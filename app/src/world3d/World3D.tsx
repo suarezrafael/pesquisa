@@ -1,14 +1,17 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Color3,
   Color4,
   DefaultRenderingPipeline,
   DirectionalLight,
+  Effect,
   Engine,
   GlowLayer,
   HavokPlugin,
   HDRCubeTexture,
   HemisphericLight,
+  Matrix,
+  Mesh,
   MeshBuilder,
   PBRMaterial,
   PhysicsAggregate,
@@ -17,10 +20,12 @@ import {
   Scene,
   SceneInstrumentation,
   SceneLoader,
+  ShaderMaterial,
   SSAO2RenderingPipeline,
   ShadowGenerator,
   UniversalCamera,
   Vector3,
+  VertexData,
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
@@ -31,12 +36,14 @@ import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
+import { startAmbience, toggleMute as toggleAmbienceMute } from './ambientAudio'
 
 interface World3DProps {
   profile: Profile
   progress: Progress
   onSelectQuest: (questId: string) => void
   onOpenHelp: () => void
+  onOpenQuestList: () => void
   suspendTriggers: boolean
 }
 
@@ -44,11 +51,23 @@ const PLANET_RADIUS = 13
 const AVATAR_RADIUS = 0.55
 const GRAVITY = 9.81
 const MAX_SPEED = 6
+const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const TRIGGER_DISTANCE = 2.4
 const RESET_DISTANCE = 3.6
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
+
+// Rotaciona `v` ao redor de `axis` por `angle` radianos (fórmula de Rodrigues) — usado pra
+// girar a direção da bola suavemente, em vez de saltar pra direção do input a cada quadro.
+function rotateAroundAxis(v: Vector3, axis: Vector3, angle: number): Vector3 {
+  const cosA = Math.cos(angle)
+  const sinA = Math.sin(angle)
+  const term1 = v.scale(cosA)
+  const term2 = Vector3.Cross(axis, v).scale(sinA)
+  const term3 = axis.scale(Vector3.Dot(axis, v) * (1 - cosA))
+  return term1.add(term2).add(term3)
+}
 
 function avatarColorFromEmoji(emoji: string): Color3 {
   const palette: Record<string, Color3> = {
@@ -74,7 +93,7 @@ function alignmentQuaternion(up: Vector3): Quaternion {
   return Quaternion.RotationAxis(axis, angle)
 }
 
-export function World3D({ profile, progress, onSelectQuest, onOpenHelp, suspendTriggers }: World3DProps) {
+export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQuestList, suspendTriggers }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
   const progressRef = useRef(progress)
@@ -82,6 +101,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, suspendT
   const onSelectQuestRef = useRef(onSelectQuest)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
+  const [muted, setMuted] = useState(false)
 
   progressRef.current = progress
   suspendRef.current = suspendTriggers
@@ -154,6 +174,11 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, suspendT
     let keysDown: Record<string, boolean> = {}
 
     async function setup() {
+      // Áudio ambiente sintetizado (vento + trilha suave) — só inicia aqui porque o jogador já
+      // interagiu com telas anteriores (título/onboarding/tutorial), então o navegador libera
+      // áudio sem bloqueio de autoplay.
+      startAmbience()
+
       // IBL real: HDRI CC0 (Poly Haven, kiara_4_mid-morning) — reflexo de ambiente de verdade
       // nos materiais PBR, não só luz hemisférica/direcional aproximada.
       const hdrTexture = new HDRCubeTexture('/assets/hdri/kiara_4_mid-morning_1k.hdr', scene, 256)
@@ -234,6 +259,147 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, suspendT
         collider.isVisible = false
         new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
       }
+
+      // Nuvens — grupos de "pufes" esféricos achatados, cada grupo derivando lentamente ao
+      // redor do eixo polar do planeta (efeito de vento/clima, sem física real envolvida).
+      const cloudMat = new PBRMaterial('cloudMat', scene)
+      cloudMat.albedoColor = new Color3(1, 1, 1)
+      cloudMat.emissiveColor = new Color3(1, 1, 1)
+      cloudMat.disableLighting = true
+      cloudMat.alpha = 0.88
+      cloudMat.backFaceCulling = false
+
+      const cloudGroups: { node: Mesh; basePos: Vector3; speed: number }[] = []
+      const CLOUD_COUNT = 9
+      for (let i = 0; i < CLOUD_COUNT; i++) {
+        const phi = Math.PI * 0.15 + (i / CLOUD_COUNT) * Math.PI * 0.55
+        const theta = i * GOLDEN_ANGLE * 2.2
+        const cloudRadius = PLANET_RADIUS + 4.5 + (i % 3)
+        const basePos = new Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.cos(phi),
+          Math.sin(phi) * Math.sin(theta),
+        ).scale(cloudRadius)
+
+        const puffCount = 3 + (i % 3)
+        const puffs: Mesh[] = []
+        for (let p = 0; p < puffCount; p++) {
+          const puff = MeshBuilder.CreateSphere(`cloud-${i}-${p}`, { diameter: 2.2 + Math.random() * 1.3 }, scene)
+          puff.scaling.y = 0.55
+          puff.position = new Vector3((p - puffCount / 2) * 1.4, Math.random() * 0.4, Math.random() * 0.6)
+          puff.material = cloudMat
+          puffs.push(puff)
+        }
+        const node = puffs[0]
+        for (let p = 1; p < puffs.length; p++) puffs[p].parent = node
+        node.position = basePos
+        cloudGroups.push({ node, basePos, speed: 0.03 + (i % 4) * 0.01 })
+      }
+
+      // Rio — tubo estreito seguindo um caminho curvo sobre a superfície do planeta,
+      // ligeiramente acima do chão pra não brigar (z-fighting) com a malha da grama/terreno.
+      function pointOnSphere(phi: number, theta: number, r: number): Vector3 {
+        return new Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.cos(phi),
+          Math.sin(phi) * Math.sin(theta),
+        ).scale(r)
+      }
+      const riverPath: Vector3[] = []
+      const RIVER_SEGMENTS = 48
+      const riverStartPhi = Math.PI * 0.2
+      const riverEndPhi = Math.PI * 0.62
+      const riverStartTheta = Math.PI * 0.15
+      const riverEndTheta = Math.PI * 1.35
+      for (let i = 0; i <= RIVER_SEGMENTS; i++) {
+        const t = i / RIVER_SEGMENTS
+        const wobble = Math.sin(t * Math.PI * 4) * 0.06
+        const phi = riverStartPhi + (riverEndPhi - riverStartPhi) * t + wobble
+        const theta = riverStartTheta + (riverEndTheta - riverStartTheta) * t
+        riverPath.push(pointOnSphere(phi, theta, PLANET_RADIUS + 0.06))
+      }
+      const river = MeshBuilder.CreateTube(
+        'river',
+        { path: riverPath, radius: 0.7, tessellation: 8, cap: Mesh.CAP_ALL },
+        scene,
+      )
+      const riverMat = new PBRMaterial('riverMat', scene)
+      riverMat.albedoColor = new Color3(0.15, 0.45, 0.75)
+      riverMat.roughness = 0.12
+      riverMat.metallic = 0.05
+      riverMat.alpha = 0.92
+      river.material = riverMat
+      river.receiveShadows = true
+
+      // Grama animada por vento — shader customizado (não textura), milhares de lâminas via
+      // thin instances (1 draw call). O balanço acontece em espaço local do vértice, antes da
+      // matriz de mundo por instância aplicar — por isso cada lâmina já nasce alinhada à
+      // curvatura do planeta sem lógica extra no shader.
+      Effect.ShadersStore['grassVertexShader'] = `
+        precision highp float;
+        attribute vec3 position;
+        attribute vec4 world0;
+        attribute vec4 world1;
+        attribute vec4 world2;
+        attribute vec4 world3;
+        uniform mat4 viewProjection;
+        uniform float time;
+        uniform float windStrength;
+        uniform float windSpeed;
+        varying float vHeight;
+        void main(void) {
+          mat4 world = mat4(world0, world1, world2, world3);
+          vec3 pos = position;
+          float phase = world3.x * 0.6 + world3.z * 0.9;
+          float sway = sin(time * windSpeed + phase) * windStrength * pos.y;
+          pos.x += sway;
+          vHeight = pos.y;
+          gl_Position = viewProjection * world * vec4(pos, 1.0);
+        }
+      `
+      Effect.ShadersStore['grassFragmentShader'] = `
+        precision highp float;
+        varying float vHeight;
+        uniform vec3 baseColor;
+        uniform vec3 tipColor;
+        void main(void) {
+          vec3 color = mix(baseColor, tipColor, clamp(vHeight / 0.55, 0.0, 1.0));
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `
+      const grassMaterial = new ShaderMaterial('grass', scene, 'grass', {
+        attributes: ['position', 'world0', 'world1', 'world2', 'world3'],
+        uniforms: ['viewProjection', 'time', 'windStrength', 'windSpeed', 'baseColor', 'tipColor'],
+      })
+      grassMaterial.backFaceCulling = false
+      grassMaterial.setColor3('baseColor', new Color3(0.22, 0.42, 0.18))
+      grassMaterial.setColor3('tipColor', new Color3(0.5, 0.75, 0.3))
+      grassMaterial.setFloat('windStrength', 0.16)
+      grassMaterial.setFloat('windSpeed', 1.8)
+
+      const bladeVertexData = new VertexData()
+      bladeVertexData.positions = [
+        -0.06, 0, 0, 0.06, 0, 0, -0.045, 0.55, 0, 0.045, 0.55, 0,
+      ]
+      bladeVertexData.indices = [0, 1, 2, 1, 3, 2, 2, 1, 0, 2, 3, 1]
+      const grassBlade = new Mesh('grassBlade', scene)
+      bladeVertexData.applyToMesh(grassBlade)
+      grassBlade.material = grassMaterial
+      grassBlade.receiveShadows = false
+
+      const GRASS_COUNT = 2600
+      const grassMatrices = new Float32Array(GRASS_COUNT * 16)
+      for (let i = 0; i < GRASS_COUNT; i++) {
+        const phi = Math.PI * 0.08 + Math.random() * Math.PI * 0.7
+        const theta = Math.random() * Math.PI * 2
+        const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+        const bladePos = up.scale(PLANET_RADIUS + 0.02)
+        const rot = alignmentQuaternion(up).multiply(Quaternion.RotationAxis(Vector3.Up(), Math.random() * Math.PI * 2))
+        const scale = 0.7 + Math.random() * 0.7
+        const m = Matrix.Compose(new Vector3(scale, scale, scale), rot, bladePos)
+        m.copyToArray(grassMatrices, i * 16)
+      }
+      grassBlade.thinInstanceSetBuffer('matrix', grassMatrices, 16, true)
 
       // Avatar (esfera física real) — nasce no "polo norte" do planeta.
       const spawnUp = new Vector3(0, 1, 0)
@@ -360,6 +526,11 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, suspendT
         const dt = engine.getDeltaTime() / 1000
         time += dt
 
+        grassMaterial.setFloat('time', time)
+        for (const cloud of cloudGroups) {
+          cloud.node.position = rotateAroundAxis(cloud.basePos, Vector3.Up(), time * cloud.speed)
+        }
+
         // combina teclado + joystick
         let x = joystickRef.current.x
         let y = joystickRef.current.y
@@ -388,17 +559,19 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, suspendT
           facing = facing.subtract(localUp.scale(Vector3.Dot(facing, localUp)))
           if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(localUp, Vector3.Right())
           facing.normalize()
-          const right = Vector3.Cross(localUp, facing).normalize()
 
-          const moveDir = right.scale(x).add(facing.scale(-y))
-          if (moveDir.lengthSquared() > 1) moveDir.normalize()
-          if (moveDir.lengthSquared() > 0.0001) {
-            facing = moveDir.clone().normalize()
+          // Controle estilo carrinho: esquerda/direita GIRA a direção atual (taxa fixa),
+          // cima/baixo acelera/freia nessa direção — nunca salta pra direção do input.
+          // (a versão anterior redefinia "facing" pra bater com o input a cada quadro, o que
+          // degenerava quando só esquerda/direita era pressionado, sem cima/baixo.)
+          if (Math.abs(x) > 0.02) {
+            facing = rotateAroundAxis(facing, localUp, x * TURN_RATE * dt)
           }
 
+          const throttle = Math.max(-1, Math.min(1, -y))
           const currentVel = body.getLinearVelocity()
           const radialVel = localUp.scale(Vector3.Dot(currentVel, localUp))
-          const tangentVel = moveDir.scale(MAX_SPEED)
+          const tangentVel = facing.scale(throttle * MAX_SPEED)
           body.setLinearVelocity(tangentVel.add(radialVel))
 
           // câmera segue a bola acompanhando a orientação local do planeta
@@ -481,11 +654,22 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, suspendT
     joystickRef.current = vector
   }
 
+  function handleToggleMute() {
+    setMuted(toggleAmbienceMute())
+  }
+
   return (
     <div className="world3d-container">
       <canvas ref={canvasRef} className="world3d-canvas" />
       {import.meta.env.DEV && <div ref={debugRef} className="world3d-debug" />}
-      <HudHeader profile={profile} progress={progress} onOpenHelp={onOpenHelp} />
+      <HudHeader
+        profile={profile}
+        progress={progress}
+        onOpenHelp={onOpenHelp}
+        onOpenQuestList={onOpenQuestList}
+        muted={muted}
+        onToggleMute={handleToggleMute}
+      />
       <p className="world3d-hint">Role até os portais brilhantes pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
     </div>

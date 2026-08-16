@@ -5,9 +5,19 @@ interface HudHeaderProps {
   profile: Profile
   progress: Progress
   onOpenHelp: () => void
+  onOpenQuestList: () => void
+  muted: boolean
+  onToggleMute: () => void
 }
 
-export function HudHeader({ profile, progress, onOpenHelp }: HudHeaderProps) {
+export function HudHeader({
+  profile,
+  progress,
+  onOpenHelp,
+  onOpenQuestList,
+  muted,
+  onToggleMute,
+}: HudHeaderProps) {
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
   const percent = Math.min(100, Math.round((current / needed) * 100))
@@ -27,6 +37,17 @@ export function HudHeader({ profile, progress, onOpenHelp }: HudHeaderProps) {
           <div className="hub-coins">🪙 {progress.coins}</div>
         </header>
 
+        <button type="button" className="help-button" onClick={onOpenQuestList} aria-label="Ver missões">
+          🗺️
+        </button>
+        <button
+          type="button"
+          className="help-button"
+          onClick={onToggleMute}
+          aria-label={muted ? 'Ativar som' : 'Silenciar som'}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
         <button type="button" className="help-button" onClick={onOpenHelp} aria-label="Como jogar">
           ?
         </button>

@@ -4,6 +4,7 @@ import { Onboarding } from './components/Onboarding'
 import { Tutorial } from './components/Tutorial'
 import { QuestModal } from './components/QuestModal'
 import { RewardToast } from './components/RewardToast'
+import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { quests } from './data/quests'
@@ -24,6 +25,7 @@ function App() {
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
   const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
   const [showHelp, setShowHelp] = useState(false)
+  const [showQuestList, setShowQuestList] = useState(false)
 
   if (!profile) {
     if (preProfileScreen === 'title') {
@@ -63,7 +65,8 @@ function App() {
           progress={progress}
           onSelectQuest={handleSelectQuest}
           onOpenHelp={() => setShowHelp(true)}
-          suspendTriggers={activeQuest !== null || reward !== null || showHelp}
+          onOpenQuestList={() => setShowQuestList(true)}
+          suspendTriggers={activeQuest !== null || reward !== null || showHelp || showQuestList}
         />
       </Suspense>
 
@@ -84,6 +87,10 @@ function App() {
       )}
 
       {showHelp && <Tutorial onDone={() => setShowHelp(false)} />}
+
+      {showQuestList && (
+        <QuestListOverlay progress={progress} onClose={() => setShowQuestList(false)} />
+      )}
     </>
   )
 }
