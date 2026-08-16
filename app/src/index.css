@@ -41,6 +41,76 @@ body {
   flex: 1;
 }
 
+/* Title screen */
+
+.title-screen {
+  text-align: center;
+  padding-top: 3.5rem;
+}
+
+.title-planet {
+  font-size: 5rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.title-screen h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.title-screen .primary-button {
+  margin-top: 1.5rem;
+}
+
+/* Tutorial */
+
+.tutorial-screen {
+  text-align: center;
+  padding-top: 3rem;
+  position: relative;
+}
+
+.tutorial-skip {
+  position: absolute;
+  top: 1rem;
+  right: 1.1rem;
+  background: none;
+  border: none;
+  color: #4a5b8c;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.tutorial-emoji {
+  font-size: 4rem;
+  margin-bottom: 0.75rem;
+}
+
+.tutorial-screen h1 {
+  font-size: 1.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.tutorial-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.tutorial-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d8dff5;
+}
+
+.tutorial-dot.active {
+  background: var(--primary);
+}
+
 /* Onboarding */
 
 .onboarding h1 {
@@ -223,6 +293,12 @@ body {
   pointer-events: none;
 }
 
+.hud-top-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .hud-overlay .hub-header {
   pointer-events: none;
   background: rgba(255, 255, 255, 0.82);
@@ -230,6 +306,23 @@ body {
   padding: 0.5rem 0.9rem;
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
   max-width: 420px;
+  flex: 1;
+  min-width: 0;
+}
+
+.help-button {
+  pointer-events: auto;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
+  cursor: pointer;
 }
 
 .hud-overlay .badge-row {

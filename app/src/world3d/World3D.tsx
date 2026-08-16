@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import {
-  ArcRotateCamera,
   Color3,
   Color4,
   DefaultRenderingPipeline,
@@ -14,11 +13,13 @@ import {
   PBRMaterial,
   PhysicsAggregate,
   PhysicsShapeType,
+  Quaternion,
   Scene,
   SceneInstrumentation,
   SceneLoader,
   SSAO2RenderingPipeline,
   ShadowGenerator,
+  UniversalCamera,
   Vector3,
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
@@ -35,13 +36,19 @@ interface World3DProps {
   profile: Profile
   progress: Progress
   onSelectQuest: (questId: string) => void
+  onOpenHelp: () => void
   suspendTriggers: boolean
 }
 
-const PORTAL_RADIUS = 15
-const TRIGGER_DISTANCE = 2.2
-const RESET_DISTANCE = 3.5
+const PLANET_RADIUS = 13
+const AVATAR_RADIUS = 0.55
+const GRAVITY = 9.81
 const MAX_SPEED = 6
+const CAMERA_DISTANCE = 9
+const CAMERA_HEIGHT = 4.5
+const TRIGGER_DISTANCE = 2.4
+const RESET_DISTANCE = 3.6
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 
 function avatarColorFromEmoji(emoji: string): Color3 {
   const palette: Record<string, Color3> = {
@@ -55,9 +62,20 @@ function avatarColorFromEmoji(emoji: string): Color3 {
   return palette[emoji] ?? new Color3(0.96, 0.51, 0.68)
 }
 
-export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: World3DProps) {
+// Menor rotação que leva o "para cima" padrão (0,1,0) até `up` — usada pra apoiar
+// props/portais deitados sobre a curvatura da esfera, não flutuando na orientação do mundo.
+function alignmentQuaternion(up: Vector3): Quaternion {
+  const defaultUp = Vector3.Up()
+  const dot = Vector3.Dot(defaultUp, up)
+  if (dot > 0.9999) return Quaternion.Identity()
+  if (dot < -0.9999) return Quaternion.RotationAxis(new Vector3(1, 0, 0), Math.PI)
+  const axis = Vector3.Cross(defaultUp, up).normalize()
+  const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
+  return Quaternion.RotationAxis(axis, angle)
+}
+
+export function World3D({ profile, progress, onSelectQuest, onOpenHelp, suspendTriggers }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const inputRef = useRef({ x: 0, y: 0 })
   const joystickRef = useRef({ x: 0, y: 0 })
   const progressRef = useRef(progress)
   const suspendRef = useRef(suspendTriggers)
@@ -87,20 +105,14 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
     }
     scene.clearColor = new Color4(0.65, 0.82, 0.93, 1)
     scene.fogMode = Scene.FOGMODE_EXP2
-    scene.fogDensity = 0.012
+    scene.fogDensity = 0.01
     scene.fogColor = new Color3(0.65, 0.82, 0.93)
 
-    const camera = new ArcRotateCamera(
-      'camera',
-      -Math.PI / 2,
-      Math.PI / 3.4,
-      16,
-      Vector3.Zero(),
-      scene,
-    )
-    camera.inputs.clear()
+    // Câmera totalmente controlada por código (sem input próprio) — reposicionada a cada
+    // quadro pra acompanhar a bola e a curvatura local do planeta.
+    const camera = new UniversalCamera('camera', new Vector3(0, PLANET_RADIUS + CAMERA_HEIGHT, -CAMERA_DISTANCE), scene)
+    camera.minZ = 0.1
 
-    // Tonemapping ACES + FXAA — sem isso PBR com luz forte estoura o branco e serrilha nas bordas.
     const pipeline = new DefaultRenderingPipeline('quality', true, scene, [camera])
     pipeline.samples = 4
     pipeline.fxaaEnabled = true
@@ -109,7 +121,6 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
     pipeline.imageProcessing.exposure = 0.9
     pipeline.bloomEnabled = false // o GlowLayer já cobre o brilho emissivo dos portais, mais barato
 
-    // SSAO leve — contato visual entre bola/árvores e o chão, orçamento mobile-friendly.
     const ssao = new SSAO2RenderingPipeline('ssao', scene, {
       ssaoRatio: 0.5,
       blurRatio: 0.5,
@@ -137,8 +148,9 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
     let havokPlugin: HavokPlugin | null = null
     let avatarBody: PhysicsAggregate | null = null
     let avatarMesh: ReturnType<typeof MeshBuilder.CreateSphere> | null = null
+    let facing = new Vector3(0, 0, 1)
     const triggered = new Set<string>()
-    const portalMeshes: { quest: (typeof quests)[number]; ring: any; base: any }[] = []
+    const portalMeshes: { quest: (typeof quests)[number]; ring: any; base: any; surfacePos: Vector3 }[] = []
     let keysDown: Record<string, boolean> = {}
 
     async function setup() {
@@ -151,36 +163,20 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
 
       const havokInstance = await HavokPhysics()
       if (disposed) return
-      // useDeltaForWorldStep=false -> Havok roda em passo fixo (~60Hz) interno,
-      // desacoplado do framerate de renderização (evita física variar com FPS).
+      // Sem gravidade global — o planeta é redondo, então cada corpo cai na direção do
+      // CENTRO do planeta, não uniformemente pra baixo (ver aplicação da força abaixo).
       havokPlugin = new HavokPlugin(false, havokInstance)
-      scene.enablePhysics(new Vector3(0, -9.81, 0), havokPlugin)
+      scene.enablePhysics(Vector3.Zero(), havokPlugin)
 
-      // Chão
-      const ground = MeshBuilder.CreateGround('ground', { width: 60, height: 60 }, scene)
-      const groundMat = new PBRMaterial('groundMat', scene)
-      groundMat.albedoColor = new Color3(0.42, 0.68, 0.4)
-      groundMat.roughness = 0.97
-      groundMat.metallic = 0
-      ground.material = groundMat
-      ground.receiveShadows = true
-      new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
-
-      // Muro invisível pra bola não sair do mundo
-      const wallMat = new PBRMaterial('wallMat', scene)
-      wallMat.alpha = 0
-      const wallPositions = [
-        { pos: new Vector3(0, 1, 28), size: { width: 60, height: 4, depth: 1 } },
-        { pos: new Vector3(0, 1, -28), size: { width: 60, height: 4, depth: 1 } },
-        { pos: new Vector3(28, 1, 0), size: { width: 1, height: 4, depth: 60 } },
-        { pos: new Vector3(-28, 1, 0), size: { width: 1, height: 4, depth: 60 } },
-      ]
-      for (const w of wallPositions) {
-        const wall = MeshBuilder.CreateBox('wall', w.size, scene)
-        wall.position = w.pos
-        wall.material = wallMat
-        new PhysicsAggregate(wall, PhysicsShapeType.BOX, { mass: 0 }, scene)
-      }
+      // Planeta
+      const planet = MeshBuilder.CreateSphere('planet', { diameter: PLANET_RADIUS * 2, segments: 32 }, scene)
+      const planetMat = new PBRMaterial('planetMat', scene)
+      planetMat.albedoColor = new Color3(0.42, 0.68, 0.4)
+      planetMat.roughness = 0.97
+      planetMat.metallic = 0
+      planet.material = planetMat
+      planet.receiveShadows = true
+      new PhysicsAggregate(planet, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.7 }, scene)
 
       // Props decorativos: modelos glTF reais (Kenney Nature Kit, CC0) — carregados uma vez
       // cada e clonados nos pontos de cena. Licença em public/assets/nature-kit/License.txt.
@@ -193,57 +189,56 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
         return root
       }
 
-      const [treeDefaultT, treeOakT, treePineT, rockLargeT, rockSmallT, mushroomT] = await Promise.all([
-        loadPropTemplate('tree_default.glb'),
-        loadPropTemplate('tree_oak.glb'),
-        loadPropTemplate('tree_pineRoundA.glb'),
-        loadPropTemplate('rock_largeA.glb'),
-        loadPropTemplate('rock_smallA.glb'),
-        loadPropTemplate('mushroom_red.glb'),
-      ])
+      const propFiles = [
+        'tree_default.glb', 'tree_oak.glb', 'tree_pineRoundA.glb', 'tree_pineRoundB.glb',
+        'tree_fat.glb', 'tree_thin.glb', 'rock_largeA.glb', 'rock_largeC.glb',
+        'rock_smallA.glb', 'rock_smallC.glb', 'rock_tallA.glb', 'stone_smallA.glb',
+        'flower_purpleA.glb', 'flower_redA.glb', 'flower_yellowA.glb',
+        'mushroom_red.glb', 'mushroom_tan.glb', 'log.glb',
+      ]
+      const propTemplates = await Promise.all(propFiles.map(loadPropTemplate))
       if (disposed) return
 
-      type PropSpot = { x: number; z: number; template: typeof treeDefaultT; scale: number; colliderH: number; colliderD: number }
-      const propSpots: PropSpot[] = [
-        { x: 22, z: 22, template: treeDefaultT, scale: 2.2, colliderH: 3.5, colliderD: 1.4 },
-        { x: -22, z: 22, template: treeOakT, scale: 2, colliderH: 3.2, colliderD: 1.6 },
-        { x: 22, z: -22, template: treePineT, scale: 2.4, colliderH: 3.8, colliderD: 1.2 },
-        { x: -22, z: -22, template: treeDefaultT, scale: 2, colliderH: 3.2, colliderD: 1.3 },
-        { x: 24, z: 0, template: treeOakT, scale: 2.2, colliderH: 3.4, colliderD: 1.5 },
-        { x: -24, z: 0, template: treePineT, scale: 2, colliderH: 3.4, colliderD: 1.1 },
-        { x: 0, z: 24, template: treeDefaultT, scale: 2.3, colliderH: 3.6, colliderD: 1.4 },
-        { x: 0, z: -24, template: treeOakT, scale: 2, colliderH: 3.2, colliderD: 1.5 },
-        { x: 12, z: 12, template: rockLargeT, scale: 1.8, colliderH: 1.4, colliderD: 1.6 },
-        { x: -12, z: 12, template: rockSmallT, scale: 1.6, colliderH: 0.8, colliderD: 1 },
-        { x: 12, z: -12, template: rockLargeT, scale: 1.6, colliderH: 1.3, colliderD: 1.5 },
-        { x: -12, z: -12, template: rockSmallT, scale: 1.8, colliderH: 0.8, colliderD: 1.1 },
-        { x: 5, z: -20, template: mushroomT, scale: 2, colliderH: 0.5, colliderD: 0.6 },
-        { x: -6, z: 20, template: mushroomT, scale: 2.4, colliderH: 0.6, colliderD: 0.7 },
-      ]
+      const PROP_COUNT = 42
+      for (let i = 0; i < PROP_COUNT; i++) {
+        const t = i / PROP_COUNT
+        // Cobre de perto do polo (onde a bola nasce) até um pouco além do equador —
+        // deixa uma pequena calota livre no polo sul só por simplicidade de câmera.
+        const phi = Math.PI * 0.14 + t * Math.PI * 0.6
+        const theta = i * GOLDEN_ANGLE * 3.1
+        const localUp = new Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.cos(phi),
+          Math.sin(phi) * Math.sin(theta),
+        )
+        const pos = localUp.scale(PLANET_RADIUS)
+        const template = propTemplates[i % propTemplates.length]
+        const scale = 1.3 + ((i * 7) % 5) * 0.18
+        const spin = (i * GOLDEN_ANGLE * 5) % (Math.PI * 2)
 
-      propSpots.forEach((spot, i) => {
-        const instance = spot.template.clone(`prop-${i}`, null)
-        if (!instance) return
+        const instance = template.clone(`prop-${i}`, null)
+        if (!instance) continue
         instance.setEnabled(true)
-        instance.position = new Vector3(spot.x, 0, spot.z)
-        instance.scaling.setAll(spot.scale)
-        instance.rotation.y = (i * 47) % 360 * (Math.PI / 180)
+        instance.position = pos
+        instance.rotationQuaternion = alignmentQuaternion(localUp).multiply(
+          Quaternion.RotationAxis(Vector3.Up(), spin),
+        )
+        instance.scaling.setAll(scale)
         instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
 
-        // Collider simplificado e invisível — nunca a malha visual detalhada do glTF.
-        const collider = MeshBuilder.CreateCylinder(
-          `propCollider-${i}`,
-          { height: spot.colliderH, diameter: spot.colliderD },
-          scene,
-        )
-        collider.position = new Vector3(spot.x, spot.colliderH / 2, spot.z)
+        // Collider simplificado (esfera) e invisível — nunca a malha visual do glTF.
+        // Esfera evita ter que alinhar rotação do colisor à curvatura do planeta.
+        const colliderDiameter = 1.1 * scale
+        const collider = MeshBuilder.CreateSphere(`propCollider-${i}`, { diameter: colliderDiameter }, scene)
+        collider.position = pos.add(localUp.scale(colliderDiameter * 0.4))
         collider.isVisible = false
-        new PhysicsAggregate(collider, PhysicsShapeType.CYLINDER, { mass: 0 }, scene)
-      })
+        new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+      }
 
-      // Avatar (esfera física real)
-      avatarMesh = MeshBuilder.CreateSphere('avatar', { diameter: 1.1 }, scene)
-      avatarMesh.position = new Vector3(0, 3, 8)
+      // Avatar (esfera física real) — nasce no "polo norte" do planeta.
+      const spawnUp = new Vector3(0, 1, 0)
+      avatarMesh = MeshBuilder.CreateSphere('avatar', { diameter: AVATAR_RADIUS * 2 }, scene)
+      avatarMesh.position = spawnUp.scale(PLANET_RADIUS + AVATAR_RADIUS + 0.05)
       const avatarMat = new PBRMaterial('avatarMat', scene)
       avatarMat.albedoColor = avatarColorFromEmoji(profile.avatarEmoji)
       avatarMat.roughness = 0.3
@@ -253,35 +248,51 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
       avatarBody = new PhysicsAggregate(
         avatarMesh,
         PhysicsShapeType.SPHERE,
-        { mass: 1, restitution: 0.35, friction: 0.5 },
+        { mass: 1, restitution: 0.35, friction: 0.6 },
         scene,
       )
+
+      // Câmera já posicionada corretamente antes do primeiro quadro (evita "pulo" inicial).
+      camera.position = avatarMesh.position.subtract(facing.scale(CAMERA_DISTANCE)).add(spawnUp.scale(CAMERA_HEIGHT))
+      camera.upVector = spawnUp
+      camera.setTarget(avatarMesh.position)
 
       if (import.meta.env.DEV) {
         // Teleporte de QA — só em dev, pra testar o gatilho dos portais sem depender
         // de simular teclado segurado por um tempo real.
-        ;(window as any).__debugTeleport = (x: number, z: number) => {
+        ;(window as any).__debugTeleport = (x: number, y: number, z: number) => {
           if (!avatarMesh || !avatarBody) return
+          const localUp = new Vector3(x, y, z).normalize()
           avatarBody.body.disablePreStep = false
-          avatarMesh.position.set(x, 1.5, z)
+          avatarMesh.position = localUp.scale(PLANET_RADIUS + AVATAR_RADIUS + 0.05)
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
         }
       }
 
-      // Portais de missão
+      // Portais de missão, apoiados na curvatura do planeta
       const guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('portalLabels', true, scene)
       quests.forEach((quest, index) => {
-        const angle = (index / quests.length) * Math.PI * 2
-        const x = Math.cos(angle) * PORTAL_RADIUS
-        const z = Math.sin(angle) * PORTAL_RADIUS
+        const t = quests.length > 1 ? index / (quests.length - 1) : 0
+        const phi = Math.PI * 0.22 + t * Math.PI * 0.4
+        const theta = index * GOLDEN_ANGLE * 1.7
+        const localUp = new Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.cos(phi),
+          Math.sin(phi) * Math.sin(theta),
+        )
+        const surfacePos = localUp.scale(PLANET_RADIUS)
+
+        const rotation = alignmentQuaternion(localUp)
 
         const base = MeshBuilder.CreateCylinder(`base-${quest.id}`, { height: 0.4, diameter: 2.2 }, scene)
-        base.position = new Vector3(x, 0.2, z)
+        base.position = surfacePos
+        base.rotationQuaternion = rotation
         base.receiveShadows = true
 
         const ring = MeshBuilder.CreateTorus(`ring-${quest.id}`, { diameter: 2, thickness: 0.22 }, scene)
-        ring.position = new Vector3(x, 1.4, z)
+        ring.parent = base
+        ring.position = new Vector3(0, 1.2, 0)
         ring.rotation.x = Math.PI / 2
         shadowGenerator.addShadowCaster(ring)
 
@@ -307,7 +318,7 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
         label.linkWithMesh(ring)
         label.linkOffsetY = -60
 
-        portalMeshes.push({ quest, ring, base })
+        portalMeshes.push({ quest, ring, base, surfacePos })
       })
 
       function applyPortalVisual(entry: (typeof portalMeshes)[number]) {
@@ -332,7 +343,7 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
       }
 
       portalMeshes.forEach(applyPortalVisual)
-      ;(scene as any).__applyPortalVisuals = () => portalMeshes.forEach(applyPortalVisual)
+      ;(scene as any).__refreshPortals = () => portalMeshes.forEach(applyPortalVisual)
 
       // Input de teclado
       const onKeyDown = (e: KeyboardEvent) => (keysDown[e.key.toLowerCase()] = true)
@@ -361,17 +372,40 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
           x /= mag
           y /= mag
         }
-        inputRef.current = { x, y }
 
         if (avatarBody && avatarMesh) {
           const body = avatarBody.body
-          const currentVel = body.getLinearVelocity()
-          const desiredX = x * MAX_SPEED
-          const desiredZ = y * MAX_SPEED
-          body.setLinearVelocity(new Vector3(desiredX, currentVel.y, desiredZ))
+          const pos = avatarMesh.position
+          const dist = pos.length()
+          const localUp = dist > 0.0001 ? pos.scale(1 / dist) : new Vector3(0, 1, 0)
 
-          // câmera segue a bola
-          camera.target = Vector3.Lerp(camera.target, avatarMesh.position, 0.08)
+          // Gravidade radial real — puxa sempre pro centro do planeta (origem),
+          // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
+          body.applyForce(localUp.scale(-GRAVITY), pos)
+
+          // Mantém "facing" tangente à superfície conforme a bola rola pela curvatura
+          // (transporte paralelo simplificado: remove a componente radial e renormaliza).
+          facing = facing.subtract(localUp.scale(Vector3.Dot(facing, localUp)))
+          if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(localUp, Vector3.Right())
+          facing.normalize()
+          const right = Vector3.Cross(localUp, facing).normalize()
+
+          const moveDir = right.scale(x).add(facing.scale(-y))
+          if (moveDir.lengthSquared() > 1) moveDir.normalize()
+          if (moveDir.lengthSquared() > 0.0001) {
+            facing = moveDir.clone().normalize()
+          }
+
+          const currentVel = body.getLinearVelocity()
+          const radialVel = localUp.scale(Vector3.Dot(currentVel, localUp))
+          const tangentVel = moveDir.scale(MAX_SPEED)
+          body.setLinearVelocity(tangentVel.add(radialVel))
+
+          // câmera segue a bola acompanhando a orientação local do planeta
+          const desiredCamPos = pos.subtract(facing.scale(CAMERA_DISTANCE)).add(localUp.scale(CAMERA_HEIGHT))
+          camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
+          camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
+          camera.setTarget(pos)
 
           // checa proximidade dos portais
           if (!suspendRef.current) {
@@ -380,13 +414,11 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
               const unlocked = isQuestUnlocked(progressRef.current, idx)
               const completed = progressRef.current.completedQuestIds.includes(entry.quest.id)
               if (!unlocked || completed) continue
-              const dx = avatarMesh.position.x - entry.base.position.x
-              const dz = avatarMesh.position.z - entry.base.position.z
-              const dist = Math.hypot(dx, dz)
-              if (dist < TRIGGER_DISTANCE && !triggered.has(entry.quest.id)) {
+              const d = Vector3.Distance(pos, entry.surfacePos)
+              if (d < TRIGGER_DISTANCE && !triggered.has(entry.quest.id)) {
                 triggered.add(entry.quest.id)
                 onSelectQuestRef.current(entry.quest.id)
-              } else if (dist > RESET_DISTANCE) {
+              } else if (d > RESET_DISTANCE) {
                 triggered.delete(entry.quest.id)
               }
             }
@@ -397,18 +429,18 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
           debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes`
         }
 
-        // animação sutil dos portais desbloqueados (bobbing)
+        // animação sutil dos portais desbloqueados (bobbing), em espaço local do "base"
+        // (que já está alinhado à curvatura do planeta) — continua correto em qualquer ponto.
         for (const entry of portalMeshes) {
           const idx = quests.findIndex((q) => q.id === entry.quest.id)
           const unlocked = isQuestUnlocked(progressRef.current, idx)
           const completed = progressRef.current.completedQuestIds.includes(entry.quest.id)
           if (unlocked && !completed) {
-            entry.ring.position.y = 1.4 + Math.sin(time * 2 + idx) * 0.15
+            entry.ring.position.y = 1.2 + Math.sin(time * 2 + idx) * 0.15
             entry.ring.rotation.z = time * 0.6
           }
         }
       })
-      ;(scene as any).__refreshPortals = () => portalMeshes.forEach(applyPortalVisual)
 
       // Instrumentação real (não estimada) de FPS/draw calls/física — lida via
       // window.__perf no console/DevTools para o relatório de desempenho.
@@ -453,8 +485,8 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
     <div className="world3d-container">
       <canvas ref={canvasRef} className="world3d-canvas" />
       {import.meta.env.DEV && <div ref={debugRef} className="world3d-debug" />}
-      <HudHeader profile={profile} progress={progress} />
-      <p className="world3d-hint">Ande até os portais brilhantes pra abrir uma missão</p>
+      <HudHeader profile={profile} progress={progress} onOpenHelp={onOpenHelp} />
+      <p className="world3d-hint">Role até os portais brilhantes pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
     </div>
   )

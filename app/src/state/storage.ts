@@ -2,6 +2,7 @@ import type { Profile, Progress } from '../types'
 
 const PROFILE_KEY = 'jogo-educativo:profile'
 const PROGRESS_KEY = 'jogo-educativo:progress'
+const TUTORIAL_SEEN_KEY = 'jogo-educativo:tutorialSeen'
 
 export const emptyProgress: Progress = {
   completedQuestIds: [],
@@ -36,4 +37,12 @@ export function loadProgress(): Progress {
 
 export function saveProgress(progress: Progress): void {
   localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress))
+}
+
+export function hasTutorialBeenSeen(): boolean {
+  return localStorage.getItem(TUTORIAL_SEEN_KEY) === 'true'
+}
+
+export function markTutorialSeen(): void {
+  localStorage.setItem(TUTORIAL_SEEN_KEY, 'true')
 }

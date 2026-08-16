@@ -1,24 +1,46 @@
 import { lazy, Suspense, useState } from 'react'
+import { TitleScreen } from './components/TitleScreen'
 import { Onboarding } from './components/Onboarding'
+import { Tutorial } from './components/Tutorial'
 import { QuestModal } from './components/QuestModal'
 import { RewardToast } from './components/RewardToast'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { quests } from './data/quests'
+import { hasTutorialBeenSeen, markTutorialSeen } from './state/storage'
 import type { Quest } from './types'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
-// entra no mundo — mantém a tela de onboarding leve em conexão 4G.
+// entra no mundo — mantém as telas iniciais leves em conexão 4G.
 const World3D = lazy(() => import('./world3d/World3D').then((m) => ({ default: m.World3D })))
+
+type PreProfileScreen = 'title' | 'onboarding'
 
 function App() {
   const { profile, createProfile } = useProfile()
   const { progress, completeQuest } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [reward, setReward] = useState<{ quest: Quest; newBadges: string[] } | null>(null)
+  const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
+  const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
+  const [showHelp, setShowHelp] = useState(false)
 
   if (!profile) {
+    if (preProfileScreen === 'title') {
+      return <TitleScreen onPlay={() => setPreProfileScreen('onboarding')} />
+    }
     return <Onboarding onDone={createProfile} />
+  }
+
+  if (!tutorialSeen) {
+    return (
+      <Tutorial
+        onDone={() => {
+          markTutorialSeen()
+          setTutorialSeen(true)
+        }}
+      />
+    )
   }
 
   function handleSelectQuest(questId: string) {
@@ -40,7 +62,8 @@ function App() {
           profile={profile}
           progress={progress}
           onSelectQuest={handleSelectQuest}
-          suspendTriggers={activeQuest !== null || reward !== null}
+          onOpenHelp={() => setShowHelp(true)}
+          suspendTriggers={activeQuest !== null || reward !== null || showHelp}
         />
       </Suspense>
 
@@ -59,6 +82,8 @@ function App() {
           onContinue={() => setReward(null)}
         />
       )}
+
+      {showHelp && <Tutorial onDone={() => setShowHelp(false)} />}
     </>
   )
 }

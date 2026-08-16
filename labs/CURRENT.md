@@ -1,9 +1,10 @@
 # Laboratório atual
 
-Laboratório 02 (Mundo 3D) **concluído**. Nenhum laboratório novo foi iniciado ainda.
+Laboratório 03 (Mini-planeta, tutorial e tela inicial) **concluído**. Nenhum laboratório novo
+foi iniciado ainda.
 
-Contexto do laboratório anterior: labs/lab-02-mundo-3d/CONTEXT.md
+Contexto do laboratório anterior: labs/lab-03-planeta-tutorial/CONTEXT.md
 
-Para retomar o trabalho numa nova sessão: leia `labs/lab-02-mundo-3d/CONTEXT.md` (o que foi
-feito e o que fica pendente — inclui a dívida técnica de assets 3D externos, que precisa de
-permissão explícita do usuário para baixar) e depois rode a skill `lab` no modo `start`.
+Para retomar o trabalho numa nova sessão: leia `labs/lab-03-planeta-tutorial/CONTEXT.md`
+(inclui a pendência de deploy real, que depende do usuário ter criado uma conta em algum
+provedor) e depois rode a skill `lab` no modo `start`.
