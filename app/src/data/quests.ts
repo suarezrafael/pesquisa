@@ -1,0 +1,156 @@
+import type { Quest } from '../types'
+
+export const quests: Quest[] = [
+  {
+    id: 'q01',
+    type: 'logica',
+    title: 'Sequência Misteriosa',
+    prompt: 'Qual número continua a sequência? 2, 4, 6, 8, ?',
+    choices: [
+      { id: 'a', label: '9' },
+      { id: 'b', label: '10' },
+      { id: 'c', label: '12' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 10,
+    coinReward: 5,
+  },
+  {
+    id: 'q02',
+    type: 'matematica',
+    title: 'Balas na Caixa',
+    prompt: 'Você tem 3 pacotes com 4 balas cada. Quantas balas você tem no total?',
+    choices: [
+      { id: 'a', label: '7' },
+      { id: 'b', label: '10' },
+      { id: 'c', label: '12' },
+    ],
+    correctChoiceId: 'c',
+    xpReward: 10,
+    coinReward: 5,
+  },
+  {
+    id: 'q03',
+    type: 'leitura',
+    title: 'O Gato Sonolento',
+    passage:
+      'Miau era um gato muito esperto. Todo dia, depois de comer sua ração, ele subia no sofá e dormia por horas.',
+    prompt: 'O que Miau fazia depois de comer?',
+    choices: [
+      { id: 'a', label: 'Ia brincar no jardim' },
+      { id: 'b', label: 'Dormia no sofá' },
+      { id: 'c', label: 'Caçava ratos' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 10,
+    coinReward: 5,
+  },
+  {
+    id: 'q04',
+    type: 'logica',
+    title: 'O Diferente do Grupo',
+    prompt: 'Qual item não pertence ao grupo: maçã, banana, cachorro, laranja?',
+    choices: [
+      { id: 'a', label: 'Maçã' },
+      { id: 'b', label: 'Cachorro' },
+      { id: 'c', label: 'Laranja' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 12,
+    coinReward: 6,
+  },
+  {
+    id: 'q05',
+    type: 'matematica',
+    title: 'Metade do Caminho',
+    prompt: 'Qual é a metade de 20?',
+    choices: [
+      { id: 'a', label: '5' },
+      { id: 'b', label: '10' },
+      { id: 'c', label: '15' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 12,
+    coinReward: 6,
+  },
+  {
+    id: 'q06',
+    type: 'leitura',
+    title: 'O Dia de Estudos',
+    passage:
+      'Ana chegou da escola, fez a lição de casa rapidamente e depois foi jogar bola com os amigos até o sol se pôr.',
+    prompt: 'O que Ana fez antes de jogar bola?',
+    choices: [
+      { id: 'a', label: 'Fez a lição de casa' },
+      { id: 'b', label: 'Foi dormir' },
+      { id: 'c', label: 'Assistiu televisão' },
+    ],
+    correctChoiceId: 'a',
+    xpReward: 12,
+    coinReward: 6,
+  },
+  {
+    id: 'q07',
+    type: 'logica',
+    title: 'Todos os Gorks',
+    prompt: 'Todos os Gorks são azuis. Zeeb é um Gork. De que cor é Zeeb?',
+    choices: [
+      { id: 'a', label: 'Verde' },
+      { id: 'b', label: 'Azul' },
+      { id: 'c', label: 'Não dá pra saber' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 14,
+    coinReward: 7,
+  },
+  {
+    id: 'q08',
+    type: 'matematica',
+    title: 'Troco Certo',
+    prompt: 'Você pagou com 10 moedas e o brinquedo custou 7. Quantas moedas voltam de troco?',
+    choices: [
+      { id: 'a', label: '2' },
+      { id: 'b', label: '3' },
+      { id: 'c', label: '4' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 14,
+    coinReward: 7,
+  },
+  {
+    id: 'q09',
+    type: 'leitura',
+    title: 'A Surpresa',
+    passage:
+      'Quando Pedro abriu a caixa e viu o filhote de cachorro, seus olhos brilharam e ele deu um grande sorriso.',
+    prompt: 'Como Pedro se sentiu ao ver o filhote?',
+    choices: [
+      { id: 'a', label: 'Triste' },
+      { id: 'b', label: 'Com medo' },
+      { id: 'c', label: 'Feliz' },
+    ],
+    correctChoiceId: 'c',
+    xpReward: 14,
+    coinReward: 7,
+  },
+  {
+    id: 'q10',
+    type: 'logica',
+    title: 'Missão Final',
+    prompt: 'Complete o padrão: 1, 3, 5, 7, ?',
+    choices: [
+      { id: 'a', label: '8' },
+      { id: 'b', label: '9' },
+      { id: 'c', label: '10' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 20,
+    coinReward: 10,
+  },
+]
+
+export const questTypeLabels: Record<Quest['type'], string> = {
+  logica: 'Lógica',
+  matematica: 'Matemática',
+  leitura: 'Leitura',
+}

@@ -1,7 +1,9 @@
 # Laboratório atual
 
-Ativo: labs/lab-01-fundacao/
-Contexto do laboratório anterior: (nenhum — este é o primeiro laboratório)
+Laboratório 01 (Fundação) **concluído**. Nenhum laboratório novo foi iniciado ainda.
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-01-fundacao/FEATURES.md`
-e, se já existir, `labs/lab-01-fundacao/CONTEXT.md`.
+Contexto do laboratório anterior: labs/lab-01-fundacao/CONTEXT.md
+
+Para retomar o trabalho numa nova sessão: leia `labs/lab-01-fundacao/CONTEXT.md` (o que foi
+feito e o que fica pendente) e depois rode a skill `lab` no modo `start` pra abrir o
+laboratório 02 com o escopo combinado com o usuário.

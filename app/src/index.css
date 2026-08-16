@@ -1,0 +1,383 @@
+:root {
+  --bg: #fef6e4;
+  --primary: #f582ae;
+  --primary-dark: #d9457f;
+  --accent: #8bd3dd;
+  --accent-dark: #4a9fac;
+  --ink: #172c66;
+  --card: #ffffff;
+  --success: #4caf50;
+  --danger: #e05454;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  flex: 1;
+}
+
+/* Onboarding */
+
+.onboarding h1 {
+  font-size: 1.6rem;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #4a5b8c;
+  margin-top: 0;
+}
+
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+.avatar-choice {
+  font-size: 2rem;
+  padding: 0.75rem;
+  border-radius: 16px;
+  border: 3px solid transparent;
+  background: var(--card);
+  cursor: pointer;
+}
+
+.avatar-choice.selected {
+  border-color: var(--primary);
+  background: #fde2ee;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+  font-weight: 600;
+}
+
+.field input {
+  font-size: 1.1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 2px solid #d8dff5;
+}
+
+.primary-button {
+  width: 100%;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 0.9rem 1rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--primary);
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--primary-dark);
+}
+
+.primary-button:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--primary-dark);
+}
+
+.primary-button:disabled {
+  background: #cbd2e8;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Hub */
+
+.hub-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.hub-avatar {
+  font-size: 2.5rem;
+  background: var(--card);
+  border-radius: 50%;
+  width: 3.25rem;
+  height: 3.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hub-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.hub-header-info h1 {
+  font-size: 1.1rem;
+  margin: 0 0 0.35rem;
+}
+
+.xp-bar {
+  background: #e2e8f8;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  background: var(--accent-dark);
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.hub-level {
+  font-size: 0.8rem;
+  color: #4a5b8c;
+}
+
+.hub-coins {
+  font-weight: 700;
+  font-size: 1.1rem;
+  white-space: nowrap;
+}
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.badge-pill {
+  background: #fff2cf;
+  border: 1px solid #f0d68a;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.hub-subtitle {
+  color: #4a5b8c;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.quest-map {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem;
+}
+
+.quest-node {
+  position: relative;
+  background: var(--card);
+  border: none;
+  border-radius: 18px;
+  padding: 1rem 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #d8dff5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.quest-node:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.quest-node.completed {
+  background: #e6f7e6;
+}
+
+.quest-node.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.quest-node-index {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-dark);
+}
+
+.quest-node-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.quest-node-type {
+  font-size: 0.75rem;
+  color: #4a5b8c;
+}
+
+.quest-node-check,
+.quest-node-lock {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  font-size: 1rem;
+}
+
+/* Modals */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(23, 44, 102, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  z-index: 10;
+}
+
+@media (min-width: 480px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 1rem;
+  }
+}
+
+.modal {
+  background: var(--card);
+  width: 100%;
+  max-width: 440px;
+  border-radius: 24px 24px 0 0;
+  padding: 1.5rem 1.25rem 2rem;
+  position: relative;
+}
+
+@media (min-width: 480px) {
+  .modal {
+    border-radius: 24px;
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.9rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #8a94b8;
+}
+
+.quest-type-tag {
+  display: inline-block;
+  background: #e2e8f8;
+  color: var(--accent-dark);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  margin-bottom: 0.5rem;
+}
+
+.quest-passage {
+  background: #f5f7fd;
+  border-radius: 12px;
+  padding: 0.85rem;
+  font-style: italic;
+  color: #33406e;
+}
+
+.quest-prompt {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.quest-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.quest-choice {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 2px solid #d8dff5;
+  background: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.quest-choice.correct {
+  border-color: var(--success);
+  background: #e6f7e6;
+}
+
+.quest-choice.wrong {
+  border-color: var(--danger);
+  background: #fdeaea;
+}
+
+.quest-feedback {
+  margin-top: 0.75rem;
+  font-weight: 700;
+}
+
+.quest-feedback.correct {
+  color: var(--success);
+}
+
+.quest-feedback.wrong {
+  color: var(--danger);
+}
+
+/* Reward */
+
+.reward-modal {
+  text-align: center;
+}
+
+.reward-icon {
+  font-size: 3rem;
+}
+
+.reward-line {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent-dark);
+}
+
+.reward-badges {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1.25rem;
+}

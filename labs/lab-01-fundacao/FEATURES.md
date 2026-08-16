@@ -1,8 +1,8 @@
 # Laboratório 01 — Fundação
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-15
-Fim: -
+Fim: 2026-08-15
 Commit inicial: 77df10a4c2d451f36218267b6253ddee5585da5e
 
 ## Objetivo do laboratório
@@ -11,11 +11,12 @@ jogar pelo menos uma quest completa do loop principal (explorar → resolver des
 e ver seu progresso salvo. Sem cooperação, sem monetização, sem eventos — só a espinha dorsal.
 
 ## Funcionalidades planejadas
-- [ ] Onboarding curto (poucas telas, sem fricção) — backlog P0, prompt.md seção 6
-- [ ] Gameplay base do loop principal (explorar → resolver desafio → ganhar recompensa) — prompt.md seção 5
-- [ ] 10 quests iniciais cobrindo os 3 tipos (lógica, matemática leve, leitura/interpretação) — prompt.md seção 5
-- [ ] Progresso salvo por conta (nível, badges, moedas do jogo sem compra real) — prompt.md seção 5
-- [ ] UI mobile / PWA instalável — prompt.md seção 9
+- [x] Onboarding curto (poucas telas, sem fricção) — backlog P0, prompt.md seção 6
+- [x] Gameplay base do loop principal (explorar → resolver desafio → ganhar recompensa) — prompt.md seção 5
+- [x] 10 quests iniciais cobrindo os 3 tipos (lógica, matemática leve, leitura/interpretação) — prompt.md seção 5
+- [~] Progresso salvo por conta (nível, badges, moedas do jogo sem compra real) — prompt.md seção 5
+      (feito localmente via localStorage; "por conta" real com Supabase Auth fica pro lab-02, ver CONTEXT.md)
+- [x] UI mobile / PWA instalável — prompt.md seção 9
 
 ## Fora de escopo (explicitamente adiado)
 - Hub social / cooperação em sala (P1)
