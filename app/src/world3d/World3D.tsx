@@ -70,6 +70,7 @@ const PLANET_RADIUS = 13
 const AVATAR_RADIUS = 0.55
 const GRAVITY = 9.81
 const MAX_SPEED = 6
+const JUMP_SPEED = 5.5 // velocidade radial (pra fora do planeta) aplicada ao pular
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
 const WALK_CYCLE_SPEED = 7 // rad/s de fase do ciclo de caminhada, por unidade de throttle
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
@@ -100,6 +101,26 @@ const PLATEAU_CENTERS = [
   { dir: new Vector3(-0.8, 0.25, -0.45).normalize(), radius: 0.26, height: 1.6 },
 ]
 
+// Centro da lagoa e da piscina — a mesma direção usada pra desenhar a água (World3D usa esses
+// mesmos pontos). Precisam existir aqui, não só dentro do componente, porque `terrainHeight`
+// carva uma "bacia" rebaixada nesses pontos (ver abaixo) — sem isso a ondulação natural do
+// terreno furava o disco de água plano em alguns lugares (o "chão dentro d'água" que ficava
+// estranho, "bugado", quando o usuário testou pela primeira vez).
+const POND_CENTER_DIR = new Vector3(-0.8552, 0.0628, 0.5145).normalize()
+// Reescolhido pra ficar longe de todos os platôs (o ponto original ficava perto o bastante do
+// platô 3 pra sua altura de até 2.1 furar a bacia rebaixada da piscina, ~0.73 de sobra pro lado
+// errado — media do céu ao chão, "o mapa" literalmente quebrado ali).
+const POOL_CENTER_DIR = new Vector3(0.4156, 0.809, 0.4156).normalize()
+
+function applyBasin(height: number, dir: Vector3, centerDir: Vector3, radius: number, depth: number): number {
+  const dot = Math.max(-1, Math.min(1, Vector3.Dot(dir, centerDir)))
+  const angle = Math.acos(dot)
+  if (angle >= radius) return height
+  const t = 1 - angle / radius
+  const smooth = t * t * (3 - 2 * t)
+  return height - smooth * depth
+}
+
 // Altura do terreno acima do raio-base do planeta, num ponto (direção normalizada) qualquer —
 // ondulação suave de fundo + platôs com topo achatado (smoothstep na borda, não penhasco reto).
 // Função única reaproveitada pra deformar a malha do chão E posicionar tudo que fica em cima
@@ -117,6 +138,13 @@ function terrainHeight(dir: Vector3): number {
       height = Math.max(height, smooth * plateau.height)
     }
   }
+
+  // Bacia da lagoa/piscina: rebaixa incondicionalmente (não é um "máximo" tipo platô — é sempre
+  // mais baixo que a vizinhança ali, senão o disco de água plano acaba mais baixo que algum
+  // solavanco do ruído de base bem no meio da lagoa, furando o chão pra fora d'água).
+  height = applyBasin(height, dir, POND_CENTER_DIR, 0.45, 0.65)
+  height = applyBasin(height, dir, POOL_CENTER_DIR, 0.32, 0.55)
+
   return height
 }
 
@@ -208,9 +236,35 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
   hair.position.y = 1.24
   addMesh(hair, hairMat, root)
 
-  const backpack = MeshBuilder.CreateBox('backpack', { width: 0.34, height: 0.34, depth: 0.16 }, scene)
-  backpack.position = new Vector3(0, 0.8, -0.2)
+  // Mochila com detalhes que dão pra reconhecer de costas (única vista que a câmera em 3ª
+  // pessoa mostra durante o jogo): corpo alto/estreito (proporção de mochila, não cubo), aba no
+  // topo, duas bolsas laterais e as pontas das alças aparecendo por cima dos ombros.
+  const backpackFlapMat = new PBRMaterial('backpackFlapMat', scene)
+  backpackFlapMat.albedoColor = backpackMat.albedoColor.scale(0.75)
+  backpackFlapMat.roughness = 0.8
+  const strapMat = new PBRMaterial('backpackStrapMat', scene)
+  strapMat.albedoColor = new Color3(0.15, 0.13, 0.12)
+  strapMat.roughness = 0.85
+
+  const backpack = MeshBuilder.CreateBox('backpack', { width: 0.28, height: 0.38, depth: 0.15 }, scene)
+  backpack.position = new Vector3(0, 0.79, -0.21)
   addMesh(backpack, backpackMat, root)
+
+  const backpackFlap = MeshBuilder.CreateBox('backpackFlap', { width: 0.3, height: 0.09, depth: 0.16 }, scene)
+  backpackFlap.position = new Vector3(0, 0.79 + 0.19 + 0.03, -0.21)
+  addMesh(backpackFlap, backpackFlapMat, root)
+
+  for (const side of [-1, 1]) {
+    const pouch = MeshBuilder.CreateCapsule(`backpackPouch${side}`, { height: 0.22, radius: 0.045 }, scene)
+    pouch.rotation.x = Math.PI / 2
+    pouch.position = new Vector3(side * 0.16, 0.72, -0.21)
+    addMesh(pouch, backpackFlapMat, root)
+
+    const strap = MeshBuilder.CreateCapsule(`backpackStrap${side}`, { height: 0.16, radius: 0.028 }, scene)
+    strap.rotation.x = 0.55
+    strap.position = new Vector3(side * 0.1, 0.98, -0.06)
+    addMesh(strap, strapMat, root)
+  }
 
   // Cada membro tem 2 segmentos (coxa+canela, ou braço+antebraço) com uma junta no meio
   // (joelho/cotovelo) — evita o visual "robotizado" de uma perna/braço só, rígida.
@@ -261,6 +315,213 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
     elbowPivotL: arm1.lowerPivot,
     elbowPivotR: arm2.lowerPivot,
   }
+}
+
+// Bichinhos que vagam pelo planeta (pedido do usuário: "animais no mundo, animais aleatorios")
+// — feitos só de primitivas, iguais em espírito ao personagem, mas bem mais simples (sem
+// articulação). A IA de cada um é: anda até um ponto aleatório na faixa caminhável, descansa um
+// tempo, escolhe outro ponto — tudo em coordenadas de "up local" (direção a partir do centro do
+// planeta), igual ao resto do mundo, pra já nascer alinhado à curvatura sem lógica extra.
+type CritterKind = 'coelho' | 'esquilo' | 'passarinho'
+
+interface Critter {
+  kind: CritterKind
+  root: TransformNode
+  wingL?: TransformNode
+  wingR?: TransformNode
+  up: Vector3
+  targetUp: Vector3
+  forward: Vector3
+  moveSpeed: number
+  hopPhase: number
+  hopSpeed: number
+  restTimer: number
+  flightHeight: number
+}
+
+function buildCoelho(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('coelhoRoot', scene)
+  const furMat = new PBRMaterial('coelhoFur', scene)
+  furMat.albedoColor = new Color3(0.92, 0.9, 0.85)
+  furMat.roughness = 0.85
+
+  function add(mesh: Mesh) {
+    mesh.material = furMat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateCapsule('coelhoBody', { height: 0.26, radius: 0.11 }, scene)
+  body.rotation.x = Math.PI / 2
+  body.position.y = 0.13
+  add(body)
+
+  const head = MeshBuilder.CreateSphere('coelhoHead', { diameter: 0.16 }, scene)
+  head.position = new Vector3(0, 0.18, 0.14)
+  add(head)
+
+  for (const side of [-1, 1]) {
+    const ear = MeshBuilder.CreateCapsule(`coelhoEar${side}`, { height: 0.16, radius: 0.028 }, scene)
+    ear.position = new Vector3(side * 0.045, 0.29, 0.14)
+    ear.rotation.z = side * 0.15
+    add(ear)
+  }
+
+  const tail = MeshBuilder.CreateSphere('coelhoTail', { diameter: 0.09 }, scene)
+  tail.position = new Vector3(0, 0.15, -0.13)
+  add(tail)
+
+  return root
+}
+
+function buildEsquilo(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('esquiloRoot', scene)
+  const furMat = new PBRMaterial('esquiloFur', scene)
+  furMat.albedoColor = new Color3(0.55, 0.32, 0.16)
+  furMat.roughness = 0.85
+
+  function add(mesh: Mesh) {
+    mesh.material = furMat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateCapsule('esquiloBody', { height: 0.2, radius: 0.09 }, scene)
+  body.rotation.x = Math.PI / 2
+  body.position.y = 0.1
+  add(body)
+
+  const head = MeshBuilder.CreateSphere('esquiloHead', { diameter: 0.13 }, scene)
+  head.position = new Vector3(0, 0.14, 0.13)
+  add(head)
+
+  // Rabo grande arqueado por trás — o traço mais reconhecível de esquilo.
+  const tail = MeshBuilder.CreateCapsule('esquiloTail', { height: 0.3, radius: 0.075 }, scene)
+  tail.position = new Vector3(0, 0.24, -0.15)
+  tail.rotation.x = -0.85
+  add(tail)
+
+  return root
+}
+
+function buildPassarinho(
+  scene: Scene,
+  shadowGenerator: ShadowGenerator,
+  bodyColor: Color3,
+): { root: TransformNode; wingL: TransformNode; wingR: TransformNode } {
+  const root = new TransformNode('passarinhoRoot', scene)
+  const bodyMat = new PBRMaterial('passarinhoBodyMat', scene)
+  bodyMat.albedoColor = bodyColor
+  bodyMat.roughness = 0.7
+  const beakMat = new PBRMaterial('passarinhoBeakMat', scene)
+  beakMat.albedoColor = new Color3(0.9, 0.6, 0.15)
+  beakMat.roughness = 0.5
+
+  const body = MeshBuilder.CreateSphere('passarinhoBody', { diameterX: 0.14, diameterY: 0.13, diameterZ: 0.2 }, scene)
+  body.material = bodyMat
+  body.parent = root
+  shadowGenerator.addShadowCaster(body)
+
+  const beak = MeshBuilder.CreateCylinder('passarinhoBeak', { height: 0.08, diameterTop: 0, diameterBottom: 0.05 }, scene)
+  beak.rotation.x = Math.PI / 2
+  beak.position = new Vector3(0, 0, 0.13)
+  beak.material = beakMat
+  beak.parent = root
+
+  function buildWing(side: number): TransformNode {
+    const pivot = new TransformNode(`passarinhoWingPivot${side}`, scene)
+    pivot.position = new Vector3(side * 0.05, 0.01, 0)
+    pivot.parent = root
+    const wing = MeshBuilder.CreateBox(`passarinhoWing${side}`, { width: 0.16, height: 0.015, depth: 0.09 }, scene)
+    wing.position = new Vector3(side * 0.08, 0, 0)
+    wing.material = bodyMat
+    wing.parent = pivot
+    shadowGenerator.addShadowCaster(wing)
+    return pivot
+  }
+
+  return { root, wingL: buildWing(-1), wingR: buildWing(1) }
+}
+
+// Bichos da lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — presos a uma área
+// pequena, então a IA aqui é mais simples que a dos bichos de terra: cada um percorre um círculo
+// no "plano" local da lagoa (aproximação razoável pra um raio pequeno, a curvatura do planeta é
+// desprezível nessa escala), com raio/velocidade/fase próprios pra não nadarem em sincronia.
+interface PondCritter {
+  root: TransformNode
+  angleOffset: number
+  radius: number
+  speed: number
+  bobPhase: number
+  depth: number
+}
+
+function buildPeixe(scene: Scene, colorSeed: number): Mesh {
+  const mat = new PBRMaterial(`peixeMat${colorSeed}`, scene)
+  mat.albedoColor = Color3.Lerp(new Color3(0.85, 0.45, 0.15), new Color3(0.9, 0.75, 0.2), colorSeed)
+  mat.roughness = 0.3
+  mat.metallic = 0.2
+  const body = MeshBuilder.CreateSphere('peixeBody', { diameterX: 0.22, diameterY: 0.09, diameterZ: 0.11 }, scene)
+  body.material = mat
+  const tail = MeshBuilder.CreateCylinder('peixeTail', { height: 0.01, diameterTop: 0, diameterBottom: 0.13, tessellation: 3 }, scene)
+  tail.rotation.z = Math.PI / 2
+  tail.position.x = -0.14
+  tail.material = mat
+  tail.parent = body
+  return body
+}
+
+function buildPato(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('patoRoot', scene)
+  const bodyMat = new PBRMaterial('patoBodyMat', scene)
+  bodyMat.albedoColor = new Color3(0.95, 0.95, 0.9)
+  bodyMat.roughness = 0.7
+  const beakMat = new PBRMaterial('patoBeakMat', scene)
+  beakMat.albedoColor = new Color3(0.95, 0.6, 0.1)
+  beakMat.roughness = 0.5
+
+  const body = MeshBuilder.CreateSphere('patoBody', { diameterX: 0.3, diameterY: 0.2, diameterZ: 0.38 }, scene)
+  body.material = bodyMat
+  body.parent = root
+  shadowGenerator.addShadowCaster(body)
+
+  const head = MeshBuilder.CreateSphere('patoHead', { diameter: 0.15 }, scene)
+  head.position = new Vector3(0, 0.16, 0.15)
+  head.material = bodyMat
+  head.parent = root
+
+  const beak = MeshBuilder.CreateCylinder('patoBeak', { height: 0.1, diameterTop: 0.02, diameterBottom: 0.08 }, scene)
+  beak.rotation.x = Math.PI / 2
+  beak.position = new Vector3(0, 0.14, 0.24)
+  beak.material = beakMat
+  beak.parent = root
+
+  return root
+}
+
+function buildTartaruga(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('tartarugaRoot', scene)
+  const shellMat = new PBRMaterial('tartarugaShellMat', scene)
+  shellMat.albedoColor = new Color3(0.28, 0.45, 0.2)
+  shellMat.roughness = 0.75
+  const skinMat = new PBRMaterial('tartarugaSkinMat', scene)
+  skinMat.albedoColor = new Color3(0.42, 0.55, 0.32)
+  skinMat.roughness = 0.7
+
+  const shell = MeshBuilder.CreateSphere('tartarugaShell', { diameterX: 0.34, diameterY: 0.2, diameterZ: 0.28, slice: 0.55 }, scene)
+  shell.material = shellMat
+  shell.parent = root
+  shell.position.y = 0.1
+  shadowGenerator.addShadowCaster(shell)
+
+  const head = MeshBuilder.CreateSphere('tartarugaHead', { diameter: 0.1 }, scene)
+  head.material = skinMat
+  head.parent = root
+  head.position = new Vector3(0, 0.1, 0.17)
+
+  return root
 }
 
 export function World3D({
@@ -370,6 +631,7 @@ export function World3D({
     const remotePlayers = new Map<string, RemotePlayer>()
     let netSendTimer = 0
     let keysDown: Record<string, boolean> = {}
+    let spaceWasDown = false
 
     async function setup() {
       // Áudio ambiente sintetizado (vento + trilha suave) — só inicia aqui porque o jogador já
@@ -407,8 +669,41 @@ export function World3D({
       VertexData.ComputeNormals(planetPositions, planet.getIndices()!, planetNormals)
       planet.updateVerticesData(VertexBuffer.NormalKind, planetNormals)
 
+      // Cor por vértice pra quebrar o verde liso ("morros sem textura") sem precisar de um
+      // arquivo de textura: nas partes íngremes (rampa dos platôs) mistura um tom de
+      // terra/pedra; no resto, uma variação sutil entre verde e verde-seco via ruído barato —
+      // o mesmo tipo de seno/cosseno já usado em `terrainHeight`, não uma textura de verdade.
+      const grassColor = new Color3(0.42, 0.68, 0.4)
+      const dryGrassColor = new Color3(0.58, 0.64, 0.34)
+      const rockColor = new Color3(0.45, 0.4, 0.34)
+      const planetColors: number[] = []
+      for (let i = 0; i < planetPositions.length; i += 3) {
+        const px = planetPositions[i]
+        const py = planetPositions[i + 1]
+        const pz = planetPositions[i + 2]
+        const nx = planetNormals[i]
+        const ny = planetNormals[i + 1]
+        const nz = planetNormals[i + 2]
+        const posLen = Math.sqrt(px * px + py * py + pz * pz) || 1
+        const slope = (nx * px + ny * py + nz * pz) / posLen // 1 = plano, menor = íngreme
+        const rockBlend = Math.max(0, Math.min(1, (0.94 - slope) / 0.3))
+        const noise = Math.sin(px * 2.3 + pz * 1.7) * 0.5 + Math.cos(py * 3.1 + px * 1.1) * 0.5
+        const dryBlend = Math.max(0, Math.min(1, noise * 0.5 + 0.5)) * 0.4
+
+        let r = grassColor.r + (dryGrassColor.r - grassColor.r) * dryBlend
+        let g = grassColor.g + (dryGrassColor.g - grassColor.g) * dryBlend
+        let b = grassColor.b + (dryGrassColor.b - grassColor.b) * dryBlend
+        r += (rockColor.r - r) * rockBlend
+        g += (rockColor.g - g) * rockBlend
+        b += (rockColor.b - b) * rockBlend
+        planetColors.push(r, g, b, 1)
+      }
+      planet.setVerticesData(VertexBuffer.ColorKind, planetColors)
+
       const planetMat = new PBRMaterial('planetMat', scene)
-      planetMat.albedoColor = new Color3(0.42, 0.68, 0.4)
+      // Branco — a cor de verdade vem da cor por vértice acima; se o albedo também tivesse cor,
+      // as duas se multiplicariam e escureceriam tudo.
+      planetMat.albedoColor = Color3.White()
       planetMat.roughness = 0.97
       planetMat.metallic = 0
       planet.material = planetMat
@@ -503,6 +798,49 @@ export function World3D({
         coins.push({ pivot: coinPivot, mesh: coinMesh, worldPos: coinPos, collected: false })
       }
 
+      // Bichinhos vagando pelo planeta (pedido do usuário: "animais no mundo, animais
+      // aleatorios") — tipo e ponto de partida sorteados, cada um com velocidade/fase própria
+      // pra não se moverem em sincronia. IA de vagar (wander) roda no loop de render abaixo.
+      const critters: Critter[] = []
+      const CRITTER_COUNT = 20
+      for (let i = 0; i < CRITTER_COUNT; i++) {
+        const kind: CritterKind = i < 8 ? 'coelho' : i < 14 ? 'esquilo' : 'passarinho'
+        const phi = Math.PI * 0.14 + Math.random() * Math.PI * 0.6
+        const theta = Math.random() * Math.PI * 2
+        const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+
+        let root: TransformNode
+        let wingL: TransformNode | undefined
+        let wingR: TransformNode | undefined
+        if (kind === 'coelho') {
+          root = buildCoelho(scene, shadowGenerator)
+        } else if (kind === 'esquilo') {
+          root = buildEsquilo(scene, shadowGenerator)
+        } else {
+          const passarinhoColor = Color3.Lerp(new Color3(0.75, 0.25, 0.2), new Color3(0.3, 0.4, 0.75), Math.random())
+          const built = buildPassarinho(scene, shadowGenerator, passarinhoColor)
+          root = built.root
+          wingL = built.wingL
+          wingR = built.wingR
+        }
+
+        critters.push({
+          kind,
+          root,
+          wingL,
+          wingR,
+          up,
+          targetUp: up,
+          forward: Vector3.Cross(up, Vector3.Right()).normalize(),
+          moveSpeed: (kind === 'passarinho' ? 0.35 : 0.18) + Math.random() * 0.12,
+          hopPhase: Math.random() * Math.PI * 2,
+          hopSpeed: (kind === 'passarinho' ? 12 : 8) + Math.random() * 3,
+          restTimer: Math.random() * 3,
+          flightHeight: kind === 'passarinho' ? 1.6 + Math.random() * 0.6 : 0,
+        })
+      }
+      if (import.meta.env.DEV) (window as any).__critters = critters
+
       // Nuvens — grupos de "pufes" esféricos achatados, cada grupo derivando lentamente ao
       // redor do eixo polar do planeta (efeito de vento/clima, sem física real envolvida).
       const cloudMat = new PBRMaterial('cloudMat', scene)
@@ -589,6 +927,54 @@ export function World3D({
       riverMat.alpha = 0.92
       river.material = riverMat
       river.receiveShadows = true
+
+      // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num
+      // ponto de theta bem distante da faixa do rio (0.15-1.35) pra não sobrepor. Os bichos da
+      // lagoa se movem em círculos num plano local tangente à esfera (aproximação razoável pro
+      // raio pequeno da lagoa — a curvatura do planeta nessa escala é desprezível), não com a
+      // mesma IA de "vagar pela esfera toda" dos bichos de terra, porque ficam confinados aqui.
+      const pondUp = POND_CENTER_DIR
+      const pondCenterPos = pondUp.scale(PLANET_RADIUS + terrainHeight(pondUp) + 0.3)
+      const pondForward = Vector3.Cross(pondUp, Vector3.Right()).normalize()
+      const pondRight = Vector3.Cross(pondUp, pondForward).normalize()
+      const pondRadius = 1.6
+
+      // Cilindro baixo, não CreateDisc — o disco nasce de pé (normal no eixo Z), então
+      // `alignmentQuaternion` (que assume a face "de cima" no eixo Y) deixaria a lagoa em pé
+      // feito uma parede. O cilindro já nasce deitado (eixo Y, igual à moeda), sem esse problema.
+      const pond = MeshBuilder.CreateCylinder('pond', { diameter: pondRadius * 2, height: 0.04, tessellation: 32 }, scene)
+      pond.material = riverMat
+      pond.position.copyFrom(pondCenterPos)
+      pond.rotationQuaternion = alignmentQuaternion(pondUp)
+      pond.receiveShadows = true
+
+      const pondCritters: PondCritter[] = []
+      for (let i = 0; i < 3; i++) {
+        pondCritters.push({
+          root: buildPeixe(scene, i / 2),
+          angleOffset: (i / 3) * Math.PI * 2,
+          radius: 0.5 + i * 0.25,
+          speed: 0.9 + i * 0.15,
+          bobPhase: Math.random() * Math.PI * 2,
+          depth: -0.06,
+        })
+      }
+      pondCritters.push({
+        root: buildPato(scene, shadowGenerator),
+        angleOffset: Math.random() * Math.PI * 2,
+        radius: 1.05,
+        speed: 0.4,
+        bobPhase: Math.random() * Math.PI * 2,
+        depth: 0.03,
+      })
+      pondCritters.push({
+        root: buildTartaruga(scene, shadowGenerator),
+        angleOffset: Math.random() * Math.PI * 2,
+        radius: 1.2,
+        speed: 0.18,
+        bobPhase: Math.random() * Math.PI * 2,
+        depth: 0.01,
+      })
 
       // Grama animada por vento — shader customizado (não textura), milhares de lâminas via
       // thin instances (1 draw call). O balanço acontece em espaço local do vértice, antes da
@@ -800,6 +1186,84 @@ export function World3D({
       portalMeshes.forEach(applyPortalVisual)
       ;(scene as any).__refreshPortals = () => portalMeshes.forEach(applyPortalVisual)
 
+      // Piscina com gente (pedido do usuário: "picina com gente nela") — separada da lagoa
+      // (theta bem distante: lagoa fica em 2.6, rio em 0.15-1.35). Reaproveita o mesmo boneco
+      // do personagem/professor (buildStudentFigure), só que parado (sem ciclo de caminhada) e
+      // afundado até a altura da água, com um balancinho de "boiando" no loop de render.
+      const poolUp = POOL_CENTER_DIR
+      const poolCenterPos = poolUp.scale(PLANET_RADIUS + terrainHeight(poolUp) + 0.25)
+      const poolForward = Vector3.Cross(poolUp, Vector3.Right()).normalize()
+      const poolRight = Vector3.Cross(poolUp, poolForward).normalize()
+      const poolRadius = 1.1
+
+      const poolWaterMat = new PBRMaterial('poolWaterMat', scene)
+      poolWaterMat.albedoColor = new Color3(0.2, 0.55, 0.85)
+      poolWaterMat.roughness = 0.08
+      poolWaterMat.metallic = 0.05
+      poolWaterMat.alpha = 0.85
+      // Cilindro baixo, não CreateDisc — mesmo motivo da lagoa (disco nasce em pé, cilindro já
+      // nasce deitado no eixo Y e alinha certo com `alignmentQuaternion`).
+      const poolWater = MeshBuilder.CreateCylinder('poolWater', { diameter: poolRadius * 2, height: 0.04, tessellation: 32 }, scene)
+      poolWater.material = poolWaterMat
+      poolWater.position.copyFrom(poolCenterPos)
+      poolWater.rotationQuaternion = alignmentQuaternion(poolUp)
+
+      const poolRimMat = new PBRMaterial('poolRimMat', scene)
+      poolRimMat.albedoColor = new Color3(0.88, 0.86, 0.8)
+      poolRimMat.roughness = 0.6
+      const poolRim = MeshBuilder.CreateTorus('poolRim', { diameter: poolRadius * 2 + 0.16, thickness: 0.16, tessellation: 32 }, scene)
+      poolRim.material = poolRimMat
+      // A água já está bem acima do chão real (bacia rebaixada + offset), então a borda só
+      // precisa de um empurrãozinho pra ficar rente à linha d'água, não afundada nela.
+      poolRim.position.copyFrom(poolCenterPos.add(poolUp.scale(0.02)))
+      poolRim.rotationQuaternion = alignmentQuaternion(poolUp)
+      shadowGenerator.addShadowCaster(poolRim)
+
+      const POOL_SHIRT_COLORS = [
+        new Color3(0.9, 0.35, 0.35),
+        new Color3(0.3, 0.65, 0.85),
+        new Color3(0.95, 0.75, 0.2),
+        new Color3(0.5, 0.8, 0.4),
+        new Color3(0.75, 0.4, 0.85),
+      ]
+      const POOL_PEOPLE_COUNT = 5
+      const POOL_CHAT_LINES = ['Oi!', 'kkk', 'Que dia bom!', '🌞', '💧']
+      const poolPeople: {
+        figure: StudentFigure
+        localX: number
+        localZ: number
+        phase: number
+        chatLabel: TextBlock
+        chatTimer: number
+      }[] = []
+      for (let i = 0; i < POOL_PEOPLE_COUNT; i++) {
+        const figure = buildStudentFigure(scene, POOL_SHIRT_COLORS[i], shadowGenerator)
+        const angle = (i / POOL_PEOPLE_COUNT) * Math.PI * 2
+        const localX = Math.cos(angle) * poolRadius * 0.5
+        const localZ = Math.sin(angle) * poolRadius * 0.5
+
+        // Bolha de fala que pisca de vez em quando — só pra dar a impressão de estarem
+        // conversando (não é chat de verdade, é decoração ambiente).
+        const chatLabel = new TextBlock(`poolChat-${i}`, '')
+        chatLabel.color = 'white'
+        chatLabel.fontSize = 20
+        chatLabel.outlineWidth = 3
+        chatLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        chatLabel.alpha = 0
+        guiTexture.addControl(chatLabel)
+        chatLabel.linkWithMesh(figure.head)
+        chatLabel.linkOffsetY = -55
+
+        poolPeople.push({
+          figure,
+          localX,
+          localZ,
+          phase: Math.random() * Math.PI * 2,
+          chatLabel,
+          chatTimer: 2 + Math.random() * 4,
+        })
+      }
+
       // Multiplayer local (mesma rede): outros jogadores conectados no mesmo servidor de
       // retransmissão (app/server/relay.cjs) aparecem como o mesmo personagem estudante, com o
       // nome flutuando acima. Cada um mantém progresso de missão individual/local.
@@ -922,7 +1386,19 @@ export function World3D({
 
           const throttle = Math.max(-1, Math.min(1, -y))
           const currentVel = body.getLinearVelocity()
-          const radialVel = localUp.scale(Vector3.Dot(currentVel, localUp))
+          let radialSpeed = Vector3.Dot(currentVel, localUp)
+
+          // Pulo (espaço): só dispara na borda de subida da tecla (não repete segurando) e só
+          // quando "no chão" (perto da altura de repouso) — evita pulo infinito/voar.
+          const spaceDown = !!keysDown[' ']
+          const groundDist = PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05
+          const grounded = dist <= groundDist + 0.08
+          if (spaceDown && !spaceWasDown && grounded) {
+            radialSpeed = JUMP_SPEED
+          }
+          spaceWasDown = spaceDown
+
+          const radialVel = localUp.scale(radialSpeed)
           const tangentVel = facing.scale(throttle * MAX_SPEED)
           body.setLinearVelocity(tangentVel.add(radialVel))
           // Trava a rotação física do colisor — é uma cápsula em pé, não deve tombar/rolar
@@ -936,7 +1412,7 @@ export function World3D({
           Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
           studentFigure.root.position.copyFrom(localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + 0.02))
-          studentFigure.root.rotationQuaternion = tmpQuat
+          studentFigure.root.rotationQuaternion = tmpQuat.clone()
 
           // Ciclo de caminhada — só avança enquanto o personagem realmente anda; som de
           // passo sintetizado disparado a cada troca de perna (cruzamento de zero do seno).
@@ -1039,6 +1515,127 @@ export function World3D({
             if (coin.collected) continue
             coin.mesh.rotation.y = time * 2.4
             coin.mesh.position.y = Math.sin(time * 2.6 + coin.worldPos.x) * 0.12
+          }
+        }
+
+        // Bichinhos de terra: IA de vagar (anda até um alvo aleatório na esfera, descansa,
+        // escolhe outro) + pulinho enquanto anda (terrestres) ou voo com bater de asa (pássaro).
+        for (const c of critters) {
+          const angleToTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(c.up, c.targetUp))))
+          const moving = angleToTarget > 0.03
+          if (!moving) {
+            c.restTimer -= dt
+            if (c.restTimer <= 0) {
+              // Alvo pertinho do ponto atual (raio pequeno no plano tangente), não em qualquer
+              // lugar da faixa caminhável — um alvo totalmente aleatório fazia o bicho andar em
+              // linha reta por boa parte do planeta, parecendo um robô "teleportando" de vagar
+              // em vagar, não um bicho circulando pela vizinhança onde nasceu.
+              const seed = Math.abs(c.up.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+              const tangentA = Vector3.Cross(c.up, seed).normalize()
+              const tangentB = Vector3.Cross(c.up, tangentA).normalize()
+              const wanderAngle = Math.random() * Math.PI * 2
+              const wanderRadius = 0.15 + Math.random() * 0.25
+              const offset = tangentA
+                .scale(Math.cos(wanderAngle) * wanderRadius)
+                .add(tangentB.scale(Math.sin(wanderAngle) * wanderRadius))
+              c.targetUp = c.up.add(offset).normalize()
+              c.restTimer = 1.5 + Math.random() * 3
+            }
+          } else {
+            const axis = Vector3.Cross(c.up, c.targetUp)
+            if (axis.lengthSquared() > 1e-8) {
+              axis.normalize()
+              const step = Math.min(c.moveSpeed * dt, angleToTarget)
+              c.up = rotateAroundAxis(c.up, axis, step).normalize()
+            }
+          }
+
+          let fwd = c.targetUp.subtract(c.up.scale(Vector3.Dot(c.targetUp, c.up)))
+          if (fwd.lengthSquared() > 1e-6) {
+            fwd.normalize()
+            c.forward = fwd
+          } else {
+            fwd = c.forward
+          }
+
+          const groundPos = c.up.scale(PLANET_RADIUS + terrainHeight(c.up) + c.flightHeight)
+          if (c.kind === 'passarinho') {
+            const bob = Math.sin(time * 2 + c.hopPhase) * 0.15
+            c.root.position.copyFrom(groundPos.add(c.up.scale(bob)))
+            const flap = Math.sin(time * c.hopSpeed) * 0.9
+            if (c.wingL) c.wingL.rotation.z = flap
+            if (c.wingR) c.wingR.rotation.z = -flap
+          } else {
+            c.hopPhase += dt * c.hopSpeed * (moving ? 1 : 0.15)
+            const hop = Math.max(0, Math.sin(c.hopPhase)) * 0.05
+            c.root.position.copyFrom(groundPos.add(c.up.scale(hop)))
+          }
+
+          const right = Vector3.Cross(c.up, fwd).normalize()
+          Matrix.FromXYZAxesToRef(right, c.up, fwd, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          c.root.rotationQuaternion = tmpQuat.clone()
+        }
+
+        // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
+        // fase próprios), orientados pra frente da direção de nado.
+        for (const pc of pondCritters) {
+          const t = time * pc.speed + pc.angleOffset
+          const localX = Math.cos(t) * pc.radius
+          const localZ = Math.sin(t) * pc.radius
+          const bob = Math.sin(time * 2.4 + pc.bobPhase) * 0.015
+          const worldPos = pondCenterPos
+            .add(pondRight.scale(localX))
+            .add(pondForward.scale(localZ))
+            .add(pondUp.scale(pc.depth + bob))
+          pc.root.position.copyFrom(worldPos)
+
+          const dirX = -Math.sin(t)
+          const dirZ = Math.cos(t)
+          const fwd = pondRight.scale(dirX).add(pondForward.scale(dirZ)).normalize()
+          const right = Vector3.Cross(pondUp, fwd).normalize()
+          Matrix.FromXYZAxesToRef(right, pondUp, fwd, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          pc.root.rotationQuaternion = tmpQuat.clone()
+        }
+
+        // Gente na piscina: parada (sem ciclo de caminhada), só um balancinho vertical de
+        // "boiando" — cada um com fase própria pra não subir/descer em sincronia.
+        for (const pp of poolPeople) {
+          const bob = Math.sin(time * 1.6 + pp.phase) * 0.05
+          // Deriva devagar em círculo dentro da piscina, em vez de ficar plantado no mesmo
+          // ponto — "se mexer" sem precisar de física de água de verdade.
+          const drift = time * 0.15 + pp.phase
+          const driftX = pp.localX + Math.cos(drift) * 0.12
+          const driftZ = pp.localZ + Math.sin(drift) * 0.12
+          const worldPos = poolCenterPos
+            .add(poolRight.scale(driftX))
+            .add(poolForward.scale(driftZ))
+            .add(poolUp.scale(-0.32 + bob))
+          pp.figure.root.position.copyFrom(worldPos)
+
+          // Gira devagar (parece estar batendo papo, olhando de um lado pro outro) +
+          // "nadadinha de cachorrinho" nos braços — não fica uma estátua parada boiando.
+          const wobble = Math.sin(time * 0.6 + pp.phase) * 0.35
+          pp.figure.root.rotationQuaternion = alignmentQuaternion(poolUp).multiply(
+            Quaternion.RotationAxis(Vector3.Up(), wobble),
+          )
+          const paddle = Math.sin(time * 3.2 + pp.phase) * 0.4
+          pp.figure.armPivotL.rotation.x = paddle
+          pp.figure.armPivotR.rotation.x = -paddle
+
+          // Bolha de fala: some, espera, aparece com uma frase por ~1.6s, some de novo — cada
+          // um com timer próprio pra não falarem todos junto.
+          pp.chatTimer -= dt
+          if (pp.chatTimer <= 0) {
+            if (pp.chatLabel.alpha > 0) {
+              pp.chatLabel.alpha = 0
+              pp.chatTimer = 2 + Math.random() * 4
+            } else {
+              pp.chatLabel.text = POOL_CHAT_LINES[Math.floor(Math.random() * POOL_CHAT_LINES.length)]
+              pp.chatLabel.alpha = 1
+              pp.chatTimer = 1.6
+            }
           }
         }
 
