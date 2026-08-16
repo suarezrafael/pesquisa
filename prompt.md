@@ -38,8 +38,8 @@ Desenhe um MVP com:
 ## 6) Backlog Inicial Priorizado
 Classifique como P0, P1, P2:
 - P0: onboarding curto, gameplay base, 10 quests, progresso local/conta, UI mobile.
-- P1: cooperação em sala, ranking por turma/amigos, eventos semanais.
-- P2: mundos extras, customização avançada, chat expandido com moderação.
+- P1: cooperação em sala, ranking por turma/amigos, eventos semanais, portal dos responsáveis + parental gate + integração de pagamento (ver seção 15), cosméticos desbloqueáveis por assinatura.
+- P2: mundos extras, customização avançada, chat expandido com moderação, relatórios de progresso automatizados por e-mail, múltiplos perfis por conta família, moeda bônus por assinatura.
 
 ## 7) Stack Recomendada (sem custo inicial)
 ### Opção A (mais rápida para MVP web/mobile)
@@ -48,11 +48,23 @@ Classifique como P0, P1, P2:
 - **Backend:** Supabase (Auth, Postgres, Realtime, Storage)
 - **Infra:** Cloudflare (CDN) + Supabase free tier
 - **Analytics:** PostHog Cloud (free tier)
+- **Pagamentos:** Stripe Checkout (sem mensalidade, só taxa por transação) — ver estratégia de monetização na seção 15
 
 ### Opção B (foco em 3D leve)
 - **Front-end/game:** PlayCanvas ou Babylon.js + React
 - **Backend:** Firebase (Auth, Firestore, Functions)
 - **Infra:** Firebase Hosting
+
+### Opção C (back-end em .NET/C#) — recomendada se você já domina C#
+Mantém o mesmo front-end/jogo da Opção A (React + TS + Vite + Phaser 3 como PWA), trocando só a camada de back-end para uma stack que você consegue ler, revisar e depurar diretamente:
+- **Front-end/game:** React + TypeScript + Vite + Phaser 3 (igual à Opção A, sem mudança na proposta de produto).
+- **Backend:** ASP.NET Core Minimal API (C#), publicado como Azure Functions (isolated worker, .NET 8) dentro do plano gratuito do Azure Static Web Apps — hospedagem do front + API + SSL + domínio próprio no mesmo tier gratuito.
+- **Tempo real (coop/sala):** Azure SignalR Service, tier gratuito F1 (até 20 conexões simultâneas e 20 mil mensagens/dia) — suficiente para salas pequenas de MVP; migrar para tier pago só quando o uso crescer.
+- **Banco de dados:** continua Supabase Postgres (free tier), acessado do .NET via Npgsql/Entity Framework Core — evita reescrever Auth/Storage do zero, mas toda a lógica de negócio (regras de quest, progressão, parental gate, entitlements de assinatura) fica em C#, sob seu controle e revisão.
+- **Autenticação:** chamar a API REST do Supabase Auth (GoTrue) a partir do back-end .NET, reaproveitando login social pronto; alternativa (mais trabalho, mais familiar) é usar ASP.NET Core Identity + JWT próprio.
+- **Pagamentos:** Stripe .NET SDK, com o endpoint de webhook (`checkout.session.completed`, etc. — seção 15.3) implementado como uma Azure Function em C#.
+- **Custo:** os tiers gratuitos do Azure Static Web Apps, Azure Functions (1 milhão de execuções/mês grátis) e Azure SignalR F1 cobrem o MVP sem custo — só é exigido cartão de crédito para criar a conta Azure, sem cobrança enquanto o uso ficar dentro dos limites gratuitos.
+- **Trade-off:** essa opção adiciona uma stack extra (Azure) além do Cloudflare/Supabase da Opção A, então só vale a pena se a familiaridade com C# para revisar o código pesar mais do que a simplicidade de manter tudo dentro do Supabase.
 
 ## 8) Hospedagem Gratuita (sem Play Store)
 ### Front-end
@@ -60,6 +72,7 @@ Classifique como P0, P1, P2:
 
 ### Backend
 - Supabase free, Firebase Spark, ou Railway/Render (limites gratuitos variam).
+- Se o back-end for em .NET/C# (Opção C da seção 7): Azure Static Web Apps + Azure Functions (tier gratuito), com Azure SignalR Service F1 para tempo real.
 
 ### Servidor de jogo (multiplayer simples)
 - Colyseus em Render/Railway/Fly.io free tier (quando disponível).
@@ -102,3 +115,37 @@ Com base neste relatório, gere:
 
 ## 14) Prompt operacional (para usar em IA de produto)
 "Com base no contexto acima, proponha 3 conceitos de jogo educativo para crianças de 10 anos. Para cada conceito, descreva: loop central, mecânicas de cooperação/interatividade, progressão por quests/recompensas, recursos sociais seguros, plano técnico (stack + hospedagem gratuita), risco principal e escopo de MVP em 6 semanas. Ao final, escolha 1 conceito vencedor com justificativa de mercado e gere backlog P0/P1/P2 + arquitetura + plano de lançamento como PWA sem Play Store."
+
+## 15) Estratégia de Monetização
+
+### 15.1 Modelo escolhido: Freemium com assinatura vendida aos responsáveis (nunca à criança)
+- O núcleo do jogo — quests educativas, progressão, cooperação, níveis — permanece 100% gratuito e completo. Não existe paywall sobre aprendizagem.
+- A monetização acontece via um **Plano Família** (assinatura recorrente) oferecido diretamente aos pais/responsáveis, fora do client infantil.
+- O que a assinatura desbloqueia: cosméticos exclusivos (skins de avatar, pets, decoração do espaço pessoal), moeda do jogo bônus (não afeta progressão pedagógica), relatórios de progresso detalhados para os pais, múltiplos perfis de filhos numa única conta família, remoção de limites de "energia"/tentativas diárias (se essa mecânica existir).
+- Regra inegociável: nunca gatear conteúdo pedagógico, quests, cooperação ou avanço de nível atrás de pagamento — isso preserva a proposta de valor educacional e evita a crítica de "pay-to-win" em produto infantil.
+
+### 15.2 Case de mercado validado: Prodigy Math Game
+- Prodigy (jogo educativo de matemática para 6–14 anos) validou exatamente esse modelo em escala: gameplay e conteúdo curricular 100% gratuitos; assinatura "Premium Membership" vendida exclusivamente aos pais, num portal separado do jogo da criança.
+- Resultado de mercado: dezenas de milhões de usuários ativos e dezenas de milhões de dólares em receita anual recorrente, sem cobrar da criança e sem comprometer a credibilidade pedagógica junto a escolas e famílias — o que também facilitou adoção institucional (professores recomendam sem culpa de "cavalo de troia" de compras).
+- Elementos do case que são diretamente replicáveis no nosso MVP:
+  1. Fluxo de compra inteiro fora do client infantil — só existe no painel dos responsáveis (web/e-mail), nunca em pop-up dentro do jogo da criança.
+  2. "Parental gate" obrigatório antes de qualquer tela de preço.
+  3. Upsell é sobre personalização e conveniência para os pais, nunca sobre poder/vantagem no desafio educativo.
+  4. Marketing e e-mails focados em outcome pedagógico ("veja o progresso do seu filho esta semana"), não em urgência/FOMO voltado à criança.
+
+### 15.3 Como construir e vincular (plano técnico de implementação)
+1. **Parental gate:** antes de qualquer fluxo de pagamento, exigir confirmação de responsável (ex.: pergunta matemática simples como "quanto é 27 × 4?" combinada com o e-mail já cadastrado do responsável). Bloqueia a criança de iniciar ou concluir uma compra sozinha.
+2. **Portal dos responsáveis:** rota separada dentro do próprio PWA (ex.: `/familia`), acessível somente após o parental gate, contendo dashboard de progresso dos filhos + tela de assinatura. Não é acessível pelo fluxo normal de jogo da criança.
+3. **Pagamento:** Stripe Checkout (sem custo fixo inicial, só taxa por transação) integrado ao portal dos responsáveis — evita depender de IAP de loja de app, coerente com a distribuição inicial via PWA sem Play Store (seção 9).
+4. **Entitlements:** tabela `subscriptions` no Supabase (Postgres), vinculada a `family_account_id`; webhooks do Stripe (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`) atualizam o status da assinatura em tempo real.
+5. **Gating por feature flag:** camada simples no client que consulta `subscriptions.status` para liberar cosméticos e moeda bônus — a mesma checagem nunca é aplicada a quests, progressão ou cooperação.
+6. **Free trial:** 7 dias grátis no Plano Família para reduzir fricção de conversão, seguindo padrão já validado no mercado (Prodigy, Duolingo Family).
+7. **Gancho de conversão:** relatórios semanais de progresso enviados por e-mail ao responsável (Supabase Edge Function + serviço de e-mail free tier, ex. Resend), citando marcos alcançados pela criança e convidando à assinatura — nunca notificação push para a criança sobre compras.
+
+### 15.4 Preço e métricas de monetização
+- Preço inicial sugerido: assinatura família na faixa de R$ 19,90–29,90/mês, cobrindo múltiplos perfis de filhos na mesma conta.
+- Métricas específicas de monetização a acompanhar, além das métricas de PMF da seção 12:
+  - Taxa de conversão free → paid entre contas de responsáveis.
+  - Churn mensal da assinatura.
+  - LTV por família.
+  - Origem da conversão (e-mail de progresso vs. orgânico vs. indicação) para calibrar o gancho de marketing mais eficaz.
