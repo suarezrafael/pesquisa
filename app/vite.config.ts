@@ -9,6 +9,11 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      workbox: {
+        // Babylon.js + Havok (motor 3D/física) passam do limite padrão de 2MB;
+        // ainda vale pré-cachear pra manter o PWA funcional offline.
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+      },
       manifest: {
         name: 'Missão Aprender',
         short_name: 'Missão Aprender',

@@ -66,6 +66,32 @@ Mantém o mesmo front-end/jogo da Opção A (React + TS + Vite + Phaser 3 como P
 - **Custo:** os tiers gratuitos do Azure Static Web Apps, Azure Functions (1 milhão de execuções/mês grátis) e Azure SignalR F1 cobrem o MVP sem custo — só é exigido cartão de crédito para criar a conta Azure, sem cobrança enquanto o uso ficar dentro dos limites gratuitos.
 - **Trade-off:** essa opção adiciona uma stack extra (Azure) além do Cloudflare/Supabase da Opção A, então só vale a pena se a familiaridade com C# para revisar o código pesar mais do que a simplicidade de manter tudo dentro do Supabase.
 
+### 7.1 Motor 3D e física — especificação técnica (a partir do lab-02)
+
+A partir do laboratório 2, o jogo passou de 2D para um mundo 3D navegável (ver `labs/lab-02-mundo-3d/`). Esta subseção fixa os critérios técnicos de "qualidade gráfica" e "física realista" em termos concretos, não vagos, e registra o que está implementado vs. o que ainda é dívida técnica.
+
+**Motor de renderização — Babylon.js** (não Three.js). Justificativa: Babylon já integra física (ver abaixo), GUI, carregador glTF e inspector de cena no próprio pacote — menos código de cola do que montar o equivalente em Three.js, o que importa para um projeto mantido por sessões de IA que retomam o trabalho a frio (ver `docs/prompts/04-manutencao-clean-code.md`). Continua sendo a stack já prevista na Opção B desta seção.
+
+**Motor de física — Havok** (não Rapier/Cannon-es). Havok é o motor de física usado em jogos AAA (Half-Life, muitos títulos de estúdios grandes); a Microsoft o liberou de graça em 2024, e a Babylon.js tem integração oficial de primeira classe (`@babylonjs/havok`, API `PhysicsAggregate`/`HavokPlugin`) — fisicamente mais realista e tão gratuito quanto Rapier/Cannon-es, com menos código de integração. Passo de física fixo (~60Hz), desacoplado do framerate de renderização (`HavokPlugin(useDeltaForWorldStep=false, ...)`), para o comportamento físico não variar com FPS. Corpos dinâmicos (avatar) e estáticos (chão, muros, árvores) usam colisor simplificado (esfera/cilindro/caixa), nunca a malha visual completa.
+
+**Formato de asset — glTF/Draco pronto, ainda sem asset externo.** O pipeline de carregamento glTF (`@babylonjs/loaders`) já está instalado e pronto para receber modelos comprimidos (Draco/Meshopt) e texturas KTX2 quando houver uma fonte CC0/gratuita definida (ex.: Kenney.nl, Poly Haven) — isso requer baixar arquivos de terceiros, uma ação que pede confirmação explícita do usuário antes de ser feita. Até lá, a cena usa geometria procedural (primitivas Babylon) com materiais PBR, o que já é zero-custo e mantém a direção "baixo-poli estilizado".
+
+**Qualidade visual dentro do orçamento zero:**
+- Materiais `PBRMaterial` (albedo/roughness/metallic) em todo objeto — nunca `StandardMaterial` (Lambert/Phong básico).
+- Sombras dinâmicas via `ShadowGenerator` (exponential shadow map com blur), luz direcional principal + luz hemisférica ambiente.
+- Pós-processamento: `DefaultRenderingPipeline` com tonemapping ACES + FXAA; `SSAO2RenderingPipeline` leve (amostragem reduzida, sem blur caro) para contato visual bola/cenário-chão; `GlowLayer` para o brilho dos portais de missão (mais barato que bloom completo, e cobre o único caso de luz emissiva da cena).
+- IBL (image-based lighting) via HDRI real **ainda não implementado** — depende de baixar um HDRI CC0 (ex.: Poly Haven), mesma ressalva de permissão do parágrafo de assets acima. Hoje a cena usa luz hemisférica + direcional, que já dá sombra/contraste, mas não reflexo de ambiente real.
+
+**Orçamento de performance:**
+- Instancing (`mesh.createInstance`) nos objetos repetidos (árvores) — reduz draw calls.
+- LOD: não aplicado — nenhum objeto da cena passa de ~1–2k triângulos (geometria procedural simples), abaixo do limiar de ~10k que justificaria LOD.
+- Frustum culling: ativo por padrão no motor (comportamento nativo da Babylon.js).
+- Occlusion culling: não ativado deliberadamente — a cena é aberta/outdoor com poucas dezenas de objetos, sem geometria oclusora relevante; ativar agora só adicionaria overhead sem ganho.
+- Code-splitting: o motor 3D (Babylon + Havok, ~1.3MB gzip) é carregado via `import()` dinâmico só ao entrar no mundo — a tela de onboarding carrega um bundle de ~67KB gzip, dentro da meta de interatividade rápida em 4G.
+- Medição real (não estimada) feita em GPU integrada (Intel UHD, via ANGLE/D3D11, não GPU dedicada): ~18,7ms por frame com o pipeline completo (PBR + sombras + SSAO + tonemapping) ativo, ~55 draw calls com a cena completamente carregada (chão, muros, 8 árvores instanciadas, avatar, 10 portais com labels de GUI). Ferramenta de medição contínua embutida: overlay de FPS/draw calls/meshes (só em build de desenvolvimento) em `World3D.tsx`.
+
+**O que falta pra ser "realismo o mais próximo possível" além do zero-custo atual:** HDRI real para IBL, texturas PBR completas (normal/AO maps) em vez de cor sólida, e modelos glTF de verdade em vez de primitivas — todos dependem de baixar assets CC0 de terceiros (ação que pede confirmação, ver seção "Escopo e limites" de `docs/prompts/README.md`). Documentado como dívida técnica consciente, não omissão.
+
 ## 8) Hospedagem Gratuita (sem Play Store)
 ### Front-end
 - Cloudflare Pages, Vercel ou Netlify (tiers gratuitos).
