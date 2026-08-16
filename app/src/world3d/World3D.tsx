@@ -8,6 +8,7 @@ import {
   Engine,
   GlowLayer,
   HavokPlugin,
+  HDRCubeTexture,
   HemisphericLight,
   MeshBuilder,
   PBRMaterial,
@@ -15,6 +16,7 @@ import {
   PhysicsShapeType,
   Scene,
   SceneInstrumentation,
+  SceneLoader,
   SSAO2RenderingPipeline,
   ShadowGenerator,
   Vector3,
@@ -104,7 +106,7 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
     pipeline.fxaaEnabled = true
     pipeline.imageProcessing.toneMappingEnabled = true
     pipeline.imageProcessing.toneMappingType = 1 // ACES
-    pipeline.imageProcessing.exposure = 1.1
+    pipeline.imageProcessing.exposure = 0.9
     pipeline.bloomEnabled = false // o GlowLayer já cobre o brilho emissivo dos portais, mais barato
 
     // SSAO leve — contato visual entre bola/árvores e o chão, orçamento mobile-friendly.
@@ -118,11 +120,11 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
     ssao.samples = 8
 
     const hemiLight = new HemisphericLight('hemi', new Vector3(0, 1, 0), scene)
-    hemiLight.intensity = 0.55
+    hemiLight.intensity = 0.3
     hemiLight.groundColor = new Color3(0.4, 0.35, 0.3)
 
     const sunLight = new DirectionalLight('sun', new Vector3(-0.6, -1.2, -0.4), scene)
-    sunLight.intensity = 1.6
+    sunLight.intensity = 1.0
     sunLight.position = new Vector3(20, 30, 20)
 
     const shadowGenerator = new ShadowGenerator(1024, sunLight)
@@ -140,6 +142,13 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
     let keysDown: Record<string, boolean> = {}
 
     async function setup() {
+      // IBL real: HDRI CC0 (Poly Haven, kiara_4_mid-morning) — reflexo de ambiente de verdade
+      // nos materiais PBR, não só luz hemisférica/direcional aproximada.
+      const hdrTexture = new HDRCubeTexture('/assets/hdri/kiara_4_mid-morning_1k.hdr', scene, 256)
+      scene.environmentTexture = hdrTexture
+      scene.environmentIntensity = 0.75
+      scene.createDefaultSkybox(hdrTexture, true, 500)
+
       const havokInstance = await HavokPhysics()
       if (disposed) return
       // useDeltaForWorldStep=false -> Havok roda em passo fixo (~60Hz) interno,
@@ -151,7 +160,7 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
       const ground = MeshBuilder.CreateGround('ground', { width: 60, height: 60 }, scene)
       const groundMat = new PBRMaterial('groundMat', scene)
       groundMat.albedoColor = new Color3(0.42, 0.68, 0.4)
-      groundMat.roughness = 0.9
+      groundMat.roughness = 0.97
       groundMat.metallic = 0
       ground.material = groundMat
       ground.receiveShadows = true
@@ -173,42 +182,61 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
         new PhysicsAggregate(wall, PhysicsShapeType.BOX, { mass: 0 }, scene)
       }
 
-      // Árvores decorativas: 1 malha "mestre" por parte (tronco/copa), o resto são
-      // instâncias GPU (instancing) — 8 árvores custam ~2 draw calls, não 16.
-      const trunkMat = new PBRMaterial('trunkMat', scene)
-      trunkMat.albedoColor = new Color3(0.45, 0.3, 0.2)
-      trunkMat.roughness = 1
-      const leafMat = new PBRMaterial('leafMat', scene)
-      leafMat.albedoColor = new Color3(0.25, 0.55, 0.3)
-      leafMat.roughness = 0.8
+      // Props decorativos: modelos glTF reais (Kenney Nature Kit, CC0) — carregados uma vez
+      // cada e clonados nos pontos de cena. Licença em public/assets/nature-kit/License.txt.
+      const ASSET_BASE = '/assets/nature-kit/'
+      async function loadPropTemplate(file: string) {
+        const result = await SceneLoader.ImportMeshAsync(null, ASSET_BASE, file, scene)
+        const root = result.meshes[0]
+        root.setEnabled(false)
+        for (const m of result.meshes) m.receiveShadows = true
+        return root
+      }
 
-      const trunkMaster = MeshBuilder.CreateCylinder('trunkMaster', { height: 2, diameter: 0.6 }, scene)
-      trunkMaster.material = trunkMat
-      trunkMaster.receiveShadows = true
-      trunkMaster.isVisible = false
+      const [treeDefaultT, treeOakT, treePineT, rockLargeT, rockSmallT, mushroomT] = await Promise.all([
+        loadPropTemplate('tree_default.glb'),
+        loadPropTemplate('tree_oak.glb'),
+        loadPropTemplate('tree_pineRoundA.glb'),
+        loadPropTemplate('rock_largeA.glb'),
+        loadPropTemplate('rock_smallA.glb'),
+        loadPropTemplate('mushroom_red.glb'),
+      ])
+      if (disposed) return
 
-      const leavesMaster = MeshBuilder.CreateSphere('leavesMaster', { diameter: 2.6 }, scene)
-      leavesMaster.material = leafMat
-      leavesMaster.receiveShadows = true
-      leavesMaster.isVisible = false
-
-      const treeSpots = [
-        [22, 22], [-22, 22], [22, -22], [-22, -22],
-        [24, 0], [-24, 0], [0, 24], [0, -24],
+      type PropSpot = { x: number; z: number; template: typeof treeDefaultT; scale: number; colliderH: number; colliderD: number }
+      const propSpots: PropSpot[] = [
+        { x: 22, z: 22, template: treeDefaultT, scale: 2.2, colliderH: 3.5, colliderD: 1.4 },
+        { x: -22, z: 22, template: treeOakT, scale: 2, colliderH: 3.2, colliderD: 1.6 },
+        { x: 22, z: -22, template: treePineT, scale: 2.4, colliderH: 3.8, colliderD: 1.2 },
+        { x: -22, z: -22, template: treeDefaultT, scale: 2, colliderH: 3.2, colliderD: 1.3 },
+        { x: 24, z: 0, template: treeOakT, scale: 2.2, colliderH: 3.4, colliderD: 1.5 },
+        { x: -24, z: 0, template: treePineT, scale: 2, colliderH: 3.4, colliderD: 1.1 },
+        { x: 0, z: 24, template: treeDefaultT, scale: 2.3, colliderH: 3.6, colliderD: 1.4 },
+        { x: 0, z: -24, template: treeOakT, scale: 2, colliderH: 3.2, colliderD: 1.5 },
+        { x: 12, z: 12, template: rockLargeT, scale: 1.8, colliderH: 1.4, colliderD: 1.6 },
+        { x: -12, z: 12, template: rockSmallT, scale: 1.6, colliderH: 0.8, colliderD: 1 },
+        { x: 12, z: -12, template: rockLargeT, scale: 1.6, colliderH: 1.3, colliderD: 1.5 },
+        { x: -12, z: -12, template: rockSmallT, scale: 1.8, colliderH: 0.8, colliderD: 1.1 },
+        { x: 5, z: -20, template: mushroomT, scale: 2, colliderH: 0.5, colliderD: 0.6 },
+        { x: -6, z: 20, template: mushroomT, scale: 2.4, colliderH: 0.6, colliderD: 0.7 },
       ]
-      treeSpots.forEach(([tx, tz], i) => {
-        const trunk = trunkMaster.createInstance(`trunk-${i}`)
-        trunk.position = new Vector3(tx, 1, tz)
-        shadowGenerator.addShadowCaster(trunk)
 
-        const leaves = leavesMaster.createInstance(`leaves-${i}`)
-        leaves.position = new Vector3(tx, 2.8, tz)
-        shadowGenerator.addShadowCaster(leaves)
+      propSpots.forEach((spot, i) => {
+        const instance = spot.template.clone(`prop-${i}`, null)
+        if (!instance) return
+        instance.setEnabled(true)
+        instance.position = new Vector3(spot.x, 0, spot.z)
+        instance.scaling.setAll(spot.scale)
+        instance.rotation.y = (i * 47) % 360 * (Math.PI / 180)
+        instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
 
-        // Collider simplificado e invisível — não usa a malha visual (com mais
-        // segmentos) como forma de colisão, só um cilindro de baixo custo.
-        const collider = MeshBuilder.CreateCylinder(`treeCollider-${i}`, { height: 3.2, diameter: 0.7 }, scene)
-        collider.position = new Vector3(tx, 1.6, tz)
+        // Collider simplificado e invisível — nunca a malha visual detalhada do glTF.
+        const collider = MeshBuilder.CreateCylinder(
+          `propCollider-${i}`,
+          { height: spot.colliderH, diameter: spot.colliderD },
+          scene,
+        )
+        collider.position = new Vector3(spot.x, spot.colliderH / 2, spot.z)
         collider.isVisible = false
         new PhysicsAggregate(collider, PhysicsShapeType.CYLINDER, { mass: 0 }, scene)
       })
@@ -261,10 +289,11 @@ export function World3D({ profile, progress, onSelectQuest, suspendTriggers }: W
         const ringMat = new PBRMaterial(`ringMat-${quest.id}`, scene)
         const color = questTypeColor[quest.type]
         baseMat.albedoColor = color.scale(0.6)
-        baseMat.roughness = 0.7
+        baseMat.roughness = 0.85
+        baseMat.metallic = 0
         ringMat.albedoColor = color
-        ringMat.roughness = 0.25
-        ringMat.metallic = 0.4
+        ringMat.roughness = 0.3
+        ringMat.metallic = 0.2
         base.material = baseMat
         ring.material = ringMat
 

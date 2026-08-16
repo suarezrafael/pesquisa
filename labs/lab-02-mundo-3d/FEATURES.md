@@ -21,9 +21,9 @@ definidos em `prompt.md` e em `docs/prompts/02-design-profissional.md` §6. A ca
 - [x] Física real via Havok (plugin oficial gratuito da Babylon.js): avatar com corpo físico
       rígido, colisão com o chão/cenário, movimento por impulso — não uma imitação visual
 - [x] Qualidade visual alta dentro do orçamento zero: materiais PBR, sombras dinâmicas, SSAO,
-      tonemapping ACES, glow — geometria baixo-poli estilizada (sem assets 3D pagos ou
-      licenciados). IBL/HDRI real e texturas com normal/AO map ficaram pendentes (dependem de
-      baixar asset CC0, ver `prompt.md` §7.1 e `CONTEXT.md`)
+      tonemapping ACES, glow, IBL real (HDRI CC0) e modelos glTF reais (Kenney Nature Kit, CC0)
+      — geometria baixo-poli estilizada, sem asset pago/licenciado. Só texturas com normal/AO
+      map ficaram pendentes, ver `CONTEXT.md`
 - [x] Controles: teclado (desktop) e joystick touch (mobile) movendo o avatar por física
 - [x] Portais de missão em 3D (1 por quest, 10 no total) que abrem o `QuestModal` existente ao
       o avatar se aproximar — reaproveitar o modal sem modificar sua lógica

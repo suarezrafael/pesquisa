@@ -59,10 +59,9 @@ Commit inicial → final: 8188d82e267ed88289474ef0599444fdc7ce7307..HEAD (commit
   motor físico usado em jogos AAA, ficou gratuito em 2024, e tem integração oficial de primeira
   classe na Babylon.js. Mais realista que as alternativas sugeridas, sem custo adicional.
   Detalhado com justificativa completa em `prompt.md` §7.1 (nova subseção).
-- **Sem assets 3D externos (glTF/HDRI baixados) neste laboratório** — baixar um arquivo de
-  terceiros (mesmo gratuito/CC0) é uma ação que pede confirmação explícita do usuário antes de
-  ser executada; não presumi essa autorização. O pipeline de carregamento glTF já está instalado
-  e pronto (`@babylonjs/loaders`), só falta a fonte do asset e a autorização de download.
+- **Assets 3D externos baixados após autorização explícita do usuário** (ver "Atualização" no
+  fim deste documento) — não presumi essa autorização durante a implementação inicial; só baixei
+  quando o usuário pediu diretamente.
 - **Câmera fixa (chase-cam simplificada)** em vez de câmera orbital livre ou primeira pessoa —
   evita a complexidade de colisão de câmera e controles de rotação por toque, mantendo o jogo
   legível pra uma criança de 10 anos. Trade-off documentado, não omissão.
@@ -72,12 +71,9 @@ Commit inicial → final: 8188d82e267ed88289474ef0599444fdc7ce7307..HEAD (commit
 
 ## Pendências / dívidas conhecidas
 
-- **IBL real (HDRI) e texturas PBR completas (normal/roughness/AO map)** não implementadas —
-  dependem de baixar asset CC0 de terceiros (Poly Haven, por exemplo), o que exige permissão
-  explícita do usuário antes de eu executar o download. Hoje a cena usa cor sólida + luz
-  hemisférica/direcional, sem reflexo de ambiente real.
-- **Sem modelos glTF reais** — toda geometria é primitiva procedural (esfera, cilindro, torus).
-  Mesma dependência de asset externo + permissão do item acima.
+- **Texturas PBR completas (normal/roughness/AO map)** não implementadas — os modelos Kenney
+  usam cor sólida por vértice, sem mapa de textura separado. Não bloqueador para a qualidade
+  visual atual.
 - **Leitura contínua de FPS não foi possível capturar 100% ao vivo** nesta sessão de teste:
   o Chrome throttla `requestAnimationFrame` de abas em segundo plano no ambiente de automação
   usado para testar, então o contador de FPS (`window.__perf`, visível também como overlay em
@@ -97,6 +93,33 @@ Nenhuma das 7 funcionalidades do `FEATURES.md` ficou de fora — a única ressal
 "qualidade visual alta" foi entregue na parte que não depende de asset externo (PBR, sombras,
 pós-processamento); IBL/texturas/modelos reais viraram dívida técnica explícita acima, não
 omissão silenciosa.
+
+## Atualização — IBL + modelos glTF reais
+
+Na mesma sessão, o usuário autorizou explicitamente baixar assets CC0 pra fechar a dívida
+técnica acima. Feito:
+
+- **HDRI real (IBL):** `kiara_4_mid-morning_1k.hdr` (Poly Haven, CC0, 1k, ~1,49MB) →
+  `app/public/assets/hdri/`, carregado via `HDRCubeTexture` como `scene.environmentTexture` +
+  skybox em `World3D.tsx`.
+- **Modelos glTF reais:** 6 arquivos `.glb` do Kenney Nature Kit (CC0, ~56KB no total: 3 árvores,
+  2 rochas, 1 cogumelo) → `app/public/assets/nature-kit/` (com `License.txt` da Kenney no mesmo
+  diretório). Carregados via `SceneLoader.ImportMeshAsync`, um template por tipo, clonados nos
+  pontos de cena — substituem as árvores procedurais (cilindro+esfera) do primeiro wrap.
+- **Reequilíbrio de luz:** com IBL real somando à luz hemisférica/direcional que já existia, a
+  cena ficou superexposta (destaque estourado nos pedestais dos portais — na real, um bug: o
+  material da base nunca tinha `metallic` definido, então herdava o padrão da `PBRMaterial` e
+  refletia o céu feito espelho). Corrigido: `metallic=0` nos materiais foscos, intensidades de
+  luz/exposição/IBL reduzidas pra compensar a luz nova.
+- **PWA offline:** o `globPatterns` padrão do `vite-plugin-pwa` não inclui `.hdr`/`.glb` —
+  sem ajustar isso, os assets baixados nunca entrariam no precache do service worker e o mundo
+  3D quebraria offline mesmo instalado como PWA. Corrigido em `vite.config.ts`.
+- Testado de novo de ponta a ponta no navegador (onboarding → mundo carrega com os modelos reais
+  → aproximar do portal abre o quiz → responder certo dá recompensa → portal seguinte
+  desbloqueia) — sem regressão.
+
+`prompt.md` §7.1 atualizado pra refletir que IBL e glTF real já estão implementados, não mais
+pendentes.
 
 ## O que o próximo laboratório deve desenvolver
 

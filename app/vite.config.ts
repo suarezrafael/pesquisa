@@ -13,6 +13,9 @@ export default defineConfig({
         // Babylon.js + Havok (motor 3D/física) passam do limite padrão de 2MB;
         // ainda vale pré-cachear pra manter o PWA funcional offline.
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        // glob padrão do workbox não inclui .hdr/.glb (HDRI + modelos 3D) — sem isso
+        // o mundo 3D não funcionaria offline mesmo depois de instalado como PWA.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,hdr,glb}'],
       },
       manifest: {
         name: 'Missão Aprender',
