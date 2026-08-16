@@ -1411,7 +1411,12 @@ export function World3D({
           const right = Vector3.Cross(localUp, facing).normalize()
           Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-          studentFigure.root.position.copyFrom(localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + 0.02))
+          // Altura extra acima do "grudado no chão" quando o colisor físico sobe (pulo) —
+          // sem isso o personagem visual ficava sempre preso na superfície e o pulo não aparecia.
+          const airHeight = Math.max(0, dist - groundDist)
+          studentFigure.root.position.copyFrom(
+            localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + 0.02 + airHeight)
+          )
           studentFigure.root.rotationQuaternion = tmpQuat.clone()
 
           // Ciclo de caminhada — só avança enquanto o personagem realmente anda; som de
