@@ -15,7 +15,7 @@ export function QuestListOverlay({ progress, onClose }: QuestListOverlayProps) {
           ×
         </button>
         <h2>Missões do planeta</h2>
-        <p className="subtitle">Role até o portal com o mesmo número pra tentar cada uma.</p>
+        <p className="subtitle">Caminhe até a escolinha com o mesmo número pra tentar cada uma.</p>
 
         <div className="quest-list">
           {quests.map((quest, index) => {

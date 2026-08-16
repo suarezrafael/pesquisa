@@ -8,17 +8,17 @@ const STEPS = [
   {
     emoji: '🪐',
     title: 'Bem-vindo ao seu mini-planeta!',
-    text: 'Você é uma bolinha rolando pela superfície de um planeta pequeno. Por ser redondo, dá pra rolar por cima dele inteiro sem cair!',
+    text: 'Você é um estudante explorando a superfície de um planeta pequeno. Por ser redondo, dá pra caminhar por cima dele inteiro sem cair!',
   },
   {
     emoji: '🕹️',
     title: 'Como se mover',
-    text: 'No computador, use as setas ou W A S D. No celular, arraste o círculo no canto da tela. A bolinha rola na direção que você mandar.',
+    text: 'No computador, use as setas ou W A S D: esquerda/direita viram, cima/baixo andam pra frente/trás. No celular, arraste o círculo no canto da tela.',
   },
   {
-    emoji: '✨',
-    title: 'Portais de missão',
-    text: 'Role até um portal brilhante pra abrir uma missão. Os cinzas ainda estão trancados — complete a missão anterior pra desbloquear o próximo.',
+    emoji: '🏫',
+    title: 'Escolinhas de missão',
+    text: 'Caminhe até uma escolinha colorida com um professor na porta pra abrir uma missão. As cinzas ainda estão trancadas — complete a anterior pra desbloquear a próxima.',
   },
   {
     emoji: '🏆',

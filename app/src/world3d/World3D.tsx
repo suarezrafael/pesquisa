@@ -23,6 +23,7 @@ import {
   ShaderMaterial,
   SSAO2RenderingPipeline,
   ShadowGenerator,
+  TransformNode,
   UniversalCamera,
   Vector3,
   VertexData,
@@ -36,7 +37,7 @@ import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
-import { startAmbience, toggleMute as toggleAmbienceMute } from './ambientAudio'
+import { playFootstep, startAmbience, toggleMute as toggleAmbienceMute } from './ambientAudio'
 
 interface World3DProps {
   profile: Profile
@@ -52,6 +53,8 @@ const AVATAR_RADIUS = 0.55
 const GRAVITY = 9.81
 const MAX_SPEED = 6
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
+const WALK_CYCLE_SPEED = 7 // rad/s de fase do ciclo de caminhada, por unidade de throttle
+const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const TRIGGER_DISTANCE = 2.4
@@ -91,6 +94,85 @@ function alignmentQuaternion(up: Vector3): Quaternion {
   const axis = Vector3.Cross(defaultUp, up).normalize()
   const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
   return Quaternion.RotationAxis(axis, angle)
+}
+
+interface StudentFigure {
+  root: TransformNode
+  legPivotL: TransformNode
+  legPivotR: TransformNode
+  armPivotL: TransformNode
+  armPivotR: TransformNode
+}
+
+// Personagem estudante estilo "avatar de app" (torso, cabeça, cabelo, mochila, 2 pernas,
+// 2 braços) construído só com primitivas — sem asset externo. As pernas/braços são
+// TransformNodes-pivô (quadril/ombro) pra poder girar em ciclo de caminhada.
+function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: ShadowGenerator): StudentFigure {
+  const root = new TransformNode('studentRoot', scene)
+
+  const skinMat = new PBRMaterial('skinMat', scene)
+  skinMat.albedoColor = new Color3(0.94, 0.76, 0.6)
+  skinMat.roughness = 0.6
+
+  const shirtMat = new PBRMaterial('shirtMat', scene)
+  shirtMat.albedoColor = shirtColor
+  shirtMat.roughness = 0.7
+
+  const pantsMat = new PBRMaterial('pantsMat', scene)
+  pantsMat.albedoColor = new Color3(0.22, 0.28, 0.48)
+  pantsMat.roughness = 0.8
+
+  const backpackMat = new PBRMaterial('backpackMat', scene)
+  backpackMat.albedoColor = Color3.Lerp(shirtColor, new Color3(0.5, 0.15, 0.1), 0.5)
+  backpackMat.roughness = 0.75
+
+  const hairMat = new PBRMaterial('hairMat', scene)
+  hairMat.albedoColor = new Color3(0.24, 0.15, 0.09)
+  hairMat.roughness = 0.9
+
+  function addMesh(mesh: Mesh, material: PBRMaterial, parent: TransformNode) {
+    mesh.material = material
+    mesh.parent = parent
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const torso = MeshBuilder.CreateCapsule('torso', { height: 0.5, radius: 0.19 }, scene)
+  torso.position.y = 0.78
+  addMesh(torso, shirtMat, root)
+
+  const head = MeshBuilder.CreateSphere('head', { diameter: 0.32 }, scene)
+  head.position.y = 1.15
+  addMesh(head, skinMat, root)
+
+  const hair = MeshBuilder.CreateSphere('hair', { diameter: 0.35, slice: 0.55 }, scene)
+  hair.position.y = 1.24
+  addMesh(hair, hairMat, root)
+
+  const backpack = MeshBuilder.CreateBox('backpack', { width: 0.34, height: 0.34, depth: 0.16 }, scene)
+  backpack.position = new Vector3(0, 0.8, -0.2)
+  addMesh(backpack, backpackMat, root)
+
+  function buildLimb(name: string, side: number, isLeg: boolean): TransformNode {
+    const pivot = new TransformNode(`${name}Pivot`, scene)
+    pivot.position = new Vector3(side * (isLeg ? 0.1 : 0.24), isLeg ? 0.53 : 0.92, 0)
+    pivot.parent = root
+    const limb = MeshBuilder.CreateCapsule(
+      name,
+      { height: isLeg ? 0.5 : 0.4, radius: isLeg ? 0.085 : 0.06 },
+      scene,
+    )
+    limb.position.y = -(isLeg ? 0.25 : 0.2)
+    addMesh(limb, isLeg ? pantsMat : skinMat, pivot)
+    return pivot
+  }
+
+  const legPivotL = buildLimb('legL', -1, true)
+  const legPivotR = buildLimb('legR', 1, true)
+  const armPivotL = buildLimb('armL', -1, false)
+  const armPivotR = buildLimb('armR', 1, false)
+
+  return { root, legPivotL, legPivotR, armPivotL, armPivotR }
 }
 
 export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQuestList, suspendTriggers }: World3DProps) {
@@ -167,10 +249,14 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
 
     let havokPlugin: HavokPlugin | null = null
     let avatarBody: PhysicsAggregate | null = null
-    let avatarMesh: ReturnType<typeof MeshBuilder.CreateSphere> | null = null
+    let avatarMesh: Mesh | null = null
     let facing = new Vector3(0, 0, 1)
+    let walkPhase = 0
+    let lastFootSign = 0
+    const tmpMatrix = new Matrix()
+    const tmpQuat = new Quaternion()
     const triggered = new Set<string>()
-    const portalMeshes: { quest: (typeof quests)[number]; ring: any; base: any; surfacePos: Vector3 }[] = []
+    const portalMeshes: { quest: (typeof quests)[number]; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
     let keysDown: Record<string, boolean> = {}
 
     async function setup() {
@@ -296,8 +382,8 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         cloudGroups.push({ node, basePos, speed: 0.03 + (i % 4) * 0.01 })
       }
 
-      // Rio — tubo estreito seguindo um caminho curvo sobre a superfície do planeta,
-      // ligeiramente acima do chão pra não brigar (z-fighting) com a malha da grama/terreno.
+      // Rio — faixa achatada (ribbon) rente à curvatura do planeta, não um tubo redondo
+      // flutuando acima do chão (era isso que ficava "sobressalente"/estranho antes).
       function pointOnSphere(phi: number, theta: number, r: number): Vector3 {
         return new Vector3(
           Math.sin(phi) * Math.cos(theta),
@@ -305,7 +391,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
           Math.sin(phi) * Math.sin(theta),
         ).scale(r)
       }
-      const riverPath: Vector3[] = []
+      const riverCenter: Vector3[] = []
       const RIVER_SEGMENTS = 48
       const riverStartPhi = Math.PI * 0.2
       const riverEndPhi = Math.PI * 0.62
@@ -316,11 +402,26 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         const wobble = Math.sin(t * Math.PI * 4) * 0.06
         const phi = riverStartPhi + (riverEndPhi - riverStartPhi) * t + wobble
         const theta = riverStartTheta + (riverEndTheta - riverStartTheta) * t
-        riverPath.push(pointOnSphere(phi, theta, PLANET_RADIUS + 0.06))
+        // Levemente acima do raio do planeta — só o suficiente pra não brigar (z-fighting)
+        // com o chão, nunca a ponto de parecer um objeto flutuando por cima do terreno.
+        riverCenter.push(pointOnSphere(phi, theta, PLANET_RADIUS + 0.025))
       }
-      const river = MeshBuilder.CreateTube(
+      const riverHalfWidth = 1.1
+      const riverLeftBank: Vector3[] = []
+      const riverRightBank: Vector3[] = []
+      for (let i = 0; i < riverCenter.length; i++) {
+        const p = riverCenter[i]
+        const up = p.normalize()
+        const next = riverCenter[Math.min(i + 1, riverCenter.length - 1)]
+        const prev = riverCenter[Math.max(i - 1, 0)]
+        const along = next.subtract(prev).normalize()
+        const side = Vector3.Cross(up, along).normalize()
+        riverLeftBank.push(p.add(side.scale(riverHalfWidth)))
+        riverRightBank.push(p.subtract(side.scale(riverHalfWidth)))
+      }
+      const river = MeshBuilder.CreateRibbon(
         'river',
-        { path: riverPath, radius: 0.7, tessellation: 8, cap: Mesh.CAP_ALL },
+        { pathArray: [riverLeftBank, riverRightBank], sideOrientation: Mesh.DOUBLESIDE },
         scene,
       )
       const riverMat = new PBRMaterial('riverMat', scene)
@@ -401,22 +502,22 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
       }
       grassBlade.thinInstanceSetBuffer('matrix', grassMatrices, 16, true)
 
-      // Avatar (esfera física real) — nasce no "polo norte" do planeta.
+      // Colisor físico do avatar — cápsula invisível, em pé (não rola feito bola). A rotação
+      // dela é travada a cada quadro (ver loop de render) pra não tombar; o personagem visual
+      // (estudante) é reposicionado por cima, independente da rotação física do colisor.
       const spawnUp = new Vector3(0, 1, 0)
-      avatarMesh = MeshBuilder.CreateSphere('avatar', { diameter: AVATAR_RADIUS * 2 }, scene)
+      avatarMesh = MeshBuilder.CreateCapsule('avatarCollider', { height: AVATAR_RADIUS * 2, radius: 0.32 }, scene)
       avatarMesh.position = spawnUp.scale(PLANET_RADIUS + AVATAR_RADIUS + 0.05)
-      const avatarMat = new PBRMaterial('avatarMat', scene)
-      avatarMat.albedoColor = avatarColorFromEmoji(profile.avatarEmoji)
-      avatarMat.roughness = 0.3
-      avatarMat.metallic = 0.1
-      avatarMesh.material = avatarMat
-      shadowGenerator.addShadowCaster(avatarMesh)
+      avatarMesh.isVisible = false
       avatarBody = new PhysicsAggregate(
         avatarMesh,
-        PhysicsShapeType.SPHERE,
-        { mass: 1, restitution: 0.35, friction: 0.6 },
+        PhysicsShapeType.CAPSULE,
+        { mass: 1, restitution: 0.05, friction: 0.6 },
         scene,
       )
+
+      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator)
+      studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + 0.02)
 
       // Câmera já posicionada corretamente antes do primeiro quadro (evita "pulo" inicial).
       camera.position = avatarMesh.position.subtract(facing.scale(CAMERA_DISTANCE)).add(spawnUp.scale(CAMERA_HEIGHT))
@@ -436,8 +537,16 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         }
       }
 
-      // Portais de missão, apoiados na curvatura do planeta
+      // Missões viram miniescolas (não anéis abstratos) — prédio baixo-poli com telhado colorido
+      // por tipo/estado da missão, mais um professor parado na porta.
       const guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('portalLabels', true, scene)
+      const wallMatShared = new PBRMaterial('schoolWallMat', scene)
+      wallMatShared.albedoColor = new Color3(0.94, 0.88, 0.75)
+      wallMatShared.roughness = 0.8
+      const doorMatShared = new PBRMaterial('schoolDoorMat', scene)
+      doorMatShared.albedoColor = new Color3(0.42, 0.26, 0.16)
+      doorMatShared.roughness = 0.7
+
       quests.forEach((quest, index) => {
         const t = quests.length > 1 ? index / (quests.length - 1) : 0
         const phi = Math.PI * 0.22 + t * Math.PI * 0.4
@@ -449,30 +558,46 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         )
         const surfacePos = localUp.scale(PLANET_RADIUS)
 
-        const rotation = alignmentQuaternion(localUp)
-
-        const base = MeshBuilder.CreateCylinder(`base-${quest.id}`, { height: 0.4, diameter: 2.2 }, scene)
+        const base = new TransformNode(`school-${quest.id}`, scene)
         base.position = surfacePos
-        base.rotationQuaternion = rotation
-        base.receiveShadows = true
+        base.rotationQuaternion = alignmentQuaternion(localUp)
 
-        const ring = MeshBuilder.CreateTorus(`ring-${quest.id}`, { diameter: 2, thickness: 0.22 }, scene)
-        ring.parent = base
-        ring.position = new Vector3(0, 1.2, 0)
-        ring.rotation.x = Math.PI / 2
-        shadowGenerator.addShadowCaster(ring)
+        const walls = MeshBuilder.CreateBox(`walls-${quest.id}`, { width: 1.6, height: 1.1, depth: 1.4 }, scene)
+        walls.position = new Vector3(0, 0.55, 0)
+        walls.material = wallMatShared
+        walls.parent = base
+        walls.receiveShadows = true
+        shadowGenerator.addShadowCaster(walls)
 
-        const baseMat = new PBRMaterial(`baseMat-${quest.id}`, scene)
-        const ringMat = new PBRMaterial(`ringMat-${quest.id}`, scene)
+        const door = MeshBuilder.CreateBox(`door-${quest.id}`, { width: 0.42, height: 0.62, depth: 0.06 }, scene)
+        door.position = new Vector3(0, 0.31, 0.71)
+        door.material = doorMatShared
+        door.parent = base
+
+        // Telhado: carrega a cor/estado da missão (equivalente ao antigo anel).
+        const roof = MeshBuilder.CreateCylinder(
+          `roof-${quest.id}`,
+          { height: 0.8, diameterTop: 0.05, diameterBottom: 2.1, tessellation: 4 },
+          scene,
+        )
+        roof.position = new Vector3(0, 1.5, 0)
+        roof.rotation.y = Math.PI / 4
+        roof.parent = base
+        shadowGenerator.addShadowCaster(roof)
+
+        const roofMat = new PBRMaterial(`roofMat-${quest.id}`, scene)
         const color = questTypeColor[quest.type]
-        baseMat.albedoColor = color.scale(0.6)
-        baseMat.roughness = 0.85
-        baseMat.metallic = 0
-        ringMat.albedoColor = color
-        ringMat.roughness = 0.3
-        ringMat.metallic = 0.2
-        base.material = baseMat
-        ring.material = ringMat
+        roofMat.albedoColor = color
+        roofMat.roughness = 0.4
+        roofMat.metallic = 0.1
+        roof.material = roofMat
+
+        // Professor parado na porta — mesmo "rig" do estudante, parado (sem animação),
+        // com um tom de roupa diferente pra ficar claramente outro personagem.
+        const teacher = buildStudentFigure(scene, new Color3(0.55, 0.25, 0.55), shadowGenerator)
+        teacher.root.scaling.setAll(0.92)
+        teacher.root.position = new Vector3(0.95, 0, 0.55)
+        teacher.root.parent = base
 
         const label = new TextBlock(`label-${quest.id}`, `${index + 1}`)
         label.color = 'white'
@@ -481,10 +606,10 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         label.outlineWidth = 4
         label.outlineColor = 'rgba(0,0,0,0.5)'
         guiTexture.addControl(label)
-        label.linkWithMesh(ring)
-        label.linkOffsetY = -60
+        label.linkWithMesh(roof)
+        label.linkOffsetY = -70
 
-        portalMeshes.push({ quest, ring, base, surfacePos })
+        portalMeshes.push({ quest, roof, base, surfacePos })
       })
 
       function applyPortalVisual(entry: (typeof portalMeshes)[number]) {
@@ -492,20 +617,20 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         const idx = quests.findIndex((q) => q.id === entry.quest.id)
         const unlocked = isQuestUnlocked(p, idx)
         const completed = p.completedQuestIds.includes(entry.quest.id)
-        const ringMat = entry.ring.material as PBRMaterial
+        const roofMat = entry.roof.material as PBRMaterial
         const color = questTypeColor[entry.quest.type]
 
         if (completed) {
-          ringMat.emissiveColor = new Color3(0.25, 0.75, 0.35)
-          ringMat.albedoColor = color
+          roofMat.emissiveColor = new Color3(0.2, 0.6, 0.28)
+          roofMat.albedoColor = color
         } else if (unlocked) {
-          ringMat.emissiveColor = color.scale(0.6)
-          ringMat.albedoColor = color
+          roofMat.emissiveColor = color.scale(0.5)
+          roofMat.albedoColor = color
         } else {
-          ringMat.emissiveColor = Color3.Black()
-          ringMat.albedoColor = new Color3(0.55, 0.55, 0.58)
+          roofMat.emissiveColor = Color3.Black()
+          roofMat.albedoColor = new Color3(0.55, 0.55, 0.58)
         }
-        entry.ring.visibility = unlocked || completed ? 1 : 0.45
+        entry.roof.visibility = unlocked || completed ? 1 : 0.55
       }
 
       portalMeshes.forEach(applyPortalVisual)
@@ -573,6 +698,41 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
           const radialVel = localUp.scale(Vector3.Dot(currentVel, localUp))
           const tangentVel = facing.scale(throttle * MAX_SPEED)
           body.setLinearVelocity(tangentVel.add(radialVel))
+          // Trava a rotação física do colisor — é uma cápsula em pé, não deve tombar/rolar
+          // por causa de torque de contato com o chão (personagem visual gira por conta própria).
+          body.setAngularVelocity(Vector3.Zero())
+
+          // Personagem visual: segue a posição tangencial do colisor, mas "grudado" na
+          // superfície do planeta (não na altura elevada do colisor físico), orientado pelos
+          // eixos direita/cima-local/frente.
+          const right = Vector3.Cross(localUp, facing).normalize()
+          Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          studentFigure.root.position.copyFrom(localUp.scale(PLANET_RADIUS + 0.02))
+          studentFigure.root.rotationQuaternion = tmpQuat
+
+          // Ciclo de caminhada — só avança enquanto o personagem realmente anda; som de
+          // passo sintetizado disparado a cada troca de perna (cruzamento de zero do seno).
+          const moving = Math.abs(throttle) > 0.05
+          if (moving) {
+            walkPhase += dt * Math.abs(throttle) * WALK_CYCLE_SPEED
+            const swing = Math.sin(walkPhase) * LEG_SWING_MAX
+            studentFigure.legPivotL.rotation.x = swing
+            studentFigure.legPivotR.rotation.x = -swing
+            studentFigure.armPivotL.rotation.x = -swing * 0.7
+            studentFigure.armPivotR.rotation.x = swing * 0.7
+            const footSign = Math.sign(swing)
+            if (footSign !== 0 && footSign !== lastFootSign) {
+              lastFootSign = footSign
+              playFootstep()
+            }
+          } else {
+            studentFigure.legPivotL.rotation.x *= 0.8
+            studentFigure.legPivotR.rotation.x *= 0.8
+            studentFigure.armPivotL.rotation.x *= 0.8
+            studentFigure.armPivotR.rotation.x *= 0.8
+            lastFootSign = 0
+          }
 
           // câmera segue a bola acompanhando a orientação local do planeta
           const desiredCamPos = pos.subtract(facing.scale(CAMERA_DISTANCE)).add(localUp.scale(CAMERA_HEIGHT))
@@ -602,15 +762,16 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
           debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes`
         }
 
-        // animação sutil dos portais desbloqueados (bobbing), em espaço local do "base"
-        // (que já está alinhado à curvatura do planeta) — continua correto em qualquer ponto.
+        // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
+        // gira — só o brilho pulsa, pra chamar atenção sem parecer um objeto mágico solto).
         for (const entry of portalMeshes) {
           const idx = quests.findIndex((q) => q.id === entry.quest.id)
           const unlocked = isQuestUnlocked(progressRef.current, idx)
           const completed = progressRef.current.completedQuestIds.includes(entry.quest.id)
           if (unlocked && !completed) {
-            entry.ring.position.y = 1.2 + Math.sin(time * 2 + idx) * 0.15
-            entry.ring.rotation.z = time * 0.6
+            const pulse = 0.4 + Math.sin(time * 2 + idx) * 0.18
+            const color = questTypeColor[entry.quest.type]
+            ;(entry.roof.material as PBRMaterial).emissiveColor = color.scale(pulse)
           }
         }
       })
@@ -670,7 +831,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         muted={muted}
         onToggleMute={handleToggleMute}
       />
-      <p className="world3d-hint">Role até os portais brilhantes pra abrir uma missão</p>
+      <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
     </div>
   )
