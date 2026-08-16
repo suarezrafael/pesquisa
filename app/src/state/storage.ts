@@ -1,4 +1,5 @@
 import type { Profile, Progress } from '../types'
+import { DEFAULT_UNLOCKED_AVATAR_IDS } from '../data/avatars'
 
 const PROFILE_KEY = 'jogo-educativo:profile'
 const PROGRESS_KEY = 'jogo-educativo:progress'
@@ -9,6 +10,7 @@ export const emptyProgress: Progress = {
   xp: 0,
   coins: 0,
   badges: [],
+  unlockedAvatarIds: DEFAULT_UNLOCKED_AVATAR_IDS,
 }
 
 export function loadProfile(): Profile | null {

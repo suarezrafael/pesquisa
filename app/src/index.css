@@ -575,6 +575,82 @@ body {
   flex-shrink: 0;
 }
 
+/* Lojinha de avatares */
+
+.avatar-shop-modal {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.avatar-shop-balance {
+  display: inline-block;
+  margin-top: 0.25rem;
+}
+
+.avatar-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.avatar-shop-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.75rem 0.4rem;
+  border-radius: 16px;
+  background: #f5f7fd;
+  border: 3px solid transparent;
+  text-align: center;
+}
+
+.avatar-shop-item.equipped {
+  border-color: var(--primary);
+  background: #fde2ee;
+}
+
+.avatar-shop-item.locked {
+  opacity: 0.85;
+}
+
+.avatar-shop-emoji {
+  font-size: 2rem;
+}
+
+.avatar-shop-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.avatar-shop-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+
+.avatar-shop-action {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.avatar-shop-action.buy {
+  background: #ffe1a8;
+}
+
+.avatar-shop-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Chat multiplayer */
 
 .chat-panel {

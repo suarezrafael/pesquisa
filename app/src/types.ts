@@ -28,4 +28,5 @@ export interface Progress {
   xp: number
   coins: number
   badges: string[]
+  unlockedAvatarIds: string[]
 }

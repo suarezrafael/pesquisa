@@ -6,6 +6,7 @@ interface HudHeaderProps {
   progress: Progress
   onOpenHelp: () => void
   onOpenQuestList: () => void
+  onOpenShop: () => void
   muted: boolean
   onToggleMute: () => void
   onOpenChat: () => void
@@ -16,6 +17,7 @@ export function HudHeader({
   progress,
   onOpenHelp,
   onOpenQuestList,
+  onOpenShop,
   muted,
   onToggleMute,
   onOpenChat,
@@ -41,6 +43,9 @@ export function HudHeader({
 
         <button type="button" className="help-button" onClick={onOpenQuestList} aria-label="Ver missões">
           🗺️
+        </button>
+        <button type="button" className="help-button" onClick={onOpenShop} aria-label="Loja de avatares">
+          🎭
         </button>
         <button
           type="button"

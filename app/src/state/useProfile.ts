@@ -11,5 +11,14 @@ export function useProfile() {
     setProfile(next)
   }
 
-  return { profile, createProfile }
+  function equipAvatar(avatarEmoji: string) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, avatarEmoji }
+      saveProfile(next)
+      return next
+    })
+  }
+
+  return { profile, createProfile, equipAvatar }
 }

@@ -1,5 +1,6 @@
 import type { Progress, Quest } from '../types'
 import { quests } from '../data/quests'
+import { findAvatarById } from '../data/avatars'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
 export function xpForLevel(level: number): number {
@@ -43,6 +44,7 @@ export function applyQuestCompletion(progress: Progress, quest: Quest): Completi
   const badges = badgesEarnedAt(completedQuestIds.length)
   const newBadges = badges.filter((b) => !progress.badges.includes(b))
   const next: Progress = {
+    ...progress,
     completedQuestIds,
     xp: progress.xp + quest.xpReward,
     coins: progress.coins + quest.coinReward,
@@ -61,4 +63,19 @@ export function isQuestUnlocked(progress: Progress, questIndex: number): boolean
 // individualmente (reaparecem a cada sessão), só a moeda ganha soma no total mesmo.
 export function applyCoinCollected(progress: Progress): Progress {
   return { ...progress, coins: progress.coins + 1 }
+}
+
+// Troca moedas por um novo avatar na loja. Não faz nada (retorna o mesmo progress) se o avatar
+// não existir, já estiver desbloqueado, ou faltar moeda — a UI decide o que mostrar em cada caso,
+// mas a regra de "pode comprar?" mora aqui, não no componente.
+export function unlockAvatar(progress: Progress, avatarId: string): Progress {
+  const avatar = findAvatarById(avatarId)
+  if (!avatar) return progress
+  if (progress.unlockedAvatarIds.includes(avatarId)) return progress
+  if (progress.coins < avatar.cost) return progress
+  return {
+    ...progress,
+    coins: progress.coins - avatar.cost,
+    unlockedAvatarIds: [...progress.unlockedAvatarIds, avatarId],
+  }
 }

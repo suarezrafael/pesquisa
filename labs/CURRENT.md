@@ -1,11 +1,10 @@
 # Laboratório atual
 
-Concluído: labs/lab-07-terreno-personagem-radio/
-Contexto do laboratório anterior: labs/lab-07-terreno-personagem-radio/CONTEXT.md
+Concluído: labs/lab-08-loja-avatares/
+Contexto do laboratório anterior: labs/lab-08-loja-avatares/CONTEXT.md
 
 Trabalho acontece na branch `main`. Nenhum laboratório novo foi aberto ainda — antes de começar
-o próximo, ver as perguntas em aberto no final de
-`labs/lab-07-terreno-personagem-radio/CONTEXT.md`.
+o próximo, ver as perguntas em aberto no final de `labs/lab-08-loja-avatares/CONTEXT.md`.
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-07-terreno-personagem-radio/CONTEXT.md`.
+`labs/lab-08-loja-avatares/CONTEXT.md`.

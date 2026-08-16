@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { AVATAR_CATALOG } from '../data/avatars'
 
-const AVATAR_OPTIONS = ['🦊', '🐱', '🐼', '🐸', '🦄', '🐯']
+// Só os avatares gratuitos aparecem na criação de perfil — os demais são desbloqueados com
+// moedas na lojinha (world3d/AvatarShop.tsx), depois de já estar jogando.
+const AVATAR_OPTIONS = AVATAR_CATALOG.filter((a) => a.cost === 0).map((a) => a.emoji)
 
 interface OnboardingProps {
   onDone: (name: string, avatarEmoji: string) => void

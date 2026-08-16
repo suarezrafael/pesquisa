@@ -33,6 +33,7 @@ import '@babylonjs/loaders/glTF'
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
+import { findAvatarByEmoji } from '../data/avatars'
 import { questTypeColor } from './questVisuals'
 import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
@@ -60,6 +61,7 @@ interface World3DProps {
   onSelectQuest: (questId: string) => void
   onOpenHelp: () => void
   onOpenQuestList: () => void
+  onOpenShop: () => void
   onCollectCoin: () => void
   suspendTriggers: boolean
 }
@@ -118,16 +120,13 @@ function terrainHeight(dir: Vector3): number {
   return height
 }
 
+// Cor da camisa vem do catálogo de avatares (src/data/avatars.ts) — fonte única de verdade,
+// compartilhada com a lojinha (AvatarShop.tsx). O fallback cobre só o caso de um emoji não
+// catalogado chegar aqui (não deveria acontecer, mas evita crash).
 function avatarColorFromEmoji(emoji: string): Color3 {
-  const palette: Record<string, Color3> = {
-    '🦊': new Color3(0.94, 0.51, 0.2),
-    '🐱': new Color3(0.95, 0.72, 0.25),
-    '🐼': new Color3(0.85, 0.85, 0.9),
-    '🐸': new Color3(0.36, 0.75, 0.4),
-    '🦄': new Color3(0.8, 0.6, 0.95),
-    '🐯': new Color3(0.95, 0.55, 0.15),
-  }
-  return palette[emoji] ?? new Color3(0.96, 0.51, 0.68)
+  const avatar = findAvatarByEmoji(emoji)
+  if (!avatar) return new Color3(0.96, 0.51, 0.68)
+  return new Color3(...avatar.colorRgb)
 }
 
 // Menor rotação que leva o "para cima" padrão (0,1,0) até `up` — usada pra apoiar
@@ -144,6 +143,7 @@ function alignmentQuaternion(up: Vector3): Quaternion {
 
 interface StudentFigure {
   root: TransformNode
+  shirtMat: PBRMaterial
   head: Mesh
   legPivotL: TransformNode
   legPivotR: TransformNode
@@ -250,6 +250,7 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
 
   return {
     root,
+    shirtMat,
     head,
     legPivotL: leg1.upperPivot,
     legPivotR: leg2.upperPivot,
@@ -268,11 +269,13 @@ export function World3D({
   onSelectQuest,
   onOpenHelp,
   onOpenQuestList,
+  onOpenShop,
   onCollectCoin,
   suspendTriggers,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
+  const profileRef = useRef(profile)
   const progressRef = useRef(progress)
   const suspendRef = useRef(suspendTriggers)
   const onSelectQuestRef = useRef(onSelectQuest)
@@ -286,6 +289,7 @@ export function World3D({
   const chatOpenRef = useRef(false)
   chatOpenRef.current = chatOpen
 
+  profileRef.current = profile
   progressRef.current = progress
   suspendRef.current = suspendTriggers
   onSelectQuestRef.current = onSelectQuest
@@ -294,6 +298,10 @@ export function World3D({
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()
   }, [progress])
+
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setAvatarShirtColor?.(profile.avatarEmoji)
+  }, [profile.avatarEmoji])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -669,6 +677,12 @@ export function World3D({
       const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
 
+      // Trocar de avatar na lojinha não reconstrói a cena inteira (custoso) — só recolore a
+      // camisa do personagem já em cena. Ver useEffect que observa `profile.avatarEmoji`.
+      ;(scene as any).__setAvatarShirtColor = (emoji: string) => {
+        studentFigure.shirtMat.albedoColor = avatarColorFromEmoji(emoji)
+      }
+
       // Câmera já posicionada corretamente antes do primeiro quadro (evita "pulo" inicial).
       camera.position = avatarMesh.position.subtract(facing.scale(CAMERA_DISTANCE)).add(spawnUp.scale(CAMERA_HEIGHT))
       camera.upVector = spawnUp
@@ -974,8 +988,8 @@ export function World3D({
           if (netSendTimer > 0.12) {
             netSendTimer = 0
             sendState(
-              profile.name,
-              profile.avatarEmoji,
+              profileRef.current.name,
+              profileRef.current.avatarEmoji,
               studentFigure.root.position.asArray() as [number, number, number],
               facing.asArray() as [number, number, number],
             )
@@ -1104,6 +1118,7 @@ export function World3D({
         progress={progress}
         onOpenHelp={onOpenHelp}
         onOpenQuestList={onOpenQuestList}
+        onOpenShop={onOpenShop}
         muted={muted}
         onToggleMute={handleToggleMute}
         onOpenChat={() => setChatOpen(true)}

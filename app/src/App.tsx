@@ -5,6 +5,7 @@ import { Tutorial } from './components/Tutorial'
 import { QuestModal } from './components/QuestModal'
 import { RewardToast } from './components/RewardToast'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
+import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { quests } from './data/quests'
@@ -18,14 +19,15 @@ const World3D = lazy(() => import('./world3d/World3D').then((m) => ({ default: m
 type PreProfileScreen = 'title' | 'onboarding'
 
 function App() {
-  const { profile, createProfile } = useProfile()
-  const { progress, completeQuest, collectCoin } = useProgress()
+  const { profile, createProfile, equipAvatar } = useProfile()
+  const { progress, completeQuest, collectCoin, unlockAvatar } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [reward, setReward] = useState<{ quest: Quest; newBadges: string[] } | null>(null)
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
   const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
   const [showHelp, setShowHelp] = useState(false)
   const [showQuestList, setShowQuestList] = useState(false)
+  const [showShop, setShowShop] = useState(false)
 
   if (!profile) {
     if (preProfileScreen === 'title') {
@@ -66,8 +68,9 @@ function App() {
           onSelectQuest={handleSelectQuest}
           onOpenHelp={() => setShowHelp(true)}
           onOpenQuestList={() => setShowQuestList(true)}
+          onOpenShop={() => setShowShop(true)}
           onCollectCoin={collectCoin}
-          suspendTriggers={activeQuest !== null || reward !== null || showHelp || showQuestList}
+          suspendTriggers={activeQuest !== null || reward !== null || showHelp || showQuestList || showShop}
         />
       </Suspense>
 
@@ -91,6 +94,16 @@ function App() {
 
       {showQuestList && (
         <QuestListOverlay progress={progress} onClose={() => setShowQuestList(false)} />
+      )}
+
+      {showShop && (
+        <AvatarShop
+          profile={profile}
+          progress={progress}
+          onUnlock={unlockAvatar}
+          onEquip={equipAvatar}
+          onClose={() => setShowShop(false)}
+        />
       )}
     </>
   )
