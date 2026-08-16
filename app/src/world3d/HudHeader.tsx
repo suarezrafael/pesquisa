@@ -8,6 +8,7 @@ interface HudHeaderProps {
   onOpenQuestList: () => void
   muted: boolean
   onToggleMute: () => void
+  onOpenChat: () => void
 }
 
 export function HudHeader({
@@ -17,6 +18,7 @@ export function HudHeader({
   onOpenQuestList,
   muted,
   onToggleMute,
+  onOpenChat,
 }: HudHeaderProps) {
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
@@ -47,6 +49,9 @@ export function HudHeader({
           aria-label={muted ? 'Ativar som' : 'Silenciar som'}
         >
           {muted ? '🔇' : '🔊'}
+        </button>
+        <button type="button" className="help-button" onClick={onOpenChat} aria-label="Abrir chat">
+          💬
         </button>
         <button type="button" className="help-button" onClick={onOpenHelp} aria-label="Como jogar">
           ?

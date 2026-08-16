@@ -574,3 +574,92 @@ body {
   font-size: 1.1rem;
   flex-shrink: 0;
 }
+
+/* Chat multiplayer */
+
+.chat-panel {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(320px, calc(100vw - 2rem));
+  max-height: 60vh;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(23, 44, 102, 0.25);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.chat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #e2e8f8;
+}
+
+.chat-panel-header .modal-close {
+  position: static;
+  font-size: 1.3rem;
+}
+
+.chat-panel-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.6rem 0.8rem;
+  min-height: 80px;
+  max-height: 40vh;
+}
+
+.chat-empty {
+  color: #8a94b8;
+  font-size: 0.85rem;
+}
+
+.chat-message {
+  font-size: 0.88rem;
+  margin: 0 0 0.4rem;
+  word-break: break-word;
+}
+
+.chat-panel-input {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  border-top: 1px solid #e2e8f8;
+}
+
+.chat-panel-input input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  border: 2px solid #d8dff5;
+  font-size: 0.88rem;
+}
+
+.chat-panel-input button {
+  border: none;
+  background: var(--primary);
+  color: white;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.chat-panel-input button:disabled {
+  background: #cbd2e8;
+  cursor: not-allowed;
+}
+
+.remote-name-tag {
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}

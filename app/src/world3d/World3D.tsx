@@ -37,7 +37,21 @@ import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
+import { ChatPanel } from './ChatPanel'
 import { playFootstep, startAmbience, toggleMute as toggleAmbienceMute } from './ambientAudio'
+import {
+  connect as connectMultiplayer,
+  disconnect as disconnectMultiplayer,
+  isConnected as isMultiplayerConnected,
+  onChat,
+  onConnectionChange,
+  onRemoteLeave,
+  onRemoteState,
+  sendChat,
+  sendState,
+  type ChatMessage,
+  type RemoteState,
+} from './multiplayer'
 
 interface World3DProps {
   profile: Profile
@@ -102,6 +116,14 @@ interface StudentFigure {
   legPivotR: TransformNode
   armPivotL: TransformNode
   armPivotR: TransformNode
+}
+
+interface RemotePlayer {
+  figure: StudentFigure
+  label: TextBlock
+  targetPos: Vector3
+  targetFacing: Vector3
+  lastSeen: number
 }
 
 // Personagem estudante estilo "avatar de app" (torso, cabeça, cabelo, mochila, 2 pernas,
@@ -184,6 +206,11 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
   const [muted, setMuted] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [mpConnected, setMpConnected] = useState(false)
+  const chatOpenRef = useRef(false)
+  chatOpenRef.current = chatOpen
 
   progressRef.current = progress
   suspendRef.current = suspendTriggers
@@ -257,6 +284,8 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
     const tmpQuat = new Quaternion()
     const triggered = new Set<string>()
     const portalMeshes: { quest: (typeof quests)[number]; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
+    const remotePlayers = new Map<string, RemotePlayer>()
+    let netSendTimer = 0
     let keysDown: Record<string, boolean> = {}
 
     async function setup() {
@@ -636,8 +665,71 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
       portalMeshes.forEach(applyPortalVisual)
       ;(scene as any).__refreshPortals = () => portalMeshes.forEach(applyPortalVisual)
 
-      // Input de teclado
-      const onKeyDown = (e: KeyboardEvent) => (keysDown[e.key.toLowerCase()] = true)
+      // Multiplayer local (mesma rede): outros jogadores conectados no mesmo servidor de
+      // retransmissão (app/server/relay.cjs) aparecem como o mesmo personagem estudante, com o
+      // nome flutuando acima. Cada um mantém progresso de missão individual/local.
+      function ensureRemotePlayer(state: RemoteState): RemotePlayer {
+        let rp = remotePlayers.get(state.id)
+        if (!rp) {
+          const rFigure = buildStudentFigure(scene, avatarColorFromEmoji(state.avatarEmoji), shadowGenerator)
+          const rLabel = new TextBlock(`remote-${state.id}`, state.name)
+          rLabel.color = 'white'
+          rLabel.fontSize = 20
+          rLabel.fontWeight = 'bold'
+          rLabel.outlineWidth = 3
+          rLabel.outlineColor = 'rgba(0,0,0,0.6)'
+          guiTexture.addControl(rLabel)
+          rLabel.linkWithMesh(rFigure.root)
+          rLabel.linkOffsetY = -115
+          rp = {
+            figure: rFigure,
+            label: rLabel,
+            targetPos: Vector3.FromArray(state.position),
+            targetFacing: Vector3.FromArray(state.facing),
+            lastSeen: performance.now(),
+          }
+          remotePlayers.set(state.id, rp)
+        }
+        return rp
+      }
+
+      function removeRemotePlayer(id: string) {
+        const rp = remotePlayers.get(id)
+        if (!rp) return
+        guiTexture.removeControl(rp.label)
+        rp.figure.root.dispose()
+        remotePlayers.delete(id)
+      }
+
+      const unsubState = onRemoteState((state) => {
+        const rp = ensureRemotePlayer(state)
+        rp.targetPos = Vector3.FromArray(state.position)
+        rp.targetFacing = Vector3.FromArray(state.facing)
+        rp.lastSeen = performance.now()
+      })
+      const unsubLeave = onRemoteLeave((id) => removeRemotePlayer(id))
+      const unsubChat = onChat((msg) => {
+        setChatMessages((prev) => [...prev.slice(-49), msg])
+      })
+      const unsubConnection = onConnectionChange((connected) => setMpConnected(connected))
+      connectMultiplayer()
+      setMpConnected(isMultiplayerConnected())
+      ;(scene as any).__disposeMultiplayer = () => {
+        unsubState()
+        unsubLeave()
+        unsubChat()
+        unsubConnection()
+        disconnectMultiplayer()
+        for (const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id)
+      }
+
+      // Input de teclado — ignora teclas enquanto o foco está num campo de texto (ex.: chat),
+      // pra digitar "s"/"w"/"a"/"d" não mexer o personagem.
+      const onKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement | null
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+        keysDown[e.key.toLowerCase()] = true
+      }
       const onKeyUp = (e: KeyboardEvent) => (keysDown[e.key.toLowerCase()] = false)
       window.addEventListener('keydown', onKeyDown)
       window.addEventListener('keyup', onKeyUp)
@@ -740,8 +832,34 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
           camera.setTarget(pos)
 
+          // Multiplayer: manda o próprio estado (posição/direção) num ritmo baixo (não todo
+          // quadro) e atualiza a posição/orientação suavizada (lerp) dos jogadores remotos.
+          netSendTimer += dt
+          if (netSendTimer > 0.12) {
+            netSendTimer = 0
+            sendState(
+              profile.name,
+              profile.avatarEmoji,
+              studentFigure.root.position.asArray() as [number, number, number],
+              facing.asArray() as [number, number, number],
+            )
+          }
+          const nowMs = performance.now()
+          for (const [remoteId, rp] of remotePlayers) {
+            if (nowMs - rp.lastSeen > 8000) {
+              removeRemotePlayer(remoteId)
+              continue
+            }
+            rp.figure.root.position = Vector3.Lerp(rp.figure.root.position, rp.targetPos, 0.15)
+            const rLocalUp = rp.targetPos.length() > 0.0001 ? rp.targetPos.clone().normalize() : new Vector3(0, 1, 0)
+            const rRight = Vector3.Cross(rLocalUp, rp.targetFacing).normalize()
+            Matrix.FromXYZAxesToRef(rRight, rLocalUp, rp.targetFacing, tmpMatrix)
+            Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+            rp.figure.root.rotationQuaternion = tmpQuat.clone()
+          }
+
           // checa proximidade dos portais
-          if (!suspendRef.current) {
+          if (!suspendRef.current && !chatOpenRef.current) {
             for (const entry of portalMeshes) {
               const idx = quests.findIndex((q) => q.id === entry.quest.id)
               const unlocked = isQuestUnlocked(progressRef.current, idx)
@@ -804,6 +922,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
       disposed = true
       window.removeEventListener('resize', onResize)
       ;(scene as any).__removeKeyListeners?.()
+      ;(scene as any).__disposeMultiplayer?.()
       sceneRef.current = null
       scene.dispose()
       engine.dispose()
@@ -819,6 +938,11 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
     setMuted(toggleAmbienceMute())
   }
 
+  function handleSendChat(text: string) {
+    sendChat(profile.name, text)
+    setChatMessages((prev) => [...prev.slice(-49), { id: 'me', name: profile.name, text, ts: Date.now() }])
+  }
+
   return (
     <div className="world3d-container">
       <canvas ref={canvasRef} className="world3d-canvas" />
@@ -830,9 +954,18 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         onOpenQuestList={onOpenQuestList}
         muted={muted}
         onToggleMute={handleToggleMute}
+        onOpenChat={() => setChatOpen(true)}
       />
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
+      {chatOpen && (
+        <ChatPanel
+          messages={chatMessages}
+          connected={mpConnected}
+          onSend={handleSendChat}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
     </div>
   )
 }
