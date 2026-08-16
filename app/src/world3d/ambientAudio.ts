@@ -14,20 +14,73 @@ interface Note {
   dur: number
 }
 
-// Melodinha alegre e curta em dó maior, no espírito "8-bit de joguinho casual" — repete em loop.
-const MELODY: Note[] = [
-  { freq: 523.25, dur: 0.22 }, // C5
-  { freq: 659.25, dur: 0.22 }, // E5
-  { freq: 783.99, dur: 0.22 }, // G5
-  { freq: 659.25, dur: 0.22 }, // E5
-  { freq: 698.46, dur: 0.22 }, // F5
-  { freq: 880.0, dur: 0.22 }, // A5
-  { freq: 783.99, dur: 0.44 }, // G5 (mais longa)
-  { freq: 659.25, dur: 0.22 }, // E5
-  { freq: 587.33, dur: 0.22 }, // D5
-  { freq: 698.46, dur: 0.22 }, // F5
-  { freq: 659.25, dur: 0.22 }, // E5
-  { freq: 523.25, dur: 0.44 }, // C5 (mais longa)
+interface Track {
+  name: string
+  waveform: OscillatorType
+  bassFreq: number
+  notes: Note[]
+}
+
+// "Rádio" do planeta: várias faixas curtas que se alternam ao terminar cada uma, em vez de uma
+// só repetindo pra sempre — cada uma com um clima/tom diferente.
+const TRACKS: Track[] = [
+  {
+    name: 'Manhã no Planeta',
+    waveform: 'square',
+    bassFreq: 130.81, // C3
+    notes: [
+      { freq: 523.25, dur: 0.22 }, // C5
+      { freq: 659.25, dur: 0.22 }, // E5
+      { freq: 783.99, dur: 0.22 }, // G5
+      { freq: 659.25, dur: 0.22 }, // E5
+      { freq: 698.46, dur: 0.22 }, // F5
+      { freq: 880.0, dur: 0.22 }, // A5
+      { freq: 783.99, dur: 0.44 }, // G5
+      { freq: 659.25, dur: 0.22 }, // E5
+      { freq: 587.33, dur: 0.22 }, // D5
+      { freq: 698.46, dur: 0.22 }, // F5
+      { freq: 659.25, dur: 0.22 }, // E5
+      { freq: 523.25, dur: 0.44 }, // C5
+    ],
+  },
+  {
+    name: 'Tarde Tranquila',
+    waveform: 'triangle',
+    bassFreq: 146.83, // D3
+    notes: [
+      { freq: 587.33, dur: 0.3 }, // D5
+      { freq: 739.99, dur: 0.3 }, // F#5
+      { freq: 880.0, dur: 0.3 }, // A5
+      { freq: 739.99, dur: 0.3 }, // F#5
+      { freq: 783.99, dur: 0.3 }, // G5
+      { freq: 987.77, dur: 0.3 }, // B5
+      { freq: 880.0, dur: 0.6 }, // A5
+      { freq: 739.99, dur: 0.3 }, // F#5
+      { freq: 659.25, dur: 0.3 }, // E5
+      { freq: 783.99, dur: 0.3 }, // G5
+      { freq: 739.99, dur: 0.3 }, // F#5
+      { freq: 587.33, dur: 0.6 }, // D5
+    ],
+  },
+  {
+    name: 'Hora da Aventura',
+    waveform: 'square',
+    bassFreq: 164.81, // E3
+    notes: [
+      { freq: 659.25, dur: 0.16 }, // E5
+      { freq: 830.61, dur: 0.16 }, // G#5
+      { freq: 987.77, dur: 0.16 }, // B5
+      { freq: 880.0, dur: 0.16 }, // A5
+      { freq: 830.61, dur: 0.16 }, // G#5
+      { freq: 739.99, dur: 0.16 }, // F#5
+      { freq: 659.25, dur: 0.32 }, // E5
+      { freq: 830.61, dur: 0.16 }, // G#5
+      { freq: 987.77, dur: 0.16 }, // B5
+      { freq: 1108.73, dur: 0.16 }, // C#6
+      { freq: 987.77, dur: 0.16 }, // B5
+      { freq: 659.25, dur: 0.32 }, // E5
+    ],
+  },
 ]
 
 export function startAmbience(): void {
@@ -82,14 +135,16 @@ export function startAmbience(): void {
   musicFilter.connect(musicGain)
   musicGain.connect(ctx.destination)
 
+  let trackIndex = 0
   let noteIndex = 0
   function playNote() {
     if (!audioCtx) return
-    const note = MELODY[noteIndex % MELODY.length]
+    const track = TRACKS[trackIndex]
+    const note = track.notes[noteIndex]
     const now = audioCtx.currentTime
 
     const osc = audioCtx.createOscillator()
-    osc.type = 'square'
+    osc.type = track.waveform
     osc.frequency.value = note.freq
     const noteGain = audioCtx.createGain()
     noteGain.gain.setValueAtTime(0, now)
@@ -99,10 +154,10 @@ export function startAmbience(): void {
     osc.start(now)
     osc.stop(now + note.dur)
 
-    if (noteIndex % MELODY.length === 0) {
+    if (noteIndex === 0) {
       const bass = audioCtx.createOscillator()
       bass.type = 'triangle'
-      bass.frequency.value = 130.81 // C3
+      bass.frequency.value = track.bassFreq
       const bassGain = audioCtx.createGain()
       bassGain.gain.setValueAtTime(0, now)
       bassGain.gain.linearRampToValueAtTime(0.8, now + 0.02)
@@ -113,6 +168,14 @@ export function startAmbience(): void {
     }
 
     noteIndex++
+    if (noteIndex >= track.notes.length) {
+      // Faixa acabou — troca de "estação" (próxima faixa, ciclando) com uma pequena pausa,
+      // pra soar como rádio trocando de música, não uma emenda instantânea.
+      noteIndex = 0
+      trackIndex = (trackIndex + 1) % TRACKS.length
+      window.setTimeout(playNote, 900)
+      return
+    }
     window.setTimeout(playNote, note.dur * 1000)
   }
   playNote()
@@ -138,6 +201,26 @@ export function playFootstep(): void {
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
   src.connect(filter).connect(gain).connect(ctx.destination)
   src.start(now)
+}
+
+export function playCoinCollect(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  // arpejo curto e brilhante ascendente — "cling" de moeda
+  const notes = [880, 1174.66, 1567.98]
+  notes.forEach((freq, i) => {
+    const t = now + i * 0.05
+    const osc = ctx.createOscillator()
+    osc.type = 'square'
+    osc.frequency.value = freq
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.12, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + 0.2)
+  })
 }
 
 export function toggleMute(): boolean {

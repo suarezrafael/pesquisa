@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Progress, Quest } from '../types'
 import { loadProgress, saveProgress } from './storage'
-import { applyQuestCompletion } from './progression'
+import { applyCoinCollected, applyQuestCompletion } from './progression'
 
 export function useProgress() {
   const [progress, setProgress] = useState<Progress>(() => loadProgress())
@@ -13,5 +13,13 @@ export function useProgress() {
     return newBadges
   }
 
-  return { progress, completeQuest }
+  function collectCoin(): void {
+    setProgress((prev) => {
+      const next = applyCoinCollected(prev)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  return { progress, completeQuest, collectCoin }
 }

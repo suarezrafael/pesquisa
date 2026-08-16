@@ -56,3 +56,9 @@ export function isQuestUnlocked(progress: Progress, questIndex: number): boolean
   const previousQuest = quests[questIndex - 1]
   return progress.completedQuestIds.includes(previousQuest.id)
 }
+
+// Moedinhas espalhadas pelo terreno pra explorar — bônus à parte das missões, não persistem
+// individualmente (reaparecem a cada sessão), só a moeda ganha soma no total mesmo.
+export function applyCoinCollected(progress: Progress): Progress {
+  return { ...progress, coins: progress.coins + 1 }
+}

@@ -26,6 +26,7 @@ import {
   TransformNode,
   UniversalCamera,
   Vector3,
+  VertexBuffer,
   VertexData,
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
@@ -38,7 +39,7 @@ import type { Profile, Progress } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { ChatPanel } from './ChatPanel'
-import { playFootstep, startAmbience, toggleMute as toggleAmbienceMute } from './ambientAudio'
+import { playCoinCollect, playFootstep, startAmbience, toggleMute as toggleAmbienceMute } from './ambientAudio'
 import {
   connect as connectMultiplayer,
   disconnect as disconnectMultiplayer,
@@ -59,6 +60,7 @@ interface World3DProps {
   onSelectQuest: (questId: string) => void
   onOpenHelp: () => void
   onOpenQuestList: () => void
+  onCollectCoin: () => void
   suspendTriggers: boolean
 }
 
@@ -69,6 +71,7 @@ const MAX_SPEED = 6
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
 const WALK_CYCLE_SPEED = 7 // rad/s de fase do ciclo de caminhada, por unidade de throttle
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
+const KNEE_BEND_MAX = 0.9 // rad — quanto o joelho/cotovelo dobra na fase de "levantar"
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const TRIGGER_DISTANCE = 2.4
@@ -84,6 +87,35 @@ function rotateAroundAxis(v: Vector3, axis: Vector3, angle: number): Vector3 {
   const term2 = Vector3.Cross(axis, v).scale(sinA)
   const term3 = axis.scale(Vector3.Dot(axis, v) * (1 - cosA))
   return term1.add(term2).add(term3)
+}
+
+// Centros dos platôs (direção normalizada no planeta + raio angular de influência + altura).
+// Ficam dentro da mesma faixa "caminhável" onde props/portais já são colocados.
+const PLATEAU_CENTERS = [
+  { dir: new Vector3(0.75, 0.6, -0.2).normalize(), radius: 0.34, height: 2.4 },
+  { dir: new Vector3(-0.5, 0.55, 0.62).normalize(), radius: 0.3, height: 1.9 },
+  { dir: new Vector3(0.15, 0.3, -0.9).normalize(), radius: 0.28, height: 2.1 },
+  { dir: new Vector3(-0.8, 0.25, -0.45).normalize(), radius: 0.26, height: 1.6 },
+]
+
+// Altura do terreno acima do raio-base do planeta, num ponto (direção normalizada) qualquer —
+// ondulação suave de fundo + platôs com topo achatado (smoothstep na borda, não penhasco reto).
+// Função única reaproveitada pra deformar a malha do chão E posicionar tudo que fica em cima
+// dele (props, escolas, rio, grama, o próprio personagem) — evita objeto flutuando ou enterrado.
+function terrainHeight(dir: Vector3): number {
+  let height =
+    Math.sin(dir.x * 3.1 + dir.z * 2.3) * 0.15 + Math.cos(dir.y * 4.7 + dir.x * 1.9) * 0.12
+
+  for (const plateau of PLATEAU_CENTERS) {
+    const dot = Math.max(-1, Math.min(1, Vector3.Dot(dir, plateau.dir)))
+    const angle = Math.acos(dot)
+    if (angle < plateau.radius) {
+      const t = 1 - angle / plateau.radius
+      const smooth = t * t * (3 - 2 * t) // smoothstep — topo achatado, rampa suave na borda
+      height = Math.max(height, smooth * plateau.height)
+    }
+  }
+  return height
 }
 
 function avatarColorFromEmoji(emoji: string): Color3 {
@@ -112,10 +144,15 @@ function alignmentQuaternion(up: Vector3): Quaternion {
 
 interface StudentFigure {
   root: TransformNode
+  head: Mesh
   legPivotL: TransformNode
   legPivotR: TransformNode
+  kneePivotL: TransformNode
+  kneePivotR: TransformNode
   armPivotL: TransformNode
   armPivotR: TransformNode
+  elbowPivotL: TransformNode
+  elbowPivotR: TransformNode
 }
 
 interface RemotePlayer {
@@ -175,34 +212,71 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
   backpack.position = new Vector3(0, 0.8, -0.2)
   addMesh(backpack, backpackMat, root)
 
-  function buildLimb(name: string, side: number, isLeg: boolean): TransformNode {
-    const pivot = new TransformNode(`${name}Pivot`, scene)
-    pivot.position = new Vector3(side * (isLeg ? 0.1 : 0.24), isLeg ? 0.53 : 0.92, 0)
-    pivot.parent = root
-    const limb = MeshBuilder.CreateCapsule(
-      name,
-      { height: isLeg ? 0.5 : 0.4, radius: isLeg ? 0.085 : 0.06 },
-      scene,
-    )
-    limb.position.y = -(isLeg ? 0.25 : 0.2)
-    addMesh(limb, isLeg ? pantsMat : skinMat, pivot)
-    return pivot
+  // Cada membro tem 2 segmentos (coxa+canela, ou braço+antebraço) com uma junta no meio
+  // (joelho/cotovelo) — evita o visual "robotizado" de uma perna/braço só, rígida.
+  function buildTwoSegmentLimb(
+    name: string,
+    side: number,
+    isLeg: boolean,
+  ): { upperPivot: TransformNode; lowerPivot: TransformNode } {
+    const hipY = isLeg ? 0.53 : 0.92
+    const upperLen = isLeg ? 0.27 : 0.22
+    const lowerLen = isLeg ? 0.26 : 0.2
+    const upperRadius = isLeg ? 0.085 : 0.06
+    const lowerRadius = upperRadius * 0.85
+    const mat = isLeg ? pantsMat : skinMat
+
+    const upperPivot = new TransformNode(`${name}UpperPivot`, scene)
+    upperPivot.position = new Vector3(side * (isLeg ? 0.1 : 0.24), hipY, 0)
+    upperPivot.parent = root
+    const upperMesh = MeshBuilder.CreateCapsule(`${name}Upper`, { height: upperLen, radius: upperRadius }, scene)
+    upperMesh.position.y = -upperLen / 2
+    addMesh(upperMesh, mat, upperPivot)
+
+    const lowerPivot = new TransformNode(`${name}LowerPivot`, scene)
+    lowerPivot.position = new Vector3(0, -upperLen, 0)
+    lowerPivot.parent = upperPivot
+    const lowerMesh = MeshBuilder.CreateCapsule(`${name}Lower`, { height: lowerLen, radius: lowerRadius }, scene)
+    lowerMesh.position.y = -lowerLen / 2
+    addMesh(lowerMesh, mat, lowerPivot)
+
+    return { upperPivot, lowerPivot }
   }
 
-  const legPivotL = buildLimb('legL', -1, true)
-  const legPivotR = buildLimb('legR', 1, true)
-  const armPivotL = buildLimb('armL', -1, false)
-  const armPivotR = buildLimb('armR', 1, false)
+  const leg1 = buildTwoSegmentLimb('legL', -1, true)
+  const leg2 = buildTwoSegmentLimb('legR', 1, true)
+  const arm1 = buildTwoSegmentLimb('armL', -1, false)
+  const arm2 = buildTwoSegmentLimb('armR', 1, false)
 
-  return { root, legPivotL, legPivotR, armPivotL, armPivotR }
+  return {
+    root,
+    head,
+    legPivotL: leg1.upperPivot,
+    legPivotR: leg2.upperPivot,
+    kneePivotL: leg1.lowerPivot,
+    kneePivotR: leg2.lowerPivot,
+    armPivotL: arm1.upperPivot,
+    armPivotR: arm2.upperPivot,
+    elbowPivotL: arm1.lowerPivot,
+    elbowPivotR: arm2.lowerPivot,
+  }
 }
 
-export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQuestList, suspendTriggers }: World3DProps) {
+export function World3D({
+  profile,
+  progress,
+  onSelectQuest,
+  onOpenHelp,
+  onOpenQuestList,
+  onCollectCoin,
+  suspendTriggers,
+}: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
   const progressRef = useRef(progress)
   const suspendRef = useRef(suspendTriggers)
   const onSelectQuestRef = useRef(onSelectQuest)
+  const onCollectCoinRef = useRef(onCollectCoin)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
   const [muted, setMuted] = useState(false)
@@ -215,6 +289,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
   progressRef.current = progress
   suspendRef.current = suspendTriggers
   onSelectQuestRef.current = onSelectQuest
+  onCollectCoinRef.current = onCollectCoin
 
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()
@@ -308,15 +383,29 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
       havokPlugin = new HavokPlugin(false, havokInstance)
       scene.enablePhysics(Vector3.Zero(), havokPlugin)
 
-      // Planeta
-      const planet = MeshBuilder.CreateSphere('planet', { diameter: PLANET_RADIUS * 2, segments: 32 }, scene)
+      // Planeta — deformado com relevo real (ondulação + platôs), não uma esfera lisa.
+      // Colisor físico usa a malha deformada (MESH), não mais SPHERE, pra bater com o visual.
+      const planet = MeshBuilder.CreateSphere('planet', { diameter: PLANET_RADIUS * 2, segments: 48 }, scene)
+      const planetPositions = planet.getVerticesData(VertexBuffer.PositionKind)!
+      for (let i = 0; i < planetPositions.length; i += 3) {
+        const dir = new Vector3(planetPositions[i], planetPositions[i + 1], planetPositions[i + 2]).normalize()
+        const newRadius = PLANET_RADIUS + terrainHeight(dir)
+        planetPositions[i] = dir.x * newRadius
+        planetPositions[i + 1] = dir.y * newRadius
+        planetPositions[i + 2] = dir.z * newRadius
+      }
+      planet.updateVerticesData(VertexBuffer.PositionKind, planetPositions)
+      const planetNormals: number[] = []
+      VertexData.ComputeNormals(planetPositions, planet.getIndices()!, planetNormals)
+      planet.updateVerticesData(VertexBuffer.NormalKind, planetNormals)
+
       const planetMat = new PBRMaterial('planetMat', scene)
       planetMat.albedoColor = new Color3(0.42, 0.68, 0.4)
       planetMat.roughness = 0.97
       planetMat.metallic = 0
       planet.material = planetMat
       planet.receiveShadows = true
-      new PhysicsAggregate(planet, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.7 }, scene)
+      new PhysicsAggregate(planet, PhysicsShapeType.MESH, { mass: 0, friction: 0.7 }, scene)
 
       // Props decorativos: modelos glTF reais (Kenney Nature Kit, CC0) — carregados uma vez
       // cada e clonados nos pontos de cena. Licença em public/assets/nature-kit/License.txt.
@@ -351,7 +440,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
           Math.cos(phi),
           Math.sin(phi) * Math.sin(theta),
         )
-        const pos = localUp.scale(PLANET_RADIUS)
+        const pos = localUp.scale(PLANET_RADIUS + terrainHeight(localUp))
         const template = propTemplates[i % propTemplates.length]
         const scale = 1.3 + ((i * 7) % 5) * 0.18
         const spin = (i * GOLDEN_ANGLE * 5) % (Math.PI * 2)
@@ -373,6 +462,37 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         collider.position = pos.add(localUp.scale(colliderDiameter * 0.4))
         collider.isVisible = false
         new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+      }
+
+      // Moedinhas colecionáveis espalhadas pelo terreno — bônus de exploração à parte das
+      // missões (resposta ao pedido de "mais coisa pra interagir"). Sem física própria, só
+      // detecção de proximidade (igual às escolas), giram e balançam pra chamar atenção.
+      const coinMat = new PBRMaterial('coinMat', scene)
+      coinMat.albedoColor = new Color3(0.95, 0.78, 0.2)
+      coinMat.emissiveColor = new Color3(0.5, 0.38, 0.05)
+      coinMat.roughness = 0.25
+      coinMat.metallic = 0.6
+
+      const COIN_COUNT = 14
+      // Pivô fixo (alinhado à curvatura do planeta) + malha filha sem rotationQuaternion —
+      // separado assim porque um mesh com rotationQuaternion ignora .rotation Euler, e a moeda
+      // precisa girar livremente (Euler) enquanto fica "de pé" na superfície (quaternion fixo).
+      const coins: { pivot: TransformNode; mesh: Mesh; worldPos: Vector3; collected: boolean }[] = []
+      for (let i = 0; i < COIN_COUNT; i++) {
+        const phi = Math.PI * 0.18 + ((i * 0.61803398875) % 1) * Math.PI * 0.6
+        const theta = i * GOLDEN_ANGLE * 4.3 + 1.1
+        const coinUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+        const coinPos = coinUp.scale(PLANET_RADIUS + terrainHeight(coinUp) + 0.5)
+
+        const coinPivot = new TransformNode(`coinPivot-${i}`, scene)
+        coinPivot.position = coinPos
+        coinPivot.rotationQuaternion = alignmentQuaternion(coinUp)
+
+        const coinMesh = MeshBuilder.CreateCylinder(`coin-${i}`, { height: 0.08, diameter: 0.55 }, scene)
+        coinMesh.parent = coinPivot
+        coinMesh.material = coinMat
+        shadowGenerator.addShadowCaster(coinMesh)
+        coins.push({ pivot: coinPivot, mesh: coinMesh, worldPos: coinPos, collected: false })
       }
 
       // Nuvens — grupos de "pufes" esféricos achatados, cada grupo derivando lentamente ao
@@ -431,9 +551,10 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         const wobble = Math.sin(t * Math.PI * 4) * 0.06
         const phi = riverStartPhi + (riverEndPhi - riverStartPhi) * t + wobble
         const theta = riverStartTheta + (riverEndTheta - riverStartTheta) * t
-        // Levemente acima do raio do planeta — só o suficiente pra não brigar (z-fighting)
-        // com o chão, nunca a ponto de parecer um objeto flutuando por cima do terreno.
-        riverCenter.push(pointOnSphere(phi, theta, PLANET_RADIUS + 0.025))
+        // Levemente acima da altura do terreno naquele ponto — só o suficiente pra não brigar
+        // (z-fighting) com o chão, nunca a ponto de parecer um objeto flutuando por cima dele.
+        const riverDir = pointOnSphere(phi, theta, 1)
+        riverCenter.push(riverDir.scale(PLANET_RADIUS + terrainHeight(riverDir) + 0.025))
       }
       const riverHalfWidth = 1.1
       const riverLeftBank: Vector3[] = []
@@ -523,7 +644,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
         const phi = Math.PI * 0.08 + Math.random() * Math.PI * 0.7
         const theta = Math.random() * Math.PI * 2
         const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
-        const bladePos = up.scale(PLANET_RADIUS + 0.02)
+        const bladePos = up.scale(PLANET_RADIUS + terrainHeight(up) + 0.02)
         const rot = alignmentQuaternion(up).multiply(Quaternion.RotationAxis(Vector3.Up(), Math.random() * Math.PI * 2))
         const scale = 0.7 + Math.random() * 0.7
         const m = Matrix.Compose(new Vector3(scale, scale, scale), rot, bladePos)
@@ -536,7 +657,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
       // (estudante) é reposicionado por cima, independente da rotação física do colisor.
       const spawnUp = new Vector3(0, 1, 0)
       avatarMesh = MeshBuilder.CreateCapsule('avatarCollider', { height: AVATAR_RADIUS * 2, radius: 0.32 }, scene)
-      avatarMesh.position = spawnUp.scale(PLANET_RADIUS + AVATAR_RADIUS + 0.05)
+      avatarMesh.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + AVATAR_RADIUS + 0.05)
       avatarMesh.isVisible = false
       avatarBody = new PhysicsAggregate(
         avatarMesh,
@@ -546,7 +667,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
       )
 
       const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator)
-      studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + 0.02)
+      studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
 
       // Câmera já posicionada corretamente antes do primeiro quadro (evita "pulo" inicial).
       camera.position = avatarMesh.position.subtract(facing.scale(CAMERA_DISTANCE)).add(spawnUp.scale(CAMERA_HEIGHT))
@@ -560,7 +681,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
           if (!avatarMesh || !avatarBody) return
           const localUp = new Vector3(x, y, z).normalize()
           avatarBody.body.disablePreStep = false
-          avatarMesh.position = localUp.scale(PLANET_RADIUS + AVATAR_RADIUS + 0.05)
+          avatarMesh.position = localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05)
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
         }
@@ -585,7 +706,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
           Math.cos(phi),
           Math.sin(phi) * Math.sin(theta),
         )
-        const surfacePos = localUp.scale(PLANET_RADIUS)
+        const surfacePos = localUp.scale(PLANET_RADIUS + terrainHeight(localUp))
 
         const base = new TransformNode(`school-${quest.id}`, scene)
         base.position = surfacePos
@@ -800,7 +921,7 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
           const right = Vector3.Cross(localUp, facing).normalize()
           Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-          studentFigure.root.position.copyFrom(localUp.scale(PLANET_RADIUS + 0.02))
+          studentFigure.root.position.copyFrom(localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + 0.02))
           studentFigure.root.rotationQuaternion = tmpQuat
 
           // Ciclo de caminhada — só avança enquanto o personagem realmente anda; som de
@@ -813,6 +934,16 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
             studentFigure.legPivotR.rotation.x = -swing
             studentFigure.armPivotL.rotation.x = -swing * 0.7
             studentFigure.armPivotR.rotation.x = swing * 0.7
+            // Joelho/cotovelo dobram durante a fase de "levantar a perna" (metade do ciclo em
+            // que a coxa está indo pra frente), esticam na fase de apoio — evita perna reta
+            // o tempo todo, que é o que lia como "robotizado".
+            const kneeL = Math.max(0, Math.sin(walkPhase + Math.PI / 2)) * KNEE_BEND_MAX
+            const kneeR = Math.max(0, Math.sin(walkPhase - Math.PI / 2)) * KNEE_BEND_MAX
+            studentFigure.kneePivotL.rotation.x = -kneeL
+            studentFigure.kneePivotR.rotation.x = -kneeR
+            studentFigure.elbowPivotL.rotation.x = kneeR * 0.5
+            studentFigure.elbowPivotR.rotation.x = kneeL * 0.5
+            studentFigure.head.position.y = 1.15 + Math.abs(Math.sin(walkPhase * 2)) * 0.025
             const footSign = Math.sign(swing)
             if (footSign !== 0 && footSign !== lastFootSign) {
               lastFootSign = footSign
@@ -823,6 +954,11 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
             studentFigure.legPivotR.rotation.x *= 0.8
             studentFigure.armPivotL.rotation.x *= 0.8
             studentFigure.armPivotR.rotation.x *= 0.8
+            studentFigure.kneePivotL.rotation.x *= 0.8
+            studentFigure.kneePivotR.rotation.x *= 0.8
+            studentFigure.elbowPivotL.rotation.x *= 0.8
+            studentFigure.elbowPivotR.rotation.x *= 0.8
+            studentFigure.head.position.y += (1.15 - studentFigure.head.position.y) * 0.2
             lastFootSign = 0
           }
 
@@ -873,6 +1009,22 @@ export function World3D({ profile, progress, onSelectQuest, onOpenHelp, onOpenQu
                 triggered.delete(entry.quest.id)
               }
             }
+
+            for (const coin of coins) {
+              if (coin.collected) continue
+              if (Vector3.Distance(pos, coin.worldPos) < 1.3) {
+                coin.collected = true
+                coin.pivot.setEnabled(false)
+                onCollectCoinRef.current()
+                playCoinCollect()
+              }
+            }
+          }
+
+          for (const coin of coins) {
+            if (coin.collected) continue
+            coin.mesh.rotation.y = time * 2.4
+            coin.mesh.position.y = Math.sin(time * 2.6 + coin.worldPos.x) * 0.12
           }
         }
 

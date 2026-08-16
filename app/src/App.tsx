@@ -19,7 +19,7 @@ type PreProfileScreen = 'title' | 'onboarding'
 
 function App() {
   const { profile, createProfile } = useProfile()
-  const { progress, completeQuest } = useProgress()
+  const { progress, completeQuest, collectCoin } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [reward, setReward] = useState<{ quest: Quest; newBadges: string[] } | null>(null)
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
@@ -66,6 +66,7 @@ function App() {
           onSelectQuest={handleSelectQuest}
           onOpenHelp={() => setShowHelp(true)}
           onOpenQuestList={() => setShowQuestList(true)}
+          onCollectCoin={collectCoin}
           suspendTriggers={activeQuest !== null || reward !== null || showHelp || showQuestList}
         />
       </Suspense>
