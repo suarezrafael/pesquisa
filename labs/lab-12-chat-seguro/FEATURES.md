@@ -1,8 +1,8 @@
 # Laboratório 12 — Chat seguro (quick-chat / mensagens pré-definidas)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-16
-Fim: -
+Fim: 2026-08-16
 Commit inicial: b58373fff76a9993b8c6d69192e0621af9b26e9c
 
 ## Objetivo do laboratório
@@ -20,15 +20,15 @@ feature nova — vinha sendo carregada como dívida técnica conhecida desde o `
 sem nunca ser corrigida.
 
 ## Funcionalidades planejadas
-- [ ] Remover o campo de texto livre de `ChatPanel.tsx` — trocar por uma lista fixa de frases
+- [x] Remover o campo de texto livre de `ChatPanel.tsx` — trocar por uma lista fixa de frases
       pré-aprovadas + emotes (referência: `docs/prompts/01-seguranca.md` §1, `prompt.md` §11).
-- [ ] Curadoria de um conjunto de mensagens/emotes cobrindo interações comuns de jogo cooperativo
+- [x] Curadoria de um conjunto de mensagens/emotes cobrindo interações comuns de jogo cooperativo
       (saudação, combinar de ir a algum lugar, comemorar, pedir ajuda) — apropriadas pra criança de
       10 anos, sem abrir espaço pra texto arbitrário.
-- [ ] `sendChat`/protocolo do relay (`multiplayer.ts`, `server/relay.cjs`) continuam funcionando
+- [x] `sendChat`/protocolo do relay (`multiplayer.ts`, `server/relay.cjs`) continuam funcionando
       com o novo formato (id da mensagre pré-definida, não string livre) — ajustar o que for
       necessário nos dois lados.
-- [ ] Verificação end-to-end: confirmar visualmente (via automação de navegador, dois clientes
+- [x] Verificação end-to-end: confirmar visualmente (via automação de navegador, dois clientes
       conectados ao relay local) que uma mensagem pré-definida enviada por um cliente aparece pro
       outro, e que não existe mais nenhum jeito de digitar texto livre na UI do chat.
 
