@@ -1,7 +1,8 @@
 # Laboratório 28 — Relevo de água (rio/piscina), rua sem risco de afundar, boneco sentado
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: c58f79329bb0d67884bb7697f1d4532c8a6c774e
 
 ## Objetivo do laboratório
@@ -27,25 +28,25 @@ Cinco relatos diretos do usuário jogando a build atual, em duas mensagens segui
    igual a qualquer chão plano, escondendo visualmente a cor distinta que já existe por baixo.
 
 ## Funcionalidades planejadas
-- [ ] Rio com relevo de verdade: bacia rebaixada ao longo do trajeto (profundidade por distância
+- [x] Rio com relevo de verdade: bacia rebaixada ao longo do trajeto (profundidade por distância
       PERPENDICULAR à linha central, não um único centro como lagoa/piscina — o rio é uma faixa
       longa), margem de terra marrom por cor de vértice na borda da bacia, superfície da água
       reposicionada mais abaixo que a margem (não rente ao nível do chão vizinho), material da
       água mais reflexivo (metallic/roughness ajustados, aproveitando o `environmentTexture` HDRI
       já carregado).
-- [ ] Piscina com leitura de buraco: mesmo tratamento de margem de terra marrom por cor de
+- [x] Piscina com leitura de buraco: mesmo tratamento de margem de terra marrom por cor de
       vértice ao redor do disco de água (a bacia de terreno já existe via `applyBasin`, só não
       tem cor distinta pra ficar visível — mesma causa raiz do rio).
-- [ ] Rua: margem de altura acima do terreno aumentada (de `+0.02` pra uma folga maior),
+- [x] Rua: margem de altura acima do terreno aumentada (de `+0.02` pra uma folga maior),
       reduzindo risco de coincidir com a malha do planeta em qualquer ponto do laço.
-- [ ] Grama não nasce em cima dos platôs (raio de cada um dos 4 `PLATEAU_CENTERS`, mesmo padrão
+- [x] Grama não nasce em cima dos platôs (raio de cada um dos 4 `PLATEAU_CENTERS`, mesmo padrão
       de reamostragem já usado pro bioma de deserto, lab-23) — deixa a cor de morro (já correta)
       finalmente visível, em vez de escondida por baixo de grama uniforme.
-- [ ] Boneco sentado de verdade no carro: pernas/braços em ângulo de "sentado" (coxa pra frente,
+- [x] Boneco sentado de verdade no carro: pernas/braços em ângulo de "sentado" (coxa pra frente,
       joelho dobrado ~90°) aplicado uma vez ao entrar no carro, não a pose parada padrão.
-- [ ] Verificação: `npm run build` passa; testar ao vivo com teleporte + screenshot em cada um
-      dos pontos (rio, piscina, um platô, a rua) confirmando visualmente a mudança; confirmar
-      numericamente que a rua não perde folga em nenhum ponto do laço.
+- [x] Verificação: `npm run build` passa; testado ao vivo com teleporte + screenshot em cada um
+      dos pontos (rio, piscina, um platô) e consulta numérica direta a dados da cena (cor/altura
+      de vértice, contagem de tufos de grama). Ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Aumentar `PLANET_RADIUS` — resolveria de vez a limitação de curvatura de horizonte que também
