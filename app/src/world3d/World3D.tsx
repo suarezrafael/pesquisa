@@ -1744,6 +1744,134 @@ export function World3D({
       portalMeshes.forEach(applyPortalVisual)
       ;(scene as any).__refreshPortals = () => portalMeshes.forEach(applyPortalVisual)
 
+      // Loja navegável (lab-16, pedido do usuário: "uma loja que dá pra entrar") — diferente das
+      // escolas (paredes sólidas decorativas, o jogador nunca "entra" de verdade, só dispara a
+      // missão por proximidade de fora), esta tem um vão de porta real na parede da frente: o
+      // jogador caminha por dentro dele e vê o interior (balcão, prateleiras, lojista). Chegar
+      // perto do balcão abre o MESMO modal de lojinha já existente (`onOpenShopRef`) — reaproveita
+      // toda a lógica de compra/equipar do lab-08/lab-13, não duplica. Local escolhido por busca
+      // de distância angular contra todos os outros marcos do mapa (mesmo método usado pra
+      // piscina/parkour/rua) — ~37° de folga do vizinho mais próximo.
+      const SHOP_ANCHOR_UP = new Vector3(0.9158133708598268, 0.24868988716485496, 0.3153398322069272).normalize()
+      const shopBase = new TransformNode('shopBase', scene)
+      shopBase.position = SHOP_ANCHOR_UP.scale(PLANET_RADIUS + terrainHeight(SHOP_ANCHOR_UP))
+      shopBase.rotationQuaternion = alignmentQuaternion(SHOP_ANCHOR_UP)
+
+      const SHOP_WIDTH = 3.0
+      const SHOP_DEPTH = 3.0
+      const SHOP_WALL_HEIGHT = 1.5
+      const SHOP_DOOR_WIDTH = 1.0
+
+      const shopWallMat = new PBRMaterial('shopWallMat', scene)
+      shopWallMat.albedoColor = new Color3(0.72, 0.5, 0.32)
+      shopWallMat.roughness = 0.8
+      const shopRoofMat = new PBRMaterial('shopRoofMat', scene)
+      shopRoofMat.albedoColor = new Color3(0.55, 0.22, 0.2)
+      shopRoofMat.roughness = 0.5
+      shopRoofMat.metallic = 0.1
+
+      function addShopMesh(mesh: Mesh, mat: PBRMaterial) {
+        mesh.material = mat
+        mesh.parent = shopBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+      }
+
+      // Parede de trás (fecha o fundo) e laterais (fecham os lados) — sólidas, só a da frente
+      // (por onde o jogador chega vindo da área caminhável) tem um vão.
+      const backWall = MeshBuilder.CreateBox('shopBackWall', { width: SHOP_WIDTH, height: SHOP_WALL_HEIGHT, depth: 0.15 }, scene)
+      backWall.position = new Vector3(0, SHOP_WALL_HEIGHT / 2, SHOP_DEPTH / 2)
+      addShopMesh(backWall, shopWallMat)
+
+      for (const side of [-1, 1]) {
+        const sideWall = MeshBuilder.CreateBox(`shopSideWall${side}`, { width: 0.15, height: SHOP_WALL_HEIGHT, depth: SHOP_DEPTH }, scene)
+        sideWall.position = new Vector3((side * SHOP_WIDTH) / 2, SHOP_WALL_HEIGHT / 2, 0)
+        addShopMesh(sideWall, shopWallMat)
+      }
+
+      // Parede da frente partida em dois — o vão entre os dois pedaços é a porta de verdade.
+      const shopFrontSegWidth = (SHOP_WIDTH - SHOP_DOOR_WIDTH) / 2
+      for (const side of [-1, 1]) {
+        const frontWall = MeshBuilder.CreateBox(
+          `shopFrontWall${side}`,
+          { width: shopFrontSegWidth, height: SHOP_WALL_HEIGHT, depth: 0.15 },
+          scene,
+        )
+        frontWall.position = new Vector3(
+          side * (SHOP_DOOR_WIDTH / 2 + shopFrontSegWidth / 2),
+          SHOP_WALL_HEIGHT / 2,
+          -SHOP_DEPTH / 2,
+        )
+        addShopMesh(frontWall, shopWallMat)
+      }
+
+      // Telhado — mesmo truque de pirâmide de 4 lados já usado nas escolas.
+      const shopRoof = MeshBuilder.CreateCylinder(
+        'shopRoof',
+        { height: 0.7, diameterTop: 0.05, diameterBottom: SHOP_WIDTH * 1.55, tessellation: 4 },
+        scene,
+      )
+      shopRoof.position = new Vector3(0, SHOP_WALL_HEIGHT + 0.35, 0)
+      shopRoof.rotation.y = Math.PI / 4
+      addShopMesh(shopRoof, shopRoofMat)
+
+      // Interior: balcão perto do fundo (o jogador entra pela porta e já vê o balcão à frente),
+      // duas prateleiras encostadas nas paredes laterais, e o lojista atrás do balcão.
+      const shopCounterMat = new PBRMaterial('shopCounterMat', scene)
+      shopCounterMat.albedoColor = new Color3(0.5, 0.34, 0.2)
+      shopCounterMat.roughness = 0.7
+      const shopCounter = MeshBuilder.CreateBox('shopCounter', { width: 1.6, height: 0.75, depth: 0.5 }, scene)
+      shopCounter.position = new Vector3(0, 0.375, SHOP_DEPTH / 2 - 0.7)
+      addShopMesh(shopCounter, shopCounterMat)
+
+      const shopShelfMat = new PBRMaterial('shopShelfMat', scene)
+      shopShelfMat.albedoColor = new Color3(0.4, 0.28, 0.18)
+      shopShelfMat.roughness = 0.75
+      const shopItemColors = [
+        new Color3(0.85, 0.3, 0.3),
+        new Color3(0.3, 0.6, 0.85),
+        new Color3(0.9, 0.75, 0.2),
+      ]
+      for (const side of [-1, 1]) {
+        const shelf = MeshBuilder.CreateBox(`shopShelf${side}`, { width: 0.3, height: 1.0, depth: 1.3 }, scene)
+        shelf.position = new Vector3((side * SHOP_WIDTH) / 2 - side * 0.2, 0.5, 0.1)
+        addShopMesh(shelf, shopShelfMat)
+        for (let it = 0; it < 3; it++) {
+          const itemMat = new PBRMaterial(`shopItemMat${side}${it}`, scene)
+          itemMat.albedoColor = shopItemColors[it]
+          itemMat.roughness = 0.4
+          const item = MeshBuilder.CreateBox(`shopItem${side}${it}`, { width: 0.18, height: 0.18, depth: 0.18 }, scene)
+          item.position = new Vector3((side * SHOP_WIDTH) / 2 - side * 0.2, 0.85, -0.35 + it * 0.35)
+          addShopMesh(item, itemMat)
+        }
+      }
+
+      const shopkeeper = buildStudentFigure(scene, new Color3(0.85, 0.55, 0.15), shadowGenerator)
+      shopkeeper.root.scaling.setAll(0.92)
+      shopkeeper.root.position = new Vector3(0, 0, SHOP_DEPTH / 2 - 1.0)
+      shopkeeper.root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), Math.PI)
+      shopkeeper.root.parent = shopBase
+
+      const shopLabel = new TextBlock('shopLabel', 'Lojinha')
+      shopLabel.color = 'white'
+      shopLabel.fontSize = 26
+      shopLabel.fontWeight = 'bold'
+      shopLabel.outlineWidth = 4
+      shopLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(shopLabel)
+      shopLabel.linkWithMesh(shopRoof)
+      shopLabel.linkOffsetY = -70
+
+      // Ponto de gatilho (balcão) em coordenadas de mundo — calculado uma vez (a loja não se
+      // move). Importante: usa a transformação de verdade do motor (`getWorldMatrix`), não um
+      // cálculo próprio de "pra frente" — `alignmentQuaternion` não garante que o eixo Z local
+      // mapeie pro mesmo vetor que um `Cross(up, Right())` calculado à parte produziria, então
+      // um cálculo independente podia apontar o gatilho pra um lugar diferente de onde o balcão
+      // realmente está desenhado.
+      shopBase.computeWorldMatrix(true)
+      const shopCounterWorldPos = Vector3.TransformCoordinates(shopCounter.position, shopBase.getWorldMatrix())
+      let shopTriggered = false
+
       // Gatos "em cima de tudo" (pedido do usuário: "alguns gatos ficam ensima de tudo") —
       // diferente dos gatos que vagam pelo chão (acima): estes ficam parados nos pontos mais
       // altos do mapa (topo dos 4 platôs + telhado de 2 escolas), só balançando/olhando ao
@@ -2262,6 +2390,17 @@ export function World3D({
                 onCollectCoinRef.current()
                 playCoinCollect()
               }
+            }
+
+            // Loja: chegar perto do balcão abre o modal de lojinha já existente. Mesma
+            // histerese gatilho/reset dos portais — evita reabrir o modal repetidamente
+            // enquanto o jogador fica parado perto do balcão (só reseta ao se afastar).
+            const shopDist = Vector3.Distance(pos, shopCounterWorldPos)
+            if (shopDist < 1.4 && !shopTriggered) {
+              shopTriggered = true
+              onOpenShopRef.current()
+            } else if (shopDist > 2.2) {
+              shopTriggered = false
             }
           }
 
