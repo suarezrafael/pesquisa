@@ -1,7 +1,8 @@
 # Laboratório 20 — Ranking local (mesma rede)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: 5493c9aadcb40b3277518d8443b88777a5fa32af
 
 ## Objetivo do laboratório
@@ -15,18 +16,20 @@ mesma rede via `app/server/relay.cjs` e já transmite `state` (posição/direç�
 falta só incluir XP/moedas nesse `state` já existente e mostrar isso como uma lista ordenada.
 
 ## Funcionalidades planejadas
-- [ ] Estender `RemoteState` (`src/world3d/multiplayer.ts`) e `sendState()` pra incluir `xp` e
+- [x] Estender `RemoteState` (`src/world3d/multiplayer.ts`) e `sendState()` pra incluir `xp` e
       `coins` do jogador (o `relay.cjs` já repassa qualquer campo do `state` sem mudança —
       confirmado lendo `broadcast(id, { ...msg, id })`).
-- [ ] Guardar `xp`/`coins` mais recentes de cada jogador remoto (`RemotePlayer`, `World3D.tsx`).
-- [ ] Painel de ranking (`RankingPanel.tsx`, React, mesmo padrão de `ChatPanel.tsx`/
-      `AvatarShop.tsx`) — lista jogadores conectados (+ o próprio jogador) ordenados por nível
+- [x] Guardar `xp`/`coins` mais recentes de cada jogador remoto (`RemotePlayer`, `World3D.tsx`).
+- [x] Painel de ranking (`RankingPanel.tsx`, React, mesmo padrão de `ChatPanel.tsx`/
+      `AvatarShop.tsx`) — lista jogadores conectados (+ o próprio jogador) ordenados por xp
       (`getLevel(xp)`, `src/state/progression.ts`, reaproveitado — nível é função determinística
-      de xp, não precisa viajar pela rede separado) e por moedas como desempate.
-- [ ] Botão de ícone novo no `HudHeader` (🏆) pra abrir o painel, mesmo padrão dos botões
+      de xp, calculado no cliente, não precisa viajar pela rede separado) e por moedas como
+      desempate.
+- [x] Botão de ícone novo no `HudHeader` (🏆) pra abrir o painel, mesmo padrão dos botões
       existentes (chat, loja, missões).
-- [ ] Verificação: `npm run build` passa; testar com dois clientes na mesma rede (dois navegadores
-      abertos no dev server) — o ranking de um mostra o XP/moedas do outro em tempo real.
+- [x] Verificação: `npm run build` passa; testado ao vivo com um `WebSocket` de teste simulando
+      um segundo jogador conectado direto no relay — o ranking mostrou os dois jogadores
+      ordenados corretamente em tempo real (~1.5s, dentro do throttle de 1s). Ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Ranking "por turma" de verdade (agrupamento por sala de aula) — exigiria conta/perfil de
