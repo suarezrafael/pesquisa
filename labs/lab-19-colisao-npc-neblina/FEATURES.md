@@ -1,8 +1,9 @@
 # Laboratório 19 — Colisão de NPCs + suavizar horizonte
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
 Fim: -
+Fim: 2026-08-17
 Commit inicial: 910be52c4daf5d0896b8854b18809ea3296f6f5e
 
 ## Objetivo do laboratório
@@ -23,13 +24,16 @@ Dois relatos do usuário jogando ao vivo:
    mundo, lab-10) não têm.
 
 ## Funcionalidades planejadas
-- [ ] Neblina base um pouco mais presente (não só durante chuva) — suaviza o corte abrupto de
+- [x] Neblina base um pouco mais presente (não só durante chuva) — suaviza o corte abrupto de
       "prédio distante afundando no horizonte" sem deixar o jogo constantemente enevoado.
-- [ ] Colisor físico nos NPCs pedestres (`walkerNpcs`, lab-10) — corpo cinemático (kinematic,
+      (`BASE_FOG_DENSITY` 0.01 → 0.018.)
+- [x] Colisor físico nos NPCs pedestres (`walkerNpcs`, lab-10) — corpo cinemático (kinematic,
       não estático) já que eles se movem via IA de vagar, não via forças de física.
-- [ ] Verificação: `npm run build` passa; testar rodando o dev server (jogador não consegue mais
+      (`PhysicsMotionType.ANIMATED` + `setTargetTransform` por quadro.)
+- [x] Verificação: `npm run build` passa; testar rodando o dev server (jogador não consegue mais
       atravessar um NPC pedestre andando na direção dele; horizonte de um prédio distante com
-      transição mais suave, não corte abrupto).
+      transição mais suave, não corte abrupto). Verificado numericamente (teste de física direto
+      no console do navegador) — ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Aumentar o raio do planeta (eliminaria de vez a curvatura visível, mas é mudança grande —
