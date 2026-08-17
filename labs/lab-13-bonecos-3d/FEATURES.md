@@ -1,8 +1,8 @@
 # Laboratório 13 — Bonecos 3D na lojinha (não só cor de avatar)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-16
-Fim: -
+Fim: 2026-08-16
 Commit inicial: 405153db59dcac6b1c73de5c0652e44f174db70b
 
 ## Objetivo do laboratório
@@ -16,15 +16,15 @@ peças 3D de verdade que combinem com o tema (orelhas, rabo, chifre, juba, bico.
 zero.
 
 ## Funcionalidades planejadas
-- [ ] `src/data/avatars.ts`: cada `AvatarOption` ganha um campo `features` (orelhas/rabo/acessório
+- [x] `src/data/avatars.ts`: cada `AvatarOption` ganha um campo `features` (orelhas/rabo/acessório
       especial/cor de acessório) descrevendo as peças 3D do boneco daquele avatar.
-- [ ] `World3D.tsx`: função que monta as peças 3D (orelhas, rabo, chifre, juba, bico, olhos,
+- [x] `World3D.tsx`: função que monta as peças 3D (orelhas, rabo, chifre, juba, bico, olhos,
       tentáculos — conforme o avatar) e anexa ao boneco base (`buildStudentFigure`), reaproveitando
       primitivas no mesmo estilo do resto do jogo (sem asset externo).
-- [ ] Trocar de avatar na lojinha atualiza as peças 3D do personagem em cena (não só a cor da
+- [x] Trocar de avatar na lojinha atualiza as peças 3D do personagem em cena (não só a cor da
       camisa) — tanto pro próprio jogador quanto pros jogadores remotos (multiplayer local), já que
       ambos já reaproveitam `buildStudentFigure` e resolvem cor a partir do emoji.
-- [ ] Verificação end-to-end: rodar o dev server, equipar pelo menos 3 avatares diferentes (um já
+- [x] Verificação end-to-end: rodar o dev server, equipar pelo menos 3 avatares diferentes (um já
       desbloqueado desde o início, um que precise comprar) e confirmar visualmente que o boneco em
       cena muda de forma (não só de cor) a cada troca.
 
