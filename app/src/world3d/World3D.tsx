@@ -1913,6 +1913,74 @@ export function World3D({
         }
       }
 
+      // Terceiro desafio de parkour (lab-36, pedido do usuário: "mais parkour", escolhido junto
+      // com o mini-game de bichos do lab-35) — os dois primeiros são ziguezagues retos num plano
+      // tangente fixo; este é uma ESPIRAL, subindo em círculos cada vez mais estreitos (como uma
+      // torre em caracol) em vez de zigue-zague — variação de verdade, não só mais um percurso
+      // igual mais comprido. Local achado pela mesma busca de distância angular dos outros
+      // desafios (~29,3° de folga do vizinho mais próximo, o primeiro parkour).
+      //
+      // Espaçamento verificado à parte (script Node, fora do app) antes de escrever este código:
+      // a maior distância 3D entre dois degraus consecutivos da espiral é 1,59 (raio inicial 1,8
+      // encolhendo até 0,6 ao longo de 12 degraus, 1,5 volta completa) — bem dentro do alcance já
+      // comprovado dos outros dois parkours (~2,1-2,36), e fica ainda mais fácil perto do topo (o
+      // raio encolhe, cada pulo fica mais curto). Sobe bem mais alto que os outros dois (12
+      // degraus × 0,85 ≈ 9,35 unidades) — o próprio conceito de espiral (gira em vez de avançar
+      // reto) permite ganhar muito mais altura no mesmo número de degraus sem esticar o percurso
+      // por uma faixa enorme do mapa.
+      const PARKOUR3_ANCHOR_UP = new Vector3(0.8443669823171058, -0.29237170472273666, -0.4489578882815462).normalize()
+      const parkour3AnchorPos = PARKOUR3_ANCHOR_UP.scale(PLANET_RADIUS + terrainHeight(PARKOUR3_ANCHOR_UP))
+      const parkour3Forward = Vector3.Cross(PARKOUR3_ANCHOR_UP, Vector3.Right()).normalize()
+      const parkour3Right = Vector3.Cross(PARKOUR3_ANCHOR_UP, parkour3Forward).normalize()
+      const PARKOUR3_STEPS = 12
+      const PARKOUR3_REVOLUTIONS = 1.5
+      const PARKOUR3_ANGLE_STEP = (Math.PI * 2 * PARKOUR3_REVOLUTIONS) / PARKOUR3_STEPS
+      const PARKOUR3_RADIUS_START = 1.8
+      const PARKOUR3_RADIUS_END = 0.6
+      const PARKOUR3_HEIGHT_STEP = 0.85 // mesmo valor já comprovado dos outros dois parkours
+
+      const parkour3PlatformMat = new PBRMaterial('parkour3PlatformMat', scene)
+      parkour3PlatformMat.albedoColor = new Color3(0.2, 0.55, 0.5) // verde-azulado — distinto do marrom/roxo dos outros dois
+      parkour3PlatformMat.roughness = 0.7
+
+      let parkour3TopPos = parkour3AnchorPos
+      for (let i = 0; i < PARKOUR3_STEPS; i++) {
+        const angle = i * PARKOUR3_ANGLE_STEP
+        const t = i / (PARKOUR3_STEPS - 1)
+        const radius = PARKOUR3_RADIUS_START + (PARKOUR3_RADIUS_END - PARKOUR3_RADIUS_START) * t
+        const platPos = parkour3AnchorPos
+          .add(parkour3Right.scale(Math.cos(angle) * radius))
+          .add(parkour3Forward.scale(Math.sin(angle) * radius))
+          .add(PARKOUR3_ANCHOR_UP.scale(0.5 + i * PARKOUR3_HEIGHT_STEP))
+        parkour3TopPos = platPos
+
+        const platform3 = MeshBuilder.CreateBox(`parkour3Platform-${i}`, { width: 1.3, height: 0.3, depth: 1.3 }, scene)
+        platform3.position.copyFrom(platPos)
+        platform3.rotationQuaternion = alignmentQuaternion(PARKOUR3_ANCHOR_UP)
+        platform3.material = parkour3PlatformMat
+        platform3.receiveShadows = true
+        shadowGenerator.addShadowCaster(platform3)
+        new PhysicsAggregate(platform3, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+      }
+
+      // Recompensa no topo — o desafio mais alto dos três, então o leque de moedas é o maior (6).
+      {
+        const TOP_COIN_COUNT = 6
+        for (let c = 0; c < TOP_COIN_COUNT; c++) {
+          const spreadAngle = (c / TOP_COIN_COUNT) * Math.PI * 2
+          const spreadDir = rotateAroundAxis(parkour3Forward, PARKOUR3_ANCHOR_UP, spreadAngle)
+          const topCoinPos = parkour3TopPos.add(PARKOUR3_ANCHOR_UP.scale(0.4)).add(spreadDir.scale(0.4))
+          const topCoinPivot = new TransformNode(`coinPivot-parkour3Top-${c}`, scene)
+          topCoinPivot.position = topCoinPos
+          topCoinPivot.rotationQuaternion = alignmentQuaternion(PARKOUR3_ANCHOR_UP)
+          const topCoinMesh = MeshBuilder.CreateCylinder(`coin-parkour3Top-${c}`, { height: 0.08, diameter: 0.55 }, scene)
+          topCoinMesh.parent = topCoinPivot
+          topCoinMesh.material = coinMat
+          shadowGenerator.addShadowCaster(topCoinMesh)
+          coins.push({ pivot: topCoinPivot, mesh: topCoinMesh, worldPos: topCoinPos, collected: false })
+        }
+      }
+
       // Bichinhos vagando pelo planeta (pedido do usuário: "animais no mundo, animais
       // aleatorios", depois "mais gato", depois "onças, cachorro, falcão") — tipo e ponto de
       // partida sorteados, cada um com velocidade/fase própria pra não se moverem em sincronia.
