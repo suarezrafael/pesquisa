@@ -1217,7 +1217,9 @@ export function World3D({
             facing = exitFwd.subtract(exitSpotUp.scale(Vector3.Dot(exitFwd, exitSpotUp)))
             if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(exitSpotUp, Vector3.Right())
             facing.normalize()
-            studentFigure.root.setEnabled(true)
+            // Desparenta do carro (lab-27) — volta a ser posicionada pelo loop de física normal
+            // do avatar a pé (que retoma no próximo quadro, já que `drivingCar` vira null aqui).
+            studentFigure.root.parent = null
             drivingCar = null
           } else if (!suspendRef.current && !chatOpenRef.current && avatarMesh) {
             let nearestCar: Carro | null = null
@@ -1235,7 +1237,14 @@ export function World3D({
                 avatarBody.body.setLinearVelocity(Vector3.Zero())
                 avatarBody.body.setAngularVelocity(Vector3.Zero())
               }
-              studentFigure.root.setEnabled(false)
+              // Boneco visível em cima do carro (lab-27, pedido do usuário: "o boneco deve
+              // ficar em cima do carro ao apertar E" — antes ficava escondido) — parentado no
+              // carro com offset local fixo (sentado por cima da cabine); herda posição/rotação
+              // do carro automaticamente a cada quadro (`positionOnLoopPath` já atualiza
+              // `drivingCar.root`), sem precisar sincronizar manualmente.
+              studentFigure.root.parent = nearestCar.root
+              studentFigure.root.position = new Vector3(0, 0.56, -0.05)
+              studentFigure.root.rotationQuaternion = Quaternion.Identity()
               for (const car of carros) car.hintLabel.alpha = 0
             }
           }
@@ -1814,20 +1823,32 @@ export function World3D({
       // curvatura do planeta), asfalto com linha central tracejada.
       //
       // Redesenhada no lab-25 (pedido do usuário: "a estrada deve fazer a volta no planeta") como
-      // um laço FECHADO — um círculo completo em phi constante (~18°, perto do polo norte onde o
-      // jogador nasce), theta indo de 0° a 360°, em vez do arco curto de antes (theta 280°-320°).
-      // phi=18° foi escolhido porque NENHUM marco existente do mapa (platôs, lagoa, piscina,
-      // parkour, lojinha, deserto, as 20 escolas) tem phi menor que 36° — confirmado calculando o
-      // phi de cada um; a rua nesse círculo nunca cruza fisicamente nada, e ainda fica bem perto
-      // do spawn (fácil de achar o carro logo no começo). A lojinha, que poderia parecer "perto"
-      // da rua antiga, na verdade já estava a ~68° de distância dela — mover a rua não quebra
-      // nenhuma relação de verdade.
-      const STREET_PHI = Math.PI * 0.1 // 18°
-      const STREET_SEGMENTS = 72
+      // um laço FECHADO em phi constante, perto do polo norte onde o jogador nasce, theta indo de
+      // 0° a 360°. Ajustada de novo no lab-27 (relato do usuário jogando: "a estrada deve fazer a
+      // volta no planeta, não em círculo" — o laço original em 18° ficou pequeno/apertado demais,
+      // lendo mais como uma rotatória pequena que como uma volta de verdade no planeta):
+      // - `STREET_PHI` sobe de 18° pra 25° — quase dobra a circunferência (raio de um círculo de
+      //   latitude é proporcional a sen(phi); sen(25°)/sen(18°) ≈ 1,37×) sem cruzar fisicamente
+      //   nenhum marco. O limite real não é "nenhum marco com phi < 36°" como no lab-25 (isso só
+      //   olhava o CENTRO de cada marco, não o raio dele) — a piscina (phi=36°, raio de bacia de
+      //   terreno 0,32 rad ≈ 18,3°) é quem realmente limita: sua borda de bacia chega a ~17,7°.
+      //   Mas a bacia é só uma rampa suave de terreno (a rua, como o resto do relevo, segue
+      //   `terrainHeight` — se a rua passar na rampa, ela desce/sobe junto, sem flutuar nem
+      //   afundar); o obstáculo físico de verdade é só o disco de água da piscina em si
+      //   (`poolRadius = 1.1`, ≈ 4,85°), bem menor que o raio da bacia. Com `STREET_PHI = 25°`, a
+      //   distância até o centro da piscina (36°) é 11° — folga de ~6° acima do disco de água
+      //   mesmo no pior caso (ponto da rua exatamente no mesmo theta da piscina).
+      // - Pequena ondulação orgânica em `phi` (mesmo tipo de `Math.sin` já usado no rio) — não
+      //   fica mais um círculo geometricamente perfeito visto de cima.
+      const STREET_PHI = Math.PI * (25 / 180)
+      const STREET_WOBBLE_AMPLITUDE = Math.PI * (1.2 / 180) // ~1,2° — sutil, não come a folga da piscina
+      const STREET_SEGMENTS = 96
       const streetCenter: Vector3[] = []
       for (let i = 0; i < STREET_SEGMENTS; i++) {
-        const theta = (i / STREET_SEGMENTS) * Math.PI * 2
-        const streetDir = pointOnSphere(STREET_PHI, theta, 1)
+        const t = i / STREET_SEGMENTS
+        const theta = t * Math.PI * 2
+        const wobble = Math.sin(theta * 5) * STREET_WOBBLE_AMPLITUDE
+        const streetDir = pointOnSphere(STREET_PHI + wobble, theta, 1)
         streetCenter.push(streetDir.scale(PLANET_RADIUS + terrainHeight(streetDir) + 0.02))
       }
       const streetHalfWidth = 0.85
