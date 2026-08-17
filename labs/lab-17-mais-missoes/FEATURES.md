@@ -1,8 +1,8 @@
 # Laboratório 17 — Mais missões (conteúdo educativo)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
-Fim: -
+Fim: 2026-08-17
 Commit inicial: c28c6259c407d573882fa6a1b7990ed9da876736
 
 ## Objetivo do laboratório
@@ -20,13 +20,13 @@ partir do array `quests`), novas missões aparecem automaticamente como prédios
 precisar tocar em código de motor 3D.
 
 ## Funcionalidades planejadas
-- [ ] 10 novas missões em `src/data/quests.ts` (q11-q20), mantendo o ciclo lógica/matemática/
+- [x] 10 novas missões em `src/data/quests.ts` (q11-q20), mantendo o ciclo lógica/matemática/
       leitura já usado, com dificuldade/recompensa crescente (mesmo padrão das 10 primeiras) e
       conteúdo adequado pra criança de ~10 anos (`prompt.md` seção 1).
-- [ ] Renomear o título da q10 (era "Missão Final", deixa de ser a última) pra algo que combine
+- [x] Renomear o título da q10 (era "Missão Final", deixa de ser a última) pra algo que combine
       com seu conteúdo real; a nova última missão (q20) herda o papel de "missão final" com um
       bônus de recompensa.
-- [ ] Verificação: `npm run build` (typecheck) passa, e as 20 escolinhas aparecem no mundo sem
+- [x] Verificação: `npm run build` (typecheck) passa, e as 20 escolinhas aparecem no mundo sem
       sobreposição óbvia (mesma distribuição por ângulo dourado já usada, agora com 20 pontos em
       vez de 10 — checar visualmente via automação de navegador).
 
