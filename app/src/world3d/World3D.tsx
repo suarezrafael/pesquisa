@@ -165,6 +165,14 @@ const POND_CENTER_DIR = new Vector3(-0.8552, 0.0628, 0.5145).normalize()
 // errado — media do céu ao chão, "o mapa" literalmente quebrado ali).
 const POOL_CENTER_DIR = new Vector3(0.4156, 0.809, 0.4156).normalize()
 
+// Bioma do deserto (lab-23, "mundos extras" — prompt.md §6 P2): região visual distinta do resto
+// do planeta (grama), mesma técnica de zona por direção+raio angular já usada pra lagoa/piscina.
+// Centro escolhido por varredura de candidatos contra todos os marcos existentes (platôs, lagoa,
+// piscina, parkour, lojinha, rua, as 20 escolas) — ~38,9° de folga da escola mais próxima, bem
+// acima do próprio raio do bioma (0.3 rad ≈ 17°).
+const DESERT_CENTER_DIR = new Vector3(0.1651492309, -0.3090169944, 0.9366078308).normalize()
+const DESERT_RADIUS = 0.3
+
 function applyBasin(height: number, dir: Vector3, centerDir: Vector3, radius: number, depth: number): number {
   const dot = Math.max(-1, Math.min(1, Vector3.Dot(dir, centerDir)))
   const angle = Math.acos(dot)
@@ -832,6 +840,40 @@ function buildCarro(scene: Scene, shadowGenerator: ShadowGenerator, bodyColor: C
   return root
 }
 
+// Cacto do bioma de deserto (lab-23) — primitivas (sem asset externo, o Kenney Nature Kit já
+// usado pros outros props não tem nada de deserto além de pedra), mesmo padrão de `buildCarro`.
+// Corpo central + dois "braços" laterais, tronco entra levemente no chão pro colisor esférico
+// (mesmo esquema já usado pros outros props) ter volume suficiente.
+function buildCactus(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('cactusRoot', scene)
+
+  const cactusMat = new PBRMaterial('cactusMat', scene)
+  cactusMat.albedoColor = new Color3(0.22, 0.5, 0.32)
+  cactusMat.roughness = 0.85
+
+  function add(mesh: Mesh) {
+    mesh.material = cactusMat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const trunk = MeshBuilder.CreateCylinder('cactusTrunk', { height: 1.1, diameter: 0.32, tessellation: 8 }, scene)
+  trunk.position.y = 0.5
+  add(trunk)
+
+  for (const side of [-1, 1]) {
+    const arm = MeshBuilder.CreateCylinder(`cactusArm${side}`, { height: 0.5, diameter: 0.2, tessellation: 8 }, scene)
+    arm.position = new Vector3(side * 0.24, 0.75, 0)
+    add(arm)
+    const armUp = MeshBuilder.CreateCylinder(`cactusArmUp${side}`, { height: 0.35, diameter: 0.18, tessellation: 8 }, scene)
+    armUp.position = new Vector3(side * 0.24, 1.05, 0)
+    add(armUp)
+  }
+
+  return root
+}
+
 export function World3D({
   profile,
   progress,
@@ -1032,6 +1074,10 @@ export function World3D({
       // íngreme) — cobre o topo achatado dos platôs também, não só a borda em rampa.
       const hillGreenColor = new Color3(0.2, 0.38, 0.2) // verde bem mais escuro que a grama normal
       const hillBrownColor = new Color3(0.42, 0.3, 0.17) // marrom terra
+      // Bioma do deserto (lab-23) — tom de areia, aplicado por cima de tudo o resto (grama/pedra/
+      // morro) dentro do raio do bioma, com transição suave na borda (mesmo smoothstep de
+      // `applyBasin`) em vez de um corte reto entre grama e areia.
+      const sandColor = new Color3(0.86, 0.74, 0.48)
       const planetColors: number[] = []
       for (let i = 0; i < planetPositions.length; i += 3) {
         const px = planetPositions[i]
@@ -1064,6 +1110,19 @@ export function World3D({
         r += (hillMixR - r) * hillBlend
         g += (hillMixG - g) * hillBlend
         b += (hillMixB - b) * hillBlend
+
+        const desertDot = Math.max(
+          -1,
+          Math.min(1, (px * DESERT_CENTER_DIR.x + py * DESERT_CENTER_DIR.y + pz * DESERT_CENTER_DIR.z) / posLen),
+        )
+        const desertAngle = Math.acos(desertDot)
+        if (desertAngle < DESERT_RADIUS) {
+          const dt = 1 - desertAngle / DESERT_RADIUS
+          const desertBlend = dt * dt * (3 - 2 * dt)
+          r += (sandColor.r - r) * desertBlend
+          g += (sandColor.g - g) * desertBlend
+          b += (sandColor.b - b) * desertBlend
+        }
 
         planetColors.push(r, g, b, 1)
       }
@@ -1113,19 +1172,37 @@ export function World3D({
           Math.sin(phi) * Math.sin(theta),
         )
         const pos = localUp.scale(PLANET_RADIUS + terrainHeight(localUp))
-        const template = propTemplates[i % propTemplates.length]
         const scale = 1.3 + ((i * 7) % 5) * 0.18
         const spin = (i * GOLDEN_ANGLE * 5) % (Math.PI * 2)
 
-        const instance = template.clone(`prop-${i}`, null)
+        // Dentro do bioma de deserto (lab-23), troca árvore/flor/cogumelo por rocha ou cacto —
+        // nada de verde ali, senão o "deserto" ficaria só com o chão pintado diferente.
+        const inDesert =
+          Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(localUp, DESERT_CENTER_DIR)))) < DESERT_RADIUS
+        const DESERT_ROCK_INDICES = [6, 7, 8, 9, 10, 11] // rock_*/stone_smallA em propFiles
+        let instance: TransformNode | null
+        let isHandBuiltCactus = false
+        if (inDesert && i % 3 === 0) {
+          instance = buildCactus(scene, shadowGenerator)
+          instance.scaling.setAll(scale)
+          isHandBuiltCactus = true
+        } else if (inDesert) {
+          const rockTemplate = propTemplates[DESERT_ROCK_INDICES[i % DESERT_ROCK_INDICES.length]]
+          instance = rockTemplate.clone(`prop-${i}`, null)
+        } else {
+          const template = propTemplates[i % propTemplates.length]
+          instance = template.clone(`prop-${i}`, null)
+        }
         if (!instance) continue
         instance.setEnabled(true)
         instance.position = pos
         instance.rotationQuaternion = alignmentQuaternion(localUp).multiply(
           Quaternion.RotationAxis(Vector3.Up(), spin),
         )
-        instance.scaling.setAll(scale)
-        instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
+        if (!isHandBuiltCactus) {
+          instance.scaling.setAll(scale)
+          instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
+        }
 
         // Collider simplificado (esfera) e invisível — nunca a malha visual do glTF.
         // Esfera evita ter que alinhar rotação do colisor à curvatura do planeta.
@@ -1157,6 +1234,57 @@ export function World3D({
         collider.position = pos.add(localUp.scale(PROP_COLLIDER_PROTRUSION - colliderRadius))
         collider.isVisible = false
         new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+      }
+
+      // Scatter dedicado do bioma de deserto (lab-23) — a distribuição geral de props acima
+      // (PROP_COUNT=42 espalhados pela faixa habitável inteira) só derruba ~1 prop dentro de um
+      // raio angular pequeno como o do deserto (0.3 rad), deixando o bioma quase vazio (só o
+      // chão pintado diferente). Reaproveita o mesmo padrão de "andar até um alvo perto" da IA de
+      // vagar dos bichos/NPCs (offset em tangentA/tangentB ao redor de um centro) pra espalhar
+      // cactos/rochas só dentro do raio do deserto.
+      {
+        const desertSeed = Math.abs(DESERT_CENTER_DIR.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+        const desertTangentA = Vector3.Cross(DESERT_CENTER_DIR, desertSeed).normalize()
+        const desertTangentB = Vector3.Cross(DESERT_CENTER_DIR, desertTangentA).normalize()
+        const DESERT_PROP_COUNT = 12
+        for (let i = 0; i < DESERT_PROP_COUNT; i++) {
+          const angle = (i / DESERT_PROP_COUNT) * Math.PI * 2 + i * 0.73
+          const radiusFrac = 0.25 + ((i * 5) % 7) / 7
+          const wanderRadius = DESERT_RADIUS * Math.min(0.92, radiusFrac)
+          const offset = desertTangentA
+            .scale(Math.cos(angle) * wanderRadius)
+            .add(desertTangentB.scale(Math.sin(angle) * wanderRadius))
+          const localUp = DESERT_CENTER_DIR.add(offset).normalize()
+          const pos = localUp.scale(PLANET_RADIUS + terrainHeight(localUp))
+          const scale = 1.0 + ((i * 7) % 5) * 0.15
+          const spin = (i * GOLDEN_ANGLE * 5) % (Math.PI * 2)
+
+          let instance: TransformNode | null
+          const isCactus = i % 2 === 0
+          if (isCactus) {
+            instance = buildCactus(scene, shadowGenerator)
+          } else {
+            const rockTemplate = propTemplates[[6, 7, 8, 9, 10, 11][i % 6]]
+            instance = rockTemplate.clone(`desertProp-${i}`, null)
+          }
+          if (!instance) continue
+          instance.setEnabled(true)
+          instance.position = pos
+          instance.rotationQuaternion = alignmentQuaternion(localUp).multiply(
+            Quaternion.RotationAxis(Vector3.Up(), spin),
+          )
+          instance.scaling.setAll(scale)
+          // `buildCactus` já registra seus próprios shadow casters internamente (ver função) —
+          // registrar de novo aqui duplicaria a malha na lista de sombra do Havok/Babylon.
+          if (!isCactus) instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
+
+          const colliderDiameter = 0.7 * scale
+          const colliderRadius = colliderDiameter / 2
+          const collider = MeshBuilder.CreateSphere(`desertPropCollider-${i}`, { diameter: colliderDiameter }, scene)
+          collider.position = pos.add(localUp.scale(0.15 - colliderRadius))
+          collider.isVisible = false
+          new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+        }
       }
 
       // Moedinhas colecionáveis espalhadas pelo terreno — bônus de exploração à parte das
@@ -1641,9 +1769,17 @@ export function World3D({
       const GRASS_COUNT = 2600
       const grassMatrices = new Float32Array(GRASS_COUNT * 16)
       for (let i = 0; i < GRASS_COUNT; i++) {
-        const phi = Math.PI * 0.08 + Math.random() * Math.PI * 0.7
-        const theta = Math.random() * Math.PI * 2
-        const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+        // Resorteia (poucas tentativas bastam — o deserto é pequeno perto da esfera toda) até
+        // cair fora do bioma do deserto (lab-23): grama saindo da areia ficaria visualmente
+        // errado, mas o total de tufos de grama (GRASS_COUNT, tamanho fixo do buffer de thin
+        // instances) precisa continuar o mesmo, então reamostra em vez de pular a posição.
+        let up = Vector3.Zero()
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const phi = Math.PI * 0.08 + Math.random() * Math.PI * 0.7
+          const theta = Math.random() * Math.PI * 2
+          up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(up, DESERT_CENTER_DIR)))) >= DESERT_RADIUS) break
+        }
         const bladePos = up.scale(PLANET_RADIUS + terrainHeight(up) + 0.02)
         const rot = alignmentQuaternion(up).multiply(Quaternion.RotationAxis(Vector3.Up(), Math.random() * Math.PI * 2))
         const scale = 0.7 + Math.random() * 0.7
