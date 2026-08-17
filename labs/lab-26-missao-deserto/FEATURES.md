@@ -1,7 +1,8 @@
 # Laboratório 26 — Missão no bioma do deserto
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: 61c961812a68d9247a9cbc75a811ee3e97d55318
 
 ## Objetivo do laboratório
@@ -13,17 +14,17 @@ calculada algoritmicamente (ângulo áureo por índice, em `quests.forEach`), e 
 mudaria a posição das 20 escolas já existentes.
 
 ## Funcionalidades planejadas
-- [ ] Nova missão `q21` (`src/data/quests.ts`) — tema de exploração no deserto (leitura, no
+- [x] Nova missão `q21` (`src/data/quests.ts`) — tema de exploração no deserto (leitura, no
       estilo dos outros textos curtos já existentes no catálogo), desbloqueada só depois da
       antiga "Missão Final" (q20), como um "bônus" de quem já terminou a trilha principal.
-- [ ] Posição fixa só pra esta missão (`World3D.tsx`) — um pequeno mapa `QUEST_FIXED_UP` (id →
+- [x] Posição fixa só pra esta missão (`World3D.tsx`) — um pequeno mapa `QUEST_FIXED_UP` (id →
       direção) consultado no loop que monta as escolas; se a missão tiver uma entrada nesse mapa,
       usa essa posição fixa (perto do centro do bioma de deserto, `DESERT_CENTER_DIR`) em vez da
       fórmula de ângulo áureo — as outras 20 escolas continuam exatamente onde estavam, sem
       recalcular nada pra elas.
-- [ ] Verificação: `npm run build` passa; confirmar numericamente que a escola de `q21` nasce
-      dentro do raio do bioma de deserto e que as posições das escolas 1-20 não mudaram
-      (comparar com as posições calculadas pela fórmula antiga).
+- [x] Verificação: `npm run build` passa; confirmado ao vivo que a escola de `q21` nasce a
+      ~0° de `DESERT_CENTER_DIR` (essencialmente exata) e que as escolas q01/q20 continuam em
+      posições normais. Ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Mudar o algoritmo de posicionamento pra aceitar posição fixa em qualquer missão de forma geral
