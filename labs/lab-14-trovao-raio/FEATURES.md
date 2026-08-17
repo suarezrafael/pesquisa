@@ -1,8 +1,8 @@
 # Laboratório 14 — Trovão e raio
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-16
-Fim: -
+Fim: 2026-08-16
 Commit inicial: 5dbf00507f74ab29f57d4901a349b8cca036e96e
 
 ## Objetivo do laboratório
@@ -17,15 +17,15 @@ do lab-10) em vez de abrir uma área nova grande — usuário pediu "continue o 
 sem especificar prioridade.
 
 ## Funcionalidades planejadas
-- [ ] Relâmpago visual: clareamento rápido da cena (flash de luz) em intervalos aleatórios,
+- [x] Relâmpago visual: clareamento rápido da cena (flash de luz) em intervalos aleatórios,
       só durante a chuva (reaproveita o estado `raining`/`rainAmount` do lab-10).
-- [ ] Trovão sintetizado: som grave/estrondoso via Web Audio API (mesmo padrão do vento/chuva em
+- [x] Trovão sintetizado: som grave/estrondoso via Web Audio API (mesmo padrão do vento/chuva em
       `ambientAudio.ts` — sem asset externo), disparado com um pequeno atraso depois do relâmpago
       (luz viaja mais rápido que o som — detalhe que ajuda a vender o efeito).
-- [ ] Frequência/intensidade aleatória, não previsível — nem todo raio é seguido de trovão audível
+- [x] Frequência/intensidade aleatória, não previsível — nem todo raio é seguido de trovão audível
       imediato (tempestade distante vs. próxima), dentro de limites razoáveis pra não virar
       irritante num jogo infantil.
-- [ ] Verificação end-to-end: rodar o dev server, forçar chuva (`window.__forceRain(true)`,
+- [x] Verificação end-to-end: rodar o dev server, forçar chuva (`window.__forceRain(true)`,
       hook de DEV já existente) e confirmar visualmente/pelo estado da cena que o flash de
       relâmpago dispara e o som de trovão tem timing coerente com o flash.
 
