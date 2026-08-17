@@ -1,8 +1,8 @@
 # Laboratório 15 — Ruas e carros
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
-Fim: -
+Fim: 2026-08-17
 Commit inicial: 29670425e2251c5b7b32de9a83b8ba53fea53398
 
 ## Objetivo do laboratório
@@ -18,13 +18,13 @@ e IA de movimento ao longo de um caminho fixo (variação da IA de "círculo loc
 lagoa/piscina, mas seguindo um caminho reto/sinuoso em vez de um círculo).
 
 ## Funcionalidades planejadas
-- [ ] Rua: uma faixa (ribbon, mesmo método do rio) de asfalto acompanhando a curvatura do planeta,
+- [x] Rua: uma faixa (ribbon, mesmo método do rio) de asfalto acompanhando a curvatura do planeta,
       com uma linha central pintada, num local escolhido por busca de distância angular contra
       todos os outros marcos do mapa (platôs, lagoa, piscina, escolas, percurso de parkour).
-- [ ] Carros: 4-6 carrinhos de brinquedo construídos só de primitivas (mesmo estilo do resto do
+- [x] Carros: 4-6 carrinhos de brinquedo construídos só de primitivas (mesmo estilo do resto do
       jogo — sem asset externo), cores variadas, andando pra frente e pra trás ao longo da rua
       (ping-pong), orientados na direção do movimento.
-- [ ] Verificação end-to-end: rodar o dev server e confirmar visualmente (via automação de
+- [x] Verificação end-to-end: rodar o dev server e confirmar visualmente (via automação de
       navegador) que a rua aparece no lugar certo e os carros se movem ao longo dela sem erros no
       console.
 
