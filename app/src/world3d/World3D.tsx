@@ -2596,11 +2596,11 @@ export function World3D({
           // Padrão documentado (ver correção do bug de sair do carro): `disablePreStep = false`
           // + `scene.render()` sincronizam o corpo físico de verdade com a posição escrita
           // aqui, e `disablePreStep = true` no final devolve o corpo pro modo normal do jogo
-          // (física dirige a posição — sem isso, deixado em `false`, o corpo ficava "grudado"
-          // relendo a mesma posição da mesh todo quadro, cancelando gravidade/qualquer física
-          // nova, mesmo depois do teleporte — bug real encontrado testando o parkour de laser,
-          // lab-39: um empurrão/gravidade aplicado logo depois de um teleporte não tinha efeito
-          // nenhum, o corpo ficava parado exatamente onde foi posto, pra sempre).
+          // (física dirige a posição). Mantido por consistência com esse padrão já estabelecido
+          // — não é a correção de um bug confirmado neste hook especificamente (investigado no
+          // lab-39: a causa real de resultados "congelados" testando o parkour de laser era a
+          // aba do Chrome da automação não renderizar quadro nenhum quando só esperando sem
+          // interagir, não este código).
           avatarBody.body.disablePreStep = false
           avatarMesh.position = localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05)
           scene.render()
@@ -2617,18 +2617,17 @@ export function World3D({
         ;(window as any).__debugTeleportExact = (x: number, y: number, z: number) => {
           if (!avatarMesh || !avatarBody) return
           avatarBody.body.disablePreStep = false
-          // Atribuição de um Vector3 NOVO, não `.position.set(...)` (mutar os componentes do
-          // vetor já existente no lugar) — bug real encontrado testando isto: `.set()` não
-          // disparava o rastreamento de "sujo"/dirty do Babylon (que depende do PRÓPRIO SETTER
-          // de `.position` rodar, atribuindo um objeto novo), então o mundo/física nunca
-          // sincronizava com a posição nova — o valor bruto de `.position` mudava (lido de volta
-          // corretamente), mas o corpo físico continuava exatamente onde estava antes, sem cair,
-          // sem nada — silenciosamente sem efeito nenhum no jogo de verdade.
           avatarMesh.position = new Vector3(x, y, z)
           scene.render()
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
           avatarBody.body.disablePreStep = true
+        }
+        // Ajusta a direção pra onde o personagem anda (dev-only, QA) — teleportar não muda
+        // `facing` (fica sempre o que era antes), então sem isto não dá pra testar "andar até X"
+        // de forma confiável depois de um teleporte pra um lugar novo do mapa.
+        ;(window as any).__debugSetFacing = (x: number, y: number, z: number) => {
+          facing = new Vector3(x, y, z).normalize()
         }
       }
 
