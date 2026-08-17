@@ -820,6 +820,7 @@ export function World3D({
   const suspendRef = useRef(suspendTriggers)
   const onSelectQuestRef = useRef(onSelectQuest)
   const onCollectCoinRef = useRef(onCollectCoin)
+  const onOpenShopRef = useRef(onOpenShop)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
   const [muted, setMuted] = useState(false)
@@ -834,6 +835,7 @@ export function World3D({
   suspendRef.current = suspendTriggers
   onSelectQuestRef.current = onSelectQuest
   onCollectCoinRef.current = onCollectCoin
+  onOpenShopRef.current = onOpenShop
 
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()
