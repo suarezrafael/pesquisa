@@ -1,12 +1,11 @@
 # Laboratório atual
 
-Concluído: labs/lab-10-clima-npcs-trilha/
+Em andamento: labs/lab-11-parkour/
+Planejamento: labs/lab-11-parkour/FEATURES.md
 Contexto do laboratório anterior: labs/lab-10-clima-npcs-trilha/CONTEXT.md
 
-Trabalho aconteceu na branch de worktree `worktree-abstract-wobbling-owl`, a partir de `main`
-(ainda não mesclada). Nenhum laboratório novo foi aberto ainda — antes de começar o próximo, ver a
-lista de pedidos pendentes (ruas+carros, loja navegável, parkour, trovão/raio) no final de
-`labs/lab-10-clima-npcs-trilha/CONTEXT.md` e confirmar prioridade com o usuário.
+Trabalho acontece numa branch de worktree (`worktree-abstract-wobbling-owl`), a partir de `main`
+(ainda não mesclada).
 
-Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-10-clima-npcs-trilha/CONTEXT.md`.
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-11-parkour/FEATURES.md` (e
+`labs/lab-10-clima-npcs-trilha/CONTEXT.md` pro histórico anterior).
