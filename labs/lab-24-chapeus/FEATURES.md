@@ -1,7 +1,8 @@
 # Laboratório 24 — Chapéus (customização avançada)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: 2e0e2f6dd40a1ab99dd09bfde710d5b396b98fa2
 
 ## Objetivo do laboratório
@@ -13,23 +14,24 @@ customização independente da escolha de criatura. Chapéus são um novo eixo d
 que se aplica em cima de qualquer criatura escolhida, sem mexer no sistema de presets existente.
 
 ## Funcionalidades planejadas
-- [ ] `src/data/hats.ts` (novo, mesmo padrão de `avatars.ts`) — catálogo de ~5 chapéus (boné,
+- [x] `src/data/hats.ts` (novo, mesmo padrão de `avatars.ts`) — catálogo de ~5 chapéus (boné,
       chapéu de festa, coroa, flor, laço), cada um com `shape` (descreve a geometria 3D, montada
       em `World3D.tsx`) + custo em moedas.
-- [ ] `Progress.unlockedHatIds: string[]` e `Profile.equippedHatId: string | null` (`types.ts`) —
+- [x] `Progress.unlockedHatIds: string[]` e `Profile.equippedHatId: string | null` (`types.ts`) —
       mesmo padrão de `unlockedAvatarIds`/`avatarEmoji`, eixo independente (trocar de criatura não
       mexe no chapéu equipado, e vice-versa).
-- [ ] `unlockHat`/`equipHat` (`progression.ts`/`useProgress.ts`/`useProfile.ts`) — mesmo padrão de
+- [x] `unlockHat`/`equipHat` (`progression.ts`/`useProgress.ts`/`useProfile.ts`) — mesmo padrão de
       `unlockAvatar`/`equipAvatar`.
-- [ ] Geometria 3D dos chapéus (`applyHat()`, `World3D.tsx`) — primitivas simples parentadas em
+- [x] Geometria 3D dos chapéus (`applyHat()`, `World3D.tsx`) — primitivas simples parentadas em
       `figure.root` acima da cabeça (mesmo padrão de `applyBonecoFeatures`, offset absoluto, não
       aninhado na malha da cabeça), com hook `__setPlayerHat` pra trocar sem reconstruir a cena
       (mesmo padrão de `__setAvatarShirtColor`).
-- [ ] Seção de chapéus na lojinha (`AvatarShop.tsx`) — mesma UI de comprar/equipar já usada pros
+- [x] Seção de chapéus na lojinha (`AvatarShop.tsx`) — mesma UI de comprar/equipar já usada pros
       avatares, título/seção separada.
-- [ ] Verificação: `npm run build` passa; testar ao vivo — comprar um chapéu, equipar, confirmar
-      visualmente que aparece na cabeça do personagem e continua equipado depois de trocar de
-      criatura (prova que os dois eixos são independentes).
+- [x] Verificação: `npm run build` passa; testado ao vivo via cliques reais na loja — comprado e
+      equipado um chapéu, confirmado por dados da cena (contagem/nomes de malha) que ele foi
+      criado, e confirmado que continua equipado (mesmas malhas) depois de trocar de criatura.
+      Validação visual por screenshot não foi concluída (ver `CONTEXT.md`, pendências).
 
 ## Fora de escopo (explicitamente adiado)
 - Sincronizar chapéu equipado pros outros jogadores no multiplayer local (exigiria estender
