@@ -250,6 +250,51 @@ export function stopRain(): void {
   rainGain = null
 }
 
+// Trovão (lab-14, completa o clima dinâmico do lab-10): ruído grave filtrado (o "estrondo",
+// ataque rápido + decaimento longo, mesmo estilo da chuva) somado a um "boom" senoidal grave
+// (reforça o golpe inicial, sem depender de asset externo). `intensity` (0-1) representa a
+// distância do raio — chamado pelo loop de clima em World3D.tsx com um atraso proporcional à
+// distância (luz viaja mais rápido que o som).
+export function playThunder(intensity: number = 1): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 1.5 + Math.random() * 1.5
+
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 180 + Math.random() * 140
+  lowpass.Q.value = 0.7
+
+  const gain = ctx.createGain()
+  const peak = 0.32 * intensity
+  gain.gain.setValueAtTime(0, now)
+  gain.gain.linearRampToValueAtTime(peak, now + 0.03)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+
+  src.connect(lowpass).connect(gain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+
+  const boom = ctx.createOscillator()
+  boom.type = 'sine'
+  boom.frequency.setValueAtTime(70, now)
+  boom.frequency.exponentialRampToValueAtTime(35, now + 0.4)
+  const boomGain = ctx.createGain()
+  boomGain.gain.setValueAtTime(0.22 * intensity, now)
+  boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
+  boom.connect(boomGain).connect(ctx.destination)
+  boom.start(now)
+  boom.stop(now + 0.5)
+}
+
 export function playFootstep(): void {
   if (!audioCtx || muted) return
   const ctx = audioCtx

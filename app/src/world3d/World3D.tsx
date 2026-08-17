@@ -17,6 +17,7 @@ import {
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
+  PhysicsRaycastResult,
   PhysicsShapeType,
   Quaternion,
   Scene,
@@ -46,6 +47,7 @@ import {
   playCoinCollect,
   playFootstep,
   startAmbience,
+  playThunder,
   startRain,
   stopRain,
   toggleMute as toggleAmbienceMute,
@@ -101,6 +103,14 @@ const BASE_HEMI_INTENSITY = 0.3
 const RAIN_HEMI_INTENSITY = 0.16
 const BASE_SUN_INTENSITY = 1.0
 const RAIN_SUN_INTENSITY = 0.5
+
+// Raio (lab-14): clareamento rápido da cena (flash aditivo de luz), não um objeto/bolt visual
+// desenhado — mais barato e já vende bem o efeito. `lightningFlash` sobe pra 1 no instante do
+// raio e decai linearmente até 0 em `LIGHTNING_DECAY_TIME` segundos.
+const LIGHTNING_DECAY_TIME = 0.35
+const LIGHTNING_HEMI_BOOST = 1.4
+const LIGHTNING_SUN_BOOST = 1.8
+const LIGHTNING_ENV_BOOST = 1.2
 
 // Rotaciona `v` ao redor de `axis` por `angle` radianos (fórmula de Rodrigues) — usado pra
 // girar a direção da bola suavemente, em vez de saltar pra direção do input a cada quadro.
@@ -850,6 +860,9 @@ export function World3D({
     let netSendTimer = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
+    // Reaproveitado a cada quadro pra checar "grounded" via raycast físico real (ver comentário
+    // onde é usado) — evita alocar um objeto novo por quadro.
+    const groundRayResult = new PhysicsRaycastResult()
     if (import.meta.env.DEV) {
       ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
     }
@@ -1831,6 +1844,20 @@ export function World3D({
       let raining = false
       let weatherTimer = 30 + Math.random() * 60
       let rainAmount = 0
+      // Raio: só ocorre durante a chuva (`raining`). `lightningTimer` sorteia o intervalo até o
+      // próximo; ao disparar, o som do trovão é agendado com um atraso proporcional a uma
+      // "distância" sorteada (raio próximo: atraso curto e som mais forte; distante: atraso
+      // maior e som mais fraco) — luz viaja mais rápido que o som, mesmo detalhe de tempestades
+      // de verdade.
+      let lightningTimer = 6 + Math.random() * 14
+      let lightningFlash = 0
+      function triggerLightning() {
+        lightningFlash = 1
+        const distance = 0.25 + Math.random() * 0.75
+        const delayMs = distance * 1800
+        const intensity = 1 - distance * 0.6
+        window.setTimeout(() => playThunder(intensity), delayMs)
+      }
       if (import.meta.env.DEV) {
         // Hook de teste manual (sem esperar minutos): window.__forceRain(true/false) no console.
         ;(window as any).__forceRain = (on: boolean) => {
@@ -1839,6 +1866,8 @@ export function World3D({
           if (on) startRain()
           else stopRain()
         }
+        // window.__forceLightning() dispara um raio na hora, sem esperar o sorteio.
+        ;(window as any).__forceLightning = () => triggerLightning()
       }
       scene.onBeforeRenderObservable.add(() => {
         const dt = engine.getDeltaTime() / 1000
@@ -1853,10 +1882,25 @@ export function World3D({
         }
         rainAmount += ((raining ? 1 : 0) - rainAmount) * Math.min(1, dt * 0.5)
         rainSystem.emitRate = rainAmount * 500
+
+        // Raio: só sorteia/dispara enquanto chove de verdade (rainAmount alto, não só
+        // "raining=true" no instante em que a chuva ainda está começando a aparecer).
+        if (raining && rainAmount > 0.4) {
+          lightningTimer -= dt
+          if (lightningTimer <= 0) {
+            lightningTimer = 6 + Math.random() * 14
+            triggerLightning()
+          }
+        }
+        lightningFlash = Math.max(0, lightningFlash - dt / LIGHTNING_DECAY_TIME)
+
         scene.fogDensity = BASE_FOG_DENSITY + (RAIN_FOG_DENSITY - BASE_FOG_DENSITY) * rainAmount
-        scene.environmentIntensity = BASE_ENV_INTENSITY + (RAIN_ENV_INTENSITY - BASE_ENV_INTENSITY) * rainAmount
-        hemiLight.intensity = BASE_HEMI_INTENSITY + (RAIN_HEMI_INTENSITY - BASE_HEMI_INTENSITY) * rainAmount
-        sunLight.intensity = BASE_SUN_INTENSITY + (RAIN_SUN_INTENSITY - BASE_SUN_INTENSITY) * rainAmount
+        scene.environmentIntensity =
+          BASE_ENV_INTENSITY + (RAIN_ENV_INTENSITY - BASE_ENV_INTENSITY) * rainAmount + lightningFlash * LIGHTNING_ENV_BOOST
+        hemiLight.intensity =
+          BASE_HEMI_INTENSITY + (RAIN_HEMI_INTENSITY - BASE_HEMI_INTENSITY) * rainAmount + lightningFlash * LIGHTNING_HEMI_BOOST
+        sunLight.intensity =
+          BASE_SUN_INTENSITY + (RAIN_SUN_INTENSITY - BASE_SUN_INTENSITY) * rainAmount + lightningFlash * LIGHTNING_SUN_BOOST
 
         grassMaterial.setFloat('time', time)
         for (const cloud of cloudGroups) {
@@ -1918,7 +1962,26 @@ export function World3D({
           // zerado) a cada quadro, então nunca fica um pulo "pendente" esperando o jogador
           // aterrissar.
           const groundDist = PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05
-          const grounded = dist <= groundDist + 0.08
+
+          // Bug real relatado pelo usuário: "o parkour só funciona o primeiro pulo, depois que
+          // estou em cima do degrau o pulo não funciona". Causa: `grounded` comparava só contra
+          // a fórmula analítica do terreno do planeta (`groundDist`, baseada em `terrainHeight`),
+          // que não sabe nada sobre as plataformas de parkour (lab-11) nem qualquer outra
+          // superfície fora do planeta — parado em cima de uma plataforma, `dist` é bem maior que
+          // `groundDist`, então `grounded` ficava falso pra sempre lá em cima, bloqueando qualquer
+          // pulo seguinte. Corrigido com um raycast físico real (curto, pra baixo, a partir do
+          // colisor do jogador) — funciona igual em cima do terreno do planeta, de uma plataforma
+          // de parkour, ou de qualquer outra superfície física futura, sem precisar de um caso
+          // especial por tipo de superfície.
+          let grounded = false
+          if (havokPlugin) {
+            const rayFrom = pos
+            const rayTo = pos.subtract(localUp.scale(AVATAR_RADIUS + 0.9))
+            havokPlugin.raycast(rayFrom, rayTo, groundRayResult, { ignoreBody: body })
+            if (groundRayResult.hasHit) {
+              grounded = groundRayResult.hitDistance <= AVATAR_RADIUS + 0.13
+            }
+          }
           if (jumpRequested) {
             jumpRequested = false
             if (grounded) radialSpeed = JUMP_SPEED
