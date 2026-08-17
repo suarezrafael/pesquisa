@@ -1,13 +1,17 @@
 // Áudio ambiente sintetizado via Web Audio API — sem depender de nenhum arquivo baixado
 // (evita qualquer questão de licença/tamanho): vento (ruído filtrado com rajadas), uma
-// melodia curta estilo chiptune de fundo, e som de passo sintetizado sob demanda.
+// melodia curta estilo chiptune de fundo, chuva (ruído filtrado sob demanda, liga/desliga com
+// o clima dinâmico) e som de passo/moeda sintetizado sob demanda.
 
 let audioCtx: AudioContext | null = null
 let started = false
 let muted = false
+let rainSource: AudioBufferSourceNode | null = null
+let rainGain: GainNode | null = null
 
 const WIND_VOLUME = 0.05
 const MUSIC_VOLUME = 0.05
+const RAIN_VOLUME = 0.07
 
 interface Note {
   freq: number
@@ -79,6 +83,23 @@ const TRACKS: Track[] = [
       { freq: 1108.73, dur: 0.16 }, // C#6
       { freq: 987.77, dur: 0.16 }, // B5
       { freq: 659.25, dur: 0.32 }, // E5
+    ],
+  },
+  {
+    name: 'Noite Estrelada',
+    waveform: 'sine',
+    bassFreq: 110.0, // A2
+    notes: [
+      { freq: 440.0, dur: 0.4 }, // A4
+      { freq: 523.25, dur: 0.4 }, // C5
+      { freq: 659.25, dur: 0.4 }, // E5
+      { freq: 587.33, dur: 0.4 }, // D5
+      { freq: 493.88, dur: 0.4 }, // B4
+      { freq: 587.33, dur: 0.4 }, // D5
+      { freq: 523.25, dur: 0.8 }, // C5
+      { freq: 440.0, dur: 0.4 }, // A4
+      { freq: 493.88, dur: 0.4 }, // B4
+      { freq: 440.0, dur: 0.8 }, // A4
     ],
   },
 ]
@@ -179,6 +200,54 @@ export function startAmbience(): void {
     window.setTimeout(playNote, note.dur * 1000)
   }
   playNote()
+}
+
+// Chuva: ruído branco passado por um filtro passa-alta (mais "chiado agudo" que o vento, que
+// usa passa-faixa mais grave) — liga/desliga com fade suave em vez de corte seco, pra soar
+// como chuva chegando/indo embora, não um clique de áudio ligando.
+export function startRain(): void {
+  if (!audioCtx || rainSource) return
+  const ctx = audioCtx
+  const bufferSize = ctx.sampleRate * 2
+  const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = noiseBuffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = noiseBuffer
+  src.loop = true
+
+  const rainFilter = ctx.createBiquadFilter()
+  rainFilter.type = 'highpass'
+  rainFilter.frequency.value = 1600
+  rainFilter.Q.value = 0.3
+
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(RAIN_VOLUME, ctx.currentTime + 2.5)
+
+  src.connect(rainFilter).connect(gain).connect(ctx.destination)
+  src.start()
+  rainSource = src
+  rainGain = gain
+}
+
+export function stopRain(): void {
+  if (!audioCtx || !rainSource || !rainGain) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  rainGain.gain.cancelScheduledValues(now)
+  rainGain.gain.setValueAtTime(rainGain.gain.value, now)
+  rainGain.gain.linearRampToValueAtTime(0, now + 1.5)
+  const src = rainSource
+  window.setTimeout(() => {
+    try {
+      src.stop()
+    } catch {
+      // já pode ter sido parado (ex.: dispose da cena) — ignora.
+    }
+  }, 1700)
+  rainSource = null
+  rainGain = null
 }
 
 export function playFootstep(): void {

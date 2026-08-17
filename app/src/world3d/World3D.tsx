@@ -4,6 +4,7 @@ import {
   Color4,
   DefaultRenderingPipeline,
   DirectionalLight,
+  DynamicTexture,
   Effect,
   Engine,
   GlowLayer,
@@ -13,6 +14,7 @@ import {
   Matrix,
   Mesh,
   MeshBuilder,
+  ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
   PhysicsShapeType,
@@ -40,7 +42,14 @@ import type { Profile, Progress } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { ChatPanel } from './ChatPanel'
-import { playCoinCollect, playFootstep, startAmbience, toggleMute as toggleAmbienceMute } from './ambientAudio'
+import {
+  playCoinCollect,
+  playFootstep,
+  startAmbience,
+  startRain,
+  stopRain,
+  toggleMute as toggleAmbienceMute,
+} from './ambientAudio'
 import {
   connect as connectMultiplayer,
   disconnect as disconnectMultiplayer,
@@ -80,6 +89,18 @@ const CAMERA_HEIGHT = 4.5
 const TRIGGER_DISTANCE = 2.4
 const RESET_DISTANCE = 3.6
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
+
+// Clima dinâmico (pedido do usuário: "chuva" — item pendente da lista do lab-09): valores de
+// atmosfera em dia limpo vs. durante a chuva, interpolados por `rainAmount` (0 a 1) pra a
+// transição ser suave, não um interruptor ligado/desligado.
+const BASE_FOG_DENSITY = 0.01
+const RAIN_FOG_DENSITY = 0.035
+const BASE_ENV_INTENSITY = 0.75
+const RAIN_ENV_INTENSITY = 0.4
+const BASE_HEMI_INTENSITY = 0.3
+const RAIN_HEMI_INTENSITY = 0.16
+const BASE_SUN_INTENSITY = 1.0
+const RAIN_SUN_INTENSITY = 0.5
 
 // Rotaciona `v` ao redor de `axis` por `angle` radianos (fórmula de Rodrigues) — usado pra
 // girar a direção da bola suavemente, em vez de saltar pra direção do input a cada quadro.
@@ -322,7 +343,7 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
 // articulação). A IA de cada um é: anda até um ponto aleatório na faixa caminhável, descansa um
 // tempo, escolhe outro ponto — tudo em coordenadas de "up local" (direção a partir do centro do
 // planeta), igual ao resto do mundo, pra já nascer alinhado à curvatura sem lógica extra.
-type CritterKind = 'coelho' | 'esquilo' | 'passarinho'
+type CritterKind = 'coelho' | 'esquilo' | 'passarinho' | 'gato'
 
 interface Critter {
   kind: CritterKind
@@ -401,6 +422,51 @@ function buildEsquilo(scene: Scene, shadowGenerator: ShadowGenerator): Transform
   const tail = MeshBuilder.CreateCapsule('esquiloTail', { height: 0.3, radius: 0.075 }, scene)
   tail.position = new Vector3(0, 0.24, -0.15)
   tail.rotation.x = -0.85
+  add(tail)
+
+  return root
+}
+
+// Gatos (pedido do usuário: "mais gato e alguns gatos ficam ensima de tudo") — a maioria vaga
+// pelo chão igual coelho/esquilo, alguns ficam parados no topo dos platôs/telhados (ver
+// `perchedCats` mais abaixo, fora da IA de vagar).
+function buildGato(scene: Scene, shadowGenerator: ShadowGenerator, furColor: Color3): TransformNode {
+  const root = new TransformNode('gatoRoot', scene)
+  const furMat = new PBRMaterial('gatoFur', scene)
+  furMat.albedoColor = furColor
+  furMat.roughness = 0.8
+
+  function add(mesh: Mesh) {
+    mesh.material = furMat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateCapsule('gatoBody', { height: 0.28, radius: 0.1 }, scene)
+  body.rotation.x = Math.PI / 2
+  body.position.y = 0.12
+  add(body)
+
+  const head = MeshBuilder.CreateSphere('gatoHead', { diameter: 0.15 }, scene)
+  head.position = new Vector3(0, 0.17, 0.16)
+  add(head)
+
+  for (const side of [-1, 1]) {
+    const ear = MeshBuilder.CreateCylinder(
+      `gatoEar${side}`,
+      { height: 0.07, diameterTop: 0, diameterBottom: 0.06, tessellation: 3 },
+      scene,
+    )
+    ear.position = new Vector3(side * 0.055, 0.25, 0.16)
+    add(ear)
+  }
+
+  // Rabo arqueado pra cima — junto com as orelhas triangulares, o traço que mais diferencia de
+  // coelho/esquilo na mesma escala de bicho pequeno.
+  const tail = MeshBuilder.CreateCapsule('gatoTail', { height: 0.26, radius: 0.028 }, scene)
+  tail.position = new Vector3(0, 0.23, -0.16)
+  tail.rotation.x = -1.15
   add(tail)
 
   return root
@@ -799,12 +865,13 @@ export function World3D({
       }
 
       // Bichinhos vagando pelo planeta (pedido do usuário: "animais no mundo, animais
-      // aleatorios") — tipo e ponto de partida sorteados, cada um com velocidade/fase própria
-      // pra não se moverem em sincronia. IA de vagar (wander) roda no loop de render abaixo.
+      // aleatorios", depois "mais gato") — tipo e ponto de partida sorteados, cada um com
+      // velocidade/fase própria pra não se moverem em sincronia. IA de vagar (wander) roda no
+      // loop de render abaixo.
       const critters: Critter[] = []
-      const CRITTER_COUNT = 20
+      const CRITTER_COUNT = 26
       for (let i = 0; i < CRITTER_COUNT; i++) {
-        const kind: CritterKind = i < 8 ? 'coelho' : i < 14 ? 'esquilo' : 'passarinho'
+        const kind: CritterKind = i < 8 ? 'coelho' : i < 14 ? 'esquilo' : i < 20 ? 'gato' : 'passarinho'
         const phi = Math.PI * 0.14 + Math.random() * Math.PI * 0.6
         const theta = Math.random() * Math.PI * 2
         const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
@@ -816,6 +883,9 @@ export function World3D({
           root = buildCoelho(scene, shadowGenerator)
         } else if (kind === 'esquilo') {
           root = buildEsquilo(scene, shadowGenerator)
+        } else if (kind === 'gato') {
+          const gatoColor = Color3.Lerp(new Color3(0.85, 0.55, 0.25), new Color3(0.15, 0.15, 0.15), Math.random())
+          root = buildGato(scene, shadowGenerator, gatoColor)
         } else {
           const passarinhoColor = Color3.Lerp(new Color3(0.75, 0.25, 0.2), new Color3(0.3, 0.4, 0.75), Math.random())
           const built = buildPassarinho(scene, shadowGenerator, passarinhoColor)
@@ -876,6 +946,53 @@ export function World3D({
         node.position = basePos
         cloudGroups.push({ node, basePos, speed: 0.03 + (i % 4) * 0.01 })
       }
+
+      // Chuva (pedido do usuário: "chuva" — item pendente da lista do lab-09): sistema de
+      // partículas simples, textura gerada por `DynamicTexture` (sem depender de nenhum arquivo
+      // baixado, mesmo princípio do áudio sintetizado). O emissor é um TransformNode que o loop
+      // de render reposiciona/reorienta pra acompanhar o jogador (`rainAnchor.position` = pos do
+      // jogador, `rainAnchor.rotationQuaternion` = alinhado ao "up" local) — com `isLocal` ligado,
+      // as partículas simulam no espaço local desse nó, então "cair pra baixo" (direção local
+      // -Y) já sai automaticamente na direção certa (rumo ao centro do planeta) em qualquer
+      // ponto da esfera, sem ter que recalcular a direção de cada partícula manualmente.
+      const rainDropTexture = new DynamicTexture('rainDropTex', { width: 8, height: 32 }, scene, false)
+      const rainDropCtx = rainDropTexture.getContext() as CanvasRenderingContext2D
+      const rainDropGradient = rainDropCtx.createLinearGradient(0, 0, 0, 32)
+      rainDropGradient.addColorStop(0, 'rgba(210,230,255,0)')
+      rainDropGradient.addColorStop(0.5, 'rgba(210,230,255,0.9)')
+      rainDropGradient.addColorStop(1, 'rgba(210,230,255,0)')
+      rainDropCtx.fillStyle = rainDropGradient
+      rainDropCtx.fillRect(0, 0, 8, 32)
+      rainDropTexture.update()
+
+      // Mesh vazio (sem geometria própria), não TransformNode — `ParticleSystem.emitter` só
+      // aceita Vector3 ou AbstractMesh.
+      const rainAnchor = new Mesh('rainAnchor', scene)
+      rainAnchor.isVisible = false
+      rainAnchor.rotationQuaternion = Quaternion.Identity()
+
+      const rainSystem = new ParticleSystem('rain', 600, scene)
+      rainSystem.particleTexture = rainDropTexture
+      rainSystem.emitter = rainAnchor
+      rainSystem.isLocal = true
+      rainSystem.minEmitBox = new Vector3(-4, 5, -4)
+      rainSystem.maxEmitBox = new Vector3(4, 6, 4)
+      rainSystem.direction1 = new Vector3(-0.15, -1, -0.15)
+      rainSystem.direction2 = new Vector3(0.15, -1, 0.15)
+      rainSystem.minEmitPower = 9
+      rainSystem.maxEmitPower = 12
+      rainSystem.gravity = Vector3.Zero()
+      rainSystem.updateSpeed = 0.02
+      rainSystem.minLifeTime = 0.5
+      rainSystem.maxLifeTime = 0.7
+      rainSystem.minSize = 0.08
+      rainSystem.maxSize = 0.18
+      rainSystem.color1 = new Color4(0.75, 0.85, 1, 0.5)
+      rainSystem.color2 = new Color4(0.75, 0.85, 1, 0.25)
+      rainSystem.colorDead = new Color4(0.75, 0.85, 1, 0)
+      rainSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
+      rainSystem.emitRate = 0 // liga suavemente no loop de render, junto com o resto do clima
+      rainSystem.start()
 
       // Rio — faixa achatada (ribbon) rente à curvatura do planeta, não um tubo redondo
       // flutuando acima do chão (era isso que ficava "sobressalente"/estranho antes).
@@ -1062,6 +1179,7 @@ export function World3D({
 
       const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
+      if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure
 
       // Trocar de avatar na lojinha não reconstrói a cena inteira (custoso) — só recolore a
       // camisa do personagem já em cena. Ver useEffect que observa `profile.avatarEmoji`.
@@ -1186,6 +1304,42 @@ export function World3D({
       portalMeshes.forEach(applyPortalVisual)
       ;(scene as any).__refreshPortals = () => portalMeshes.forEach(applyPortalVisual)
 
+      // Gatos "em cima de tudo" (pedido do usuário: "alguns gatos ficam ensima de tudo") —
+      // diferente dos gatos que vagam pelo chão (acima): estes ficam parados nos pontos mais
+      // altos do mapa (topo dos 4 platôs + telhado de 2 escolas), só balançando/olhando ao
+      // redor devagar — não entram na IA de vagar porque teriam que "descer" pra andar até um
+      // alvo, o que ia contra a ideia de ficarem sempre no topo.
+      interface PerchedCat {
+        root: TransformNode
+        up: Vector3
+        phase: number
+      }
+      const perchedCats: PerchedCat[] = []
+      const PERCHED_CAT_COLORS = [
+        new Color3(0.85, 0.55, 0.25),
+        new Color3(0.15, 0.15, 0.15),
+        new Color3(0.55, 0.55, 0.58),
+        new Color3(0.92, 0.9, 0.85),
+      ]
+      PLATEAU_CENTERS.forEach((plateau, i) => {
+        const up = plateau.dir
+        const catRoot = buildGato(scene, shadowGenerator, PERCHED_CAT_COLORS[i % PERCHED_CAT_COLORS.length])
+        catRoot.position.copyFrom(up.scale(PLANET_RADIUS + terrainHeight(up) + 0.02))
+        catRoot.rotationQuaternion = alignmentQuaternion(up)
+        perchedCats.push({ root: catRoot, up, phase: Math.random() * Math.PI * 2 })
+      })
+      portalMeshes.slice(0, 2).forEach((entry, i) => {
+        const up = entry.surfacePos.length() > 0.0001 ? entry.surfacePos.clone().normalize() : Vector3.Up()
+        // Ponta do telhado (cone): local Y 1.9 acima da base da escola (roof.position.y=1.5 +
+        // metade da altura 0.8) — mesma direção "up" usada pra erguer a escola do chão.
+        const roofTopPos = entry.surfacePos.add(up.scale(1.9))
+        const catRoot = buildGato(scene, shadowGenerator, PERCHED_CAT_COLORS[(i + 2) % PERCHED_CAT_COLORS.length])
+        catRoot.position.copyFrom(roofTopPos)
+        catRoot.rotationQuaternion = alignmentQuaternion(up)
+        perchedCats.push({ root: catRoot, up, phase: Math.random() * Math.PI * 2 })
+      })
+      if (import.meta.env.DEV) (window as any).__perchedCats = perchedCats
+
       // Piscina com gente (pedido do usuário: "picina com gente nela") — separada da lagoa
       // (theta bem distante: lagoa fica em 2.6, rio em 0.15-1.35). Reaproveita o mesmo boneco
       // do personagem/professor (buildStudentFigure), só que parado (sem ciclo de caminhada) e
@@ -1227,7 +1381,20 @@ export function World3D({
         new Color3(0.75, 0.4, 0.85),
       ]
       const POOL_PEOPLE_COUNT = 5
-      const POOL_CHAT_LINES = ['Oi!', 'kkk', 'Que dia bom!', '🌞', '💧']
+      const POOL_CHAT_LINES = [
+        'Oi!',
+        'kkk',
+        'Que dia bom!',
+        '🌞',
+        '💧',
+        'Vem nadar!',
+        'A água tá ótima!',
+        'Bora de mergulho?',
+        '🏊',
+        'Adoro esse lugar!',
+        'Quem topa uma corrida?',
+        '😄',
+      ]
       const poolPeople: {
         figure: StudentFigure
         localX: number
@@ -1263,6 +1430,72 @@ export function World3D({
           chatTimer: 2 + Math.random() * 4,
         })
       }
+
+      // Pessoas civis andando pelo planeta (pedido do usuário: "pessoas andando por ai" /
+      // "algumas pessoas passeando e falando") — reaproveita o mesmo boneco do jogador
+      // (buildStudentFigure) e a IA de vagar dos bichinhos (lab-09), mas com o ciclo de
+      // caminhada de verdade (pernas/braços) e uma bolha de fala decorativa durante as pausas,
+      // igual à da piscina — dá a impressão de parar pra bater papo antes de seguir andando.
+      const NPC_SHIRT_COLORS = [
+        new Color3(0.85, 0.55, 0.25),
+        new Color3(0.4, 0.55, 0.9),
+        new Color3(0.85, 0.8, 0.3),
+        new Color3(0.55, 0.85, 0.75),
+        new Color3(0.8, 0.45, 0.6),
+        new Color3(0.35, 0.75, 0.45),
+      ]
+      const NPC_CHAT_LINES = [
+        'Oi!',
+        'Bonito dia, né?',
+        'Vamos por ali!',
+        'Já viu a missão nova?',
+        'Olha essa moeda!',
+        '😊',
+        'Boa caminhada!',
+        'Que vista linda!',
+      ]
+      interface WalkerNpc {
+        figure: StudentFigure
+        up: Vector3
+        targetUp: Vector3
+        forward: Vector3
+        moveSpeed: number
+        restTimer: number
+        walkPhase: number
+        chatLabel: TextBlock
+        chatTimer: number
+      }
+      const walkerNpcs: WalkerNpc[] = []
+      const WALKER_COUNT = 10
+      for (let i = 0; i < WALKER_COUNT; i++) {
+        const figure = buildStudentFigure(scene, NPC_SHIRT_COLORS[i % NPC_SHIRT_COLORS.length], shadowGenerator)
+        const phi = Math.PI * 0.16 + Math.random() * Math.PI * 0.56
+        const theta = Math.random() * Math.PI * 2
+        const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+
+        const chatLabel = new TextBlock(`npcChat-${i}`, '')
+        chatLabel.color = 'white'
+        chatLabel.fontSize = 18
+        chatLabel.outlineWidth = 3
+        chatLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        chatLabel.alpha = 0
+        guiTexture.addControl(chatLabel)
+        chatLabel.linkWithMesh(figure.head)
+        chatLabel.linkOffsetY = -55
+
+        walkerNpcs.push({
+          figure,
+          up,
+          targetUp: up,
+          forward: Vector3.Cross(up, Vector3.Right()).normalize(),
+          moveSpeed: 0.12 + Math.random() * 0.08,
+          restTimer: Math.random() * 3,
+          walkPhase: Math.random() * Math.PI * 2,
+          chatLabel,
+          chatTimer: 2 + Math.random() * 5,
+        })
+      }
+      if (import.meta.env.DEV) (window as any).__walkerNpcs = walkerNpcs
 
       // Multiplayer local (mesma rede): outros jogadores conectados no mesmo servidor de
       // retransmissão (app/server/relay.cjs) aparecem como o mesmo personagem estudante, com o
@@ -1338,9 +1571,39 @@ export function World3D({
       }
 
       let time = 0
+      // Clima dinâmico: alterna sozinho entre seco e chuva em horários aleatórios (não é um
+      // ciclo fixo previsível). `rainAmount` sobe/desce suavemente (não pula direto de 0 pra 1)
+      // pra transição de luz/neblina/som/partículas parecer clima de verdade chegando, não um
+      // interruptor.
+      let raining = false
+      let weatherTimer = 30 + Math.random() * 60
+      let rainAmount = 0
+      if (import.meta.env.DEV) {
+        // Hook de teste manual (sem esperar minutos): window.__forceRain(true/false) no console.
+        ;(window as any).__forceRain = (on: boolean) => {
+          raining = on
+          weatherTimer = on ? 20 + Math.random() * 40 : 45 + Math.random() * 90
+          if (on) startRain()
+          else stopRain()
+        }
+      }
       scene.onBeforeRenderObservable.add(() => {
         const dt = engine.getDeltaTime() / 1000
         time += dt
+
+        weatherTimer -= dt
+        if (weatherTimer <= 0) {
+          raining = !raining
+          weatherTimer = raining ? 20 + Math.random() * 40 : 45 + Math.random() * 90
+          if (raining) startRain()
+          else stopRain()
+        }
+        rainAmount += ((raining ? 1 : 0) - rainAmount) * Math.min(1, dt * 0.5)
+        rainSystem.emitRate = rainAmount * 500
+        scene.fogDensity = BASE_FOG_DENSITY + (RAIN_FOG_DENSITY - BASE_FOG_DENSITY) * rainAmount
+        scene.environmentIntensity = BASE_ENV_INTENSITY + (RAIN_ENV_INTENSITY - BASE_ENV_INTENSITY) * rainAmount
+        hemiLight.intensity = BASE_HEMI_INTENSITY + (RAIN_HEMI_INTENSITY - BASE_HEMI_INTENSITY) * rainAmount
+        sunLight.intensity = BASE_SUN_INTENSITY + (RAIN_SUN_INTENSITY - BASE_SUN_INTENSITY) * rainAmount
 
         grassMaterial.setFloat('time', time)
         for (const cloud of cloudGroups) {
@@ -1365,6 +1628,11 @@ export function World3D({
           const pos = avatarMesh.position
           const dist = pos.length()
           const localUp = dist > 0.0001 ? pos.scale(1 / dist) : new Vector3(0, 1, 0)
+
+          // Chuva acompanha o jogador — reorienta o emissor pro "up" local atual, senão a chuva
+          // continuaria caindo na direção de onde o jogador nasceu conforme ele anda pela esfera.
+          rainAnchor.position.copyFrom(pos)
+          rainAnchor.rotationQuaternion = alignmentQuaternion(localUp)
 
           // Gravidade radial real — puxa sempre pro centro do planeta (origem),
           // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
@@ -1580,6 +1848,99 @@ export function World3D({
           Matrix.FromXYZAxesToRef(right, c.up, fwd, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
           c.root.rotationQuaternion = tmpQuat.clone()
+        }
+
+        // Gatos no topo dos platôs/telhados: parados, só um giro lento de "olhando ao redor" —
+        // não usam a IA de vagar (ver comentário onde são criados).
+        for (const cat of perchedCats) {
+          const lookAngle = Math.sin(time * 0.3 + cat.phase) * 0.6
+          cat.root.rotationQuaternion = alignmentQuaternion(cat.up).multiply(
+            Quaternion.RotationAxis(Vector3.Up(), lookAngle),
+          )
+        }
+
+        // Pessoas civis: mesma IA de vagar dos bichos de terra (anda até um alvo perto, descansa,
+        // escolhe outro), mas com o ciclo de caminhada completo (pernas/joelhos/braços) igual ao
+        // personagem jogável, e bolha de fala só durante as pausas.
+        for (const npc of walkerNpcs) {
+          const angleToTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(npc.up, npc.targetUp))))
+          const moving = angleToTarget > 0.03
+          if (!moving) {
+            npc.restTimer -= dt
+            if (npc.restTimer <= 0) {
+              const seed = Math.abs(npc.up.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+              const tangentA = Vector3.Cross(npc.up, seed).normalize()
+              const tangentB = Vector3.Cross(npc.up, tangentA).normalize()
+              const wanderAngle = Math.random() * Math.PI * 2
+              const wanderRadius = 0.2 + Math.random() * 0.3
+              const offset = tangentA
+                .scale(Math.cos(wanderAngle) * wanderRadius)
+                .add(tangentB.scale(Math.sin(wanderAngle) * wanderRadius))
+              npc.targetUp = npc.up.add(offset).normalize()
+              npc.restTimer = 2 + Math.random() * 4
+            }
+          } else {
+            const axis = Vector3.Cross(npc.up, npc.targetUp)
+            if (axis.lengthSquared() > 1e-8) {
+              axis.normalize()
+              const step = Math.min(npc.moveSpeed * dt, angleToTarget)
+              npc.up = rotateAroundAxis(npc.up, axis, step).normalize()
+            }
+          }
+
+          let npcFwd = npc.targetUp.subtract(npc.up.scale(Vector3.Dot(npc.targetUp, npc.up)))
+          if (npcFwd.lengthSquared() > 1e-6) {
+            npcFwd.normalize()
+            npc.forward = npcFwd
+          } else {
+            npcFwd = npc.forward
+          }
+
+          npc.figure.root.position.copyFrom(npc.up.scale(PLANET_RADIUS + terrainHeight(npc.up) + 0.02))
+          const npcRight = Vector3.Cross(npc.up, npcFwd).normalize()
+          Matrix.FromXYZAxesToRef(npcRight, npc.up, npcFwd, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          npc.figure.root.rotationQuaternion = tmpQuat.clone()
+
+          if (moving) {
+            npc.walkPhase += dt * WALK_CYCLE_SPEED * 0.7
+            const swing = Math.sin(npc.walkPhase) * LEG_SWING_MAX
+            npc.figure.legPivotL.rotation.x = swing
+            npc.figure.legPivotR.rotation.x = -swing
+            npc.figure.armPivotL.rotation.x = -swing * 0.7
+            npc.figure.armPivotR.rotation.x = swing * 0.7
+            const kneeL = Math.max(0, Math.sin(npc.walkPhase + Math.PI / 2)) * KNEE_BEND_MAX
+            const kneeR = Math.max(0, Math.sin(npc.walkPhase - Math.PI / 2)) * KNEE_BEND_MAX
+            npc.figure.kneePivotL.rotation.x = -kneeL
+            npc.figure.kneePivotR.rotation.x = -kneeR
+            npc.figure.elbowPivotL.rotation.x = kneeR * 0.5
+            npc.figure.elbowPivotR.rotation.x = kneeL * 0.5
+          } else {
+            npc.figure.legPivotL.rotation.x *= 0.8
+            npc.figure.legPivotR.rotation.x *= 0.8
+            npc.figure.armPivotL.rotation.x *= 0.8
+            npc.figure.armPivotR.rotation.x *= 0.8
+            npc.figure.kneePivotL.rotation.x *= 0.8
+            npc.figure.kneePivotR.rotation.x *= 0.8
+            npc.figure.elbowPivotL.rotation.x *= 0.8
+            npc.figure.elbowPivotR.rotation.x *= 0.8
+          }
+
+          // Bolha de fala só durante as pausas (parece bater papo antes de seguir andando) —
+          // some assim que volta a andar.
+          npc.chatTimer -= dt
+          if (!moving && npc.chatTimer <= 0) {
+            if (npc.chatLabel.alpha > 0) {
+              npc.chatLabel.alpha = 0
+              npc.chatTimer = 1.5 + Math.random() * 3
+            } else {
+              npc.chatLabel.text = NPC_CHAT_LINES[Math.floor(Math.random() * NPC_CHAT_LINES.length)]
+              npc.chatLabel.alpha = 1
+              npc.chatTimer = 1.8
+            }
+          } else if (moving && npc.chatLabel.alpha > 0) {
+            npc.chatLabel.alpha = 0
+          }
         }
 
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
