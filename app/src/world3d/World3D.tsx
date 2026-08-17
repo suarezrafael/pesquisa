@@ -44,6 +44,7 @@ import type { Profile, Progress } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { ChatPanel } from './ChatPanel'
+import { RankingPanel } from './RankingPanel'
 import {
   playBirdChirp,
   playCoinCollect,
@@ -65,6 +66,7 @@ import {
   sendChat,
   sendState,
   type ChatMessage,
+  type RankingEntry,
   type RemoteState,
 } from './multiplayer'
 
@@ -255,6 +257,10 @@ interface RemotePlayer {
   targetPos: Vector3
   targetFacing: Vector3
   lastSeen: number
+  name: string
+  avatarEmoji: string
+  xp: number
+  coins: number
 }
 
 // Personagem estudante estilo "avatar de app" (torso, cabeça, cabelo, mochila, 2 pernas,
@@ -850,6 +856,8 @@ export function World3D({
   const [chatOpen, setChatOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [mpConnected, setMpConnected] = useState(false)
+  const [rankingOpen, setRankingOpen] = useState(false)
+  const [rankingEntries, setRankingEntries] = useState<RankingEntry[]>([])
   const chatOpenRef = useRef(false)
   chatOpenRef.current = chatOpen
 
@@ -934,6 +942,7 @@ export function World3D({
     const portalMeshes: { quest: (typeof quests)[number]; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
     const remotePlayers = new Map<string, RemotePlayer>()
     let netSendTimer = 0
+    let rankingTimer = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
     // Reaproveitado a cada quadro pra checar "grounded" via raycast físico real (ver comentário
@@ -2152,6 +2161,10 @@ export function World3D({
             targetPos: Vector3.FromArray(state.position),
             targetFacing: Vector3.FromArray(state.facing),
             lastSeen: performance.now(),
+            name: state.name,
+            avatarEmoji: state.avatarEmoji,
+            xp: state.xp,
+            coins: state.coins,
           }
           remotePlayers.set(state.id, rp)
         }
@@ -2171,6 +2184,8 @@ export function World3D({
         rp.targetPos = Vector3.FromArray(state.position)
         rp.targetFacing = Vector3.FromArray(state.facing)
         rp.lastSeen = performance.now()
+        rp.xp = state.xp
+        rp.coins = state.coins
       })
       const unsubLeave = onRemoteLeave((id) => removeRemotePlayer(id))
       const unsubChat = onChat((msg) => {
@@ -2414,6 +2429,8 @@ export function World3D({
               profileRef.current.avatarEmoji,
               studentFigure.root.position.asArray() as [number, number, number],
               facing.asArray() as [number, number, number],
+              progressRef.current.xp,
+              progressRef.current.coins,
             )
           }
           const nowMs = performance.now()
@@ -2428,6 +2445,29 @@ export function World3D({
             Matrix.FromXYZAxesToRef(rRight, rLocalUp, rp.targetFacing, tmpMatrix)
             Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
             rp.figure.root.rotationQuaternion = tmpQuat.clone()
+          }
+
+          // Ranking (lab-20): não recalcula/renderiza a cada quadro (o `state` de rede já chega
+          // a cada ~0.12s por jogador) — só 1x/s, throttle suficiente pra uma lista que muda
+          // devagar (XP/moedas), evitando re-renders React desnecessários.
+          rankingTimer += dt
+          if (rankingTimer > 1) {
+            rankingTimer = 0
+            const entries: RankingEntry[] = [
+              {
+                id: 'self',
+                name: profileRef.current.name,
+                avatarEmoji: profileRef.current.avatarEmoji,
+                xp: progressRef.current.xp,
+                coins: progressRef.current.coins,
+                isSelf: true,
+              },
+            ]
+            for (const [id, rp] of remotePlayers) {
+              entries.push({ id, name: rp.name, avatarEmoji: rp.avatarEmoji, xp: rp.xp, coins: rp.coins, isSelf: false })
+            }
+            entries.sort((a, b) => (b.xp !== a.xp ? b.xp - a.xp : b.coins - a.coins))
+            setRankingEntries(entries)
           }
 
           // checa proximidade dos portais
@@ -2826,6 +2866,7 @@ export function World3D({
         muted={muted}
         onToggleMute={handleToggleMute}
         onOpenChat={() => setChatOpen(true)}
+        onOpenRanking={() => setRankingOpen(true)}
       />
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
@@ -2836,6 +2877,9 @@ export function World3D({
           onSend={handleSendChat}
           onClose={() => setChatOpen(false)}
         />
+      )}
+      {rankingOpen && (
+        <RankingPanel entries={rankingEntries} connected={mpConnected} onClose={() => setRankingOpen(false)} />
       )}
     </div>
   )

@@ -10,6 +10,19 @@ export interface RemoteState {
   avatarEmoji: string
   position: [number, number, number]
   facing: [number, number, number]
+  xp: number
+  coins: number
+}
+
+// Ranking local (lab-20): entrada derivada do próprio jogador + do `RemoteState` de cada peer
+// conectado, não um tipo transmitido pela rede (é montado localmente em `World3D.tsx`).
+export interface RankingEntry {
+  id: string
+  name: string
+  avatarEmoji: string
+  xp: number
+  coins: number
+  isSelf: boolean
 }
 
 export interface ChatMessage {
@@ -101,9 +114,11 @@ export function sendState(
   avatarEmoji: string,
   position: [number, number, number],
   facing: [number, number, number],
+  xp: number,
+  coins: number,
 ): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) return
-  socket.send(JSON.stringify({ type: 'state', name, avatarEmoji, position, facing }))
+  socket.send(JSON.stringify({ type: 'state', name, avatarEmoji, position, facing, xp, coins }))
 }
 
 export function sendChat(name: string, messageId: string): void {

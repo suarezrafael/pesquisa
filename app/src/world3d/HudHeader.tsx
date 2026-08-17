@@ -10,6 +10,7 @@ interface HudHeaderProps {
   muted: boolean
   onToggleMute: () => void
   onOpenChat: () => void
+  onOpenRanking: () => void
 }
 
 export function HudHeader({
@@ -21,6 +22,7 @@ export function HudHeader({
   muted,
   onToggleMute,
   onOpenChat,
+  onOpenRanking,
 }: HudHeaderProps) {
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
@@ -57,6 +59,9 @@ export function HudHeader({
         </button>
         <button type="button" className="help-button" onClick={onOpenChat} aria-label="Abrir chat">
           💬
+        </button>
+        <button type="button" className="help-button" onClick={onOpenRanking} aria-label="Ver ranking">
+          🏆
         </button>
         <button type="button" className="help-button" onClick={onOpenHelp} aria-label="Como jogar">
           ?

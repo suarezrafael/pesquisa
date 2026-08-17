@@ -728,6 +728,32 @@ body {
   filter: brightness(1.08);
 }
 
+/* Ranking multiplayer (lab-20) */
+
+.ranking-panel {
+  /* Ancorado à esquerda (chat fica à direita, herdado de .chat-panel) — os dois painéis podem
+     ficar abertos ao mesmo tempo sem se sobrepor. */
+  right: auto;
+  left: 1rem;
+}
+
+.ranking-row {
+  font-size: 0.88rem;
+  margin: 0 0 0.5rem;
+  word-break: break-word;
+}
+
+.ranking-row-self {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.ranking-place {
+  display: inline-block;
+  min-width: 1.6em;
+  color: #8a94b8;
+}
+
 .remote-name-tag {
   color: white;
   font-size: 0.65rem;
