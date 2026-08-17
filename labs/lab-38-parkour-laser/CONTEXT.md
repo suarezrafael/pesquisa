@@ -2,6 +2,15 @@
 
 Preenchido em: 2026-08-17
 
+> **Correção registrada no lab-39**: o teste de física real descrito abaixo em "Verificação feita"
+> (teleportar o jogador exatamente na posição de um laser e medir o empurrão) de fato confirmou
+> que pisar no laser causa a queda — mas o lab-39 descobriu que esse teste específico não
+> distinguia entre "detecção funcionando certo" e um bug real (limite inferior de altura
+> faltando na checagem do laser, corrigido no lab-39) — as duas explicações davam o mesmo
+> resultado observado aqui. A conclusão (laser causa queda de verdade) continua válida; só note
+> que o teste não isolava a causa tão bem quanto pareceu na hora. Ver `labs/lab-39-.../CONTEXT.md`
+> pro histórico completo e os testes que isolam os três cenários corretamente.
+
 ## O que foi feito
 
 1. **`PARKOUR4_*`** (`src/world3d/World3D.tsx`, depois da recompensa do terceiro parkour) — 8

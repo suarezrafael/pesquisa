@@ -2586,14 +2586,49 @@ export function World3D({
 
       if (import.meta.env.DEV) {
         // Teleporte de QA — só em dev, pra testar o gatilho dos portais sem depender
-        // de simular teclado segurado por um tempo real.
+        // de simular teclado segurado por um tempo real. Recebe uma DIREÇÃO (normalizada
+        // internamente) e sempre pousa na altura do CHÃO nessa direção — não serve pra testar
+        // algo numa altura específica acima do chão (ex.: no meio do ar, perto de um laser de
+        // parkour) — ver `__debugTeleportExact` pra isso.
         ;(window as any).__debugTeleport = (x: number, y: number, z: number) => {
           if (!avatarMesh || !avatarBody) return
           const localUp = new Vector3(x, y, z).normalize()
+          // Padrão documentado (ver correção do bug de sair do carro): `disablePreStep = false`
+          // + `scene.render()` sincronizam o corpo físico de verdade com a posição escrita
+          // aqui, e `disablePreStep = true` no final devolve o corpo pro modo normal do jogo
+          // (física dirige a posição — sem isso, deixado em `false`, o corpo ficava "grudado"
+          // relendo a mesma posição da mesh todo quadro, cancelando gravidade/qualquer física
+          // nova, mesmo depois do teleporte — bug real encontrado testando o parkour de laser,
+          // lab-39: um empurrão/gravidade aplicado logo depois de um teleporte não tinha efeito
+          // nenhum, o corpo ficava parado exatamente onde foi posto, pra sempre).
           avatarBody.body.disablePreStep = false
           avatarMesh.position = localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05)
+          scene.render()
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
+          avatarBody.body.disablePreStep = true
+        }
+        // Bug real encontrado testando o parkour de laser (lab-39): `__debugTeleport` sempre
+        // recalcula a altura do CHÃO na direção dada, então não dava pra testar uma posição no
+        // meio do ar (ex.: bem em cima da altura exata de um laser) — qualquer chamada com uma
+        // posição elevada era silenciosamente reduzida pra altura do chão na mesma direção,
+        // invalidando o teste sem erro nenhum. Esta versão recebe as coordenadas EXATAS
+        // (posição de verdade, não uma direção a normalizar) e não mexe na altura.
+        ;(window as any).__debugTeleportExact = (x: number, y: number, z: number) => {
+          if (!avatarMesh || !avatarBody) return
+          avatarBody.body.disablePreStep = false
+          // Atribuição de um Vector3 NOVO, não `.position.set(...)` (mutar os componentes do
+          // vetor já existente no lugar) — bug real encontrado testando isto: `.set()` não
+          // disparava o rastreamento de "sujo"/dirty do Babylon (que depende do PRÓPRIO SETTER
+          // de `.position` rodar, atribuindo um objeto novo), então o mundo/física nunca
+          // sincronizava com a posição nova — o valor bruto de `.position` mudava (lido de volta
+          // corretamente), mas o corpo físico continuava exatamente onde estava antes, sem cair,
+          // sem nada — silenciosamente sem efeito nenhum no jogo de verdade.
+          avatarMesh.position = new Vector3(x, y, z)
+          scene.render()
+          avatarBody.body.setLinearVelocity(Vector3.Zero())
+          avatarBody.body.setAngularVelocity(Vector3.Zero())
+          avatarBody.body.disablePreStep = true
         }
       }
 
@@ -3516,12 +3551,20 @@ export function World3D({
           // relativa ao feixe) e lateral (o quão perto da "linha" do feixe, nos outros dois
           // eixos) — só conta como acerto perto o bastante lateralmente E baixo o bastante
           // (não pulou alto o suficiente pra passar por cima).
+          //
+          // Bug real encontrado testando isto ao vivo (lab-39): a checagem original só tinha
+          // limite SUPERIOR (`radialOffset < 0.05` — não subiu alto o bastante), sem limite
+          // INFERIOR — um jogador no CHÃO, bem abaixo de toda a estrutura do parkour, mas
+          // lateralmente alinhado com um laser específico (mesma "linha" vinda do centro do
+          // planeta), também batia nas duas condições e disparava a queda, mesmo estando longe
+          // de qualquer plataforma. `radialOffset > -0.7` limita a zona de perigo a perto da
+          // plataforma de onde o laser realmente guarda a entrada, não a coluna toda abaixo dele.
           if (laserStunTimer <= 0) {
             for (const laser of parkour4Lasers) {
               const toLaser = pos.subtract(laser.worldPos)
               const radialOffset = Vector3.Dot(toLaser, localUp)
               const lateralDist = toLaser.subtract(localUp.scale(radialOffset)).length()
-              if (lateralDist < LASER_HIT_RADIUS && radialOffset < 0.05) {
+              if (lateralDist < LASER_HIT_RADIUS && radialOffset < 0.05 && radialOffset > -0.7) {
                 laserStunTimer = 2.2
                 laserStunSeed = Math.random() * Math.PI * 2
                 playLaserZap()
