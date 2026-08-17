@@ -859,9 +859,32 @@ export function World3D({
 
         // Collider simplificado (esfera) e invisível — nunca a malha visual do glTF.
         // Esfera evita ter que alinhar rotação do colisor à curvatura do planeta.
-        const colliderDiameter = 1.1 * scale
+        //
+        // Bug real corrigido nesta sessão ("montanha invisível", relatado pelo usuário com
+        // screenshot do personagem flutuando no ar): o offset/diâmetro antigos (0.4×diâmetro de
+        // deslocamento, diâmetro = 1.1×escala) deixavam até ~2 unidades de esfera pra fora do
+        // chão nas props maiores (escala até 2.02×) — uma cúpula invisível grande o bastante pra
+        // o jogador ficar em pé em cima dela, apoiado pelo colisor, em vez de esbarrar na lateral
+        // e ser bloqueado. Isso sempre existiu, mas só ficou visível depois do bugfix do pulo (lab
+        // anterior) passar a fazer o personagem visual seguir a altura real do colisor físico —
+        // antes disso, o personagem ficava sempre grudado visualmente no chão, escondendo o
+        // problema.
+        //
+        // Só encolher o colisor não bastou (testado: ainda sobrava ~1.2 de saliência acima do
+        // chão nas props maiores, ainda dava pra ficar "em pé no ar"). Em vez de um offset
+        // proporcional ao diâmetro, agora o quanto sobra pra fora do chão é uma constante fixa
+        // pequena (`PROP_COLLIDER_PROTRUSION`), com o centro da esfera embutido abaixo da
+        // superfície o quanto for preciso pra compensar o raio de cada prop — o colisor continua
+        // grande o bastante (em volume 3D) pra bloquear o personagem esbarrando na lateral do
+        // tronco/corpo da prop, mas não sobra saliência alta o bastante pra virar uma plataforma.
+        // Confirmado testando (teleporte + assentamento físico): personagem solto de cima da
+        // maior prop do mapa agora cai até a distância normal de chão (mesma de andar em terreno
+        // aberto), não fica mais flutuando parado no ar.
+        const PROP_COLLIDER_PROTRUSION = 0.15
+        const colliderDiameter = 0.7 * scale
+        const colliderRadius = colliderDiameter / 2
         const collider = MeshBuilder.CreateSphere(`propCollider-${i}`, { diameter: colliderDiameter }, scene)
-        collider.position = pos.add(localUp.scale(colliderDiameter * 0.4))
+        collider.position = pos.add(localUp.scale(PROP_COLLIDER_PROTRUSION - colliderRadius))
         collider.isVisible = false
         new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
       }
