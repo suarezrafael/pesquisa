@@ -44,6 +44,7 @@ import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { ChatPanel } from './ChatPanel'
 import {
+  playBirdChirp,
   playCoinCollect,
   playFootstep,
   startAmbience,
@@ -79,13 +80,29 @@ interface World3DProps {
 
 const PLANET_RADIUS = 13
 const AVATAR_RADIUS = 0.55
-const GRAVITY = 9.81
+// Gravidade/pulo (lab-18): valores de física de verdade (9.81 m/s²) deixavam o pulo com ~1.1s no
+// ar e ~1.5 de altura — relatado pelo usuário como "não realista, parece que estou na lua"
+// (tempo no ar/altura grandes demais pro tamanho do personagem). Jogos em geral usam gravidade
+// bem mais forte que a real pra o pulo parecer "no chão", não flutuando — aqui GRAVITY subiu
+// ~63% e JUMP_SPEED baixou um pouco, resultando em altura ~1.2 e ~0.78s no ar (quase metade do
+// tempo de antes). Ainda dá folga confortável (0.35) sobre os degraus do parkour (altura 0.85,
+// lab-11) e alcance horizontal de sobra (MAX_SPEED × tempo no ar ≈ 4.65, contra os 2.27
+// necessários entre plataformas).
+const GRAVITY = 16
 const MAX_SPEED = 6
-const JUMP_SPEED = 5.5 // velocidade radial (pra fora do planeta) aplicada ao pular
+const JUMP_SPEED = 6.2 // velocidade radial (pra fora do planeta) aplicada ao pular
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
 const WALK_CYCLE_SPEED = 7 // rad/s de fase do ciclo de caminhada, por unidade de throttle
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
-const KNEE_BEND_MAX = 0.9 // rad — quanto o joelho/cotovelo dobra na fase de "levantar"
+// Relatado pelo usuário: "o boneco não dobra os joelhos pra andar". A fórmula antiga
+// (`max(0, sin(...))`) fazia o joelho dobrar só na METADE do ciclo (fase de "levantar a perna")
+// e ficar 100% reto (zero) na outra metade (fase de apoio) — biomecanicamente ok, mas na prática
+// lia como "quase sempre reto" pra quem está olhando de longe. Agora o joelho nunca fica
+// perfeitamente reto (`KNEE_BEND_MIN`) e oscila continuamente até `KNEE_BEND_MAX`, sem ficar
+// travado em zero — o dobrar fica visível o tempo todo enquanto anda, não só metade do tempo.
+const KNEE_BEND_MIN = 0.15 // rad — dobra mínima, nunca perna 100% reta andando
+const KNEE_BEND_MAX = 1.0 // rad — quanto o joelho/cotovelo dobra no pico da fase de "levantar"
+const BIRD_CHIRP_RADIUS = 3.5 // pedido do usuário: pássaros cantam baixinho quando o jogador está perto
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const TRIGGER_DISTANCE = 2.4
@@ -520,6 +537,9 @@ interface Critter {
   hopSpeed: number
   restTimer: number
   flightHeight: number
+  // Só usado por `kind === 'passarinho'` — canto baixinho quando o jogador está perto (pedido
+  // do usuário). `undefined` até o primeiro uso, sorteado na primeira checagem.
+  chirpTimer?: number
 }
 
 function buildCoelho(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
@@ -993,6 +1013,13 @@ export function World3D({
       const grassColor = new Color3(0.42, 0.68, 0.4)
       const dryGrassColor = new Color3(0.58, 0.64, 0.34)
       const rockColor = new Color3(0.45, 0.4, 0.34)
+      // Morros/platôs (relatado pelo usuário com screenshot: "tem grama mas está invisível" —
+      // um platô alto mas de rampa suave não tinha cor própria nenhuma, só a mesma grama do
+      // resto do planeta, então ficava "invisível" como relevo apesar da altura de verdade).
+      // Misturado por ALTURA (não só inclinação como o `rockBlend` acima, que só pega rampa
+      // íngreme) — cobre o topo achatado dos platôs também, não só a borda em rampa.
+      const hillGreenColor = new Color3(0.2, 0.38, 0.2) // verde bem mais escuro que a grama normal
+      const hillBrownColor = new Color3(0.42, 0.3, 0.17) // marrom terra
       const planetColors: number[] = []
       for (let i = 0; i < planetPositions.length; i += 3) {
         const px = planetPositions[i]
@@ -1013,6 +1040,19 @@ export function World3D({
         r += (rockColor.r - r) * rockBlend
         g += (rockColor.g - g) * rockBlend
         b += (rockColor.b - b) * rockBlend
+
+        // Acima de 0.5 de altura (a ondulação de base do planeta não passa de ~0.27, então só
+        // platôs de verdade entram aqui) até 2.0 é o platô mais alto — rampa vira marrom, topo
+        // achatado vira verde escuro, com `rockBlend` decidindo a mistura entre os dois.
+        const height = posLen - PLANET_RADIUS
+        const hillBlend = Math.max(0, Math.min(1, (height - 0.5) / 1.5))
+        const hillMixR = hillGreenColor.r + (hillBrownColor.r - hillGreenColor.r) * rockBlend
+        const hillMixG = hillGreenColor.g + (hillBrownColor.g - hillGreenColor.g) * rockBlend
+        const hillMixB = hillGreenColor.b + (hillBrownColor.b - hillGreenColor.b) * rockBlend
+        r += (hillMixR - r) * hillBlend
+        g += (hillMixG - g) * hillBlend
+        b += (hillMixB - b) * hillBlend
+
         planetColors.push(r, g, b, 1)
       }
       planet.setVerticesData(VertexBuffer.ColorKind, planetColors)
@@ -2309,8 +2349,8 @@ export function World3D({
             // Joelho/cotovelo dobram durante a fase de "levantar a perna" (metade do ciclo em
             // que a coxa está indo pra frente), esticam na fase de apoio — evita perna reta
             // o tempo todo, que é o que lia como "robotizado".
-            const kneeL = Math.max(0, Math.sin(walkPhase + Math.PI / 2)) * KNEE_BEND_MAX
-            const kneeR = Math.max(0, Math.sin(walkPhase - Math.PI / 2)) * KNEE_BEND_MAX
+            const kneeL = KNEE_BEND_MIN + (Math.sin(walkPhase + Math.PI / 2) * 0.5 + 0.5) * (KNEE_BEND_MAX - KNEE_BEND_MIN)
+            const kneeR = KNEE_BEND_MIN + (Math.sin(walkPhase - Math.PI / 2) * 0.5 + 0.5) * (KNEE_BEND_MAX - KNEE_BEND_MIN)
             studentFigure.kneePivotL.rotation.x = -kneeL
             studentFigure.kneePivotR.rotation.x = -kneeR
             studentFigure.elbowPivotL.rotation.x = kneeR * 0.5
@@ -2458,6 +2498,19 @@ export function World3D({
             const flap = Math.sin(time * c.hopSpeed) * 0.9
             if (c.wingL) c.wingL.rotation.z = flap
             if (c.wingR) c.wingR.rotation.z = -flap
+
+            // Canto baixinho quando o jogador está perto (pedido do usuário). Timer por
+            // pássaro (não sincronizado entre eles) — só checa a distância quando o timer zera,
+            // não todo quadro, e só canta se o jogador estiver mesmo perto nesse instante.
+            if (avatarMesh) {
+              c.chirpTimer = (c.chirpTimer ?? 2 + Math.random() * 5) - dt
+              if (c.chirpTimer <= 0) {
+                c.chirpTimer = 3 + Math.random() * 5
+                if (Vector3.Distance(c.root.position, avatarMesh.position) < BIRD_CHIRP_RADIUS) {
+                  playBirdChirp()
+                }
+              }
+            }
           } else {
             c.hopPhase += dt * c.hopSpeed * (moving ? 1 : 0.15)
             const hop = Math.max(0, Math.sin(c.hopPhase)) * 0.05
@@ -2529,8 +2582,8 @@ export function World3D({
             npc.figure.legPivotR.rotation.x = -swing
             npc.figure.armPivotL.rotation.x = -swing * 0.7
             npc.figure.armPivotR.rotation.x = swing * 0.7
-            const kneeL = Math.max(0, Math.sin(npc.walkPhase + Math.PI / 2)) * KNEE_BEND_MAX
-            const kneeR = Math.max(0, Math.sin(npc.walkPhase - Math.PI / 2)) * KNEE_BEND_MAX
+            const kneeL = KNEE_BEND_MIN + (Math.sin(npc.walkPhase + Math.PI / 2) * 0.5 + 0.5) * (KNEE_BEND_MAX - KNEE_BEND_MIN)
+            const kneeR = KNEE_BEND_MIN + (Math.sin(npc.walkPhase - Math.PI / 2) * 0.5 + 0.5) * (KNEE_BEND_MAX - KNEE_BEND_MIN)
             npc.figure.kneePivotL.rotation.x = -kneeL
             npc.figure.kneePivotR.rotation.x = -kneeR
             npc.figure.elbowPivotL.rotation.x = kneeR * 0.5

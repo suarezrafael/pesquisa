@@ -295,11 +295,15 @@ export function playThunder(intensity: number = 1): void {
   boom.stop(now + 0.5)
 }
 
+// Relatado pelo usuário: "o boneco deve fazer barulho de passo ao andar" — o som já disparava
+// (confirmado contando criações de nó de áudio durante uma caminhada), mas era baixo/curto
+// demais pra realmente se notar. Ganho maior, filtro mais grave (mais "toc" que "chiado") e um
+// pouco mais de duração.
 export function playFootstep(): void {
   if (!audioCtx || muted) return
   const ctx = audioCtx
   const now = ctx.currentTime
-  const bufferSize = Math.floor(ctx.sampleRate * 0.08)
+  const bufferSize = Math.floor(ctx.sampleRate * 0.1)
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
   const data = buffer.getChannelData(0)
   for (let i = 0; i < bufferSize; i++) {
@@ -309,12 +313,34 @@ export function playFootstep(): void {
   src.buffer = buffer
   const filter = ctx.createBiquadFilter()
   filter.type = 'lowpass'
-  filter.frequency.value = 900
+  filter.frequency.value = 650
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0.09, now)
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+  gain.gain.setValueAtTime(0.16, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
   src.connect(filter).connect(gain).connect(ctx.destination)
   src.start(now)
+}
+
+// Passarinho cantando baixinho perto do jogador (pedido do usuário) — dois bipes agudos rápidos
+// ("piu-piu"), bem mais quieto que o passo, disparado só quando um pássaro está perto (ver
+// World3D.tsx, IA de vagar dos bichos).
+export function playBirdChirp(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const notes = [2200, 2650]
+  notes.forEach((freq, i) => {
+    const t = ctx.currentTime + i * 0.09
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(freq, t)
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.85, t + 0.06)
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.035, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + 0.08)
+  })
 }
 
 export function playCoinCollect(): void {
