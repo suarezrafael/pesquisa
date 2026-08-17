@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AVATAR_CATALOG } from '../data/avatars'
+import { generateNickname } from '../data/nicknames'
 
 // Só os avatares gratuitos aparecem na criação de perfil — os demais são desbloqueados com
 // moedas na lojinha (world3d/AvatarShop.tsx), depois de já estar jogando.
@@ -41,14 +42,25 @@ export function Onboarding({ onDone }: OnboardingProps) {
         </div>
 
         <label className="field">
-          <span>Seu nome</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Digite seu nome"
-            maxLength={20}
-            autoFocus
-          />
+          <span>Seu apelido de explorador(a)</span>
+          <div className="nickname-row">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: RaposaCorajosa42"
+              maxLength={20}
+              autoFocus
+            />
+            <button
+              type="button"
+              className="nickname-generate-btn"
+              onClick={() => setName(generateNickname())}
+              aria-label="Gerar apelido aleatório"
+            >
+              🎲 Gerar
+            </button>
+          </div>
+          <small className="field-hint">Use um apelido, não seu nome real — outros jogadores podem ver!</small>
         </label>
 
         <button type="submit" className="primary-button" disabled={!name.trim()}>
