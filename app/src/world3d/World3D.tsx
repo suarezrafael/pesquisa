@@ -752,6 +752,57 @@ function buildTartaruga(scene: Scene, shadowGenerator: ShadowGenerator): Transfo
   return root
 }
 
+// Carrinho de brinquedo (lab-15, pedido do usuário: "ruas+carros") — só primitivas, mesmo
+// espírito dos bichos/personagens do resto do jogo, sem asset externo. Anda pra frente e pra
+// trás ao longo da rua (ver `streetCenter` mais abaixo), nunca sai do asfalto.
+function buildCarro(scene: Scene, shadowGenerator: ShadowGenerator, bodyColor: Color3): TransformNode {
+  const root = new TransformNode('carroRoot', scene)
+
+  const bodyMat = new PBRMaterial('carroBodyMat', scene)
+  bodyMat.albedoColor = bodyColor
+  bodyMat.roughness = 0.4
+  bodyMat.metallic = 0.3
+
+  const wheelMat = new PBRMaterial('carroWheelMat', scene)
+  wheelMat.albedoColor = new Color3(0.08, 0.08, 0.08)
+  wheelMat.roughness = 0.85
+
+  const glassMat = new PBRMaterial('carroGlassMat', scene)
+  glassMat.albedoColor = new Color3(0.6, 0.75, 0.85)
+  glassMat.alpha = 0.75
+  glassMat.roughness = 0.1
+
+  function add(mesh: Mesh, mat: PBRMaterial) {
+    mesh.material = mat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateBox('carroBody', { width: 0.5, height: 0.22, depth: 0.9 }, scene)
+  body.position.y = 0.24
+  add(body, bodyMat)
+
+  const cabin = MeshBuilder.CreateBox('carroCabin', { width: 0.42, height: 0.2, depth: 0.5 }, scene)
+  cabin.position = new Vector3(0, 0.44, -0.05)
+  add(cabin, glassMat)
+
+  for (const side of [-1, 1]) {
+    for (const front of [-1, 1]) {
+      const wheel = MeshBuilder.CreateCylinder(
+        `carroWheel${side}${front}`,
+        { height: 0.08, diameter: 0.22, tessellation: 12 },
+        scene,
+      )
+      wheel.rotation.z = Math.PI / 2
+      wheel.position = new Vector3(side * 0.27, 0.11, front * 0.32)
+      add(wheel, wheelMat)
+    }
+  }
+
+  return root
+}
+
 export function World3D({
   profile,
   progress,
@@ -1301,7 +1352,14 @@ export function World3D({
       const riverRightBank: Vector3[] = []
       for (let i = 0; i < riverCenter.length; i++) {
         const p = riverCenter[i]
-        const up = p.normalize()
+        // Bug real encontrado nesta sessão (lab-15, testando a rua nova): `.normalize()` muta o
+        // vetor NO LUGAR (ao contrário de `.scale()`/`.add()`/`.subtract()`, que retornam um
+        // vetor novo) — `p` é a mesma referência guardada em `riverCenter[i]`, então
+        // `p.normalize()` encolhia cada ponto do rio pra comprimento 1 (perto da origem do
+        // planeta) como efeito colateral, silenciosamente, desde que este trecho foi escrito.
+        // `.clone()` antes evita mutar `p` (e por extensão `riverCenter[i]`, usado logo abaixo
+        // em `p.add()`/`p.subtract()` — precisa continuar com o comprimento de verdade).
+        const up = p.clone().normalize()
         const next = riverCenter[Math.min(i + 1, riverCenter.length - 1)]
         const prev = riverCenter[Math.max(i - 1, 0)]
         const along = next.subtract(prev).normalize()
@@ -1321,6 +1379,106 @@ export function World3D({
       riverMat.alpha = 0.92
       river.material = riverMat
       river.receiveShadows = true
+
+      // Rua (lab-15, pedido do usuário: "ruas+carros") — mesma técnica do rio (ribbon rente à
+      // curvatura do planeta), asfalto com linha central tracejada. Local (theta 280°-320°, phi
+      // igual à faixa das escolas) escolhido por busca de distância angular contra todos os
+      // outros marcos do mapa (platôs, lagoa, piscina, escolas, percurso de parkour, o próprio
+      // rio) — mesmo método usado pra achar o lugar da piscina/parkour, ~13.5° de folga do
+      // vizinho mais próximo.
+      const streetCenter: Vector3[] = []
+      const STREET_SEGMENTS = 32
+      const streetStartPhi = Math.PI * 0.22
+      const streetEndPhi = Math.PI * 0.62
+      const streetStartTheta = (280 * Math.PI) / 180
+      const streetEndTheta = (320 * Math.PI) / 180
+      for (let i = 0; i <= STREET_SEGMENTS; i++) {
+        const t = i / STREET_SEGMENTS
+        const phi = streetStartPhi + (streetEndPhi - streetStartPhi) * t
+        const theta = streetStartTheta + (streetEndTheta - streetStartTheta) * t
+        const streetDir = pointOnSphere(phi, theta, 1)
+        streetCenter.push(streetDir.scale(PLANET_RADIUS + terrainHeight(streetDir) + 0.02))
+      }
+      const streetHalfWidth = 0.85
+      const streetLeftBank: Vector3[] = []
+      const streetRightBank: Vector3[] = []
+      for (let i = 0; i < streetCenter.length; i++) {
+        const p = streetCenter[i]
+        // `.clone()` antes de `.normalize()` — ver comentário no laço equivalente do rio, acima
+        // (mesmo bug: `.normalize()` muta no lugar, e `p` é a referência real guardada em
+        // `streetCenter[i]`, reaproveitada logo abaixo em `p.add()`/`p.subtract()`).
+        const up = p.clone().normalize()
+        const next = streetCenter[Math.min(i + 1, streetCenter.length - 1)]
+        const prev = streetCenter[Math.max(i - 1, 0)]
+        const along = next.subtract(prev).normalize()
+        const side = Vector3.Cross(up, along).normalize()
+        streetLeftBank.push(p.add(side.scale(streetHalfWidth)))
+        streetRightBank.push(p.subtract(side.scale(streetHalfWidth)))
+      }
+      const street = MeshBuilder.CreateRibbon(
+        'street',
+        { pathArray: [streetLeftBank, streetRightBank], sideOrientation: Mesh.DOUBLESIDE },
+        scene,
+      )
+      const streetMat = new PBRMaterial('streetMat', scene)
+      streetMat.albedoColor = new Color3(0.22, 0.22, 0.25)
+      streetMat.roughness = 0.9
+      street.material = streetMat
+      street.receiveShadows = true
+
+      // Linha central tracejada — só desenha em segmentos alternados (índice par), fininha e
+      // levemente acima do asfalto (evita brigar com o chão, mesmo truque do rio).
+      const centerLineMat = new PBRMaterial('centerLineMat', scene)
+      centerLineMat.albedoColor = new Color3(0.92, 0.8, 0.25)
+      centerLineMat.emissiveColor = new Color3(0.15, 0.13, 0.03)
+      centerLineMat.roughness = 0.6
+      const centerLineHalfWidth = 0.05
+      for (let i = 0; i < streetCenter.length - 1; i += 2) {
+        const p = streetCenter[i]
+        const up = p.clone().normalize()
+        const next = streetCenter[i + 1]
+        const along = next.subtract(p).normalize()
+        const side = Vector3.Cross(up, along).normalize()
+        const dashLeft = [p.add(side.scale(centerLineHalfWidth)).add(up.scale(0.005)), next.add(side.scale(centerLineHalfWidth)).add(up.scale(0.005))]
+        const dashRight = [p.subtract(side.scale(centerLineHalfWidth)).add(up.scale(0.005)), next.subtract(side.scale(centerLineHalfWidth)).add(up.scale(0.005))]
+        const dash = MeshBuilder.CreateRibbon(
+          `streetDash-${i}`,
+          { pathArray: [dashLeft, dashRight], sideOrientation: Mesh.DOUBLESIDE },
+          scene,
+        )
+        dash.material = centerLineMat
+      }
+
+      // Carrinhos andando pra frente e pra trás ao longo da rua (ping-pong), espalhados e com
+      // velocidades diferentes pra não andarem em fileira sincronizada.
+      interface Carro {
+        root: TransformNode
+        pathIndex: number
+        direction: 1 | -1
+        speed: number
+      }
+      const carros: Carro[] = []
+      const CARRO_COUNT = 5
+      const CARRO_COLORS = [
+        new Color3(0.85, 0.2, 0.2),
+        new Color3(0.2, 0.4, 0.85),
+        new Color3(0.95, 0.8, 0.2),
+        new Color3(0.3, 0.75, 0.35),
+        new Color3(0.85, 0.85, 0.88),
+      ]
+      for (let i = 0; i < CARRO_COUNT; i++) {
+        const carRoot = buildCarro(scene, shadowGenerator, CARRO_COLORS[i % CARRO_COLORS.length])
+        carros.push({
+          root: carRoot,
+          pathIndex: (i / CARRO_COUNT) * (streetCenter.length - 1),
+          direction: i % 2 === 0 ? 1 : -1,
+          speed: 3 + Math.random() * 2,
+        })
+      }
+      if (import.meta.env.DEV) {
+        ;(window as any).__carros = carros
+        ;(window as any).__streetCenter = streetCenter
+      }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num
       // ponto de theta bem distante da faixa do rio (0.15-1.35) pra não sobrepor. Os bichos da
@@ -2262,6 +2420,41 @@ export function World3D({
           } else if (moving && npc.chatLabel.alpha > 0) {
             npc.chatLabel.alpha = 0
           }
+        }
+
+        // Carros: andam pra frente e pra trás ao longo da rua (`streetCenter`), nunca saindo do
+        // asfalto — `pathIndex` é uma posição fracionária dentro do array de pontos da rua,
+        // interpolada entre os dois pontos vizinhos pra um movimento suave.
+        for (const car of carros) {
+          car.pathIndex += car.direction * car.speed * dt
+          if (car.pathIndex >= streetCenter.length - 1) {
+            car.pathIndex = streetCenter.length - 1
+            car.direction = -1
+          } else if (car.pathIndex <= 0) {
+            car.pathIndex = 0
+            car.direction = 1
+          }
+          const i0 = Math.floor(car.pathIndex)
+          const i1 = Math.min(i0 + 1, streetCenter.length - 1)
+          const frac = car.pathIndex - i0
+          const p0 = streetCenter[i0]
+          const p1 = streetCenter[i1]
+          const carPos = Vector3.Lerp(p0, p1, frac)
+          // `.clone()` antes de `.normalize()` — mesmo bug do rio/rua (ver comentário lá acima):
+          // `carPos.normalize()` sem clonar mutava `carPos` pro comprimento 1 no lugar, e
+          // `carPos` ainda é usado embaixo (`car.root.position.copyFrom(carPos...)`) precisando
+          // do comprimento de verdade (distância até a superfície da rua).
+          const carUp = carPos.clone().normalize()
+          let carFwd = p1.subtract(p0)
+          carFwd = carFwd.subtract(carUp.scale(Vector3.Dot(carFwd, carUp)))
+          if (carFwd.lengthSquared() < 1e-8) carFwd = Vector3.Cross(carUp, Vector3.Right())
+          carFwd.normalize()
+          if (car.direction === -1) carFwd.scaleInPlace(-1)
+          car.root.position.copyFrom(carPos.add(carUp.scale(0.08)))
+          const carRight = Vector3.Cross(carUp, carFwd).normalize()
+          Matrix.FromXYZAxesToRef(carRight, carUp, carFwd, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          car.root.rotationQuaternion = tmpQuat.clone()
         }
 
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
