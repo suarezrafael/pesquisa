@@ -1,7 +1,8 @@
 # Laboratório 30 — Rio enterrado na malha do planeta
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: a832750935072094f718cc62c2bd68172a1099a7
 
 ## Objetivo do laboratório
@@ -18,17 +19,17 @@ contínua de `terrainHeight`, só que pior aqui porque o rio cruza uma faixa de 
 ampla (216°) que a rua.
 
 ## Funcionalidades planejadas
-- [ ] Água do rio (linha central E as duas margens) posicionada por raycast físico real contra a
+- [x] Água do rio (linha central E as duas margens) posicionada por raycast físico real contra a
       malha do planeta (`realGroundRadial`, novo helper), não mais só pela fórmula contínua de
       `terrainHeight` — a água nasce onde a malha RENDERIZADA de verdade está, não onde a fórmula
       (que a malha só aproxima) diz que deveria estar.
-- [ ] Margens também recalculadas por raycast independente (não só um deslocamento lateral plano
+- [x] Margens também recalculadas por raycast independente (não só um deslocamento lateral plano
       a partir do centro já corrigido) — descoberto durante a própria correção que só ajustar o
       centro não bastava (gap ainda em 0,41 depois do primeiro fix): a margem lateral podia cair
       num ponto da malha real bem diferente do que o deslocamento presumia.
-- [ ] Verificação: `npm run build` passa; raycast físico varrendo os vértices da malha de água
-      de verdade (não só os pontos da linha central usados pra construir) confirmando a água
-      sempre acima do chão renderizado, folga consistente em todos os pontos amostrados.
+- [x] Verificação: `npm run build` passa; raycast físico varrendo os 66 vértices da malha de
+      água de verdade (não só os pontos da linha central usados pra construir) confirmou folga
+      constante de 0,03 em todos os pontos amostrados. Ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Aplicar a mesma técnica de raycast na RUA — já verificada como suficiente no lab-29 com uma
