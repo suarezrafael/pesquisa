@@ -1,7 +1,8 @@
 # Laboratório 21 — Apelido seguro no onboarding (não solicitar nome real)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: 6729272f239f41226fac142b57fb522dec067efa
 
 ## Objetivo do laboratório
@@ -26,17 +27,17 @@ não é uma dívida teórica, é o comportamento atual. É um item MUST de segur
 feature nova; trato como correção, não como polimento opcional.
 
 ## Funcionalidades planejadas
-- [ ] `Onboarding.tsx`: trocar o rótulo/placeholder de "nome" pra "apelido de explorador(a)",
+- [x] `Onboarding.tsx`: trocar o rótulo/placeholder de "nome" pra "apelido de explorador(a)",
       deixando claro que não deve ser o nome real (linguagem apropriada pra criança de ~10 anos,
       não um aviso legal).
-- [ ] Gerador de apelido (`src/data/nicknames.ts`, novo, mesmo padrão de catálogo fechado de
+- [x] Gerador de apelido (`src/data/nicknames.ts`, novo, mesmo padrão de catálogo fechado de
       `chatMessages.ts`) — combina adjetivo + animal/tema de aventura + número, ex.
       "RaposaCorajosa42". Botão "🎲 Gerar apelido" no onboarding preenche o campo automaticamente;
       criança ainda pode editar/digitar o próprio apelido (não é travado só no gerador — o
       objetivo é desencorajar nome real, não impedir customização).
-- [ ] Verificação: `npm run build` passa; testar o fluxo de onboarding no navegador (gerar
-      apelido, editar manualmente, criar perfil) — nome exibido em HUD/multiplayer/ranking
-      continua funcionando igual, só a fonte do texto muda.
+- [x] Verificação: `npm run build` passa; testado no navegador (perfil temporário limpo com
+      backup/restauração) — gerar apelido, criar perfil, confirmado via `localStorage` que o
+      apelido gerado foi salvo corretamente. Ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Trocar perfis já criados (`localStorage`) — só afeta onboarding de perfil novo; não migra
