@@ -697,9 +697,42 @@ export function World3D({
     const remotePlayers = new Map<string, RemotePlayer>()
     let netSendTimer = 0
     let keysDown: Record<string, boolean> = {}
-    let spaceWasDown = false
+    let jumpRequested = false
+    if (import.meta.env.DEV) {
+      ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
+    }
 
     async function setup() {
+      // Input de teclado — registrado antes de qualquer `await` (física WASM, textura HDRI, 18
+      // modelos glTF de props) pra funcionar desde o primeiro quadro, não só depois que o mundo
+      // termina de carregar. Bug real encontrado nesta sessão: como esse listener era a ÚLTIMA
+      // coisa registrada em `setup()` (depois de todo o carregamento de assets), apertar espaço
+      // (ou qualquer tecla) enquanto o mundo ainda estava carregando não fazia nada — nem erro,
+      // nem pulo — porque `window.addEventListener('keydown', ...)` simplesmente ainda não tinha
+      // rodado. Confirmado isolando a causa: um clique + tecla real via automação, poucos
+      // segundos após a página carregar, chegava a `document.body` normalmente (capturado por um
+      // listener de diagnóstico), mas o `keysDown` do próprio jogo continuava vazio — a única
+      // explicação é o listener do jogo ainda não existir naquele momento. Ignora teclas enquanto
+      // o foco está num campo de texto (ex.: chat), pra digitar "s"/"w"/"a"/"d" não mexer o
+      // personagem.
+      const onKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement | null
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+        const key = e.key.toLowerCase()
+        // Latch no próprio evento (não no polling do loop de render) — ver comentário onde
+        // `jumpRequested` é consumido, no loop de render. `!keysDown[key]` evita re-latch por
+        // key-repeat do SO enquanto o jogador segura a tecla.
+        if (key === ' ' && !keysDown[key]) jumpRequested = true
+        keysDown[key] = true
+      }
+      const onKeyUp = (e: KeyboardEvent) => (keysDown[e.key.toLowerCase()] = false)
+      window.addEventListener('keydown', onKeyDown)
+      window.addEventListener('keyup', onKeyUp)
+      ;(scene as any).__removeKeyListeners = () => {
+        window.removeEventListener('keydown', onKeyDown)
+        window.removeEventListener('keyup', onKeyUp)
+      }
+
       // Áudio ambiente sintetizado (vento + trilha suave) — só inicia aqui porque o jogador já
       // interagiu com telas anteriores (título/onboarding/tutorial), então o navegador libera
       // áudio sem bloqueio de autoplay.
@@ -1555,21 +1588,6 @@ export function World3D({
         for (const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id)
       }
 
-      // Input de teclado — ignora teclas enquanto o foco está num campo de texto (ex.: chat),
-      // pra digitar "s"/"w"/"a"/"d" não mexer o personagem.
-      const onKeyDown = (e: KeyboardEvent) => {
-        const target = e.target as HTMLElement | null
-        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
-        keysDown[e.key.toLowerCase()] = true
-      }
-      const onKeyUp = (e: KeyboardEvent) => (keysDown[e.key.toLowerCase()] = false)
-      window.addEventListener('keydown', onKeyDown)
-      window.addEventListener('keyup', onKeyUp)
-      ;(scene as any).__removeKeyListeners = () => {
-        window.removeEventListener('keydown', onKeyDown)
-        window.removeEventListener('keyup', onKeyUp)
-      }
-
       let time = 0
       // Clima dinâmico: alterna sozinho entre seco e chuva em horários aleatórios (não é um
       // ciclo fixo previsível). `rainAmount` sobe/desce suavemente (não pula direto de 0 pra 1)
@@ -1656,15 +1674,20 @@ export function World3D({
           const currentVel = body.getLinearVelocity()
           let radialSpeed = Vector3.Dot(currentVel, localUp)
 
-          // Pulo (espaço): só dispara na borda de subida da tecla (não repete segurando) e só
-          // quando "no chão" (perto da altura de repouso) — evita pulo infinito/voar.
-          const spaceDown = !!keysDown[' ']
+          // Pulo (espaço): dispara a partir de `jumpRequested`, setado no próprio evento de
+          // keydown (não por polling do estado da tecla aqui) — um toque rápido no espaço pode
+          // descer E subir de novo entre dois quadros renderizados (60fps só dá ~16ms por
+          // quadro; qualquer soluço/engasgo do navegador alarga essa janela), e nesse caso o
+          // polling antigo (`spaceDown && !spaceWasDown`) nunca via a tecla "descer" — o pulo
+          // simplesmente não acontecia, de forma intermitente e sem erro nenhum. Consumido (e
+          // zerado) a cada quadro, então nunca fica um pulo "pendente" esperando o jogador
+          // aterrissar.
           const groundDist = PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05
           const grounded = dist <= groundDist + 0.08
-          if (spaceDown && !spaceWasDown && grounded) {
-            radialSpeed = JUMP_SPEED
+          if (jumpRequested) {
+            jumpRequested = false
+            if (grounded) radialSpeed = JUMP_SPEED
           }
-          spaceWasDown = spaceDown
 
           const radialVel = localUp.scale(radialSpeed)
           const tangentVel = facing.scale(throttle * MAX_SPEED)
