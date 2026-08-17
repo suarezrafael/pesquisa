@@ -111,6 +111,10 @@ const POND_CENTER_DIR = new Vector3(-0.8552, 0.0628, 0.5145).normalize()
 // platô 3 pra sua altura de até 2.1 furar a bacia rebaixada da piscina, ~0.73 de sobra pro lado
 // errado — media do céu ao chão, "o mapa" literalmente quebrado ali).
 const POOL_CENTER_DIR = new Vector3(0.4156, 0.809, 0.4156).normalize()
+// Segundo lago (pedido do usuário: "um espaco em branco no jogo bote um lago nele com patos") —
+// escolhido bem longe de tudo (platôs, escolas, lagoa, piscina), num canto vazio do mapa perto
+// da borda da faixa caminhável, verificado por varredura de candidatos antes de aplicar.
+const LAKE2_CENTER_DIR = new Vector3(0.7632, -0.6129, 0.2045).normalize()
 
 function applyBasin(height: number, dir: Vector3, centerDir: Vector3, radius: number, depth: number): number {
   const dot = Math.max(-1, Math.min(1, Vector3.Dot(dir, centerDir)))
@@ -144,6 +148,7 @@ function terrainHeight(dir: Vector3): number {
   // solavanco do ruído de base bem no meio da lagoa, furando o chão pra fora d'água).
   height = applyBasin(height, dir, POND_CENTER_DIR, 0.45, 0.65)
   height = applyBasin(height, dir, POOL_CENTER_DIR, 0.32, 0.55)
+  height = applyBasin(height, dir, LAKE2_CENTER_DIR, 0.45, 0.65)
 
   return height
 }
@@ -322,7 +327,7 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
 // articulação). A IA de cada um é: anda até um ponto aleatório na faixa caminhável, descansa um
 // tempo, escolhe outro ponto — tudo em coordenadas de "up local" (direção a partir do centro do
 // planeta), igual ao resto do mundo, pra já nascer alinhado à curvatura sem lógica extra.
-type CritterKind = 'coelho' | 'esquilo' | 'passarinho'
+type CritterKind = 'coelho' | 'esquilo' | 'passarinho' | 'gato' | 'cachorro'
 
 interface Critter {
   kind: CritterKind
@@ -406,6 +411,87 @@ function buildEsquilo(scene: Scene, shadowGenerator: ShadowGenerator): Transform
   return root
 }
 
+function buildGato(scene: Scene, shadowGenerator: ShadowGenerator, furColor: Color3): TransformNode {
+  const root = new TransformNode('gatoRoot', scene)
+  const furMat = new PBRMaterial('gatoFur', scene)
+  furMat.albedoColor = furColor
+  furMat.roughness = 0.8
+
+  function add(mesh: Mesh) {
+    mesh.material = furMat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateCapsule('gatoBody', { height: 0.24, radius: 0.08 }, scene)
+  body.rotation.x = Math.PI / 2
+  body.position.y = 0.1
+  add(body)
+
+  const head = MeshBuilder.CreateSphere('gatoHead', { diameter: 0.13 }, scene)
+  head.position = new Vector3(0, 0.13, 0.12)
+  add(head)
+
+  // Orelhas triangulares (cone achatado) — o que mais diferencia a silhueta de gato de um cão.
+  for (const side of [-1, 1]) {
+    const ear = MeshBuilder.CreateCylinder(`gatoEar${side}`, { height: 0.07, diameterTop: 0, diameterBottom: 0.06 }, scene)
+    ear.position = new Vector3(side * 0.04, 0.2, 0.12)
+    add(ear)
+  }
+
+  // Rabo fino e comprido, arqueado — bem diferente do rabo grosso/arqueado do esquilo.
+  const tail = MeshBuilder.CreateCapsule('gatoTail', { height: 0.28, radius: 0.03 }, scene)
+  tail.position = new Vector3(0, 0.2, -0.16)
+  tail.rotation.x = -0.6
+  add(tail)
+
+  return root
+}
+
+function buildCachorro(scene: Scene, shadowGenerator: ShadowGenerator, furColor: Color3): TransformNode {
+  const root = new TransformNode('cachorroRoot', scene)
+  const furMat = new PBRMaterial('cachorroFur', scene)
+  furMat.albedoColor = furColor
+  furMat.roughness = 0.85
+
+  function add(mesh: Mesh) {
+    mesh.material = furMat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateCapsule('cachorroBody', { height: 0.3, radius: 0.115 }, scene)
+  body.rotation.x = Math.PI / 2
+  body.position.y = 0.13
+  add(body)
+
+  const head = MeshBuilder.CreateSphere('cachorroHead', { diameter: 0.17 }, scene)
+  head.position = new Vector3(0, 0.16, 0.17)
+  add(head)
+
+  const snout = MeshBuilder.CreateCapsule('cachorroSnout', { height: 0.1, radius: 0.05 }, scene)
+  snout.rotation.x = Math.PI / 2
+  snout.position = new Vector3(0, 0.13, 0.24)
+  add(snout)
+
+  // Orelhas caídas (cápsula pendurada), não em pé — silhueta de cachorro, não de gato/raposa.
+  for (const side of [-1, 1]) {
+    const ear = MeshBuilder.CreateCapsule(`cachorroEar${side}`, { height: 0.1, radius: 0.03 }, scene)
+    ear.position = new Vector3(side * 0.075, 0.16, 0.13)
+    ear.rotation.z = side * 0.5
+    add(ear)
+  }
+
+  const tail = MeshBuilder.CreateCapsule('cachorroTail', { height: 0.18, radius: 0.035 }, scene)
+  tail.position = new Vector3(0, 0.22, -0.18)
+  tail.rotation.x = -0.7
+  add(tail)
+
+  return root
+}
+
 function buildPassarinho(
   scene: Scene,
   shadowGenerator: ShadowGenerator,
@@ -456,6 +542,20 @@ interface PondCritter {
   speed: number
   bobPhase: number
   depth: number
+}
+
+// Pessoa passeando com cachorro — a pessoa usa a mesma IA de vagar (alvo pertinho, descansa,
+// escolhe outro) e o mesmo ciclo de caminhada do jogador; o cachorro só segue a poucos passos
+// atrás/do lado, na "coleira" (sem IA própria — sempre mirando um ponto relativo à pessoa).
+interface DogWalker {
+  person: StudentFigure
+  dog: TransformNode
+  up: Vector3
+  targetUp: Vector3
+  forward: Vector3
+  moveSpeed: number
+  walkPhase: number
+  restTimer: number
 }
 
 function buildPeixe(scene: Scene, colorSeed: number): Mesh {
@@ -802,9 +902,17 @@ export function World3D({
       // aleatorios") — tipo e ponto de partida sorteados, cada um com velocidade/fase própria
       // pra não se moverem em sincronia. IA de vagar (wander) roda no loop de render abaixo.
       const critters: Critter[] = []
-      const CRITTER_COUNT = 20
+      // Pedido do usuário: "bote gatos, cachorros" — junto dos bichos de terra já existentes.
+      const CRITTER_KINDS: CritterKind[] = [
+        'coelho', 'coelho', 'coelho', 'coelho', 'coelho', 'coelho',
+        'esquilo', 'esquilo', 'esquilo', 'esquilo', 'esquilo',
+        'gato', 'gato', 'gato', 'gato',
+        'cachorro', 'cachorro', 'cachorro', 'cachorro',
+        'passarinho', 'passarinho', 'passarinho', 'passarinho', 'passarinho',
+      ]
+      const CRITTER_COUNT = CRITTER_KINDS.length
       for (let i = 0; i < CRITTER_COUNT; i++) {
-        const kind: CritterKind = i < 8 ? 'coelho' : i < 14 ? 'esquilo' : 'passarinho'
+        const kind = CRITTER_KINDS[i]
         const phi = Math.PI * 0.14 + Math.random() * Math.PI * 0.6
         const theta = Math.random() * Math.PI * 2
         const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
@@ -816,6 +924,12 @@ export function World3D({
           root = buildCoelho(scene, shadowGenerator)
         } else if (kind === 'esquilo') {
           root = buildEsquilo(scene, shadowGenerator)
+        } else if (kind === 'gato') {
+          const gatoColor = Color3.Lerp(new Color3(0.15, 0.15, 0.16), new Color3(0.9, 0.6, 0.3), Math.random())
+          root = buildGato(scene, shadowGenerator, gatoColor)
+        } else if (kind === 'cachorro') {
+          const cachorroColor = Color3.Lerp(new Color3(0.85, 0.68, 0.4), new Color3(0.35, 0.24, 0.15), Math.random())
+          root = buildCachorro(scene, shadowGenerator, cachorroColor)
         } else {
           const passarinhoColor = Color3.Lerp(new Color3(0.75, 0.25, 0.2), new Color3(0.3, 0.4, 0.75), Math.random())
           const built = buildPassarinho(scene, shadowGenerator, passarinhoColor)
@@ -840,6 +954,31 @@ export function World3D({
         })
       }
       if (import.meta.env.DEV) (window as any).__critters = critters
+
+      // Pessoas passeando com cachorro (pedido do usuário: "pessoas passeando com cachorros") —
+      // reaproveita o mesmo boneco do personagem (buildStudentFigure), andando de verdade (ciclo
+      // de caminhada igual ao do jogador), com um cachorro seguindo do lado/atrás, na coleira.
+      const DOG_WALKER_SHIRT_COLORS = [new Color3(0.35, 0.55, 0.3), new Color3(0.6, 0.4, 0.7), new Color3(0.85, 0.5, 0.2)]
+      const dogWalkers: DogWalker[] = []
+      const DOG_WALKER_COUNT = 3
+      for (let i = 0; i < DOG_WALKER_COUNT; i++) {
+        const phi = Math.PI * 0.16 + Math.random() * Math.PI * 0.55
+        const theta = Math.random() * Math.PI * 2
+        const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+        const person = buildStudentFigure(scene, DOG_WALKER_SHIRT_COLORS[i % DOG_WALKER_SHIRT_COLORS.length], shadowGenerator)
+        const dogColor = Color3.Lerp(new Color3(0.85, 0.68, 0.4), new Color3(0.35, 0.24, 0.15), Math.random())
+        const dog = buildCachorro(scene, shadowGenerator, dogColor)
+        dogWalkers.push({
+          person,
+          dog,
+          up,
+          targetUp: up,
+          forward: Vector3.Cross(up, Vector3.Right()).normalize(),
+          moveSpeed: 0.13 + Math.random() * 0.05,
+          walkPhase: Math.random() * Math.PI * 2,
+          restTimer: Math.random() * 3,
+        })
+      }
 
       // Nuvens — grupos de "pufes" esféricos achatados, cada grupo derivando lentamente ao
       // redor do eixo polar do planeta (efeito de vento/clima, sem física real envolvida).
@@ -975,6 +1114,33 @@ export function World3D({
         bobPhase: Math.random() * Math.PI * 2,
         depth: 0.01,
       })
+
+      // Segundo lago (pedido do usuário: "um espaco em branco no jogo bote um lago nele com
+      // patos") — num canto vazio do mapa, longe de tudo (ver `LAKE2_CENTER_DIR`). Só patos
+      // (plural, como pedido), mesma técnica de nado em círculo da lagoa principal.
+      const lake2Up = LAKE2_CENTER_DIR
+      const lake2CenterPos = lake2Up.scale(PLANET_RADIUS + terrainHeight(lake2Up) + 0.3)
+      const lake2Forward = Vector3.Cross(lake2Up, Vector3.Right()).normalize()
+      const lake2Right = Vector3.Cross(lake2Up, lake2Forward).normalize()
+      const lake2Radius = 1.6
+
+      const lake2 = MeshBuilder.CreateCylinder('lake2', { diameter: lake2Radius * 2, height: 0.04, tessellation: 32 }, scene)
+      lake2.material = riverMat
+      lake2.position.copyFrom(lake2CenterPos)
+      lake2.rotationQuaternion = alignmentQuaternion(lake2Up)
+      lake2.receiveShadows = true
+
+      const lake2Critters: PondCritter[] = []
+      for (let i = 0; i < 3; i++) {
+        lake2Critters.push({
+          root: buildPato(scene, shadowGenerator),
+          angleOffset: (i / 3) * Math.PI * 2,
+          radius: 0.7 + i * 0.3,
+          speed: 0.35 + i * 0.1,
+          bobPhase: Math.random() * Math.PI * 2,
+          depth: 0.03,
+        })
+      }
 
       // Grama animada por vento — shader customizado (não textura), milhares de lâminas via
       // thin instances (1 draw call). O balanço acontece em espaço local do vértice, antes da
@@ -1577,6 +1743,82 @@ export function World3D({
           c.root.rotationQuaternion = tmpQuat.clone()
         }
 
+        // Pessoas passeando com cachorro: mesma IA de vagar dos bichos de terra (alvo pertinho,
+        // descansa, escolhe outro), mas com o ciclo de caminhada de verdade do personagem
+        // (braço/perna/joelho) em vez de pulinho. O cachorro só segue um ponto relativo à
+        // pessoa (atrás e pro lado), sem IA própria — como se estivesse na coleira.
+        for (const dw of dogWalkers) {
+          const angleToTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(dw.up, dw.targetUp))))
+          const moving = angleToTarget > 0.03
+          if (!moving) {
+            dw.restTimer -= dt
+            if (dw.restTimer <= 0) {
+              const seed = Math.abs(dw.up.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+              const tangentA = Vector3.Cross(dw.up, seed).normalize()
+              const tangentB = Vector3.Cross(dw.up, tangentA).normalize()
+              const wanderAngle = Math.random() * Math.PI * 2
+              const wanderRadius = 0.15 + Math.random() * 0.25
+              const offset = tangentA
+                .scale(Math.cos(wanderAngle) * wanderRadius)
+                .add(tangentB.scale(Math.sin(wanderAngle) * wanderRadius))
+              dw.targetUp = dw.up.add(offset).normalize()
+              dw.restTimer = 1.5 + Math.random() * 3
+            }
+          } else {
+            const axis = Vector3.Cross(dw.up, dw.targetUp)
+            if (axis.lengthSquared() > 1e-8) {
+              axis.normalize()
+              const step = Math.min(dw.moveSpeed * dt, angleToTarget)
+              dw.up = rotateAroundAxis(dw.up, axis, step).normalize()
+            }
+          }
+
+          let fwd = dw.targetUp.subtract(dw.up.scale(Vector3.Dot(dw.targetUp, dw.up)))
+          if (fwd.lengthSquared() > 1e-6) {
+            fwd.normalize()
+            dw.forward = fwd
+          } else {
+            fwd = dw.forward
+          }
+
+          const personPos = dw.up.scale(PLANET_RADIUS + terrainHeight(dw.up) + 0.02)
+          dw.person.root.position.copyFrom(personPos)
+          const right = Vector3.Cross(dw.up, fwd).normalize()
+          Matrix.FromXYZAxesToRef(right, dw.up, fwd, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          dw.person.root.rotationQuaternion = tmpQuat.clone()
+
+          if (moving) {
+            dw.walkPhase += dt * WALK_CYCLE_SPEED * 0.7
+            const swing = Math.sin(dw.walkPhase) * LEG_SWING_MAX
+            dw.person.legPivotL.rotation.x = swing
+            dw.person.legPivotR.rotation.x = -swing
+            dw.person.armPivotL.rotation.x = -swing * 0.7
+            dw.person.armPivotR.rotation.x = swing * 0.7
+            const kneeL = Math.max(0, Math.sin(dw.walkPhase + Math.PI / 2)) * KNEE_BEND_MAX
+            const kneeR = Math.max(0, Math.sin(dw.walkPhase - Math.PI / 2)) * KNEE_BEND_MAX
+            dw.person.kneePivotL.rotation.x = -kneeL
+            dw.person.kneePivotR.rotation.x = -kneeR
+          } else {
+            dw.person.legPivotL.rotation.x *= 0.8
+            dw.person.legPivotR.rotation.x *= 0.8
+            dw.person.armPivotL.rotation.x *= 0.8
+            dw.person.armPivotR.rotation.x *= 0.8
+            dw.person.kneePivotL.rotation.x *= 0.8
+            dw.person.kneePivotR.rotation.x *= 0.8
+          }
+
+          // Cachorro: sempre mirando um ponto atrás e ao lado da pessoa (coleira), com um
+          // pulinho leve pra não parecer deslizando.
+          const dogHop = Math.max(0, Math.sin(time * 7 + dw.walkPhase)) * 0.04
+          const dogGroundPos = dw.up.scale(PLANET_RADIUS + terrainHeight(dw.up) + dogHop)
+          const dogPos = dogGroundPos.subtract(fwd.scale(0.45)).subtract(right.scale(0.4))
+          dw.dog.position.copyFrom(dogPos)
+          Matrix.FromXYZAxesToRef(right, dw.up, fwd, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          dw.dog.rotationQuaternion = tmpQuat.clone()
+        }
+
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
         // fase próprios), orientados pra frente da direção de nado.
         for (const pc of pondCritters) {
@@ -1595,6 +1837,27 @@ export function World3D({
           const fwd = pondRight.scale(dirX).add(pondForward.scale(dirZ)).normalize()
           const right = Vector3.Cross(pondUp, fwd).normalize()
           Matrix.FromXYZAxesToRef(right, pondUp, fwd, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          pc.root.rotationQuaternion = tmpQuat.clone()
+        }
+
+        // Patos do segundo lago — mesma lógica de nado em círculo, centro/base diferentes.
+        for (const pc of lake2Critters) {
+          const t = time * pc.speed + pc.angleOffset
+          const localX = Math.cos(t) * pc.radius
+          const localZ = Math.sin(t) * pc.radius
+          const bob = Math.sin(time * 2.4 + pc.bobPhase) * 0.015
+          const worldPos = lake2CenterPos
+            .add(lake2Right.scale(localX))
+            .add(lake2Forward.scale(localZ))
+            .add(lake2Up.scale(pc.depth + bob))
+          pc.root.position.copyFrom(worldPos)
+
+          const dirX = -Math.sin(t)
+          const dirZ = Math.cos(t)
+          const fwd = lake2Right.scale(dirX).add(lake2Forward.scale(dirZ)).normalize()
+          const right = Vector3.Cross(lake2Up, fwd).normalize()
+          Matrix.FromXYZAxesToRef(right, lake2Up, fwd, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
           pc.root.rotationQuaternion = tmpQuat.clone()
         }
