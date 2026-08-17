@@ -2146,9 +2146,9 @@ export function World3D({
     setMuted(toggleAmbienceMute())
   }
 
-  function handleSendChat(text: string) {
-    sendChat(profile.name, text)
-    setChatMessages((prev) => [...prev.slice(-49), { id: 'me', name: profile.name, text, ts: Date.now() }])
+  function handleSendChat(messageId: string) {
+    sendChat(profile.name, messageId)
+    setChatMessages((prev) => [...prev.slice(-49), { id: 'me', name: profile.name, messageId, ts: Date.now() }])
   }
 
   return (

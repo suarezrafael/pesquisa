@@ -2,6 +2,8 @@
 // (app/server/relay.cjs) via WebSocket. Sem conta, sem nuvem: assume que o servidor roda na
 // mesma máquina que serve o jogo (mesmo hostname da página), porta fixa.
 
+import { QUICK_CHAT_MESSAGES } from '../data/chatMessages'
+
 export interface RemoteState {
   id: string
   name: string
@@ -13,7 +15,9 @@ export interface RemoteState {
 export interface ChatMessage {
   id: string
   name: string
-  text: string
+  // Chave de `QUICK_CHAT_MESSAGES` (src/data/chatMessages.ts) — nunca texto livre. Requisito
+  // [MUST] de docs/prompts/01-seguranca.md §1 / prompt.md §11.
+  messageId: string
   ts: number
 }
 
@@ -61,8 +65,15 @@ export function connect(): void {
       return
     }
     if (msg.type === 'state') stateHandlers.forEach((h) => h(msg as RemoteState))
-    else if (msg.type === 'chat') chatHandlers.forEach((h) => h({ ...msg, ts: Date.now() } as ChatMessage))
-    else if (msg.type === 'leave') leaveHandlers.forEach((h) => h(msg.id))
+    else if (msg.type === 'chat') {
+      // Nunca confia em texto vindo da rede — só repassa se `messageId` bater com uma entrada
+      // conhecida do catálogo (o relay já valida isso também, mas checar de novo aqui é
+      // defesa em profundidade: um peer adulterado não deveria conseguir fazer nada renderizar
+      // além do catálogo fechado, mesmo que o servidor mude).
+      if (typeof msg.messageId === 'string' && QUICK_CHAT_MESSAGES.some((m) => m.id === msg.messageId)) {
+        chatHandlers.forEach((h) => h({ ...msg, ts: Date.now() } as ChatMessage))
+      }
+    } else if (msg.type === 'leave') leaveHandlers.forEach((h) => h(msg.id))
   }
 
   ws.onclose = () => {
@@ -95,11 +106,10 @@ export function sendState(
   socket.send(JSON.stringify({ type: 'state', name, avatarEmoji, position, facing }))
 }
 
-export function sendChat(name: string, text: string): void {
+export function sendChat(name: string, messageId: string): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) return
-  const trimmed = text.trim().slice(0, 140)
-  if (!trimmed) return
-  socket.send(JSON.stringify({ type: 'chat', name, text: trimmed }))
+  if (!QUICK_CHAT_MESSAGES.some((m) => m.id === messageId)) return
+  socket.send(JSON.stringify({ type: 'chat', name: name.slice(0, 40), messageId }))
 }
 
 export function onRemoteState(handler: StateHandler): () => void {
