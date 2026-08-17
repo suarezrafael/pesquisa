@@ -96,16 +96,22 @@ const AVATAR_RADIUS = 0.55
 // bem mais forte que a real pra o pulo parecer "no chão", não flutuando — aqui GRAVITY subiu
 // ~63% e JUMP_SPEED baixou um pouco, resultando em altura ~1.2 e ~0.78s no ar (quase metade do
 // tempo de antes). Ainda dá folga confortável (0.35) sobre os degraus do parkour (altura 0.85,
-// lab-11) e alcance horizontal de sobra (MAX_SPEED × tempo no ar ≈ 4.65, contra os 2.27
-// necessários entre plataformas).
+// lab-11) e alcance horizontal de sobra (mesmo correndo com RUN_SPEED, bem mais rápido que na
+// época deste cálculo, o tempo no ar de ~0,78s dá alcance de sobra contra os 2,27 necessários
+// entre plataformas — RUN_SPEED só aumenta essa folga, nunca reduz).
 const GRAVITY = 16
-// Pedido do usuário: "o andar do boneco é meio lento, acelere ele um pouco" — era 6, +25%.
-// WALK_CYCLE_SPEED sobe na mesma proporção pra pernas/braços continuarem batendo no ritmo certo
-// do passo (senão as pernas "escorregam" — giram mais devagar que o deslocamento de verdade).
-const MAX_SPEED = 7.5
+// Pedido do usuário: "o andar do boneco é meio lento, acelere ele um pouco" — era 6, +25% (essa
+// virou a velocidade de CAMINHAR abaixo). Pedido seguinte: "adicione a opção de correr e
+// caminhar" — segurar Shift agora corre (`RUN_SPEED`, mais rápido ainda que o andar já
+// acelerado). `*_CYCLE_SPEED` sobe na mesma proporção da velocidade de deslocamento em cada
+// modo, pra pernas/braços continuarem batendo no ritmo certo do passo (senão as pernas
+// "escorregam" — giram mais devagar que o deslocamento de verdade).
+const WALK_SPEED = 7.5
+const RUN_SPEED = 11
 const JUMP_SPEED = 6.2 // velocidade radial (pra fora do planeta) aplicada ao pular
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
 const WALK_CYCLE_SPEED = 8.75 // rad/s de fase do ciclo de caminhada, por unidade de throttle
+const RUN_CYCLE_SPEED = WALK_CYCLE_SPEED * (RUN_SPEED / WALK_SPEED)
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
 // Relatado pelo usuário: "o boneco não dobra os joelhos pra andar". A fórmula antiga
 // (`max(0, sin(...))`) fazia o joelho dobrar só na METADE do ciclo (fase de "levantar a perna")
@@ -122,7 +128,7 @@ const TRIGGER_DISTANCE = 2.4
 const RESET_DISTANCE = 3.6
 // Carro dirigível (lab-25): distância pra mostrar a dica "pressione E" / poder entrar, e
 // velocidade de deslocamento ao longo da rua quando o jogador está no controle (mais rápida que
-// MAX_SPEED a pé — é um carro, deveria ser nitidamente mais rápido que andar).
+// WALK_SPEED a pé — é um carro, deveria ser nitidamente mais rápido que andar).
 const CAR_ENTER_DISTANCE = 2.0
 const CAR_DRIVE_SPEED = 6
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
@@ -1811,7 +1817,8 @@ export function World3D({
       // real do pulo: JUMP_SPEED=5.5 e GRAVITY=9.81 dão altura máxima de pulo de
       // JUMP_SPEED²/(2·GRAVITY) ≈ 1.54 — cada degrau sobe só 0.85 (bastante folga) — e tempo no
       // ar de ≈1.12s, então mesmo o alcance horizontal do ziguezague (~2.1 por degrau) é
-      // confortável contra o quanto dá pra andar nesse tempo (MAX_SPEED=6 → até 6.7).
+      // confortável contra o quanto dá pra andar nesse tempo (WALK_SPEED/RUN_SPEED só aumentam
+      // essa folga, nunca reduzem).
       const PARKOUR_ANCHOR_UP = new Vector3(0.7760390996088926, -0.6156614753256583, 0.13683663134575172).normalize()
       const parkourAnchorPos = PARKOUR_ANCHOR_UP.scale(PLANET_RADIUS + terrainHeight(PARKOUR_ANCHOR_UP))
       const parkourForward = Vector3.Cross(PARKOUR_ANCHOR_UP, Vector3.Right()).normalize()
@@ -3400,8 +3407,12 @@ export function World3D({
             if (grounded) radialSpeed = JUMP_SPEED
           }
 
+          // Correr/caminhar (pedido do usuário) — segurar Shift troca de velocidade. Só no
+          // teclado por enquanto (sem toggle equivalente no joystick de toque).
+          const running = !!keysDown['shift']
+          const currentSpeed = running ? RUN_SPEED : WALK_SPEED
           const radialVel = localUp.scale(radialSpeed)
-          const tangentVel = facing.scale(throttle * MAX_SPEED)
+          const tangentVel = facing.scale(throttle * currentSpeed)
           body.setLinearVelocity(tangentVel.add(radialVel))
           // Trava a rotação física do colisor — é uma cápsula em pé, não deve tombar/rolar
           // por causa de torque de contato com o chão (personagem visual gira por conta própria).
@@ -3425,7 +3436,7 @@ export function World3D({
           // passo sintetizado disparado a cada troca de perna (cruzamento de zero do seno).
           const moving = Math.abs(throttle) > 0.05
           if (moving) {
-            walkPhase += dt * Math.abs(throttle) * WALK_CYCLE_SPEED
+            walkPhase += dt * Math.abs(throttle) * (running ? RUN_CYCLE_SPEED : WALK_CYCLE_SPEED)
             const swing = Math.sin(walkPhase) * LEG_SWING_MAX
             studentFigure.legPivotL.rotation.x = swing
             studentFigure.legPivotR.rotation.x = -swing
