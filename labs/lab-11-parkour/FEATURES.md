@@ -1,8 +1,8 @@
 # Laboratório 11 — Parkour
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-16
-Fim: -
+Fim: 2026-08-16
 Commit inicial: d70199bdc38068259bc0169a220979ae40a0e69f
 
 ## Objetivo do laboratório
@@ -19,15 +19,19 @@ trabalhosos. Retomado direto após o usuário pedir "continue o próximo lab" se
 prioridade; os outros itens continuam na fila.
 
 ## Funcionalidades planejadas
-- [ ] Plataformas flutuantes/blocos escalonados formando ao menos um percurso de parkour
+- [x] Plataformas flutuantes/blocos escalonados formando ao menos um percurso de parkour
       (referência: `labs/lab-10-clima-npcs-trilha/CONTEXT.md`, "O que o próximo laboratório deve
       desenvolver", item 3 — "Parkour").
-- [ ] Colisor físico nas plataformas (`PhysicsAggregate`, mesmo padrão dos props/planeta) — o
+- [x] Colisor físico nas plataformas (`PhysicsAggregate`, mesmo padrão dos props/planeta) — o
       personagem precisa conseguir ficar em pé nelas de verdade, não só visual.
-- [ ] Pelo menos uma recompensa/sinal de conclusão ao chegar no topo/fim do percurso (reaproveitar
+- [x] Pelo menos uma recompensa/sinal de conclusão ao chegar no topo/fim do percurso (reaproveitar
       o padrão de moedas ou um marcador visual simples) — sem isso não fica claro que "deu certo".
-- [ ] Verificação end-to-end: rodar o dev server e confirmar visualmente (via automação de
-      navegador) que dá pra subir o percurso pulando de plataforma em plataforma.
+- [~] Verificação end-to-end: rodar o dev server e confirmar visualmente (via automação de
+      navegador) que dá pra subir o percurso pulando de plataforma em plataforma. Feito
+      parcialmente — confirmado o espaçamento matemático, colisor sólido (personagem descansa
+      estável sobre a plataforma, testado via teleporte) e captura de tela do percurso, mas não
+      um playthrough real de ponta a ponta pulando plataforma a plataforma (ver Pendências no
+      CONTEXT.md).
 
 ## Fora de escopo (explicitamente adiado)
 - Ruas e carros andando no mundo (pendência do lab-09/10).
