@@ -6,7 +6,7 @@ export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile())
 
   function createProfile(name: string, avatarEmoji: string) {
-    const next: Profile = { name, avatarEmoji, createdAt: new Date().toISOString() }
+    const next: Profile = { name, avatarEmoji, createdAt: new Date().toISOString(), equippedHatId: null }
     saveProfile(next)
     setProfile(next)
   }
@@ -20,5 +20,14 @@ export function useProfile() {
     })
   }
 
-  return { profile, createProfile, equipAvatar }
+  function equipHat(hatId: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, equippedHatId: hatId }
+      saveProfile(next)
+      return next
+    })
+  }
+
+  return { profile, createProfile, equipAvatar, equipHat }
 }

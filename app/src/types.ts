@@ -21,6 +21,9 @@ export interface Profile {
   name: string
   avatarEmoji: string
   createdAt: string
+  // Chapéu equipado (lab-24) — eixo de customização independente da criatura (`avatarEmoji`):
+  // null = nenhum chapéu, não amarrado a qual criatura está em uso.
+  equippedHatId: string | null
 }
 
 export interface Progress {
@@ -29,4 +32,5 @@ export interface Progress {
   coins: number
   badges: string[]
   unlockedAvatarIds: string[]
+  unlockedHatIds: string[]
 }

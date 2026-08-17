@@ -19,8 +19,8 @@ const World3D = lazy(() => import('./world3d/World3D').then((m) => ({ default: m
 type PreProfileScreen = 'title' | 'onboarding'
 
 function App() {
-  const { profile, createProfile, equipAvatar } = useProfile()
-  const { progress, completeQuest, collectCoin, unlockAvatar } = useProgress()
+  const { profile, createProfile, equipAvatar, equipHat } = useProfile()
+  const { progress, completeQuest, collectCoin, unlockAvatar, unlockHat } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [reward, setReward] = useState<{ quest: Quest; newBadges: string[]; awardedXp: number; awardedCoins: number } | null>(
     null,
@@ -105,6 +105,8 @@ function App() {
           progress={progress}
           onUnlock={unlockAvatar}
           onEquip={equipAvatar}
+          onUnlockHat={unlockHat}
+          onEquipHat={equipHat}
           onClose={() => setShowShop(false)}
         />
       )}

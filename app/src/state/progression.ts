@@ -1,6 +1,7 @@
 import type { Progress, Quest } from '../types'
 import { quests } from '../data/quests'
 import { findAvatarById } from '../data/avatars'
+import { findHatById } from '../data/hats'
 import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -89,5 +90,19 @@ export function unlockAvatar(progress: Progress, avatarId: string): Progress {
     ...progress,
     coins: progress.coins - avatar.cost,
     unlockedAvatarIds: [...progress.unlockedAvatarIds, avatarId],
+  }
+}
+
+// Mesma regra de compra do `unlockAvatar`, mas pro catálogo de chapéus (lab-24) — eixo de
+// customização independente (trocar de criatura não desbloqueia/perde chapéu nenhum).
+export function unlockHat(progress: Progress, hatId: string): Progress {
+  const hat = findHatById(hatId)
+  if (!hat) return progress
+  if (progress.unlockedHatIds.includes(hatId)) return progress
+  if (progress.coins < hat.cost) return progress
+  return {
+    ...progress,
+    coins: progress.coins - hat.cost,
+    unlockedHatIds: [...progress.unlockedHatIds, hatId],
   }
 }

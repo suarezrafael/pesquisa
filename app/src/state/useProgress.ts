@@ -6,6 +6,7 @@ import {
   applyQuestCompletion,
   type CompletionResult,
   unlockAvatar as applyAvatarUnlock,
+  unlockHat as applyHatUnlock,
 } from './progression'
 
 export function useProgress() {
@@ -34,5 +35,13 @@ export function useProgress() {
     })
   }
 
-  return { progress, completeQuest, collectCoin, unlockAvatar }
+  function unlockHat(hatId: string): void {
+    setProgress((prev) => {
+      const next = applyHatUnlock(prev, hatId)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  return { progress, completeQuest, collectCoin, unlockAvatar, unlockHat }
 }

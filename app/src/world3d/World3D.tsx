@@ -38,6 +38,7 @@ import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
 import { findAvatarByEmoji, type BonecoFeatures } from '../data/avatars'
+import { findHatById, type HatOption } from '../data/hats'
 import { questTypeColor } from './questVisuals'
 import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
@@ -257,6 +258,9 @@ interface StudentFigure {
   // camisa) — populado por `applyBonecoFeatures`, guardado aqui pra poder descartar e remontar
   // quando o jogador troca de avatar em cena (sem reconstruir a figura inteira).
   accessories: Mesh[]
+  // Chapéu equipado (lab-24) — eixo de customização INDEPENDENTE de `accessories`: populado por
+  // `applyHat`, sobrevive a troca de criatura (não é descartado por `applyBonecoFeatures`).
+  hatMeshes: Mesh[]
 }
 
 interface RemotePlayer {
@@ -395,6 +399,7 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
     elbowPivotL: arm1.lowerPivot,
     elbowPivotR: arm2.lowerPivot,
     accessories: [],
+    hatMeshes: [],
   }
 }
 
@@ -530,6 +535,97 @@ function applyBonecoFeatures(
       tentacle.position = new Vector3(Math.cos(angle) * 0.14, HEAD_Y - 0.05, Math.sin(angle) * 0.14)
       tentacle.rotation.x = 0.6
       add(tentacle)
+    }
+  }
+}
+
+// Chapéu equipado (lab-24) — eixo de customização independente de `applyBonecoFeatures`: guardado
+// em `figure.hatMeshes` (não em `figure.accessories`), pra trocar de criatura não descartar o
+// chapéu e vice-versa. `hat` null = remove qualquer chapéu (descarta as malhas e sai).
+function applyHat(
+  figure: StudentFigure,
+  hat: HatOption | null,
+  scene: Scene,
+  shadowGenerator: ShadowGenerator,
+): void {
+  for (const mesh of figure.hatMeshes) mesh.dispose()
+  figure.hatMeshes = []
+  if (!hat) return
+
+  const hatMat = new PBRMaterial(`hatMat-${hat.id}`, scene)
+  hatMat.albedoColor = new Color3(...hat.colorRgb)
+  hatMat.roughness = 0.6
+
+  function add(mesh: Mesh) {
+    mesh.material = hatMat
+    mesh.parent = figure.root
+    shadowGenerator.addShadowCaster(mesh)
+    figure.hatMeshes.push(mesh)
+    return mesh
+  }
+
+  // Acima do cabelo (hair vai até HEAD_Y+0.24ish, diâmetro 0.35 slice 0.55) — HAT_Y evita
+  // z-fighting com a touca de cabelo por baixo.
+  const HAT_Y = 1.34
+
+  if (hat.shape === 'cap') {
+    const brim = MeshBuilder.CreateCylinder('hatCapBrim', { height: 0.03, diameter: 0.34, tessellation: 16 }, scene)
+    brim.position = new Vector3(0, HAT_Y - 0.06, 0.08)
+    add(brim)
+    const dome = MeshBuilder.CreateSphere('hatCapDome', { diameter: 0.34, slice: 0.55 }, scene)
+    dome.position.y = HAT_Y
+    add(dome)
+  } else if (hat.shape === 'party') {
+    const cone = MeshBuilder.CreateCylinder(
+      'hatPartyCone',
+      { height: 0.32, diameterTop: 0.02, diameterBottom: 0.26, tessellation: 12 },
+      scene,
+    )
+    cone.position.y = HAT_Y + 0.14
+    add(cone)
+    const pom = MeshBuilder.CreateSphere('hatPartyPom', { diameter: 0.07 }, scene)
+    pom.position.y = HAT_Y + 0.31
+    add(pom)
+  } else if (hat.shape === 'flower') {
+    const petalCount = 5
+    for (let p = 0; p < petalCount; p++) {
+      const angle = (p / petalCount) * Math.PI * 2
+      const petal = MeshBuilder.CreateSphere(`hatFlowerPetal${p}`, { diameter: 0.09 }, scene)
+      petal.scaling.y = 0.5
+      petal.position = new Vector3(Math.cos(angle) * 0.08, HAT_Y - 0.02, Math.sin(angle) * 0.08 + 0.1)
+      add(petal)
+    }
+    const center = MeshBuilder.CreateSphere('hatFlowerCenter', { diameter: 0.06 }, scene)
+    center.position = new Vector3(0, HAT_Y - 0.02, 0.1)
+    add(center)
+  } else if (hat.shape === 'bow') {
+    for (const side of [-1, 1]) {
+      const loop = MeshBuilder.CreateBox(`hatBowLoop${side}`, { width: 0.12, height: 0.08, depth: 0.03 }, scene)
+      loop.position = new Vector3(side * 0.07, HAT_Y - 0.04, 0.1)
+      loop.rotation.z = side * 0.5
+      add(loop)
+    }
+    const knot = MeshBuilder.CreateSphere('hatBowKnot', { diameter: 0.05 }, scene)
+    knot.position = new Vector3(0, HAT_Y - 0.04, 0.1)
+    add(knot)
+  } else if (hat.shape === 'crown') {
+    const band = MeshBuilder.CreateCylinder(
+      'hatCrownBand',
+      { height: 0.09, diameterTop: 0.32, diameterBottom: 0.3, tessellation: 16 },
+      scene,
+    )
+    band.position.y = HAT_Y - 0.03
+    add(band)
+    const spikeCount = 5
+    for (let s = 0; s < spikeCount; s++) {
+      const angle = (s / spikeCount) * Math.PI * 2
+      const spike = MeshBuilder.CreateCylinder(
+        `hatCrownSpike${s}`,
+        { height: 0.1, diameterTop: 0, diameterBottom: 0.06, tessellation: 4 },
+        scene,
+      )
+      spike.position = new Vector3(Math.cos(angle) * 0.13, HAT_Y + 0.06, Math.sin(angle) * 0.13)
+      add(spike)
     }
   }
 }
@@ -917,6 +1013,10 @@ export function World3D({
   useEffect(() => {
     ;(sceneRef.current as any)?.__setAvatarShirtColor?.(profile.avatarEmoji)
   }, [profile.avatarEmoji])
+
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setPlayerHat?.(profile.equippedHatId)
+  }, [profile.equippedHatId])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -1804,6 +1904,7 @@ export function World3D({
 
       const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator)
       applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
+      applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
       if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure
 
@@ -1813,6 +1914,12 @@ export function World3D({
       ;(scene as any).__setAvatarShirtColor = (emoji: string) => {
         studentFigure.shirtMat.albedoColor = avatarColorFromEmoji(emoji)
         applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(emoji), scene, shadowGenerator)
+      }
+
+      // Trocar de chapéu na lojinha (lab-24) — eixo independente do avatar/criatura, não
+      // reconstrói `accessories`. Ver useEffect que observa `profile.equippedHatId`.
+      ;(scene as any).__setPlayerHat = (hatId: string | null) => {
+        applyHat(studentFigure, hatId ? findHatById(hatId) ?? null : null, scene, shadowGenerator)
       }
 
       // Câmera já posicionada corretamente antes do primeiro quadro (evita "pulo" inicial).

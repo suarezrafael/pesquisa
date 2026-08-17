@@ -1,4 +1,5 @@
 import { AVATAR_CATALOG } from '../data/avatars'
+import { HAT_CATALOG } from '../data/hats'
 import type { Profile, Progress } from '../types'
 
 interface AvatarShopProps {
@@ -6,10 +7,20 @@ interface AvatarShopProps {
   progress: Progress
   onUnlock: (avatarId: string) => void
   onEquip: (avatarEmoji: string) => void
+  onUnlockHat: (hatId: string) => void
+  onEquipHat: (hatId: string | null) => void
   onClose: () => void
 }
 
-export function AvatarShop({ profile, progress, onUnlock, onEquip, onClose }: AvatarShopProps) {
+export function AvatarShop({
+  profile,
+  progress,
+  onUnlock,
+  onEquip,
+  onUnlockHat,
+  onEquipHat,
+  onClose,
+}: AvatarShopProps) {
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Loja de avatares">
       <div className="modal avatar-shop-modal">
@@ -50,6 +61,57 @@ export function AvatarShop({ profile, progress, onUnlock, onEquip, onClose }: Av
                     onClick={() => onUnlock(avatar.id)}
                   >
                     🪙 {avatar.cost}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        <h2>Chapéus</h2>
+        <p className="subtitle">
+          Chapéus são independentes do personagem — troque de bicho sem perder o chapéu.
+        </p>
+
+        <div className="avatar-shop-grid">
+          <div className={`avatar-shop-item ${!profile.equippedHatId ? 'equipped' : ''}`}>
+            <span className="avatar-shop-emoji">🚫</span>
+            <span className="avatar-shop-name">Nenhum</span>
+            {!profile.equippedHatId ? (
+              <span className="avatar-shop-tag">Em uso</span>
+            ) : (
+              <button type="button" className="avatar-shop-action" onClick={() => onEquipHat(null)}>
+                Usar
+              </button>
+            )}
+          </div>
+
+          {HAT_CATALOG.map((hat) => {
+            const unlocked = progress.unlockedHatIds.includes(hat.id)
+            const equipped = profile.equippedHatId === hat.id
+            const affordable = progress.coins >= hat.cost
+
+            return (
+              <div key={hat.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!unlocked ? 'locked' : ''}`}>
+                <span className="avatar-shop-emoji">{hat.emoji}</span>
+                <span className="avatar-shop-name">{hat.name}</span>
+
+                {equipped && <span className="avatar-shop-tag">Em uso</span>}
+
+                {!equipped && unlocked && (
+                  <button type="button" className="avatar-shop-action" onClick={() => onEquipHat(hat.id)}>
+                    Usar
+                  </button>
+                )}
+
+                {!unlocked && (
+                  <button
+                    type="button"
+                    className="avatar-shop-action buy"
+                    disabled={!affordable}
+                    onClick={() => onUnlockHat(hat.id)}
+                  >
+                    🪙 {hat.cost}
                   </button>
                 )}
               </div>
