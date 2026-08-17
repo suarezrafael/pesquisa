@@ -22,7 +22,9 @@ function App() {
   const { profile, createProfile, equipAvatar } = useProfile()
   const { progress, completeQuest, collectCoin, unlockAvatar } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
-  const [reward, setReward] = useState<{ quest: Quest; newBadges: string[] } | null>(null)
+  const [reward, setReward] = useState<{ quest: Quest; newBadges: string[]; awardedXp: number; awardedCoins: number } | null>(
+    null,
+  )
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
   const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
   const [showHelp, setShowHelp] = useState(false)
@@ -54,8 +56,8 @@ function App() {
 
   function handleQuestCorrect() {
     if (!activeQuest) return
-    const newBadges = completeQuest(activeQuest)
-    setReward({ quest: activeQuest, newBadges })
+    const { newBadges, awardedXp, awardedCoins } = completeQuest(activeQuest)
+    setReward({ quest: activeQuest, newBadges, awardedXp, awardedCoins })
     setActiveQuest(null)
   }
 
@@ -84,7 +86,8 @@ function App() {
 
       {reward && (
         <RewardToast
-          quest={reward.quest}
+          awardedXp={reward.awardedXp}
+          awardedCoins={reward.awardedCoins}
           newBadges={reward.newBadges}
           onContinue={() => setReward(null)}
         />

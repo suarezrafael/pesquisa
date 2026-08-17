@@ -546,6 +546,28 @@ body {
   margin: 0.75rem 0 1.25rem;
 }
 
+.reward-bonus-line {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0.35rem 0 0;
+}
+
+/* Evento semanal (lab-22) */
+
+.weekly-event-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: #fff2d6;
+  color: #8a5a00;
+  cursor: default;
+}
+
 /* Lista de missões */
 
 .quest-list-modal {

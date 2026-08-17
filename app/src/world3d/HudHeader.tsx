@@ -1,5 +1,6 @@
 import type { Profile, Progress } from '../types'
 import { getLevel, xpIntoLevel } from '../state/progression'
+import { getCurrentWeeklyEvent } from '../data/weeklyEvents'
 
 interface HudHeaderProps {
   profile: Profile
@@ -27,6 +28,7 @@ export function HudHeader({
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
   const percent = Math.min(100, Math.round((current / needed) * 100))
+  const weeklyEvent = getCurrentWeeklyEvent()
 
   return (
     <div className="hud-overlay">
@@ -68,15 +70,16 @@ export function HudHeader({
         </button>
       </div>
 
-      {progress.badges.length > 0 && (
-        <div className="badge-row">
-          {progress.badges.map((badge) => (
-            <span key={badge} className="badge-pill">
-              🎖️ {badge}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="badge-row">
+        <span className="weekly-event-badge" title={weeklyEvent.description}>
+          {weeklyEvent.emoji} {weeklyEvent.name}
+        </span>
+        {progress.badges.map((badge) => (
+          <span key={badge} className="badge-pill">
+            🎖️ {badge}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
