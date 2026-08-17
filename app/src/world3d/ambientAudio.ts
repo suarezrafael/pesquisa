@@ -10,7 +10,11 @@ let rainSource: AudioBufferSourceNode | null = null
 let rainGain: GainNode | null = null
 
 const WIND_VOLUME = 0.05
-const MUSIC_VOLUME = 0.05
+// Pedido do usuário: "tire a musiquinha, deixe só o barulho dos animais e do vento. a versão mais
+// calma da música até pode deixar mas baixinho" — a trilha não sai de vez (só as faixas mais
+// agitadas saem, ver `TRACKS` abaixo), mas o volume cai bem mais que o vento/som ambiente, pra
+// ficar claramente em segundo plano.
+const MUSIC_VOLUME = 0.016
 const RAIN_VOLUME = 0.07
 
 interface Note {
@@ -25,28 +29,11 @@ interface Track {
   notes: Note[]
 }
 
-// "Rádio" do planeta: várias faixas curtas que se alternam ao terminar cada uma, em vez de uma
-// só repetindo pra sempre — cada uma com um clima/tom diferente.
+// "Rádio" do planeta: só as faixas mais calmas (triangle/sine, andamento mais lento) — pedido do
+// usuário ("tire a musiquinha, deixe só o barulho dos animais e do vento, a versão mais calma da
+// música até pode deixar mas baixinho"). As duas faixas mais agitadas (onda quadrada, andamento
+// rápido, clima "aventura") saíram; as duas que sobraram tocam bem baixo (ver `MUSIC_VOLUME`).
 const TRACKS: Track[] = [
-  {
-    name: 'Manhã no Planeta',
-    waveform: 'square',
-    bassFreq: 130.81, // C3
-    notes: [
-      { freq: 523.25, dur: 0.22 }, // C5
-      { freq: 659.25, dur: 0.22 }, // E5
-      { freq: 783.99, dur: 0.22 }, // G5
-      { freq: 659.25, dur: 0.22 }, // E5
-      { freq: 698.46, dur: 0.22 }, // F5
-      { freq: 880.0, dur: 0.22 }, // A5
-      { freq: 783.99, dur: 0.44 }, // G5
-      { freq: 659.25, dur: 0.22 }, // E5
-      { freq: 587.33, dur: 0.22 }, // D5
-      { freq: 698.46, dur: 0.22 }, // F5
-      { freq: 659.25, dur: 0.22 }, // E5
-      { freq: 523.25, dur: 0.44 }, // C5
-    ],
-  },
   {
     name: 'Tarde Tranquila',
     waveform: 'triangle',
@@ -64,25 +51,6 @@ const TRACKS: Track[] = [
       { freq: 783.99, dur: 0.3 }, // G5
       { freq: 739.99, dur: 0.3 }, // F#5
       { freq: 587.33, dur: 0.6 }, // D5
-    ],
-  },
-  {
-    name: 'Hora da Aventura',
-    waveform: 'square',
-    bassFreq: 164.81, // E3
-    notes: [
-      { freq: 659.25, dur: 0.16 }, // E5
-      { freq: 830.61, dur: 0.16 }, // G#5
-      { freq: 987.77, dur: 0.16 }, // B5
-      { freq: 880.0, dur: 0.16 }, // A5
-      { freq: 830.61, dur: 0.16 }, // G#5
-      { freq: 739.99, dur: 0.16 }, // F#5
-      { freq: 659.25, dur: 0.32 }, // E5
-      { freq: 830.61, dur: 0.16 }, // G#5
-      { freq: 987.77, dur: 0.16 }, // B5
-      { freq: 1108.73, dur: 0.16 }, // C#6
-      { freq: 987.77, dur: 0.16 }, // B5
-      { freq: 659.25, dur: 0.32 }, // E5
     ],
   },
   {

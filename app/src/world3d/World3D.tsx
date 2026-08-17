@@ -17,7 +17,6 @@ import {
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
-  type PhysicsBody,
   PhysicsMotionType,
   PhysicsRaycastResult,
   PhysicsShapeType,
@@ -94,10 +93,13 @@ const AVATAR_RADIUS = 0.55
 // lab-11) e alcance horizontal de sobra (MAX_SPEED × tempo no ar ≈ 4.65, contra os 2.27
 // necessários entre plataformas).
 const GRAVITY = 16
-const MAX_SPEED = 6
+// Pedido do usuário: "o andar do boneco é meio lento, acelere ele um pouco" — era 6, +25%.
+// WALK_CYCLE_SPEED sobe na mesma proporção pra pernas/braços continuarem batendo no ritmo certo
+// do passo (senão as pernas "escorregam" — giram mais devagar que o deslocamento de verdade).
+const MAX_SPEED = 7.5
 const JUMP_SPEED = 6.2 // velocidade radial (pra fora do planeta) aplicada ao pular
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
-const WALK_CYCLE_SPEED = 7 // rad/s de fase do ciclo de caminhada, por unidade de throttle
+const WALK_CYCLE_SPEED = 8.75 // rad/s de fase do ciclo de caminhada, por unidade de throttle
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
 // Relatado pelo usuário: "o boneco não dobra os joelhos pra andar". A fórmula antiga
 // (`max(0, sin(...))`) fazia o joelho dobrar só na METADE do ciclo (fase de "levantar a perna")
@@ -269,45 +271,6 @@ function applyBasin(height: number, dir: Vector3, centerDir: Vector3, radius: nu
   return height - smooth * depth
 }
 
-// Trajeto do rio (lab-28: "o rio deveria ser em baixo relevo" — antes era só uma faixa azul
-// chata rente ao chão, sem nenhuma bacia de verdade) — mesma curva (phi/theta/wobble) usada pra
-// desenhar a malha da água em `setup()`, mas replicada aqui em escopo de módulo porque
-// `terrainHeight` (usada tanto pra deformar o planeta quanto pra desenhar a água) precisa dela
-// ANTES da cena existir. `riverCenterPhiAt` inverte theta→t (o theta do rio cresce sempre com t,
-// nunca inverte, então dá pra achar o ponto do rio na mesma "longitude" de qualquer `dir` sem
-// precisar buscar em todos os segmentos) — uma aproximação de "distância perpendicular à linha
-// central" boa o bastante pra esse formato de rio específico (um arco, não um caminho torto).
-const RIVER_START_PHI = Math.PI * 0.2
-const RIVER_END_PHI = Math.PI * 0.62
-const RIVER_START_THETA = Math.PI * 0.15
-const RIVER_END_THETA = Math.PI * 1.35
-const RIVER_BASIN_RADIUS = 0.11 // rad ≈ 6,3° de cada lado da linha central — a bacia, não a água
-const RIVER_BASIN_DEPTH = 0.4
-// Altura que a malha da água fica ACIMA do chão real (medido por raycast, ver `realGroundRadial`).
-// Era 0,03 — corrigia a posição (nada mais enterrado dentro do planeta), mas o gap era pequeno
-// demais pro depth buffer distinguir de forma confiável a água do terreno por baixo: testado ao
-// vivo (material emissivo/unlit magenta pra eliminar qualquer efeito de iluminação/reflexo),
-// só uma pequena tira da água vencia o teste de profundidade contra o terreno — o resto ficava
-// invisível (relato do usuário: "aparece uma tirinha, o resto dentro do planeta") mesmo com a
-// altura já certa. 0,15 dá folga suficiente pro z-fighting sem a água parecer flutuando.
-const RIVER_WATER_CLEARANCE = 0.15
-
-function riverCenterPhiAt(theta: number): number {
-  const t = Math.max(0, Math.min(1, (theta - RIVER_START_THETA) / (RIVER_END_THETA - RIVER_START_THETA)))
-  const wobble = Math.sin(t * Math.PI * 4) * 0.06
-  return RIVER_START_PHI + (RIVER_END_PHI - RIVER_START_PHI) * t + wobble
-}
-
-// Retorna null fora da faixa de theta do rio (sem afetar terreno em nenhum outro lugar do
-// planeta) ou a distância angular (perpendicular, aproximada) até a linha central do rio.
-function riverPerpDistance(dir: { x: number; y: number; z: number }): number | null {
-  const phi = Math.acos(Math.max(-1, Math.min(1, dir.y)))
-  let theta = Math.atan2(dir.z, dir.x)
-  if (theta < 0) theta += Math.PI * 2
-  if (theta < RIVER_START_THETA - RIVER_BASIN_RADIUS || theta > RIVER_END_THETA + RIVER_BASIN_RADIUS) return null
-  return Math.abs(phi - riverCenterPhiAt(theta))
-}
-
 // Altura do terreno acima do raio-base do planeta, num ponto (direção normalizada) qualquer —
 // ondulação suave de fundo + platôs com topo achatado (smoothstep na borda, não penhasco reto).
 // Função única reaproveitada pra deformar a malha do chão E posicionar tudo que fica em cima
@@ -331,23 +294,10 @@ function terrainHeight(dir: Vector3): number {
   // solavanco do ruído de base bem no meio da lagoa, furando o chão pra fora d'água).
   //
   // Nenhuma bacia cava perto de uma escola (lab-28: bug real relatado pelo usuário, "a casinha
-  // 14 está debaixo da terra" — a bacia do rio, nova nesta sessão, carvou embaixo de 3 escolas
-  // sem ninguém checar as duas coisas juntas; ver `nearAnySchool`). Lagoa/piscina foram escolhidas
-  // por busca de folga em labs anteriores e provavelmente nunca encostariam numa escola mesmo
-  // sem essa checagem, mas é barato proteger todas as bacias igual, não só a nova.
+  // 14 está debaixo da terra"; ver `nearAnySchool`).
   if (!nearAnySchool(dir)) {
     height = applyBasin(height, dir, POND_CENTER_DIR, 0.45, 0.65)
     height = applyBasin(height, dir, POOL_CENTER_DIR, 0.32, 0.55)
-
-    // Bacia do rio (lab-28): mesmo princípio (rebaixa incondicionalmente), mas ao longo de um
-    // trajeto em vez de um único centro — `riverPerpDistance` já devolve null fora da faixa do
-    // rio, então isso não mexe em nenhum outro lugar do planeta.
-    const riverDist = riverPerpDistance(dir)
-    if (riverDist !== null && riverDist < RIVER_BASIN_RADIUS) {
-      const t = 1 - riverDist / RIVER_BASIN_RADIUS
-      const smooth = t * t * (3 - 2 * t)
-      height -= smooth * RIVER_BASIN_DEPTH
-    }
   }
 
   return height
@@ -1422,11 +1372,10 @@ export function World3D({
       // morro) dentro do raio do bioma, com transição suave na borda (mesmo smoothstep de
       // `applyBasin`) em vez de um corte reto entre grama e areia.
       const sandColor = new Color3(0.86, 0.74, 0.48)
-      // Margem de terra do rio/lagoa/piscina (lab-28, pedido do usuário: "a piscina não parece
-      // um buraco... o rio deveria ter margens marrom de terra") — a bacia (`applyBasin`/
-      // `riverPerpDistance`, em `terrainHeight`) já existia geometricamente, só não tinha cor
-      // distinta pra ficar visível: virava a mesma grama de sempre, então lia como "chão plano
-      // com um disco de água em cima" em vez de uma depressão de verdade.
+      // Margem de terra da lagoa/piscina (lab-28, pedido do usuário: "a piscina não parece um
+      // buraco") — a bacia (`applyBasin`, em `terrainHeight`) já existia geometricamente, só não
+      // tinha cor distinta pra ficar visível: virava a mesma grama de sempre, então lia como
+      // "chão plano com um disco de água em cima" em vez de uma depressão de verdade.
       const bankColor = new Color3(0.36, 0.26, 0.16) // marrom terra úmida, mais escuro que hillBrownColor
       const planetColors: number[] = []
       for (let i = 0; i < planetPositions.length; i += 3) {
@@ -1474,11 +1423,11 @@ export function World3D({
           b += (sandColor.b - b) * desertBlend
         }
 
-        // Margem de terra ao redor da bacia da lagoa/piscina/rio — mesmo smoothstep de
-        // `applyBasin`, só que pra cor, não pra altura (a altura já está certa, só faltava
-        // aparecer). Sem cor de margem perto de escola nenhuma (mesma proteção de
-        // `nearAnySchool` usada na altura, lab-28) — senão a escola ficaria com chão normal mas
-        // cor de barro ao redor, inconsistente.
+        // Margem de terra ao redor da bacia da lagoa/piscina — mesmo smoothstep de `applyBasin`,
+        // só que pra cor, não pra altura (a altura já está certa, só faltava aparecer). Sem cor
+        // de margem perto de escola nenhuma (mesma proteção de `nearAnySchool` usada na altura,
+        // lab-28) — senão a escola ficaria com chão normal mas cor de barro ao redor,
+        // inconsistente.
         const dirVec = { x: px / posLen, y: py / posLen, z: pz / posLen }
         if (!nearAnySchool(dirVec)) {
           for (const [centerDir, radius] of [
@@ -1494,16 +1443,6 @@ export function World3D({
               g += (bankColor.g - g) * bankBlend
               b += (bankColor.b - b) * bankBlend
             }
-          }
-
-          // Margem do rio — mesma ideia, ao longo do trajeto em vez de um centro único.
-          const riverBankDist = riverPerpDistance(dirVec)
-          if (riverBankDist !== null && riverBankDist < RIVER_BASIN_RADIUS) {
-            const rt = 1 - riverBankDist / RIVER_BASIN_RADIUS
-            const riverBankBlend = rt * rt * (3 - 2 * rt)
-            r += (bankColor.r - r) * riverBankBlend
-            g += (bankColor.g - g) * riverBankBlend
-            b += (bankColor.b - b) * riverBankBlend
           }
         }
 
@@ -1887,140 +1826,20 @@ export function World3D({
       rainSystem.emitRate = 0 // liga suavemente no loop de render, junto com o resto do clima
       rainSystem.start()
 
-      // Rio — faixa achatada (ribbon) rente à curvatura do planeta, não um tubo redondo
-      // flutuando acima do chão (era isso que ficava "sobressalente"/estranho antes).
+      // Removido (lab-32, pedido do usuário: "o rio existe mas está dentro do planeta... se não
+      // conseguir fazer funcionar pode apagar") — quatro laboratórios (28-31) tentaram corrigir a
+      // água enterrada/invisível (bacia perto de escola, discretização malha-vs-fórmula, raycast
+      // acertando colisor errado, folga insuficiente contra z-fighting); mesmo depois de todas
+      // essas correções, verificadas uma a uma com raycast físico real, o usuário ainda via a
+      // água dentro do planeta em jogo. Em vez de insistir numa quinta rodada, o rio (bacia,
+      // malha de água, margens, pato) foi removido — ver `labs/lab-32-.../CONTEXT.md` pro
+      // histórico completo da investigação, caso o rio volte a ser pedido no futuro.
       function pointOnSphere(phi: number, theta: number, r: number): Vector3 {
         return new Vector3(
           Math.sin(phi) * Math.cos(theta),
           Math.cos(phi),
           Math.sin(phi) * Math.sin(theta),
         ).scale(r)
-      }
-      const riverCenter: Vector3[] = []
-      const RIVER_SEGMENTS = 48
-      // Lab-29 (continuação): a água posicionada só pela fórmula contínua de `terrainHeight`
-      // ficava ENTERRADA dentro da malha renderizada do planeta em vários pontos — o mesmo tipo
-      // de erro de discretização já visto na rua (lab-29), só que bem maior aqui (até 0,46
-      // unidade medido por raycast, contra ~0,11 na rua — o rio cruza uma faixa de theta bem
-      // mais ampla, 216°, incluindo trechos de relevo mais íngreme que a malha de 48 segmentos
-      // aproxima pior). Relatado pelo usuário jogando: "o rio fisicamente está lá... mas ele não
-      // aparece, eu até caio dentro dele mas o boneco afunda no planeta" — a bacia (física)
-      // sempre esteve certa; era só a malha de água (visual) que ficava embaixo do chão de
-      // verdade, escondida.
-      //
-      // Correção: em vez de confiar só na fórmula, um raycast físico de verdade (contra a MESMA
-      // malha que o jogador colide) encontra a altura real da superfície renderizada em cada
-      // ponto — a água nasce ali, não onde a fórmula (que a malha grosseira só aproxima) diz que
-      // deveria estar. `realGroundRadial` cai de volta pra fórmula só se o raycast não acertar
-      // nada (não deveria acontecer, mas evita uma exceção matando a criação do rio inteiro).
-      //
-      // Bug real encontrado testando esta correção (relato do usuário: "agora aparece uma
-      // tirinha do rio, mas o resto está dentro do planeta"): o raycast, sem filtro, podia
-      // acertar QUALQUER colisor no caminho — o avatar (se estivesse por perto testando), ou o
-      // colisor esférico de uma árvore/rocha perto do rio — não só o planeta. Um ponto que
-      // acertasse a copa de uma árvore, por exemplo, herdava a altura da árvore (bem mais alta
-      // que o chão de verdade ali), fazendo a água pular pra cima só naquele ponto e criando um
-      // buraco na malha entre ele e os vizinhos. `ignoreBody` só ignora UM corpo por vez, então
-      // a correção repete o raycast, ignorando cada acerto que não seja o próprio planeta, até
-      // acertar o planeta de verdade (ou desistir depois de algumas tentativas).
-      const riverRaycastResult = new PhysicsRaycastResult()
-      function realGroundRadial(dir: Vector3, formulaHeight: number): number {
-        if (!havokPlugin) return PLANET_RADIUS + formulaHeight
-        const from = dir.scale(PLANET_RADIUS + 5)
-        const to = dir.scale(PLANET_RADIUS - 5)
-        let ignoreBody: PhysicsBody | undefined
-        for (let attempt = 0; attempt < 6; attempt++) {
-          riverRaycastResult.reset()
-          havokPlugin.raycast(from, to, riverRaycastResult, ignoreBody ? { ignoreBody } : undefined)
-          if (!riverRaycastResult.hasHit) break
-          if (riverRaycastResult.body?.transformNode?.name === 'planet') {
-            return riverRaycastResult.hitPointWorld.length()
-          }
-          ignoreBody = riverRaycastResult.body ?? undefined
-        }
-        return PLANET_RADIUS + formulaHeight
-      }
-      // `RIVER_START_PHI`/`RIVER_END_PHI`/`RIVER_START_THETA`/`RIVER_END_THETA` (constantes de
-      // módulo, perto de `terrainHeight`) são a mesma curva usada lá pra cavar a bacia do rio —
-      // reaproveitadas aqui, não redeclaradas, pra nunca poderem ficar dessincronizadas.
-      for (let i = 0; i <= RIVER_SEGMENTS; i++) {
-        const t = i / RIVER_SEGMENTS
-        const wobble = Math.sin(t * Math.PI * 4) * 0.06
-        const phi = RIVER_START_PHI + (RIVER_END_PHI - RIVER_START_PHI) * t + wobble
-        const theta = RIVER_START_THETA + (RIVER_END_THETA - RIVER_START_THETA) * t
-        const riverDir = pointOnSphere(phi, theta, 1)
-        const groundRadial = realGroundRadial(riverDir, terrainHeight(riverDir))
-        riverCenter.push(riverDir.scale(groundRadial + RIVER_WATER_CLEARANCE))
-      }
-      // Lab-28 (pedido do usuário: "a água mais abaixo com reflexo de água"): a água ocupa só a
-      // parte mais funda da bacia (raio bem menor que `RIVER_BASIN_RADIUS`, ~6,3° ≈ 1,43 unidades
-      // de raio total) — a faixa entre a borda da água e a borda da bacia fica de fora da malha
-      // de água, exposta como terreno de verdade (a rampa carvada + a cor de margem marrom, ver
-      // blend de cor mais abaixo), dando a leitura de "margem" que faltava.
-      const riverHalfWidth = 0.55
-      const riverLeftBank: Vector3[] = []
-      const riverRightBank: Vector3[] = []
-      for (let i = 0; i < riverCenter.length; i++) {
-        const p = riverCenter[i]
-        // Bug real encontrado nesta sessão (lab-15, testando a rua nova): `.normalize()` muta o
-        // vetor NO LUGAR (ao contrário de `.scale()`/`.add()`/`.subtract()`, que retornam um
-        // vetor novo) — `p` é a mesma referência guardada em `riverCenter[i]`, então
-        // `p.normalize()` encolhia cada ponto do rio pra comprimento 1 (perto da origem do
-        // planeta) como efeito colateral, silenciosamente, desde que este trecho foi escrito.
-        // `.clone()` antes evita mutar `p` (e por extensão `riverCenter[i]`, usado logo abaixo
-        // em `p.add()`/`p.subtract()` — precisa continuar com o comprimento de verdade).
-        const up = p.clone().normalize()
-        const next = riverCenter[Math.min(i + 1, riverCenter.length - 1)]
-        const prev = riverCenter[Math.max(i - 1, 0)]
-        const along = next.subtract(prev).normalize()
-        const side = Vector3.Cross(up, along).normalize()
-        // Cada margem também precisa do próprio raycast (lab-29, continuação) — deslocar
-        // lateralmente a partir do ponto central JÁ AJUSTADO (via um vetor tangente, não
-        // acompanhando a curvatura de verdade) não bastava: bug real encontrado verificando esta
-        // correção — o gap ainda chegava a 0,41 depois de só corrigir o centro, porque a margem
-        // lateral podia cair num ponto da malha real bem diferente do que o deslocamento plano
-        // presumia. O deslocamento lateral só decide a DIREÇÃO; a altura final vem de novo do
-        // raycast, não da distância radial do ponto central.
-        const leftOffset = p.add(side.scale(riverHalfWidth))
-        const leftUp = leftOffset.clone().normalize()
-        const leftGroundRadial = realGroundRadial(leftUp, terrainHeight(leftUp))
-        riverLeftBank.push(leftUp.scale(leftGroundRadial + RIVER_WATER_CLEARANCE))
-        const rightOffset = p.subtract(side.scale(riverHalfWidth))
-        const rightUp = rightOffset.clone().normalize()
-        const rightGroundRadial = realGroundRadial(rightUp, terrainHeight(rightUp))
-        riverRightBank.push(rightUp.scale(rightGroundRadial + RIVER_WATER_CLEARANCE))
-      }
-      const river = MeshBuilder.CreateRibbon(
-        'river',
-        { pathArray: [riverLeftBank, riverRightBank], sideOrientation: Mesh.DOUBLESIDE },
-        scene,
-      )
-      const riverMat = new PBRMaterial('riverMat', scene)
-      riverMat.albedoColor = new Color3(0.1, 0.32, 0.55)
-      // Reflexo de água (lab-28, pedido do usuário) — `roughness` bem baixo + `metallic` alto
-      // fazem a água refletir de verdade o `environmentTexture` HDRI já carregado na cena (céu/
-      // nuvens), em vez de só uma cor azul lisa sem brilho.
-      riverMat.roughness = 0.04
-      riverMat.metallic = 0.65
-      riverMat.alpha = 0.92
-      river.material = riverMat
-      river.receiveShadows = true
-
-      // Pato no rio (lab-25, pedido do usuário: "coloque pato no rio") — reaproveita `buildPato`
-      // (já existia pra lagoa, lab-09), nadando pra frente/trás ao longo de `riverCenter` com o
-      // mesmo mecanismo de `pathIndex` já usado pelos carros na rua (ver `carros`, abaixo) —
-      // não é um bicho novo, só um novo trajeto pro bicho que já existia.
-      interface RiverDuck {
-        root: TransformNode
-        pathIndex: number
-        direction: 1 | -1
-        speed: number
-      }
-      const riverDuck: RiverDuck = {
-        root: buildPato(scene, shadowGenerator),
-        pathIndex: riverCenter.length * 0.4,
-        direction: 1,
-        speed: 1.8,
       }
 
       // Rua (lab-15, pedido do usuário: "ruas+carros") — mesma técnica do rio (ribbon rente à
@@ -2177,7 +1996,15 @@ export function World3D({
       // `alignmentQuaternion` (que assume a face "de cima" no eixo Y) deixaria a lagoa em pé
       // feito uma parede. O cilindro já nasce deitado (eixo Y, igual à moeda), sem esse problema.
       const pond = MeshBuilder.CreateCylinder('pond', { diameter: pondRadius * 2, height: 0.04, tessellation: 32 }, scene)
-      pond.material = riverMat
+      const pondMat = new PBRMaterial('pondMat', scene)
+      pondMat.albedoColor = new Color3(0.1, 0.32, 0.55)
+      // Reflexo de água (lab-28, pedido do usuário) — `roughness` bem baixo + `metallic` alto
+      // fazem a água refletir de verdade o `environmentTexture` HDRI já carregado na cena (céu/
+      // nuvens), em vez de só uma cor azul lisa sem brilho.
+      pondMat.roughness = 0.04
+      pondMat.metallic = 0.65
+      pondMat.alpha = 0.92
+      pond.material = pondMat
       pond.position.copyFrom(pondCenterPos)
       pond.rotationQuaternion = alignmentQuaternion(pondUp)
       pond.receiveShadows = true
@@ -3385,38 +3212,6 @@ export function World3D({
           camera.position = Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
           camera.upVector = Vector3.Lerp(camera.upVector, carUpNow, 0.15).normalize()
           camera.setTarget(drivingCar.root.position)
-        }
-
-        // Pato no rio (lab-25): mesmo mecanismo de trajeto dos carros, mas ida-e-volta
-        // (ping-pong) — o rio não é um laço fechado como a rua, então "acaba" nas pontas de
-        // verdade, e reverter a direção lá é o comportamento certo (não envolver).
-        riverDuck.pathIndex += riverDuck.direction * riverDuck.speed * dt
-        if (riverDuck.pathIndex >= riverCenter.length - 1) {
-          riverDuck.pathIndex = riverCenter.length - 1
-          riverDuck.direction = -1
-        } else if (riverDuck.pathIndex <= 0) {
-          riverDuck.pathIndex = 0
-          riverDuck.direction = 1
-        }
-        {
-          const i0 = Math.floor(riverDuck.pathIndex)
-          const i1 = Math.min(i0 + 1, riverCenter.length - 1)
-          const frac = riverDuck.pathIndex - i0
-          const p0 = riverCenter[i0]
-          const p1 = riverCenter[i1]
-          const duckPos = Vector3.Lerp(p0, p1, frac)
-          const duckUp = duckPos.clone().normalize()
-          let duckFwd = p1.subtract(p0)
-          duckFwd = duckFwd.subtract(duckUp.scale(Vector3.Dot(duckFwd, duckUp)))
-          if (duckFwd.lengthSquared() < 1e-8) duckFwd = Vector3.Cross(duckUp, Vector3.Right())
-          duckFwd.normalize()
-          if (riverDuck.direction === -1) duckFwd.scaleInPlace(-1)
-          const bob = Math.sin(time * 2.2) * 0.02
-          riverDuck.root.position.copyFrom(duckPos.add(duckUp.scale(0.03 + bob)))
-          const duckRight = Vector3.Cross(duckUp, duckFwd).normalize()
-          Matrix.FromXYZAxesToRef(duckRight, duckUp, duckFwd, tmpMatrix)
-          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-          riverDuck.root.rotationQuaternion = tmpQuat.clone()
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
