@@ -236,6 +236,37 @@ function applyBasin(height: number, dir: Vector3, centerDir: Vector3, radius: nu
   return height - smooth * depth
 }
 
+// Trajeto do rio (lab-28: "o rio deveria ser em baixo relevo" — antes era só uma faixa azul
+// chata rente ao chão, sem nenhuma bacia de verdade) — mesma curva (phi/theta/wobble) usada pra
+// desenhar a malha da água em `setup()`, mas replicada aqui em escopo de módulo porque
+// `terrainHeight` (usada tanto pra deformar o planeta quanto pra desenhar a água) precisa dela
+// ANTES da cena existir. `riverCenterPhiAt` inverte theta→t (o theta do rio cresce sempre com t,
+// nunca inverte, então dá pra achar o ponto do rio na mesma "longitude" de qualquer `dir` sem
+// precisar buscar em todos os segmentos) — uma aproximação de "distância perpendicular à linha
+// central" boa o bastante pra esse formato de rio específico (um arco, não um caminho torto).
+const RIVER_START_PHI = Math.PI * 0.2
+const RIVER_END_PHI = Math.PI * 0.62
+const RIVER_START_THETA = Math.PI * 0.15
+const RIVER_END_THETA = Math.PI * 1.35
+const RIVER_BASIN_RADIUS = 0.11 // rad ≈ 6,3° de cada lado da linha central — a bacia, não a água
+const RIVER_BASIN_DEPTH = 0.4
+
+function riverCenterPhiAt(theta: number): number {
+  const t = Math.max(0, Math.min(1, (theta - RIVER_START_THETA) / (RIVER_END_THETA - RIVER_START_THETA)))
+  const wobble = Math.sin(t * Math.PI * 4) * 0.06
+  return RIVER_START_PHI + (RIVER_END_PHI - RIVER_START_PHI) * t + wobble
+}
+
+// Retorna null fora da faixa de theta do rio (sem afetar terreno em nenhum outro lugar do
+// planeta) ou a distância angular (perpendicular, aproximada) até a linha central do rio.
+function riverPerpDistance(dir: { x: number; y: number; z: number }): number | null {
+  const phi = Math.acos(Math.max(-1, Math.min(1, dir.y)))
+  let theta = Math.atan2(dir.z, dir.x)
+  if (theta < 0) theta += Math.PI * 2
+  if (theta < RIVER_START_THETA - RIVER_BASIN_RADIUS || theta > RIVER_END_THETA + RIVER_BASIN_RADIUS) return null
+  return Math.abs(phi - riverCenterPhiAt(theta))
+}
+
 // Altura do terreno acima do raio-base do planeta, num ponto (direção normalizada) qualquer —
 // ondulação suave de fundo + platôs com topo achatado (smoothstep na borda, não penhasco reto).
 // Função única reaproveitada pra deformar a malha do chão E posicionar tudo que fica em cima
@@ -259,6 +290,16 @@ function terrainHeight(dir: Vector3): number {
   // solavanco do ruído de base bem no meio da lagoa, furando o chão pra fora d'água).
   height = applyBasin(height, dir, POND_CENTER_DIR, 0.45, 0.65)
   height = applyBasin(height, dir, POOL_CENTER_DIR, 0.32, 0.55)
+
+  // Bacia do rio (lab-28): mesmo princípio (rebaixa incondicionalmente), mas ao longo de um
+  // trajeto em vez de um único centro — `riverPerpDistance` já devolve null fora da faixa do
+  // rio, então isso não mexe em nenhum outro lugar do planeta.
+  const riverDist = riverPerpDistance(dir)
+  if (riverDist !== null && riverDist < RIVER_BASIN_RADIUS) {
+    const t = 1 - riverDist / RIVER_BASIN_RADIUS
+    const smooth = t * t * (3 - 2 * t)
+    height -= smooth * RIVER_BASIN_DEPTH
+  }
 
   return height
 }
@@ -1245,6 +1286,20 @@ export function World3D({
               studentFigure.root.parent = nearestCar.root
               studentFigure.root.position = new Vector3(0, 0.56, -0.05)
               studentFigure.root.rotationQuaternion = Quaternion.Identity()
+              // Pose sentada (lab-28, pedido do usuário: "o boneco deve ir sentado em cima do
+              // carro" — antes ficava na pose parada padrão) — aplicada uma vez ao entrar, não
+              // animada: coxa levantada pra frente, joelho dobrado de volta, braços apoiados
+              // como se estivesse no volante. Congelada enquanto dirige (o ciclo de caminhada só
+              // roda com `!drivingCar`), volta ao normal sozinha no próximo passo andando a pé
+              // (o loop de caminhada recalcula essas mesmas rotações a cada quadro).
+              studentFigure.legPivotL.rotation.x = -1.3
+              studentFigure.legPivotR.rotation.x = -1.3
+              studentFigure.kneePivotL.rotation.x = 1.3
+              studentFigure.kneePivotR.rotation.x = 1.3
+              studentFigure.armPivotL.rotation.x = -0.3
+              studentFigure.armPivotR.rotation.x = -0.3
+              studentFigure.elbowPivotL.rotation.x = 0.6
+              studentFigure.elbowPivotR.rotation.x = 0.6
               for (const car of carros) car.hintLabel.alpha = 0
             }
           }
@@ -1318,6 +1373,12 @@ export function World3D({
       // morro) dentro do raio do bioma, com transição suave na borda (mesmo smoothstep de
       // `applyBasin`) em vez de um corte reto entre grama e areia.
       const sandColor = new Color3(0.86, 0.74, 0.48)
+      // Margem de terra do rio/lagoa/piscina (lab-28, pedido do usuário: "a piscina não parece
+      // um buraco... o rio deveria ter margens marrom de terra") — a bacia (`applyBasin`/
+      // `riverPerpDistance`, em `terrainHeight`) já existia geometricamente, só não tinha cor
+      // distinta pra ficar visível: virava a mesma grama de sempre, então lia como "chão plano
+      // com um disco de água em cima" em vez de uma depressão de verdade.
+      const bankColor = new Color3(0.36, 0.26, 0.16) // marrom terra úmida, mais escuro que hillBrownColor
       const planetColors: number[] = []
       for (let i = 0; i < planetPositions.length; i += 3) {
         const px = planetPositions[i]
@@ -1362,6 +1423,34 @@ export function World3D({
           r += (sandColor.r - r) * desertBlend
           g += (sandColor.g - g) * desertBlend
           b += (sandColor.b - b) * desertBlend
+        }
+
+        // Margem de terra ao redor da bacia da lagoa/piscina — mesmo smoothstep de `applyBasin`,
+        // só que pra cor, não pra altura (a altura já está certa, só faltava aparecer).
+        const dirVec = { x: px / posLen, y: py / posLen, z: pz / posLen }
+        for (const [centerDir, radius] of [
+          [POND_CENTER_DIR, 0.45],
+          [POOL_CENTER_DIR, 0.32],
+        ] as const) {
+          const dot = Math.max(-1, Math.min(1, dirVec.x * centerDir.x + dirVec.y * centerDir.y + dirVec.z * centerDir.z))
+          const angle = Math.acos(dot)
+          if (angle < radius) {
+            const bt = 1 - angle / radius
+            const bankBlend = bt * bt * (3 - 2 * bt)
+            r += (bankColor.r - r) * bankBlend
+            g += (bankColor.g - g) * bankBlend
+            b += (bankColor.b - b) * bankBlend
+          }
+        }
+
+        // Margem do rio — mesma ideia, ao longo do trajeto em vez de um centro único.
+        const riverBankDist = riverPerpDistance(dirVec)
+        if (riverBankDist !== null && riverBankDist < RIVER_BASIN_RADIUS) {
+          const rt = 1 - riverBankDist / RIVER_BASIN_RADIUS
+          const riverBankBlend = rt * rt * (3 - 2 * rt)
+          r += (bankColor.r - r) * riverBankBlend
+          g += (bankColor.g - g) * riverBankBlend
+          b += (bankColor.b - b) * riverBankBlend
         }
 
         planetColors.push(r, g, b, 1)
@@ -1755,21 +1844,27 @@ export function World3D({
       }
       const riverCenter: Vector3[] = []
       const RIVER_SEGMENTS = 48
-      const riverStartPhi = Math.PI * 0.2
-      const riverEndPhi = Math.PI * 0.62
-      const riverStartTheta = Math.PI * 0.15
-      const riverEndTheta = Math.PI * 1.35
+      // `RIVER_START_PHI`/`RIVER_END_PHI`/`RIVER_START_THETA`/`RIVER_END_THETA` (constantes de
+      // módulo, perto de `terrainHeight`) são a mesma curva usada lá pra cavar a bacia do rio —
+      // reaproveitadas aqui, não redeclaradas, pra nunca poderem ficar dessincronizadas.
       for (let i = 0; i <= RIVER_SEGMENTS; i++) {
         const t = i / RIVER_SEGMENTS
         const wobble = Math.sin(t * Math.PI * 4) * 0.06
-        const phi = riverStartPhi + (riverEndPhi - riverStartPhi) * t + wobble
-        const theta = riverStartTheta + (riverEndTheta - riverStartTheta) * t
+        const phi = RIVER_START_PHI + (RIVER_END_PHI - RIVER_START_PHI) * t + wobble
+        const theta = RIVER_START_THETA + (RIVER_END_THETA - RIVER_START_THETA) * t
         // Levemente acima da altura do terreno naquele ponto — só o suficiente pra não brigar
         // (z-fighting) com o chão, nunca a ponto de parecer um objeto flutuando por cima dele.
+        // A altura aqui já vem da bacia carvada (`terrainHeight` inclui `riverPerpDistance`),
+        // então a água nasce sozinha no fundo do relevo — não precisa de nenhum ajuste extra.
         const riverDir = pointOnSphere(phi, theta, 1)
         riverCenter.push(riverDir.scale(PLANET_RADIUS + terrainHeight(riverDir) + 0.025))
       }
-      const riverHalfWidth = 1.1
+      // Lab-28 (pedido do usuário: "a água mais abaixo com reflexo de água"): a água ocupa só a
+      // parte mais funda da bacia (raio bem menor que `RIVER_BASIN_RADIUS`, ~6,3° ≈ 1,43 unidades
+      // de raio total) — a faixa entre a borda da água e a borda da bacia fica de fora da malha
+      // de água, exposta como terreno de verdade (a rampa carvada + a cor de margem marrom, ver
+      // blend de cor mais abaixo), dando a leitura de "margem" que faltava.
+      const riverHalfWidth = 0.55
       const riverLeftBank: Vector3[] = []
       const riverRightBank: Vector3[] = []
       for (let i = 0; i < riverCenter.length; i++) {
@@ -1795,9 +1890,12 @@ export function World3D({
         scene,
       )
       const riverMat = new PBRMaterial('riverMat', scene)
-      riverMat.albedoColor = new Color3(0.15, 0.45, 0.75)
-      riverMat.roughness = 0.12
-      riverMat.metallic = 0.05
+      riverMat.albedoColor = new Color3(0.1, 0.32, 0.55)
+      // Reflexo de água (lab-28, pedido do usuário) — `roughness` bem baixo + `metallic` alto
+      // fazem a água refletir de verdade o `environmentTexture` HDRI já carregado na cena (céu/
+      // nuvens), em vez de só uma cor azul lisa sem brilho.
+      riverMat.roughness = 0.04
+      riverMat.metallic = 0.65
       riverMat.alpha = 0.92
       river.material = riverMat
       river.receiveShadows = true
@@ -1849,7 +1947,12 @@ export function World3D({
         const theta = t * Math.PI * 2
         const wobble = Math.sin(theta * 5) * STREET_WOBBLE_AMPLITUDE
         const streetDir = pointOnSphere(STREET_PHI + wobble, theta, 1)
-        streetCenter.push(streetDir.scale(PLANET_RADIUS + terrainHeight(streetDir) + 0.02))
+        // Margem de altura acima de +0.02 (lab-28, relato do usuário: "a estrada está abaixo da
+        // terra, ela não aparece") — não reproduzido de forma clara ao testar, mas +0.02 é fino
+        // o bastante pra arriscar coincidir com a malha do planeta (48 segmentos, só uma
+        // aproximação poligonal da curva contínua de `terrainHeight`) em algum ponto do laço;
+        // +0.08 dá bem mais folga sem ficar visivelmente "flutuando".
+        streetCenter.push(streetDir.scale(PLANET_RADIUS + terrainHeight(streetDir) + 0.08))
       }
       const streetHalfWidth = 0.85
       const streetLeftBank: Vector3[] = []
@@ -2051,16 +2154,22 @@ export function World3D({
       const GRASS_COUNT = 2600
       const grassMatrices = new Float32Array(GRASS_COUNT * 16)
       for (let i = 0; i < GRASS_COUNT; i++) {
-        // Resorteia (poucas tentativas bastam — o deserto é pequeno perto da esfera toda) até
-        // cair fora do bioma do deserto (lab-23): grama saindo da areia ficaria visualmente
-        // errado, mas o total de tufos de grama (GRASS_COUNT, tamanho fixo do buffer de thin
-        // instances) precisa continuar o mesmo, então reamostra em vez de pular a posição.
+        // Resorteia (poucas tentativas bastam) até cair fora do bioma do deserto (lab-23) E fora
+        // do topo/rampa de qualquer platô (lab-28, relato do usuário: "a casa número 4 está em
+        // cima de um morro, mas o morro é invisível, a grama está sobre ele mas o morro não
+        // aparece" — a cor do morro já estava certa, lab-18; o problema real é grama uniforme
+        // escondendo essa cor). Limite de altura 0,35 (um pouco abaixo de onde `hillBlend`
+        // começa, 0,5) deixa uma franja fina de grama na base da rampa, sem esconder o topo
+        // colorido. Total de tufos (`GRASS_COUNT`, buffer de thin instances de tamanho fixo)
+        // continua o mesmo — reamostra em vez de pular a posição.
         let up = Vector3.Zero()
         for (let attempt = 0; attempt < 8; attempt++) {
           const phi = Math.PI * 0.08 + Math.random() * Math.PI * 0.7
           const theta = Math.random() * Math.PI * 2
           up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
-          if (Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(up, DESERT_CENTER_DIR)))) >= DESERT_RADIUS) break
+          const inDesert = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(up, DESERT_CENTER_DIR)))) < DESERT_RADIUS
+          const onHill = terrainHeight(up) > 0.35
+          if (!inDesert && !onHill) break
         }
         const bladePos = up.scale(PLANET_RADIUS + terrainHeight(up) + 0.02)
         const rot = alignmentQuaternion(up).multiply(Quaternion.RotationAxis(Vector3.Up(), Math.random() * Math.PI * 2))
