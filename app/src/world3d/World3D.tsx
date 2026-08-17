@@ -17,6 +17,7 @@ import {
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
+  PhysicsMotionType,
   PhysicsRaycastResult,
   PhysicsShapeType,
   Quaternion,
@@ -112,7 +113,9 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 // Clima dinâmico (pedido do usuário: "chuva" — item pendente da lista do lab-09): valores de
 // atmosfera em dia limpo vs. durante a chuva, interpolados por `rainAmount` (0 a 1) pra a
 // transição ser suave, não um interruptor ligado/desligado.
-const BASE_FOG_DENSITY = 0.01
+// lab-19: densidade base subiu de 0.01 pra 0.018 — suaviza o corte abrupto de prédios distantes
+// "afundando" no horizonte (curvatura do planeta pequeno, raio 13), sem deixar dia limpo enevoado.
+const BASE_FOG_DENSITY = 0.018
 const RAIN_FOG_DENSITY = 0.035
 const BASE_ENV_INTENSITY = 0.75
 const RAIN_ENV_INTENSITY = 0.4
@@ -879,7 +882,7 @@ export function World3D({
     }
     scene.clearColor = new Color4(0.65, 0.82, 0.93, 1)
     scene.fogMode = Scene.FOGMODE_EXP2
-    scene.fogDensity = 0.01
+    scene.fogDensity = BASE_FOG_DENSITY
     scene.fogColor = new Color3(0.65, 0.82, 0.93)
 
     // Câmera totalmente controlada por código (sem input próprio) — reposicionada a cada
@@ -2072,9 +2075,15 @@ export function World3D({
         walkPhase: number
         chatLabel: TextBlock
         chatTimer: number
+        colliderBody: PhysicsAggregate['body']
       }
       const walkerNpcs: WalkerNpc[] = []
       const WALKER_COUNT = 10
+      // lab-19: colisor cápsula por NPC, corpo ANIMATED (não DYNAMIC nem STATIC) — eles se movem
+      // via IA de vagar (posição escrita direto no transform a cada quadro), não por forças de
+      // física, mas ainda precisam bloquear o jogador. ANIMATED é o modo certo pra isso: o motor
+      // não aplica gravidade/forças nele (o script continua no controle), mas ele empurra outros
+      // corpos (o avatar) pra fora do caminho, ao contrário de um corpo STATIC que não se move.
       for (let i = 0; i < WALKER_COUNT; i++) {
         const figure = buildStudentFigure(scene, NPC_SHIRT_COLORS[i % NPC_SHIRT_COLORS.length], shadowGenerator)
         const phi = Math.PI * 0.16 + Math.random() * Math.PI * 0.56
@@ -2091,6 +2100,20 @@ export function World3D({
         chatLabel.linkWithMesh(figure.head)
         chatLabel.linkOffsetY = -55
 
+        // Cápsula centralizada a meia-altura acima do chão (igual ao colisor do avatar,
+        // AVATAR_RADIUS+0.05) — a raiz visual do NPC fica colada no chão (+0.02), mas o colisor
+        // físico precisa do centro elevado pra cobrir o corpo inteiro, não só os pés.
+        const npcCollider = MeshBuilder.CreateCapsule(`npcCollider-${i}`, { height: 1.0, radius: 0.3 }, scene)
+        npcCollider.position.copyFrom(up.scale(PLANET_RADIUS + terrainHeight(up) + 0.55))
+        npcCollider.isVisible = false
+        const npcAggregate = new PhysicsAggregate(
+          npcCollider,
+          PhysicsShapeType.CAPSULE,
+          { mass: 1, friction: 0.6 },
+          scene,
+        )
+        npcAggregate.body.setMotionType(PhysicsMotionType.ANIMATED)
+
         walkerNpcs.push({
           figure,
           up,
@@ -2101,6 +2124,7 @@ export function World3D({
           walkPhase: Math.random() * Math.PI * 2,
           chatLabel,
           chatTimer: 2 + Math.random() * 5,
+          colliderBody: npcAggregate.body,
         })
       }
       if (import.meta.env.DEV) (window as any).__walkerNpcs = walkerNpcs
@@ -2574,6 +2598,15 @@ export function World3D({
           Matrix.FromXYZAxesToRef(npcRight, npc.up, npcFwd, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
           npc.figure.root.rotationQuaternion = tmpQuat.clone()
+          // Colisor ANIMATED: `setTargetTransform` (não escrever a posição do transform direto)
+          // é o jeito certo do Havok pra mover um corpo cinemático — assim ele calcula a
+          // velocidade implícita do movimento e consegue empurrar o avatar corretamente em vez
+          // de só teleportar o colisor sem gerar resposta de colisão. Centro elevado (+0.55, meia
+          // altura da cápsula) igual na criação — a raiz visual (+0.02) fica só nos pés.
+          npc.colliderBody.setTargetTransform(
+            npc.up.scale(PLANET_RADIUS + terrainHeight(npc.up) + 0.55),
+            npc.figure.root.rotationQuaternion,
+          )
 
           if (moving) {
             npc.walkPhase += dt * WALK_CYCLE_SPEED * 0.7
