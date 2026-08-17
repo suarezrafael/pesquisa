@@ -35,7 +35,7 @@ import '@babylonjs/loaders/glTF'
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
-import { findAvatarByEmoji } from '../data/avatars'
+import { findAvatarByEmoji, type BonecoFeatures } from '../data/avatars'
 import { questTypeColor } from './questVisuals'
 import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
@@ -178,6 +178,17 @@ function avatarColorFromEmoji(emoji: string): Color3 {
   return new Color3(...avatar.colorRgb)
 }
 
+const FALLBACK_BONECO_FEATURES: BonecoFeatures = {
+  earStyle: 'none',
+  tailStyle: 'none',
+  special: 'none',
+  accentColorRgb: [0.96, 0.51, 0.68],
+}
+
+function bonecoFeaturesFromEmoji(emoji: string): BonecoFeatures {
+  return findAvatarByEmoji(emoji)?.features ?? FALLBACK_BONECO_FEATURES
+}
+
 // Menor rotação que leva o "para cima" padrão (0,1,0) até `up` — usada pra apoiar
 // props/portais deitados sobre a curvatura da esfera, não flutuando na orientação do mundo.
 function alignmentQuaternion(up: Vector3): Quaternion {
@@ -202,6 +213,10 @@ interface StudentFigure {
   armPivotR: TransformNode
   elbowPivotL: TransformNode
   elbowPivotR: TransformNode
+  // Peças do "boneco 3D" trocável na lojinha (lab-13: orelhas/rabo/chifre/etc., não só cor da
+  // camisa) — populado por `applyBonecoFeatures`, guardado aqui pra poder descartar e remontar
+  // quando o jogador troca de avatar em cena (sem reconstruir a figura inteira).
+  accessories: Mesh[]
 }
 
 interface RemotePlayer {
@@ -335,6 +350,143 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
     armPivotR: arm2.upperPivot,
     elbowPivotL: arm1.lowerPivot,
     elbowPivotR: arm2.lowerPivot,
+    accessories: [],
+  }
+}
+
+// Peças 3D que dão a cada avatar do catálogo (src/data/avatars.ts) uma forma de verdade — não só
+// uma cor de camisa (pedido do usuário: "bonecos 3d pra trocar não só de avatar", lab-13).
+// Descarta as peças antigas (se houver — troca de avatar em cena já com a cena montada) e monta
+// as novas a partir de `features`, tudo parentado em `figure.root` (mesmo padrão da mochila/
+// cabelo: offset absoluto, não aninhado na cabeça) reaproveitando primitivas simples, sem asset
+// externo, igual ao resto do jogo.
+function applyBonecoFeatures(
+  figure: StudentFigure,
+  features: BonecoFeatures,
+  scene: Scene,
+  shadowGenerator: ShadowGenerator,
+): void {
+  for (const mesh of figure.accessories) mesh.dispose()
+  figure.accessories = []
+
+  const accentMat = new PBRMaterial('bonecoAccentMat', scene)
+  accentMat.albedoColor = new Color3(...features.accentColorRgb)
+  accentMat.roughness = 0.75
+
+  function add(mesh: Mesh) {
+    mesh.material = accentMat
+    mesh.parent = figure.root
+    shadowGenerator.addShadowCaster(mesh)
+    figure.accessories.push(mesh)
+    return mesh
+  }
+
+  const HEAD_Y = 1.15
+
+  if (features.earStyle === 'triangle') {
+    for (const side of [-1, 1]) {
+      const ear = MeshBuilder.CreateCylinder(
+        `earTriangle${side}`,
+        { height: 0.14, diameterTop: 0, diameterBottom: 0.09, tessellation: 3 },
+        scene,
+      )
+      ear.position = new Vector3(side * 0.13, HEAD_Y + 0.16, 0.03)
+      ear.rotation.z = side * 0.35
+      add(ear)
+    }
+  } else if (features.earStyle === 'round') {
+    for (const side of [-1, 1]) {
+      const ear = MeshBuilder.CreateSphere(`earRound${side}`, { diameter: 0.14 }, scene)
+      ear.scaling.z = 0.6
+      ear.position = new Vector3(side * 0.15, HEAD_Y + 0.14, 0.02)
+      add(ear)
+    }
+  } else if (features.earStyle === 'tufted') {
+    for (const side of [-1, 1]) {
+      const ear = MeshBuilder.CreateCylinder(
+        `earTufted${side}`,
+        { height: 0.1, diameterTop: 0, diameterBottom: 0.05, tessellation: 3 },
+        scene,
+      )
+      ear.position = new Vector3(side * 0.07, HEAD_Y + 0.18, 0.05)
+      ear.rotation.z = side * 0.2
+      add(ear)
+    }
+  }
+
+  if (features.tailStyle === 'fluffy') {
+    const tail = MeshBuilder.CreateCapsule('tailFluffy', { height: 0.4, radius: 0.075 }, scene)
+    tail.position = new Vector3(0, 0.62, -0.24)
+    tail.rotation.x = -0.9
+    add(tail)
+    const tip = MeshBuilder.CreateSphere('tailFluffyTip', { diameter: 0.14 }, scene)
+    tip.position = new Vector3(0, 0.82, -0.42)
+    add(tip)
+  } else if (features.tailStyle === 'thin') {
+    const tail = MeshBuilder.CreateCapsule('tailThin', { height: 0.32, radius: 0.032 }, scene)
+    tail.position = new Vector3(0, 0.58, -0.22)
+    tail.rotation.x = -0.6
+    add(tail)
+  } else if (features.tailStyle === 'tufted') {
+    const tail = MeshBuilder.CreateCapsule('tailTufted', { height: 0.36, radius: 0.035 }, scene)
+    tail.position = new Vector3(0, 0.6, -0.24)
+    tail.rotation.x = -0.75
+    add(tail)
+    const tip = MeshBuilder.CreateSphere('tailTuftedTip', { diameter: 0.1 }, scene)
+    tip.position = new Vector3(0, 0.78, -0.4)
+    add(tip)
+  }
+
+  if (features.special === 'horn') {
+    const horn = MeshBuilder.CreateCylinder('horn', { height: 0.24, diameterTop: 0, diameterBottom: 0.06, tessellation: 6 }, scene)
+    horn.position = new Vector3(0, HEAD_Y + 0.22, 0.08)
+    horn.rotation.x = -0.3
+    add(horn)
+  } else if (features.special === 'horns') {
+    for (const side of [-1, 1]) {
+      const horn = MeshBuilder.CreateCylinder(
+        `horns${side}`,
+        { height: 0.14, diameterTop: 0, diameterBottom: 0.04, tessellation: 5 },
+        scene,
+      )
+      horn.position = new Vector3(side * 0.09, HEAD_Y + 0.18, 0.06)
+      horn.rotation.z = side * 0.3
+      horn.rotation.x = -0.2
+      add(horn)
+    }
+  } else if (features.special === 'beak') {
+    const beak = MeshBuilder.CreateCylinder('beak', { height: 0.09, diameterTop: 0, diameterBottom: 0.055 }, scene)
+    beak.rotation.x = Math.PI / 2
+    beak.position = new Vector3(0, HEAD_Y - 0.01, 0.16)
+    add(beak)
+  } else if (features.special === 'mane') {
+    const spikeCount = 10
+    for (let s = 0; s < spikeCount; s++) {
+      const angle = (s / spikeCount) * Math.PI * 2
+      const spike = MeshBuilder.CreateCylinder(
+        `mane${s}`,
+        { height: 0.13, diameterTop: 0, diameterBottom: 0.06, tessellation: 3 },
+        scene,
+      )
+      spike.position = new Vector3(Math.cos(angle) * 0.16, HEAD_Y + Math.sin(angle) * 0.1, Math.sin(angle) * 0.05 + 0.02)
+      spike.rotation.z = angle + Math.PI / 2
+      add(spike)
+    }
+  } else if (features.special === 'eyes') {
+    for (const side of [-1, 1]) {
+      const eye = MeshBuilder.CreateSphere(`eyes${side}`, { diameter: 0.1 }, scene)
+      eye.position = new Vector3(side * 0.08, HEAD_Y + 0.13, 0.1)
+      add(eye)
+    }
+  } else if (features.special === 'tentacles') {
+    const tentacleCount = 3
+    for (let t = 0; t < tentacleCount; t++) {
+      const angle = (t / tentacleCount) * Math.PI * 2
+      const tentacle = MeshBuilder.CreateCapsule(`tentacles${t}`, { height: 0.22, radius: 0.028 }, scene)
+      tentacle.position = new Vector3(Math.cos(angle) * 0.14, HEAD_Y - 0.05, Math.sin(angle) * 0.14)
+      tentacle.rotation.x = 0.6
+      add(tentacle)
+    }
   }
 }
 
@@ -1290,13 +1442,16 @@ export function World3D({
       )
 
       const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator)
+      applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
       if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure
 
       // Trocar de avatar na lojinha não reconstrói a cena inteira (custoso) — só recolore a
-      // camisa do personagem já em cena. Ver useEffect que observa `profile.avatarEmoji`.
+      // camisa e remonta as peças do boneco (orelhas/rabo/etc., lab-13) do personagem já em
+      // cena. Ver useEffect que observa `profile.avatarEmoji`.
       ;(scene as any).__setAvatarShirtColor = (emoji: string) => {
         studentFigure.shirtMat.albedoColor = avatarColorFromEmoji(emoji)
+        applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(emoji), scene, shadowGenerator)
       }
 
       // Câmera já posicionada corretamente antes do primeiro quadro (evita "pulo" inicial).
@@ -1616,6 +1771,7 @@ export function World3D({
         let rp = remotePlayers.get(state.id)
         if (!rp) {
           const rFigure = buildStudentFigure(scene, avatarColorFromEmoji(state.avatarEmoji), shadowGenerator)
+          applyBonecoFeatures(rFigure, bonecoFeaturesFromEmoji(state.avatarEmoji), scene, shadowGenerator)
           const rLabel = new TextBlock(`remote-${state.id}`, state.name)
           rLabel.color = 'white'
           rLabel.fontSize = 20
