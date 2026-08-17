@@ -2676,6 +2676,217 @@ export function World3D({
       const shopCounterWorldPos = Vector3.TransformCoordinates(shopCounter.position, shopBase.getWorldMatrix())
       let shopTriggered = false
 
+      // Torre do Tesouro (pedido do usuário: "prédios que a gente pode entrar e subir as
+      // escadas e achar moedas, e nesse prédio tem mais desafios") — protótipo de prédio
+      // navegável de verdade: chão físico, rampa subindo pro andar de cima, mais moedas lá em
+      // cima que embaixo (mesmo princípio "recompensa maior no topo" do segundo parkour), e um
+      // pulo pequeno até a moeda final (um toque de desafio, não só andar até o topo). Um prédio
+      // só nesta primeira versão (não os 21 das escolas) — validar o padrão aqui antes de decidir
+      // se vale replicar. Reaproveita a técnica de parede-com-vão-de-porta já usada na lojinha
+      // (`shopFrontWall${side}`) e o raycast físico real (`schoolGroundRadial`) já comprovado
+      // pra posicionar sem flutuar/afundar.
+      const TOWER_ANCHOR_UP = new Vector3(-0.6323378682909753, -0.7313537016191705, -0.2554810823782512).normalize()
+      const towerBase = new TransformNode('towerBase', scene)
+      const towerGroundRadial = schoolGroundRadial(TOWER_ANCHOR_UP, terrainHeight(TOWER_ANCHOR_UP))
+      towerBase.position = TOWER_ANCHOR_UP.scale(towerGroundRadial)
+      towerBase.rotationQuaternion = alignmentQuaternion(TOWER_ANCHOR_UP)
+
+      const TOWER_WIDTH = 3.2
+      const TOWER_DEPTH = 4.4
+      const TOWER_FLOOR1_HEIGHT = 1.6
+      const TOWER_FLOOR2_HEIGHT = 1.5
+      const TOWER_DOOR_WIDTH = 1.0
+      const TOWER_HALF_W = TOWER_WIDTH / 2
+      const TOWER_HALF_D = TOWER_DEPTH / 2
+      // Bug real encontrado testando esta correção ao vivo: a primeira versão calculava a rampa
+      // (percurso de 3,6) sem checar se cabia dentro da própria profundidade do prédio (3,2) —
+      // a rampa acabava atravessando as duas paredes (fundo E frente/porta), saindo do prédio
+      // pelos dois lados. Corrigido calculando TODAS as posições a partir de valores explícitos
+      // (profundidade do mezanino, ponto onde a rampa encontra o mezanino), verificados aqui em
+      // vez de expressões derivadas (`TOWER_DEPTH * 0.55`) que escondiam a inconsistência.
+      const TOWER_MEZZ_DEPTH = 1.6 // profundidade da laje do andar de cima (mezanino)
+      const TOWER_MEZZ_FRONT_Z = TOWER_HALF_D - TOWER_MEZZ_DEPTH // borda da frente do mezanino
+      const TOWER_MEZZ_CENTER_Z = TOWER_HALF_D - TOWER_MEZZ_DEPTH / 2
+      const TOWER_RAMP_LOW_Z = -TOWER_HALF_D + 0.3 // logo depois da porta
+      const TOWER_RAMP_HIGH_Z = TOWER_MEZZ_FRONT_Z // encontra o mezanino exatamente na borda dele
+      const TOWER_RAMP_RUN = TOWER_RAMP_HIGH_Z - TOWER_RAMP_LOW_Z
+      const TOWER_RAMP_X = 0.8 // encostada num dos lados, sobra corredor do outro lado pra andar
+
+      const towerWallMat = new PBRMaterial('towerWallMat', scene)
+      towerWallMat.albedoColor = new Color3(0.62, 0.58, 0.68)
+      towerWallMat.roughness = 0.85
+      const towerRoofMat = new PBRMaterial('towerRoofMat', scene)
+      towerRoofMat.albedoColor = new Color3(0.75, 0.2, 0.3)
+      towerRoofMat.roughness = 0.5
+      towerRoofMat.metallic = 0.1
+      const towerFloorMat = new PBRMaterial('towerFloorMat', scene)
+      towerFloorMat.albedoColor = new Color3(0.45, 0.35, 0.28)
+      towerFloorMat.roughness = 0.8
+
+      function addTowerMesh(mesh: Mesh, mat: PBRMaterial, collide: boolean) {
+        mesh.material = mat
+        mesh.parent = towerBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        if (collide) new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+      }
+
+      // Chão do térreo — elevado um pouco (0,05) acima da superfície real do planeta, mesmo
+      // motivo do `RIVER_WATER_CLEARANCE`/margem da rua em labs anteriores: uma malha rente
+      // demais ao chão de baixo pode sofrer z-fighting ou ficar parcialmente enterrada por causa
+      // do mesmo erro de discretização malha-vs-fórmula já documentado.
+      const towerFloor1 = MeshBuilder.CreateBox('towerFloor1', { width: TOWER_WIDTH, height: 0.1, depth: TOWER_DEPTH }, scene)
+      towerFloor1.position = new Vector3(0, 0.05, 0)
+      addTowerMesh(towerFloor1, towerFloorMat, true)
+
+      // Paredes do térreo — fundo e laterais sólidas, frente partida em dois (vão = porta),
+      // mesmo padrão da lojinha.
+      const towerBackWall = MeshBuilder.CreateBox('towerBackWall', { width: TOWER_WIDTH, height: TOWER_FLOOR1_HEIGHT, depth: 0.15 }, scene)
+      towerBackWall.position = new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT / 2, TOWER_HALF_D)
+      addTowerMesh(towerBackWall, towerWallMat, true)
+
+      for (const side of [-1, 1]) {
+        const sideWall = MeshBuilder.CreateBox(`towerSideWall${side}`, { width: 0.15, height: TOWER_FLOOR1_HEIGHT, depth: TOWER_DEPTH }, scene)
+        sideWall.position = new Vector3(side * TOWER_HALF_W, 0.1 + TOWER_FLOOR1_HEIGHT / 2, 0)
+        addTowerMesh(sideWall, towerWallMat, true)
+      }
+
+      const towerFrontSegWidth = (TOWER_WIDTH - TOWER_DOOR_WIDTH) / 2
+      for (const side of [-1, 1]) {
+        const frontWall = MeshBuilder.CreateBox(
+          `towerFrontWall${side}`,
+          { width: towerFrontSegWidth, height: TOWER_FLOOR1_HEIGHT, depth: 0.15 },
+          scene,
+        )
+        frontWall.position = new Vector3(
+          side * (TOWER_DOOR_WIDTH / 2 + towerFrontSegWidth / 2),
+          0.1 + TOWER_FLOOR1_HEIGHT / 2,
+          -TOWER_HALF_D,
+        )
+        addTowerMesh(frontWall, towerWallMat, true)
+      }
+
+      // Rampa até o andar de cima — começa logo depois da porta (`TOWER_RAMP_LOW_Z`) e sobe até
+      // encontrar a borda da frente do mezanino (`TOWER_RAMP_HIGH_Z`), inteiramente na área
+      // aberta do térreo (não passa por baixo do mezanino em nenhum ponto — sem risco de bater a
+      // cabeça no teto ao subir). Inclinação ~32,6° (rampLength/run/rise abaixo) — um bloco só,
+      // inclinado, colide igual qualquer outra plataforma estática (o jogador é empurrado pra
+      // cima pelo próprio solver de física ao encostar, sem precisar de lógica especial de
+      // "escada" — mesmo princípio de qualquer rampa em qualquer motor de física).
+      const rampLength = Math.sqrt(TOWER_RAMP_RUN * TOWER_RAMP_RUN + TOWER_FLOOR1_HEIGHT * TOWER_FLOOR1_HEIGHT)
+      const rampAngle = Math.atan2(TOWER_FLOOR1_HEIGHT, TOWER_RAMP_RUN)
+      const towerRamp = MeshBuilder.CreateBox('towerRamp', { width: 1.1, height: 0.12, depth: rampLength }, scene)
+      towerRamp.position = new Vector3(TOWER_RAMP_X, 0.1 + TOWER_FLOOR1_HEIGHT / 2, (TOWER_RAMP_LOW_Z + TOWER_RAMP_HIGH_Z) / 2)
+      towerRamp.rotation.x = -rampAngle
+      addTowerMesh(towerRamp, towerFloorMat, true)
+
+      // Andar de cima (mezanino) — só a laje de trás (`TOWER_MEZZ_DEPTH`); a área da frente fica
+      // aberta, é onde a rampa chega e onde dá pra ver o térreo lá embaixo.
+      const towerFloor2 = MeshBuilder.CreateBox(
+        'towerFloor2',
+        { width: TOWER_WIDTH, height: 0.12, depth: TOWER_MEZZ_DEPTH },
+        scene,
+      )
+      towerFloor2.position = new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT, TOWER_MEZZ_CENTER_Z)
+      addTowerMesh(towerFloor2, towerFloorMat, true)
+
+      // Parapeito baixo na borda aberta do mezanino — só pra marcar visualmente a borda (o
+      // jogador ainda consegue pular por cima ou voltar pela rampa, não é uma parede de verdade).
+      const towerParapet = MeshBuilder.CreateBox('towerParapet', { width: TOWER_WIDTH, height: 0.3, depth: 0.1 }, scene)
+      towerParapet.position = new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT + 0.15, TOWER_MEZZ_FRONT_Z)
+      addTowerMesh(towerParapet, towerWallMat, true)
+
+      // Paredes do andar de cima (só atrás e laterais, acompanhando o piso menor) + telhado.
+      const towerBackWall2 = MeshBuilder.CreateBox('towerBackWall2', { width: TOWER_WIDTH, height: TOWER_FLOOR2_HEIGHT, depth: 0.15 }, scene)
+      towerBackWall2.position = new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT + TOWER_FLOOR2_HEIGHT / 2, TOWER_HALF_D)
+      addTowerMesh(towerBackWall2, towerWallMat, true)
+      for (const side of [-1, 1]) {
+        const sideWall2 = MeshBuilder.CreateBox(
+          `towerSideWall2${side}`,
+          { width: 0.15, height: TOWER_FLOOR2_HEIGHT, depth: TOWER_MEZZ_DEPTH },
+          scene,
+        )
+        sideWall2.position = new Vector3(
+          side * TOWER_HALF_W,
+          0.1 + TOWER_FLOOR1_HEIGHT + TOWER_FLOOR2_HEIGHT / 2,
+          TOWER_MEZZ_CENTER_Z,
+        )
+        addTowerMesh(sideWall2, towerWallMat, true)
+      }
+
+      const towerRoof = MeshBuilder.CreateCylinder(
+        'towerRoof',
+        { height: 0.9, diameterTop: 0.05, diameterBottom: TOWER_WIDTH * 1.5, tessellation: 4 },
+        scene,
+      )
+      towerRoof.position = new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT + TOWER_FLOOR2_HEIGHT + 0.45, TOWER_MEZZ_CENTER_Z)
+      towerRoof.rotation.y = Math.PI / 4
+      addTowerMesh(towerRoof, towerRoofMat, false)
+
+      const towerLabel = new TextBlock('towerLabel', 'Torre do Tesouro')
+      towerLabel.color = 'white'
+      towerLabel.fontSize = 24
+      towerLabel.fontWeight = 'bold'
+      towerLabel.outlineWidth = 4
+      towerLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(towerLabel)
+      towerLabel.linkWithMesh(towerRoof)
+      towerLabel.linkOffsetY = -70
+
+      // Moedas: 2 fáceis no térreo, 3 no mezanino (mais valioso, igual ao segundo parkour), e uma
+      // última numa plataforma pequena flutuando um pulo à frente do mezanino — "o desafio" do
+      // prédio, não só subir a rampa.
+      towerBase.computeWorldMatrix(true)
+      function addTowerCoin(name: string, localPos: Vector3) {
+        const worldPos = Vector3.TransformCoordinates(localPos, towerBase.getWorldMatrix())
+        const pivot = new TransformNode(`coinPivot-${name}`, scene)
+        pivot.position = worldPos
+        pivot.rotationQuaternion = alignmentQuaternion(TOWER_ANCHOR_UP)
+        const mesh = MeshBuilder.CreateCylinder(`coin-${name}`, { height: 0.08, diameter: 0.5 }, scene)
+        mesh.parent = pivot
+        mesh.material = coinMat
+        shadowGenerator.addShadowCaster(mesh)
+        coins.push({ pivot, mesh, worldPos, collected: false })
+      }
+      // Térreo: do lado oposto à rampa (x negativo), fora do caminho de quem sobe.
+      addTowerCoin('towerGround0', new Vector3(-0.8, 0.4, -1.0))
+      addTowerCoin('towerGround1', new Vector3(-0.8, 0.4, 0.3))
+      // Mezanino: espalhadas pela laje de trás (`TOWER_MEZZ_CENTER_Z`).
+      addTowerCoin('towerMezz0', new Vector3(-0.9, 0.1 + TOWER_FLOOR1_HEIGHT + 0.35, TOWER_MEZZ_CENTER_Z))
+      addTowerCoin('towerMezz1', new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT + 0.35, TOWER_MEZZ_CENTER_Z))
+      addTowerCoin('towerMezz2', new Vector3(0.9, 0.1 + TOWER_FLOOR1_HEIGHT + 0.35, TOWER_MEZZ_CENTER_Z))
+
+      // Plataforma-desafio: flutua acima da rampa (não colide com ela — a rampa termina bem
+      // abaixo, ver `rampAngle`/`TOWER_RAMP_RUN`), separada da borda do mezanino por um vão
+      // pequeno (0,9 — bem dentro do alcance de um pulo comum, mesma conta de espaçamento do
+      // parkour), com a moeda de maior valor simbólico (a última, "o prêmio").
+      const TOWER_PRIZE_Z = TOWER_MEZZ_FRONT_Z - 0.9
+      const towerChallengePlatform = MeshBuilder.CreateBox(
+        'towerChallengePlatform',
+        { width: 1.0, height: 0.15, depth: 1.0 },
+        scene,
+      )
+      towerChallengePlatform.position = new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT + 0.05, TOWER_PRIZE_Z)
+      addTowerMesh(towerChallengePlatform, towerFloorMat, true)
+      addTowerCoin('towerPrize', new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT + 0.35, TOWER_PRIZE_Z))
+
+      // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
+      // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
+      // alto de cada uma (`plateau.height`, o mesmo valor usado por `terrainHeight` — o centro do
+      // platô é o único ponto onde o smoothstep chega a `t=1`, então a altura ali é exata, sem
+      // ambiguidade). Só quem realmente sobe até o topo de cada montanha encontra.
+      PLATEAU_CENTERS.forEach((plateau, i) => {
+        const peakPos = plateau.dir.scale(PLANET_RADIUS + plateau.height + 0.35)
+        const pivot = new TransformNode(`coinPivot-peak${i}`, scene)
+        pivot.position = peakPos
+        pivot.rotationQuaternion = alignmentQuaternion(plateau.dir)
+        const mesh = MeshBuilder.CreateCylinder(`coin-peak${i}`, { height: 0.08, diameter: 0.5 }, scene)
+        mesh.parent = pivot
+        mesh.material = coinMat
+        shadowGenerator.addShadowCaster(mesh)
+        coins.push({ pivot, mesh, worldPos: peakPos, collected: false })
+      })
+
       // Gatos "em cima de tudo" (pedido do usuário: "alguns gatos ficam ensima de tudo") —
       // diferente dos gatos que vagam pelo chão (acima): estes ficam parados nos pontos mais
       // altos do mapa (topo dos 4 platôs + telhado de 2 escolas), só balançando/olhando ao
