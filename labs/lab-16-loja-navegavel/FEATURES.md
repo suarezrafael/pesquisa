@@ -1,8 +1,8 @@
 # Laboratório 16 — Loja navegável (interior)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
-Fim: -
+Fim: 2026-08-17
 Commit inicial: 8ef63e1f0ee1b43d60817cd32f6050017ba191bc
 
 ## Objetivo do laboratório
@@ -19,15 +19,15 @@ escolas), com um interior simples (balcão, prateleiras, um lojista) — chegar 
 o MESMO modal de lojinha já existente (reaproveita toda a lógica de compra/equipar, não duplica).
 
 ## Funcionalidades planejadas
-- [ ] Prédio da loja: paredes com um vão de porta de verdade (não uma parede sólida decorativa
+- [x] Prédio da loja: paredes com um vão de porta de verdade (não uma parede sólida decorativa
       como as escolas), teto, num local escolhido por busca de distância angular contra todos os
       outros marcos do mapa.
-- [ ] Interior: balcão, 1-2 prateleiras decorativas, um lojista (reaproveita `buildStudentFigure`,
+- [x] Interior: balcão, 1-2 prateleiras decorativas, um lojista (reaproveita `buildStudentFigure`,
       mesmo padrão do professor nas escolas).
-- [ ] Gatilho: chegar perto do balcão (dentro do prédio) abre o modal de lojinha já existente
+- [x] Gatilho: chegar perto do balcão (dentro do prédio) abre o modal de lojinha já existente
       (`onOpenShop`, reaproveitando a prop já passada pro `World3D`) — mesmo padrão de proximidade
       já usado pras escolas/moedas.
-- [ ] Verificação end-to-end: rodar o dev server, confirmar visualmente que dá pra entrar pela
+- [x] Verificação end-to-end: rodar o dev server, confirmar visualmente que dá pra entrar pela
       porta e ver o interior, e que chegar perto do balcão abre a lojinha de verdade.
 
 ## Fora de escopo (explicitamente adiado)
