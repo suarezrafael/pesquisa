@@ -61,6 +61,7 @@ import {
   playFalconScreech,
   playFunnyTalk,
   playFart,
+  playLaserZap,
 } from './ambientAudio'
 import {
   connect as connectMultiplayer,
@@ -1362,6 +1363,14 @@ export function World3D({
     let rankingTimer = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
+    // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
+    // morrendo e caindo até o planeta novamente") — enquanto `laserStunTimer > 0`, o controle
+    // normal do jogador (andar/pular) fica suspenso e o personagem visual gira sem parar
+    // (cambalhota), deixando só a gravidade real (já aplicada todo quadro independente disto)
+    // levá-lo de volta pro chão de verdade. `laserStunSeed` varia o eixo de giro por acerto
+    // (não é sempre a mesma cambalhota, parece mais orgânico).
+    let laserStunTimer = 0
+    let laserStunSeed = 0
     // Carro que o jogador está dirigindo agora (lab-25) — null = a pé. Trocado só pelo handler
     // de teclado da tecla `e` (ver `onKeyDown`), lido pelo loop de física/câmera do avatar (pra
     // se congelar) e pelo loop dos carros (pra saber qual pular da IA e mover por input).
@@ -1981,6 +1990,99 @@ export function World3D({
           topCoinPivot.position = topCoinPos
           topCoinPivot.rotationQuaternion = alignmentQuaternion(PARKOUR3_ANCHOR_UP)
           const topCoinMesh = MeshBuilder.CreateCylinder(`coin-parkour3Top-${c}`, { height: 0.08, diameter: 0.55 }, scene)
+          topCoinMesh.parent = topCoinPivot
+          topCoinMesh.material = coinMat
+          shadowGenerator.addShadowCaster(topCoinMesh)
+          coins.push({ pivot: topCoinPivot, mesh: topCoinMesh, worldPos: topCoinPos, collected: false })
+        }
+      }
+
+      // Quarto desafio de parkour (lab-38, pedido do usuário: "parkour que tem laser nos
+      // quadradinhos, mas eles devem ser retangulares e pra passar pro retângulo mais alto tem
+      // que pular antes o laser, se pisar no laser fazer animação de morrendo e caindo até o
+      // planeta novamente") — plataformas retangulares (não quadradas) em linha reta (sem
+      // ziguezague lateral — o laser já é o desafio principal, ziguezague junto ficaria injusto),
+      // cada uma guardada por um feixe de laser na altura de aproximação: precisa pular ANTES de
+      // chegar nele (ficar acima de `LASER_HEIGHT` no momento de cruzar sua posição) — andando
+      // normal (sem pular) nunca passa de altura ~0, bem abaixo do feixe.
+      const PARKOUR4_ANCHOR_UP = new Vector3(-0.49240387650610407, -0.7660444431189779, 0.413175911166535).normalize()
+      const parkour4AnchorPos = PARKOUR4_ANCHOR_UP.scale(PLANET_RADIUS + terrainHeight(PARKOUR4_ANCHOR_UP))
+      // Percurso reto (sem `right`/ziguezague — o laser já é o desafio principal).
+      const parkour4Forward = Vector3.Cross(PARKOUR4_ANCHOR_UP, Vector3.Right()).normalize()
+      const PARKOUR4_STEPS = 8
+      const LASER_HEIGHT = 0.5 // acima disso (relativo à plataforma de onde se pulou) já limpou o feixe
+      const LASER_HIT_RADIUS = 0.42 // zona de perigo estreita — só bem em cima do feixe, não a passagem toda
+      const LASER_APPROACH_T = 0.6 // posição do feixe entre uma plataforma e a próxima (mais perto da próxima — "pular ANTES")
+
+      const parkour4PlatformMat = new PBRMaterial('parkour4PlatformMat', scene)
+      parkour4PlatformMat.albedoColor = new Color3(0.3, 0.32, 0.36) // cinza metálico — tema "instalação com laser", distinto dos outros 3
+      parkour4PlatformMat.roughness = 0.55
+      parkour4PlatformMat.metallic = 0.3
+
+      const laserMat = new PBRMaterial('laserMat', scene)
+      laserMat.albedoColor = new Color3(1, 0.08, 0.08)
+      laserMat.emissiveColor = new Color3(1, 0.1, 0.1)
+      laserMat.disableLighting = true
+      laserMat.alpha = 0.9
+
+      interface ParkourLaser {
+        worldPos: Vector3
+        mesh: Mesh
+      }
+      const parkour4Lasers: ParkourLaser[] = []
+
+      let parkour4PrevForward = 0
+      let parkour4PrevUp = 0
+      let parkour4TopPos = parkour4AnchorPos
+      for (let i = 0; i < PARKOUR4_STEPS; i++) {
+        const stepForward = 1.0 + i * PARKOUR_FORWARD_STEP
+        const stepUp = 0.5 + i * PARKOUR_HEIGHT_STEP
+        const platPos = parkour4AnchorPos
+          .add(parkour4Forward.scale(stepForward))
+          .add(PARKOUR4_ANCHOR_UP.scale(stepUp))
+        parkour4TopPos = platPos
+
+        // Retangular de verdade (não quadrada): bem mais larga (eixo direita) que funda (eixo
+        // frente), como uma barra que atravessa o caminho — pedido explícito do usuário.
+        const platform4 = MeshBuilder.CreateBox(`parkour4Platform-${i}`, { width: 2.0, height: 0.3, depth: 0.8 }, scene)
+        platform4.position.copyFrom(platPos)
+        platform4.rotationQuaternion = alignmentQuaternion(PARKOUR4_ANCHOR_UP)
+        platform4.material = parkour4PlatformMat
+        platform4.receiveShadows = true
+        shadowGenerator.addShadowCaster(platform4)
+        new PhysicsAggregate(platform4, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+
+        // Laser guardando a entrada desta plataforma — altura fixa acima da plataforma ANTERIOR
+        // (de onde o jogador pula), posição entre as duas (`LASER_APPROACH_T`, mais perto desta).
+        const laserForward = parkour4PrevForward + (stepForward - parkour4PrevForward) * LASER_APPROACH_T
+        const laserUp = parkour4PrevUp + LASER_HEIGHT
+        const laserWorldPos = parkour4AnchorPos
+          .add(parkour4Forward.scale(laserForward))
+          .add(PARKOUR4_ANCHOR_UP.scale(laserUp))
+
+        const laserBeam = MeshBuilder.CreateBox(`laserBeam-${i}`, { width: 1.7, height: 0.06, depth: 0.06 }, scene)
+        laserBeam.position.copyFrom(laserWorldPos)
+        laserBeam.rotationQuaternion = alignmentQuaternion(PARKOUR4_ANCHOR_UP)
+        laserBeam.material = laserMat
+        parkour4Lasers.push({ worldPos: laserWorldPos, mesh: laserBeam })
+
+        parkour4PrevForward = stepForward
+        parkour4PrevUp = stepUp
+      }
+      if (import.meta.env.DEV) (window as any).__parkour4Lasers = parkour4Lasers
+
+      // Recompensa no topo — 6 moedas, igual ao terceiro (o mais alto até agora); o laser já é
+      // o próprio risco/desafio extra deste percurso, não precisa de mais degraus pra justificar.
+      {
+        const TOP_COIN_COUNT = 6
+        for (let c = 0; c < TOP_COIN_COUNT; c++) {
+          const spreadAngle = (c / TOP_COIN_COUNT) * Math.PI * 2
+          const spreadDir = rotateAroundAxis(parkour4Forward, PARKOUR4_ANCHOR_UP, spreadAngle)
+          const topCoinPos = parkour4TopPos.add(PARKOUR4_ANCHOR_UP.scale(0.4)).add(spreadDir.scale(0.4))
+          const topCoinPivot = new TransformNode(`coinPivot-parkour4Top-${c}`, scene)
+          topCoinPivot.position = topCoinPos
+          topCoinPivot.rotationQuaternion = alignmentQuaternion(PARKOUR4_ANCHOR_UP)
+          const topCoinMesh = MeshBuilder.CreateCylinder(`coin-parkour4Top-${c}`, { height: 0.08, diameter: 0.55 }, scene)
           topCoinMesh.parent = topCoinPivot
           topCoinMesh.material = coinMat
           shadowGenerator.addShadowCaster(topCoinMesh)
@@ -3404,7 +3506,33 @@ export function World3D({
           }
           if (jumpRequested) {
             jumpRequested = false
-            if (grounded) radialSpeed = JUMP_SPEED
+            if (grounded && laserStunTimer <= 0) radialSpeed = JUMP_SPEED
+          }
+
+          // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
+          // morrendo e caindo até o planeta novamente") — checa só quando não já caindo (evita
+          // redisparar o empurrão toda vez que o corpo ainda atravessa a zona de perigo durante
+          // a própria queda). Decompõe a distância até o feixe em componente radial (altura
+          // relativa ao feixe) e lateral (o quão perto da "linha" do feixe, nos outros dois
+          // eixos) — só conta como acerto perto o bastante lateralmente E baixo o bastante
+          // (não pulou alto o suficiente pra passar por cima).
+          if (laserStunTimer <= 0) {
+            for (const laser of parkour4Lasers) {
+              const toLaser = pos.subtract(laser.worldPos)
+              const radialOffset = Vector3.Dot(toLaser, localUp)
+              const lateralDist = toLaser.subtract(localUp.scale(radialOffset)).length()
+              if (lateralDist < LASER_HIT_RADIUS && radialOffset < 0.05) {
+                laserStunTimer = 2.2
+                laserStunSeed = Math.random() * Math.PI * 2
+                playLaserZap()
+                // Empurrão inicial pra fora da plataforma (pra trás + pra baixo) — sem isso o
+                // corpo continuaria apoiado na mesma plataforma indefinidamente (gravidade
+                // sozinha não desgruda de uma superfície sólida com contato ativo).
+                const pushDir = facing.scale(-1).add(localUp.scale(-1)).normalize()
+                body.setLinearVelocity(pushDir.scale(4))
+                break
+              }
+            }
           }
 
           // Correr/caminhar (pedido do usuário) — segurar Shift troca de velocidade. Só no
@@ -3412,8 +3540,15 @@ export function World3D({
           const running = !!keysDown['shift']
           const currentSpeed = running ? RUN_SPEED : WALK_SPEED
           const radialVel = localUp.scale(radialSpeed)
-          const tangentVel = facing.scale(throttle * currentSpeed)
-          body.setLinearVelocity(tangentVel.add(radialVel))
+          if (laserStunTimer > 0) {
+            // Caindo depois do laser — não mexe mais na velocidade, deixa só a gravidade (já
+            // aplicada como força no topo deste bloco, todo quadro) levar o personagem de volta
+            // pro chão de verdade, sem o jogador conseguir andar/pular durante a queda.
+            laserStunTimer -= dt
+          } else {
+            const tangentVel = facing.scale(throttle * currentSpeed)
+            body.setLinearVelocity(tangentVel.add(radialVel))
+          }
           // Trava a rotação física do colisor — é uma cápsula em pé, não deve tombar/rolar
           // por causa de torque de contato com o chão (personagem visual gira por conta própria).
           body.setAngularVelocity(Vector3.Zero())
@@ -3422,19 +3557,30 @@ export function World3D({
           // superfície do planeta (não na altura elevada do colisor físico), orientado pelos
           // eixos direita/cima-local/frente.
           const right = Vector3.Cross(localUp, facing).normalize()
-          Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)
-          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          if (laserStunTimer > 0) {
+            // Animação de "morrendo e caindo" (pedido do usuário) — cambalhota contínua em vez
+            // da orientação normal (alinhada com a direção de andar), enquanto a gravidade
+            // (aplicada acima) faz o trabalho de verdade de levar o personagem pro chão.
+            const tumbleAngle = (2.2 - laserStunTimer) * 9 + laserStunSeed
+            studentFigure.root.rotationQuaternion = Quaternion.RotationAxis(right, tumbleAngle).multiply(
+              alignmentQuaternion(localUp),
+            )
+          } else {
+            Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)
+            Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+            studentFigure.root.rotationQuaternion = tmpQuat.clone()
+          }
           // Altura extra acima do "grudado no chão" quando o colisor físico sobe (pulo) —
           // sem isso o personagem visual ficava sempre preso na superfície e o pulo não aparecia.
           const airHeight = Math.max(0, dist - groundDist)
           studentFigure.root.position.copyFrom(
             localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + 0.02 + airHeight)
           )
-          studentFigure.root.rotationQuaternion = tmpQuat.clone()
 
-          // Ciclo de caminhada — só avança enquanto o personagem realmente anda; som de
-          // passo sintetizado disparado a cada troca de perna (cruzamento de zero do seno).
-          const moving = Math.abs(throttle) > 0.05
+          // Ciclo de caminhada — só avança enquanto o personagem realmente anda (e não está
+          // caindo do laser — a cambalhota acima já cuida da pose nesse caso); som de passo
+          // sintetizado disparado a cada troca de perna (cruzamento de zero do seno).
+          const moving = laserStunTimer <= 0 && Math.abs(throttle) > 0.05
           if (moving) {
             walkPhase += dt * Math.abs(throttle) * (running ? RUN_CYCLE_SPEED : WALK_CYCLE_SPEED)
             const swing = Math.sin(walkPhase) * LEG_SWING_MAX

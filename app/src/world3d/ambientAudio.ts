@@ -289,6 +289,41 @@ export function playFootstep(): void {
   src.start(now)
 }
 
+// "Zap" do laser do parkour (lab-38, pedido do usuário: "pisar no laser") — glissando descendente
+// rápido em onda dente-de-serra (mais "elétrico"/áspero que qualquer som já existente aqui) com
+// um pouco de ruído por cima, imitando o "bzzt" de um feixe de laser desligando ao ser tocado.
+export function playLaserZap(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.35
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(1800, now)
+  osc.frequency.exponentialRampToValueAtTime(120, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.14, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  osc.connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + duration)
+
+  const bufferSize = Math.floor(ctx.sampleRate * 0.08)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const highpass = ctx.createBiquadFilter()
+  highpass.type = 'highpass'
+  highpass.frequency.value = 2000
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0.08, now)
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+  src.connect(highpass).connect(noiseGain).connect(ctx.destination)
+  src.start(now)
+}
+
 // Passarinho cantando baixinho perto do jogador (pedido do usuário) — dois bipes agudos rápidos
 // ("piu-piu"), bem mais quieto que o passo, disparado só quando um pássaro está perto (ver
 // World3D.tsx, IA de vagar dos bichos).
