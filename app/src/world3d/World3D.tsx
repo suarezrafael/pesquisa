@@ -897,6 +897,62 @@ export function World3D({
         coins.push({ pivot: coinPivot, mesh: coinMesh, worldPos: coinPos, collected: false })
       }
 
+      // Parkour (lab-11) — sequência de plataformas subindo em ziguezague, só dá pra atravessar
+      // pulando. Local escolhido por busca (varredura de candidatos medindo distância angular
+      // contra platôs/lagoa/piscina/escolas, mesmo método usado no lab-09 pra achar o lugar da
+      // piscina) — ~58° de folga do vizinho mais próximo. Degraus num referencial tangente local
+      // fixo (não acompanham a curvatura como o resto do mundo) porque o percurso é pequeno,
+      // igual à aproximação já usada em lagoa/piscina. Espaçamento calculado a partir da física
+      // real do pulo: JUMP_SPEED=5.5 e GRAVITY=9.81 dão altura máxima de pulo de
+      // JUMP_SPEED²/(2·GRAVITY) ≈ 1.54 — cada degrau sobe só 0.85 (bastante folga) — e tempo no
+      // ar de ≈1.12s, então mesmo o alcance horizontal do ziguezague (~2.1 por degrau) é
+      // confortável contra o quanto dá pra andar nesse tempo (MAX_SPEED=6 → até 6.7).
+      const PARKOUR_ANCHOR_UP = new Vector3(0.7760390996088926, -0.6156614753256583, 0.13683663134575172).normalize()
+      const parkourAnchorPos = PARKOUR_ANCHOR_UP.scale(PLANET_RADIUS + terrainHeight(PARKOUR_ANCHOR_UP))
+      const parkourForward = Vector3.Cross(PARKOUR_ANCHOR_UP, Vector3.Right()).normalize()
+      const parkourRight = Vector3.Cross(PARKOUR_ANCHOR_UP, parkourForward).normalize()
+      const PARKOUR_STEPS = 7
+      const PARKOUR_FORWARD_STEP = 1.1
+      const PARKOUR_LATERAL_AMPLITUDE = 0.9
+      const PARKOUR_HEIGHT_STEP = 0.85
+
+      const parkourPlatformMat = new PBRMaterial('parkourPlatformMat', scene)
+      parkourPlatformMat.albedoColor = new Color3(0.72, 0.48, 0.28)
+      parkourPlatformMat.roughness = 0.75
+
+      let parkourTopPos = parkourAnchorPos
+      for (let i = 0; i < PARKOUR_STEPS; i++) {
+        const lateral = (i % 2 === 0 ? 1 : -1) * PARKOUR_LATERAL_AMPLITUDE
+        const platPos = parkourAnchorPos
+          .add(parkourForward.scale(1.0 + i * PARKOUR_FORWARD_STEP))
+          .add(parkourRight.scale(lateral))
+          .add(PARKOUR_ANCHOR_UP.scale(0.5 + i * PARKOUR_HEIGHT_STEP))
+        parkourTopPos = platPos
+
+        const platform = MeshBuilder.CreateBox(`parkourPlatform-${i}`, { width: 1.3, height: 0.3, depth: 1.3 }, scene)
+        platform.position.copyFrom(platPos)
+        platform.rotationQuaternion = alignmentQuaternion(PARKOUR_ANCHOR_UP)
+        platform.material = parkourPlatformMat
+        platform.receiveShadows = true
+        shadowGenerator.addShadowCaster(platform)
+        new PhysicsAggregate(platform, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+      }
+
+      // Recompensa no topo do percurso — reaproveita o mesmo mecanismo de moeda (visual, giro,
+      // detecção de proximidade, coleta) em vez de inventar um sistema novo: um item a mais no
+      // mesmo array `coins`, sem lógica extra em lugar nenhum.
+      {
+        const topCoinPos = parkourTopPos.add(PARKOUR_ANCHOR_UP.scale(0.4))
+        const topCoinPivot = new TransformNode('coinPivot-parkourTop', scene)
+        topCoinPivot.position = topCoinPos
+        topCoinPivot.rotationQuaternion = alignmentQuaternion(PARKOUR_ANCHOR_UP)
+        const topCoinMesh = MeshBuilder.CreateCylinder('coin-parkourTop', { height: 0.08, diameter: 0.55 }, scene)
+        topCoinMesh.parent = topCoinPivot
+        topCoinMesh.material = coinMat
+        shadowGenerator.addShadowCaster(topCoinMesh)
+        coins.push({ pivot: topCoinPivot, mesh: topCoinMesh, worldPos: topCoinPos, collected: false })
+      }
+
       // Bichinhos vagando pelo planeta (pedido do usuário: "animais no mundo, animais
       // aleatorios", depois "mais gato") — tipo e ponto de partida sorteados, cada um com
       // velocidade/fase própria pra não se moverem em sincronia. IA de vagar (wander) roda no
