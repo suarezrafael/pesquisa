@@ -1889,6 +1889,31 @@ export function World3D({
       }
       const riverCenter: Vector3[] = []
       const RIVER_SEGMENTS = 48
+      // Lab-29 (continuação): a água posicionada só pela fórmula contínua de `terrainHeight`
+      // ficava ENTERRADA dentro da malha renderizada do planeta em vários pontos — o mesmo tipo
+      // de erro de discretização já visto na rua (lab-29), só que bem maior aqui (até 0,46
+      // unidade medido por raycast, contra ~0,11 na rua — o rio cruza uma faixa de theta bem
+      // mais ampla, 216°, incluindo trechos de relevo mais íngreme que a malha de 48 segmentos
+      // aproxima pior). Relatado pelo usuário jogando: "o rio fisicamente está lá... mas ele não
+      // aparece, eu até caio dentro dele mas o boneco afunda no planeta" — a bacia (física)
+      // sempre esteve certa; era só a malha de água (visual) que ficava embaixo do chão de
+      // verdade, escondida.
+      //
+      // Correção: em vez de confiar só na fórmula, um raycast físico de verdade (contra a MESMA
+      // malha que o jogador colide) encontra a altura real da superfície renderizada em cada
+      // ponto — a água nasce ali, não onde a fórmula (que a malha grosseira só aproxima) diz que
+      // deveria estar. `realGroundRadial` cai de volta pra fórmula só se o raycast não acertar
+      // nada (não deveria acontecer, mas evita uma exceção matando a criação do rio inteiro).
+      const riverRaycastResult = new PhysicsRaycastResult()
+      function realGroundRadial(dir: Vector3, formulaHeight: number): number {
+        if (!havokPlugin) return PLANET_RADIUS + formulaHeight
+        const from = dir.scale(PLANET_RADIUS + 5)
+        const to = dir.scale(PLANET_RADIUS - 5)
+        riverRaycastResult.reset()
+        havokPlugin.raycast(from, to, riverRaycastResult)
+        if (riverRaycastResult.hasHit) return riverRaycastResult.hitPointWorld.length()
+        return PLANET_RADIUS + formulaHeight
+      }
       // `RIVER_START_PHI`/`RIVER_END_PHI`/`RIVER_START_THETA`/`RIVER_END_THETA` (constantes de
       // módulo, perto de `terrainHeight`) são a mesma curva usada lá pra cavar a bacia do rio —
       // reaproveitadas aqui, não redeclaradas, pra nunca poderem ficar dessincronizadas.
@@ -1897,12 +1922,9 @@ export function World3D({
         const wobble = Math.sin(t * Math.PI * 4) * 0.06
         const phi = RIVER_START_PHI + (RIVER_END_PHI - RIVER_START_PHI) * t + wobble
         const theta = RIVER_START_THETA + (RIVER_END_THETA - RIVER_START_THETA) * t
-        // Levemente acima da altura do terreno naquele ponto — só o suficiente pra não brigar
-        // (z-fighting) com o chão, nunca a ponto de parecer um objeto flutuando por cima dele.
-        // A altura aqui já vem da bacia carvada (`terrainHeight` inclui `riverPerpDistance`),
-        // então a água nasce sozinha no fundo do relevo — não precisa de nenhum ajuste extra.
         const riverDir = pointOnSphere(phi, theta, 1)
-        riverCenter.push(riverDir.scale(PLANET_RADIUS + terrainHeight(riverDir) + 0.025))
+        const groundRadial = realGroundRadial(riverDir, terrainHeight(riverDir))
+        riverCenter.push(riverDir.scale(groundRadial + 0.03))
       }
       // Lab-28 (pedido do usuário: "a água mais abaixo com reflexo de água"): a água ocupa só a
       // parte mais funda da bacia (raio bem menor que `RIVER_BASIN_RADIUS`, ~6,3° ≈ 1,43 unidades
@@ -1926,8 +1948,21 @@ export function World3D({
         const prev = riverCenter[Math.max(i - 1, 0)]
         const along = next.subtract(prev).normalize()
         const side = Vector3.Cross(up, along).normalize()
-        riverLeftBank.push(p.add(side.scale(riverHalfWidth)))
-        riverRightBank.push(p.subtract(side.scale(riverHalfWidth)))
+        // Cada margem também precisa do próprio raycast (lab-29, continuação) — deslocar
+        // lateralmente a partir do ponto central JÁ AJUSTADO (via um vetor tangente, não
+        // acompanhando a curvatura de verdade) não bastava: bug real encontrado verificando esta
+        // correção — o gap ainda chegava a 0,41 depois de só corrigir o centro, porque a margem
+        // lateral podia cair num ponto da malha real bem diferente do que o deslocamento plano
+        // presumia. O deslocamento lateral só decide a DIREÇÃO; a altura final vem de novo do
+        // raycast, não da distância radial do ponto central.
+        const leftOffset = p.add(side.scale(riverHalfWidth))
+        const leftUp = leftOffset.clone().normalize()
+        const leftGroundRadial = realGroundRadial(leftUp, terrainHeight(leftUp))
+        riverLeftBank.push(leftUp.scale(leftGroundRadial + 0.03))
+        const rightOffset = p.subtract(side.scale(riverHalfWidth))
+        const rightUp = rightOffset.clone().normalize()
+        const rightGroundRadial = realGroundRadial(rightUp, terrainHeight(rightUp))
+        riverRightBank.push(rightUp.scale(rightGroundRadial + 0.03))
       }
       const river = MeshBuilder.CreateRibbon(
         'river',
