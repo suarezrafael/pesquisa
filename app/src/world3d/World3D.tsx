@@ -17,6 +17,7 @@ import {
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
+  type PhysicsBody,
   PhysicsMotionType,
   PhysicsRaycastResult,
   PhysicsShapeType,
@@ -282,6 +283,14 @@ const RIVER_START_THETA = Math.PI * 0.15
 const RIVER_END_THETA = Math.PI * 1.35
 const RIVER_BASIN_RADIUS = 0.11 // rad ≈ 6,3° de cada lado da linha central — a bacia, não a água
 const RIVER_BASIN_DEPTH = 0.4
+// Altura que a malha da água fica ACIMA do chão real (medido por raycast, ver `realGroundRadial`).
+// Era 0,03 — corrigia a posição (nada mais enterrado dentro do planeta), mas o gap era pequeno
+// demais pro depth buffer distinguir de forma confiável a água do terreno por baixo: testado ao
+// vivo (material emissivo/unlit magenta pra eliminar qualquer efeito de iluminação/reflexo),
+// só uma pequena tira da água vencia o teste de profundidade contra o terreno — o resto ficava
+// invisível (relato do usuário: "aparece uma tirinha, o resto dentro do planeta") mesmo com a
+// altura já certa. 0,15 dá folga suficiente pro z-fighting sem a água parecer flutuando.
+const RIVER_WATER_CLEARANCE = 0.15
 
 function riverCenterPhiAt(theta: number): number {
   const t = Math.max(0, Math.min(1, (theta - RIVER_START_THETA) / (RIVER_END_THETA - RIVER_START_THETA)))
@@ -1904,14 +1913,31 @@ export function World3D({
       // ponto — a água nasce ali, não onde a fórmula (que a malha grosseira só aproxima) diz que
       // deveria estar. `realGroundRadial` cai de volta pra fórmula só se o raycast não acertar
       // nada (não deveria acontecer, mas evita uma exceção matando a criação do rio inteiro).
+      //
+      // Bug real encontrado testando esta correção (relato do usuário: "agora aparece uma
+      // tirinha do rio, mas o resto está dentro do planeta"): o raycast, sem filtro, podia
+      // acertar QUALQUER colisor no caminho — o avatar (se estivesse por perto testando), ou o
+      // colisor esférico de uma árvore/rocha perto do rio — não só o planeta. Um ponto que
+      // acertasse a copa de uma árvore, por exemplo, herdava a altura da árvore (bem mais alta
+      // que o chão de verdade ali), fazendo a água pular pra cima só naquele ponto e criando um
+      // buraco na malha entre ele e os vizinhos. `ignoreBody` só ignora UM corpo por vez, então
+      // a correção repete o raycast, ignorando cada acerto que não seja o próprio planeta, até
+      // acertar o planeta de verdade (ou desistir depois de algumas tentativas).
       const riverRaycastResult = new PhysicsRaycastResult()
       function realGroundRadial(dir: Vector3, formulaHeight: number): number {
         if (!havokPlugin) return PLANET_RADIUS + formulaHeight
         const from = dir.scale(PLANET_RADIUS + 5)
         const to = dir.scale(PLANET_RADIUS - 5)
-        riverRaycastResult.reset()
-        havokPlugin.raycast(from, to, riverRaycastResult)
-        if (riverRaycastResult.hasHit) return riverRaycastResult.hitPointWorld.length()
+        let ignoreBody: PhysicsBody | undefined
+        for (let attempt = 0; attempt < 6; attempt++) {
+          riverRaycastResult.reset()
+          havokPlugin.raycast(from, to, riverRaycastResult, ignoreBody ? { ignoreBody } : undefined)
+          if (!riverRaycastResult.hasHit) break
+          if (riverRaycastResult.body?.transformNode?.name === 'planet') {
+            return riverRaycastResult.hitPointWorld.length()
+          }
+          ignoreBody = riverRaycastResult.body ?? undefined
+        }
         return PLANET_RADIUS + formulaHeight
       }
       // `RIVER_START_PHI`/`RIVER_END_PHI`/`RIVER_START_THETA`/`RIVER_END_THETA` (constantes de
@@ -1924,7 +1950,7 @@ export function World3D({
         const theta = RIVER_START_THETA + (RIVER_END_THETA - RIVER_START_THETA) * t
         const riverDir = pointOnSphere(phi, theta, 1)
         const groundRadial = realGroundRadial(riverDir, terrainHeight(riverDir))
-        riverCenter.push(riverDir.scale(groundRadial + 0.03))
+        riverCenter.push(riverDir.scale(groundRadial + RIVER_WATER_CLEARANCE))
       }
       // Lab-28 (pedido do usuário: "a água mais abaixo com reflexo de água"): a água ocupa só a
       // parte mais funda da bacia (raio bem menor que `RIVER_BASIN_RADIUS`, ~6,3° ≈ 1,43 unidades
@@ -1958,11 +1984,11 @@ export function World3D({
         const leftOffset = p.add(side.scale(riverHalfWidth))
         const leftUp = leftOffset.clone().normalize()
         const leftGroundRadial = realGroundRadial(leftUp, terrainHeight(leftUp))
-        riverLeftBank.push(leftUp.scale(leftGroundRadial + 0.03))
+        riverLeftBank.push(leftUp.scale(leftGroundRadial + RIVER_WATER_CLEARANCE))
         const rightOffset = p.subtract(side.scale(riverHalfWidth))
         const rightUp = rightOffset.clone().normalize()
         const rightGroundRadial = realGroundRadial(rightUp, terrainHeight(rightUp))
-        riverRightBank.push(rightUp.scale(rightGroundRadial + 0.03))
+        riverRightBank.push(rightUp.scale(rightGroundRadial + RIVER_WATER_CLEARANCE))
       }
       const river = MeshBuilder.CreateRibbon(
         'river',
