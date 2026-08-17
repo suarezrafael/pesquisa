@@ -1919,6 +1919,16 @@ export function World3D({
       // IA de vagar (wander) roda no loop de render abaixo. Falcão voa igual passarinho (asa +
       // altura de voo); cachorro/onça vagam pelo chão igual coelho/esquilo/gato. Onça é mais rara
       // (predador grande, não devia estar em todo canto) que os outros bichos.
+      // Mini-game "Amigo dos Bichos" (pedido do usuário: "mini-games com animais") — a primeira
+      // vez que o jogador chega bem perto de CADA espécie (não de cada bicho — um coelho já
+      // conhecido não dá recompensa de novo, mas o primeiro cachorro sim), toca o mesmo som de
+      // moeda e dá uma moeda de verdade (`onCollectCoinRef`), como um "colecione as 7 espécies".
+      // Não persiste entre sessões — mesma característica de TODAS as moedas do jogo (o array
+      // `coins` também é reconstruído do zero a cada carregamento, `collected: false` sempre),
+      // então não é uma inconsistência nova, só o mesmo comportamento já existente aplicado aqui.
+      const metSpecies = new Set<CritterKind>()
+      const FRIEND_RADIUS = 1.4 // bem mais perto que o raio de som (3.5) — precisa "ir até" o bicho, não só passar perto
+
       const critters: Critter[] = []
       const CRITTER_COUNT = 39
       for (let i = 0; i < CRITTER_COUNT; i++) {
@@ -3577,6 +3587,17 @@ export function World3D({
                 if (Math.random() < 0.5) playFunnyTalk()
                 else playFart()
               }
+            }
+          }
+
+          // "Amigo dos Bichos" (ver `metSpecies` acima) — checado todo quadro (não por timer,
+          // diferente dos sons acima) porque só dispara UMA vez por espécie no total, não é
+          // repetitivo o bastante pra precisar economizar checagens.
+          if (avatarMesh && !metSpecies.has(c.kind)) {
+            if (Vector3.Distance(c.root.position, avatarMesh.position) < FRIEND_RADIUS) {
+              metSpecies.add(c.kind)
+              playCoinCollect()
+              onCollectCoinRef.current()
             }
           }
 
