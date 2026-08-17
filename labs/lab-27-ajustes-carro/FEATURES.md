@@ -1,7 +1,8 @@
 # Laboratório 27 — Ajustes do carro dirigível (rua maior, boneco visível)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: 9700cdaeef2cc5cb7a4354f4017fd859425006f3
 
 ## Objetivo do laboratório
@@ -16,20 +17,20 @@ Dois relatos diretos do usuário jogando a build do lab-25:
    em cima do carro.
 
 ## Funcionalidades planejadas
-- [ ] Rua maior: `STREET_PHI` sobe de 18° pra perto do limite seguro (~32°, ainda abaixo do
-      marco mais próximo do polo — a piscina, a 36°) — quase dobra o raio/circunferência da
-      volta, sem perder a garantia de não cruzar nenhum marco existente (mesmo cálculo de folga
-      do lab-25, só com uma margem menor de segurança).
-- [ ] Rua com leve ondulação orgânica (wobble em `phi`, mesmo padrão já usado no rio) — não fica
+- [x] Rua maior: `STREET_PHI` sobe de 18° pra 25° (limite real de segurança recalculado durante
+      este lab — o disco de água da piscina, não a bacia de terreno inteira, ~1,37× mais raio)
+      sem cruzar fisicamente nenhum marco existente.
+- [x] Rua com leve ondulação orgânica (wobble em `phi`, mesmo padrão já usado no rio) — não fica
       mais um círculo geometricamente perfeito visto de cima, lê mais como uma estrada de
       verdade contornando o relevo.
-- [ ] Boneco visível dirigindo: em vez de esconder a figura (`setEnabled(false)`), ela é
+- [x] Boneco visível dirigindo: em vez de esconder a figura (`setEnabled(false)`), ela é
       parentada no carro (`studentFigure.root.parent = carro.root`) com um offset local sentado
       na cabine — anda e gira junto com o carro automaticamente (herda a transformação do pai),
       sem precisar sincronizar posição/rotação a cada quadro feito com o avatar a pé.
-- [ ] Verificação: `npm run build` passa; testar ao vivo — comparar raio/posição da rua nova
-      (maior, ~32° em vez de 18°) contra todos os marcos (ainda sem cruzar nenhum); confirmar que
-      o boneco aparece visível em cima do carro ao entrar, e volta a andar normal ao sair.
+- [x] Verificação: `npm run build` passa; testado ao vivo — folga real (não estimada) contra o
+      disco de água da piscina (0,69) e contra a escola mais próxima (1,64); boneco confirmado
+      parentado e visível ao entrar, mantendo o offset local durante a condução, desparentado e
+      visível ao sair. Ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Pose de "sentado" de verdade (pernas dobradas tipo dirigindo) — o boneco fica na pose parada
