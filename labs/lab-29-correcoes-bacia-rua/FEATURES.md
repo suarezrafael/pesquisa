@@ -1,7 +1,8 @@
 # Laboratório 29 — Correções: escolas afundadas na bacia do rio, rua abaixo do chão
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: 8c705b3f8ac3d2797e204607dc6ec72d4aa45479
 
 ## Objetivo do laboratório
@@ -25,15 +26,15 @@ introduzidos pelo próprio lab-28, não relatos repetidos sem causa nova:
    +0,08 do lab-28 não cobria isso.
 
 ## Funcionalidades planejadas
-- [ ] Nenhuma bacia (lagoa/piscina/rio) carva perto de uma escola — `SCHOOL_DIRS` (nova
+- [x] Nenhuma bacia (lagoa/piscina/rio) carva perto de uma escola — `SCHOOL_DIRS` (nova
       constante de módulo, mesma fórmula usada pra montar as escolas) + `nearAnySchool()`,
       aplicada tanto na altura (`terrainHeight`) quanto na cor de margem (evita escola com chão
       normal mas cor de barro ao redor).
-- [ ] Margem de altura da rua aumentada de novo (de `+0,08` pra `+0,2`), baseada em dado real
+- [x] Margem de altura da rua aumentada de novo (de `+0,08` pra `+0,2`), baseada em dado real
       (pior caso medido por raycast em todo o laço), não em outro palpite.
-- [ ] Verificação: `npm run build` passa; varrer o laço inteiro da rua com raycast físico
-      confirmando folga positiva em TODOS os pontos (não só uma amostra); confirmar as 21
-      escolas com altura dentro da faixa normal (nenhuma "cratera").
+- [x] Verificação: `npm run build` passa; varrido o laço inteiro da rua com raycast físico
+      (96/96 pontos, folga positiva em todos, pior caso +0,089); confirmadas as 21 escolas com
+      altura dentro da faixa normal (nenhuma "cratera"). Ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Investigar a fundo POR QUE a malha grossa do planeta erra até 0,11 num pico específico da
