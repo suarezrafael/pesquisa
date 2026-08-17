@@ -111,6 +111,11 @@ const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const TRIGGER_DISTANCE = 2.4
 const RESET_DISTANCE = 3.6
+// Carro dirigível (lab-25): distância pra mostrar a dica "pressione E" / poder entrar, e
+// velocidade de deslocamento ao longo da rua quando o jogador está no controle (mais rápida que
+// MAX_SPEED a pé — é um carro, deveria ser nitidamente mais rápido que andar).
+const CAR_ENTER_DISTANCE = 2.0
+const CAR_DRIVE_SPEED = 6
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 
 // Clima dinâmico (pedido do usuário: "chuva" — item pendente da lista do lab-09): valores de
@@ -144,6 +149,43 @@ function rotateAroundAxis(v: Vector3, axis: Vector3, angle: number): Vector3 {
   const term2 = Vector3.Cross(axis, v).scale(sinA)
   const term3 = axis.scale(Vector3.Dot(axis, v) * (1 - cosA))
   return term1.add(term2).add(term3)
+}
+
+// Posiciona/orienta `root` num ponto de um trajeto FECHADO (`path`, ex. `streetCenter` — laço
+// completo, sem ponta) a partir de uma posição fracionária (`pathIndex`, envolve pra frente e
+// pra trás via `%` — nunca "acaba"). Reaproveitado pelos carros de IA e pelo carro que o jogador
+// dirige (lab-25) — mesma matemática, só a fonte do `pathIndex` muda (autônomo vs. teclado).
+function positionOnLoopPath(
+  path: Vector3[],
+  pathIndex: number,
+  direction: 1 | -1,
+  root: TransformNode,
+  heightOffset: number,
+  tmpMatrix: Matrix,
+  tmpQuat: Quaternion,
+): void {
+  const len = path.length
+  const wrapped = ((pathIndex % len) + len) % len
+  const i0 = Math.floor(wrapped)
+  const i1 = (i0 + 1) % len
+  const frac = wrapped - i0
+  const p0 = path[i0]
+  const p1 = path[i1]
+  const pos = Vector3.Lerp(p0, p1, frac)
+  // `.clone()` antes de `.normalize()` — mesmo bug do rio/rua original (`.normalize()` muta no
+  // lugar; `pos` vem de `Vector3.Lerp`, um vetor novo, então aqui não mutaria `path`, mas
+  // manter o padrão evita reintroduzir o bug se este código for copiado de novo no futuro).
+  const up = pos.clone().normalize()
+  let fwd = p1.subtract(p0)
+  fwd = fwd.subtract(up.scale(Vector3.Dot(fwd, up)))
+  if (fwd.lengthSquared() < 1e-8) fwd = Vector3.Cross(up, Vector3.Right())
+  fwd.normalize()
+  if (direction === -1) fwd.scaleInPlace(-1)
+  root.position.copyFrom(pos.add(up.scale(heightOffset)))
+  const right = Vector3.Cross(up, fwd).normalize()
+  Matrix.FromXYZAxesToRef(right, up, fwd, tmpMatrix)
+  Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+  root.rotationQuaternion = tmpQuat.clone()
 }
 
 // Centros dos platôs (direção normalizada no planeta + raio angular de influência + altura).
@@ -261,6 +303,20 @@ interface StudentFigure {
   // Chapéu equipado (lab-24) — eixo de customização INDEPENDENTE de `accessories`: populado por
   // `applyHat`, sobrevive a troca de criatura (não é descartado por `applyBonecoFeatures`).
   hatMeshes: Mesh[]
+}
+
+// Carro (lab-15/lab-25) — em escopo de módulo (não dentro de `setup()`) porque o handler de
+// teclado que entra/sai do carro (`onKeyDown`, dentro de `setup()`) precisa do tipo `Carro` numa
+// declaração `let` que vem antes, textualmente, de onde `carros: Carro[]` é montado.
+interface Carro {
+  root: TransformNode
+  pathIndex: number
+  direction: 1 | -1
+  speed: number
+  // Rótulo GUI "pressione E" (lab-25) — visível só quando o jogador está perto o bastante deste
+  // carro específico e não está dirigindo nenhum (mesmo padrão da bolha de fala dos NPCs: alpha
+  // 0/1 alternado, não criado/destruído a cada quadro).
+  hintLabel: TextBlock
 }
 
 interface RemotePlayer {
@@ -1087,6 +1143,10 @@ export function World3D({
     let rankingTimer = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
+    // Carro que o jogador está dirigindo agora (lab-25) — null = a pé. Trocado só pelo handler
+    // de teclado da tecla `e` (ver `onKeyDown`), lido pelo loop de física/câmera do avatar (pra
+    // se congelar) e pelo loop dos carros (pra saber qual pular da IA e mover por input).
+    let drivingCar: Carro | null = null
     // Reaproveitado a cada quadro pra checar "grounded" via raycast físico real (ver comentário
     // onde é usado) — evita alocar um objeto novo por quadro.
     const groundRayResult = new PhysicsRaycastResult()
@@ -1115,6 +1175,60 @@ export function World3D({
         // `jumpRequested` é consumido, no loop de render. `!keysDown[key]` evita re-latch por
         // key-repeat do SO enquanto o jogador segura a tecla.
         if (key === ' ' && !keysDown[key]) jumpRequested = true
+        // Entrar/sair do carro (lab-25, pedido do usuário: "pressionar alguma tecla e entrar
+        // no carro") — `e`, alternando: perto de um carro parado vira "dirigindo"; dirigindo
+        // vira "a pé" de novo, reaparecendo do lado do carro. `!keysDown[key]` evita alternar
+        // várias vezes num só toque por causa de key-repeat do SO.
+        if (key === 'e' && !keysDown[key]) {
+          if (drivingCar) {
+            const exitUp = drivingCar.root.position.clone().normalize()
+            const exitFwd = Vector3.TransformNormal(Vector3.Forward(), drivingCar.root.getWorldMatrix()).normalize()
+            const exitRight = Vector3.Cross(exitUp, exitFwd).normalize()
+            const exitSpot = exitUp.scale(PLANET_RADIUS).add(exitRight.scale(1.3))
+            const exitSpotUp = exitSpot.clone().normalize()
+            if (avatarMesh && avatarBody) {
+              // Teleporte físico seguro (mesmo padrão usado em todo o resto do jogo pra mover o
+              // avatar direto, ex. respawn) — `disablePreStep = false` + `scene.render()` fazem
+              // o corpo físico sincronizar de verdade com a posição escrita aqui; sem isso, o
+              // corpo físico (que roda em `disablePreStep = true` durante o jogo normal) ignora
+              // completamente a escrita direta em `avatarMesh.position` e volta pra onde estava
+              // no próximo passo de física — bug real encontrado testando esta função: o jogador
+              // saía do carro mas continuava "preso" na posição de quando entrou.
+              avatarBody.body.disablePreStep = false
+              avatarMesh.position.copyFrom(
+                exitSpotUp.scale(PLANET_RADIUS + terrainHeight(exitSpotUp) + AVATAR_RADIUS + 0.05),
+              )
+              scene.render()
+              avatarBody.body.setLinearVelocity(Vector3.Zero())
+              avatarBody.body.setAngularVelocity(Vector3.Zero())
+              avatarBody.body.disablePreStep = true
+            }
+            facing = exitFwd.subtract(exitSpotUp.scale(Vector3.Dot(exitFwd, exitSpotUp)))
+            if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(exitSpotUp, Vector3.Right())
+            facing.normalize()
+            studentFigure.root.setEnabled(true)
+            drivingCar = null
+          } else if (!suspendRef.current && !chatOpenRef.current && avatarMesh) {
+            let nearestCar: Carro | null = null
+            let nearestDist = CAR_ENTER_DISTANCE
+            for (const car of carros) {
+              const d = Vector3.Distance(avatarMesh.position, car.root.position)
+              if (d < nearestDist) {
+                nearestCar = car
+                nearestDist = d
+              }
+            }
+            if (nearestCar) {
+              drivingCar = nearestCar
+              if (avatarBody) {
+                avatarBody.body.setLinearVelocity(Vector3.Zero())
+                avatarBody.body.setAngularVelocity(Vector3.Zero())
+              }
+              studentFigure.root.setEnabled(false)
+              for (const car of carros) car.hintLabel.alpha = 0
+            }
+          }
+        }
         keysDown[key] = true
       }
       const onKeyUp = (e: KeyboardEvent) => (keysDown[e.key.toLowerCase()] = false)
@@ -1143,6 +1257,12 @@ export function World3D({
       // CENTRO do planeta, não uniformemente pra baixo (ver aplicação da força abaixo).
       havokPlugin = new HavokPlugin(false, havokInstance)
       scene.enablePhysics(Vector3.Zero(), havokPlugin)
+
+      // Camada de UI 2D sobreposta ao mundo 3D (rótulos flutuantes: nome das escolas, bolhas de
+      // fala dos NPCs, "pressione E" dos carros lab-25, etc.) — criada cedo (antes de qualquer
+      // malha que precise de rótulo) porque vários trechos abaixo (rua/carros, escolas, lagoa,
+      // piscina, NPCs) já usam `guiTexture.addControl(...)` conforme vão sendo montados.
+      const guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('portalLabels', true, scene)
 
       // Planeta — deformado com relevo real (ondulação + platôs), não uma esfera lisa.
       // Colisor físico usa a malha deformada (MESH), não mais SPHERE, pra bater com o visual.
@@ -1662,23 +1782,41 @@ export function World3D({
       river.material = riverMat
       river.receiveShadows = true
 
+      // Pato no rio (lab-25, pedido do usuário: "coloque pato no rio") — reaproveita `buildPato`
+      // (já existia pra lagoa, lab-09), nadando pra frente/trás ao longo de `riverCenter` com o
+      // mesmo mecanismo de `pathIndex` já usado pelos carros na rua (ver `carros`, abaixo) —
+      // não é um bicho novo, só um novo trajeto pro bicho que já existia.
+      interface RiverDuck {
+        root: TransformNode
+        pathIndex: number
+        direction: 1 | -1
+        speed: number
+      }
+      const riverDuck: RiverDuck = {
+        root: buildPato(scene, shadowGenerator),
+        pathIndex: riverCenter.length * 0.4,
+        direction: 1,
+        speed: 1.8,
+      }
+
       // Rua (lab-15, pedido do usuário: "ruas+carros") — mesma técnica do rio (ribbon rente à
-      // curvatura do planeta), asfalto com linha central tracejada. Local (theta 280°-320°, phi
-      // igual à faixa das escolas) escolhido por busca de distância angular contra todos os
-      // outros marcos do mapa (platôs, lagoa, piscina, escolas, percurso de parkour, o próprio
-      // rio) — mesmo método usado pra achar o lugar da piscina/parkour, ~13.5° de folga do
-      // vizinho mais próximo.
+      // curvatura do planeta), asfalto com linha central tracejada.
+      //
+      // Redesenhada no lab-25 (pedido do usuário: "a estrada deve fazer a volta no planeta") como
+      // um laço FECHADO — um círculo completo em phi constante (~18°, perto do polo norte onde o
+      // jogador nasce), theta indo de 0° a 360°, em vez do arco curto de antes (theta 280°-320°).
+      // phi=18° foi escolhido porque NENHUM marco existente do mapa (platôs, lagoa, piscina,
+      // parkour, lojinha, deserto, as 20 escolas) tem phi menor que 36° — confirmado calculando o
+      // phi de cada um; a rua nesse círculo nunca cruza fisicamente nada, e ainda fica bem perto
+      // do spawn (fácil de achar o carro logo no começo). A lojinha, que poderia parecer "perto"
+      // da rua antiga, na verdade já estava a ~68° de distância dela — mover a rua não quebra
+      // nenhuma relação de verdade.
+      const STREET_PHI = Math.PI * 0.1 // 18°
+      const STREET_SEGMENTS = 72
       const streetCenter: Vector3[] = []
-      const STREET_SEGMENTS = 32
-      const streetStartPhi = Math.PI * 0.22
-      const streetEndPhi = Math.PI * 0.62
-      const streetStartTheta = (280 * Math.PI) / 180
-      const streetEndTheta = (320 * Math.PI) / 180
-      for (let i = 0; i <= STREET_SEGMENTS; i++) {
-        const t = i / STREET_SEGMENTS
-        const phi = streetStartPhi + (streetEndPhi - streetStartPhi) * t
-        const theta = streetStartTheta + (streetEndTheta - streetStartTheta) * t
-        const streetDir = pointOnSphere(phi, theta, 1)
+      for (let i = 0; i < STREET_SEGMENTS; i++) {
+        const theta = (i / STREET_SEGMENTS) * Math.PI * 2
+        const streetDir = pointOnSphere(STREET_PHI, theta, 1)
         streetCenter.push(streetDir.scale(PLANET_RADIUS + terrainHeight(streetDir) + 0.02))
       }
       const streetHalfWidth = 0.85
@@ -1690,8 +1828,10 @@ export function World3D({
         // (mesmo bug: `.normalize()` muta no lugar, e `p` é a referência real guardada em
         // `streetCenter[i]`, reaproveitada logo abaixo em `p.add()`/`p.subtract()`).
         const up = p.clone().normalize()
-        const next = streetCenter[Math.min(i + 1, streetCenter.length - 1)]
-        const prev = streetCenter[Math.max(i - 1, 0)]
+        // Índices com wraparound (`% length`, não `Math.min`/`Math.max` mais) — laço fechado não
+        // tem ponta, o vizinho do último ponto é o primeiro e vice-versa.
+        const next = streetCenter[(i + 1) % streetCenter.length]
+        const prev = streetCenter[(i - 1 + streetCenter.length) % streetCenter.length]
         const along = next.subtract(prev).normalize()
         const side = Vector3.Cross(up, along).normalize()
         streetLeftBank.push(p.add(side.scale(streetHalfWidth)))
@@ -1699,7 +1839,7 @@ export function World3D({
       }
       const street = MeshBuilder.CreateRibbon(
         'street',
-        { pathArray: [streetLeftBank, streetRightBank], sideOrientation: Mesh.DOUBLESIDE },
+        { pathArray: [streetLeftBank, streetRightBank], sideOrientation: Mesh.DOUBLESIDE, closePath: true },
         scene,
       )
       const streetMat = new PBRMaterial('streetMat', scene)
@@ -1709,16 +1849,18 @@ export function World3D({
       street.receiveShadows = true
 
       // Linha central tracejada — só desenha em segmentos alternados (índice par), fininha e
-      // levemente acima do asfalto (evita brigar com o chão, mesmo truque do rio).
+      // levemente acima do asfalto (evita brigar com o chão, mesmo truque do rio). `% length`
+      // no vizinho fecha o último traço de volta pro primeiro ponto (STREET_SEGMENTS=72 é par,
+      // então a alternância par/ímpar continua consistente na volta).
       const centerLineMat = new PBRMaterial('centerLineMat', scene)
       centerLineMat.albedoColor = new Color3(0.92, 0.8, 0.25)
       centerLineMat.emissiveColor = new Color3(0.15, 0.13, 0.03)
       centerLineMat.roughness = 0.6
       const centerLineHalfWidth = 0.05
-      for (let i = 0; i < streetCenter.length - 1; i += 2) {
+      for (let i = 0; i < streetCenter.length; i += 2) {
         const p = streetCenter[i]
         const up = p.clone().normalize()
-        const next = streetCenter[i + 1]
+        const next = streetCenter[(i + 1) % streetCenter.length]
         const along = next.subtract(p).normalize()
         const side = Vector3.Cross(up, along).normalize()
         const dashLeft = [p.add(side.scale(centerLineHalfWidth)).add(up.scale(0.005)), next.add(side.scale(centerLineHalfWidth)).add(up.scale(0.005))]
@@ -1731,14 +1873,9 @@ export function World3D({
         dash.material = centerLineMat
       }
 
-      // Carrinhos andando pra frente e pra trás ao longo da rua (ping-pong), espalhados e com
-      // velocidades diferentes pra não andarem em fileira sincronizada.
-      interface Carro {
-        root: TransformNode
-        pathIndex: number
-        direction: 1 | -1
-        speed: number
-      }
+      // Carrinhos dando voltas contínuas na rua (laço fechado, lab-25 — antes era ping-pong, mas
+      // um laço fechado não tem ponta pra ricochetear), espalhados e com velocidades diferentes
+      // pra não andarem em fileira sincronizada.
       const carros: Carro[] = []
       const CARRO_COUNT = 5
       const CARRO_COLORS = [
@@ -1750,11 +1887,24 @@ export function World3D({
       ]
       for (let i = 0; i < CARRO_COUNT; i++) {
         const carRoot = buildCarro(scene, shadowGenerator, CARRO_COLORS[i % CARRO_COLORS.length])
+
+        const hintLabel = new TextBlock(`carHint-${i}`, 'Pressione E pra entrar')
+        hintLabel.color = 'white'
+        hintLabel.fontSize = 18
+        hintLabel.fontWeight = 'bold'
+        hintLabel.outlineWidth = 3
+        hintLabel.outlineColor = 'rgba(0,0,0,0.6)'
+        hintLabel.alpha = 0
+        guiTexture.addControl(hintLabel)
+        hintLabel.linkWithMesh(carRoot)
+        hintLabel.linkOffsetY = -55
+
         carros.push({
           root: carRoot,
-          pathIndex: (i / CARRO_COUNT) * (streetCenter.length - 1),
+          pathIndex: (i / CARRO_COUNT) * streetCenter.length,
           direction: i % 2 === 0 ? 1 : -1,
           speed: 3 + Math.random() * 2,
+          hintLabel,
         })
       }
       if (import.meta.env.DEV) {
@@ -1942,7 +2092,6 @@ export function World3D({
 
       // Missões viram miniescolas (não anéis abstratos) — prédio baixo-poli com telhado colorido
       // por tipo/estado da missão, mais um professor parado na porta.
-      const guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('portalLabels', true, scene)
       const wallMatShared = new PBRMaterial('schoolWallMat', scene)
       wallMatShared.albedoColor = new Color3(0.94, 0.88, 0.75)
       wallMatShared.roughness = 0.8
@@ -2541,6 +2690,11 @@ export function World3D({
           rainAnchor.position.copyFrom(pos)
           rainAnchor.rotationQuaternion = alignmentQuaternion(localUp)
 
+          // Dirigindo um carro (lab-25): o corpo físico do avatar fica congelado (sem
+          // gravidade/velocidade nova) e a figura visual escondida (ver handler de entrar/sair)
+          // — o input de teclado vira controle do carro, não do personagem a pé, então nada
+          // aqui deve mexer no avatar enquanto isso.
+          if (!drivingCar) {
           // Gravidade radial real — puxa sempre pro centro do planeta (origem),
           // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
           body.applyForce(localUp.scale(-GRAVITY), pos)
@@ -2655,8 +2809,11 @@ export function World3D({
             studentFigure.head.position.y += (1.15 - studentFigure.head.position.y) * 0.2
             lastFootSign = 0
           }
+          } // fim do `if (!drivingCar)` — resto do bloco (câmera/multiplayer/ranking/portais)
+            // continua rodando normalmente dirigindo ou não.
 
-          // câmera segue a bola acompanhando a orientação local do planeta
+          // câmera segue a bola acompanhando a orientação local do planeta (sobrescrita pela
+          // câmera do carro logo abaixo, se `drivingCar` estiver setado neste quadro)
           const desiredCamPos = pos.subtract(facing.scale(CAMERA_DISTANCE)).add(localUp.scale(CAMERA_HEIGHT))
           camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
@@ -2932,39 +3089,86 @@ export function World3D({
           }
         }
 
-        // Carros: andam pra frente e pra trás ao longo da rua (`streetCenter`), nunca saindo do
-        // asfalto — `pathIndex` é uma posição fracionária dentro do array de pontos da rua,
-        // interpolada entre os dois pontos vizinhos pra um movimento suave.
+        // Carros de IA: dão voltas contínuas na rua (laço fechado, lab-25) — `pathIndex` sobe
+        // sempre na mesma direção, envolvendo (`%`, dentro de `positionOnLoopPath`) em vez de
+        // ricochetear numa ponta que não existe mais.
         for (const car of carros) {
+          if (car === drivingCar) continue // o jogador está no controle deste, não a IA
           car.pathIndex += car.direction * car.speed * dt
-          if (car.pathIndex >= streetCenter.length - 1) {
-            car.pathIndex = streetCenter.length - 1
-            car.direction = -1
-          } else if (car.pathIndex <= 0) {
-            car.pathIndex = 0
-            car.direction = 1
-          }
-          const i0 = Math.floor(car.pathIndex)
-          const i1 = Math.min(i0 + 1, streetCenter.length - 1)
-          const frac = car.pathIndex - i0
-          const p0 = streetCenter[i0]
-          const p1 = streetCenter[i1]
-          const carPos = Vector3.Lerp(p0, p1, frac)
-          // `.clone()` antes de `.normalize()` — mesmo bug do rio/rua (ver comentário lá acima):
-          // `carPos.normalize()` sem clonar mutava `carPos` pro comprimento 1 no lugar, e
-          // `carPos` ainda é usado embaixo (`car.root.position.copyFrom(carPos...)`) precisando
-          // do comprimento de verdade (distância até a superfície da rua).
-          const carUp = carPos.clone().normalize()
-          let carFwd = p1.subtract(p0)
-          carFwd = carFwd.subtract(carUp.scale(Vector3.Dot(carFwd, carUp)))
-          if (carFwd.lengthSquared() < 1e-8) carFwd = Vector3.Cross(carUp, Vector3.Right())
-          carFwd.normalize()
-          if (car.direction === -1) carFwd.scaleInPlace(-1)
-          car.root.position.copyFrom(carPos.add(carUp.scale(0.08)))
-          const carRight = Vector3.Cross(carUp, carFwd).normalize()
-          Matrix.FromXYZAxesToRef(carRight, carUp, carFwd, tmpMatrix)
+          positionOnLoopPath(streetCenter, car.pathIndex, car.direction, car.root, 0.08, tmpMatrix, tmpQuat)
+        }
+
+        // Carro que o jogador está dirigindo (lab-25, pedido do usuário: "andar de carro na
+        // estrada atraves das setas") — mesmo trajeto/mecanismo dos carros de IA, mas o
+        // `pathIndex` avança por input de teclado (cima/baixo, igual ao "throttle" do
+        // personagem a pé) em vez de sozinho. Setas esquerda/direita não fazem nada aqui — a
+        // rua é um trilho 1D, não tem pra onde "virar" fora dela.
+        if (drivingCar) {
+          const driveThrottle = Math.max(-1, Math.min(1, -y))
+          drivingCar.direction = driveThrottle >= 0 ? 1 : -1
+          drivingCar.pathIndex += driveThrottle * CAR_DRIVE_SPEED * dt
+          positionOnLoopPath(streetCenter, drivingCar.pathIndex, drivingCar.direction, drivingCar.root, 0.08, tmpMatrix, tmpQuat)
+
+          // Câmera segue o carro (mesmo esquema de lerp da câmera a pé) — usa a orientação do
+          // próprio carro como "up"/"facing" local, já calculada por `positionOnLoopPath`.
+          const carUpNow = drivingCar.root.position.clone().normalize()
+          // `computeWorldMatrix(true)` força recálculo imediato — sem isso, `getWorldMatrix()`
+          // devolveria a matriz de ANTES do `positionOnLoopPath` deste mesmo quadro (o
+          // recálculo automático do Babylon só acontece depois, na passada de render), um
+          // atraso de 1 quadro na direção da câmera (imperceptível a 60fps, mas incorreto).
+          const carFwdNow = Vector3.TransformNormal(
+            Vector3.Forward(),
+            drivingCar.root.computeWorldMatrix(true),
+          ).normalize()
+          const desiredCarCamPos = drivingCar.root.position.subtract(carFwdNow.scale(CAMERA_DISTANCE)).add(carUpNow.scale(CAMERA_HEIGHT))
+          camera.position = Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
+          camera.upVector = Vector3.Lerp(camera.upVector, carUpNow, 0.15).normalize()
+          camera.setTarget(drivingCar.root.position)
+        }
+
+        // Pato no rio (lab-25): mesmo mecanismo de trajeto dos carros, mas ida-e-volta
+        // (ping-pong) — o rio não é um laço fechado como a rua, então "acaba" nas pontas de
+        // verdade, e reverter a direção lá é o comportamento certo (não envolver).
+        riverDuck.pathIndex += riverDuck.direction * riverDuck.speed * dt
+        if (riverDuck.pathIndex >= riverCenter.length - 1) {
+          riverDuck.pathIndex = riverCenter.length - 1
+          riverDuck.direction = -1
+        } else if (riverDuck.pathIndex <= 0) {
+          riverDuck.pathIndex = 0
+          riverDuck.direction = 1
+        }
+        {
+          const i0 = Math.floor(riverDuck.pathIndex)
+          const i1 = Math.min(i0 + 1, riverCenter.length - 1)
+          const frac = riverDuck.pathIndex - i0
+          const p0 = riverCenter[i0]
+          const p1 = riverCenter[i1]
+          const duckPos = Vector3.Lerp(p0, p1, frac)
+          const duckUp = duckPos.clone().normalize()
+          let duckFwd = p1.subtract(p0)
+          duckFwd = duckFwd.subtract(duckUp.scale(Vector3.Dot(duckFwd, duckUp)))
+          if (duckFwd.lengthSquared() < 1e-8) duckFwd = Vector3.Cross(duckUp, Vector3.Right())
+          duckFwd.normalize()
+          if (riverDuck.direction === -1) duckFwd.scaleInPlace(-1)
+          const bob = Math.sin(time * 2.2) * 0.02
+          riverDuck.root.position.copyFrom(duckPos.add(duckUp.scale(0.03 + bob)))
+          const duckRight = Vector3.Cross(duckUp, duckFwd).normalize()
+          Matrix.FromXYZAxesToRef(duckRight, duckUp, duckFwd, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-          car.root.rotationQuaternion = tmpQuat.clone()
+          riverDuck.root.rotationQuaternion = tmpQuat.clone()
+        }
+
+        // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
+        // jogador não está dirigindo nenhum (não faz sentido mostrar "entrar" em cima de outro
+        // carro enquanto já se está dirigindo um). `avatarMesh.position` direto (não `pos`, que
+        // só existe dentro do bloco `if (avatarBody && avatarMesh)` acima, já fechado aqui).
+        if (!drivingCar && avatarMesh) {
+          for (const car of carros) {
+            const d = Vector3.Distance(avatarMesh.position, car.root.position)
+            car.hintLabel.alpha = d < CAR_ENTER_DISTANCE ? 1 : 0
+          }
+        } else {
+          for (const car of carros) car.hintLabel.alpha = 0
         }
 
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
