@@ -216,6 +216,17 @@ const POOL_CENTER_DIR = new Vector3(0.4156, 0.809, 0.4156).normalize()
 const DESERT_CENTER_DIR = new Vector3(0.1651492309, -0.3090169944, 0.9366078308).normalize()
 const DESERT_RADIUS = 0.3
 
+// Posição fixa pra missões específicas (lab-26) — a posição das escolas normalmente é calculada
+// só pelo índice na lista (ângulo áureo, ver `quests.forEach` em `World3D`), então não dava pra
+// simplesmente "colocar uma escola no deserto" sem mudar a fórmula pra todo mundo (deslocaria as
+// 20 escolas já existentes). `q21` (bônus pós-"Missão Final", tema de deserto) é a exceção: usa
+// o próprio `DESERT_CENTER_DIR` — o centro exato do bioma nunca é ocupado pelo scatter de props
+// do deserto (que só espalha cactos/rochas a partir de 25% do raio pra fora, nunca no centro),
+// então a escola cabe ali sem colidir com nada.
+const QUEST_FIXED_UP: Record<string, Vector3> = {
+  q21: DESERT_CENTER_DIR,
+}
+
 function applyBasin(height: number, dir: Vector3, centerDir: Vector3, radius: number, depth: number): number {
   const dot = Math.max(-1, Math.min(1, Vector3.Dot(dir, centerDir)))
   const angle = Math.acos(dot)
@@ -2100,14 +2111,19 @@ export function World3D({
       doorMatShared.roughness = 0.7
 
       quests.forEach((quest, index) => {
-        const t = quests.length > 1 ? index / (quests.length - 1) : 0
-        const phi = Math.PI * 0.22 + t * Math.PI * 0.4
-        const theta = index * GOLDEN_ANGLE * 1.7
-        const localUp = new Vector3(
-          Math.sin(phi) * Math.cos(theta),
-          Math.cos(phi),
-          Math.sin(phi) * Math.sin(theta),
-        )
+        // `QUEST_FIXED_UP` (lab-26): só `q21` usa isso — as outras continuam pela fórmula de
+        // ângulo áureo de sempre, posição inalterada.
+        let localUp = QUEST_FIXED_UP[quest.id]
+        if (!localUp) {
+          const t = quests.length > 1 ? index / (quests.length - 1) : 0
+          const phi = Math.PI * 0.22 + t * Math.PI * 0.4
+          const theta = index * GOLDEN_ANGLE * 1.7
+          localUp = new Vector3(
+            Math.sin(phi) * Math.cos(theta),
+            Math.cos(phi),
+            Math.sin(phi) * Math.sin(theta),
+          )
+        }
         const surfacePos = localUp.scale(PLANET_RADIUS + terrainHeight(localUp))
 
         const base = new TransformNode(`school-${quest.id}`, scene)

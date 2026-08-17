@@ -293,6 +293,22 @@ export const quests: Quest[] = [
     xpReward: 35,
     coinReward: 18,
   },
+  {
+    id: 'q21',
+    type: 'leitura',
+    title: 'O Oásis Escondido',
+    passage:
+      'Depois de terminar todas as missões, Duda encontrou um caminho de areia que ninguém tinha explorado. No meio do deserto, entre cactos e pedras, havia uma escolinha esperando — o último segredo do planeta.',
+    prompt: 'O que Duda encontrou no meio do deserto?',
+    choices: [
+      { id: 'a', label: 'Um rio congelado' },
+      { id: 'b', label: 'Uma escolinha escondida' },
+      { id: 'c', label: 'Um castelo de gelo' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 40,
+    coinReward: 20,
+  },
 ]
 
 export const questTypeLabels: Record<Quest['type'], string> = {
