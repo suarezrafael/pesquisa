@@ -1,7 +1,8 @@
 # Laboratório 23 — Bioma do deserto (mundo extra)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-17
+Fim: 2026-08-17
 Commit inicial: e83de70412eca0cf77a5c67883afcbdb3ab1e5a4
 
 ## Objetivo do laboratório
@@ -13,20 +14,24 @@ de deserto (`prompt.md` §6 P2 "mundos extras"), região visualmente distinta do
 raio angular, escolhida por busca de folga contra todos os marcos existentes).
 
 ## Funcionalidades planejadas
-- [ ] `DESERT_CENTER_DIR`/`DESERT_RADIUS` — centro escolhido por varredura de candidatos
+- [x] `DESERT_CENTER_DIR`/`DESERT_RADIUS` — centro escolhido por varredura de candidatos
       (mesmo método já usado pra lagoa/piscina/rua/parkour): ~38,9° de folga da escola mais
       próxima, bem acima do raio do próprio bioma.
-- [ ] Cor de areia por vértice no planeta — mistura adicional na malha do planeta (mesmo esquema
+- [x] Cor de areia por vértice no planeta — mistura adicional na malha do planeta (mesmo esquema
       de `hillBlend`/`rockBlend` já existente), baseada na distância angular até
       `DESERT_CENTER_DIR`, com transição suave na borda (não um corte reto).
-- [ ] Grama (thin instances) não nasce dentro do raio do deserto — teria grama saindo da areia,
+- [x] Grama (thin instances) não nasce dentro do raio do deserto — teria grama saindo da areia,
       visualmente errado.
-- [ ] Props do deserto: `buildCactus()` novo (primitivas, mesmo padrão de `buildCarro`) +
+- [x] Props do deserto: `buildCactus()` novo (primitivas, mesmo padrão de `buildCarro`) +
       reaproveitamento das rochas já existentes (Kenney Nature Kit) — substituem
-      árvores/flores/cogumelos só dentro do raio do bioma (fora dele, tudo continua igual).
-- [ ] Verificação: `npm run build` passa; testar ao vivo — teleportar/andar até
-      `DESERT_CENTER_DIR` e confirmar visualmente (terreno de areia, cacto/rochas, sem grama) e
-      numericamente (cor do vértice mais próxima da cor de areia esperada que da grama).
+      árvores/flores/cogumelos só dentro do raio do bioma (fora dele, tudo continua igual). Um
+      scatter dedicado (não previsto originalmente, ver `CONTEXT.md`) foi necessário além da
+      substituição no scatter geral, porque o scatter geral sozinho quase não derrubava nenhum
+      prop dentro de um raio tão pequeno.
+- [x] Verificação: `npm run build` passa; testado ao vivo — cor do vértice mais próximo do centro
+      bate com a cor de areia esperada, 0 de 2600 tufos de grama caem no raio do bioma, scatter
+      dedicado confirmado (6 cactos + rochas), e visualmente confirmado por teleporte + screenshot
+      com clima forçado limpo. Ver `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 - Nova missão/escola dentro do deserto — a posição das escolas é derivada algoritmicamente do
