@@ -311,6 +311,159 @@ export function playBirdChirp(): void {
   })
 }
 
+// Onça, cachorro, falcão (pedido do usuário: "sons engraçados... onças, cachorro, falcão") — cada
+// um sintetizado do zero (mesmo estilo/motivo dos outros sons daqui: sem depender de arquivo de
+// áudio baixado), disparado por proximidade igual ao pássaro (ver `World3D.tsx`, IA de vagar).
+
+// Rosnado grave — ruído filtrado passa-baixa (textura áspera) por cima de um tom senoidal grave
+// oscilando devagar (o "vibrato" que dá a sensação de rosnado, não um tom puro parado).
+export function playJaguarGrowl(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.55
+
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 220
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0, now)
+  noiseGain.gain.linearRampToValueAtTime(0.06, now + 0.08)
+  noiseGain.gain.linearRampToValueAtTime(0, now + duration)
+  src.connect(lowpass).connect(noiseGain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(85, now)
+  const vibrato = ctx.createOscillator()
+  vibrato.frequency.value = 7
+  const vibratoGain = ctx.createGain()
+  vibratoGain.gain.value = 6
+  vibrato.connect(vibratoGain).connect(osc.frequency)
+  const oscGain = ctx.createGain()
+  oscGain.gain.setValueAtTime(0, now)
+  oscGain.gain.linearRampToValueAtTime(0.09, now + 0.08)
+  oscGain.gain.linearRampToValueAtTime(0, now + duration)
+  osc.connect(oscGain).connect(ctx.destination)
+  osc.start(now)
+  vibrato.start(now)
+  osc.stop(now + duration)
+  vibrato.stop(now + duration)
+}
+
+// "Au-au" — dois latidos curtos (onda quadrada, ataque instantâneo, decaimento rápido).
+export function playDogBark(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const barks = [0, 0.16]
+  barks.forEach((offset) => {
+    const t = ctx.currentTime + offset
+    const osc = audioCtx!.createOscillator()
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(340, t)
+    osc.frequency.exponentialRampToValueAtTime(180, t + 0.09)
+    const gain = audioCtx!.createGain()
+    gain.gain.setValueAtTime(0.14, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11)
+    osc.connect(gain).connect(audioCtx!.destination)
+    osc.start(t)
+    osc.stop(t + 0.12)
+  })
+}
+
+// Grito agudo do falcão — tom que sobe e desce rápido (glissando), bem mais estridente/longo que
+// o piu-piu do passarinho.
+export function playFalconScreech(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(1400, now)
+  osc.frequency.linearRampToValueAtTime(2100, now + 0.12)
+  osc.frequency.linearRampToValueAtTime(1100, now + 0.35)
+  const bandpass = ctx.createBiquadFilter()
+  bandpass.type = 'bandpass'
+  bandpass.frequency.value = 1800
+  bandpass.Q.value = 1.5
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, now)
+  gain.gain.linearRampToValueAtTime(0.05, now + 0.04)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4)
+  osc.connect(bandpass).connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + 0.4)
+}
+
+// Sons engraçados (pedido do usuário: "sons engraçados de conversa e pum") — disparados de vez em
+// quando por qualquer bicho perto do jogador (não um tipo específico), pra dar um toque de humor
+// sem exigir animação/fala de verdade.
+
+// "Conversa" bobinha — sequência de bipes curtos em frequências aleatórias (efeito "blablablá"
+// tipo Animal Crossing/Banjo-Kazooie, não fala de verdade).
+export function playFunnyTalk(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const syllables = 3 + Math.floor(Math.random() * 3)
+  for (let i = 0; i < syllables; i++) {
+    const t = ctx.currentTime + i * 0.11
+    const freq = 320 + Math.random() * 260
+    const osc = ctx.createOscillator()
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(freq, t)
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.7, t + 0.07)
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.06, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + 0.09)
+  }
+}
+
+// "Pum" — tom grave curto com queda rápida de frequência + um pouco de ruído, efeito clássico de
+// desenho animado.
+export function playFart(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.32
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(140, now)
+  osc.frequency.exponentialRampToValueAtTime(45, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.1, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  osc.connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + duration)
+
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 400
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0.04, now)
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  src.connect(lowpass).connect(noiseGain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+}
+
 export function playCoinCollect(): void {
   if (!audioCtx || muted) return
   const ctx = audioCtx

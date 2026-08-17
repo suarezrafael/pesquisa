@@ -17,6 +17,7 @@ import {
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
+  type PhysicsBody,
   PhysicsMotionType,
   PhysicsRaycastResult,
   PhysicsShapeType,
@@ -55,6 +56,11 @@ import {
   startRain,
   stopRain,
   toggleMute as toggleAmbienceMute,
+  playJaguarGrowl,
+  playDogBark,
+  playFalconScreech,
+  playFunnyTalk,
+  playFart,
 } from './ambientAudio'
 import {
   connect as connectMultiplayer,
@@ -191,13 +197,22 @@ function positionOnLoopPath(
   root.rotationQuaternion = tmpQuat.clone()
 }
 
-// Centros dos platôs (direção normalizada no planeta + raio angular de influência + altura).
-// Ficam dentro da mesma faixa "caminhável" onde props/portais já são colocados.
+// Centros dos platôs/"montanhas" (direção normalizada no planeta + raio angular de influência +
+// altura). Ficam dentro da mesma faixa "caminhável" onde props/portais já são colocados.
+//
+// Pedido do usuário (elogiando o visual): "esses objetos de montanha ficaram muito bonitos, você
+// pode fazer eles maiores e outros no mapa" — as 4 originais tiveram radius/height aumentados
+// (~+35%), e mais 4 foram acrescentadas espalhadas pelo mesmo ângulo áureo usado no resto do
+// mapa (props/escolas), pra ficarem bem distribuídas em vez de agrupadas.
 const PLATEAU_CENTERS = [
-  { dir: new Vector3(0.75, 0.6, -0.2).normalize(), radius: 0.34, height: 2.4 },
-  { dir: new Vector3(-0.5, 0.55, 0.62).normalize(), radius: 0.3, height: 1.9 },
-  { dir: new Vector3(0.15, 0.3, -0.9).normalize(), radius: 0.28, height: 2.1 },
-  { dir: new Vector3(-0.8, 0.25, -0.45).normalize(), radius: 0.26, height: 1.6 },
+  { dir: new Vector3(0.75, 0.6, -0.2).normalize(), radius: 0.46, height: 3.2 },
+  { dir: new Vector3(-0.5, 0.55, 0.62).normalize(), radius: 0.41, height: 2.6 },
+  { dir: new Vector3(0.15, 0.3, -0.9).normalize(), radius: 0.38, height: 2.8 },
+  { dir: new Vector3(-0.8, 0.25, -0.45).normalize(), radius: 0.35, height: 2.2 },
+  { dir: new Vector3(-0.21, 0.5, 0.84).normalize(), radius: 0.32, height: 2.4 },
+  { dir: new Vector3(-0.25, 0.65, -0.7).normalize(), radius: 0.3, height: 2.0 },
+  { dir: new Vector3(0.55, 0.15, 0.75).normalize(), radius: 0.34, height: 2.3 },
+  { dir: new Vector3(-0.7, 0.5, 0.1).normalize(), radius: 0.28, height: 1.8 },
 ]
 
 // Centro da lagoa e da piscina — a mesma direção usada pra desenhar a água (World3D usa esses
@@ -742,7 +757,7 @@ function applyHat(
 // articulação). A IA de cada um é: anda até um ponto aleatório na faixa caminhável, descansa um
 // tempo, escolhe outro ponto — tudo em coordenadas de "up local" (direção a partir do centro do
 // planeta), igual ao resto do mundo, pra já nascer alinhado à curvatura sem lógica extra.
-type CritterKind = 'coelho' | 'esquilo' | 'passarinho' | 'gato'
+type CritterKind = 'coelho' | 'esquilo' | 'passarinho' | 'gato' | 'cachorro' | 'onca' | 'falcao'
 
 interface Critter {
   kind: CritterKind
@@ -760,6 +775,12 @@ interface Critter {
   // Só usado por `kind === 'passarinho'` — canto baixinho quando o jogador está perto (pedido
   // do usuário). `undefined` até o primeiro uso, sorteado na primeira checagem.
   chirpTimer?: number
+  // Som de espécie (latido/rosnado/grito, cachorro/onça/falcão) — mesmo mecanismo do
+  // `chirpTimer` acima, timer independente por bicho pra não disparar tudo sincronizado.
+  soundTimer?: number
+  // Som engraçado (pedido do usuário: "sons engraçados de conversa e pum") — qualquer bicho
+  // pode disparar de vez em quando quando o jogador está perto, não só os 3 novos tipos.
+  funnyTimer?: number
 }
 
 function buildCoelho(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
@@ -904,6 +925,147 @@ function buildPassarinho(
     pivot.parent = root
     const wing = MeshBuilder.CreateBox(`passarinhoWing${side}`, { width: 0.16, height: 0.015, depth: 0.09 }, scene)
     wing.position = new Vector3(side * 0.08, 0, 0)
+    wing.material = bodyMat
+    wing.parent = pivot
+    shadowGenerator.addShadowCaster(wing)
+    return pivot
+  }
+
+  return { root, wingL: buildWing(-1), wingR: buildWing(1) }
+}
+
+// Cachorro (pedido do usuário: "sons engraçados... onças, cachorro, falcão") — vaga pelo chão
+// igual coelho/esquilo/gato, mesmo estilo baixo-poli de cápsulas/esferas.
+function buildCachorro(scene: Scene, shadowGenerator: ShadowGenerator, furColor: Color3): TransformNode {
+  const root = new TransformNode('cachorroRoot', scene)
+  const furMat = new PBRMaterial('cachorroFur', scene)
+  furMat.albedoColor = furColor
+  furMat.roughness = 0.85
+
+  function add(mesh: Mesh) {
+    mesh.material = furMat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateCapsule('cachorroBody', { height: 0.34, radius: 0.13 }, scene)
+  body.rotation.x = Math.PI / 2
+  body.position.y = 0.16
+  add(body)
+
+  const head = MeshBuilder.CreateSphere('cachorroHead', { diameter: 0.18 }, scene)
+  head.position = new Vector3(0, 0.2, 0.2)
+  add(head)
+
+  const snout = MeshBuilder.CreateCapsule('cachorroSnout', { height: 0.12, radius: 0.055 }, scene)
+  snout.rotation.x = Math.PI / 2
+  snout.position = new Vector3(0, 0.16, 0.29)
+  add(snout)
+
+  for (const side of [-1, 1]) {
+    const ear = MeshBuilder.CreateCapsule(`cachorroEar${side}`, { height: 0.1, radius: 0.035 }, scene)
+    ear.position = new Vector3(side * 0.08, 0.27, 0.19)
+    ear.rotation.z = side * 0.5
+    add(ear)
+  }
+
+  const tail = MeshBuilder.CreateCapsule('cachorroTail', { height: 0.22, radius: 0.035 }, scene)
+  tail.position = new Vector3(0, 0.26, -0.19)
+  tail.rotation.x = -0.9
+  add(tail)
+
+  return root
+}
+
+// Onça (jaguar) — corpo maior/mais alongado que os outros bichos de terra, manchas escuras
+// espalhadas (esferas achatadas pequenas sobre o pelo) pra diferenciar de um gato comum de longe.
+function buildOnca(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('oncaRoot', scene)
+  const furMat = new PBRMaterial('oncaFur', scene)
+  furMat.albedoColor = new Color3(0.85, 0.62, 0.25)
+  furMat.roughness = 0.8
+  const spotMat = new PBRMaterial('oncaSpot', scene)
+  spotMat.albedoColor = new Color3(0.22, 0.14, 0.05)
+  spotMat.roughness = 0.85
+
+  function add(mesh: Mesh, mat: PBRMaterial = furMat) {
+    mesh.material = mat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateCapsule('oncaBody', { height: 0.5, radius: 0.16 }, scene)
+  body.rotation.x = Math.PI / 2
+  body.position.y = 0.19
+  add(body)
+
+  const head = MeshBuilder.CreateSphere('oncaHead', { diameter: 0.22 }, scene)
+  head.position = new Vector3(0, 0.23, 0.3)
+  add(head)
+
+  for (const side of [-1, 1]) {
+    const ear = MeshBuilder.CreateCylinder(
+      `oncaEar${side}`,
+      { height: 0.06, diameterTop: 0, diameterBottom: 0.07, tessellation: 3 },
+      scene,
+    )
+    ear.position = new Vector3(side * 0.08, 0.33, 0.3)
+    add(ear)
+  }
+
+  const tail = MeshBuilder.CreateCapsule('oncaTail', { height: 0.32, radius: 0.04 }, scene)
+  tail.position = new Vector3(0, 0.28, -0.3)
+  tail.rotation.x = -1.0
+  add(tail)
+
+  // Manchas: pequenas esferas achatadas espalhadas pelo corpo, posições fixas mas assimétricas
+  // (não uma grade regular) pra não parecer padrão repetido.
+  const spotOffsets: Array<[number, number, number]> = [
+    [0.1, 0.24, 0.1], [-0.11, 0.22, -0.02], [0.08, 0.26, -0.15],
+    [-0.09, 0.25, 0.2], [0.12, 0.21, -0.28], [-0.1, 0.23, -0.32],
+  ]
+  spotOffsets.forEach(([x, y, z], i) => {
+    const spot = MeshBuilder.CreateSphere(`oncaSpot${i}`, { diameterX: 0.05, diameterY: 0.03, diameterZ: 0.05 }, scene)
+    spot.position = new Vector3(x, y, z)
+    add(spot, spotMat)
+  })
+
+  return root
+}
+
+// Falcão — voa igual ao passarinho (mesmo mecanismo de asa/altura de voo), só maior e sem o bico
+// arredondado (bico de gancho, mais predador).
+function buildFalcao(
+  scene: Scene,
+  shadowGenerator: ShadowGenerator,
+): { root: TransformNode; wingL: TransformNode; wingR: TransformNode } {
+  const root = new TransformNode('falcaoRoot', scene)
+  const bodyMat = new PBRMaterial('falcaoBodyMat', scene)
+  bodyMat.albedoColor = new Color3(0.38, 0.3, 0.22)
+  bodyMat.roughness = 0.7
+  const beakMat = new PBRMaterial('falcaoBeakMat', scene)
+  beakMat.albedoColor = new Color3(0.85, 0.75, 0.2)
+  beakMat.roughness = 0.5
+
+  const body = MeshBuilder.CreateSphere('falcaoBody', { diameterX: 0.22, diameterY: 0.2, diameterZ: 0.32 }, scene)
+  body.material = bodyMat
+  body.parent = root
+  shadowGenerator.addShadowCaster(body)
+
+  const beak = MeshBuilder.CreateCylinder('falcaoBeak', { height: 0.11, diameterTop: 0, diameterBottom: 0.06 }, scene)
+  beak.rotation.x = Math.PI / 2 + 0.3
+  beak.position = new Vector3(0, -0.02, 0.2)
+  beak.material = beakMat
+  beak.parent = root
+
+  function buildWing(side: number): TransformNode {
+    const pivot = new TransformNode(`falcaoWingPivot${side}`, scene)
+    pivot.position = new Vector3(side * 0.08, 0.01, 0)
+    pivot.parent = root
+    const wing = MeshBuilder.CreateBox(`falcaoWing${side}`, { width: 0.28, height: 0.02, depth: 0.14 }, scene)
+    wing.position = new Vector3(side * 0.14, 0, 0)
     wing.material = bodyMat
     wing.parent = pivot
     shadowGenerator.addShadowCaster(wing)
@@ -1696,14 +1858,79 @@ export function World3D({
         coins.push({ pivot: topCoinPivot, mesh: topCoinMesh, worldPos: topCoinPos, collected: false })
       }
 
+      // Segundo desafio de parkour (pedido do usuário: "o parkour de degraus ficou legal, coloque
+      // um desafio maior de blocos mais alto e bem lá em cima ganha mais moedas") — mesma técnica
+      // do primeiro (referencial tangente local fixo, física de pulo idêntica), só que com o
+      // dobro de degraus (mais alto/mais longo) e várias moedas agrupadas no topo em vez de uma
+      // só, pra realmente valer mais quando completado. Local achado por varredura de candidatos
+      // (mesmo método de busca por distância angular usado pro primeiro parkour/piscina/lojinha)
+      // contra TODOS os marcos do mapa — as 8 montanhas, lagoa, piscina, deserto, o parkour
+      // original e a lojinha — margem de folga de ~44° do vizinho mais próximo.
+      const PARKOUR2_ANCHOR_UP = new Vector3(0.26684324711116825, -0.754709580222772, -0.5993397458796933).normalize()
+      const parkour2AnchorPos = PARKOUR2_ANCHOR_UP.scale(PLANET_RADIUS + terrainHeight(PARKOUR2_ANCHOR_UP))
+      const parkour2Forward = Vector3.Cross(PARKOUR2_ANCHOR_UP, Vector3.Right()).normalize()
+      const parkour2Right = Vector3.Cross(PARKOUR2_ANCHOR_UP, parkour2Forward).normalize()
+      const PARKOUR2_STEPS = 14
+
+      const parkour2PlatformMat = new PBRMaterial('parkour2PlatformMat', scene)
+      parkour2PlatformMat.albedoColor = new Color3(0.55, 0.3, 0.65) // roxo — visualmente distinto do primeiro parkour (marrom)
+      parkour2PlatformMat.roughness = 0.7
+
+      let parkour2TopPos = parkour2AnchorPos
+      for (let i = 0; i < PARKOUR2_STEPS; i++) {
+        const lateral = (i % 2 === 0 ? 1 : -1) * PARKOUR_LATERAL_AMPLITUDE
+        const platPos = parkour2AnchorPos
+          .add(parkour2Forward.scale(1.0 + i * PARKOUR_FORWARD_STEP))
+          .add(parkour2Right.scale(lateral))
+          .add(PARKOUR2_ANCHOR_UP.scale(0.5 + i * PARKOUR_HEIGHT_STEP))
+        parkour2TopPos = platPos
+
+        const platform2 = MeshBuilder.CreateBox(`parkour2Platform-${i}`, { width: 1.3, height: 0.3, depth: 1.3 }, scene)
+        platform2.position.copyFrom(platPos)
+        platform2.rotationQuaternion = alignmentQuaternion(PARKOUR2_ANCHOR_UP)
+        platform2.material = parkour2PlatformMat
+        platform2.receiveShadows = true
+        shadowGenerator.addShadowCaster(platform2)
+        new PhysicsAggregate(platform2, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+      }
+
+      // Recompensa maior no topo — um leque de 5 moedas em vez de 1, pra render o desafio maior
+      // (14 degraus contra 7 do primeiro) valer proporcionalmente mais quando completado.
+      {
+        const TOP_COIN_COUNT = 5
+        for (let c = 0; c < TOP_COIN_COUNT; c++) {
+          const spreadAngle = (c - (TOP_COIN_COUNT - 1) / 2) * 0.5
+          const spreadDir = rotateAroundAxis(parkour2Forward, PARKOUR2_ANCHOR_UP, spreadAngle)
+          const topCoinPos = parkour2TopPos.add(PARKOUR2_ANCHOR_UP.scale(0.4)).add(spreadDir.scale(0.5))
+          const topCoinPivot = new TransformNode(`coinPivot-parkour2Top-${c}`, scene)
+          topCoinPivot.position = topCoinPos
+          topCoinPivot.rotationQuaternion = alignmentQuaternion(PARKOUR2_ANCHOR_UP)
+          const topCoinMesh = MeshBuilder.CreateCylinder(`coin-parkour2Top-${c}`, { height: 0.08, diameter: 0.55 }, scene)
+          topCoinMesh.parent = topCoinPivot
+          topCoinMesh.material = coinMat
+          shadowGenerator.addShadowCaster(topCoinMesh)
+          coins.push({ pivot: topCoinPivot, mesh: topCoinMesh, worldPos: topCoinPos, collected: false })
+        }
+      }
+
       // Bichinhos vagando pelo planeta (pedido do usuário: "animais no mundo, animais
-      // aleatorios", depois "mais gato") — tipo e ponto de partida sorteados, cada um com
-      // velocidade/fase própria pra não se moverem em sincronia. IA de vagar (wander) roda no
-      // loop de render abaixo.
+      // aleatorios", depois "mais gato", depois "onças, cachorro, falcão") — tipo e ponto de
+      // partida sorteados, cada um com velocidade/fase própria pra não se moverem em sincronia.
+      // IA de vagar (wander) roda no loop de render abaixo. Falcão voa igual passarinho (asa +
+      // altura de voo); cachorro/onça vagam pelo chão igual coelho/esquilo/gato. Onça é mais rara
+      // (predador grande, não devia estar em todo canto) que os outros bichos.
       const critters: Critter[] = []
-      const CRITTER_COUNT = 26
+      const CRITTER_COUNT = 39
       for (let i = 0; i < CRITTER_COUNT; i++) {
-        const kind: CritterKind = i < 8 ? 'coelho' : i < 14 ? 'esquilo' : i < 20 ? 'gato' : 'passarinho'
+        const kind: CritterKind =
+          i < 8 ? 'coelho'
+          : i < 14 ? 'esquilo'
+          : i < 20 ? 'gato'
+          : i < 26 ? 'passarinho'
+          : i < 31 ? 'cachorro'
+          : i < 34 ? 'onca'
+          : 'falcao'
+        const flies = kind === 'passarinho' || kind === 'falcao'
         const phi = Math.PI * 0.14 + Math.random() * Math.PI * 0.6
         const theta = Math.random() * Math.PI * 2
         const up = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
@@ -1718,9 +1945,19 @@ export function World3D({
         } else if (kind === 'gato') {
           const gatoColor = Color3.Lerp(new Color3(0.85, 0.55, 0.25), new Color3(0.15, 0.15, 0.15), Math.random())
           root = buildGato(scene, shadowGenerator, gatoColor)
-        } else {
+        } else if (kind === 'cachorro') {
+          const dogColor = Color3.Lerp(new Color3(0.75, 0.55, 0.3), new Color3(0.35, 0.25, 0.15), Math.random())
+          root = buildCachorro(scene, shadowGenerator, dogColor)
+        } else if (kind === 'onca') {
+          root = buildOnca(scene, shadowGenerator)
+        } else if (kind === 'passarinho') {
           const passarinhoColor = Color3.Lerp(new Color3(0.75, 0.25, 0.2), new Color3(0.3, 0.4, 0.75), Math.random())
           const built = buildPassarinho(scene, shadowGenerator, passarinhoColor)
+          root = built.root
+          wingL = built.wingL
+          wingR = built.wingR
+        } else {
+          const built = buildFalcao(scene, shadowGenerator)
           root = built.root
           wingL = built.wingL
           wingR = built.wingR
@@ -1734,11 +1971,11 @@ export function World3D({
           up,
           targetUp: up,
           forward: Vector3.Cross(up, Vector3.Right()).normalize(),
-          moveSpeed: (kind === 'passarinho' ? 0.35 : 0.18) + Math.random() * 0.12,
+          moveSpeed: (flies ? 0.35 : 0.18) + Math.random() * 0.12,
           hopPhase: Math.random() * Math.PI * 2,
-          hopSpeed: (kind === 'passarinho' ? 12 : 8) + Math.random() * 3,
+          hopSpeed: (flies ? 12 : 8) + Math.random() * 3,
           restTimer: Math.random() * 3,
-          flightHeight: kind === 'passarinho' ? 1.6 + Math.random() * 0.6 : 0,
+          flightHeight: flies ? 1.6 + Math.random() * 0.6 : 0,
         })
       }
       if (import.meta.env.DEV) (window as any).__critters = critters
@@ -2173,6 +2410,35 @@ export function World3D({
         }
       }
 
+      // A fórmula contínua de `terrainHeight` não bate exatamente com a malha RENDERIZADA do
+      // planeta (malha grossa, 48 segmentos) — erro medido em labs anteriores (rua, rio) de até
+      // ~0,1-0,5 unidade, maior perto de bordas íngremes (como a borda de um platô/montanha).
+      // Pedido do usuário (junto com montanhas maiores, ver `PLATEAU_CENTERS` acima): "em vez de
+      // botar as casinhas em pontos flutuantes invisíveis, pode colocar elas em cima das
+      // montanhas" — as escolas até então confiavam só na fórmula, então perto de uma borda de
+      // platô podiam ficar flutuando (fórmula prevendo chão mais alto que a malha de verdade) ou
+      // afundadas. `schoolGroundRadial` faz o mesmo raycast físico real (contra a MESMA malha do
+      // planeta) já comprovado no rio/rua, com o mesmo filtro de colisor (ignora qualquer acerto
+      // que não seja o planeta — o avatar já existe na cena nesse ponto de `setup()`, então um
+      // raycast sem filtro correria o mesmo risco de acertar o colisor do jogador em vez do chão).
+      const schoolRaycastResult = new PhysicsRaycastResult()
+      function schoolGroundRadial(dir: Vector3, formulaHeight: number): number {
+        if (!havokPlugin) return PLANET_RADIUS + formulaHeight
+        const from = dir.scale(PLANET_RADIUS + 6)
+        const to = dir.scale(PLANET_RADIUS - 2)
+        let ignoreBody: PhysicsBody | undefined
+        for (let attempt = 0; attempt < 6; attempt++) {
+          schoolRaycastResult.reset()
+          havokPlugin.raycast(from, to, schoolRaycastResult, ignoreBody ? { ignoreBody } : undefined)
+          if (!schoolRaycastResult.hasHit) break
+          if (schoolRaycastResult.body?.transformNode?.name === 'planet') {
+            return schoolRaycastResult.hitPointWorld.length()
+          }
+          ignoreBody = schoolRaycastResult.body ?? undefined
+        }
+        return PLANET_RADIUS + formulaHeight
+      }
+
       // Missões viram miniescolas (não anéis abstratos) — prédio baixo-poli com telhado colorido
       // por tipo/estado da missão, mais um professor parado na porta.
       const wallMatShared = new PBRMaterial('schoolWallMat', scene)
@@ -2196,7 +2462,8 @@ export function World3D({
             Math.sin(phi) * Math.sin(theta),
           )
         }
-        const surfacePos = localUp.scale(PLANET_RADIUS + terrainHeight(localUp))
+        const groundRadial = schoolGroundRadial(localUp, terrainHeight(localUp))
+        const surfacePos = localUp.scale(groundRadial)
 
         const base = new TransformNode(`school-${quest.id}`, scene)
         base.position = surfacePos
@@ -2207,6 +2474,11 @@ export function World3D({
         walls.material = wallMatShared
         walls.parent = base
         walls.receiveShadows = true
+        // Pedido do usuário (junto com montanhas maiores/casinhas em cima delas): "precisam ter
+        // colisão" — antes o prédio era só visual, o jogador atravessava a parede andando. Mesmo
+        // padrão das plataformas de parkour (`PhysicsShapeType.BOX`, `mass: 0` — estático, nunca
+        // se move).
+        new PhysicsAggregate(walls, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
         shadowGenerator.addShadowCaster(walls)
 
         const door = MeshBuilder.CreateBox(`door-${quest.id}`, { width: 0.42, height: 0.62, depth: 0.06 }, scene)
@@ -3044,22 +3316,23 @@ export function World3D({
           }
 
           const groundPos = c.up.scale(PLANET_RADIUS + terrainHeight(c.up) + c.flightHeight)
-          if (c.kind === 'passarinho') {
+          if (c.kind === 'passarinho' || c.kind === 'falcao') {
             const bob = Math.sin(time * 2 + c.hopPhase) * 0.15
             c.root.position.copyFrom(groundPos.add(c.up.scale(bob)))
             const flap = Math.sin(time * c.hopSpeed) * 0.9
             if (c.wingL) c.wingL.rotation.z = flap
             if (c.wingR) c.wingR.rotation.z = -flap
 
-            // Canto baixinho quando o jogador está perto (pedido do usuário). Timer por
-            // pássaro (não sincronizado entre eles) — só checa a distância quando o timer zera,
-            // não todo quadro, e só canta se o jogador estiver mesmo perto nesse instante.
+            // Canto/grito baixinho quando o jogador está perto (pedido do usuário). Timer por
+            // bicho (não sincronizado entre eles) — só checa a distância quando o timer zera,
+            // não todo quadro, e só toca se o jogador estiver mesmo perto nesse instante.
             if (avatarMesh) {
               c.chirpTimer = (c.chirpTimer ?? 2 + Math.random() * 5) - dt
               if (c.chirpTimer <= 0) {
                 c.chirpTimer = 3 + Math.random() * 5
                 if (Vector3.Distance(c.root.position, avatarMesh.position) < BIRD_CHIRP_RADIUS) {
-                  playBirdChirp()
+                  if (c.kind === 'passarinho') playBirdChirp()
+                  else playFalconScreech()
                 }
               }
             }
@@ -3067,6 +3340,33 @@ export function World3D({
             c.hopPhase += dt * c.hopSpeed * (moving ? 1 : 0.15)
             const hop = Math.max(0, Math.sin(c.hopPhase)) * 0.05
             c.root.position.copyFrom(groundPos.add(c.up.scale(hop)))
+
+            // Latido/rosnado (cachorro/onça) quando o jogador está perto — mesmo mecanismo do
+            // pássaro/falcão acima, timer independente.
+            if (avatarMesh && (c.kind === 'cachorro' || c.kind === 'onca')) {
+              c.soundTimer = (c.soundTimer ?? 3 + Math.random() * 5) - dt
+              if (c.soundTimer <= 0) {
+                c.soundTimer = 4 + Math.random() * 6
+                if (Vector3.Distance(c.root.position, avatarMesh.position) < BIRD_CHIRP_RADIUS) {
+                  if (c.kind === 'cachorro') playDogBark()
+                  else playJaguarGrowl()
+                }
+              }
+            }
+          }
+
+          // Som engraçado (pedido do usuário: "sons engraçados de conversa e pum") — qualquer
+          // bicho, de vez em quando, quando o jogador está perto. Intervalo bem mais longo que
+          // os sons de espécie acima (é um extra raro/cômico, não o som "normal" do bicho).
+          if (avatarMesh) {
+            c.funnyTimer = (c.funnyTimer ?? 10 + Math.random() * 20) - dt
+            if (c.funnyTimer <= 0) {
+              c.funnyTimer = 20 + Math.random() * 25
+              if (Vector3.Distance(c.root.position, avatarMesh.position) < BIRD_CHIRP_RADIUS) {
+                if (Math.random() < 0.5) playFunnyTalk()
+                else playFart()
+              }
+            }
           }
 
           const right = Vector3.Cross(c.up, fwd).normalize()
