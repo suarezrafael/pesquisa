@@ -227,6 +227,38 @@ const QUEST_FIXED_UP: Record<string, Vector3> = {
   q21: DESERT_CENTER_DIR,
 }
 
+// Direção de cada escola, calculada aqui com a MESMA fórmula do loop que monta as escolas em
+// `setup()` (fonte única — copiada, não importada, porque `quests.forEach` também precisa rodar
+// outro código de construção de malha que não faz sentido em escopo de módulo; mas a fórmula de
+// posição em si tem que ser idêntica, letra por letra).
+//
+// Existe pra proteger escolas de bacias de terreno que passam perto (lab-28: a bacia do rio,
+// nova nesta sessão, carvou embaixo de 3 escolas — q06/q14/q17 — sem nenhum aviso, porque a
+// fórmula de posição das escolas é independente de onde o rio passa e ninguém tinha verificado
+// as duas coisas juntas antes. Bug real relatado pelo usuário: "a casinha 14 está debaixo da
+// terra"). Qualquer bacia nova que varra uma faixa ampla de theta (como o rio, que cobre ~216°)
+// precisa checar contra isto antes de cavar.
+const SCHOOL_DIRS: Vector3[] = quests.map((quest, index) => {
+  const fixed = QUEST_FIXED_UP[quest.id]
+  if (fixed) return fixed
+  const t = quests.length > 1 ? index / (quests.length - 1) : 0
+  const phi = Math.PI * 0.22 + t * Math.PI * 0.4
+  const theta = index * GOLDEN_ANGLE * 1.7
+  return new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+})
+// Raio de proteção: maior que o "meio-tamanho" de um prédio de escola (paredes 1,6×1,4, metade
+// da diagonal ≈ 1,05 unidade ≈ 0,08 rad) com folga extra — suficiente pra manter a escola inteira
+// (não só o centro) fora de qualquer bacia que passe perto.
+const SCHOOL_PROTECTION_RADIUS = 0.12
+
+function nearAnySchool(dir: { x: number; y: number; z: number }): boolean {
+  for (const schoolDir of SCHOOL_DIRS) {
+    const dot = dir.x * schoolDir.x + dir.y * schoolDir.y + dir.z * schoolDir.z
+    if (dot > Math.cos(SCHOOL_PROTECTION_RADIUS)) return true
+  }
+  return false
+}
+
 function applyBasin(height: number, dir: Vector3, centerDir: Vector3, radius: number, depth: number): number {
   const dot = Math.max(-1, Math.min(1, Vector3.Dot(dir, centerDir)))
   const angle = Math.acos(dot)
@@ -288,17 +320,25 @@ function terrainHeight(dir: Vector3): number {
   // Bacia da lagoa/piscina: rebaixa incondicionalmente (não é um "máximo" tipo platô — é sempre
   // mais baixo que a vizinhança ali, senão o disco de água plano acaba mais baixo que algum
   // solavanco do ruído de base bem no meio da lagoa, furando o chão pra fora d'água).
-  height = applyBasin(height, dir, POND_CENTER_DIR, 0.45, 0.65)
-  height = applyBasin(height, dir, POOL_CENTER_DIR, 0.32, 0.55)
+  //
+  // Nenhuma bacia cava perto de uma escola (lab-28: bug real relatado pelo usuário, "a casinha
+  // 14 está debaixo da terra" — a bacia do rio, nova nesta sessão, carvou embaixo de 3 escolas
+  // sem ninguém checar as duas coisas juntas; ver `nearAnySchool`). Lagoa/piscina foram escolhidas
+  // por busca de folga em labs anteriores e provavelmente nunca encostariam numa escola mesmo
+  // sem essa checagem, mas é barato proteger todas as bacias igual, não só a nova.
+  if (!nearAnySchool(dir)) {
+    height = applyBasin(height, dir, POND_CENTER_DIR, 0.45, 0.65)
+    height = applyBasin(height, dir, POOL_CENTER_DIR, 0.32, 0.55)
 
-  // Bacia do rio (lab-28): mesmo princípio (rebaixa incondicionalmente), mas ao longo de um
-  // trajeto em vez de um único centro — `riverPerpDistance` já devolve null fora da faixa do
-  // rio, então isso não mexe em nenhum outro lugar do planeta.
-  const riverDist = riverPerpDistance(dir)
-  if (riverDist !== null && riverDist < RIVER_BASIN_RADIUS) {
-    const t = 1 - riverDist / RIVER_BASIN_RADIUS
-    const smooth = t * t * (3 - 2 * t)
-    height -= smooth * RIVER_BASIN_DEPTH
+    // Bacia do rio (lab-28): mesmo princípio (rebaixa incondicionalmente), mas ao longo de um
+    // trajeto em vez de um único centro — `riverPerpDistance` já devolve null fora da faixa do
+    // rio, então isso não mexe em nenhum outro lugar do planeta.
+    const riverDist = riverPerpDistance(dir)
+    if (riverDist !== null && riverDist < RIVER_BASIN_RADIUS) {
+      const t = 1 - riverDist / RIVER_BASIN_RADIUS
+      const smooth = t * t * (3 - 2 * t)
+      height -= smooth * RIVER_BASIN_DEPTH
+    }
   }
 
   return height
@@ -1425,32 +1465,37 @@ export function World3D({
           b += (sandColor.b - b) * desertBlend
         }
 
-        // Margem de terra ao redor da bacia da lagoa/piscina — mesmo smoothstep de `applyBasin`,
-        // só que pra cor, não pra altura (a altura já está certa, só faltava aparecer).
+        // Margem de terra ao redor da bacia da lagoa/piscina/rio — mesmo smoothstep de
+        // `applyBasin`, só que pra cor, não pra altura (a altura já está certa, só faltava
+        // aparecer). Sem cor de margem perto de escola nenhuma (mesma proteção de
+        // `nearAnySchool` usada na altura, lab-28) — senão a escola ficaria com chão normal mas
+        // cor de barro ao redor, inconsistente.
         const dirVec = { x: px / posLen, y: py / posLen, z: pz / posLen }
-        for (const [centerDir, radius] of [
-          [POND_CENTER_DIR, 0.45],
-          [POOL_CENTER_DIR, 0.32],
-        ] as const) {
-          const dot = Math.max(-1, Math.min(1, dirVec.x * centerDir.x + dirVec.y * centerDir.y + dirVec.z * centerDir.z))
-          const angle = Math.acos(dot)
-          if (angle < radius) {
-            const bt = 1 - angle / radius
-            const bankBlend = bt * bt * (3 - 2 * bt)
-            r += (bankColor.r - r) * bankBlend
-            g += (bankColor.g - g) * bankBlend
-            b += (bankColor.b - b) * bankBlend
+        if (!nearAnySchool(dirVec)) {
+          for (const [centerDir, radius] of [
+            [POND_CENTER_DIR, 0.45],
+            [POOL_CENTER_DIR, 0.32],
+          ] as const) {
+            const dot = Math.max(-1, Math.min(1, dirVec.x * centerDir.x + dirVec.y * centerDir.y + dirVec.z * centerDir.z))
+            const angle = Math.acos(dot)
+            if (angle < radius) {
+              const bt = 1 - angle / radius
+              const bankBlend = bt * bt * (3 - 2 * bt)
+              r += (bankColor.r - r) * bankBlend
+              g += (bankColor.g - g) * bankBlend
+              b += (bankColor.b - b) * bankBlend
+            }
           }
-        }
 
-        // Margem do rio — mesma ideia, ao longo do trajeto em vez de um centro único.
-        const riverBankDist = riverPerpDistance(dirVec)
-        if (riverBankDist !== null && riverBankDist < RIVER_BASIN_RADIUS) {
-          const rt = 1 - riverBankDist / RIVER_BASIN_RADIUS
-          const riverBankBlend = rt * rt * (3 - 2 * rt)
-          r += (bankColor.r - r) * riverBankBlend
-          g += (bankColor.g - g) * riverBankBlend
-          b += (bankColor.b - b) * riverBankBlend
+          // Margem do rio — mesma ideia, ao longo do trajeto em vez de um centro único.
+          const riverBankDist = riverPerpDistance(dirVec)
+          if (riverBankDist !== null && riverBankDist < RIVER_BASIN_RADIUS) {
+            const rt = 1 - riverBankDist / RIVER_BASIN_RADIUS
+            const riverBankBlend = rt * rt * (3 - 2 * rt)
+            r += (bankColor.r - r) * riverBankBlend
+            g += (bankColor.g - g) * riverBankBlend
+            b += (bankColor.b - b) * riverBankBlend
+          }
         }
 
         planetColors.push(r, g, b, 1)
@@ -1943,16 +1988,25 @@ export function World3D({
       const STREET_SEGMENTS = 96
       const streetCenter: Vector3[] = []
       for (let i = 0; i < STREET_SEGMENTS; i++) {
-        const t = i / STREET_SEGMENTS
+        // `+ 0.5` desloca a amostragem meio segmento (não muda o resultado sozinho, mas evita
+        // theta exatamente 0 por precaução).
+        const t = (i + 0.5) / STREET_SEGMENTS
         const theta = t * Math.PI * 2
         const wobble = Math.sin(theta * 5) * STREET_WOBBLE_AMPLITUDE
         const streetDir = pointOnSphere(STREET_PHI + wobble, theta, 1)
-        // Margem de altura acima de +0.02 (lab-28, relato do usuário: "a estrada está abaixo da
-        // terra, ela não aparece") — não reproduzido de forma clara ao testar, mas +0.02 é fino
-        // o bastante pra arriscar coincidir com a malha do planeta (48 segmentos, só uma
-        // aproximação poligonal da curva contínua de `terrainHeight`) em algum ponto do laço;
-        // +0.08 dá bem mais folga sem ficar visivelmente "flutuando".
-        streetCenter.push(streetDir.scale(PLANET_RADIUS + terrainHeight(streetDir) + 0.08))
+        // Margem de altura (lab-28, relato do usuário: "a estrada está abaixo da terra, ela não
+        // aparece") — bug real confirmado por raycast físico de verdade (`havokPlugin.raycast`,
+        // não só comparação com o vértice mais próximo, que não pega o suficiente): perto de
+        // `theta≈0°`/`phi=25°` a malha RENDERIZADA do planeta (48 segmentos) fica até ~0,11
+        // ACIMA do valor que a fórmula contínua de `terrainHeight` dá naquele ponto exato — a
+        // ondulação de base tem um pico ali que a malha grossa aproxima mal entre dois vértices
+        // (a curva do pico é mais "pontuda" que a malha consegue seguir com poucos segmentos).
+        // Confirmado varrendo o laço inteiro com raycast: pior caso medido = 0,031 de "chão
+        // acima da rua" mesmo já com margem de +0,08 — ou seja, o erro real da malha ali chega a
+        // ~0,11, bem maior que qualquer margem "razoável" de poucos centésimos. `+0.2` cobre esse
+        // pior caso medido com folga de sobra, sem ficar visivelmente flutuando (a rua já é
+        // larga o bastante, 0,85 de meia-largura, pra uma elevação de 0,2 não chamar atenção).
+        streetCenter.push(streetDir.scale(PLANET_RADIUS + terrainHeight(streetDir) + 0.2))
       }
       const streetHalfWidth = 0.85
       const streetLeftBank: Vector3[] = []
