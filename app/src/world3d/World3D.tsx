@@ -211,6 +211,12 @@ function positionOnLoopPath(
 // pode fazer eles maiores e outros no mapa" — as 4 originais tiveram radius/height aumentados
 // (~+35%), e mais 4 foram acrescentadas espalhadas pelo mesmo ângulo áureo usado no resto do
 // mapa (props/escolas), pra ficarem bem distribuídas em vez de agrupadas.
+//
+// Pedido seguinte: "coloque mais montanhas... no planeta" — mais 4 (índices 8-11), posições
+// achadas pela mesma busca gulosa de distância angular contra TODOS os marcos do mapa (as 8
+// montanhas anteriores, lagoa, piscina, deserto, os 4 parkours, lojinha, torre, as 21 escolas) —
+// cada uma escolhida como o ponto de MAIOR folga restante depois de já contar as anteriores,
+// então elas não se amontoam nem colidem com nada existente (folga mínima de 18,6°).
 const PLATEAU_CENTERS = [
   { dir: new Vector3(0.75, 0.6, -0.2).normalize(), radius: 0.46, height: 3.2 },
   { dir: new Vector3(-0.5, 0.55, 0.62).normalize(), radius: 0.41, height: 2.6 },
@@ -220,6 +226,10 @@ const PLATEAU_CENTERS = [
   { dir: new Vector3(-0.25, 0.65, -0.7).normalize(), radius: 0.3, height: 2.0 },
   { dir: new Vector3(0.55, 0.15, 0.75).normalize(), radius: 0.34, height: 2.3 },
   { dir: new Vector3(-0.7, 0.5, 0.1).normalize(), radius: 0.28, height: 1.8 },
+  { dir: new Vector3(0.3957395681006683, -0.7660444431189779, 0.5065235487181534).normalize(), radius: 0.3, height: 2.0 },
+  { dir: new Vector3(-0.3257732493748943, -0.6691306063588582, -0.6679341446771153).normalize(), radius: 0.28, height: 1.9 },
+  { dir: new Vector3(-0.9338776729355676, -0.3255681544571564, -0.14791169255948008).normalize(), radius: 0.28, height: 2.1 },
+  { dir: new Vector3(0.5093910906471965, -0.27563735581699905, -0.8151961511485887).normalize(), radius: 0.26, height: 1.8 },
 ]
 
 // Centro da lagoa e da piscina — a mesma direção usada pra desenhar a água (World3D usa esses
@@ -1658,7 +1668,21 @@ export function World3D({
       const propTemplates = await Promise.all(propFiles.map(loadPropTemplate))
       if (disposed) return
 
-      const PROP_COUNT = 42
+      // Pedido do usuário: "coloque mais... flores no planeta, e mais árvores" — em vez de só
+      // aumentar `PROP_COUNT` (que manteria a mesma proporção de 1/3 árvore, 1/3 pedra, 1/6 flor,
+      // 1/9 cogumelo/tronco, revezando por `i % propTemplates.length`), o índice sorteado agora
+      // vem de uma lista com árvore/flor repetidas — sem mudar `propFiles`/`DESERT_ROCK_INDICES`
+      // (que dependem dos índices originais continuarem os mesmos).
+      const TREE_INDICES = [0, 1, 2, 3, 4, 5]
+      const FLOWER_INDICES = [12, 13, 14]
+      const OTHER_INDICES = [6, 7, 8, 9, 10, 11, 15, 16, 17]
+      const PROP_WEIGHTED_INDICES = [
+        ...TREE_INDICES, ...TREE_INDICES,
+        ...FLOWER_INDICES, ...FLOWER_INDICES,
+        ...OTHER_INDICES,
+      ]
+
+      const PROP_COUNT = 65
       for (let i = 0; i < PROP_COUNT; i++) {
         const t = i / PROP_COUNT
         // Cobre de perto do polo (onde a bola nasce) até um pouco além do equador —
@@ -1689,7 +1713,8 @@ export function World3D({
           const rockTemplate = propTemplates[DESERT_ROCK_INDICES[i % DESERT_ROCK_INDICES.length]]
           instance = rockTemplate.clone(`prop-${i}`, null)
         } else {
-          const template = propTemplates[i % propTemplates.length]
+          const templateIndex = PROP_WEIGHTED_INDICES[i % PROP_WEIGHTED_INDICES.length]
+          const template = propTemplates[templateIndex]
           instance = template.clone(`prop-${i}`, null)
         }
         if (!instance) continue
