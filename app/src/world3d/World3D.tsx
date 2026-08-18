@@ -1563,6 +1563,64 @@ export function World3D({
         return PLANET_RADIUS + formulaHeight
       }
 
+      function settleMeshOnTerrain(root: TransformNode, up: Vector3): void {
+        root.computeWorldMatrix(true)
+        const samples: Vector3[] = []
+        const seed = Math.abs(up.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+        const tangentA = Vector3.Cross(up, seed).normalize()
+        const tangentB = Vector3.Cross(up, tangentA).normalize()
+
+        for (const mesh of root.getChildMeshes()) {
+          const positions = mesh.getVerticesData(VertexBuffer.PositionKind)
+          if (!positions) continue
+          mesh.computeWorldMatrix(true)
+          const worldMatrix = mesh.getWorldMatrix()
+          const vertices: { position: Vector3; x: number; z: number; radial: number }[] = []
+          for (let i = 0; i < positions.length; i += 3) {
+            const position = Vector3.TransformCoordinates(
+              new Vector3(positions[i], positions[i + 1], positions[i + 2]),
+              worldMatrix,
+            )
+            vertices.push({
+              position,
+              x: Vector3.Dot(position, tangentA),
+              z: Vector3.Dot(position, tangentB),
+              radial: Vector3.Dot(position, up),
+            })
+          }
+          if (vertices.length === 0) continue
+
+          const minX = Math.min(...vertices.map((vertex) => vertex.x))
+          const maxX = Math.max(...vertices.map((vertex) => vertex.x))
+          const minZ = Math.min(...vertices.map((vertex) => vertex.z))
+          const maxZ = Math.max(...vertices.map((vertex) => vertex.z))
+          const buckets = new Map<number, (typeof vertices)[number]>()
+
+          for (const vertex of vertices) {
+            const xBucket = Math.min(2, Math.floor(((vertex.x - minX) / Math.max(0.0001, maxX - minX)) * 3))
+            const zBucket = Math.min(2, Math.floor(((vertex.z - minZ) / Math.max(0.0001, maxZ - minZ)) * 3))
+            const key = zBucket * 3 + xBucket
+            const current = buckets.get(key)
+            if (!current || vertex.radial < current.radial) buckets.set(key, vertex)
+          }
+          for (const sample of buckets.values()) samples.push(sample.position)
+        }
+
+        if (samples.length === 0) return
+        let largestGap = 0
+
+        for (const sample of samples) {
+          const direction = sample.clone().normalize()
+          const groundRadial = terrainGroundRadial(direction, terrainHeight(direction))
+          largestGap = Math.max(largestGap, sample.length() - groundRadial)
+        }
+
+        if (largestGap > 0) {
+          root.position.subtractInPlace(up.scale(largestGap + 0.12))
+          root.computeWorldMatrix(true)
+        }
+      }
+
       // Camada de UI 2D sobreposta ao mundo 3D (rótulos flutuantes: nome das escolas, bolhas de
       // fala dos NPCs, "pressione E" dos carros lab-25, etc.) — criada cedo (antes de qualquer
       // malha que precise de rótulo) porque vários trechos abaixo (rua/carros, escolas, lagoa,
@@ -1894,14 +1952,10 @@ export function World3D({
           instance.position = pos
           instance.rotationQuaternion = alignmentQuaternion(localUp).multiply(Quaternion.RotationAxis(Vector3.Up(), spin))
           instance.scaling.setAll(scale)
-          instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
-
-          const colliderDiameter = 0.7 * scale
-          const colliderRadius = colliderDiameter / 2
-          const collider = MeshBuilder.CreateSphere(`mountainRockCollider-${pi}-${ri}`, { diameter: colliderDiameter }, scene)
-          collider.position = pos.add(localUp.scale(0.15 - colliderRadius))
-          collider.isVisible = false
-          new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+          settleMeshOnTerrain(instance, localUp)
+          // O terreno já é sólido. Um colisor esférico separado ultrapassava a silhueta
+          // irregular da rocha e criava rampas invisíveis ao redor dela.
+          instance.getChildMeshes().forEach((mesh) => shadowGenerator.addShadowCaster(mesh))
         }
       })
 
@@ -2763,6 +2817,9 @@ export function World3D({
       const doorMatShared = new PBRMaterial('schoolDoorMat', scene)
       doorMatShared.albedoColor = new Color3(0.42, 0.26, 0.16)
       doorMatShared.roughness = 0.7
+      const foundationMatShared = new PBRMaterial('schoolFoundationMat', scene)
+      foundationMatShared.albedoColor = new Color3(0.5, 0.42, 0.32)
+      foundationMatShared.roughness = 0.95
 
       quests.forEach((quest, index) => {
         // `QUEST_FIXED_UP` (lab-26): só `q21` usa isso — as outras continuam pela fórmula de
@@ -2796,6 +2853,24 @@ export function World3D({
         // se move).
         new PhysicsAggregate(walls, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
         shadowGenerator.addShadowCaster(walls)
+
+        // Fundação (pedido do usuário, com screenshots: "a casa flutuando numa superfície
+        // invisível" mesmo depois de `terrainGroundRadial` confirmar folga ~0 no ANCORA da
+        // escola). Causa raiz real: `surfacePos`/`alignmentQuaternion` amostram o terreno em UM
+        // ponto só, mas a caixa de paredes (1.6 x 1.4) é rígida — em terreno com relevo, o
+        // terreno varia até ~1,4 unidade de um canto ao outro da própria escola, deixando um
+        // canto flutuando (chão visível embaixo) enquanto o oposto afunda. Uma base mais funda e
+        // um pouco mais larga que as paredes garante que nenhum canto fique no ar, sem precisar
+        // inclinar a caixa pra seguir o relevo local.
+        const foundation = MeshBuilder.CreateBox(
+          `foundation-${quest.id}`,
+          { width: 1.72, height: 1.6, depth: 1.52 },
+          scene,
+        )
+        foundation.position = new Vector3(0, -0.65, 0)
+        foundation.material = foundationMatShared
+        foundation.parent = base
+        foundation.receiveShadows = true
 
         const door = MeshBuilder.CreateBox(`door-${quest.id}`, { width: 0.42, height: 0.62, depth: 0.06 }, scene)
         door.position = new Vector3(0, 0.31, 0.71)
@@ -2924,6 +2999,20 @@ export function World3D({
         )
         addShopMesh(frontWall, shopWallMat)
       }
+
+      // Fundação (mesmo problema e mesma correção das escolas: a caixa de paredes usa só o ponto
+      // de amostra `SHOP_ANCHOR_UP`, mas o terreno varia dentro dos 3x3 da própria loja — sem
+      // isso um canto flutua enquanto o oposto afunda).
+      const shopFoundationMat = new PBRMaterial('shopFoundationMat', scene)
+      shopFoundationMat.albedoColor = new Color3(0.5, 0.42, 0.32)
+      shopFoundationMat.roughness = 0.95
+      const shopFoundation = MeshBuilder.CreateBox(
+        'shopFoundation',
+        { width: SHOP_WIDTH + 0.2, height: 1.6, depth: SHOP_DEPTH + 0.2 },
+        scene,
+      )
+      shopFoundation.position = new Vector3(0, -0.65, 0)
+      addShopMesh(shopFoundation, shopFoundationMat)
 
       // Telhado — mesmo truque de pirâmide de 4 lados já usado nas escolas.
       const shopRoof = MeshBuilder.CreateCylinder(
@@ -3054,6 +3143,16 @@ export function World3D({
       const towerFloor1 = MeshBuilder.CreateBox('towerFloor1', { width: TOWER_WIDTH, height: 0.1, depth: TOWER_DEPTH }, scene)
       towerFloor1.position = new Vector3(0, 0.05, 0)
       addTowerMesh(towerFloor1, towerFloorMat, true)
+
+      // Fundação (mesma correção das escolas/lojinha — o térreo usa só o ponto de amostra
+      // `TOWER_ANCHOR_UP`, mas o terreno varia dentro dos 3,2x4,4 do prédio inteiro).
+      const towerFoundation = MeshBuilder.CreateBox(
+        'towerFoundation',
+        { width: TOWER_WIDTH + 0.2, height: 1.6, depth: TOWER_DEPTH + 0.2 },
+        scene,
+      )
+      towerFoundation.position = new Vector3(0, -0.6, 0)
+      addTowerMesh(towerFoundation, towerFloorMat, false)
 
       // Paredes do térreo — fundo e laterais sólidas, frente partida em dois (vão = porta),
       // mesmo padrão da lojinha.
