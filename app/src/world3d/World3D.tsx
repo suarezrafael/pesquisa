@@ -81,6 +81,7 @@ interface World3DProps {
   profile: Profile
   progress: Progress
   onSelectQuest: (questId: string) => void
+  onSelectSurpriseQuiz: (quizId: string) => void
   onOpenHelp: () => void
   onOpenQuestList: () => void
   onOpenShop: () => void
@@ -1259,6 +1260,7 @@ export function World3D({
   profile,
   progress,
   onSelectQuest,
+  onSelectSurpriseQuiz,
   onOpenHelp,
   onOpenQuestList,
   onOpenShop,
@@ -1271,6 +1273,7 @@ export function World3D({
   const progressRef = useRef(progress)
   const suspendRef = useRef(suspendTriggers)
   const onSelectQuestRef = useRef(onSelectQuest)
+  const onSelectSurpriseQuizRef = useRef(onSelectSurpriseQuiz)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
   const sceneRef = useRef<Scene | null>(null)
@@ -1288,6 +1291,7 @@ export function World3D({
   progressRef.current = progress
   suspendRef.current = suspendTriggers
   onSelectQuestRef.current = onSelectQuest
+  onSelectSurpriseQuizRef.current = onSelectSurpriseQuiz
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
 
@@ -1877,10 +1881,14 @@ export function World3D({
         const desertSeed = Math.abs(DESERT_CENTER_DIR.y) < 0.9 ? Vector3.Up() : Vector3.Right()
         const desertTangentA = Vector3.Cross(DESERT_CENTER_DIR, desertSeed).normalize()
         const desertTangentB = Vector3.Cross(DESERT_CENTER_DIR, desertTangentA).normalize()
-        const DESERT_PROP_COUNT = 12
+        // Pedido do usuário: "diminua a quantidade de rochas do deserto, estão em muito número e
+        // uma perto da outra" — de 12 pra 7 (menos itens no total) e `radiusFrac` com piso maior
+        // (0,25 → 0,35) pra afastar um pouco mais do centro, reduzindo a chance de dois caírem
+        // perto um do outro.
+        const DESERT_PROP_COUNT = 7
         for (let i = 0; i < DESERT_PROP_COUNT; i++) {
           const angle = (i / DESERT_PROP_COUNT) * Math.PI * 2 + i * 0.73
-          const radiusFrac = 0.25 + ((i * 5) % 7) / 7
+          const radiusFrac = 0.35 + ((i * 5) % 7) / 7
           const wanderRadius = DESERT_RADIUS * Math.min(0.92, radiusFrac)
           const offset = desertTangentA
             .scale(Math.cos(angle) * wanderRadius)
@@ -2364,9 +2372,12 @@ export function World3D({
         const puffCount = 3 + (i % 3)
         const puffs: Mesh[] = []
         for (let p = 0; p < puffCount; p++) {
-          const puff = MeshBuilder.CreateSphere(`cloud-${i}-${p}`, { diameter: 2.2 + Math.random() * 1.3 }, scene)
+          // Pedido do usuário: "diminua o tamanho das nuvens" — diâmetro e espaçamento entre
+          // tufos reduzidos na mesma proporção (~55% do original) pra manter a silhueta, só
+          // menor.
+          const puff = MeshBuilder.CreateSphere(`cloud-${i}-${p}`, { diameter: 1.2 + Math.random() * 0.7 }, scene)
           puff.scaling.y = 0.55
-          puff.position = new Vector3((p - puffCount / 2) * 1.4, Math.random() * 0.4, Math.random() * 0.6)
+          puff.position = new Vector3((p - puffCount / 2) * 0.8, Math.random() * 0.25, Math.random() * 0.35)
           puff.material = cloudMat
           puffs.push(puff)
         }
@@ -3285,6 +3296,230 @@ export function World3D({
       addTowerMesh(towerChallengePlatform, towerFloorMat, true)
       addTowerCoin('towerPrize', new Vector3(0, 0.1 + TOWER_FLOOR1_HEIGHT + 0.35, TOWER_PRIZE_Z))
 
+      // Prédio dos Enigmas (pedido do usuário: "prédio de 4 andares em que possa subir via
+      // escada... paredes quase transparentes pra poder ver como subir... quiz surpresa em cada
+      // andar"). Diferente da Torre do Tesouro (rampa lisa): aqui é uma escada de degraus de
+      // verdade. Degraus baixos (0,2 cada — bem menor que o raio da cápsula física do avatar,
+      // 0,32) pra a cápsula conseguir subir sozinha, empurrada pelo solver de física ao encostar
+      // no degrau seguinte, mesmo princípio já validado na rampa da torre.
+      // Pedido do usuário: "não vai colocar o prédio em cima da estrada, pode colocar ao lado da
+      // estrada" — o vetor original (phi ~30°) ficava a só 1,43 unidade da faixa da rua
+      // (`streetCenter`, meio-largura 0,85), sobrepondo o asfalto. Mesmo `theta` (mesma
+      // "longitude", perto de onde estava, do lado da Torre do Tesouro), `phi` maior (38°, medido
+      // ao vivo: ~3,17 unidades até a faixa da rua — folga confortável além da meia-largura da
+      // rua + a metade da fachada do prédio) pra ficar ao lado, não em cima.
+      const QT_ANCHOR_UP = new Vector3(0.05574, 0.78801, -0.61313).normalize()
+      const quizTowerBase = new TransformNode('quizTowerBase', scene)
+      const qtGroundRadial = terrainGroundRadial(QT_ANCHOR_UP, terrainHeight(QT_ANCHOR_UP))
+      quizTowerBase.position = QT_ANCHOR_UP.scale(qtGroundRadial)
+      quizTowerBase.rotationQuaternion = alignmentQuaternion(QT_ANCHOR_UP)
+
+      // Eixo x local: [-1.7,-0.7] é o poço da escada (sempre aberto, do térreo ao topo); [-0.7,1.7]
+      // é o piso andável de cada andar.
+      const QT_WIDTH = 3.4
+      const QT_DEPTH = 3.4
+      const QT_HALF_W = QT_WIDTH / 2
+      const QT_HALF_D = QT_DEPTH / 2
+      const QT_FLOOR_HEIGHT = 1.8
+      const QT_FLOOR_COUNT = 4
+      const QT_DOOR_WIDTH = 1.0
+      const QT_FLOOR_X_MIN = -0.7
+      const QT_FLOOR_WIDTH = QT_HALF_W - QT_FLOOR_X_MIN // 2.4 — exclui o poço da escada
+      const QT_FLOOR_CENTER_X = (QT_FLOOR_X_MIN + QT_HALF_W) / 2
+      const QT_STAIR_CENTER_X = (-QT_HALF_W + QT_FLOOR_X_MIN) / 2 // -1.2
+      const QT_STEPS_PER_FLIGHT = 9
+      const QT_STEP_RISE = QT_FLOOR_HEIGHT / QT_STEPS_PER_FLIGHT
+      const QT_STEP_RUN = QT_DEPTH / QT_STEPS_PER_FLIGHT
+
+      const qtWallMat = new PBRMaterial('quizTowerWallMat', scene)
+      qtWallMat.albedoColor = new Color3(0.68, 0.66, 0.78)
+      qtWallMat.roughness = 0.8
+      const qtRoofMat = new PBRMaterial('quizTowerRoofMat', scene)
+      qtRoofMat.albedoColor = new Color3(0.35, 0.55, 0.75)
+      qtRoofMat.roughness = 0.45
+      qtRoofMat.metallic = 0.1
+      const qtFloorMat = new PBRMaterial('quizTowerFloorMat', scene)
+      qtFloorMat.albedoColor = new Color3(0.5, 0.42, 0.32)
+      qtFloorMat.roughness = 0.85
+      const qtStepMat = new PBRMaterial('quizTowerStepMat', scene)
+      qtStepMat.albedoColor = new Color3(0.58, 0.5, 0.4)
+      qtStepMat.roughness = 0.85
+      const qtMarkerMat = new PBRMaterial('quizTowerMarkerMat', scene)
+      qtMarkerMat.albedoColor = new Color3(0.95, 0.75, 0.15)
+      qtMarkerMat.emissiveColor = new Color3(0.7, 0.5, 0.05)
+      qtMarkerMat.roughness = 0.4
+
+      // Malhas das paredes (não o telhado/piso/escada) — as únicas que ficam quase transparentes
+      // quando a câmera se aproxima (ver `onBeforeRenderObservable` mais abaixo).
+      const quizTowerWalls: Mesh[] = []
+
+      function addQtMesh(mesh: Mesh, mat: PBRMaterial, collide: boolean, isWall = false) {
+        mesh.material = mat
+        mesh.parent = quizTowerBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        if (collide) new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+        if (isWall) quizTowerWalls.push(mesh)
+      }
+
+      // Fundação (mesma correção do lab-45 — footprint grande o bastante pra sofrer com relevo
+      // variável dentro da própria área do prédio).
+      const qtFoundation = MeshBuilder.CreateBox(
+        'quizTowerFoundation',
+        { width: QT_WIDTH + 0.2, height: 1.8, depth: QT_DEPTH + 0.2 },
+        scene,
+      )
+      qtFoundation.position = new Vector3(0, -0.85, 0)
+      addQtMesh(qtFoundation, qtFloorMat, false)
+
+      const quizMarkers: { id: string; worldPos: Vector3 }[] = []
+
+      for (let floor = 0; floor < QT_FLOOR_COUNT; floor++) {
+        const floorY = floor * QT_FLOOR_HEIGHT
+
+        // Piso: térreo é a largura toda (nada embaixo pra deixar aberto); andar 2 em diante
+        // deixa o poço da escada (`QT_FLOOR_X_MIN` pra trás) sempre livre, do térreo ao topo.
+        if (floor === 0) {
+          const slab = MeshBuilder.CreateBox('quizFloor-0', { width: QT_WIDTH, height: 0.1, depth: QT_DEPTH }, scene)
+          slab.position = new Vector3(0, 0.05, 0)
+          addQtMesh(slab, qtFloorMat, true)
+        } else {
+          const slab = MeshBuilder.CreateBox(
+            `quizFloor-${floor}`,
+            { width: QT_FLOOR_WIDTH, height: 0.12, depth: QT_DEPTH },
+            scene,
+          )
+          slab.position = new Vector3(QT_FLOOR_CENTER_X, floorY + 0.06, 0)
+          addQtMesh(slab, qtFloorMat, true)
+
+          // Parapeito baixo na borda do poço — só sinaliza visualmente a queda, o jogador ainda
+          // consegue pular por cima (mesmo padrão do `towerParapet`).
+          const parapet = MeshBuilder.CreateBox(
+            `quizParapet-${floor}`,
+            { width: 0.1, height: 0.3, depth: QT_DEPTH },
+            scene,
+          )
+          parapet.position = new Vector3(QT_FLOOR_X_MIN, floorY + 0.12 + 0.15, 0)
+          addQtMesh(parapet, qtWallMat, true)
+        }
+
+        // Paredes do andar — 4 lados; só o térreo tem vão de porta na frente (entrada).
+        const backWall = MeshBuilder.CreateBox(
+          `quizBackWall-${floor}`,
+          { width: QT_WIDTH, height: QT_FLOOR_HEIGHT, depth: 0.15 },
+          scene,
+        )
+        backWall.position = new Vector3(0, floorY + QT_FLOOR_HEIGHT / 2, QT_HALF_D)
+        addQtMesh(backWall, qtWallMat, true, true)
+
+        for (const side of [-1, 1]) {
+          const sideWall = MeshBuilder.CreateBox(
+            `quizSideWall-${floor}-${side}`,
+            { width: 0.15, height: QT_FLOOR_HEIGHT, depth: QT_DEPTH },
+            scene,
+          )
+          sideWall.position = new Vector3(side * QT_HALF_W, floorY + QT_FLOOR_HEIGHT / 2, 0)
+          addQtMesh(sideWall, qtWallMat, true, true)
+        }
+
+        if (floor === 0) {
+          const frontSegWidth = (QT_WIDTH - QT_DOOR_WIDTH) / 2
+          for (const side of [-1, 1]) {
+            const frontWall = MeshBuilder.CreateBox(
+              `quizFrontWall-${floor}-${side}`,
+              { width: frontSegWidth, height: QT_FLOOR_HEIGHT, depth: 0.15 },
+              scene,
+            )
+            frontWall.position = new Vector3(
+              side * (QT_DOOR_WIDTH / 2 + frontSegWidth / 2),
+              floorY + QT_FLOOR_HEIGHT / 2,
+              -QT_HALF_D,
+            )
+            addQtMesh(frontWall, qtWallMat, true, true)
+          }
+        } else {
+          const frontWall = MeshBuilder.CreateBox(
+            `quizFrontWall-${floor}`,
+            { width: QT_WIDTH, height: QT_FLOOR_HEIGHT, depth: 0.15 },
+            scene,
+          )
+          frontWall.position = new Vector3(0, floorY + QT_FLOOR_HEIGHT / 2, -QT_HALF_D)
+          addQtMesh(frontWall, qtWallMat, true, true)
+        }
+
+        // Escada — só até o próximo andar (o topo não sobe mais). Degraus empilhados (cada um
+        // mais alto que o anterior, descendo até o piso do próprio andar) andando de
+        // z=-QT_HALF_D até z=+QT_HALF_D, sempre no mesmo sentido — pra subir o próximo lance o
+        // jogador atravessa o piso do andar até voltar pro início do poço.
+        if (floor < QT_FLOOR_COUNT - 1) {
+          for (let i = 0; i < QT_STEPS_PER_FLIGHT; i++) {
+            const stepZ = -QT_HALF_D + (i + 0.5) * QT_STEP_RUN
+            const step = MeshBuilder.CreateBox(
+              `quizStep-${floor}-${i}`,
+              { width: 0.9, height: (i + 1) * QT_STEP_RISE, depth: QT_STEP_RUN + 0.02 },
+              scene,
+            )
+            step.position = new Vector3(QT_STAIR_CENTER_X, floorY + ((i + 1) * QT_STEP_RISE) / 2, stepZ)
+            addQtMesh(step, qtStepMat, true)
+          }
+        }
+
+        // Marcador do quiz surpresa deste andar — flutua sobre o piso andável, longe do poço da
+        // escada, fácil de ver assim que o jogador chega no andar.
+        const markerLocalPos = new Vector3(1.0, floorY + (floor === 0 ? 0.1 : 0.12) + 0.55, 0)
+        quizTowerBase.computeWorldMatrix(true)
+        const markerWorldPos = Vector3.TransformCoordinates(markerLocalPos, quizTowerBase.getWorldMatrix())
+        const markerMesh = MeshBuilder.CreateSphere(`quizMarker-${floor}`, { diameter: 0.56 }, scene)
+        markerMesh.position = markerWorldPos
+        markerMesh.material = qtMarkerMat
+        shadowGenerator.addShadowCaster(markerMesh)
+        const markerLabel = new TextBlock(`quizMarkerLabel-${floor}`, '?')
+        markerLabel.color = 'white'
+        markerLabel.fontSize = 32
+        markerLabel.fontWeight = 'bold'
+        markerLabel.outlineWidth = 4
+        markerLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(markerLabel)
+        markerLabel.linkWithMesh(markerMesh)
+        markerLabel.linkOffsetY = -34
+        quizMarkers.push({ id: `surprise-${String(floor + 1).padStart(2, '0')}`, worldPos: markerWorldPos })
+      }
+
+      // Telhado no topo do último andar.
+      const qtRoof = MeshBuilder.CreateCylinder(
+        'quizTowerRoof',
+        { height: 0.8, diameterTop: 0.05, diameterBottom: QT_WIDTH * 1.5, tessellation: 4 },
+        scene,
+      )
+      qtRoof.position = new Vector3(0, QT_FLOOR_COUNT * QT_FLOOR_HEIGHT + 0.4, 0)
+      qtRoof.rotation.y = Math.PI / 4
+      addQtMesh(qtRoof, qtRoofMat, false)
+
+      const qtLabel = new TextBlock('quizTowerLabel', 'Prédio dos Enigmas')
+      qtLabel.color = 'white'
+      qtLabel.fontSize = 24
+      qtLabel.fontWeight = 'bold'
+      qtLabel.outlineWidth = 4
+      qtLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(qtLabel)
+      qtLabel.linkWithMesh(qtRoof)
+      qtLabel.linkOffsetY = -70
+
+      // Paredes quase transparentes perto do jogador (pedido do usuário: "a câmera fique com as
+      // paredes do prédio quase transparente pra poder ver como subir as escadas"). O gatilho é
+      // a distância do JOGADOR até o eixo vertical do prédio — não da câmera: a câmera em
+      // terceira pessoa fica atrás/acima do jogador (offset de `CAMERA_DISTANCE`/`CAMERA_HEIGHT`),
+      // então medir a distância dela até a base do prédio dava falso-negativo (jogador encostado
+      // na parede, câmera ainda a vários metros por trás/em cima — nunca cruzava o limiar). Usa
+      // a distância TANGENCIAL (rejeita a componente radial/`QT_ANCHOR_UP`) em vez da distância
+      // 3D direta até a base — assim funciona igual em qualquer andar (2º ao 4º ficam vários
+      // metros "acima" da base em linha reta, mas continuam igualmente "dentro" do prédio).
+      // Atualizada dentro do loop de física por quadro (mais abaixo, perto do gatilho dos quiz
+      // markers) — só as constantes ficam aqui.
+      const QT_FADE_START = 5.5
+      const QT_FADE_END = 2.6
+      const QT_MIN_ALPHA = 0.12
+
       // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
       // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
       // alto de cada uma (`plateau.height`, o mesmo valor usado por `terrainHeight` — o centro do
@@ -3912,6 +4147,24 @@ export function World3D({
             setRankingEntries(entries)
           }
 
+          // Fade das paredes do Prédio dos Enigmas (ver comentário de `QT_FADE_START` acima, no
+          // ponto onde o prédio é construído) — roda sempre, mesmo com um quiz aberto, pra não
+          // "saltar" de opacidade quando o modal fecha.
+          {
+            const toPlayer = pos.subtract(quizTowerBase.position)
+            const radial = Vector3.Dot(toPlayer, QT_ANCHOR_UP)
+            const tangentialDist = toPlayer.subtract(QT_ANCHOR_UP.scale(radial)).length()
+            const qtTarget =
+              tangentialDist >= QT_FADE_START
+                ? 1
+                : tangentialDist <= QT_FADE_END
+                  ? QT_MIN_ALPHA
+                  : QT_MIN_ALPHA + ((tangentialDist - QT_FADE_END) / (QT_FADE_START - QT_FADE_END)) * (1 - QT_MIN_ALPHA)
+            for (const wall of quizTowerWalls) {
+              wall.visibility += (qtTarget - wall.visibility) * 0.15
+            }
+          }
+
           // checa proximidade dos portais
           if (!suspendRef.current && !chatOpenRef.current) {
             for (const entry of portalMeshes) {
@@ -3925,6 +4178,20 @@ export function World3D({
                 onSelectQuestRef.current(entry.quest.id)
               } else if (d > RESET_DISTANCE) {
                 triggered.delete(entry.quest.id)
+              }
+            }
+
+            // Quiz surpresa de cada andar do Prédio dos Enigmas — mesmo padrão de gatilho por
+            // distância dos portais das escolas, mas sem checar `completedQuestIds` (são bônus
+            // avulsos, podem ser refeitos: `triggered` só evita repetir sem o jogador sair de
+            // perto e voltar).
+            for (const marker of quizMarkers) {
+              const d = Vector3.Distance(pos, marker.worldPos)
+              if (d < TRIGGER_DISTANCE && !triggered.has(marker.id)) {
+                triggered.add(marker.id)
+                onSelectSurpriseQuizRef.current(marker.id)
+              } else if (d > RESET_DISTANCE) {
+                triggered.delete(marker.id)
               }
             }
 

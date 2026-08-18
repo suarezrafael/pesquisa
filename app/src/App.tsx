@@ -9,6 +9,7 @@ import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { quests } from './data/quests'
+import { surpriseQuizzes } from './data/surpriseQuizzes'
 import { hasTutorialBeenSeen, markTutorialSeen } from './state/storage'
 import type { Quest } from './types'
 
@@ -22,6 +23,7 @@ function App() {
   const { profile, createProfile, equipAvatar, equipHat } = useProfile()
   const { progress, completeQuest, collectCoin, unlockAvatar, unlockHat } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
+  const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [reward, setReward] = useState<{ quest: Quest; newBadges: string[]; awardedXp: number; awardedCoins: number } | null>(
     null,
   )
@@ -61,6 +63,21 @@ function App() {
     setActiveQuest(null)
   }
 
+  function handleSelectSurpriseQuiz(quizId: string) {
+    const quiz = surpriseQuizzes.find((q) => q.id === quizId) ?? null
+    setActiveSurpriseQuiz(quiz)
+  }
+
+  // Bônus intencionalmente leve (pedido do usuário: "pequeno quiz surpresa" em cada andar do
+  // Prédio dos Enigmas) — só moedas na hora via `collectCoin`, sem passar por `completeQuest`:
+  // não conta pra `completedQuestIds`/badges nem aparece na `QuestListOverlay`, que listam as 21
+  // missões das escolas.
+  function handleSurpriseQuizCorrect() {
+    if (!activeSurpriseQuiz) return
+    for (let i = 0; i < activeSurpriseQuiz.coinReward; i++) collectCoin()
+    setActiveSurpriseQuiz(null)
+  }
+
   return (
     <>
       <Suspense fallback={<div className="world-loading">Carregando o mundo 3D…</div>}>
@@ -68,11 +85,19 @@ function App() {
           profile={profile}
           progress={progress}
           onSelectQuest={handleSelectQuest}
+          onSelectSurpriseQuiz={handleSelectSurpriseQuiz}
           onOpenHelp={() => setShowHelp(true)}
           onOpenQuestList={() => setShowQuestList(true)}
           onOpenShop={() => setShowShop(true)}
           onCollectCoin={collectCoin}
-          suspendTriggers={activeQuest !== null || reward !== null || showHelp || showQuestList || showShop}
+          suspendTriggers={
+            activeQuest !== null ||
+            activeSurpriseQuiz !== null ||
+            reward !== null ||
+            showHelp ||
+            showQuestList ||
+            showShop
+          }
         />
       </Suspense>
 
@@ -81,6 +106,14 @@ function App() {
           quest={activeQuest}
           onCorrect={handleQuestCorrect}
           onClose={() => setActiveQuest(null)}
+        />
+      )}
+
+      {activeSurpriseQuiz && (
+        <QuestModal
+          quest={activeSurpriseQuiz}
+          onCorrect={handleSurpriseQuizCorrect}
+          onClose={() => setActiveSurpriseQuiz(null)}
         />
       )}
 
