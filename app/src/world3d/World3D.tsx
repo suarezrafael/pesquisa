@@ -1811,6 +1811,78 @@ export function World3D({
         }
       }
 
+      // Rochas nas montanhas (lab-42, pedido do usuário: "as montanhas estão invisíveis... elas
+      // devem ficar como as rochas ao lado dos cactos") — a montanha em si é só relevo do próprio
+      // planeta (cor por vértice, sem malha própria), o que aparentemente não estava lendo como
+      // "montanha" visualmente. Em vez de depender só do relevo+cor, cada uma das 12 ganha um
+      // grupo de rochas de verdade (mesmos modelos glTF já usados nas rochas do deserto — provado
+      // que renderizam certo), bem maiores, espalhadas perto do topo — garante uma presença
+      // visual sólida e inconfundível, não importa o que aconteça com a sutileza da cor do
+      // relevo. Posição de cada rocha usa raycast físico real (mesma técnica comprovada em
+      // `schoolGroundRadial`, labs 33/34/38/39) em vez de só a fórmula — rochas bem maiores
+      // tornam qualquer gap de flutuação/afundamento muito mais visível que num prop pequeno.
+      //
+      // Bug real encontrado testando isto: `schoolGroundRadial` (a versão já existente) usa um
+      // `const schoolRaycastResult` declarado só mais adiante no arquivo, perto de
+      // `quests.forEach` — chamar a função aqui, ANTES dessa declaração rodar, disparava
+      // `ReferenceError: Cannot access 'schoolRaycastResult' before initialization` (a função em
+      // si é indiferente a hoisting, mas `const` fica em "zona morta temporal" até a linha da
+      // declaração executar). Isso não só quebrava as rochas — a exceção não tratada interrompia
+      // o resto de `setup()` inteiro (escolas, torre, parkours, bichos — tudo que vem depois no
+      // código nunca chegava a rodar). Corrigido com uma cópia local independente da mesma
+      // função/raycast, sem depender de nada declarado mais adiante.
+      const mountainRockRaycastResult = new PhysicsRaycastResult()
+      function mountainRockGroundRadial(dir: Vector3, formulaHeight: number): number {
+        if (!havokPlugin) return PLANET_RADIUS + formulaHeight
+        const from = dir.scale(PLANET_RADIUS + 6)
+        const to = dir.scale(PLANET_RADIUS - 2)
+        let ignoreBody: PhysicsBody | undefined
+        for (let attempt = 0; attempt < 6; attempt++) {
+          mountainRockRaycastResult.reset()
+          havokPlugin.raycast(from, to, mountainRockRaycastResult, ignoreBody ? { ignoreBody } : undefined)
+          if (!mountainRockRaycastResult.hasHit) break
+          if (mountainRockRaycastResult.body?.transformNode?.name === 'planet') {
+            return mountainRockRaycastResult.hitPointWorld.length()
+          }
+          ignoreBody = mountainRockRaycastResult.body ?? undefined
+        }
+        return PLANET_RADIUS + formulaHeight
+      }
+      const MOUNTAIN_ROCK_TEMPLATE_INDICES = [6, 7, 10] // rock_largeA / rock_largeC / rock_tallA
+      PLATEAU_CENTERS.forEach((plateau, pi) => {
+        const seed = Math.abs(plateau.dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+        const tangentA = Vector3.Cross(plateau.dir, seed).normalize()
+        const tangentB = Vector3.Cross(plateau.dir, tangentA).normalize()
+        const ROCKS_PER_MOUNTAIN = 4
+        for (let ri = 0; ri < ROCKS_PER_MOUNTAIN; ri++) {
+          const angle = (ri / ROCKS_PER_MOUNTAIN) * Math.PI * 2 + pi * 0.9
+          const radiusFrac = 0.15 + ((ri * 5 + pi * 3) % 7) / 7 / 1.6 // 0.15-0.58 do raio do platô
+          const wanderRadius = plateau.radius * radiusFrac
+          const offset = tangentA.scale(Math.cos(angle) * wanderRadius).add(tangentB.scale(Math.sin(angle) * wanderRadius))
+          const localUp = plateau.dir.add(offset).normalize()
+          const groundRadial = mountainRockGroundRadial(localUp, terrainHeight(localUp))
+          const pos = localUp.scale(groundRadial)
+          const scale = 2.6 + ((ri * 7 + pi * 5) % 5) * 0.3 // bem maior que props/rochas normais
+          const spin = (ri * GOLDEN_ANGLE * 5 + pi) % (Math.PI * 2)
+
+          const templateIndex = MOUNTAIN_ROCK_TEMPLATE_INDICES[(ri + pi) % MOUNTAIN_ROCK_TEMPLATE_INDICES.length]
+          const instance = propTemplates[templateIndex].clone(`mountainRock-${pi}-${ri}`, null)
+          if (!instance) continue
+          instance.setEnabled(true)
+          instance.position = pos
+          instance.rotationQuaternion = alignmentQuaternion(localUp).multiply(Quaternion.RotationAxis(Vector3.Up(), spin))
+          instance.scaling.setAll(scale)
+          instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
+
+          const colliderDiameter = 0.7 * scale
+          const colliderRadius = colliderDiameter / 2
+          const collider = MeshBuilder.CreateSphere(`mountainRockCollider-${pi}-${ri}`, { diameter: colliderDiameter }, scene)
+          collider.position = pos.add(localUp.scale(0.15 - colliderRadius))
+          collider.isVisible = false
+          new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+        }
+      })
+
       // Moedinhas colecionáveis espalhadas pelo terreno — bônus de exploração à parte das
       // missões (resposta ao pedido de "mais coisa pra interagir"). Sem física própria, só
       // detecção de proximidade (igual às escolas), giram e balançam pra chamar atenção.
