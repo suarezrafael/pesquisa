@@ -17,7 +17,6 @@ import {
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
-  type PhysicsBody,
   PhysicsMotionType,
   PhysicsRaycastResult,
   PhysicsShapeType,
@@ -1519,6 +1518,51 @@ export function World3D({
       havokPlugin = new HavokPlugin(false, havokInstance)
       scene.enablePhysics(Vector3.Zero(), havokPlugin)
 
+      // A fórmula contínua de `terrainHeight` não bate exatamente com a malha RENDERIZADA do
+      // planeta (malha grossa, 48 segmentos) — erro medido em labs anteriores (rua, rio) de até
+      // ~0,1-0,5 unidade, maior perto de bordas íngremes (como a borda de um platô/montanha).
+      // `terrainGroundRadial` faz um raycast físico real (contra a MESMA malha que o jogador
+      // colide) em vez de confiar só na fórmula — usado por qualquer coisa que precise se
+      // posicionar exatamente no chão de verdade (escolas, torre, rochas de montanha).
+      // Declarada aqui, logo depois do `havokPlugin` existir, pra poder ser chamada de QUALQUER
+      // lugar mais adiante em `setup()` sem risco do bug do lab-42 (chamar antes de uma `const`
+      // auxiliar ter rodado sua própria linha de declaração — "zona morta temporal" do JS).
+      //
+      // Bug real encontrado no lab-43 (relatado pelo usuário: "as rochas e algumas casa estão
+      // flutuando... como se a superfície tivesse uma montanha invisível"): a versão anterior
+      // (duas cópias quase idênticas, `schoolGroundRadial`/`mountainRockGroundRadial`) usava
+      // `ignoreBody` (que só guarda UM corpo) pra tentar pular colisores que não fossem o
+      // planeta — mas se o raycast alternasse entre EXATAMENTE DOIS colisores não-planeta (ex.:
+      // a parede de uma escola perto de uma rocha de montanha), cada tentativa ignorava só o
+      // ÚLTIMO acerto, deixando o raio "ricochetear" pra frente e pra trás entre os mesmos dois
+      // colisores pra sempre, nunca alcançando o planeta — mesmo com várias tentativas.
+      // Confirmado ao vivo: um raycast numa escola específica (`school-q06`, perto de uma rocha
+      // de montanha nova) alternou `walls-q06`/`mountainRockCollider-4-0` em todas as 20
+      // tentativas testadas, sem nunca acertar o planeta — a função caía de volta pra fórmula
+      // (que perto de uma montanha pode estar bem errada), causando o "flutuando no ar" relatado.
+      // Corrigido: em vez de tentar "ignorar" corpos (limitado a um só pela própria API do
+      // Havok/Babylon), cada tentativa AVANÇA o ponto de partida do raio pra logo depois do
+      // último acerto não-planeta, na mesma direção — geometricamente nunca pode acertar o MESMO
+      // colisor de novo (já passou dele), garantindo progresso real em direção ao planeta a cada
+      // tentativa, não importa quantos ou quais colisores estejam no caminho.
+      const terrainRaycastResult = new PhysicsRaycastResult()
+      function terrainGroundRadial(dir: Vector3, formulaHeight: number): number {
+        if (!havokPlugin) return PLANET_RADIUS + formulaHeight
+        const to = dir.scale(PLANET_RADIUS - 2)
+        const rayDir = dir.clone().normalize()
+        let from = dir.scale(PLANET_RADIUS + 6)
+        for (let attempt = 0; attempt < 12; attempt++) {
+          terrainRaycastResult.reset()
+          havokPlugin.raycast(from, to, terrainRaycastResult)
+          if (!terrainRaycastResult.hasHit) break
+          if (terrainRaycastResult.body?.transformNode?.name === 'planet') {
+            return terrainRaycastResult.hitPointWorld.length()
+          }
+          from = terrainRaycastResult.hitPointWorld.subtract(rayDir.scale(0.01))
+        }
+        return PLANET_RADIUS + formulaHeight
+      }
+
       // Camada de UI 2D sobreposta ao mundo 3D (rótulos flutuantes: nome das escolas, bolhas de
       // fala dos NPCs, "pressione E" dos carros lab-25, etc.) — criada cedo (antes de qualquer
       // malha que precise de rótulo) porque vários trechos abaixo (rua/carros, escolas, lagoa,
@@ -1818,36 +1862,9 @@ export function World3D({
       // grupo de rochas de verdade (mesmos modelos glTF já usados nas rochas do deserto — provado
       // que renderizam certo), bem maiores, espalhadas perto do topo — garante uma presença
       // visual sólida e inconfundível, não importa o que aconteça com a sutileza da cor do
-      // relevo. Posição de cada rocha usa raycast físico real (mesma técnica comprovada em
-      // `schoolGroundRadial`, labs 33/34/38/39) em vez de só a fórmula — rochas bem maiores
-      // tornam qualquer gap de flutuação/afundamento muito mais visível que num prop pequeno.
-      //
-      // Bug real encontrado testando isto: `schoolGroundRadial` (a versão já existente) usa um
-      // `const schoolRaycastResult` declarado só mais adiante no arquivo, perto de
-      // `quests.forEach` — chamar a função aqui, ANTES dessa declaração rodar, disparava
-      // `ReferenceError: Cannot access 'schoolRaycastResult' before initialization` (a função em
-      // si é indiferente a hoisting, mas `const` fica em "zona morta temporal" até a linha da
-      // declaração executar). Isso não só quebrava as rochas — a exceção não tratada interrompia
-      // o resto de `setup()` inteiro (escolas, torre, parkours, bichos — tudo que vem depois no
-      // código nunca chegava a rodar). Corrigido com uma cópia local independente da mesma
-      // função/raycast, sem depender de nada declarado mais adiante.
-      const mountainRockRaycastResult = new PhysicsRaycastResult()
-      function mountainRockGroundRadial(dir: Vector3, formulaHeight: number): number {
-        if (!havokPlugin) return PLANET_RADIUS + formulaHeight
-        const from = dir.scale(PLANET_RADIUS + 6)
-        const to = dir.scale(PLANET_RADIUS - 2)
-        let ignoreBody: PhysicsBody | undefined
-        for (let attempt = 0; attempt < 6; attempt++) {
-          mountainRockRaycastResult.reset()
-          havokPlugin.raycast(from, to, mountainRockRaycastResult, ignoreBody ? { ignoreBody } : undefined)
-          if (!mountainRockRaycastResult.hasHit) break
-          if (mountainRockRaycastResult.body?.transformNode?.name === 'planet') {
-            return mountainRockRaycastResult.hitPointWorld.length()
-          }
-          ignoreBody = mountainRockRaycastResult.body ?? undefined
-        }
-        return PLANET_RADIUS + formulaHeight
-      }
+      // relevo. Posição de cada rocha usa `terrainGroundRadial` (raycast físico real, declarada
+      // logo depois do `havokPlugin` existir — ver comentário lá pro histórico do bug de
+      // ping-pong entre dois colisores que motivou virar uma função compartilhada única).
       const MOUNTAIN_ROCK_TEMPLATE_INDICES = [6, 7, 10] // rock_largeA / rock_largeC / rock_tallA
       PLATEAU_CENTERS.forEach((plateau, pi) => {
         const seed = Math.abs(plateau.dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
@@ -1860,7 +1877,7 @@ export function World3D({
           const wanderRadius = plateau.radius * radiusFrac
           const offset = tangentA.scale(Math.cos(angle) * wanderRadius).add(tangentB.scale(Math.sin(angle) * wanderRadius))
           const localUp = plateau.dir.add(offset).normalize()
-          const groundRadial = mountainRockGroundRadial(localUp, terrainHeight(localUp))
+          const groundRadial = terrainGroundRadial(localUp, terrainHeight(localUp))
           const pos = localUp.scale(groundRadial)
           const scale = 2.6 + ((ri * 7 + pi * 5) % 5) * 0.3 // bem maior que props/rochas normais
           const spin = (ri * GOLDEN_ANGLE * 5 + pi) % (Math.PI * 2)
@@ -2728,34 +2745,10 @@ export function World3D({
         }
       }
 
-      // A fórmula contínua de `terrainHeight` não bate exatamente com a malha RENDERIZADA do
-      // planeta (malha grossa, 48 segmentos) — erro medido em labs anteriores (rua, rio) de até
-      // ~0,1-0,5 unidade, maior perto de bordas íngremes (como a borda de um platô/montanha).
-      // Pedido do usuário (junto com montanhas maiores, ver `PLATEAU_CENTERS` acima): "em vez de
-      // botar as casinhas em pontos flutuantes invisíveis, pode colocar elas em cima das
-      // montanhas" — as escolas até então confiavam só na fórmula, então perto de uma borda de
-      // platô podiam ficar flutuando (fórmula prevendo chão mais alto que a malha de verdade) ou
-      // afundadas. `schoolGroundRadial` faz o mesmo raycast físico real (contra a MESMA malha do
-      // planeta) já comprovado no rio/rua, com o mesmo filtro de colisor (ignora qualquer acerto
-      // que não seja o planeta — o avatar já existe na cena nesse ponto de `setup()`, então um
-      // raycast sem filtro correria o mesmo risco de acertar o colisor do jogador em vez do chão).
-      const schoolRaycastResult = new PhysicsRaycastResult()
-      function schoolGroundRadial(dir: Vector3, formulaHeight: number): number {
-        if (!havokPlugin) return PLANET_RADIUS + formulaHeight
-        const from = dir.scale(PLANET_RADIUS + 6)
-        const to = dir.scale(PLANET_RADIUS - 2)
-        let ignoreBody: PhysicsBody | undefined
-        for (let attempt = 0; attempt < 6; attempt++) {
-          schoolRaycastResult.reset()
-          havokPlugin.raycast(from, to, schoolRaycastResult, ignoreBody ? { ignoreBody } : undefined)
-          if (!schoolRaycastResult.hasHit) break
-          if (schoolRaycastResult.body?.transformNode?.name === 'planet') {
-            return schoolRaycastResult.hitPointWorld.length()
-          }
-          ignoreBody = schoolRaycastResult.body ?? undefined
-        }
-        return PLANET_RADIUS + formulaHeight
-      }
+      // Posicionamento das escolas usa `terrainGroundRadial` (raycast físico real, declarada logo
+      // depois do `havokPlugin` existir, no topo de `setup()`) em vez de só a fórmula — pedido do
+      // usuário (junto com montanhas maiores, ver `PLATEAU_CENTERS` acima): "em vez de botar as
+      // casinhas em pontos flutuantes invisíveis, pode colocar elas em cima das montanhas".
 
       // Missões viram miniescolas (não anéis abstratos) — prédio baixo-poli com telhado colorido
       // por tipo/estado da missão, mais um professor parado na porta.
@@ -2780,7 +2773,7 @@ export function World3D({
             Math.sin(phi) * Math.sin(theta),
           )
         }
-        const groundRadial = schoolGroundRadial(localUp, terrainHeight(localUp))
+        const groundRadial = terrainGroundRadial(localUp, terrainHeight(localUp))
         const surfacePos = localUp.scale(groundRadial)
 
         const base = new TransformNode(`school-${quest.id}`, scene)
@@ -3001,11 +2994,11 @@ export function World3D({
       // pulo pequeno até a moeda final (um toque de desafio, não só andar até o topo). Um prédio
       // só nesta primeira versão (não os 21 das escolas) — validar o padrão aqui antes de decidir
       // se vale replicar. Reaproveita a técnica de parede-com-vão-de-porta já usada na lojinha
-      // (`shopFrontWall${side}`) e o raycast físico real (`schoolGroundRadial`) já comprovado
+      // (`shopFrontWall${side}`) e o raycast físico real (`terrainGroundRadial`) já comprovado
       // pra posicionar sem flutuar/afundar.
       const TOWER_ANCHOR_UP = new Vector3(-0.6323378682909753, -0.7313537016191705, -0.2554810823782512).normalize()
       const towerBase = new TransformNode('towerBase', scene)
-      const towerGroundRadial = schoolGroundRadial(TOWER_ANCHOR_UP, terrainHeight(TOWER_ANCHOR_UP))
+      const towerGroundRadial = terrainGroundRadial(TOWER_ANCHOR_UP, terrainHeight(TOWER_ANCHOR_UP))
       towerBase.position = TOWER_ANCHOR_UP.scale(towerGroundRadial)
       towerBase.rotationQuaternion = alignmentQuaternion(TOWER_ANCHOR_UP)
 
