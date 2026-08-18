@@ -1738,7 +1738,12 @@ export function World3D({
           Math.cos(phi),
           Math.sin(phi) * Math.sin(theta),
         )
-        const pos = localUp.scale(PLANET_RADIUS + terrainHeight(localUp))
+        // Raycast físico real (`terrainGroundRadial`), não só a fórmula (pedido do usuário:
+        // "as rochas e algumas casa estão flutuando" — o scatter geral de props nunca tinha
+        // recebido esta correção, só escolas/torre/rochas de montanha dedicadas; com montanhas
+        // maiores e mais numerosas, MUITO mais provável de um prop comum cair perto de uma
+        // borda íngreme onde a fórmula erra bastante da malha renderizada de verdade).
+        const pos = localUp.scale(terrainGroundRadial(localUp, terrainHeight(localUp)))
         const scale = 1.3 + ((i * 7) % 5) * 0.18
         const spin = (i * GOLDEN_ANGLE * 5) % (Math.PI * 2)
 
@@ -1823,7 +1828,7 @@ export function World3D({
             .scale(Math.cos(angle) * wanderRadius)
             .add(desertTangentB.scale(Math.sin(angle) * wanderRadius))
           const localUp = DESERT_CENTER_DIR.add(offset).normalize()
-          const pos = localUp.scale(PLANET_RADIUS + terrainHeight(localUp))
+          const pos = localUp.scale(terrainGroundRadial(localUp, terrainHeight(localUp)))
           const scale = 1.0 + ((i * 7) % 5) * 0.15
           const spin = (i * GOLDEN_ANGLE * 5) % (Math.PI * 2)
 
@@ -2869,7 +2874,7 @@ export function World3D({
       // piscina/parkour/rua) — ~37° de folga do vizinho mais próximo.
       const SHOP_ANCHOR_UP = new Vector3(0.9158133708598268, 0.24868988716485496, 0.3153398322069272).normalize()
       const shopBase = new TransformNode('shopBase', scene)
-      shopBase.position = SHOP_ANCHOR_UP.scale(PLANET_RADIUS + terrainHeight(SHOP_ANCHOR_UP))
+      shopBase.position = SHOP_ANCHOR_UP.scale(terrainGroundRadial(SHOP_ANCHOR_UP, terrainHeight(SHOP_ANCHOR_UP)))
       shopBase.rotationQuaternion = alignmentQuaternion(SHOP_ANCHOR_UP)
 
       const SHOP_WIDTH = 3.0
@@ -3218,7 +3223,7 @@ export function World3D({
       PLATEAU_CENTERS.forEach((plateau, i) => {
         const up = plateau.dir
         const catRoot = buildGato(scene, shadowGenerator, PERCHED_CAT_COLORS[i % PERCHED_CAT_COLORS.length])
-        catRoot.position.copyFrom(up.scale(PLANET_RADIUS + terrainHeight(up) + 0.02))
+        catRoot.position.copyFrom(up.scale(terrainGroundRadial(up, terrainHeight(up)) + 0.02))
         catRoot.rotationQuaternion = alignmentQuaternion(up)
         perchedCats.push({ root: catRoot, up, phase: Math.random() * Math.PI * 2 })
       })
