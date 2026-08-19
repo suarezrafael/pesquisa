@@ -1321,7 +1321,16 @@ export function World3D({
     if (!canvas) return
 
     let disposed = false
-    const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true })
+
+    // Redmi Pad 2 e tablets/celulares similares têm GPU muito mais fraca que desktop — sem essa
+    // detecção o jogo roda em resolução nativa com MSAA+FXAA+SSAO+sombras em ~1900 meshes, o que
+    // não é jogável em GPU mobile de entrada. Em vez de tentar medir a GPU (APIs pouco confiáveis
+    // e inconsistentes entre navegadores), usa o mesmo sinal que já decide mostrar os controles de
+    // toque: é um aparelho móvel/tablet.
+    const isLowEndDevice = /Android|iPad|iPhone|iPod|Tablet|Mobi/i.test(navigator.userAgent)
+
+    const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
+    if (isLowEndDevice) engine.setHardwareScalingLevel(1.5)
     const scene = new Scene(engine)
     sceneRef.current = scene
     if (import.meta.env.DEV) {
@@ -1339,21 +1348,25 @@ export function World3D({
     camera.minZ = 0.1
 
     const pipeline = new DefaultRenderingPipeline('quality', true, scene, [camera])
-    pipeline.samples = 4
-    pipeline.fxaaEnabled = true
+    pipeline.samples = isLowEndDevice ? 1 : 4
+    pipeline.fxaaEnabled = !isLowEndDevice
     pipeline.imageProcessing.toneMappingEnabled = true
     pipeline.imageProcessing.toneMappingType = 1 // ACES
     pipeline.imageProcessing.exposure = 0.9
     pipeline.bloomEnabled = false // o GlowLayer já cobre o brilho emissivo dos portais, mais barato
 
-    const ssao = new SSAO2RenderingPipeline('ssao', scene, {
-      ssaoRatio: 0.5,
-      blurRatio: 0.5,
-    }, [camera])
-    ssao.radius = 2
-    ssao.totalStrength = 0.8
-    ssao.expensiveBlur = false
-    ssao.samples = 8
+    // SSAO2 é um dos passes mais caros pra GPU mobile (ratio 0.5 + blur, por quadro) — pulado
+    // inteiro em dispositivos fracos.
+    if (!isLowEndDevice) {
+      const ssao = new SSAO2RenderingPipeline('ssao', scene, {
+        ssaoRatio: 0.5,
+        blurRatio: 0.5,
+      }, [camera])
+      ssao.radius = 2
+      ssao.totalStrength = 0.8
+      ssao.expensiveBlur = false
+      ssao.samples = 8
+    }
 
     const hemiLight = new HemisphericLight('hemi', new Vector3(0, 1, 0), scene)
     hemiLight.intensity = 0.3
@@ -1363,9 +1376,15 @@ export function World3D({
     sunLight.intensity = 1.0
     sunLight.position = new Vector3(20, 30, 20)
 
-    const shadowGenerator = new ShadowGenerator(1024, sunLight)
-    shadowGenerator.useBlurExponentialShadowMap = true
+    const shadowGenerator = new ShadowGenerator(isLowEndDevice ? 512 : 1024, sunLight)
+    shadowGenerator.useBlurExponentialShadowMap = !isLowEndDevice
     shadowGenerator.blurKernel = 32
+    // Sombra dinâmica é barata por caster individual, mas o jogo tem ~1900 meshes e quase todo
+    // builder (props, pedras, bichos, moedas, degraus) chama addShadowCaster — em GPU fraca isso
+    // some ainda mais rápido que o próprio SSAO. Em vez de caçar e editar cada um dos ~40 pontos
+    // de chamada, desativa a captura de sombra inteira (o gerador continua existindo, só não
+    // recebe casters — sem casters o passe de shadow map roda sobre nada, custo desprezível).
+    if (isLowEndDevice) shadowGenerator.addShadowCaster = () => shadowGenerator
 
     const glow = new GlowLayer('glow', scene)
     glow.intensity = 0.7
@@ -2426,7 +2445,7 @@ export function World3D({
       rainAnchor.isVisible = false
       rainAnchor.rotationQuaternion = Quaternion.Identity()
 
-      const rainSystem = new ParticleSystem('rain', 600, scene)
+      const rainSystem = new ParticleSystem('rain', isLowEndDevice ? 150 : 600, scene)
       rainSystem.particleTexture = rainDropTexture
       rainSystem.emitter = rainAnchor
       rainSystem.isLocal = true
@@ -3994,7 +4013,7 @@ export function World3D({
           else stopRain()
         }
         rainAmount += ((raining ? 1 : 0) - rainAmount) * Math.min(1, dt * 0.5)
-        rainSystem.emitRate = rainAmount * 500
+        rainSystem.emitRate = rainAmount * (isLowEndDevice ? 130 : 500)
 
         // Raio: só sorteia/dispara enquanto chove de verdade (rainAmount alto, não só
         // "raining=true" no instante em que a chuva ainda está começando a aparecer).
