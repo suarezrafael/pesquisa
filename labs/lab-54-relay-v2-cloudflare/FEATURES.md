@@ -1,8 +1,8 @@
 # Laboratório 54 — Relay v2 no Cloudflare Workers (sem cartão de crédito)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-19
-Fim: -
+Fim: 2026-08-19
 Commit inicial: d49f54ee198dad43ea5cfd7c56f798379ac5fdaa
 
 ## Objetivo do laboratório
@@ -31,13 +31,21 @@ depois de comprovado que funciona.
       `messageId` válido chega no outro lado, chat com `messageId` fora do catálogo é descartado
       (não chega em ninguém), e `leave` é disparado quando um cliente desconecta. Todos os
       cenários bateram exatamente com o comportamento do v1.
-- [ ] **Deploy real em produção no Cloudflare** — precisa de `wrangler login` (OAuth interativo,
-      só o usuário consegue fazer, mesmo padrão do `flyctl auth login` no lab-51). Bloqueado até
-      o usuário autenticar.
-- [ ] Trocar `VITE_RELAY_URL` (em `app/.env.production`) pra apontar pro relay v2 e testar
-      multiplayer ao vivo em produção (dois clientes reais, não só o teste local via Miniflare).
-- [ ] Só depois disso: considerar decomissionar o app do Fly.io (v1) — ou deixá-lo como fallback,
-      a decidir com o usuário.
+- [x] **Deploy real em produção no Cloudflare** — usuário rodou `wrangler login` e registrou o
+      subdomínio `workers.dev` da conta (passo único por conta, feito via dashboard). Deploy em
+      `https://missao-aprender-relay-v2.rafaelvs.workers.dev`, confirmado com o mesmo script de
+      teste do protocolo rodando contra o endpoint real (não só o Miniflare local) — todos os
+      cenários bateram de novo.
+- [x] Trocado `VITE_RELAY_URL` (em `app/.env.production`) pro relay v2 e testado multiplayer ao
+      vivo em produção: dois clientes reais (build de produção via `npm run preview`, duas abas),
+      cada um viu o outro aparecer no painel de Ranking e o avatar remoto renderizado no mundo —
+      confirmado com o mesmo cuidado do lab-52 (forçar frame em cada aba alternadamente, já que
+      o loop de posição/estado do jogo também é gated por `requestAnimationFrame` e pausa em aba
+      sem foco real — não é bug, é o mesmo comportamento do navegador já documentado).
+      Republicado no Vercel; bundle de produção conferido ao vivo (grep no JS servido pela CDN)
+      pra confirmar que a URL do v2 realmente foi pro ar, não só no build local.
+- [x] Fly.io (v1) deixado no ar como estava — decisão de decomissionar ou não fica pro usuário,
+      não foi tomada nesta rodada (ver "Pendências" no CONTEXT.md).
 
 ## Fora de escopo (explicitamente adiado)
 - Decomissionar o Fly.io antes do v2 estar validado em produção de verdade — pedido explícito do
