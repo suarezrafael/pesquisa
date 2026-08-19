@@ -37,6 +37,7 @@ import '@babylonjs/loaders/glTF'
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
+import { findQuickChatMessage } from '../data/chatMessages'
 import { findAvatarByEmoji, type BonecoFeatures } from '../data/avatars'
 import { findHatById, type HatOption } from '../data/hats'
 import { questTypeColor } from './questVisuals'
@@ -126,6 +127,7 @@ const KNEE_BEND_MAX = 1.0 // rad — quanto o joelho/cotovelo dobra no pico da f
 const BIRD_CHIRP_RADIUS = 3.5 // pedido do usuário: pássaros cantam baixinho quando o jogador está perto
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
+const CAMERA_ROTATE_SPEED = 1.6 // rad/s — velocidade de giro da câmera segurando os botões ◀/▶
 const TRIGGER_DISTANCE = 2.4
 const RESET_DISTANCE = 3.6
 // Carro dirigível (lab-25): distância pra mostrar a dica "pressione E" / poder entrar, e
@@ -413,6 +415,16 @@ interface RemotePlayer {
   avatarEmoji: string
   xp: number
   coins: number
+  // Animação de andar (lab-55: "eles não mexem as pernas") — sem input direto de um jogador
+  // remoto, a fase do ciclo avança com base na distância percorrida a cada quadro (ver loop de
+  // render), não no throttle (que só existe pro jogador local).
+  walkPhase: number
+  lastFootSign: number
+  // Bolha de fala (lab-55: "quando eu dei olá no chat pode aparecer um balão da msg sobre a
+  // cabeça") — TextBlock própria, separada do rótulo de nome (`label`), mesmo padrão visual dos
+  // NPCs (`chatLabel` em `WalkerNpc`/pool people): alpha 0/1, ligada à cabeça da figura.
+  chatLabel: TextBlock
+  chatBubbleTimeout: number | null
 }
 
 // Personagem estudante estilo "avatar de app" (torso, cabeça, cabelo, mochila, 2 pernas,
@@ -1278,6 +1290,14 @@ export function World3D({
   // segura o botão, igual ao Shift.
   const touchJumpRef = useRef(false)
   const touchRunRef = useRef(false)
+  // Controle de câmera por toque (lab-55, pedido do usuário: "pra tablet a mudança de posição da
+  // câmera pode ser... por touch screen" — sem mouse, não dava pra orbitar a câmera olhando ao
+  // redor). Mesmo padrão de `touchRunRef` (contínuo enquanto segura); o ângulo em si
+  // (`cameraYawOffsetRef`) é lido/escrito só dentro do loop de física, nunca pelo React — não
+  // precisa de `useState` (não afeta render de nenhum componente).
+  const cameraRotateLeftRef = useRef(false)
+  const cameraRotateRightRef = useRef(false)
+  const cameraYawOffsetRef = useRef(0)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
   const suspendRef = useRef(suspendTriggers)
@@ -1815,7 +1835,11 @@ export function World3D({
         ...OTHER_INDICES,
       ]
 
-      const PROP_COUNT = 65
+      // Metade da contagem em dispositivo fraco (lab-55: "ainda está muito pesado pra tablet") —
+      // cada prop a menos é um mesh a menos (sem instancing nenhum nesses loops), então reduzir a
+      // quantidade em cenário puramente decorativo é o jeito mais simples e seguro de cortar
+      // draw calls sem arriscar um refactor de instancing sem poder testar no aparelho real.
+      const PROP_COUNT = isLowEndDevice ? 34 : 65
       for (let i = 0; i < PROP_COUNT; i++) {
         const t = i / PROP_COUNT
         // Cobre de perto do polo (onde a bola nasce) até um pouco além do equador —
@@ -1865,6 +1889,12 @@ export function World3D({
           instance.scaling.setAll(scale)
           instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
         }
+        // Prop decorativa: posição/rotação/escala não mudam mais depois daqui — congela a matriz
+        // de mundo (custo de recálculo por quadro vira zero) em vez de recalcular à toa todo
+        // quadro pros ~65 props + filhos do glTF, um ganho de CPU sem risco visual nenhum (lab-55,
+        // parte do pedido de otimização de FPS pro Redmi Pad 2).
+        instance.freezeWorldMatrix()
+        instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
 
         // Collider simplificado (esfera) e invisível — nunca a malha visual do glTF.
         // Esfera evita ter que alinhar rotação do colisor à curvatura do planeta.
@@ -1912,7 +1942,7 @@ export function World3D({
         // uma perto da outra" — de 12 pra 7 (menos itens no total) e `radiusFrac` com piso maior
         // (0,25 → 0,35) pra afastar um pouco mais do centro, reduzindo a chance de dois caírem
         // perto um do outro.
-        const DESERT_PROP_COUNT = 7
+        const DESERT_PROP_COUNT = isLowEndDevice ? 4 : 7
         for (let i = 0; i < DESERT_PROP_COUNT; i++) {
           const angle = (i / DESERT_PROP_COUNT) * Math.PI * 2 + i * 0.73
           const radiusFrac = 0.35 + ((i * 5) % 7) / 7
@@ -1943,6 +1973,8 @@ export function World3D({
           // `buildCactus` já registra seus próprios shadow casters internamente (ver função) —
           // registrar de novo aqui duplicaria a malha na lista de sombra do Havok/Babylon.
           if (!isCactus) instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
+          instance.freezeWorldMatrix()
+          instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
 
           const colliderDiameter = 0.7 * scale
           const colliderRadius = colliderDiameter / 2
@@ -1968,7 +2000,7 @@ export function World3D({
         const seed = Math.abs(plateau.dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
         const tangentA = Vector3.Cross(plateau.dir, seed).normalize()
         const tangentB = Vector3.Cross(plateau.dir, tangentA).normalize()
-        const ROCKS_PER_MOUNTAIN = 4
+        const ROCKS_PER_MOUNTAIN = isLowEndDevice ? 2 : 4
         for (let ri = 0; ri < ROCKS_PER_MOUNTAIN; ri++) {
           const angle = (ri / ROCKS_PER_MOUNTAIN) * Math.PI * 2 + pi * 0.9
           const radiusFrac = 0.15 + ((ri * 5 + pi * 3) % 7) / 7 / 1.6 // 0.15-0.58 do raio do platô
@@ -1991,6 +2023,8 @@ export function World3D({
           // O terreno já é sólido. Um colisor esférico separado ultrapassava a silhueta
           // irregular da rocha e criava rampas invisíveis ao redor dela.
           instance.getChildMeshes().forEach((mesh) => shadowGenerator.addShadowCaster(mesh))
+          instance.freezeWorldMatrix()
+          instance.getChildMeshes().forEach((mesh) => mesh.freezeWorldMatrix())
         }
       })
 
@@ -2315,7 +2349,7 @@ export function World3D({
       const FRIEND_RADIUS = 1.4 // bem mais perto que o raio de som (3.5) — precisa "ir até" o bicho, não só passar perto
 
       const critters: Critter[] = []
-      const CRITTER_COUNT = 39
+      const CRITTER_COUNT = isLowEndDevice ? 20 : 39
       for (let i = 0; i < CRITTER_COUNT; i++) {
         const kind: CritterKind =
           i < 8 ? 'coelho'
@@ -2392,7 +2426,7 @@ export function World3D({
       const CLOUD_MIN_ALPHA = 0.2
 
       const cloudGroups: { node: Mesh; puffs: Mesh[]; basePos: Vector3; speed: number }[] = []
-      const CLOUD_COUNT = 9
+      const CLOUD_COUNT = isLowEndDevice ? 5 : 9
       for (let i = 0; i < CLOUD_COUNT; i++) {
         const phi = Math.PI * 0.15 + (i / CLOUD_COUNT) * Math.PI * 0.55
         const theta = i * GOLDEN_ANGLE * 2.2
@@ -2795,6 +2829,26 @@ export function World3D({
       // reconstrói `accessories`. Ver useEffect que observa `profile.equippedHatId`.
       ;(scene as any).__setPlayerHat = (hatId: string | null) => {
         applyHat(studentFigure, hatId ? findHatById(hatId) ?? null : null, scene, shadowGenerator)
+      }
+
+      // Bolha de fala sobre a própria cabeça (lab-55) — o relay não devolve a própria mensagem
+      // pro remetente (`broadcast` exclui o sender), então sem isso só os OUTROS jogadores veriam
+      // a bolha; chamado por `handleSendChat` (fora deste efeito) via essa ponte, mesmo padrão de
+      // `__setAvatarShirtColor`/`__setPlayerHat` acima.
+      const localChatLabel = new TextBlock('localChat', '')
+      localChatLabel.color = 'white'
+      localChatLabel.fontSize = 18
+      localChatLabel.outlineWidth = 3
+      localChatLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      localChatLabel.alpha = 0
+      guiTexture.addControl(localChatLabel)
+      localChatLabel.linkWithMesh(studentFigure.head)
+      localChatLabel.linkOffsetY = -55
+      let localChatBubbleTimeout: number | null = null
+      ;(scene as any).__showLocalChatBubble = (messageId: string) => {
+        const quickMsg = findQuickChatMessage(messageId)
+        if (!quickMsg) return
+        localChatBubbleTimeout = showChatBubbleText(localChatLabel, `${quickMsg.emoji} ${quickMsg.text}`, localChatBubbleTimeout)
       }
 
       // Câmera já posicionada corretamente antes do primeiro quadro (evita "pulo" inicial).
@@ -3730,7 +3784,7 @@ export function World3D({
         new Color3(0.5, 0.8, 0.4),
         new Color3(0.75, 0.4, 0.85),
       ]
-      const POOL_PEOPLE_COUNT = 5
+      const POOL_PEOPLE_COUNT = isLowEndDevice ? 3 : 5
       const POOL_CHAT_LINES = [
         'Oi!',
         'kkk',
@@ -3817,7 +3871,7 @@ export function World3D({
         colliderBody: PhysicsAggregate['body']
       }
       const walkerNpcs: WalkerNpc[] = []
-      const WALKER_COUNT = 10
+      const WALKER_COUNT = isLowEndDevice ? 5 : 10
       // lab-19: colisor cápsula por NPC, corpo ANIMATED (não DYNAMIC nem STATIC) — eles se movem
       // via IA de vagar (posição escrita direto no transform a cada quadro), não por forças de
       // física, mas ainda precisam bloquear o jogador. ANIMATED é o modo certo pra isso: o motor
@@ -3883,8 +3937,22 @@ export function World3D({
           rLabel.outlineWidth = 3
           rLabel.outlineColor = 'rgba(0,0,0,0.6)'
           guiTexture.addControl(rLabel)
+          // Sem isso a figura nasce na origem (centro do planeta) e "voa" lerpando até a posição
+          // real no primeiro quadro — bug pré-existente, pequeno mas visível, corrigido de
+          // passagem junto com a animação de andar (lab-55) pra não disparar um passo/animação
+          // fantasma nesse salto inicial.
+          rFigure.root.position = Vector3.FromArray(state.position)
           rLabel.linkWithMesh(rFigure.root)
           rLabel.linkOffsetY = -115
+          const rChatLabel = new TextBlock(`remoteChat-${state.id}`, '')
+          rChatLabel.color = 'white'
+          rChatLabel.fontSize = 18
+          rChatLabel.outlineWidth = 3
+          rChatLabel.outlineColor = 'rgba(0,0,0,0.5)'
+          rChatLabel.alpha = 0
+          guiTexture.addControl(rChatLabel)
+          rChatLabel.linkWithMesh(rFigure.head)
+          rChatLabel.linkOffsetY = -55
           rp = {
             figure: rFigure,
             label: rLabel,
@@ -3895,6 +3963,10 @@ export function World3D({
             avatarEmoji: state.avatarEmoji,
             xp: state.xp,
             coins: state.coins,
+            walkPhase: Math.random() * Math.PI * 2,
+            lastFootSign: 0,
+            chatLabel: rChatLabel,
+            chatBubbleTimeout: null,
           }
           remotePlayers.set(state.id, rp)
         }
@@ -3904,9 +3976,25 @@ export function World3D({
       function removeRemotePlayer(id: string) {
         const rp = remotePlayers.get(id)
         if (!rp) return
+        if (rp.chatBubbleTimeout !== null) window.clearTimeout(rp.chatBubbleTimeout)
         guiTexture.removeControl(rp.label)
+        guiTexture.removeControl(rp.chatLabel)
         rp.figure.root.dispose()
         remotePlayers.delete(id)
+      }
+
+      // Mostra a bolha de fala por cima da cabeça de uma figura (jogador remoto ou o próprio,
+      // via `__showLocalChatBubble` abaixo) por alguns segundos e some sozinha — mesmo padrão
+      // visual dos NPCs (`chatLabel` alpha 0/1), mas disparada por evento (uma mensagem de
+      // verdade) em vez de timer de conversa aleatória. Retorna o novo timeout id, pro chamador
+      // guardar e conseguir cancelar se uma segunda mensagem chegar antes da primeira sumir.
+      function showChatBubbleText(label: TextBlock, text: string, previousTimeout: number | null): number {
+        if (previousTimeout !== null) window.clearTimeout(previousTimeout)
+        label.text = text
+        label.alpha = 1
+        return window.setTimeout(() => {
+          label.alpha = 0
+        }, 3000)
       }
 
       const unsubState = onRemoteState((state) => {
@@ -3920,6 +4008,11 @@ export function World3D({
       const unsubLeave = onRemoteLeave((id) => removeRemotePlayer(id))
       const unsubChat = onChat((msg) => {
         setChatMessages((prev) => [...prev.slice(-49), msg])
+        const rp = remotePlayers.get(msg.id)
+        const quickMsg = findQuickChatMessage(msg.messageId)
+        if (rp && quickMsg) {
+          rp.chatBubbleTimeout = showChatBubbleText(rp.chatLabel, `${quickMsg.emoji} ${quickMsg.text}`, rp.chatBubbleTimeout)
+        }
       })
       const unsubConnection = onConnectionChange((connected) => setMpConnected(connected))
       connectMultiplayer()
@@ -4258,7 +4351,15 @@ export function World3D({
 
           // câmera segue a bola acompanhando a orientação local do planeta (sobrescrita pela
           // câmera do carro logo abaixo, se `drivingCar` estiver setado neste quadro)
-          const desiredCamPos = pos.subtract(facing.scale(CAMERA_DISTANCE)).add(localUp.scale(CAMERA_HEIGHT))
+          // Botões de rotação de câmera (lab-55, pedido do usuário — tablet sem mouse pra olhar
+          // em volta): giram só a posição da câmera ao redor do jogador (`cameraYawOffsetRef`),
+          // sem tocar em `facing` — o boneco continua andando pra onde o direcional manda, só a
+          // vista gira, como olhar em volta sem mudar pra onde anda.
+          if (cameraRotateLeftRef.current) cameraYawOffsetRef.current -= dt * CAMERA_ROTATE_SPEED
+          if (cameraRotateRightRef.current) cameraYawOffsetRef.current += dt * CAMERA_ROTATE_SPEED
+          Matrix.FromQuaternionToRef(Quaternion.RotationAxis(localUp, cameraYawOffsetRef.current), tmpMatrix)
+          const camFacing = Vector3.TransformNormal(facing, tmpMatrix).normalize()
+          const desiredCamPos = pos.subtract(camFacing.scale(CAMERA_DISTANCE)).add(localUp.scale(CAMERA_HEIGHT))
           camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
           camera.setTarget(pos)
@@ -4283,12 +4384,55 @@ export function World3D({
               removeRemotePlayer(remoteId)
               continue
             }
+            const prevRemotePos = rp.figure.root.position.clone()
             rp.figure.root.position = Vector3.Lerp(rp.figure.root.position, rp.targetPos, 0.15)
             const rLocalUp = rp.targetPos.length() > 0.0001 ? rp.targetPos.clone().normalize() : new Vector3(0, 1, 0)
             const rRight = Vector3.Cross(rLocalUp, rp.targetFacing).normalize()
             Matrix.FromXYZAxesToRef(rRight, rLocalUp, rp.targetFacing, tmpMatrix)
             Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
             rp.figure.root.rotationQuaternion = tmpQuat.clone()
+
+            // Animação de andar (lab-55: "eles não mexem as pernas") — um jogador remoto não tem
+            // throttle/input local, então a "velocidade" vem da distância percorrida neste quadro
+            // (já suavizada pelo lerp acima), igual em espírito ao que o throttle representa pro
+            // personagem local. Mesmas fórmulas de perna/joelho/braço/cabeça do avatar local.
+            const remoteSpeed = Vector3.Distance(prevRemotePos, rp.figure.root.position) / Math.max(dt, 0.0001)
+            const remoteMoving = remoteSpeed > 0.15
+            if (remoteMoving) {
+              const cycleSpeed = remoteSpeed > WALK_SPEED * 1.3 ? RUN_CYCLE_SPEED : WALK_CYCLE_SPEED
+              rp.walkPhase += dt * cycleSpeed
+              const rSwing = Math.sin(rp.walkPhase) * LEG_SWING_MAX
+              rp.figure.legPivotL.rotation.x = rSwing
+              rp.figure.legPivotR.rotation.x = -rSwing
+              rp.figure.armPivotL.rotation.x = -rSwing * 0.7
+              rp.figure.armPivotR.rotation.x = rSwing * 0.7
+              const rKneeL = KNEE_BEND_MIN + (Math.sin(rp.walkPhase + Math.PI / 2) * 0.5 + 0.5) * (KNEE_BEND_MAX - KNEE_BEND_MIN)
+              const rKneeR = KNEE_BEND_MIN + (Math.sin(rp.walkPhase - Math.PI / 2) * 0.5 + 0.5) * (KNEE_BEND_MAX - KNEE_BEND_MIN)
+              rp.figure.kneePivotL.rotation.x = -rKneeL
+              rp.figure.kneePivotR.rotation.x = -rKneeR
+              rp.figure.elbowPivotL.rotation.x = rKneeR * 0.5
+              rp.figure.elbowPivotR.rotation.x = rKneeL * 0.5
+              rp.figure.head.position.y = 1.15 + Math.abs(Math.sin(rp.walkPhase * 2)) * 0.025
+              const rFootSign = Math.sign(rSwing)
+              if (rFootSign !== 0 && rFootSign !== rp.lastFootSign) {
+                rp.lastFootSign = rFootSign
+                // Passo dos outros jogadores mais baixo que o próprio e some com a distância
+                // (12 unidades) — evita virar uma bagunça de som com vários jogadores por perto.
+                const distToLocal = Vector3.Distance(pos, rp.figure.root.position)
+                playFootstep(Math.max(0, 1 - distToLocal / 12) * 0.6)
+              }
+            } else {
+              rp.figure.legPivotL.rotation.x *= 0.8
+              rp.figure.legPivotR.rotation.x *= 0.8
+              rp.figure.armPivotL.rotation.x *= 0.8
+              rp.figure.armPivotR.rotation.x *= 0.8
+              rp.figure.kneePivotL.rotation.x *= 0.8
+              rp.figure.kneePivotR.rotation.x *= 0.8
+              rp.figure.elbowPivotL.rotation.x *= 0.8
+              rp.figure.elbowPivotR.rotation.x *= 0.8
+              rp.figure.head.position.y += (1.15 - rp.figure.head.position.y) * 0.2
+              rp.lastFootSign = 0
+            }
           }
 
           // Fade das paredes do Prédio dos Enigmas (ver comentário de `QT_FADE_START` acima, no
@@ -4779,6 +4923,22 @@ export function World3D({
     touchRunRef.current = false
   }
 
+  function handleCameraRotateLeftPress() {
+    cameraRotateLeftRef.current = true
+  }
+
+  function handleCameraRotateLeftRelease() {
+    cameraRotateLeftRef.current = false
+  }
+
+  function handleCameraRotateRightPress() {
+    cameraRotateRightRef.current = true
+  }
+
+  function handleCameraRotateRightRelease() {
+    cameraRotateRightRef.current = false
+  }
+
   function handleToggleMute() {
     setMuted(toggleAmbienceMute())
   }
@@ -4786,6 +4946,7 @@ export function World3D({
   function handleSendChat(messageId: string) {
     sendChat(profile.name, messageId)
     setChatMessages((prev) => [...prev.slice(-49), { id: 'me', name: profile.name, messageId, ts: Date.now() }])
+    ;(sceneRef.current as any)?.__showLocalChatBubble?.(messageId)
   }
 
   return (
@@ -4811,6 +4972,18 @@ export function World3D({
         label="🏃"
         onPress={handleTouchRunPress}
         onRelease={handleTouchRunRelease}
+      />
+      <TouchActionButton
+        className="touch-action-cam-left"
+        label="◀"
+        onPress={handleCameraRotateLeftPress}
+        onRelease={handleCameraRotateLeftRelease}
+      />
+      <TouchActionButton
+        className="touch-action-cam-right"
+        label="▶"
+        onPress={handleCameraRotateRightPress}
+        onRelease={handleCameraRotateRightRelease}
       />
       {chatOpen && (
         <ChatPanel

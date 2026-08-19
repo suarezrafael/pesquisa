@@ -267,8 +267,11 @@ export function playThunder(intensity: number = 1): void {
 // (confirmado contando criações de nó de áudio durante uma caminhada), mas era baixo/curto
 // demais pra realmente se notar. Ganho maior, filtro mais grave (mais "toc" que "chiado") e um
 // pouco mais de duração.
-export function playFootstep(): void {
-  if (!audioCtx || muted) return
+// `volume` (0-1, padrão 1) — usado pelos passos dos jogadores remotos (lab-55: "eles não emitem
+// o barulho da caminhada"), mais baixo e com atenuação por distância do próprio jogador, pra não
+// virar uma bagunça de som quando vários jogadores andam por perto ao mesmo tempo.
+export function playFootstep(volume = 1): void {
+  if (!audioCtx || muted || volume <= 0) return
   const ctx = audioCtx
   const now = ctx.currentTime
   const bufferSize = Math.floor(ctx.sampleRate * 0.1)
@@ -283,7 +286,7 @@ export function playFootstep(): void {
   filter.type = 'lowpass'
   filter.frequency.value = 650
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0.16, now)
+  gain.gain.setValueAtTime(0.16 * volume, now)
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
   src.connect(filter).connect(gain).connect(ctx.destination)
   src.start(now)
