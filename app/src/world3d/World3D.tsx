@@ -2357,7 +2357,14 @@ export function World3D({
       cloudMat.alpha = 0.88
       cloudMat.backFaceCulling = false
 
-      const cloudGroups: { node: Mesh; basePos: Vector3; speed: number }[] = []
+      // Fade quando a câmera se aproxima/atravessa um tufo (ver uso mais abaixo, no loop de
+      // física por quadro) — cada tufo é pequeno (diâmetro 1,2-1,9 depois da redução de tamanho),
+      // então o limiar é proporcionalmente pequeno também.
+      const CLOUD_FADE_START = 3.2
+      const CLOUD_FADE_END = 1.2
+      const CLOUD_MIN_ALPHA = 0.2
+
+      const cloudGroups: { node: Mesh; puffs: Mesh[]; basePos: Vector3; speed: number }[] = []
       const CLOUD_COUNT = 9
       for (let i = 0; i < CLOUD_COUNT; i++) {
         const phi = Math.PI * 0.15 + (i / CLOUD_COUNT) * Math.PI * 0.55
@@ -2384,7 +2391,7 @@ export function World3D({
         const node = puffs[0]
         for (let p = 1; p < puffs.length; p++) puffs[p].parent = node
         node.position = basePos
-        cloudGroups.push({ node, basePos, speed: 0.03 + (i % 4) * 0.01 })
+        cloudGroups.push({ node, puffs, basePos, speed: 0.03 + (i % 4) * 0.01 })
       }
 
       // Chuva (pedido do usuário: "chuva" — item pendente da lista do lab-09): sistema de
@@ -3349,17 +3356,22 @@ export function World3D({
       qtMarkerMat.emissiveColor = new Color3(0.7, 0.5, 0.05)
       qtMarkerMat.roughness = 0.4
 
-      // Malhas das paredes (não o telhado/piso/escada) — as únicas que ficam quase transparentes
-      // quando a câmera se aproxima (ver `onBeforeRenderObservable` mais abaixo).
+      // Malhas que ficam com a opacidade reduzida perto do jogador (ver fade no loop de física
+      // mais abaixo) — paredes ficam quase transparentes (bem menos opacas); pisos só "um pouco"
+      // transparentes (pedido do usuário: "o piso dos andares tem que ficar um pouco transparente
+      // pra não atrapalhar a visão da câmera em 3ª pessoa" — a câmera em terceira pessoa, com
+      // offset de altura, podia ficar com o piso do andar de cima entre ela e o jogador).
       const quizTowerWalls: Mesh[] = []
+      const quizTowerFloors: Mesh[] = []
 
-      function addQtMesh(mesh: Mesh, mat: PBRMaterial, collide: boolean, isWall = false) {
+      function addQtMesh(mesh: Mesh, mat: PBRMaterial, collide: boolean, kind?: 'wall' | 'floor') {
         mesh.material = mat
         mesh.parent = quizTowerBase
         mesh.receiveShadows = true
         shadowGenerator.addShadowCaster(mesh)
         if (collide) new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
-        if (isWall) quizTowerWalls.push(mesh)
+        if (kind === 'wall') quizTowerWalls.push(mesh)
+        if (kind === 'floor') quizTowerFloors.push(mesh)
       }
 
       // Fundação (mesma correção do lab-45 — footprint grande o bastante pra sofrer com relevo
@@ -3382,7 +3394,7 @@ export function World3D({
         if (floor === 0) {
           const slab = MeshBuilder.CreateBox('quizFloor-0', { width: QT_WIDTH, height: 0.1, depth: QT_DEPTH }, scene)
           slab.position = new Vector3(0, 0.05, 0)
-          addQtMesh(slab, qtFloorMat, true)
+          addQtMesh(slab, qtFloorMat, true, 'floor')
         } else {
           const slab = MeshBuilder.CreateBox(
             `quizFloor-${floor}`,
@@ -3390,7 +3402,7 @@ export function World3D({
             scene,
           )
           slab.position = new Vector3(QT_FLOOR_CENTER_X, floorY + 0.06, 0)
-          addQtMesh(slab, qtFloorMat, true)
+          addQtMesh(slab, qtFloorMat, true, 'floor')
 
           // Parapeito baixo na borda do poço — só sinaliza visualmente a queda, o jogador ainda
           // consegue pular por cima (mesmo padrão do `towerParapet`).
@@ -3403,65 +3415,116 @@ export function World3D({
           addQtMesh(parapet, qtWallMat, true)
         }
 
-        // Paredes do andar — 4 lados; só o térreo tem vão de porta na frente (entrada).
+        // Paredes do andar — BUG real encontrado ao testar (usuário: "não consigo subir nas
+        // escadas"): a primeira versão fazia a parede de trás e a de frente cobrirem a LARGURA
+        // TODA (`QT_WIDTH`), incluindo o poço da escada — ou seja, cada lance ficava literalmente
+        // fechado numa caixa, sem conseguir chegar em nenhuma das duas pontas (z=±QT_HALF_D)
+        // pra completar a subida. Corrigido: parede de trás e de frente cobrem só a largura do
+        // PISO (`QT_FLOOR_WIDTH`/`QT_FLOOR_CENTER_X`), deixando o poço da escada sempre aberto
+        // nas duas pontas, em todo andar — também ajuda a ver a escada de fora sem depender só
+        // do fade de transparência.
         const backWall = MeshBuilder.CreateBox(
           `quizBackWall-${floor}`,
-          { width: QT_WIDTH, height: QT_FLOOR_HEIGHT, depth: 0.15 },
+          { width: QT_FLOOR_WIDTH, height: QT_FLOOR_HEIGHT, depth: 0.15 },
           scene,
         )
-        backWall.position = new Vector3(0, floorY + QT_FLOOR_HEIGHT / 2, QT_HALF_D)
-        addQtMesh(backWall, qtWallMat, true, true)
+        backWall.position = new Vector3(QT_FLOOR_CENTER_X, floorY + QT_FLOOR_HEIGHT / 2, QT_HALF_D)
+        addQtMesh(backWall, qtWallMat, true, 'wall')
 
-        for (const side of [-1, 1]) {
-          const sideWall = MeshBuilder.CreateBox(
-            `quizSideWall-${floor}-${side}`,
-            { width: 0.15, height: QT_FLOOR_HEIGHT, depth: QT_DEPTH },
-            scene,
-          )
-          sideWall.position = new Vector3(side * QT_HALF_W, floorY + QT_FLOOR_HEIGHT / 2, 0)
-          addQtMesh(sideWall, qtWallMat, true, true)
-        }
+        // Parede lateral externa (x=+QT_HALF_W, lado do piso) — full depth, sem afetar o poço.
+        const outerSideWall = MeshBuilder.CreateBox(
+          `quizSideWall-${floor}-1`,
+          { width: 0.15, height: QT_FLOOR_HEIGHT, depth: QT_DEPTH },
+          scene,
+        )
+        outerSideWall.position = new Vector3(QT_HALF_W, floorY + QT_FLOOR_HEIGHT / 2, 0)
+        addQtMesh(outerSideWall, qtWallMat, true, 'wall')
+
+        // Parede lateral externa do poço da escada (x=-QT_HALF_W) — fecha só o lado de FORA do
+        // poço; as pontas (z=±QT_HALF_D) continuam abertas pra escada passar.
+        const stairOuterWall = MeshBuilder.CreateBox(
+          `quizSideWall-${floor}--1`,
+          { width: 0.15, height: QT_FLOOR_HEIGHT, depth: QT_DEPTH },
+          scene,
+        )
+        stairOuterWall.position = new Vector3(-QT_HALF_W, floorY + QT_FLOOR_HEIGHT / 2, 0)
+        addQtMesh(stairOuterWall, qtWallMat, true, 'wall')
 
         if (floor === 0) {
-          const frontSegWidth = (QT_WIDTH - QT_DOOR_WIDTH) / 2
-          for (const side of [-1, 1]) {
-            const frontWall = MeshBuilder.CreateBox(
-              `quizFrontWall-${floor}-${side}`,
-              { width: frontSegWidth, height: QT_FLOOR_HEIGHT, depth: 0.15 },
+          // Segmento da porta do lado do piso (inalterado) + um segmento curto do lado do poço
+          // (só entre a borda do poço e a porta — não cobre o poço em si).
+          const frontRightWidth = (QT_HALF_W - QT_DOOR_WIDTH / 2)
+          const frontRight = MeshBuilder.CreateBox(
+            'quizFrontWall-0-1',
+            { width: frontRightWidth, height: QT_FLOOR_HEIGHT, depth: 0.15 },
+            scene,
+          )
+          frontRight.position = new Vector3(QT_DOOR_WIDTH / 2 + frontRightWidth / 2, floorY + QT_FLOOR_HEIGHT / 2, -QT_HALF_D)
+          addQtMesh(frontRight, qtWallMat, true, 'wall')
+
+          const frontLeftWidth = -QT_DOOR_WIDTH / 2 - QT_FLOOR_X_MIN // entre a porta e a borda do poço
+          if (frontLeftWidth > 0.05) {
+            const frontLeft = MeshBuilder.CreateBox(
+              'quizFrontWall-0--1',
+              { width: frontLeftWidth, height: QT_FLOOR_HEIGHT, depth: 0.15 },
               scene,
             )
-            frontWall.position = new Vector3(
-              side * (QT_DOOR_WIDTH / 2 + frontSegWidth / 2),
-              floorY + QT_FLOOR_HEIGHT / 2,
-              -QT_HALF_D,
-            )
-            addQtMesh(frontWall, qtWallMat, true, true)
+            frontLeft.position = new Vector3(QT_FLOOR_X_MIN + frontLeftWidth / 2, floorY + QT_FLOOR_HEIGHT / 2, -QT_HALF_D)
+            addQtMesh(frontLeft, qtWallMat, true, 'wall')
           }
         } else {
           const frontWall = MeshBuilder.CreateBox(
             `quizFrontWall-${floor}`,
-            { width: QT_WIDTH, height: QT_FLOOR_HEIGHT, depth: 0.15 },
+            { width: QT_FLOOR_WIDTH, height: QT_FLOOR_HEIGHT, depth: 0.15 },
             scene,
           )
-          frontWall.position = new Vector3(0, floorY + QT_FLOOR_HEIGHT / 2, -QT_HALF_D)
-          addQtMesh(frontWall, qtWallMat, true, true)
+          frontWall.position = new Vector3(QT_FLOOR_CENTER_X, floorY + QT_FLOOR_HEIGHT / 2, -QT_HALF_D)
+          addQtMesh(frontWall, qtWallMat, true, 'wall')
         }
 
-        // Escada — só até o próximo andar (o topo não sobe mais). Degraus empilhados (cada um
-        // mais alto que o anterior, descendo até o piso do próprio andar) andando de
-        // z=-QT_HALF_D até z=+QT_HALF_D, sempre no mesmo sentido — pra subir o próximo lance o
-        // jogador atravessa o piso do andar até voltar pro início do poço.
+        // Escada em zigue-zague (pedido do usuário depois de testar: "as escadas ficaram do
+        // mesmo lado" — a versão anterior sempre subia z=-QT_HALF_D→+QT_HALF_D, então pra
+        // continuar pro próximo lance o jogador tinha que atravessar o andar inteiro de volta.
+        // Lances pares sobem nesse sentido, ímpares no sentido contrário — o topo de um lance
+        // fica bem perto do início do próximo (mesmo canto), como uma escada de prédio de
+        // verdade, sem precisar atravessar o piso.
+        //
+        // BUG REAL encontrado testando ao vivo (usuário pediu explicitamente pra testar antes):
+        // com um colisor BOX por degrau, o avatar ficava fisicamente preso no meio da subida —
+        // confirmado com um raycast pra frente que bateu bem em cima do próprio degrau seguinte
+        // (`quizStep-0-6`), a poucos centímetros da cápsula. Degraus discretos empilhados não são
+        // confiáveis pra um character controller de cápsula sem step-offset dedicado (é por isso
+        // que a Torre do Tesouro já usa uma RAMPA lisa, não degraus). Correção: os degraus viram
+        // só VISUAL (`collide: false` — dão a aparência de "escada" que o usuário pediu), e uma
+        // rampa INVISÍVEL (mesma técnica já comprovada da torre) cobre o lance inteiro pra
+        // colisão de verdade — o jogador sobe suave por baixo dos degraus visuais.
         if (floor < QT_FLOOR_COUNT - 1) {
+          const forward = floor % 2 === 0
           for (let i = 0; i < QT_STEPS_PER_FLIGHT; i++) {
-            const stepZ = -QT_HALF_D + (i + 0.5) * QT_STEP_RUN
+            const stepZ = forward
+              ? -QT_HALF_D + (i + 0.5) * QT_STEP_RUN
+              : QT_HALF_D - (i + 0.5) * QT_STEP_RUN
             const step = MeshBuilder.CreateBox(
               `quizStep-${floor}-${i}`,
-              { width: 0.9, height: (i + 1) * QT_STEP_RISE, depth: QT_STEP_RUN + 0.02 },
+              { width: 0.75, height: (i + 1) * QT_STEP_RISE, depth: QT_STEP_RUN + 0.02 },
               scene,
             )
             step.position = new Vector3(QT_STAIR_CENTER_X, floorY + ((i + 1) * QT_STEP_RISE) / 2, stepZ)
-            addQtMesh(step, qtStepMat, true)
+            addQtMesh(step, qtStepMat, false)
           }
+
+          const rampLength = Math.sqrt(QT_DEPTH * QT_DEPTH + QT_FLOOR_HEIGHT * QT_FLOOR_HEIGHT)
+          const rampAngle = Math.atan2(QT_FLOOR_HEIGHT, QT_DEPTH)
+          const ramp = MeshBuilder.CreateBox(
+            `quizRamp-${floor}`,
+            { width: 0.75, height: 0.12, depth: rampLength },
+            scene,
+          )
+          ramp.position = new Vector3(QT_STAIR_CENTER_X, floorY + QT_FLOOR_HEIGHT / 2, 0)
+          ramp.rotation.x = forward ? -rampAngle : rampAngle
+          ramp.isVisible = false
+          ramp.parent = quizTowerBase
+          new PhysicsAggregate(ramp, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
         }
 
         // Marcador do quiz surpresa deste andar — flutua sobre o piso andável, longe do poço da
@@ -3519,6 +3582,9 @@ export function World3D({
       const QT_FADE_START = 5.5
       const QT_FADE_END = 2.6
       const QT_MIN_ALPHA = 0.12
+      // Pisos ficam só "um pouco" transparentes (pedido do usuário), não quase invisíveis como as
+      // paredes — ainda precisam ser reconhecíveis como chão.
+      const QT_FLOOR_MIN_ALPHA = 0.55
 
       // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
       // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
@@ -3885,6 +3951,16 @@ export function World3D({
         grassMaterial.setFloat('time', time)
         for (const cloud of cloudGroups) {
           cloud.node.position = rotateAroundAxis(cloud.basePos, Vector3.Up(), time * cloud.speed)
+          // Pedido do usuário: "o mesmo vale pras nuvens quando cruzam a câmera" — a câmera em
+          // terceira pessoa às vezes passa perto/dentro de um tufo de nuvem (mais provável perto
+          // de montanhas altas), tampando a visão. Cada nuvem fica quase transparente quando a
+          // CÂMERA (não o jogador — aqui o efeito é literalmente sobre o que a câmera enxerga)
+          // está perto dela.
+          const camDistToCloud = Vector3.Distance(camera.position, cloud.node.position)
+          const cloudTarget = camDistToCloud >= CLOUD_FADE_START ? 1 : camDistToCloud <= CLOUD_FADE_END ? CLOUD_MIN_ALPHA : CLOUD_MIN_ALPHA + ((camDistToCloud - CLOUD_FADE_END) / (CLOUD_FADE_START - CLOUD_FADE_END)) * (1 - CLOUD_MIN_ALPHA)
+          for (const puff of cloud.puffs) {
+            puff.visibility += (cloudTarget - puff.visibility) * 0.2
+          }
         }
 
         // combina teclado + joystick
@@ -4162,6 +4238,16 @@ export function World3D({
                   : QT_MIN_ALPHA + ((tangentialDist - QT_FADE_END) / (QT_FADE_START - QT_FADE_END)) * (1 - QT_MIN_ALPHA)
             for (const wall of quizTowerWalls) {
               wall.visibility += (qtTarget - wall.visibility) * 0.15
+            }
+            const qtFloorTarget =
+              tangentialDist >= QT_FADE_START
+                ? 1
+                : tangentialDist <= QT_FADE_END
+                  ? QT_FLOOR_MIN_ALPHA
+                  : QT_FLOOR_MIN_ALPHA +
+                    ((tangentialDist - QT_FADE_END) / (QT_FADE_START - QT_FADE_END)) * (1 - QT_FLOOR_MIN_ALPHA)
+            for (const floorMesh of quizTowerFloors) {
+              floorMesh.visibility += (qtFloorTarget - floorMesh.visibility) * 0.15
             }
           }
 
