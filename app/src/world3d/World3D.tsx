@@ -1350,7 +1350,9 @@ export function World3D({
     const isLowEndDevice = /Android|iPad|iPhone|iPod|Tablet|Mobi/i.test(navigator.userAgent)
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
-    if (isLowEndDevice) engine.setHardwareScalingLevel(1.5)
+    // 1.5 -> 1.75 (lab-56, "ainda está um pouco pesado pro tablet"): renderiza a menos pixels
+    // ainda (upscale automático) — a alavanca mais direta pra GPU fill-rate limitada.
+    if (isLowEndDevice) engine.setHardwareScalingLevel(1.75)
     const scene = new Scene(engine)
     sceneRef.current = scene
     if (import.meta.env.DEV) {
@@ -1406,8 +1408,13 @@ export function World3D({
     // recebe casters — sem casters o passe de shadow map roda sobre nada, custo desprezível).
     if (isLowEndDevice) shadowGenerator.addShadowCaster = () => shadowGenerator
 
-    const glow = new GlowLayer('glow', scene)
-    glow.intensity = 0.7
+    // GlowLayer roda um passe extra de blur sobre o material emissivo todo quadro — mais um post-
+    // process caro pulado em dispositivo fraco (lab-56, "ainda está um pouco pesado pro tablet"),
+    // igual já foi feito com SSAO2/sombras/MSAA. Só afeta o brilho dos portais das escolas.
+    if (!isLowEndDevice) {
+      const glow = new GlowLayer('glow', scene)
+      glow.intensity = 0.7
+    }
 
     let havokPlugin: HavokPlugin | null = null
     let avatarBody: PhysicsAggregate | null = null
@@ -2769,7 +2776,9 @@ export function World3D({
       grassBlade.material = grassMaterial
       grassBlade.receiveShadows = false
 
-      const GRASS_COUNT = 2600
+      // Já é 1 draw call só (thin instances), mas cada instância ainda é vértices/fragmentos de
+      // verdade pra GPU processar — metade da densidade em dispositivo fraco (lab-56).
+      const GRASS_COUNT = isLowEndDevice ? 1300 : 2600
       const grassMatrices = new Float32Array(GRASS_COUNT * 16)
       for (let i = 0; i < GRASS_COUNT; i++) {
         // Resorteia (poucas tentativas bastam) até cair fora do bioma do deserto (lab-23) E fora
