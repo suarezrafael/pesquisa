@@ -3604,6 +3604,11 @@ export function World3D({
       // Pisos ficam só "um pouco" transparentes (pedido do usuário), não quase invisíveis como as
       // paredes — ainda precisam ser reconhecíveis como chão.
       const QT_FLOOR_MIN_ALPHA = 0.55
+      // Distância de gatilho do quiz surpresa — bem menor que `TRIGGER_DISTANCE` (2,4, usado
+      // pelos portais das escolas): a esfera do marcador tem raio 0,28, a cápsula do avatar tem
+      // raio 0,32 — 0,85 exige contato de verdade, não só "chegar no andar" (ver comentário no
+      // gatilho, no loop de física por quadro).
+      const QT_QUIZ_TRIGGER_DISTANCE = 0.85
 
       // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
       // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
@@ -4286,13 +4291,19 @@ export function World3D({
               }
             }
 
-            // Quiz surpresa de cada andar do Prédio dos Enigmas — mesmo padrão de gatilho por
-            // distância dos portais das escolas, mas sem checar `completedQuestIds` (são bônus
-            // avulsos, podem ser refeitos: `triggered` só evita repetir sem o jogador sair de
-            // perto e voltar).
+            // Quiz surpresa de cada andar do Prédio dos Enigmas — sem checar `completedQuestIds`
+            // (são bônus avulsos, podem ser refeitos: `triggered` só evita repetir sem o jogador
+            // sair de perto e voltar).
+            //
+            // Bug real reportado pelo usuário: "o quiz do prédio abre só de chegar no andar, tem
+            // que ser quando encosto na esfera amarela" — usava o mesmo `TRIGGER_DISTANCE` (2,4)
+            // dos portais das escolas, generoso demais pra uma esfera pequena (raio 0,28):
+            // disparava só de pisar no andar, bem antes de chegar perto da esfera de verdade.
+            // Limiar bem mais apertado (0,85 ≈ raio da cápsula do avatar + raio da esfera + uma
+            // margem pequena de caminhada) pra exigir contato de verdade com o marcador.
             for (const marker of quizMarkers) {
               const d = Vector3.Distance(pos, marker.worldPos)
-              if (d < TRIGGER_DISTANCE && !triggered.has(marker.id)) {
+              if (d < QT_QUIZ_TRIGGER_DISTANCE && !triggered.has(marker.id)) {
                 triggered.add(marker.id)
                 onSelectSurpriseQuizRef.current(marker.id)
               } else if (d > RESET_DISTANCE) {
