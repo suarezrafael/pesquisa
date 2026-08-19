@@ -1,6 +1,8 @@
 import type { Progress, Quest } from '../types'
 import { quests } from '../data/quests'
 import { findAvatarById } from '../data/avatars'
+import { findHatById } from '../data/hats'
+import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
 export function xpForLevel(level: number): number {
@@ -34,23 +36,34 @@ export function badgesEarnedAt(completedCount: number): string[] {
 export interface CompletionResult {
   progress: Progress
   newBadges: string[]
+  // Recompensa realmente creditada, já com o multiplicador do evento semanal (lab-22) aplicado —
+  // a UI de recompensa deve mostrar isto, nunca `quest.xpReward`/`coinReward` direto, senão
+  // mostraria o valor errado numa semana com bônus.
+  awardedXp: number
+  awardedCoins: number
 }
 
-export function applyQuestCompletion(progress: Progress, quest: Quest): CompletionResult {
+export function applyQuestCompletion(
+  progress: Progress,
+  quest: Quest,
+  event: WeeklyEvent = getCurrentWeeklyEvent(),
+): CompletionResult {
   if (progress.completedQuestIds.includes(quest.id)) {
-    return { progress, newBadges: [] }
+    return { progress, newBadges: [], awardedXp: 0, awardedCoins: 0 }
   }
+  const awardedXp = Math.round(quest.xpReward * event.xpMultiplier)
+  const awardedCoins = Math.round(quest.coinReward * event.coinMultiplier)
   const completedQuestIds = [...progress.completedQuestIds, quest.id]
   const badges = badgesEarnedAt(completedQuestIds.length)
   const newBadges = badges.filter((b) => !progress.badges.includes(b))
   const next: Progress = {
     ...progress,
     completedQuestIds,
-    xp: progress.xp + quest.xpReward,
-    coins: progress.coins + quest.coinReward,
+    xp: progress.xp + awardedXp,
+    coins: progress.coins + awardedCoins,
     badges,
   }
-  return { progress: next, newBadges }
+  return { progress: next, newBadges, awardedXp, awardedCoins }
 }
 
 export function isQuestUnlocked(progress: Progress, questIndex: number): boolean {
@@ -77,5 +90,19 @@ export function unlockAvatar(progress: Progress, avatarId: string): Progress {
     ...progress,
     coins: progress.coins - avatar.cost,
     unlockedAvatarIds: [...progress.unlockedAvatarIds, avatarId],
+  }
+}
+
+// Mesma regra de compra do `unlockAvatar`, mas pro catálogo de chapéus (lab-24) — eixo de
+// customização independente (trocar de criatura não desbloqueia/perde chapéu nenhum).
+export function unlockHat(progress: Progress, hatId: string): Progress {
+  const hat = findHatById(hatId)
+  if (!hat) return progress
+  if (progress.unlockedHatIds.includes(hatId)) return progress
+  if (progress.coins < hat.cost) return progress
+  return {
+    ...progress,
+    coins: progress.coins - hat.cost,
+    unlockedHatIds: [...progress.unlockedHatIds, hatId],
   }
 }

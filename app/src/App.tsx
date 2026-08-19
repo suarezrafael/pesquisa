@@ -9,6 +9,7 @@ import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { quests } from './data/quests'
+import { surpriseQuizzes } from './data/surpriseQuizzes'
 import { hasTutorialBeenSeen, markTutorialSeen } from './state/storage'
 import type { Quest } from './types'
 
@@ -19,10 +20,13 @@ const World3D = lazy(() => import('./world3d/World3D').then((m) => ({ default: m
 type PreProfileScreen = 'title' | 'onboarding'
 
 function App() {
-  const { profile, createProfile, equipAvatar } = useProfile()
-  const { progress, completeQuest, collectCoin, unlockAvatar } = useProgress()
+  const { profile, createProfile, equipAvatar, equipHat } = useProfile()
+  const { progress, completeQuest, collectCoin, unlockAvatar, unlockHat } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
-  const [reward, setReward] = useState<{ quest: Quest; newBadges: string[] } | null>(null)
+  const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
+  const [reward, setReward] = useState<{ quest: Quest; newBadges: string[]; awardedXp: number; awardedCoins: number } | null>(
+    null,
+  )
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
   const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
   const [showHelp, setShowHelp] = useState(false)
@@ -54,9 +58,24 @@ function App() {
 
   function handleQuestCorrect() {
     if (!activeQuest) return
-    const newBadges = completeQuest(activeQuest)
-    setReward({ quest: activeQuest, newBadges })
+    const { newBadges, awardedXp, awardedCoins } = completeQuest(activeQuest)
+    setReward({ quest: activeQuest, newBadges, awardedXp, awardedCoins })
     setActiveQuest(null)
+  }
+
+  function handleSelectSurpriseQuiz(quizId: string) {
+    const quiz = surpriseQuizzes.find((q) => q.id === quizId) ?? null
+    setActiveSurpriseQuiz(quiz)
+  }
+
+  // Bônus intencionalmente leve (pedido do usuário: "pequeno quiz surpresa" em cada andar do
+  // Prédio dos Enigmas) — só moedas na hora via `collectCoin`, sem passar por `completeQuest`:
+  // não conta pra `completedQuestIds`/badges nem aparece na `QuestListOverlay`, que listam as 21
+  // missões das escolas.
+  function handleSurpriseQuizCorrect() {
+    if (!activeSurpriseQuiz) return
+    for (let i = 0; i < activeSurpriseQuiz.coinReward; i++) collectCoin()
+    setActiveSurpriseQuiz(null)
   }
 
   return (
@@ -66,11 +85,19 @@ function App() {
           profile={profile}
           progress={progress}
           onSelectQuest={handleSelectQuest}
+          onSelectSurpriseQuiz={handleSelectSurpriseQuiz}
           onOpenHelp={() => setShowHelp(true)}
           onOpenQuestList={() => setShowQuestList(true)}
           onOpenShop={() => setShowShop(true)}
           onCollectCoin={collectCoin}
-          suspendTriggers={activeQuest !== null || reward !== null || showHelp || showQuestList || showShop}
+          suspendTriggers={
+            activeQuest !== null ||
+            activeSurpriseQuiz !== null ||
+            reward !== null ||
+            showHelp ||
+            showQuestList ||
+            showShop
+          }
         />
       </Suspense>
 
@@ -82,9 +109,18 @@ function App() {
         />
       )}
 
+      {activeSurpriseQuiz && (
+        <QuestModal
+          quest={activeSurpriseQuiz}
+          onCorrect={handleSurpriseQuizCorrect}
+          onClose={() => setActiveSurpriseQuiz(null)}
+        />
+      )}
+
       {reward && (
         <RewardToast
-          quest={reward.quest}
+          awardedXp={reward.awardedXp}
+          awardedCoins={reward.awardedCoins}
           newBadges={reward.newBadges}
           onContinue={() => setReward(null)}
         />
@@ -102,6 +138,8 @@ function App() {
           progress={progress}
           onUnlock={unlockAvatar}
           onEquip={equipAvatar}
+          onUnlockHat={unlockHat}
+          onEquipHat={equipHat}
           onClose={() => setShowShop(false)}
         />
       )}

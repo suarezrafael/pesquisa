@@ -1,0 +1,13 @@
+{
+  "name": "missao-aprender-relay-v2",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260819.1",
+    "wrangler": "^4.124.0"
+  }
+}

@@ -1,5 +1,6 @@
 import type { Profile, Progress } from '../types'
 import { DEFAULT_UNLOCKED_AVATAR_IDS } from '../data/avatars'
+import { DEFAULT_UNLOCKED_HAT_IDS } from '../data/hats'
 
 const PROFILE_KEY = 'jogo-educativo:profile'
 const PROGRESS_KEY = 'jogo-educativo:progress'
@@ -11,13 +12,19 @@ export const emptyProgress: Progress = {
   coins: 0,
   badges: [],
   unlockedAvatarIds: DEFAULT_UNLOCKED_AVATAR_IDS,
+  unlockedHatIds: DEFAULT_UNLOCKED_HAT_IDS,
 }
 
 export function loadProfile(): Profile | null {
   const raw = localStorage.getItem(PROFILE_KEY)
   if (!raw) return null
   try {
-    return JSON.parse(raw) as Profile
+    // `equippedHatId: null` como default cobre perfis salvos antes do lab-24 (chapéus), que não
+    // têm esse campo gravado ainda — sem isso, `profile.equippedHatId` ficaria `undefined` em
+    // vez de `null` pra quem já tinha perfil salvo, um valor fora do tipo declarado. `Partial`
+    // no cast (não `Profile` direto) porque dado salvo antes deste lab pode legitimamente não
+    // ter o campo — sem isso o TS assume que o spread sempre sobrescreve o default.
+    return { equippedHatId: null, ...(JSON.parse(raw) as Partial<Profile>) } as Profile
   } catch {
     return null
   }

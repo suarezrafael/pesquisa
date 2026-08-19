@@ -1,6 +1,11 @@
-// Cliente de multiplayer local (mesma rede) — conecta no servidor de retransmissão
-// (app/server/relay.cjs) via WebSocket. Sem conta, sem nuvem: assume que o servidor roda na
-// mesma máquina que serve o jogo (mesmo hostname da página), porta fixa.
+// Cliente de multiplayer — conecta no servidor de retransmissão (app/server/relay.cjs) via
+// WebSocket. Em produção (hospedagem estática, ex. Vercel), o relé roda num serviço separado
+// (Fly.io) e sua URL fixa vem de `VITE_RELAY_URL` (definida em tempo de build). Sem essa
+// variável, cai de volta no comportamento original de rede local: assume que o servidor roda na
+// mesma máquina que serve o jogo (mesmo hostname da página), porta fixa — é o que `npm run dev`
+// usa pra multiplayer na mesma rede sem precisar configurar nada.
+
+import { QUICK_CHAT_MESSAGES } from '../data/chatMessages'
 
 export interface RemoteState {
   id: string
@@ -8,12 +13,27 @@ export interface RemoteState {
   avatarEmoji: string
   position: [number, number, number]
   facing: [number, number, number]
+  xp: number
+  coins: number
+}
+
+// Ranking local (lab-20): entrada derivada do próprio jogador + do `RemoteState` de cada peer
+// conectado, não um tipo transmitido pela rede (é montado localmente em `World3D.tsx`).
+export interface RankingEntry {
+  id: string
+  name: string
+  avatarEmoji: string
+  xp: number
+  coins: number
+  isSelf: boolean
 }
 
 export interface ChatMessage {
   id: string
   name: string
-  text: string
+  // Chave de `QUICK_CHAT_MESSAGES` (src/data/chatMessages.ts) — nunca texto livre. Requisito
+  // [MUST] de docs/prompts/01-seguranca.md §1 / prompt.md §11.
+  messageId: string
   ts: number
 }
 
@@ -32,6 +52,8 @@ let chatHandlers: ChatHandler[] = []
 let connectionHandlers: ConnectionHandler[] = []
 
 function relayUrl(): string {
+  const configured = import.meta.env.VITE_RELAY_URL as string | undefined
+  if (configured) return configured
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
   return `${proto}://${window.location.hostname}:${RELAY_PORT}`
 }
@@ -61,8 +83,15 @@ export function connect(): void {
       return
     }
     if (msg.type === 'state') stateHandlers.forEach((h) => h(msg as RemoteState))
-    else if (msg.type === 'chat') chatHandlers.forEach((h) => h({ ...msg, ts: Date.now() } as ChatMessage))
-    else if (msg.type === 'leave') leaveHandlers.forEach((h) => h(msg.id))
+    else if (msg.type === 'chat') {
+      // Nunca confia em texto vindo da rede — só repassa se `messageId` bater com uma entrada
+      // conhecida do catálogo (o relay já valida isso também, mas checar de novo aqui é
+      // defesa em profundidade: um peer adulterado não deveria conseguir fazer nada renderizar
+      // além do catálogo fechado, mesmo que o servidor mude).
+      if (typeof msg.messageId === 'string' && QUICK_CHAT_MESSAGES.some((m) => m.id === msg.messageId)) {
+        chatHandlers.forEach((h) => h({ ...msg, ts: Date.now() } as ChatMessage))
+      }
+    } else if (msg.type === 'leave') leaveHandlers.forEach((h) => h(msg.id))
   }
 
   ws.onclose = () => {
@@ -90,16 +119,17 @@ export function sendState(
   avatarEmoji: string,
   position: [number, number, number],
   facing: [number, number, number],
+  xp: number,
+  coins: number,
 ): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) return
-  socket.send(JSON.stringify({ type: 'state', name, avatarEmoji, position, facing }))
+  socket.send(JSON.stringify({ type: 'state', name, avatarEmoji, position, facing, xp, coins }))
 }
 
-export function sendChat(name: string, text: string): void {
+export function sendChat(name: string, messageId: string): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) return
-  const trimmed = text.trim().slice(0, 140)
-  if (!trimmed) return
-  socket.send(JSON.stringify({ type: 'chat', name, text: trimmed }))
+  if (!QUICK_CHAT_MESSAGES.some((m) => m.id === messageId)) return
+  socket.send(JSON.stringify({ type: 'chat', name: name.slice(0, 40), messageId }))
 }
 
 export function onRemoteState(handler: StateHandler): () => void {

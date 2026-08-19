@@ -1,16 +1,22 @@
 import { useState } from 'react'
 import type { Progress, Quest } from '../types'
 import { loadProgress, saveProgress } from './storage'
-import { applyCoinCollected, applyQuestCompletion, unlockAvatar as applyAvatarUnlock } from './progression'
+import {
+  applyCoinCollected,
+  applyQuestCompletion,
+  type CompletionResult,
+  unlockAvatar as applyAvatarUnlock,
+  unlockHat as applyHatUnlock,
+} from './progression'
 
 export function useProgress() {
   const [progress, setProgress] = useState<Progress>(() => loadProgress())
 
-  function completeQuest(quest: Quest): string[] {
-    const { progress: next, newBadges } = applyQuestCompletion(progress, quest)
-    setProgress(next)
-    saveProgress(next)
-    return newBadges
+  function completeQuest(quest: Quest): CompletionResult {
+    const result = applyQuestCompletion(progress, quest)
+    setProgress(result.progress)
+    saveProgress(result.progress)
+    return result
   }
 
   function collectCoin(): void {
@@ -29,5 +35,13 @@ export function useProgress() {
     })
   }
 
-  return { progress, completeQuest, collectCoin, unlockAvatar }
+  function unlockHat(hatId: string): void {
+    setProgress((prev) => {
+      const next = applyHatUnlock(prev, hatId)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  return { progress, completeQuest, collectCoin, unlockAvatar, unlockHat }
 }

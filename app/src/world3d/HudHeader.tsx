@@ -1,5 +1,6 @@
 import type { Profile, Progress } from '../types'
 import { getLevel, xpIntoLevel } from '../state/progression'
+import { getCurrentWeeklyEvent } from '../data/weeklyEvents'
 
 interface HudHeaderProps {
   profile: Profile
@@ -10,6 +11,7 @@ interface HudHeaderProps {
   muted: boolean
   onToggleMute: () => void
   onOpenChat: () => void
+  onOpenRanking: () => void
 }
 
 export function HudHeader({
@@ -21,10 +23,12 @@ export function HudHeader({
   muted,
   onToggleMute,
   onOpenChat,
+  onOpenRanking,
 }: HudHeaderProps) {
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
   const percent = Math.min(100, Math.round((current / needed) * 100))
+  const weeklyEvent = getCurrentWeeklyEvent()
 
   return (
     <div className="hud-overlay">
@@ -58,20 +62,24 @@ export function HudHeader({
         <button type="button" className="help-button" onClick={onOpenChat} aria-label="Abrir chat">
           💬
         </button>
+        <button type="button" className="help-button" onClick={onOpenRanking} aria-label="Ver ranking">
+          🏆
+        </button>
         <button type="button" className="help-button" onClick={onOpenHelp} aria-label="Como jogar">
           ?
         </button>
       </div>
 
-      {progress.badges.length > 0 && (
-        <div className="badge-row">
-          {progress.badges.map((badge) => (
-            <span key={badge} className="badge-pill">
-              🎖️ {badge}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="badge-row">
+        <span className="weekly-event-badge" title={weeklyEvent.description}>
+          {weeklyEvent.emoji} {weeklyEvent.name}
+        </span>
+        {progress.badges.map((badge) => (
+          <span key={badge} className="badge-pill">
+            🎖️ {badge}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

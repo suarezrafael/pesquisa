@@ -1,13 +1,21 @@
 // Áudio ambiente sintetizado via Web Audio API — sem depender de nenhum arquivo baixado
 // (evita qualquer questão de licença/tamanho): vento (ruído filtrado com rajadas), uma
-// melodia curta estilo chiptune de fundo, e som de passo sintetizado sob demanda.
+// melodia curta estilo chiptune de fundo, chuva (ruído filtrado sob demanda, liga/desliga com
+// o clima dinâmico) e som de passo/moeda sintetizado sob demanda.
 
 let audioCtx: AudioContext | null = null
 let started = false
 let muted = false
+let rainSource: AudioBufferSourceNode | null = null
+let rainGain: GainNode | null = null
 
 const WIND_VOLUME = 0.05
-const MUSIC_VOLUME = 0.05
+// Pedido do usuário: "tire a musiquinha, deixe só o barulho dos animais e do vento. a versão mais
+// calma da música até pode deixar mas baixinho" — a trilha não sai de vez (só as faixas mais
+// agitadas saem, ver `TRACKS` abaixo), mas o volume cai bem mais que o vento/som ambiente, pra
+// ficar claramente em segundo plano.
+const MUSIC_VOLUME = 0.016
+const RAIN_VOLUME = 0.07
 
 interface Note {
   freq: number
@@ -21,28 +29,11 @@ interface Track {
   notes: Note[]
 }
 
-// "Rádio" do planeta: várias faixas curtas que se alternam ao terminar cada uma, em vez de uma
-// só repetindo pra sempre — cada uma com um clima/tom diferente.
+// "Rádio" do planeta: só as faixas mais calmas (triangle/sine, andamento mais lento) — pedido do
+// usuário ("tire a musiquinha, deixe só o barulho dos animais e do vento, a versão mais calma da
+// música até pode deixar mas baixinho"). As duas faixas mais agitadas (onda quadrada, andamento
+// rápido, clima "aventura") saíram; as duas que sobraram tocam bem baixo (ver `MUSIC_VOLUME`).
 const TRACKS: Track[] = [
-  {
-    name: 'Manhã no Planeta',
-    waveform: 'square',
-    bassFreq: 130.81, // C3
-    notes: [
-      { freq: 523.25, dur: 0.22 }, // C5
-      { freq: 659.25, dur: 0.22 }, // E5
-      { freq: 783.99, dur: 0.22 }, // G5
-      { freq: 659.25, dur: 0.22 }, // E5
-      { freq: 698.46, dur: 0.22 }, // F5
-      { freq: 880.0, dur: 0.22 }, // A5
-      { freq: 783.99, dur: 0.44 }, // G5
-      { freq: 659.25, dur: 0.22 }, // E5
-      { freq: 587.33, dur: 0.22 }, // D5
-      { freq: 698.46, dur: 0.22 }, // F5
-      { freq: 659.25, dur: 0.22 }, // E5
-      { freq: 523.25, dur: 0.44 }, // C5
-    ],
-  },
   {
     name: 'Tarde Tranquila',
     waveform: 'triangle',
@@ -63,22 +54,20 @@ const TRACKS: Track[] = [
     ],
   },
   {
-    name: 'Hora da Aventura',
-    waveform: 'square',
-    bassFreq: 164.81, // E3
+    name: 'Noite Estrelada',
+    waveform: 'sine',
+    bassFreq: 110.0, // A2
     notes: [
-      { freq: 659.25, dur: 0.16 }, // E5
-      { freq: 830.61, dur: 0.16 }, // G#5
-      { freq: 987.77, dur: 0.16 }, // B5
-      { freq: 880.0, dur: 0.16 }, // A5
-      { freq: 830.61, dur: 0.16 }, // G#5
-      { freq: 739.99, dur: 0.16 }, // F#5
-      { freq: 659.25, dur: 0.32 }, // E5
-      { freq: 830.61, dur: 0.16 }, // G#5
-      { freq: 987.77, dur: 0.16 }, // B5
-      { freq: 1108.73, dur: 0.16 }, // C#6
-      { freq: 987.77, dur: 0.16 }, // B5
-      { freq: 659.25, dur: 0.32 }, // E5
+      { freq: 440.0, dur: 0.4 }, // A4
+      { freq: 523.25, dur: 0.4 }, // C5
+      { freq: 659.25, dur: 0.4 }, // E5
+      { freq: 587.33, dur: 0.4 }, // D5
+      { freq: 493.88, dur: 0.4 }, // B4
+      { freq: 587.33, dur: 0.4 }, // D5
+      { freq: 523.25, dur: 0.8 }, // C5
+      { freq: 440.0, dur: 0.4 }, // A4
+      { freq: 493.88, dur: 0.4 }, // B4
+      { freq: 440.0, dur: 0.8 }, // A4
     ],
   },
 ]
@@ -181,11 +170,111 @@ export function startAmbience(): void {
   playNote()
 }
 
-export function playFootstep(): void {
+// Chuva: ruído branco passado por um filtro passa-alta (mais "chiado agudo" que o vento, que
+// usa passa-faixa mais grave) — liga/desliga com fade suave em vez de corte seco, pra soar
+// como chuva chegando/indo embora, não um clique de áudio ligando.
+export function startRain(): void {
+  if (!audioCtx || rainSource) return
+  const ctx = audioCtx
+  const bufferSize = ctx.sampleRate * 2
+  const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = noiseBuffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = noiseBuffer
+  src.loop = true
+
+  const rainFilter = ctx.createBiquadFilter()
+  rainFilter.type = 'highpass'
+  rainFilter.frequency.value = 1600
+  rainFilter.Q.value = 0.3
+
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(RAIN_VOLUME, ctx.currentTime + 2.5)
+
+  src.connect(rainFilter).connect(gain).connect(ctx.destination)
+  src.start()
+  rainSource = src
+  rainGain = gain
+}
+
+export function stopRain(): void {
+  if (!audioCtx || !rainSource || !rainGain) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  rainGain.gain.cancelScheduledValues(now)
+  rainGain.gain.setValueAtTime(rainGain.gain.value, now)
+  rainGain.gain.linearRampToValueAtTime(0, now + 1.5)
+  const src = rainSource
+  window.setTimeout(() => {
+    try {
+      src.stop()
+    } catch {
+      // já pode ter sido parado (ex.: dispose da cena) — ignora.
+    }
+  }, 1700)
+  rainSource = null
+  rainGain = null
+}
+
+// Trovão (lab-14, completa o clima dinâmico do lab-10): ruído grave filtrado (o "estrondo",
+// ataque rápido + decaimento longo, mesmo estilo da chuva) somado a um "boom" senoidal grave
+// (reforça o golpe inicial, sem depender de asset externo). `intensity` (0-1) representa a
+// distância do raio — chamado pelo loop de clima em World3D.tsx com um atraso proporcional à
+// distância (luz viaja mais rápido que o som).
+export function playThunder(intensity: number = 1): void {
   if (!audioCtx || muted) return
   const ctx = audioCtx
   const now = ctx.currentTime
-  const bufferSize = Math.floor(ctx.sampleRate * 0.08)
+  const duration = 1.5 + Math.random() * 1.5
+
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 180 + Math.random() * 140
+  lowpass.Q.value = 0.7
+
+  const gain = ctx.createGain()
+  const peak = 0.32 * intensity
+  gain.gain.setValueAtTime(0, now)
+  gain.gain.linearRampToValueAtTime(peak, now + 0.03)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+
+  src.connect(lowpass).connect(gain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+
+  const boom = ctx.createOscillator()
+  boom.type = 'sine'
+  boom.frequency.setValueAtTime(70, now)
+  boom.frequency.exponentialRampToValueAtTime(35, now + 0.4)
+  const boomGain = ctx.createGain()
+  boomGain.gain.setValueAtTime(0.22 * intensity, now)
+  boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
+  boom.connect(boomGain).connect(ctx.destination)
+  boom.start(now)
+  boom.stop(now + 0.5)
+}
+
+// Relatado pelo usuário: "o boneco deve fazer barulho de passo ao andar" — o som já disparava
+// (confirmado contando criações de nó de áudio durante uma caminhada), mas era baixo/curto
+// demais pra realmente se notar. Ganho maior, filtro mais grave (mais "toc" que "chiado") e um
+// pouco mais de duração.
+// `volume` (0-1, padrão 1) — usado pelos passos dos jogadores remotos (lab-55: "eles não emitem
+// o barulho da caminhada"), mais baixo e com atenuação por distância do próprio jogador, pra não
+// virar uma bagunça de som quando vários jogadores andam por perto ao mesmo tempo.
+export function playFootstep(volume = 1): void {
+  if (!audioCtx || muted || volume <= 0) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const bufferSize = Math.floor(ctx.sampleRate * 0.1)
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
   const data = buffer.getChannelData(0)
   for (let i = 0; i < bufferSize; i++) {
@@ -195,12 +284,222 @@ export function playFootstep(): void {
   src.buffer = buffer
   const filter = ctx.createBiquadFilter()
   filter.type = 'lowpass'
-  filter.frequency.value = 900
+  filter.frequency.value = 650
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0.09, now)
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+  gain.gain.setValueAtTime(0.16 * volume, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
   src.connect(filter).connect(gain).connect(ctx.destination)
   src.start(now)
+}
+
+// "Zap" do laser do parkour (lab-38, pedido do usuário: "pisar no laser") — glissando descendente
+// rápido em onda dente-de-serra (mais "elétrico"/áspero que qualquer som já existente aqui) com
+// um pouco de ruído por cima, imitando o "bzzt" de um feixe de laser desligando ao ser tocado.
+export function playLaserZap(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.35
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(1800, now)
+  osc.frequency.exponentialRampToValueAtTime(120, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.14, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  osc.connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + duration)
+
+  const bufferSize = Math.floor(ctx.sampleRate * 0.08)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const highpass = ctx.createBiquadFilter()
+  highpass.type = 'highpass'
+  highpass.frequency.value = 2000
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0.08, now)
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+  src.connect(highpass).connect(noiseGain).connect(ctx.destination)
+  src.start(now)
+}
+
+// Passarinho cantando baixinho perto do jogador (pedido do usuário) — dois bipes agudos rápidos
+// ("piu-piu"), bem mais quieto que o passo, disparado só quando um pássaro está perto (ver
+// World3D.tsx, IA de vagar dos bichos).
+export function playBirdChirp(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const notes = [2200, 2650]
+  notes.forEach((freq, i) => {
+    const t = ctx.currentTime + i * 0.09
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(freq, t)
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.85, t + 0.06)
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.035, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + 0.08)
+  })
+}
+
+// Onça, cachorro, falcão (pedido do usuário: "sons engraçados... onças, cachorro, falcão") — cada
+// um sintetizado do zero (mesmo estilo/motivo dos outros sons daqui: sem depender de arquivo de
+// áudio baixado), disparado por proximidade igual ao pássaro (ver `World3D.tsx`, IA de vagar).
+
+// Rosnado grave — ruído filtrado passa-baixa (textura áspera) por cima de um tom senoidal grave
+// oscilando devagar (o "vibrato" que dá a sensação de rosnado, não um tom puro parado).
+export function playJaguarGrowl(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.55
+
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 220
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0, now)
+  noiseGain.gain.linearRampToValueAtTime(0.06, now + 0.08)
+  noiseGain.gain.linearRampToValueAtTime(0, now + duration)
+  src.connect(lowpass).connect(noiseGain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(85, now)
+  const vibrato = ctx.createOscillator()
+  vibrato.frequency.value = 7
+  const vibratoGain = ctx.createGain()
+  vibratoGain.gain.value = 6
+  vibrato.connect(vibratoGain).connect(osc.frequency)
+  const oscGain = ctx.createGain()
+  oscGain.gain.setValueAtTime(0, now)
+  oscGain.gain.linearRampToValueAtTime(0.09, now + 0.08)
+  oscGain.gain.linearRampToValueAtTime(0, now + duration)
+  osc.connect(oscGain).connect(ctx.destination)
+  osc.start(now)
+  vibrato.start(now)
+  osc.stop(now + duration)
+  vibrato.stop(now + duration)
+}
+
+// "Au-au" — dois latidos curtos (onda quadrada, ataque instantâneo, decaimento rápido).
+export function playDogBark(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const barks = [0, 0.16]
+  barks.forEach((offset) => {
+    const t = ctx.currentTime + offset
+    const osc = audioCtx!.createOscillator()
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(340, t)
+    osc.frequency.exponentialRampToValueAtTime(180, t + 0.09)
+    const gain = audioCtx!.createGain()
+    gain.gain.setValueAtTime(0.14, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11)
+    osc.connect(gain).connect(audioCtx!.destination)
+    osc.start(t)
+    osc.stop(t + 0.12)
+  })
+}
+
+// Grito agudo do falcão — tom que sobe e desce rápido (glissando), bem mais estridente/longo que
+// o piu-piu do passarinho.
+export function playFalconScreech(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(1400, now)
+  osc.frequency.linearRampToValueAtTime(2100, now + 0.12)
+  osc.frequency.linearRampToValueAtTime(1100, now + 0.35)
+  const bandpass = ctx.createBiquadFilter()
+  bandpass.type = 'bandpass'
+  bandpass.frequency.value = 1800
+  bandpass.Q.value = 1.5
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, now)
+  gain.gain.linearRampToValueAtTime(0.05, now + 0.04)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4)
+  osc.connect(bandpass).connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + 0.4)
+}
+
+// Sons engraçados (pedido do usuário: "sons engraçados de conversa e pum") — disparados de vez em
+// quando por qualquer bicho perto do jogador (não um tipo específico), pra dar um toque de humor
+// sem exigir animação/fala de verdade.
+
+// "Conversa" bobinha — sequência de bipes curtos em frequências aleatórias (efeito "blablablá"
+// tipo Animal Crossing/Banjo-Kazooie, não fala de verdade).
+export function playFunnyTalk(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const syllables = 3 + Math.floor(Math.random() * 3)
+  for (let i = 0; i < syllables; i++) {
+    const t = ctx.currentTime + i * 0.11
+    const freq = 320 + Math.random() * 260
+    const osc = ctx.createOscillator()
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(freq, t)
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.7, t + 0.07)
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.06, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + 0.09)
+  }
+}
+
+// "Pum" — tom grave curto com queda rápida de frequência + um pouco de ruído, efeito clássico de
+// desenho animado.
+export function playFart(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.32
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(140, now)
+  osc.frequency.exponentialRampToValueAtTime(45, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.1, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  osc.connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + duration)
+
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 400
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0.04, now)
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  src.connect(lowpass).connect(noiseGain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
 }
 
 export function playCoinCollect(): void {
