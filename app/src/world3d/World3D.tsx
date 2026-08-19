@@ -1350,9 +1350,11 @@ export function World3D({
     const isLowEndDevice = /Android|iPad|iPhone|iPod|Tablet|Mobi/i.test(navigator.userAgent)
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
-    // 1.5 -> 1.75 (lab-56, "ainda está um pouco pesado pro tablet"): renderiza a menos pixels
-    // ainda (upscale automático) — a alavanca mais direta pra GPU fill-rate limitada.
-    if (isLowEndDevice) engine.setHardwareScalingLevel(1.75)
+    // 1.75 (lab-56) voltou pra 1.5 (lab-57, relatado no Poco C75: "qualidade gráfica está muito
+    // baixa") — 1.75 foi ajustado sem poder testar num aparelho real, e alto demais deixa o
+    // mundo 3D borrado demais num celular; 1.5 é o valor original do lab-53, já testado e mais
+    // conservador nesse trade-off.
+    if (isLowEndDevice) engine.setHardwareScalingLevel(1.5)
     const scene = new Scene(engine)
     sceneRef.current = scene
     if (import.meta.env.DEV) {
@@ -1684,6 +1686,24 @@ export function World3D({
       // malha que precise de rótulo) porque vários trechos abaixo (rua/carros, escolas, lagoa,
       // piscina, NPCs) já usam `guiTexture.addControl(...)` conforme vão sendo montados.
       const guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('portalLabels', true, scene)
+      // Legendas flutuantes com fonte grande demais e borradas (lab-57, relatado no Poco C75): o
+      // ADT do Babylon.GUI, por padrão, usa a MESMA resolução interna da cena 3D
+      // (`engine.getRenderWidth/Height()`) — que `hardwareScalingLevel` reduz de propósito em
+      // dispositivo fraco pra ganhar FPS. Texto 2D não precisa da mesma resolução reduzida do
+      // mundo 3D sombreado (é bem mais barato de desenhar), então a resolução do GUI é forçada
+      // pro tamanho real do canvas em pixels de dispositivo, independente de quanto a cena 3D
+      // está escalada — reaplicado a cada resize (`onResize` mais abaixo), já que o ADT
+      // resincroniza sozinho com a resolução (escalada) da engine a cada `engine.resize()`.
+      function syncGuiResolution() {
+        if (!canvas) return
+        const dpr = window.devicePixelRatio || 1
+        guiTexture.scaleTo(Math.round(canvas.clientWidth * dpr), Math.round(canvas.clientHeight * dpr))
+      }
+      syncGuiResolution()
+      // `setup()` roda numa closure própria (é `async`) — `onResize` fica no escopo do efeito
+      // principal, lá fora, então precisa dessa ponte pra re-sincronizar depois de cada resize
+      // (mesmo padrão de `__setAvatarShirtColor`/`__showLocalChatBubble` já usado neste arquivo).
+      ;(scene as any).__syncGuiResolution = syncGuiResolution
 
       // Planeta — deformado com relevo real (ondulação + platôs), não uma esfera lisa.
       // Colisor físico usa a malha deformada (MESH), não mais SPHERE, pra bater com o visual.
@@ -4901,7 +4921,10 @@ export function World3D({
       if (!disposed) scene.render()
     })
 
-    const onResize = () => engine.resize()
+    const onResize = () => {
+      engine.resize()
+      ;(scene as any).__syncGuiResolution?.()
+    }
     window.addEventListener('resize', onResize)
 
     return () => {

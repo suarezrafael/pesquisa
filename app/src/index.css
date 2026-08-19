@@ -362,6 +362,51 @@ body {
   filter: drop-shadow(0 2px 6px rgba(23, 44, 102, 0.25));
 }
 
+/* HUD grande demais em celular estreito (lab-57, relatado no Poco C75: "o componente fixo no
+   topo tá um pouco grande pra essa resolução") — o cabeçalho (avatar+nome+XP+moedas) somado aos
+   6 botões redondos não cabe confortavelmente numa tela de ~360-400px de largura CSS. Encolhe
+   avatar/fonte/botões/gaps só abaixo desse ponto de corte; telas maiores (tablet, desktop)
+   continuam do jeito que já estavam. */
+@media (max-width: 420px) {
+  .hud-overlay {
+    padding: 0.6rem 0.6rem 0;
+  }
+
+  .hud-top-row {
+    gap: 0.35rem;
+  }
+
+  .hud-overlay .hub-header {
+    padding: 0.35rem 0.6rem;
+    gap: 0.5rem;
+  }
+
+  .hub-avatar {
+    width: 2.4rem;
+    height: 2.4rem;
+    font-size: 1.7rem;
+  }
+
+  .hub-header-info h1 {
+    font-size: 0.85rem;
+    margin: 0 0 0.2rem;
+  }
+
+  .hub-level {
+    font-size: 0.68rem;
+  }
+
+  .hub-coins {
+    font-size: 0.9rem;
+  }
+
+  .help-button {
+    width: 1.8rem;
+    height: 1.8rem;
+    font-size: 0.85rem;
+  }
+}
+
 .world3d-hint {
   position: absolute;
   bottom: 1.1rem;
