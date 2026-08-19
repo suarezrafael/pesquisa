@@ -1,8 +1,8 @@
 # Laboratório 51 — Publicação em produção (Vercel + relé de multiplayer)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-18
-Fim: -
+Fim: 2026-08-19
 Commit inicial: a0dd3f5
 
 ## Objetivo do laboratório
@@ -26,16 +26,19 @@ pela internet de verdade, não só rede local (o usuário pediu pra resolver os 
       Criado `app/server/package.json` (dependência `ws` isolada, deploy independente do app
       principal) e `app/server/fly.toml` (Fly.io, região `gru`/São Paulo, `auto_stop_machines`
       ligado pra não gastar recursos parado).
-- [x] flyctl instalado (`C:\Users\rafae\.fly\bin\flyctl.exe`).
-- [ ] **Bloqueado esperando o usuário**: `flyctl auth login` precisa rodar num terminal
-      interativo de verdade (a sessão desta ferramenta é headless — confirmado com o erro real
-      `fly auth login requires an interactive terminal`, diferente do Vercel, que já tinha sessão
-      pronta). Pedido ao usuário rodar esse comando no PowerShell dele.
-- [ ] Depois do login: `flyctl deploy` a partir de `app/server/`, pegar a URL pública
-      (`https://missao-aprender-relay.fly.dev` ou parecido), gravar em `app/.env.production`
-      como `VITE_RELAY_URL=wss://<url>`, rebuild e redeploy no Vercel.
-- [ ] Teste ao vivo do multiplayer entre duas abas/dispositivos diferentes contra o relé
-      publicado.
+- [x] flyctl instalado (`C:\Users\rafae\.fly\bin\flyctl.exe`); usuário rodou
+      `flyctl auth login` no PowerShell dele (a sessão desta ferramenta é headless, não consegue
+      fazer login interativo sozinha — diferente do Vercel, que já tinha sessão pronta).
+- [x] Relé publicado em https://missao-aprender-relay.fly.dev — bug real encontrado e corrigido
+      no caminho (`fly launch` regenerou `fly.toml` com a porta errada, 3000 em vez de 8080;
+      corrigido e confirmado via SSH + `curl` externo que o processo real escuta na porta certa).
+- [x] `app/.env.production` com `VITE_RELAY_URL=wss://missao-aprender-relay.fly.dev`, rebuild e
+      redeploy no Vercel.
+- [x] Teste ao vivo do multiplayer entre duas abas do navegador contra o relé publicado — segundo
+      bug real encontrado (service worker do PWA servindo o bundle antigo, sem a URL do relé;
+      corrigido desregistrando o service worker/limpando cache) e confirmado depois: as duas abas
+      se enxergam no painel de Ranking, "🟢 conectado", pela internet de verdade (Vercel ↔
+      Fly.io), não só rede local.
 
 ## Fora de escopo (explicitamente adiado)
 - Domínio próprio (o usuário pode adicionar depois pelo painel do Vercel se quiser, não pedido
