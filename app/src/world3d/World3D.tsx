@@ -44,6 +44,7 @@ import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
+import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
 import { RankingPanel } from './RankingPanel'
 import {
@@ -1269,6 +1270,14 @@ export function World3D({
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
+  // Botões de toque (pedido do usuário: "o android não tem teclado" — sem eles, pular/correr só
+  // funcionava via teclado, inacessível em celular/tablet). Mesmo padrão do `joystickRef`: a UI
+  // React escreve, o loop de física por quadro (dentro de `setup()`) lê. `touchJumpRef` é
+  // consumido uma vez só (pulo é um evento, não um estado contínuo — mesmo padrão de
+  // `jumpRequested` já usado pra tecla espaço); `touchRunRef` fica `true` enquanto o dedo
+  // segura o botão, igual ao Shift.
+  const touchJumpRef = useRef(false)
+  const touchRunRef = useRef(false)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
   const suspendRef = useRef(suspendTriggers)
@@ -1373,7 +1382,6 @@ export function World3D({
     const portalMeshes: { quest: (typeof quests)[number]; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
     const remotePlayers = new Map<string, RemotePlayer>()
     let netSendTimer = 0
-    let rankingTimer = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
     // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
@@ -3897,12 +3905,47 @@ export function World3D({
       const unsubConnection = onConnectionChange((connected) => setMpConnected(connected))
       connectMultiplayer()
       setMpConnected(isMultiplayerConnected())
+
+      // Ranking (lab-20) — bug real reportado pelo usuário: "eu tentei abrir no tablet e os
+      // aplicativos não se enxergaram". A causa não era o WebSocket (confirmado ao vivo: os
+      // dados de posição/XP/moedas chegam certinho e em tempo real, `onRemoteState` já roda
+      // fora do loop de render, direto no evento de mensagem) — era este cálculo do ranking
+      // rodar dentro do loop de física por quadro (`rankingTimer += dt` acumulado no
+      // `scene.onBeforeRenderObservable`), que o Chrome PAUSA quando a aba/app fica em segundo
+      // plano (mesmo comportamento documentado antes nesta sessão pra leitura de física via
+      // automação). Resultado: comparar dois aparelhos/abas lado a lado — o normal ao testar
+      // multiplayer — faz o que está sem foco no momento parecer "não enxergar" o outro, porque
+      // o painel simplesmente para de atualizar enquanto a aba não está em primeiro plano.
+      // `setInterval` continua rodando em segundo plano (o Chrome no máximo limita a ~1x/s em
+      // abas bem inativas — exatamente a cadência que já era o objetivo aqui), então o ranking
+      // se mantém atualizado nos dois lados independente de qual está com o foco.
+      function refreshRanking() {
+        const entries: RankingEntry[] = [
+          {
+            id: 'self',
+            name: profileRef.current.name,
+            avatarEmoji: profileRef.current.avatarEmoji,
+            xp: progressRef.current.xp,
+            coins: progressRef.current.coins,
+            isSelf: true,
+          },
+        ]
+        for (const [id, rp] of remotePlayers) {
+          entries.push({ id, name: rp.name, avatarEmoji: rp.avatarEmoji, xp: rp.xp, coins: rp.coins, isSelf: false })
+        }
+        entries.sort((a, b) => (b.xp !== a.xp ? b.xp - a.xp : b.coins - a.coins))
+        setRankingEntries(entries)
+      }
+      refreshRanking()
+      const rankingInterval = window.setInterval(refreshRanking, 1000)
+
       ;(scene as any).__disposeMultiplayer = () => {
         unsubState()
         unsubLeave()
         unsubChat()
         unsubConnection()
         disconnectMultiplayer()
+        window.clearInterval(rankingInterval)
         for (const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id)
       }
 
@@ -4067,6 +4110,10 @@ export function World3D({
               grounded = groundRayResult.hitDistance <= AVATAR_RADIUS + 0.13
             }
           }
+          if (touchJumpRef.current) {
+            touchJumpRef.current = false
+            jumpRequested = true
+          }
           if (jumpRequested) {
             jumpRequested = false
             if (grounded && laserStunTimer <= 0) radialSpeed = JUMP_SPEED
@@ -4106,9 +4153,10 @@ export function World3D({
             }
           }
 
-          // Correr/caminhar (pedido do usuário) — segurar Shift troca de velocidade. Só no
-          // teclado por enquanto (sem toggle equivalente no joystick de toque).
-          const running = !!keysDown['shift']
+          // Correr/caminhar (pedido do usuário) — segurar Shift troca de velocidade; segurar o
+          // botão de toque (`touchRunRef`, pedido do usuário: "botão de correr" pro Android sem
+          // teclado) faz o mesmo.
+          const running = !!keysDown['shift'] || touchRunRef.current
           const currentSpeed = running ? RUN_SPEED : WALK_SPEED
           const radialVel = localUp.scale(radialSpeed)
           if (laserStunTimer > 0) {
@@ -4222,29 +4270,6 @@ export function World3D({
             Matrix.FromXYZAxesToRef(rRight, rLocalUp, rp.targetFacing, tmpMatrix)
             Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
             rp.figure.root.rotationQuaternion = tmpQuat.clone()
-          }
-
-          // Ranking (lab-20): não recalcula/renderiza a cada quadro (o `state` de rede já chega
-          // a cada ~0.12s por jogador) — só 1x/s, throttle suficiente pra uma lista que muda
-          // devagar (XP/moedas), evitando re-renders React desnecessários.
-          rankingTimer += dt
-          if (rankingTimer > 1) {
-            rankingTimer = 0
-            const entries: RankingEntry[] = [
-              {
-                id: 'self',
-                name: profileRef.current.name,
-                avatarEmoji: profileRef.current.avatarEmoji,
-                xp: progressRef.current.xp,
-                coins: progressRef.current.coins,
-                isSelf: true,
-              },
-            ]
-            for (const [id, rp] of remotePlayers) {
-              entries.push({ id, name: rp.name, avatarEmoji: rp.avatarEmoji, xp: rp.xp, coins: rp.coins, isSelf: false })
-            }
-            entries.sort((a, b) => (b.xp !== a.xp ? b.xp - a.xp : b.coins - a.coins))
-            setRankingEntries(entries)
           }
 
           // Fade das paredes do Prédio dos Enigmas (ver comentário de `QT_FADE_START` acima, no
@@ -4723,6 +4748,18 @@ export function World3D({
     joystickRef.current = vector
   }
 
+  function handleTouchJumpPress() {
+    touchJumpRef.current = true
+  }
+
+  function handleTouchRunPress() {
+    touchRunRef.current = true
+  }
+
+  function handleTouchRunRelease() {
+    touchRunRef.current = false
+  }
+
   function handleToggleMute() {
     setMuted(toggleAmbienceMute())
   }
@@ -4749,6 +4786,13 @@ export function World3D({
       />
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
+      <TouchActionButton className="touch-action-jump" label="⬆️" onPress={handleTouchJumpPress} />
+      <TouchActionButton
+        className="touch-action-run"
+        label="🏃"
+        onPress={handleTouchRunPress}
+        onRelease={handleTouchRunRelease}
+      />
       {chatOpen && (
         <ChatPanel
           messages={chatMessages}

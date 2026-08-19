@@ -16,6 +16,16 @@ export default defineConfig({
         // glob padrão do workbox não inclui .hdr/.glb (HDRI + modelos 3D) — sem isso
         // o mundo 3D não funcionaria offline mesmo depois de instalado como PWA.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,hdr,glb}'],
+        // Bug real encontrado no lab-51: sem isso, um service worker antigo já instalado
+        // continua servindo o bundle JS cacheado (com código velho, ex. sem o endereço do
+        // relé de multiplayer) até o usuário fechar TODAS as abas e abrir de novo — mesmo
+        // com `registerType: 'autoUpdate'` baixando a versão nova em segundo plano.
+        // `skipWaiting` + `clientsClaim` fazem o novo service worker assumir imediatamente
+        // (a próxima navegação/recarregamento já usa os arquivos novos, sem precisar fechar
+        // nada) — crítico pro multiplayer, que depende de código atualizado do lado do
+        // cliente pra saber pra onde conectar.
+        skipWaiting: true,
+        clientsClaim: true,
       },
       manifest: {
         name: 'Missão Aprender',
