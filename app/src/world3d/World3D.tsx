@@ -3319,7 +3319,16 @@ export function World3D({
       const quizTowerBase = new TransformNode('quizTowerBase', scene)
       const qtGroundRadial = terrainGroundRadial(QT_ANCHOR_UP, terrainHeight(QT_ANCHOR_UP))
       quizTowerBase.position = QT_ANCHOR_UP.scale(qtGroundRadial)
-      quizTowerBase.rotationQuaternion = alignmentQuaternion(QT_ANCHOR_UP)
+      // Bug real reportado pelo usuário: "não consigo entrar no prédio, não tem porta" — a porta
+      // existia (fisicamente aberta, confirmado com raycast), mas `alignmentQuaternion` sozinho
+      // deixava a fachada (porta, z local negativo) virada 177,6° em relação à rua — ou seja,
+      // de costas pra ela. Quem chegasse andando da rua (o jeito natural de se aproximar)
+      // esbarrava direto na parede de TRÁS, sólida, sem nunca ver a porta do outro lado. Giro
+      // extra de 180° ao redor do próprio eixo "up" do prédio (mesmo padrão de `spin` já usado
+      // em props) — mesma técnica de alinhamento, só virando a fachada pro lado certo.
+      quizTowerBase.rotationQuaternion = alignmentQuaternion(QT_ANCHOR_UP).multiply(
+        Quaternion.RotationAxis(Vector3.Up(), Math.PI),
+      )
 
       // Eixo x local: [-2.0,-0.7] é o poço da escada (sempre aberto, do térreo ao topo, agora
       // largo o bastante pra caber uma escada em ESPIRAL, não só uma faixa reta); [-0.7,2.0] é o
