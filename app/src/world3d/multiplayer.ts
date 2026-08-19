@@ -1,6 +1,9 @@
-// Cliente de multiplayer local (mesma rede) — conecta no servidor de retransmissão
-// (app/server/relay.cjs) via WebSocket. Sem conta, sem nuvem: assume que o servidor roda na
-// mesma máquina que serve o jogo (mesmo hostname da página), porta fixa.
+// Cliente de multiplayer — conecta no servidor de retransmissão (app/server/relay.cjs) via
+// WebSocket. Em produção (hospedagem estática, ex. Vercel), o relé roda num serviço separado
+// (Fly.io) e sua URL fixa vem de `VITE_RELAY_URL` (definida em tempo de build). Sem essa
+// variável, cai de volta no comportamento original de rede local: assume que o servidor roda na
+// mesma máquina que serve o jogo (mesmo hostname da página), porta fixa — é o que `npm run dev`
+// usa pra multiplayer na mesma rede sem precisar configurar nada.
 
 import { QUICK_CHAT_MESSAGES } from '../data/chatMessages'
 
@@ -49,6 +52,8 @@ let chatHandlers: ChatHandler[] = []
 let connectionHandlers: ConnectionHandler[] = []
 
 function relayUrl(): string {
+  const configured = import.meta.env.VITE_RELAY_URL as string | undefined
+  if (configured) return configured
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
   return `${proto}://${window.location.hostname}:${RELAY_PORT}`
 }
