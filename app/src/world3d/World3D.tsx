@@ -3321,9 +3321,10 @@ export function World3D({
       quizTowerBase.position = QT_ANCHOR_UP.scale(qtGroundRadial)
       quizTowerBase.rotationQuaternion = alignmentQuaternion(QT_ANCHOR_UP)
 
-      // Eixo x local: [-1.7,-0.7] é o poço da escada (sempre aberto, do térreo ao topo); [-0.7,1.7]
-      // é o piso andável de cada andar.
-      const QT_WIDTH = 3.4
+      // Eixo x local: [-2.0,-0.7] é o poço da escada (sempre aberto, do térreo ao topo, agora
+      // largo o bastante pra caber uma escada em ESPIRAL, não só uma faixa reta); [-0.7,2.0] é o
+      // piso andável de cada andar.
+      const QT_WIDTH = 4.0
       const QT_DEPTH = 3.4
       const QT_HALF_W = QT_WIDTH / 2
       const QT_HALF_D = QT_DEPTH / 2
@@ -3331,12 +3332,18 @@ export function World3D({
       const QT_FLOOR_COUNT = 4
       const QT_DOOR_WIDTH = 1.0
       const QT_FLOOR_X_MIN = -0.7
-      const QT_FLOOR_WIDTH = QT_HALF_W - QT_FLOOR_X_MIN // 2.4 — exclui o poço da escada
+      const QT_FLOOR_WIDTH = QT_HALF_W - QT_FLOOR_X_MIN // exclui o poço da escada
       const QT_FLOOR_CENTER_X = (QT_FLOOR_X_MIN + QT_HALF_W) / 2
-      const QT_STAIR_CENTER_X = (-QT_HALF_W + QT_FLOOR_X_MIN) / 2 // -1.2
-      const QT_STEPS_PER_FLIGHT = 9
-      const QT_STEP_RISE = QT_FLOOR_HEIGHT / QT_STEPS_PER_FLIGHT
-      const QT_STEP_RUN = QT_DEPTH / QT_STEPS_PER_FLIGHT
+      // Escada em ESPIRAL (pedido do usuário depois de ver o zigue-zague ainda parecendo "sempre
+      // do mesmo lado": "tem que colocar a escada do mesmo jeito que fez o parkour em degraus
+      // espiral" — degraus individuais tipo plataforma, como as do parkour, girando ao redor de
+      // um eixo central). Um giro completo (360°) por andar — nunca repete o mesmo ângulo dentro
+      // de uma subida, resolve "mesmo lado" de vez.
+      const QT_SPIRAL_CENTER_X = (-QT_HALF_W + QT_FLOOR_X_MIN) / 2 // -1.35, centro do poço
+      const QT_SPIRAL_RADIUS = 0.5
+      const QT_SPIRAL_STEPS_PER_FLOOR = 12 // 30° por degrau
+      const QT_SPIRAL_STEP_ANGLE = (Math.PI * 2) / QT_SPIRAL_STEPS_PER_FLOOR
+      const QT_SPIRAL_STEP_RISE = QT_FLOOR_HEIGHT / QT_SPIRAL_STEPS_PER_FLOOR
 
       const qtWallMat = new PBRMaterial('quizTowerWallMat', scene)
       qtWallMat.albedoColor = new Color3(0.68, 0.66, 0.78)
@@ -3482,49 +3489,52 @@ export function World3D({
           addQtMesh(frontWall, qtWallMat, true, 'wall')
         }
 
-        // Escada em zigue-zague (pedido do usuário depois de testar: "as escadas ficaram do
-        // mesmo lado" — a versão anterior sempre subia z=-QT_HALF_D→+QT_HALF_D, então pra
-        // continuar pro próximo lance o jogador tinha que atravessar o andar inteiro de volta.
-        // Lances pares sobem nesse sentido, ímpares no sentido contrário — o topo de um lance
-        // fica bem perto do início do próximo (mesmo canto), como uma escada de prédio de
-        // verdade, sem precisar atravessar o piso.
+        // Escada em ESPIRAL (ver constantes `QT_SPIRAL_*` acima) — degraus individuais tipo
+        // plataforma (mesmo estilo do parkour: `parkourPlatform`/`parkour4Platform`, uma caixa
+        // rasa por degrau), girando 360° ao redor de `QT_SPIRAL_CENTER_X` a cada andar. Nunca
+        // repete o mesmo ângulo dentro de uma subida — resolve "mesmo lado" de vez (era o mesmo
+        // problema do zigue-zague anterior, só que pior: lá cada LANCE inteiro ainda seguia uma
+        // linha reta única).
         //
-        // BUG REAL encontrado testando ao vivo (usuário pediu explicitamente pra testar antes):
-        // com um colisor BOX por degrau, o avatar ficava fisicamente preso no meio da subida —
-        // confirmado com um raycast pra frente que bateu bem em cima do próprio degrau seguinte
-        // (`quizStep-0-6`), a poucos centímetros da cápsula. Degraus discretos empilhados não são
-        // confiáveis pra um character controller de cápsula sem step-offset dedicado (é por isso
-        // que a Torre do Tesouro já usa uma RAMPA lisa, não degraus). Correção: os degraus viram
-        // só VISUAL (`collide: false` — dão a aparência de "escada" que o usuário pediu), e uma
-        // rampa INVISÍVEL (mesma técnica já comprovada da torre) cobre o lance inteiro pra
-        // colisão de verdade — o jogador sobe suave por baixo dos degraus visuais.
+        // Colisão: mesma lição do bug real encontrado testando o zigue-zague (cápsula presa em
+        // degraus com colisor BOX individual, sem step-offset dedicado) — os degraus aqui
+        // também são só visual (`collide: false`). A subida de verdade é uma rampa HELICOIDAL
+        // aproximada por vários segmentos retos curtos e invisíveis (`quizSpiralRamp-*`), um por
+        // degrau, cada um girado (`yaw`) pra ficar tangente ao círculo naquele ponto e inclinado
+        // (`pitch`) pra cobrir a subida daquele trecho — mesmo princípio da rampa reta da Torre
+        // do Tesouro, só que quebrada em pedaços curtos pra acompanhar a curva.
         if (floor < QT_FLOOR_COUNT - 1) {
-          const forward = floor % 2 === 0
-          for (let i = 0; i < QT_STEPS_PER_FLIGHT; i++) {
-            const stepZ = forward
-              ? -QT_HALF_D + (i + 0.5) * QT_STEP_RUN
-              : QT_HALF_D - (i + 0.5) * QT_STEP_RUN
-            const step = MeshBuilder.CreateBox(
-              `quizStep-${floor}-${i}`,
-              { width: 0.75, height: (i + 1) * QT_STEP_RISE, depth: QT_STEP_RUN + 0.02 },
+          const arcLength = QT_SPIRAL_RADIUS * QT_SPIRAL_STEP_ANGLE
+          const segmentLength = Math.sqrt(arcLength * arcLength + QT_SPIRAL_STEP_RISE * QT_SPIRAL_STEP_RISE)
+          const pitch = Math.atan2(QT_SPIRAL_STEP_RISE, arcLength)
+          for (let i = 0; i < QT_SPIRAL_STEPS_PER_FLOOR; i++) {
+            const angle = i * QT_SPIRAL_STEP_ANGLE
+            const stepX = QT_SPIRAL_CENTER_X + QT_SPIRAL_RADIUS * Math.cos(angle)
+            const stepZ = QT_SPIRAL_RADIUS * Math.sin(angle)
+            const stepY = floorY + i * QT_SPIRAL_STEP_RISE
+
+            // Degrau visual — plataforma rasa, tangente ao círculo (facing na direção de giro).
+            const step = MeshBuilder.CreateBox(`quizStep-${floor}-${i}`, { width: 0.55, height: 0.12, depth: 0.42 }, scene)
+            step.position = new Vector3(stepX, stepY, stepZ)
+            step.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), -angle - Math.PI / 2)
+            addQtMesh(step, qtStepMat, false)
+
+            // Segmento de rampa invisível — do degrau i até o degrau i+1, tangente + inclinado.
+            const angleMid = angle + QT_SPIRAL_STEP_ANGLE / 2
+            const segX = QT_SPIRAL_CENTER_X + QT_SPIRAL_RADIUS * Math.cos(angleMid)
+            const segZ = QT_SPIRAL_RADIUS * Math.sin(angleMid)
+            const segY = floorY + (i + 0.5) * QT_SPIRAL_STEP_RISE
+            const ramp = MeshBuilder.CreateBox(
+              `quizSpiralRamp-${floor}-${i}`,
+              { width: 0.55, height: 0.1, depth: segmentLength },
               scene,
             )
-            step.position = new Vector3(QT_STAIR_CENTER_X, floorY + ((i + 1) * QT_STEP_RISE) / 2, stepZ)
-            addQtMesh(step, qtStepMat, false)
+            ramp.position = new Vector3(segX, segY, segZ)
+            ramp.rotationQuaternion = Quaternion.RotationYawPitchRoll(-angleMid - Math.PI / 2, -pitch, 0)
+            ramp.isVisible = false
+            ramp.parent = quizTowerBase
+            new PhysicsAggregate(ramp, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
           }
-
-          const rampLength = Math.sqrt(QT_DEPTH * QT_DEPTH + QT_FLOOR_HEIGHT * QT_FLOOR_HEIGHT)
-          const rampAngle = Math.atan2(QT_FLOOR_HEIGHT, QT_DEPTH)
-          const ramp = MeshBuilder.CreateBox(
-            `quizRamp-${floor}`,
-            { width: 0.75, height: 0.12, depth: rampLength },
-            scene,
-          )
-          ramp.position = new Vector3(QT_STAIR_CENTER_X, floorY + QT_FLOOR_HEIGHT / 2, 0)
-          ramp.rotation.x = forward ? -rampAngle : rampAngle
-          ramp.isVisible = false
-          ramp.parent = quizTowerBase
-          new PhysicsAggregate(ramp, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
         }
 
         // Marcador do quiz surpresa deste andar — flutua sobre o piso andável, longe do poço da
