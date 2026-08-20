@@ -271,7 +271,21 @@ const QUEST_FIXED_UP: Record<string, Vector3> = {
 // torre dos enigmas, escolas, ponto de nascimento) — ~34° de folga do mais próximo (platô 8),
 // mesma técnica já usada pro deserto/piscina (ver comentários acima).
 const ROCKET_LAUNCH_DIR = new Vector3(-0.3797213687147455, -0.913545457642601, 0.14576137678401327).normalize()
-const ROCKET_ENTER_DISTANCE = 2.6
+// 2.6 → 4 (lab-59): o pouso deixa o jogador ~1.8-2.2 unidades do foguete de propósito (pra não
+// nascer em cima da própria plataforma), mas gravidade normal ainda roda por alguns quadros
+// depois do pouso até assentar de vez (velocidade residual da física) — testado ao vivo, a
+// distância final observada passava um pouco de 2.6, deixando "Pressione E" fora de alcance sem
+// nenhum motivo visível pro jogador. Mais folga cobre esse assentamento sem enfraquecer a checa-
+// gem (a plataforma continua sendo o único lugar por perto onde há QUALQUER foguete).
+const ROCKET_ENTER_DISTANCE = 4
+// Progresso (0 a 1) por segundo com o acelerador todo pra frente — ~9s de viagem de ponta a
+// ponta, rápido o bastante pra não cansar, devagar o bastante pra parecer uma viagem de verdade,
+// não um pulo instantâneo.
+const ROCKET_FLIGHT_SPEED = 1 / 9
+// Altura do arco entre as duas plataformas — evita a trajetória reta "raspar" na superfície de
+// qualquer um dos dois planetas perto da decolagem/pouso, e de quebra parece mais "viajando pelo
+// espaço" do que uma linha reta sem graça.
+const ROCKET_ARC_HEIGHT = 45
 // O planetinha secundário só é construído (e só existe) quando o jogador embarca na nave pela
 // primeira vez — "aparece quando você embarca" (pedido do usuário), não fica sempre presente na
 // cena. Fica bem longe da origem (onde o planeta principal mora) pra nunca ficar visível de lá,
@@ -1359,6 +1373,44 @@ function buildRocket(scene: Scene, shadowGenerator: ShadowGenerator): TransformN
   return root
 }
 
+// Entrada de caverna em Marte (lab-59, pedido do usuário: "o outro planeta é Marte... o que tem
+// lá são cavernas") — dois montes de rocha (silhueta irregular, não uma bola perfeita) com uma
+// "boca" escura encostada na face de um deles. Sem `shadowGenerator`/shadow caster de propósito,
+// igual ao resto da decoração de Marte (ver comentário em `buildSecondPlanetIfNeeded`) — só
+// primitivas, sem asset externo, mesmo padrão do resto do jogo.
+function buildCaveEntrance(scene: Scene): TransformNode {
+  const root = new TransformNode('caveRoot', scene)
+
+  const rockMat = new PBRMaterial('caveRockMat', scene)
+  rockMat.albedoColor = new Color3(0.4, 0.26, 0.18)
+  rockMat.roughness = 0.95
+
+  const mound = MeshBuilder.CreateSphere('caveMound', { diameter: 2.4, slice: 0.62, segments: 10 }, scene)
+  mound.scaling = new Vector3(1.3, 0.85, 1.1)
+  mound.material = rockMat
+  mound.parent = root
+
+  const mound2 = MeshBuilder.CreateSphere('caveMound2', { diameter: 1.3, slice: 0.6, segments: 8 }, scene)
+  mound2.position = new Vector3(0.85, -0.15, 0.25)
+  mound2.material = rockMat
+  mound2.parent = root
+
+  const mouthMat = new PBRMaterial('caveMouthMat', scene)
+  mouthMat.albedoColor = new Color3(0.02, 0.015, 0.015)
+  mouthMat.roughness = 1
+  const mouth = MeshBuilder.CreateCylinder(
+    'caveMouth',
+    { diameterTop: 0.45, diameterBottom: 0.85, height: 0.3, tessellation: 12 },
+    scene,
+  )
+  mouth.rotation.x = Math.PI / 2
+  mouth.position = new Vector3(-0.15, 0.1, 1.0)
+  mouth.material = mouthMat
+  mouth.parent = root
+
+  return root
+}
+
 export function World3D({
   profile,
   progress,
@@ -1553,6 +1605,24 @@ export function World3D({
     let secondPlanetBuilt = false
     let mainRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
     let secondPlanetReturnRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
+    // Piloto do foguete (lab-59, pedido do usuário: "o lance da viagem do foguete é o boneco
+    // entrar no foguete, deve ter como controlar como tem no carro... ir pra trás e pra frente
+    // com as setas... e viajar pelo espaço entre os dois planetas") — os dois foguetes das
+    // plataformas (`mainRocket`/`secondPlanetReturnRocket`) ficam sempre parados, servindo só de
+    // ponto de embarque/desembarque; `flyingRocket` é o veículo visual usado durante o trecho
+    // voando (construído uma vez em `setup()`, escondido até embarcar). `progress` vai de 0
+    // (ponto de partida) a 1 (ponto de chegada) ao longo de uma curva fixa entre as duas
+    // plataformas — mesmo espírito do `pathIndex` do carro, só que a "pista" é uma curva pelo
+    // espaço em vez de uma rua na superfície.
+    interface RocketFlight {
+      progress: number
+      p0: Vector3
+      mid: Vector3
+      p1: Vector3
+      toSecondPlanet: boolean
+    }
+    let drivingRocket: RocketFlight | null = null
+    let flyingRocket: TransformNode | null = null
     if (import.meta.env.DEV) {
       ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
     }
@@ -1596,14 +1666,86 @@ export function World3D({
         facing.normalize()
       }
 
-      // Embarcar/desembarcar do foguete (lab-58, pedido do usuário: "aperta a tecla E e consegue
-      // voar pra um outro planetinha"). Ao contrário do carro (dirigir é contínuo), viajar é
-      // instantâneo — teleporte pro planetinha secundário (construído na hora, na primeira vez —
-      // "só aparece quando você embarca na nave") ou de volta, alternando.
-      function travelToOtherPlanet() {
-        if (!avatarMesh || !avatarBody) return
-        if (!onSecondPlanet) {
-          buildSecondPlanetIfNeeded()
+      // Ponto/tangente numa curva de Bézier quadrática (arco simples entre dois pontos com um
+      // "meio" elevado) — usada pra voar o foguete pelo espaço (lab-59) em vez de uma linha reta
+      // (que poderia raspar na superfície de um dos planetas perto da decolagem/pouso).
+      function sampleFlightArc(p0: Vector3, mid: Vector3, p1: Vector3, t: number) {
+        const u = 1 - t
+        const position = p0
+          .scale(u * u)
+          .add(mid.scale(2 * u * t))
+          .add(p1.scale(t * t))
+        const tangent = mid
+          .subtract(p0)
+          .scale(2 * u)
+          .add(p1.subtract(mid).scale(2 * t))
+        return { position, tangent: tangent.normalize() }
+      }
+
+      // Embarcar no foguete (lab-59, pedido do usuário: "o lance da viagem do foguete é o boneco
+      // entrar no foguete, deve ter como controlar como tem no carro... e viajar pelo espaço
+      // entre os dois planetas") — parenteia o boneco no foguete voador (igual ao carro), define
+      // a curva fixa entre a plataforma de partida e a de chegada, e entra em modo de pilotagem.
+      // O planetinha secundário já é construído aqui (não só ao chegar) — precisa existir pro
+      // foguete de chegada (`toRocket`) ter uma posição real pra mirar.
+      function boardRocket() {
+        if (!avatarMesh || !avatarBody || !flyingRocket) return
+        if (!onSecondPlanet) buildSecondPlanetIfNeeded()
+        const toSecondPlanet = !onSecondPlanet
+        const fromRocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
+        const toRocket = onSecondPlanet ? mainRocket : secondPlanetReturnRocket
+        if (!fromRocket || !toRocket) return
+
+        const p0 = fromRocket.root.getAbsolutePosition().clone()
+        const p1 = toRocket.root.getAbsolutePosition().clone()
+        // "Pra cima" médio dos dois pontos de partida/chegada — o arco sobe nessa direção no
+        // meio do caminho, afastando a curva da superfície dos dois planetas.
+        const arcDir = ROCKET_LAUNCH_DIR.add(SECOND_PLANET_LANDING_UP).normalize()
+        const mid = Vector3.Lerp(p0, p1, 0.5).add(arcDir.scale(ROCKET_ARC_HEIGHT))
+
+        // `progress` começa num epsilon positivo, não exatamente 0 — bug real encontrado ao
+        // vivo: com `progress` clampado em [0,1] (nunca fica negativo) e a checagem de pouso
+        // sendo `<= 0`, começar exatamente em 0 disparava o pouso de "voltou pro início" no
+        // PRÓPRIO primeiro quadro do voo, desfazendo o embarque na hora, antes de qualquer input.
+        drivingRocket = { progress: 0.001, p0, mid, p1, toSecondPlanet }
+        flyingRocket.setEnabled(true)
+        flyingRocket.position.copyFrom(p0)
+
+        if (avatarBody) {
+          avatarBody.body.setLinearVelocity(Vector3.Zero())
+          avatarBody.body.setAngularVelocity(Vector3.Zero())
+        }
+        // Boneco visível dentro do foguete, perto da janela — mesma pose sentada já usada no
+        // carro (lab-27/28), reaproveitada aqui.
+        studentFigure.root.parent = flyingRocket
+        studentFigure.root.position = new Vector3(0, 1.55, 0.1)
+        studentFigure.root.rotationQuaternion = Quaternion.Identity()
+        studentFigure.legPivotL.rotation.x = -1.3
+        studentFigure.legPivotR.rotation.x = -1.3
+        studentFigure.kneePivotL.rotation.x = 1.3
+        studentFigure.kneePivotR.rotation.x = 1.3
+        studentFigure.armPivotL.rotation.x = -0.3
+        studentFigure.armPivotR.rotation.x = -0.3
+        studentFigure.elbowPivotL.rotation.x = 0.6
+        studentFigure.elbowPivotR.rotation.x = 0.6
+        fromRocket.hintLabel.alpha = 0
+      }
+
+      // Pousa ao alcançar qualquer uma das duas pontas do voo (lab-59) — mesma lógica de
+      // teleporte/troca de planeta do lab-58, só que disparada pelo fim da viagem pilotada em vez
+      // de instantaneamente ao apertar E.
+      function landRocket() {
+        if (!drivingRocket || !flyingRocket) return
+        // `progress` 1 = chegou no destino (`toSecondPlanet` diz qual é); `progress` 0 = voltou
+        // pro ponto de partida (desistiu no meio do caminho, empurrando o acelerador pra trás até
+        // o início de novo) — nesse caso o pouso é no planeta de ORIGEM, o oposto do destino.
+        const arrivedAtDestination = drivingRocket.progress >= 1
+        const arrivedAtSecondPlanet = arrivedAtDestination ? drivingRocket.toSecondPlanet : !drivingRocket.toSecondPlanet
+        flyingRocket.setEnabled(false)
+        studentFigure.root.parent = null
+        drivingRocket = null
+
+        if (arrivedAtSecondPlanet) {
           onSecondPlanet = true
           currentWorldCenter = SECOND_PLANET_CENTER
           currentGroundBaseFn = () => SECOND_PLANET_RADIUS
@@ -1631,6 +1773,9 @@ export function World3D({
       // celular precisa de um botão transparente de função de ação da tecla E" — o carro, desde o
       // lab-25, só dava pra entrar via teclado; agora os dois usam o mesmo caminho).
       function handleInteractPress() {
+        // Meio do voo (lab-59) não tem "sair" — o único jeito de voltar é pilotar de volta até o
+        // progresso chegar em 0 (mesmo espírito de não poder sair do carro no meio da estrada).
+        if (drivingRocket) return
         if (drivingCar) {
           const exitUp = drivingCar.root.position.clone().normalize()
           const exitFwd = Vector3.TransformNormal(Vector3.Forward(), drivingCar.root.getWorldMatrix()).normalize()
@@ -1714,7 +1859,7 @@ export function World3D({
           // ao vivo (embarcar funcionava, voltar não fazia nada).
           const d = Vector3.Distance(avatarMesh.position, rocket.root.getAbsolutePosition())
           if (d < ROCKET_ENTER_DISTANCE) {
-            travelToOtherPlanet()
+            boardRocket()
             rocket.hintLabel.alpha = 0
           }
         }
@@ -2911,6 +3056,11 @@ export function World3D({
         mainRocket = { root: rocketRoot, hintLabel: rocketHint }
       }
 
+      // Foguete voador (lab-59) — o veículo de verdade usado durante o trecho pilotado entre as
+      // duas plataformas (ver `boardRocket`/`landRocket`). Escondido até o primeiro embarque.
+      flyingRocket = buildRocket(scene, shadowGenerator)
+      flyingRocket.setEnabled(false)
+
       // Planetinha secundário (lab-58) — só construído quando o jogador embarca no foguete pela
       // primeira vez ("só aparece quando você embarca na nave", pedido do usuário), não fica
       // sempre presente na cena. Bem mais simples que o principal de propósito (pedido do
@@ -2924,13 +3074,13 @@ export function World3D({
         const secondPlanetRoot = new TransformNode('secondPlanetRoot', scene)
         secondPlanetRoot.position = SECOND_PLANET_CENTER
 
-        // Cor distinta do planeta principal (verde-oliva mais acinzentado) — sinaliza "lugar
-        // diferente" mesmo sem trocar céu/luz (globais, compartilhados com o planeta principal;
-        // trocar exigiria salvar/restaurar o estado inteiro ao ir e voltar — fora de escopo do
-        // "por enquanto" pedido pelo usuário).
+        // Marte (lab-59, pedido do usuário: "o outro planeta é Marte... ele é meio marrom") —
+        // marrom-avermelhado, sem trocar céu/luz (globais, compartilhados com o planeta
+        // principal; trocar exigiria salvar/restaurar o estado inteiro ao ir e voltar — fora de
+        // escopo do "por enquanto" pedido pelo usuário desde o lab-58).
         const groundMat = new PBRMaterial('secondPlanetGroundMat', scene)
-        groundMat.albedoColor = new Color3(0.48, 0.56, 0.4)
-        groundMat.roughness = 0.9
+        groundMat.albedoColor = new Color3(0.56, 0.35, 0.22)
+        groundMat.roughness = 0.92
         const groundSphere = MeshBuilder.CreateSphere(
           'secondPlanetGround',
           { diameter: SECOND_PLANET_RADIUS * 2, segments: 28 },
@@ -2942,23 +3092,31 @@ export function World3D({
         groundSphere.computeWorldMatrix(true)
         new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
 
-        // Árvores e rochas — reaproveita os mesmos modelos glTF já carregados pro planeta
-        // principal (índices 0-5 árvore, 6-11 rocha em `propFiles`). Sem shadow caster: o
-        // ShadowGenerator já tem o alcance ajustado pro planeta principal, e este é um bônus
-        // pequeno e distante — não vale o custo de sombra própria.
+        // Só rocha, sem árvore nenhuma (pedido do usuário: "não tem árvores só rocha") —
+        // reaproveita os mesmos modelos glTF de rocha já carregados pro planeta principal
+        // (índices 6-11 em `propFiles`), intercalados com algumas entradas de caverna
+        // (`buildCaveEntrance`, pedido do usuário: "o que tem lá são cavernas"). Sem shadow
+        // caster: o ShadowGenerator já tem o alcance ajustado pro planeta principal, e este é um
+        // bônus pequeno e distante — não vale o custo de sombra própria.
         const SECOND_PLANET_PROP_COUNT = 22
-        const treeAndRockIndices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        const rockIndices = [6, 7, 8, 9, 10, 11]
         for (let i = 0; i < SECOND_PLANET_PROP_COUNT; i++) {
           const phi = Math.acos(1 - 2 * ((i + 0.5) / SECOND_PLANET_PROP_COUNT))
           const theta = i * GOLDEN_ANGLE * 3.3
           const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
           // Não planta nada perto do foguete de volta.
           if (Vector3.Dot(localUp, SECOND_PLANET_LANDING_UP) > Math.cos(0.4)) continue
-          const templateIndex = treeAndRockIndices[i % treeAndRockIndices.length]
-          const instance = propTemplates[templateIndex].clone(`secondPlanetProp-${i}`, null)
+
+          let instance: TransformNode | null
+          if (i % 4 === 0) {
+            instance = buildCaveEntrance(scene)
+          } else {
+            const templateIndex = rockIndices[i % rockIndices.length]
+            instance = propTemplates[templateIndex].clone(`secondPlanetProp-${i}`, null)
+            if (instance) instance.setEnabled(true)
+          }
           if (!instance) continue
           instance.parent = secondPlanetRoot
-          instance.setEnabled(true)
           instance.position = localUp.scale(SECOND_PLANET_RADIUS)
           instance.rotationQuaternion = alignmentQuaternion(localUp)
           instance.scaling.setAll(0.9 + ((i * 7) % 5) * 0.15)
@@ -4505,8 +4663,8 @@ export function World3D({
           // Dirigindo um carro (lab-25): o corpo físico do avatar fica congelado (sem
           // gravidade/velocidade nova) e a figura visual escondida (ver handler de entrar/sair)
           // — o input de teclado vira controle do carro, não do personagem a pé, então nada
-          // aqui deve mexer no avatar enquanto isso.
-          if (!drivingCar) {
+          // aqui deve mexer no avatar enquanto isso. Mesma coisa pilotando o foguete (lab-59).
+          if (!drivingCar && !drivingRocket) {
           // Gravidade radial real — puxa sempre pro centro do planeta (origem),
           // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
           body.applyForce(localUp.scale(-GRAVITY), pos)
@@ -4682,8 +4840,8 @@ export function World3D({
             studentFigure.head.position.y += (1.15 - studentFigure.head.position.y) * 0.2
             lastFootSign = 0
           }
-          } // fim do `if (!drivingCar)` — resto do bloco (câmera/multiplayer/ranking/portais)
-            // continua rodando normalmente dirigindo ou não.
+          } // fim do `if (!drivingCar && !drivingRocket)` — resto do bloco (câmera/multiplayer/
+            // ranking/portais) continua rodando normalmente dirigindo ou não.
 
           // câmera segue a bola acompanhando a orientação local do planeta (sobrescrita pela
           // câmera do carro logo abaixo, se `drivingCar` estiver setado neste quadro)
@@ -5114,6 +5272,42 @@ export function World3D({
           camera.setTarget(drivingCar.root.position)
         }
 
+        // Foguete que o jogador está pilotando (lab-59, pedido do usuário: "deve ter como
+        // controlar como tem no carro, em que você consegue ir pra trás e pra frente com as
+        // setas ou direcional, e viajar pelo espaço entre os dois planetas") — mesmo mecanismo
+        // do carro (input cima/baixo vira progresso ao longo de um trajeto fixo), só que o
+        // "trajeto" é a curva de voo entre as duas plataformas em vez de uma rua. Pouso
+        // automático (`landRocket`) ao alcançar qualquer uma das duas pontas — não precisa
+        // apertar E de novo pra desembarcar.
+        if (drivingRocket && flyingRocket) {
+          const rocketThrottle = Math.max(-1, Math.min(1, -y))
+          drivingRocket.progress = Math.max(
+            0,
+            Math.min(1, drivingRocket.progress + rocketThrottle * ROCKET_FLIGHT_SPEED * dt),
+          )
+          const { position: shipPos, tangent: shipFwd } = sampleFlightArc(
+            drivingRocket.p0,
+            drivingRocket.mid,
+            drivingRocket.p1,
+            drivingRocket.progress,
+          )
+          flyingRocket.position.copyFrom(shipPos)
+          // Sem planeta embaixo dos pés no meio do espaço vazio — "para cima" fixo (eixo Y do
+          // mundo) em vez de derivado da superfície de algum planeta, só pra orientar a nave.
+          const shipUp = Vector3.Up()
+          const shipRight = Vector3.Cross(shipUp, shipFwd).normalize()
+          Matrix.FromXYZAxesToRef(shipRight, shipUp, shipFwd, tmpMatrix)
+          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+          flyingRocket.rotationQuaternion = tmpQuat.clone()
+
+          const desiredShipCamPos = shipPos.subtract(shipFwd.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
+          camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
+          camera.upVector = Vector3.Lerp(camera.upVector, shipUp, 0.15).normalize()
+          camera.setTarget(shipPos)
+
+          if (drivingRocket.progress >= 1 || drivingRocket.progress <= 0) landRocket()
+        }
+
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
         // jogador não está dirigindo nenhum (não faz sentido mostrar "entrar" em cima de outro
         // carro enquanto já se está dirigindo um). `avatarMesh.position` direto (não `pos`, que
@@ -5130,7 +5324,11 @@ export function World3D({
         // Dica "pressione E" do foguete (lab-58) — mesmo padrão do carro acima: só o foguete do
         // planeta em que o jogador está agora (o outro fica escondido/distante, sem custo real de
         // checar já que é só uma comparação de distância).
-        if (avatarMesh) {
+        // Escondida durante o voo (lab-59) — sem isso ficaria presa em "Pressione E pra
+        // embarcar" o trecho inteiro: `avatarMesh` (o colisor físico do jogador a pé) fica
+        // parado perto da plataforma de partida durante o voo inteiro (só `flyingRocket` se move
+        // de verdade), então a distância até o foguete parado continuaria pequena o tempo todo.
+        if (avatarMesh && !drivingRocket) {
           const activeRocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
           if (activeRocket) {
             // `getAbsolutePosition()` — mesmo motivo do outro ponto de checagem em
@@ -5138,6 +5336,9 @@ export function World3D({
             const d = Vector3.Distance(avatarMesh.position, activeRocket.root.getAbsolutePosition())
             activeRocket.hintLabel.alpha = d < ROCKET_ENTER_DISTANCE ? 1 : 0
           }
+        } else if (drivingRocket) {
+          if (mainRocket) mainRocket.hintLabel.alpha = 0
+          if (secondPlanetReturnRocket) secondPlanetReturnRocket.hintLabel.alpha = 0
         }
 
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
