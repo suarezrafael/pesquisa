@@ -8,7 +8,11 @@ primeiro deploy, feedback do usuário em produção pediu decolagem vertical de 
 "de lado" — e reduzir a distância entre os planetas pra ~1,5 diâmetro do planeta principal; numa
 segunda rodada de feedback, corrigido um bug real de orientação que deixava a nave "torta"
 saindo/"achatada" voltando do planetinha (rotação incremental quadro a quadro em vez de
-reconstruir a base do zero) e adicionado som de motor do foguete durante o voo)
+reconstruir a base do zero) e adicionado som de motor do foguete durante o voo; numa terceira
+rodada, corrigido o pouso "de cabeça" em Marte (agora pousa de ré — interpolação esférica entre as
+rotações de repouso das duas plataformas, não a tangente da curva), removido o "prato" que a nave
+voadora carregava embaixo (reaproveitava a malha inteira da plataforma fixa; separado veículo de
+plataforma), dado uma cauda afunilada mais aerodinâmica, e adicionada chama saindo dos motores)
 Contexto para o próximo laboratório: labs/lab-59-foguete-pilotavel-e-marte/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
