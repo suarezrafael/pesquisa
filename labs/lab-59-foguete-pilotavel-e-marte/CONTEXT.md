@@ -127,6 +127,45 @@ todo achatado. melhore o algulo de sauda e de volta e faca um barulho de foguete
   console, quaternion final da nave confirmado unitário (`length() === 1`, sem distorção/"achatado"
   de verdade) e escala intacta (`[1,1,1]`) via inspeção direta do estado da cena.
 
+## Terceira correção pós-verificação (mesmo dia, terceiro round de feedback do usuário)
+
+Depois da correção de "torto/achatado", o usuário testou de novo e reportou mais três problemas:
+"o foguete pousa de cabeça em marte, tem que pousar de ré. e tem que sair fogo dos motores., e
+ele tem que ter um formato mais e foguete com uma cauda mas aero dinamica, nao um prato em baixo."
+
+- **"Pousa de cabeça" — causa raiz**: a orientação em voo seguia a TANGENTE da curva de Bézier
+  (`shipFwd`). Perto da chegada, essa tangente aponta pra DENTRO do planeta de destino (é assim
+  que a nave desacelera/desce) — então o nariz (que seguia a tangente) apontava pro chão bem na
+  hora de pousar, um mergulho de cabeça. Correção: a rotação em voo virou uma interpolação esférica
+  (`Quaternion.Slerp`) entre a rotação de REPOUSO na plataforma de partida
+  (`alignmentQuaternion(fromUp)`) e a de repouso na de chegada (`alignmentQuaternion(toUp)`) — a
+  MESMA rotação que o foguete tem parado numa base, nariz longe do planeta. Em t=1 a nave chega
+  EXATAMENTE na orientação "de pé" da plataforma de destino: motores (cauda) na frente descendo,
+  nariz apontando pra longe do planeta — um pouso de ré de verdade. Verificado matematicamente ao
+  vivo: o quaternion final da nave batia, casa decimal por casa decimal, com
+  `alignmentQuaternion(ROCKET_LAUNCH_DIR)` calculado à mão. Essa troca também tornou a função
+  `quaternionBetweenVectors` (rotação incremental, da correção anterior) desnecessária — removida
+  (Slerp entre dois quaternions fixos é ainda mais simples e nunca degenera).
+- **"Prato embaixo" — causa raiz**: `flyingRocket` (o veículo que realmente voa/pousa) reaproveitava
+  a MESMA malha `buildRocket()` usada pelas plataformas fixas — disco + 4 pilares da base
+  INCLUÍDOS. Voando, isso lia como "um prato" grudado embaixo da nave. Correção: `addRocketBody`
+  virou uma função compartilhada (bocais dos motores + cauda afunilada + corpo + nariz + janela +
+  barbatanas, SEM base), chamada tanto por `buildRocket` (plataforma fixa: base/pilares +
+  `addRocketBody`) quanto pela nova `buildRocketVehicle` (só `addRocketBody`, usada só pra
+  `flyingRocket`). De quebra, o corpo ganhou uma cauda afunilada ("boat-tail", mais estreita na
+  base que no corpo) no lugar de um cilindro reto terminando de repente — pedido do usuário: "uma
+  cauda mais aerodinâmica".
+- **Fogo dos motores**: novo `ParticleSystem` (`rocketFlame`, mesma técnica de textura por
+  `DynamicTexture` já usada na chuva) ancorado bem embaixo dos bocais dos motores, `isLocal = true`
+  (as partículas nascem já na orientação atual da nave a cada quadro, sem recalcular direção
+  manualmente conforme ela gira). Liga (`emitRate = 80`) junto com o som do motor em
+  `boardRocket()`, desliga (`emitRate = 0`) em `landRocket()` — confirmado ao vivo nos dois
+  momentos via inspeção direta do `ParticleSystem`.
+- Verificado ao vivo de novo (dev server + teleporte de debug): ida e volta completas, sem erro no
+  console, malha do veículo voador confirmada SEM `rocketPad`/`rocketPillar*` (só
+  `rocketNozzle*`/`rocketTail`/`rocketBody`/`rocketNose`/`rocketWindow`/`rocketFin*`), quaternion
+  final do pouso no planeta principal batendo exatamente com `alignmentQuaternion(ROCKET_LAUNCH_DIR)`.
+
 ## Pendências / dívidas conhecidas
 
 - **Cor original do glTF nas rochas reaproveitadas** — algumas mantêm um tom ligeiramente

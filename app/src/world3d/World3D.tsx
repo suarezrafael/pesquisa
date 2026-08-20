@@ -407,30 +407,6 @@ function alignmentQuaternion(up: Vector3): Quaternion {
   return Quaternion.RotationAxis(axis, angle)
 }
 
-// Menor rotação que leva o vetor `from` até `to` — usada pra girar o foguete em voo (lab-59)
-// incrementalmente, quadro a quadro, do nariz atual pra tangente nova da curva, em vez de
-// reconstruir a orientação do zero via produto vetorial contra um eixo de referência fixo. Bug
-// real reportado pelo usuário ("o foguete sai todo torto do planetinha e quando volta volta todo
-// achatado"): a versão anterior recalculava a base (direita/cima/frente) do zero a cada quadro
-// contra o eixo Y do mundo, e trocava de eixo de referência (pra evitar produto vetorial
-// degenerado) bem perto dos dois pontos onde a curva de voo passa quase paralela a esse eixo —
-// exatamente decolando/pousando no planetinha secundário (cujo "pra cima" já É o eixo Y do
-// mundo). Rotação incremental nunca degenera desse jeito: preserva a rolagem (torção em torno do
-// próprio eixo) continuamente, do jeito que a nave já estava apoiada na plataforma.
-function quaternionBetweenVectors(from: Vector3, to: Vector3): Quaternion {
-  const dot = Vector3.Dot(from, to)
-  if (dot > 0.9999) return Quaternion.Identity()
-  if (dot < -0.9999) {
-    let axis = Vector3.Cross(Vector3.Right(), from)
-    if (axis.lengthSquared() < 1e-6) axis = Vector3.Cross(Vector3.Up(), from)
-    axis.normalize()
-    return Quaternion.RotationAxis(axis, Math.PI)
-  }
-  const axis = Vector3.Cross(from, to).normalize()
-  const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
-  return Quaternion.RotationAxis(axis, angle)
-}
-
 interface StudentFigure {
   root: TransformNode
   shirtMat: PBRMaterial
@@ -1330,19 +1306,16 @@ function buildCactus(scene: Scene, shadowGenerator: ShadowGenerator): TransformN
   return root
 }
 
-// Foguete + plataforma de lançamento (lab-58, pedido do usuário: "crie um foguete e uma estação
-// de decolagem espacial... como se fosse um prédio") — só primitivas, sem asset externo, mesmo
-// padrão do resto do jogo (carro, cacto, bichos). Reaproveitado duas vezes: uma vez no planeta
-// principal (ponto de partida) e uma vez no planetinha secundário (ponto de volta) — mesma malha,
-// lugares diferentes.
-function buildRocket(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
-  const root = new TransformNode('rocketRoot', scene)
-
-  const padMat = new PBRMaterial('rocketPadMat', scene)
-  padMat.albedoColor = new Color3(0.32, 0.34, 0.4)
-  padMat.roughness = 0.75
-  padMat.metallic = 0.15
-
+// Corpo do foguete (bocais dos motores + cauda afunilada + corpo + nariz + janela + barbatanas) —
+// função compartilhada entre a plataforma fixa (`buildRocket`, com base/pilares) e o veículo que
+// realmente voa/pousa (`buildRocketVehicle`, SEM base/pilares). Bug real reportado pelo usuário:
+// "o foguete... tem que ter um formato mais de foguete... não um prato embaixo" — a nave voadora
+// reaproveitava a MESMA malha inteira da plataforma fixa (disco + 4 pilares incluídos), que
+// sobrava embaixo dela flutuando durante o voo e o pouso, lendo como "um prato". Separar as duas
+// resolve isso; de quebra, a cauda ganhou um afunilamento ("boat-tail") e bocais de motor no
+// lugar de um cilindro reto terminando de repente — pedido do usuário: "uma cauda mais
+// aerodinâmica".
+function addRocketBody(root: TransformNode, scene: Scene, shadowGenerator: ShadowGenerator) {
   const bodyMat = new PBRMaterial('rocketBodyMat', scene)
   bodyMat.albedoColor = new Color3(0.88, 0.88, 0.92)
   bodyMat.roughness = 0.35
@@ -1356,6 +1329,80 @@ function buildRocket(scene: Scene, shadowGenerator: ShadowGenerator): TransformN
   windowMat.albedoColor = new Color3(0.25, 0.6, 0.85)
   windowMat.emissiveColor = new Color3(0.08, 0.18, 0.28)
   windowMat.roughness = 0.2
+
+  const nozzleMat = new PBRMaterial('rocketNozzleMat', scene)
+  nozzleMat.albedoColor = new Color3(0.16, 0.16, 0.19)
+  nozzleMat.roughness = 0.45
+  nozzleMat.metallic = 0.65
+
+  function add(mesh: Mesh, mat: PBRMaterial) {
+    mesh.material = mat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  // Bocais dos motores — flangeados (mais largos na ponta que na base), de onde sai o fogo do
+  // escapamento durante o voo (pedido do usuário: "tem que sair fogo dos motores" — ver
+  // `rocketFlameSystem`/`flameAnchor` em `setup()`, ancorado bem embaixo deles).
+  for (let i = 0; i < 3; i++) {
+    const angle = (i / 3) * Math.PI * 2
+    const nozzle = MeshBuilder.CreateCylinder(
+      `rocketNozzle${i}`,
+      { diameterTop: 0.22, diameterBottom: 0.38, height: 0.3, tessellation: 10 },
+      scene,
+    )
+    nozzle.position = new Vector3(Math.cos(angle) * 0.3, 0.15, Math.sin(angle) * 0.3)
+    add(nozzle, nozzleMat)
+  }
+
+  // Cauda afunilada ("boat-tail") — mais estreita na base que no corpo, silhueta aerodinâmica de
+  // verdade em vez de um cilindro reto terminando de repente numa plataforma.
+  const tail = MeshBuilder.CreateCylinder(
+    'rocketTail',
+    { diameterTop: 0.85, diameterBottom: 0.5, height: 0.55, tessellation: 16 },
+    scene,
+  )
+  tail.position.y = 0.575
+  add(tail, bodyMat)
+
+  // Corpo + nariz cônico + janela.
+  const body = MeshBuilder.CreateCylinder('rocketBody', { diameter: 0.85, height: 1.85, tessellation: 16 }, scene)
+  body.position.y = 1.775
+  add(body, bodyMat)
+  const nose = MeshBuilder.CreateCylinder('rocketNose', { diameterTop: 0, diameterBottom: 0.85, height: 1.0, tessellation: 16 }, scene)
+  nose.position.y = 3.2
+  add(nose, bodyMat)
+  const windowMesh = MeshBuilder.CreateSphere('rocketWindow', { diameter: 0.4 }, scene)
+  windowMesh.position = new Vector3(0, 2.1, 0.4)
+  windowMesh.scaling.z = 0.4
+  add(windowMesh, windowMat)
+
+  // Barbatanas — 3, em tripé, encostadas na cauda afunilada com um leve ângulo pra trás (mais
+  // "aerodinâmico" que retas na vertical).
+  for (let i = 0; i < 3; i++) {
+    const angle = (i / 3) * Math.PI * 2
+    const fin = MeshBuilder.CreateCylinder(`rocketFin${i}`, { diameterTop: 0, diameterBottom: 0.06, height: 1.0, tessellation: 3 }, scene)
+    fin.scaling = new Vector3(1.3, 1, 0.12)
+    fin.rotation.x = Math.PI / 2 + 0.3
+    fin.rotation.y = angle
+    fin.position = new Vector3(Math.cos(angle) * 0.48, 0.5, Math.sin(angle) * 0.48)
+    add(fin, finMat)
+  }
+}
+
+// Foguete + plataforma de lançamento (lab-58, pedido do usuário: "crie um foguete e uma estação
+// de decolagem espacial... como se fosse um prédio") — só primitivas, sem asset externo, mesmo
+// padrão do resto do jogo (carro, cacto, bichos). Reaproveitado duas vezes: uma vez no planeta
+// principal (ponto de partida) e uma vez no planetinha secundário (ponto de volta) — mesma malha,
+// lugares diferentes. Só pra exibição PARADA — o veículo que voa/pousa é `buildRocketVehicle`.
+function buildRocket(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('rocketRoot', scene)
+
+  const padMat = new PBRMaterial('rocketPadMat', scene)
+  padMat.albedoColor = new Color3(0.32, 0.34, 0.4)
+  padMat.roughness = 0.75
+  padMat.metallic = 0.15
 
   function add(mesh: Mesh, mat: PBRMaterial) {
     mesh.material = mat
@@ -1376,29 +1423,16 @@ function buildRocket(scene: Scene, shadowGenerator: ShadowGenerator): TransformN
     add(pillar, padMat)
   }
 
-  // Corpo + nariz cônico + janela.
-  const body = MeshBuilder.CreateCylinder('rocketBody', { diameter: 0.9, height: 2.3, tessellation: 16 }, scene)
-  body.position.y = 1.45
-  add(body, bodyMat)
-  const nose = MeshBuilder.CreateCylinder('rocketNose', { diameterTop: 0, diameterBottom: 0.9, height: 1.0, tessellation: 16 }, scene)
-  nose.position.y = 3.1
-  add(nose, bodyMat)
-  const windowMesh = MeshBuilder.CreateSphere('rocketWindow', { diameter: 0.42 }, scene)
-  windowMesh.position = new Vector3(0, 1.9, 0.42)
-  windowMesh.scaling.z = 0.4
-  add(windowMesh, windowMat)
+  addRocketBody(root, scene, shadowGenerator)
+  return root
+}
 
-  // Barbatanas — 3, em tripé (mais estável visualmente que 4 numa base cilíndrica pequena).
-  for (let i = 0; i < 3; i++) {
-    const angle = (i / 3) * Math.PI * 2
-    const fin = MeshBuilder.CreateCylinder(`rocketFin${i}`, { diameterTop: 0, diameterBottom: 0.06, height: 1.0, tessellation: 3 }, scene)
-    fin.scaling = new Vector3(1.3, 1, 0.12)
-    fin.rotation.x = Math.PI / 2
-    fin.rotation.y = angle
-    fin.position = new Vector3(Math.cos(angle) * 0.55, 0.55, Math.sin(angle) * 0.55)
-    add(fin, finMat)
-  }
-
+// Veículo que realmente voa e pousa (lab-59) — mesmo corpo de `buildRocket`, mas SEM a
+// base/pilares da plataforma fixa (ver comentário em `addRocketBody`: essa era a causa do "prato
+// embaixo" reportado pelo usuário — a nave voadora reaproveitava a plataforma inteira).
+function buildRocketVehicle(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('rocketVehicleRoot', scene)
+  addRocketBody(root, scene, shadowGenerator)
   return root
 }
 
@@ -1650,13 +1684,20 @@ export function World3D({
       c2: Vector3
       p1: Vector3
       toSecondPlanet: boolean
-      // Direção atual do nariz (eixo Y local) da nave, atualizada a cada quadro — usada pra girar
-      // a nave incrementalmente (do nariz atual pro novo, rotação mínima) em vez de reconstruir a
-      // orientação do zero contra um "pra cima" fixo do mundo (ver comentário no laço de voo).
-      currentNose: Vector3
+      // Rotação de "repouso" da nave em cada ponta (a mesma que `alignmentQuaternion` dá ao
+      // foguete parado numa plataforma — nariz apontando pra longe do planeta) — a orientação em
+      // voo é uma interpolação esférica (`Quaternion.Slerp`) entre as duas, não a tangente da
+      // curva. Bug real reportado pelo usuário ("o foguete pousa de cabeça em Marte, tem que
+      // pousar de ré"): seguir a tangente da curva faz o nariz apontar pra DENTRO do planeta de
+      // chegada (mergulho de cabeça); interpolar as rotações de repouso garante que a nave chega
+      // já na MESMA orientação "de pé" que teria parada na plataforma — motores (cauda) na frente,
+      // descendo de ré, como um pouso de foguete de verdade.
+      fromRestQuat: Quaternion
+      toRestQuat: Quaternion
     }
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
+    let rocketFlameSystem: ParticleSystem | null = null
     if (import.meta.env.DEV) {
       ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
     }
@@ -1752,14 +1793,17 @@ export function World3D({
         // vivo: com `progress` clampado em [0,1] (nunca fica negativo) e a checagem de pouso
         // sendo `<= 0`, começar exatamente em 0 disparava o pouso de "voltou pro início" no
         // PRÓPRIO primeiro quadro do voo, desfazendo o embarque na hora, antes de qualquer input.
-        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet, currentNose: fromUp.clone() }
+        const fromRestQuat = alignmentQuaternion(fromUp)
+        const toRestQuat = alignmentQuaternion(toUp)
+        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet, fromRestQuat, toRestQuat }
         flyingRocket.setEnabled(true)
         flyingRocket.position.copyFrom(p0)
         // Começa com a MESMA rotação da plataforma parada (`alignmentQuaternion(fromUp)`, igual
         // à usada pra apoiar o foguete fixo) — decolagem sem "pulo" visual de orientação entre
         // "sentado na base" e "primeiro quadro voando".
-        flyingRocket.rotationQuaternion = alignmentQuaternion(fromUp)
+        flyingRocket.rotationQuaternion = fromRestQuat.clone()
         startRocketEngine()
+        if (rocketFlameSystem) rocketFlameSystem.emitRate = 80
 
         if (avatarBody) {
           avatarBody.body.setLinearVelocity(Vector3.Zero())
@@ -1795,6 +1839,7 @@ export function World3D({
         studentFigure.root.parent = null
         drivingRocket = null
         stopRocketEngine()
+        if (rocketFlameSystem) rocketFlameSystem.emitRate = 0
 
         if (arrivedAtSecondPlanet) {
           onSecondPlanet = true
@@ -3108,9 +3153,57 @@ export function World3D({
       }
 
       // Foguete voador (lab-59) — o veículo de verdade usado durante o trecho pilotado entre as
-      // duas plataformas (ver `boardRocket`/`landRocket`). Escondido até o primeiro embarque.
-      flyingRocket = buildRocket(scene, shadowGenerator)
+      // duas plataformas (ver `boardRocket`/`landRocket`). `buildRocketVehicle`, não `buildRocket`
+      // — sem a base/pilares da plataforma fixa (ver comentário em `addRocketBody`). Escondido até
+      // o primeiro embarque.
+      flyingRocket = buildRocketVehicle(scene, shadowGenerator)
       flyingRocket.setEnabled(false)
+
+      // Chama de escapamento (lab-59, pedido do usuário: "tem que sair fogo dos motores") —
+      // partículas com textura gerada num canvas (gradiente radial amarelo→laranja→transparente,
+      // mesma técnica da gota de chuva acima), saindo pra trás dos bocais dos motores (direção -Y
+      // local — o oposto do nariz). `isLocal = true` faz as partículas nascerem já na orientação
+      // ATUAL da nave a cada quadro, sem precisar recalcular a direção manualmente conforme ela
+      // gira durante o voo. Desligada por padrão (`emitRate = 0`); liga/desliga junto com o som do
+      // motor em `boardRocket`/`landRocket`.
+      const flameTexture = new DynamicTexture('rocketFlameTex', { width: 32, height: 32 }, scene, false)
+      const flameCtx = flameTexture.getContext() as CanvasRenderingContext2D
+      const flameGradient = flameCtx.createRadialGradient(16, 16, 0, 16, 16, 16)
+      flameGradient.addColorStop(0, 'rgba(255,255,220,1)')
+      flameGradient.addColorStop(0.4, 'rgba(255,170,60,0.9)')
+      flameGradient.addColorStop(1, 'rgba(255,80,20,0)')
+      flameCtx.fillStyle = flameGradient
+      flameCtx.fillRect(0, 0, 32, 32)
+      flameTexture.update()
+
+      const flameAnchor = new Mesh('rocketFlameAnchor', scene)
+      flameAnchor.isVisible = false
+      flameAnchor.parent = flyingRocket
+      flameAnchor.position = new Vector3(0, -0.05, 0)
+      flameAnchor.rotationQuaternion = Quaternion.Identity()
+
+      rocketFlameSystem = new ParticleSystem('rocketFlame', 150, scene)
+      rocketFlameSystem.particleTexture = flameTexture
+      rocketFlameSystem.emitter = flameAnchor
+      rocketFlameSystem.isLocal = true
+      rocketFlameSystem.minEmitBox = new Vector3(-0.12, 0, -0.12)
+      rocketFlameSystem.maxEmitBox = new Vector3(0.12, 0, 0.12)
+      rocketFlameSystem.direction1 = new Vector3(-0.2, -1, -0.2)
+      rocketFlameSystem.direction2 = new Vector3(0.2, -1, 0.2)
+      rocketFlameSystem.minEmitPower = 4
+      rocketFlameSystem.maxEmitPower = 7
+      rocketFlameSystem.gravity = Vector3.Zero()
+      rocketFlameSystem.updateSpeed = 0.02
+      rocketFlameSystem.minLifeTime = 0.12
+      rocketFlameSystem.maxLifeTime = 0.22
+      rocketFlameSystem.minSize = 0.25
+      rocketFlameSystem.maxSize = 0.55
+      rocketFlameSystem.color1 = new Color4(1, 0.95, 0.6, 0.9)
+      rocketFlameSystem.color2 = new Color4(1, 0.55, 0.15, 0.7)
+      rocketFlameSystem.colorDead = new Color4(1, 0.3, 0.1, 0)
+      rocketFlameSystem.blendMode = ParticleSystem.BLENDMODE_ADD
+      rocketFlameSystem.emitRate = 0
+      rocketFlameSystem.start()
 
       // Planetinha secundário (lab-58) — só construído quando o jogador embarca no foguete pela
       // primeira vez ("só aparece quando você embarca na nave", pedido do usuário), não fica
@@ -5344,21 +5437,21 @@ export function World3D({
             drivingRocket.progress,
           )
           flyingRocket.position.copyFrom(shipPos)
-          // O nariz do foguete (eixo Y local — mesmo eixo que `alignmentQuaternion` alinha à
-          // superfície do planeta quando ele está parado na plataforma) gira INCREMENTALMENTE do
-          // nariz atual pro novo, quadro a quadro (rotação mínima, ver `quaternionBetweenVectors`),
-          // em vez de reconstruir a base do zero (direita/cima/frente) contra um "pra cima" fixo
-          // do mundo a cada quadro. Segundo bug real reportado pelo usuário ("o foguete sai todo
-          // torto do planetinha e quando volta volta todo achatado"): a versão anterior trocava de
-          // eixo de referência pra evitar produto vetorial degenerado bem perto de onde a curva de
-          // voo passa quase paralela a esse eixo — que é EXATAMENTE decolando/pousando no
-          // planetinha secundário (cujo "pra cima" já é o próprio eixo Y do mundo usado como
-          // referência). Rotação incremental nunca degenera desse jeito.
-          const deltaRotation = quaternionBetweenVectors(drivingRocket.currentNose, shipFwd)
-          flyingRocket.rotationQuaternion = deltaRotation.multiply(
-            flyingRocket.rotationQuaternion ?? Quaternion.Identity(),
+          // Orientação da nave = interpolação esférica entre a rotação "de pé" na plataforma de
+          // partida e a "de pé" na plataforma de chegada — NÃO a tangente da curva de voo. Bug
+          // real reportado pelo usuário ("o foguete pousa de cabeça em Marte, tem que pousar de
+          // ré"): seguir a tangente faz o nariz apontar pra DENTRO do planeta de chegada (mergulho
+          // de cabeça, motores pra cima); interpolar as rotações de repouso garante que a nave
+          // termina o voo na mesma orientação "de pé" que teria parada na plataforma — motores
+          // (cauda) na frente descendo, nariz apontando pra longe do planeta, como um pouso de
+          // foguete de verdade. De quebra, também elimina o bug anterior ("sai todo torto/volta
+          // achatado"): `Slerp` entre dois quaternions nunca degenera nem troca de eixo de
+          // referência no meio do caminho.
+          flyingRocket.rotationQuaternion = Quaternion.Slerp(
+            drivingRocket.fromRestQuat,
+            drivingRocket.toRestQuat,
+            drivingRocket.progress,
           )
-          drivingRocket.currentNose = shipFwd.clone()
           // Câmera continua usando "pra cima" fixo do mundo (independente do nariz da nave) —
           // simples e estável, sem planeta nenhum por perto pra derivar uma superfície.
           const shipUp = Vector3.Up()
