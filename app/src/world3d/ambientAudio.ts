@@ -522,6 +522,99 @@ export function playCoinCollect(): void {
   })
 }
 
+// Ronco do motor do foguete (lab-59, pedido do usuário: "faça um barulho de foguete") — ruído
+// grave filtrado (o "sopro"/turbulência, mesma técnica do vento) somado a um oscilador grave em
+// dente-de-serra com vibrato lento (o "ronco" do motor, mesma técnica do rosnado da onça) — liga
+// com fade-in ao embarcar, desliga com fade-out ao pousar, igual ao ciclo liga/desliga da chuva.
+interface RocketEngineNodes {
+  noiseSrc: AudioBufferSourceNode
+  noiseGain: GainNode
+  osc: OscillatorNode
+  oscGain: GainNode
+  wobble: OscillatorNode
+}
+let rocketEngine: RocketEngineNodes | null = null
+const ROCKET_ENGINE_VOLUME = 0.1
+
+export function startRocketEngine(): void {
+  if (!audioCtx || rocketEngine) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+
+  const bufferSize = ctx.sampleRate * 2
+  const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = noiseBuffer.getChannelData(0)
+  let last = 0
+  for (let i = 0; i < bufferSize; i++) {
+    const white = Math.random() * 2 - 1
+    last = (last + 0.08 * white) / 1.08
+    data[i] = last * 2.6
+  }
+  const noiseSrc = ctx.createBufferSource()
+  noiseSrc.buffer = noiseBuffer
+  noiseSrc.loop = true
+
+  const rumbleFilter = ctx.createBiquadFilter()
+  rumbleFilter.type = 'lowpass'
+  rumbleFilter.frequency.value = 440
+  rumbleFilter.Q.value = 0.5
+
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0, now)
+  noiseGain.gain.linearRampToValueAtTime(ROCKET_ENGINE_VOLUME, now + 0.4)
+  noiseSrc.connect(rumbleFilter).connect(noiseGain).connect(ctx.destination)
+  noiseSrc.start(now)
+
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(38, now)
+  osc.frequency.exponentialRampToValueAtTime(66, now + 0.6)
+  const wobble = ctx.createOscillator()
+  wobble.frequency.value = 8
+  const wobbleGain = ctx.createGain()
+  wobbleGain.gain.value = 5
+  wobble.connect(wobbleGain).connect(osc.frequency)
+  const oscGain = ctx.createGain()
+  oscGain.gain.setValueAtTime(0, now)
+  oscGain.gain.linearRampToValueAtTime(ROCKET_ENGINE_VOLUME * 0.7, now + 0.4)
+  osc.connect(oscGain).connect(ctx.destination)
+  osc.start(now)
+  wobble.start(now)
+
+  rocketEngine = { noiseSrc, noiseGain, osc, oscGain, wobble }
+}
+
+export function stopRocketEngine(): void {
+  if (!audioCtx || !rocketEngine) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const { noiseSrc, noiseGain, osc, oscGain, wobble } = rocketEngine
+  noiseGain.gain.cancelScheduledValues(now)
+  noiseGain.gain.setValueAtTime(noiseGain.gain.value, now)
+  noiseGain.gain.linearRampToValueAtTime(0, now + 0.4)
+  oscGain.gain.cancelScheduledValues(now)
+  oscGain.gain.setValueAtTime(oscGain.gain.value, now)
+  oscGain.gain.linearRampToValueAtTime(0, now + 0.4)
+  window.setTimeout(() => {
+    try {
+      noiseSrc.stop()
+    } catch {
+      // já pode ter sido parado (ex.: dispose da cena) — ignora.
+    }
+    try {
+      osc.stop()
+    } catch {
+      // idem
+    }
+    try {
+      wobble.stop()
+    } catch {
+      // idem
+    }
+  }, 500)
+  rocketEngine = null
+}
+
 export function toggleMute(): boolean {
   muted = !muted
   if (audioCtx) {

@@ -63,6 +63,8 @@ import {
   playFunnyTalk,
   playFart,
   playLaserZap,
+  startRocketEngine,
+  stopRocketEngine,
 } from './ambientAudio'
 import {
   connect as connectMultiplayer,
@@ -401,6 +403,30 @@ function alignmentQuaternion(up: Vector3): Quaternion {
   if (dot > 0.9999) return Quaternion.Identity()
   if (dot < -0.9999) return Quaternion.RotationAxis(new Vector3(1, 0, 0), Math.PI)
   const axis = Vector3.Cross(defaultUp, up).normalize()
+  const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
+  return Quaternion.RotationAxis(axis, angle)
+}
+
+// Menor rotação que leva o vetor `from` até `to` — usada pra girar o foguete em voo (lab-59)
+// incrementalmente, quadro a quadro, do nariz atual pra tangente nova da curva, em vez de
+// reconstruir a orientação do zero via produto vetorial contra um eixo de referência fixo. Bug
+// real reportado pelo usuário ("o foguete sai todo torto do planetinha e quando volta volta todo
+// achatado"): a versão anterior recalculava a base (direita/cima/frente) do zero a cada quadro
+// contra o eixo Y do mundo, e trocava de eixo de referência (pra evitar produto vetorial
+// degenerado) bem perto dos dois pontos onde a curva de voo passa quase paralela a esse eixo —
+// exatamente decolando/pousando no planetinha secundário (cujo "pra cima" já É o eixo Y do
+// mundo). Rotação incremental nunca degenera desse jeito: preserva a rolagem (torção em torno do
+// próprio eixo) continuamente, do jeito que a nave já estava apoiada na plataforma.
+function quaternionBetweenVectors(from: Vector3, to: Vector3): Quaternion {
+  const dot = Vector3.Dot(from, to)
+  if (dot > 0.9999) return Quaternion.Identity()
+  if (dot < -0.9999) {
+    let axis = Vector3.Cross(Vector3.Right(), from)
+    if (axis.lengthSquared() < 1e-6) axis = Vector3.Cross(Vector3.Up(), from)
+    axis.normalize()
+    return Quaternion.RotationAxis(axis, Math.PI)
+  }
+  const axis = Vector3.Cross(from, to).normalize()
   const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
   return Quaternion.RotationAxis(axis, angle)
 }
@@ -1624,6 +1650,10 @@ export function World3D({
       c2: Vector3
       p1: Vector3
       toSecondPlanet: boolean
+      // Direção atual do nariz (eixo Y local) da nave, atualizada a cada quadro — usada pra girar
+      // a nave incrementalmente (do nariz atual pro novo, rotação mínima) em vez de reconstruir a
+      // orientação do zero contra um "pra cima" fixo do mundo (ver comentário no laço de voo).
+      currentNose: Vector3
     }
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
@@ -1722,9 +1752,14 @@ export function World3D({
         // vivo: com `progress` clampado em [0,1] (nunca fica negativo) e a checagem de pouso
         // sendo `<= 0`, começar exatamente em 0 disparava o pouso de "voltou pro início" no
         // PRÓPRIO primeiro quadro do voo, desfazendo o embarque na hora, antes de qualquer input.
-        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet }
+        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet, currentNose: fromUp.clone() }
         flyingRocket.setEnabled(true)
         flyingRocket.position.copyFrom(p0)
+        // Começa com a MESMA rotação da plataforma parada (`alignmentQuaternion(fromUp)`, igual
+        // à usada pra apoiar o foguete fixo) — decolagem sem "pulo" visual de orientação entre
+        // "sentado na base" e "primeiro quadro voando".
+        flyingRocket.rotationQuaternion = alignmentQuaternion(fromUp)
+        startRocketEngine()
 
         if (avatarBody) {
           avatarBody.body.setLinearVelocity(Vector3.Zero())
@@ -1759,6 +1794,7 @@ export function World3D({
         flyingRocket.setEnabled(false)
         studentFigure.root.parent = null
         drivingRocket = null
+        stopRocketEngine()
 
         if (arrivedAtSecondPlanet) {
           onSecondPlanet = true
@@ -5309,17 +5345,20 @@ export function World3D({
           )
           flyingRocket.position.copyFrom(shipPos)
           // O nariz do foguete (eixo Y local — mesmo eixo que `alignmentQuaternion` alinha à
-          // superfície do planeta quando ele está parado na plataforma) aponta na direção de
-          // voo, não num "pra cima" fixo do mundo — bug real reportado pelo usuário ("o foguete
-          // deve decolar na vertical, não de lado"): a versão antiga travava o nariz no eixo Y
-          // do mundo e deixava a direção de voo no eixo Z, então a decolagem parecia de lado
-          // sempre que a plataforma não estivesse perto do "topo" do planeta.
-          const referenceUp = Math.abs(Vector3.Dot(shipFwd, Vector3.Up())) > 0.98 ? Vector3.Right() : Vector3.Up()
-          const shipRight = Vector3.Cross(referenceUp, shipFwd).normalize()
-          const shipSide = Vector3.Cross(shipFwd, shipRight).normalize()
-          Matrix.FromXYZAxesToRef(shipRight, shipFwd, shipSide, tmpMatrix)
-          Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-          flyingRocket.rotationQuaternion = tmpQuat.clone()
+          // superfície do planeta quando ele está parado na plataforma) gira INCREMENTALMENTE do
+          // nariz atual pro novo, quadro a quadro (rotação mínima, ver `quaternionBetweenVectors`),
+          // em vez de reconstruir a base do zero (direita/cima/frente) contra um "pra cima" fixo
+          // do mundo a cada quadro. Segundo bug real reportado pelo usuário ("o foguete sai todo
+          // torto do planetinha e quando volta volta todo achatado"): a versão anterior trocava de
+          // eixo de referência pra evitar produto vetorial degenerado bem perto de onde a curva de
+          // voo passa quase paralela a esse eixo — que é EXATAMENTE decolando/pousando no
+          // planetinha secundário (cujo "pra cima" já é o próprio eixo Y do mundo usado como
+          // referência). Rotação incremental nunca degenera desse jeito.
+          const deltaRotation = quaternionBetweenVectors(drivingRocket.currentNose, shipFwd)
+          flyingRocket.rotationQuaternion = deltaRotation.multiply(
+            flyingRocket.rotationQuaternion ?? Quaternion.Identity(),
+          )
+          drivingRocket.currentNose = shipFwd.clone()
           // Câmera continua usando "pra cima" fixo do mundo (independente do nariz da nave) —
           // simples e estável, sem planeta nenhum por perto pra derivar uma superfície.
           const shipUp = Vector3.Up()

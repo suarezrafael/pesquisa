@@ -95,6 +95,38 @@ não deve estar muito longe na viagem, como se fosse uma distância de um planet
   tangente da cúbica em t=0 é exatamente `(c1-p0)`, e `c1 = p0 + fromUp * ROCKET_ARC_HEIGHT`, ou
   seja, sempre `fromUp` normalizado por construção, não por coincidência.
 
+## Segunda correção pós-verificação (mesmo dia, novo feedback do usuário em produção)
+
+Depois da primeira correção (decolagem vertical + distância reduzida), o usuário testou de novo e
+reportou mais dois problemas reais: "o foguete sai todo torto do planetinha e quando volta volta
+todo achatado. melhore o algulo de sauda e de volta e faca um barulho de foguete."
+
+- **"Torto"/"achatado" — causa raiz**: a orientação da nave durante o voo era reconstruída DO
+  ZERO a cada quadro via produto vetorial (`Cross`) contra um eixo de referência fixo (`Vector3.
+  Up()`, com uma troca pra `Vector3.Right()` quando quase paralelo, pra evitar produto vetorial
+  degenerado). Essa troca de eixo de referência acontecia bem perto de decolar/pousar no
+  planetinha secundário — porque o "pra cima" do planetinha (`SECOND_PLANET_LANDING_UP`) já É o
+  próprio eixo `Vector3.Up()` usado como referência, então a tangente do voo passa quase paralela
+  a ele exatamente nesses dois momentos, disparando a troca de eixo (e a mudança abrupta de
+  "rolagem" que vem junto) bem na hora mais visível — saindo/chegando no planetinha.
+- **Correção**: trocada a reconstrução do zero por rotação INCREMENTAL, quadro a quadro — uma
+  nova função `quaternionBetweenVectors(from, to)` calcula a menor rotação entre o nariz atual da
+  nave e a tangente nova da curva, aplicada em cima da rotação já existente
+  (`deltaRotation.multiply(flyingRocket.rotationQuaternion)`). Isso nunca degenera (não existe
+  "eixo de referência" pra ficar paralelo a nada) e preserva a rolagem continuamente — a nave sai
+  literalmente na mesma orientação que já tinha sentada na plataforma
+  (`flyingRocket.rotationQuaternion = alignmentQuaternion(fromUp)`, ajustado ao embarcar) e vai
+  girando suavemente dali, sem nenhum "salto"/reconstrução do zero em nenhum instante do voo.
+- **Barulho de foguete**: duas funções novas em `ambientAudio.ts` — `startRocketEngine()`/
+  `stopRocketEngine()` — seguindo o MESMO padrão liga/desliga com fade já usado pra chuva
+  (`startRain`/`stopRain`): ruído grave filtrado (turbulência) + oscilador grave em dente-de-serra
+  com vibrato lento (o "ronco" do motor, mesma técnica já usada no rosnado da onça). Chamadas em
+  `boardRocket()` (liga, com uma pequena subida de tom simulando a ignição) e `landRocket()`
+  (desliga com fade-out) — toca durante TODA a viagem, não só um efeito pontual.
+- Verificado ao vivo de novo (dev server + teleporte de debug): ida e volta completas, sem erro no
+  console, quaternion final da nave confirmado unitário (`length() === 1`, sem distorção/"achatado"
+  de verdade) e escala intacta (`[1,1,1]`) via inspeção direta do estado da cena.
+
 ## Pendências / dívidas conhecidas
 
 - **Cor original do glTF nas rochas reaproveitadas** — algumas mantêm um tom ligeiramente
