@@ -166,6 +166,26 @@ ele tem que ter um formato mais e foguete com uma cauda mas aero dinamica, nao u
   `rocketNozzle*`/`rocketTail`/`rocketBody`/`rocketNose`/`rocketWindow`/`rocketFin*`), quaternion
   final do pouso no planeta principal batendo exatamente com `alignmentQuaternion(ROCKET_LAUNCH_DIR)`.
 
+## Quarta correção pós-verificação (mesmo dia, quarto round de feedback do usuário)
+
+Depois da correção "pousa de ré", o usuário testou de novo: "o foguete está saindo meio de lado
+da Terra, tá bizarro, ele tem que sair pra cima e depois pousar de ré."
+
+- **Causa raiz**: a correção anterior interpolava a rotação (`Quaternion.Slerp` entre a orientação
+  de repouso da plataforma de partida e a de chegada) linearmente com `progress` (0 a 1) — o que
+  corrige os dois EXTREMOS (decola e pousa "de pé"), mas faz a nave começar a virar rumo à
+  orientação de CHEGADA desde o primeiro instante do voo, ainda bem perto da plataforma de
+  partida, mal saindo do chão — visualmente "de lado" logo na decolagem, exatamente como reportado.
+- **Correção**: nova função `holdFlipHoldCurve(t, holdStart, holdEnd)` — trava a rotação em 0
+  (orientação de decolagem, sem NENHUMA guinada) até `progress = 0.2`, sobe suavemente (smoothstep)
+  até `progress = 0.8`, e trava em 1 (orientação de pouso) dali até o fim. Usada como parâmetro do
+  `Quaternion.Slerp` no lugar de `progress` puro. Resultado: decola reto por 20% do voo, vira só no
+  trecho do meio (longe de qualquer planeta, onde não há "chão" pra parecer errado), e chega já
+  "de pé" nos 20% finais — literalmente "sai pra cima e depois pousa de ré", como pedido.
+- Os dois extremos continuam matematicamente garantidos (verificado ao vivo de novo: quaternion
+  final de cada pouso batendo exatamente com `alignmentQuaternion(fromUp/toUp)`) — só o MEIO do
+  caminho mudou de forma.
+
 ## Pendências / dívidas conhecidas
 
 - **Cor original do glTF nas rochas reaproveitadas** — algumas mantêm um tom ligeiramente

@@ -1764,6 +1764,23 @@ export function World3D({
         return { position, tangent: tangent.normalize() }
       }
 
+      // Curva "segura-vira-segura": 0 até `holdStart`, sobe suave (smoothstep) até `holdEnd`,
+      // depois 1 até o fim — usada pra girar o foguete (lab-59, ver laço de voo mais abaixo). Bug
+      // real reportado pelo usuário ("o foguete está saindo meio de lado da Terra, tem que sair
+      // pra cima e depois pousar de ré"): interpolar a rotação linearmente com `progress` (0 a 1)
+      // fazia a nave começar a virar rumo à orientação de CHEGADA desde o primeiro instante do
+      // voo — ainda bem perto da plataforma, mal saindo do chão, já visivelmente "de lado". Esta
+      // curva mantém a rotação TRAVADA na orientação de decolagem por uma fração inicial do voo
+      // (decola reto, sem nenhuma guinada) e travada na orientação de pouso pela fração final
+      // (chega já "de pé", pronta pra descer de ré) — só gira de verdade no trecho do meio, longe
+      // de qualquer um dos dois planetas, onde não há "chão" pra parecer errado.
+      function holdFlipHoldCurve(t: number, holdStart: number, holdEnd: number): number {
+        if (t <= holdStart) return 0
+        if (t >= holdEnd) return 1
+        const x = (t - holdStart) / (holdEnd - holdStart)
+        return x * x * (3 - 2 * x)
+      }
+
       // Embarcar no foguete (lab-59, pedido do usuário: "o lance da viagem do foguete é o boneco
       // entrar no foguete, deve ter como controlar como tem no carro... e viajar pelo espaço
       // entre os dois planetas") — parenteia o boneco no foguete voador (igual ao carro), define
@@ -5438,19 +5455,17 @@ export function World3D({
           )
           flyingRocket.position.copyFrom(shipPos)
           // Orientação da nave = interpolação esférica entre a rotação "de pé" na plataforma de
-          // partida e a "de pé" na plataforma de chegada — NÃO a tangente da curva de voo. Bug
-          // real reportado pelo usuário ("o foguete pousa de cabeça em Marte, tem que pousar de
-          // ré"): seguir a tangente faz o nariz apontar pra DENTRO do planeta de chegada (mergulho
-          // de cabeça, motores pra cima); interpolar as rotações de repouso garante que a nave
-          // termina o voo na mesma orientação "de pé" que teria parada na plataforma — motores
-          // (cauda) na frente descendo, nariz apontando pra longe do planeta, como um pouso de
-          // foguete de verdade. De quebra, também elimina o bug anterior ("sai todo torto/volta
-          // achatado"): `Slerp` entre dois quaternions nunca degenera nem troca de eixo de
-          // referência no meio do caminho.
+          // partida e a "de pé" na plataforma de chegada — NÃO a tangente da curva de voo (faria o
+          // nariz apontar pra DENTRO do planeta de chegada, mergulho de cabeça). O parâmetro dessa
+          // interpolação não é `progress` puro — é `holdFlipHoldCurve(progress, 0.2, 0.8)`: trava
+          // a orientação de decolagem por 20% do voo (sai reto, sem guinada perto da plataforma —
+          // bug real reportado pelo usuário: "está saindo meio de lado, tem que sair pra cima"),
+          // vira suavemente no meio, e trava a orientação de pouso nos 20% finais (chega já "de
+          // pé", pronta pra descer de ré).
           flyingRocket.rotationQuaternion = Quaternion.Slerp(
             drivingRocket.fromRestQuat,
             drivingRocket.toRestQuat,
-            drivingRocket.progress,
+            holdFlipHoldCurve(drivingRocket.progress, 0.2, 0.8),
           )
           // Câmera continua usando "pra cima" fixo do mundo (independente do nariz da nave) —
           // simples e estável, sem planeta nenhum por perto pra derivar uma superfície.
