@@ -3,7 +3,10 @@
 Último concluído: labs/lab-59-foguete-pilotavel-e-marte/ (foguete deixou de ser teleporte
 instantâneo — agora o boneco entra na nave e pilota, avanço/recuo com as mesmas setas/direcional
 do carro, viajando ao longo de um arco real entre os dois planetas; planetinha secundário
-reskinado como Marte — chão marrom, só rochas, entradas de caverna, sem árvores)
+reskinado como Marte — chão marrom, só rochas, entradas de caverna, sem árvores; depois do
+primeiro deploy, feedback do usuário em produção pediu decolagem vertical de verdade — em vez de
+"de lado" — e reduzir a distância entre os planetas pra ~1,5 diâmetro do planeta principal, ambos
+corrigidos e redeployados no mesmo dia)
 Contexto para o próximo laboratório: labs/lab-59-foguete-pilotavel-e-marte/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
