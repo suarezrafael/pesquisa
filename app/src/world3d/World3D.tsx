@@ -282,16 +282,19 @@ const ROCKET_ENTER_DISTANCE = 4
 // ponta, rápido o bastante pra não cansar, devagar o bastante pra parecer uma viagem de verdade,
 // não um pulo instantâneo.
 const ROCKET_FLIGHT_SPEED = 1 / 9
-// Altura do arco entre as duas plataformas — evita a trajetória reta "raspar" na superfície de
-// qualquer um dos dois planetas perto da decolagem/pouso, e de quebra parece mais "viajando pelo
-// espaço" do que uma linha reta sem graça.
-const ROCKET_ARC_HEIGHT = 45
+// Distância que cada ponto de controle da curva (lab-59: curva cúbica, não mais um único "meio"
+// elevado) se afasta da plataforma na direção "pra cima" local dela antes de curvar rumo ao
+// destino — pequena o bastante pra não virar um balão gigante agora que os dois planetas ficam
+// perto um do outro (era 45, calibrado pra quando o planetinha ficava a 400 unidades de distância).
+const ROCKET_ARC_HEIGHT = 14
 // O planetinha secundário só é construído (e só existe) quando o jogador embarca na nave pela
 // primeira vez — "aparece quando você embarca" (pedido do usuário), não fica sempre presente na
-// cena. Fica bem longe da origem (onde o planeta principal mora) pra nunca ficar visível de lá,
-// mesmo depois de construído — nada de "ponto suspeito no céu" antes de embarcar.
+// cena. Pedido do usuário (lab-59): "o planetinha não deve estar muito longe na viagem, como se
+// fosse uma distância de um planeta e meio" — distância do centro escolhida pra deixar ~1,5
+// diâmetro do planeta principal (2*PLANET_RADIUS = 26) de vão livre entre as duas superfícies
+// (13 + 6 + 39 = 58), bem menos que os 400 originais do lab-58.
 const SECOND_PLANET_RADIUS = 6
-const SECOND_PLANET_CENTER = new Vector3(0, 0, 400)
+const SECOND_PLANET_CENTER = new Vector3(0, 0, 58)
 // Direção fixa (não precisa evitar nada — o planetinha só tem árvore/rocha decorativa, pedido do
 // usuário: "por enquanto o planetinha pode ter só árvores e rochas, não precisa NPC") de onde o
 // foguete de volta pousa.
@@ -1617,7 +1620,8 @@ export function World3D({
     interface RocketFlight {
       progress: number
       p0: Vector3
-      mid: Vector3
+      c1: Vector3
+      c2: Vector3
       p1: Vector3
       toSecondPlanet: boolean
     }
@@ -1666,19 +1670,26 @@ export function World3D({
         facing.normalize()
       }
 
-      // Ponto/tangente numa curva de Bézier quadrática (arco simples entre dois pontos com um
-      // "meio" elevado) — usada pra voar o foguete pelo espaço (lab-59) em vez de uma linha reta
-      // (que poderia raspar na superfície de um dos planetas perto da decolagem/pouso).
-      function sampleFlightArc(p0: Vector3, mid: Vector3, p1: Vector3, t: number) {
+      // Ponto/tangente numa curva de Bézier cúbica — usada pra voar o foguete pelo espaço
+      // (lab-59). Cúbica em vez de quadrática (que era só um "meio" elevado) porque só ela
+      // garante a tangente EXATA em cada ponta: com `c1`/`c2` colocados na direção "pra cima"
+      // local de cada plataforma, a nave sai e chega sempre na vertical (pedido do usuário: "o
+      // foguete deve decolar na vertical, não de lado"), em vez de sair numa direção genérica
+      // rumo ao meio do caminho.
+      function sampleFlightArc(p0: Vector3, c1: Vector3, c2: Vector3, p1: Vector3, t: number) {
         const u = 1 - t
+        const uu = u * u
+        const tt = t * t
         const position = p0
-          .scale(u * u)
-          .add(mid.scale(2 * u * t))
-          .add(p1.scale(t * t))
-        const tangent = mid
+          .scale(uu * u)
+          .add(c1.scale(3 * uu * t))
+          .add(c2.scale(3 * u * tt))
+          .add(p1.scale(tt * t))
+        const tangent = c1
           .subtract(p0)
-          .scale(2 * u)
-          .add(p1.subtract(mid).scale(2 * t))
+          .scale(3 * uu)
+          .add(c2.subtract(c1).scale(6 * u * t))
+          .add(p1.subtract(c2).scale(3 * tt))
         return { position, tangent: tangent.normalize() }
       }
 
@@ -1698,16 +1709,20 @@ export function World3D({
 
         const p0 = fromRocket.root.getAbsolutePosition().clone()
         const p1 = toRocket.root.getAbsolutePosition().clone()
-        // "Pra cima" médio dos dois pontos de partida/chegada — o arco sobe nessa direção no
-        // meio do caminho, afastando a curva da superfície dos dois planetas.
-        const arcDir = ROCKET_LAUNCH_DIR.add(SECOND_PLANET_LANDING_UP).normalize()
-        const mid = Vector3.Lerp(p0, p1, 0.5).add(arcDir.scale(ROCKET_ARC_HEIGHT))
+        // "Pra cima" local de cada plataforma (a direção que o próprio foguete parado aponta,
+        // ver `alignmentQuaternion(ROCKET_LAUNCH_DIR)`/`alignmentQuaternion(SECOND_PLANET_LANDING_UP)`
+        // usados ao construir as plataformas) — os pontos de controle da cúbica saem exatamente
+        // nessa direção, garantindo decolagem/pouso na vertical em vez de um ângulo genérico.
+        const fromUp = onSecondPlanet ? SECOND_PLANET_LANDING_UP : ROCKET_LAUNCH_DIR
+        const toUp = toSecondPlanet ? SECOND_PLANET_LANDING_UP : ROCKET_LAUNCH_DIR
+        const c1 = p0.add(fromUp.scale(ROCKET_ARC_HEIGHT))
+        const c2 = p1.add(toUp.scale(ROCKET_ARC_HEIGHT))
 
         // `progress` começa num epsilon positivo, não exatamente 0 — bug real encontrado ao
         // vivo: com `progress` clampado em [0,1] (nunca fica negativo) e a checagem de pouso
         // sendo `<= 0`, começar exatamente em 0 disparava o pouso de "voltou pro início" no
         // PRÓPRIO primeiro quadro do voo, desfazendo o embarque na hora, antes de qualquer input.
-        drivingRocket = { progress: 0.001, p0, mid, p1, toSecondPlanet }
+        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet }
         flyingRocket.setEnabled(true)
         flyingRocket.position.copyFrom(p0)
 
@@ -5287,18 +5302,27 @@ export function World3D({
           )
           const { position: shipPos, tangent: shipFwd } = sampleFlightArc(
             drivingRocket.p0,
-            drivingRocket.mid,
+            drivingRocket.c1,
+            drivingRocket.c2,
             drivingRocket.p1,
             drivingRocket.progress,
           )
           flyingRocket.position.copyFrom(shipPos)
-          // Sem planeta embaixo dos pés no meio do espaço vazio — "para cima" fixo (eixo Y do
-          // mundo) em vez de derivado da superfície de algum planeta, só pra orientar a nave.
-          const shipUp = Vector3.Up()
-          const shipRight = Vector3.Cross(shipUp, shipFwd).normalize()
-          Matrix.FromXYZAxesToRef(shipRight, shipUp, shipFwd, tmpMatrix)
+          // O nariz do foguete (eixo Y local — mesmo eixo que `alignmentQuaternion` alinha à
+          // superfície do planeta quando ele está parado na plataforma) aponta na direção de
+          // voo, não num "pra cima" fixo do mundo — bug real reportado pelo usuário ("o foguete
+          // deve decolar na vertical, não de lado"): a versão antiga travava o nariz no eixo Y
+          // do mundo e deixava a direção de voo no eixo Z, então a decolagem parecia de lado
+          // sempre que a plataforma não estivesse perto do "topo" do planeta.
+          const referenceUp = Math.abs(Vector3.Dot(shipFwd, Vector3.Up())) > 0.98 ? Vector3.Right() : Vector3.Up()
+          const shipRight = Vector3.Cross(referenceUp, shipFwd).normalize()
+          const shipSide = Vector3.Cross(shipFwd, shipRight).normalize()
+          Matrix.FromXYZAxesToRef(shipRight, shipFwd, shipSide, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
           flyingRocket.rotationQuaternion = tmpQuat.clone()
+          // Câmera continua usando "pra cima" fixo do mundo (independente do nariz da nave) —
+          // simples e estável, sem planeta nenhum por perto pra derivar uma superfície.
+          const shipUp = Vector3.Up()
 
           const desiredShipCamPos = shipPos.subtract(shipFwd.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
           camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)

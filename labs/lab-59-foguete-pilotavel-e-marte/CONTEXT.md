@@ -59,6 +59,42 @@ Commit inicial → final: 16087c7ca9e25b354a7038b85145b9dbf3236ab0..HEAD
   não sai da pista), consistente com o pedido literal do usuário ("ir pra trás e pra frente com as
   setas") e mais simples de garantir que a nave sempre chega no destino certo.
 
+## Correção pós-verificação (mesmo dia, feedback do usuário em produção)
+
+Depois do primeiro deploy deste laboratório, o usuário testou em produção e reportou dois problemas
+reais (que a verificação ao vivo no dev server não tinha pego, porque o teleporte de debug começa
+sempre na mesma posição/ângulo): "o foguete deve decolar na vertical, não de lado, e o planetinha
+não deve estar muito longe na viagem, como se fosse uma distância de um planeta e meio."
+
+- **Decolagem de lado, não vertical** — bug real de orientação: o quadro-a-quadro que gira o
+  foguete durante o voo (`Matrix.FromXYZAxesToRef(shipRight, shipUp, shipFwd, ...)`) travava o
+  nariz do foguete (eixo Y local, o mesmo que `alignmentQuaternion` alinha à superfície quando ele
+  está parado na plataforma) no "pra cima" FIXO do mundo, e a direção de voo ficava no eixo Z —
+  então a nave sempre voava "de lado" (nariz apontando pro céu do mundo, casco deslizando na
+  direção do voo) em vez de apontar pra onde estava indo. Corrigido trocando os eixos: o nariz
+  (Y local) agora acompanha a tangente da curva de voo a cada quadro.
+- **Curva sem tangente garantida na decolagem/pouso** — a curva antiga (Bézier quadrática, um
+  único ponto "meio" elevado numa direção genérica) não garantia que a tangente no EXATO instante
+  da decolagem apontasse pra cima da plataforma — só "mais ou menos". Trocada por uma Bézier
+  CÚBICA com dois pontos de controle, cada um deslocado da própria plataforma na direção "pra
+  cima" local dela (`ROCKET_LAUNCH_DIR` na partida do planeta principal, `SECOND_PLANET_LANDING_UP`
+  na do planetinha) — isso garante matematicamente (não só visualmente) que a tangente em t=0 e
+  t=1 é exatamente a direção vertical de cada plataforma.
+- **Planetinha longe demais (400 unidades)** — reduzido pra uma distância de centro-a-centro de
+  58 (13 + 39 + 6 ⇒ ~1,5 diâmetro do planeta principal de vão livre entre as duas superfícies,
+  "uma distância de um planeta e meio" como pedido). `ROCKET_ARC_HEIGHT` (a distância que os
+  pontos de controle da curva se afastam de cada plataforma) também reduzida de 45 pra 14 —
+  calibrada pra 400 unidades de distância, ficaria desproporcionalmente gigante pra uma viagem de
+  ~58 unidades.
+- Verificado ao vivo de novo depois da correção (teleporte de debug + `__handleInteractPress` +
+  tecla real): ida e volta completas, chão de Marte confirmado marrom via inspeção direta do
+  material (`secondPlanetGround`, `Color3(0.56, 0.35, 0.22)`), distância nova de 58 unidades
+  confirmada pela posição real do foguete de volta. A decolagem vertical em si não deu pra
+  observar quadro a quadro (o mesmo throttle de aba em segundo plano documentado em memória fez o
+  voo inteiro completar num único quadro forçado de novo), mas a garantia é matemática — a
+  tangente da cúbica em t=0 é exatamente `(c1-p0)`, e `c1 = p0 + fromUp * ROCKET_ARC_HEIGHT`, ou
+  seja, sempre `fromUp` normalizado por construção, não por coincidência.
+
 ## Pendências / dívidas conhecidas
 
 - **Cor original do glTF nas rochas reaproveitadas** — algumas mantêm um tom ligeiramente
