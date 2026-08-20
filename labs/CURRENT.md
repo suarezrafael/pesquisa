@@ -12,7 +12,9 @@ reconstruir a base do zero) e adicionado som de motor do foguete durante o voo; 
 rodada, corrigido o pouso "de cabeça" em Marte (agora pousa de ré — interpolação esférica entre as
 rotações de repouso das duas plataformas, não a tangente da curva), removido o "prato" que a nave
 voadora carregava embaixo (reaproveitava a malha inteira da plataforma fixa; separado veículo de
-plataforma), dado uma cauda afunilada mais aerodinâmica, e adicionada chama saindo dos motores)
+plataforma), dado uma cauda afunilada mais aerodinâmica, e adicionada chama saindo dos motores;
+numa quarta rodada, corrigida a decolagem "de lado" da Terra — a rotação agora fica travada reta
+nos primeiros 20% do voo, vira suavemente só no meio, e trava de pé nos 20% finais)
 Contexto para o próximo laboratório: labs/lab-59-foguete-pilotavel-e-marte/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
