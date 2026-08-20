@@ -225,11 +225,11 @@ body {
 }
 
 .hub-avatar {
-  font-size: 2.5rem;
+  font-size: clamp(1.5rem, 6vw, 2.5rem);
   background: var(--card);
   border-radius: 50%;
-  width: 3.25rem;
-  height: 3.25rem;
+  width: clamp(2.2rem, 9vw, 3.25rem);
+  height: clamp(2.2rem, 9vw, 3.25rem);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -242,8 +242,8 @@ body {
 }
 
 .hub-header-info h1 {
-  font-size: 1.1rem;
-  margin: 0 0 0.35rem;
+  font-size: clamp(0.8rem, 3.2vw, 1.1rem);
+  margin: 0 0 clamp(0.15rem, 0.8vw, 0.35rem);
 }
 
 .xp-bar {
@@ -260,13 +260,13 @@ body {
 }
 
 .hub-level {
-  font-size: 0.8rem;
+  font-size: clamp(0.65rem, 2.4vw, 0.8rem);
   color: #4a5b8c;
 }
 
 .hub-coins {
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: clamp(0.85rem, 3vw, 1.1rem);
   white-space: nowrap;
 }
 
@@ -321,21 +321,27 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  padding: 1rem 1.1rem 0;
+  padding: clamp(0.5rem, 2.6vw, 1rem) clamp(0.5rem, 2.8vw, 1.1rem) 0;
   pointer-events: none;
 }
 
 .hud-top-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: clamp(0.3rem, 1.6vw, 0.6rem);
 }
 
+/* Tamanhos em `clamp(mín, %vw, máx)` em vez de um breakpoint fixo (lab-57 tentou
+   `@media (max-width: 420px)`, mas o usuário reportou que o cabeçalho — avatar+nome+barra de
+   nível — continuava grande demais num Poco C75 real; sem conseguir emular o viewport exato
+   desse aparelho neste ambiente, `clamp()` com unidade `vw` acompanha a largura real da tela de
+   forma contínua, sem depender de acertar um número de corte específico — encolhe suavemente em
+   qualquer tela estreita, não só abaixo de um valor fixo). */
 .hud-overlay .hub-header {
   pointer-events: none;
   background: rgba(255, 255, 255, 0.82);
   border-radius: 999px;
-  padding: 0.5rem 0.9rem;
+  padding: clamp(0.3rem, 1.6vw, 0.5rem) clamp(0.5rem, 2.6vw, 0.9rem);
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
   max-width: 420px;
   flex: 1;
@@ -345,14 +351,14 @@ body {
 .help-button {
   pointer-events: auto;
   flex-shrink: 0;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: clamp(1.7rem, 6.5vw, 2.25rem);
+  height: clamp(1.7rem, 6.5vw, 2.25rem);
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.82);
   color: var(--ink);
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: clamp(0.8rem, 3vw, 1.1rem);
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
   cursor: pointer;
 }
@@ -360,51 +366,6 @@ body {
 .hud-overlay .badge-row {
   pointer-events: none;
   filter: drop-shadow(0 2px 6px rgba(23, 44, 102, 0.25));
-}
-
-/* HUD grande demais em celular estreito (lab-57, relatado no Poco C75: "o componente fixo no
-   topo tá um pouco grande pra essa resolução") — o cabeçalho (avatar+nome+XP+moedas) somado aos
-   6 botões redondos não cabe confortavelmente numa tela de ~360-400px de largura CSS. Encolhe
-   avatar/fonte/botões/gaps só abaixo desse ponto de corte; telas maiores (tablet, desktop)
-   continuam do jeito que já estavam. */
-@media (max-width: 420px) {
-  .hud-overlay {
-    padding: 0.6rem 0.6rem 0;
-  }
-
-  .hud-top-row {
-    gap: 0.35rem;
-  }
-
-  .hud-overlay .hub-header {
-    padding: 0.35rem 0.6rem;
-    gap: 0.5rem;
-  }
-
-  .hub-avatar {
-    width: 2.4rem;
-    height: 2.4rem;
-    font-size: 1.7rem;
-  }
-
-  .hub-header-info h1 {
-    font-size: 0.85rem;
-    margin: 0 0 0.2rem;
-  }
-
-  .hub-level {
-    font-size: 0.68rem;
-  }
-
-  .hub-coins {
-    font-size: 0.9rem;
-  }
-
-  .help-button {
-    width: 1.8rem;
-    height: 1.8rem;
-    font-size: 0.85rem;
-  }
 }
 
 .world3d-hint {
@@ -516,6 +477,18 @@ body {
 
 .touch-action-cam-right {
   transform: translateY(calc(-50% + 34px));
+}
+
+/* Ação da tecla E por toque (lab-58, pedido do usuário: "se você estiver no celular precisa de
+   um pequeno botão transparente de função de ação da tecla E") — cobre entrar/sair do carro e
+   embarcar/desembarcar do foguete. Acima do botão de pular, longe do grupo de câmera no meio da
+   tela. */
+.touch-action-interact {
+  right: 1.5rem;
+  bottom: 8.7rem;
+  width: 68px;
+  height: 68px;
+  font-size: 1.6rem;
 }
 
 /* Modals */

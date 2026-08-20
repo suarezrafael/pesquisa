@@ -265,6 +265,24 @@ const QUEST_FIXED_UP: Record<string, Vector3> = {
   q21: DESERT_CENTER_DIR,
 }
 
+// Estação de lançamento (lab-58, pedido do usuário: "crie um foguete e uma estação de decolagem
+// espacial... aperta a tecla E e consegue voar pra um outro planetinha"). Direção escolhida por
+// varredura de candidatos contra TODOS os marcos existentes (platôs, lagoa, piscina, deserto,
+// torre dos enigmas, escolas, ponto de nascimento) — ~34° de folga do mais próximo (platô 8),
+// mesma técnica já usada pro deserto/piscina (ver comentários acima).
+const ROCKET_LAUNCH_DIR = new Vector3(-0.3797213687147455, -0.913545457642601, 0.14576137678401327).normalize()
+const ROCKET_ENTER_DISTANCE = 2.6
+// O planetinha secundário só é construído (e só existe) quando o jogador embarca na nave pela
+// primeira vez — "aparece quando você embarca" (pedido do usuário), não fica sempre presente na
+// cena. Fica bem longe da origem (onde o planeta principal mora) pra nunca ficar visível de lá,
+// mesmo depois de construído — nada de "ponto suspeito no céu" antes de embarcar.
+const SECOND_PLANET_RADIUS = 6
+const SECOND_PLANET_CENTER = new Vector3(0, 0, 400)
+// Direção fixa (não precisa evitar nada — o planetinha só tem árvore/rocha decorativa, pedido do
+// usuário: "por enquanto o planetinha pode ter só árvores e rochas, não precisa NPC") de onde o
+// foguete de volta pousa.
+const SECOND_PLANET_LANDING_UP = new Vector3(0, 1, 0)
+
 // Direção de cada escola, calculada aqui com a MESMA fórmula do loop que monta as escolas em
 // `setup()` (fonte única — copiada, não importada, porque `quests.forEach` também precisa rodar
 // outro código de construção de malha que não faz sentido em escopo de módulo; mas a fórmula de
@@ -1269,6 +1287,78 @@ function buildCactus(scene: Scene, shadowGenerator: ShadowGenerator): TransformN
   return root
 }
 
+// Foguete + plataforma de lançamento (lab-58, pedido do usuário: "crie um foguete e uma estação
+// de decolagem espacial... como se fosse um prédio") — só primitivas, sem asset externo, mesmo
+// padrão do resto do jogo (carro, cacto, bichos). Reaproveitado duas vezes: uma vez no planeta
+// principal (ponto de partida) e uma vez no planetinha secundário (ponto de volta) — mesma malha,
+// lugares diferentes.
+function buildRocket(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('rocketRoot', scene)
+
+  const padMat = new PBRMaterial('rocketPadMat', scene)
+  padMat.albedoColor = new Color3(0.32, 0.34, 0.4)
+  padMat.roughness = 0.75
+  padMat.metallic = 0.15
+
+  const bodyMat = new PBRMaterial('rocketBodyMat', scene)
+  bodyMat.albedoColor = new Color3(0.88, 0.88, 0.92)
+  bodyMat.roughness = 0.35
+  bodyMat.metallic = 0.35
+
+  const finMat = new PBRMaterial('rocketFinMat', scene)
+  finMat.albedoColor = new Color3(0.82, 0.22, 0.22)
+  finMat.roughness = 0.6
+
+  const windowMat = new PBRMaterial('rocketWindowMat', scene)
+  windowMat.albedoColor = new Color3(0.25, 0.6, 0.85)
+  windowMat.emissiveColor = new Color3(0.08, 0.18, 0.28)
+  windowMat.roughness = 0.2
+
+  function add(mesh: Mesh, mat: PBRMaterial) {
+    mesh.material = mat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  // Plataforma — "como se fosse um prédio" (pedido do usuário): base ampla + 4 pilares curtos,
+  // pra ler como uma pequena estrutura construída, não só o chão pintado diferente.
+  const pad = MeshBuilder.CreateCylinder('rocketPad', { diameter: 3.2, height: 0.22, tessellation: 20 }, scene)
+  pad.position.y = 0.11
+  add(pad, padMat)
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2 + Math.PI / 4
+    const pillar = MeshBuilder.CreateCylinder(`rocketPillar${i}`, { diameter: 0.22, height: 0.5, tessellation: 8 }, scene)
+    pillar.position = new Vector3(Math.cos(angle) * 1.3, -0.14, Math.sin(angle) * 1.3)
+    add(pillar, padMat)
+  }
+
+  // Corpo + nariz cônico + janela.
+  const body = MeshBuilder.CreateCylinder('rocketBody', { diameter: 0.9, height: 2.3, tessellation: 16 }, scene)
+  body.position.y = 1.45
+  add(body, bodyMat)
+  const nose = MeshBuilder.CreateCylinder('rocketNose', { diameterTop: 0, diameterBottom: 0.9, height: 1.0, tessellation: 16 }, scene)
+  nose.position.y = 3.1
+  add(nose, bodyMat)
+  const windowMesh = MeshBuilder.CreateSphere('rocketWindow', { diameter: 0.42 }, scene)
+  windowMesh.position = new Vector3(0, 1.9, 0.42)
+  windowMesh.scaling.z = 0.4
+  add(windowMesh, windowMat)
+
+  // Barbatanas — 3, em tripé (mais estável visualmente que 4 numa base cilíndrica pequena).
+  for (let i = 0; i < 3; i++) {
+    const angle = (i / 3) * Math.PI * 2
+    const fin = MeshBuilder.CreateCylinder(`rocketFin${i}`, { diameterTop: 0, diameterBottom: 0.06, height: 1.0, tessellation: 3 }, scene)
+    fin.scaling = new Vector3(1.3, 1, 0.12)
+    fin.rotation.x = Math.PI / 2
+    fin.rotation.y = angle
+    fin.position = new Vector3(Math.cos(angle) * 0.55, 0.55, Math.sin(angle) * 0.55)
+    add(fin, finMat)
+  }
+
+  return root
+}
+
 export function World3D({
   profile,
   progress,
@@ -1350,11 +1440,13 @@ export function World3D({
     const isLowEndDevice = /Android|iPad|iPhone|iPod|Tablet|Mobi/i.test(navigator.userAgent)
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
-    // 1.75 (lab-56) voltou pra 1.5 (lab-57, relatado no Poco C75: "qualidade gráfica está muito
-    // baixa") — 1.75 foi ajustado sem poder testar num aparelho real, e alto demais deixa o
-    // mundo 3D borrado demais num celular; 1.5 é o valor original do lab-53, já testado e mais
-    // conservador nesse trade-off.
-    if (isLowEndDevice) engine.setHardwareScalingLevel(1.5)
+    // Valor inicial moderado — nem o melhor nem o pior caso — só até a medição real de FPS (ver
+    // `autoTuneResolution` mais abaixo, fora de `setup()`) ajustar pro valor certo pra ESTE
+    // aparelho especificamente. Chutar um número fixo (1.5, depois 1.75, depois 1.5 de novo) sem
+    // conseguir testar no aparelho real vinha errando pra mais ou pra menos dependendo do
+    // dispositivo (lab-56 pesado demais borrado num Poco C75, lab-53 nem sempre leve o bastante
+    // num Redmi Pad 2) — medir de verdade resolve os dois lados do mesmo problema de uma vez.
+    if (isLowEndDevice) engine.setHardwareScalingLevel(1.3)
     const scene = new Scene(engine)
     sceneRef.current = scene
     if (import.meta.env.DEV) {
@@ -1447,6 +1539,20 @@ export function World3D({
     // Reaproveitado a cada quadro pra checar "grounded" via raycast físico real (ver comentário
     // onde é usado) — evita alocar um objeto novo por quadro.
     const groundRayResult = new PhysicsRaycastResult()
+
+    // Viagem pro planetinha secundário (lab-58) — TODO o resto do jogo (gravidade radial, altura
+    // do chão, o boneco visual "grudado" na superfície) assume implicitamente que "o planeta" tem
+    // centro na origem (0,0,0) — ver o bloco de física do avatar mais abaixo. Em vez de reescrever
+    // esse sistema inteiro pra saber lidar com múltiplos planetas ao mesmo tempo, generaliza só o
+    // suficiente: essas duas variáveis substituem as constantes fixas "origem" e "PLANET_RADIUS +
+    // terrainHeight(localUp)" nesse bloco — trocadas ao embarcar/desembarcar, tudo o resto do
+    // sistema de física continua igual, sem saber que existe um segundo planeta.
+    let currentWorldCenter = Vector3.Zero()
+    let currentGroundBaseFn: (localUp: Vector3) => number = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
+    let onSecondPlanet = false
+    let secondPlanetBuilt = false
+    let mainRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
+    let secondPlanetReturnRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
     if (import.meta.env.DEV) {
       ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
     }
@@ -1464,6 +1570,157 @@ export function World3D({
       // explicação é o listener do jogo ainda não existir naquele momento. Ignora teclas enquanto
       // o foco está num campo de texto (ex.: chat), pra digitar "s"/"w"/"a"/"d" não mexer o
       // personagem.
+      // Distância até uma superfície esférica qualquer (planeta principal ou o secundário, ambos
+      // com raio próprio) na direção de pouso, com um pequeno deslocamento tangencial — mesma
+      // técnica já usada na saída do carro logo abaixo (`exitSpot`), generalizada pra não colocar
+      // o jogador em cima da própria plataforma do foguete.
+      function offsetLandingUp(up: Vector3, planetRadius: number, offsetDistance: number): Vector3 {
+        const tangentSeed = Math.abs(up.y) < 0.99 ? Vector3.Up() : Vector3.Right()
+        const tangent = Vector3.Cross(up, tangentSeed).normalize()
+        return up.add(tangent.scale(offsetDistance / planetRadius)).normalize()
+      }
+
+      function teleportAvatarTo(center: Vector3, landingUp: Vector3, groundFn: (u: Vector3) => number) {
+        if (!avatarMesh || !avatarBody) return
+        // Teleporte físico seguro (mesmo padrão usado em todo o resto do jogo pra mover o avatar
+        // direto — ver saída do carro logo abaixo — `disablePreStep = false` + `scene.render()`
+        // sincronizam o corpo físico de verdade com a posição escrita aqui).
+        avatarBody.body.disablePreStep = false
+        avatarMesh.position.copyFrom(center.add(landingUp.scale(groundFn(landingUp) + AVATAR_RADIUS + 0.05)))
+        scene.render()
+        avatarBody.body.setLinearVelocity(Vector3.Zero())
+        avatarBody.body.setAngularVelocity(Vector3.Zero())
+        avatarBody.body.disablePreStep = true
+        facing = Vector3.Cross(landingUp, Vector3.Right())
+        if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(landingUp, Vector3.Forward())
+        facing.normalize()
+      }
+
+      // Embarcar/desembarcar do foguete (lab-58, pedido do usuário: "aperta a tecla E e consegue
+      // voar pra um outro planetinha"). Ao contrário do carro (dirigir é contínuo), viajar é
+      // instantâneo — teleporte pro planetinha secundário (construído na hora, na primeira vez —
+      // "só aparece quando você embarca na nave") ou de volta, alternando.
+      function travelToOtherPlanet() {
+        if (!avatarMesh || !avatarBody) return
+        if (!onSecondPlanet) {
+          buildSecondPlanetIfNeeded()
+          onSecondPlanet = true
+          currentWorldCenter = SECOND_PLANET_CENTER
+          currentGroundBaseFn = () => SECOND_PLANET_RADIUS
+          teleportAvatarTo(
+            SECOND_PLANET_CENTER,
+            offsetLandingUp(SECOND_PLANET_LANDING_UP, SECOND_PLANET_RADIUS, 1.8),
+            currentGroundBaseFn,
+          )
+        } else {
+          onSecondPlanet = false
+          currentWorldCenter = Vector3.Zero()
+          currentGroundBaseFn = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
+          teleportAvatarTo(
+            Vector3.Zero(),
+            offsetLandingUp(ROCKET_LAUNCH_DIR, PLANET_RADIUS, 2.2),
+            currentGroundBaseFn,
+          )
+        }
+      }
+
+      // Ação genérica da tecla E — entrar/sair do carro OU embarcar/desembarcar do foguete,
+      // dependendo do que está por perto (nunca os dois ao mesmo tempo, o carro só existe no
+      // planeta principal). Extraída numa função nomeada (não só inline em `onKeyDown`) pra poder
+      // ser chamada também pelo botão de toque (lab-58, pedido do usuário: "se você estiver no
+      // celular precisa de um botão transparente de função de ação da tecla E" — o carro, desde o
+      // lab-25, só dava pra entrar via teclado; agora os dois usam o mesmo caminho).
+      function handleInteractPress() {
+        if (drivingCar) {
+          const exitUp = drivingCar.root.position.clone().normalize()
+          const exitFwd = Vector3.TransformNormal(Vector3.Forward(), drivingCar.root.getWorldMatrix()).normalize()
+          const exitRight = Vector3.Cross(exitUp, exitFwd).normalize()
+          const exitSpot = exitUp.scale(PLANET_RADIUS).add(exitRight.scale(1.3))
+          const exitSpotUp = exitSpot.clone().normalize()
+          if (avatarMesh && avatarBody) {
+            // Teleporte físico seguro (mesmo padrão usado em todo o resto do jogo pra mover o
+            // avatar direto, ex. respawn) — `disablePreStep = false` + `scene.render()` fazem
+            // o corpo físico sincronizar de verdade com a posição escrita aqui; sem isso, o
+            // corpo físico (que roda em `disablePreStep = true` durante o jogo normal) ignora
+            // completamente a escrita direta em `avatarMesh.position` e volta pra onde estava
+            // no próximo passo de física — bug real encontrado testando esta função: o jogador
+            // saía do carro mas continuava "preso" na posição de quando entrou.
+            avatarBody.body.disablePreStep = false
+            avatarMesh.position.copyFrom(
+              exitSpotUp.scale(PLANET_RADIUS + terrainHeight(exitSpotUp) + AVATAR_RADIUS + 0.05),
+            )
+            scene.render()
+            avatarBody.body.setLinearVelocity(Vector3.Zero())
+            avatarBody.body.setAngularVelocity(Vector3.Zero())
+            avatarBody.body.disablePreStep = true
+          }
+          facing = exitFwd.subtract(exitSpotUp.scale(Vector3.Dot(exitFwd, exitSpotUp)))
+          if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(exitSpotUp, Vector3.Right())
+          facing.normalize()
+          // Desparenta do carro (lab-27) — volta a ser posicionada pelo loop de física normal
+          // do avatar a pé (que retoma no próximo quadro, já que `drivingCar` vira null aqui).
+          studentFigure.root.parent = null
+          drivingCar = null
+          return
+        }
+        if (suspendRef.current || chatOpenRef.current || !avatarMesh) return
+        let nearestCar: Carro | null = null
+        let nearestDist = CAR_ENTER_DISTANCE
+        for (const car of carros) {
+          const d = Vector3.Distance(avatarMesh.position, car.root.position)
+          if (d < nearestDist) {
+            nearestCar = car
+            nearestDist = d
+          }
+        }
+        if (nearestCar) {
+          drivingCar = nearestCar
+          if (avatarBody) {
+            avatarBody.body.setLinearVelocity(Vector3.Zero())
+            avatarBody.body.setAngularVelocity(Vector3.Zero())
+          }
+          // Boneco visível em cima do carro (lab-27, pedido do usuário: "o boneco deve
+          // ficar em cima do carro ao apertar E" — antes ficava escondido) — parentado no
+          // carro com offset local fixo (sentado por cima da cabine); herda posição/rotação
+          // do carro automaticamente a cada quadro (`positionOnLoopPath` já atualiza
+          // `drivingCar.root`), sem precisar sincronizar manualmente.
+          studentFigure.root.parent = nearestCar.root
+          studentFigure.root.position = new Vector3(0, 0.56, -0.05)
+          studentFigure.root.rotationQuaternion = Quaternion.Identity()
+          // Pose sentada (lab-28, pedido do usuário: "o boneco deve ir sentado em cima do
+          // carro" — antes ficava na pose parada padrão) — aplicada uma vez ao entrar, não
+          // animada: coxa levantada pra frente, joelho dobrado de volta, braços apoiados
+          // como se estivesse no volante. Congelada enquanto dirige (o ciclo de caminhada só
+          // roda com `!drivingCar`), volta ao normal sozinha no próximo passo andando a pé
+          // (o loop de caminhada recalcula essas mesmas rotações a cada quadro).
+          studentFigure.legPivotL.rotation.x = -1.3
+          studentFigure.legPivotR.rotation.x = -1.3
+          studentFigure.kneePivotL.rotation.x = 1.3
+          studentFigure.kneePivotR.rotation.x = 1.3
+          studentFigure.armPivotL.rotation.x = -0.3
+          studentFigure.armPivotR.rotation.x = -0.3
+          studentFigure.elbowPivotL.rotation.x = 0.6
+          studentFigure.elbowPivotR.rotation.x = 0.6
+          for (const car of carros) car.hintLabel.alpha = 0
+          return
+        }
+        const rocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
+        if (rocket) {
+          // `getAbsolutePosition()`, não `.position` — o foguete de volta é filho de
+          // `secondPlanetRoot` (posição local, não em coordenadas de mundo); `.position` sozinho
+          // aqui comparava contra a posição local (perto de 0,6,0) em vez da posição real no
+          // mundo (perto de SECOND_PLANET_CENTER), fazendo essa distância dar sempre um valor
+          // gigante e a checagem nunca passar — bug real encontrado testando a viagem de volta
+          // ao vivo (embarcar funcionava, voltar não fazia nada).
+          const d = Vector3.Distance(avatarMesh.position, rocket.root.getAbsolutePosition())
+          if (d < ROCKET_ENTER_DISTANCE) {
+            travelToOtherPlanet()
+            rocket.hintLabel.alpha = 0
+          }
+        }
+      }
+      ;(scene as any).__handleInteractPress = handleInteractPress
+
       const onKeyDown = (e: KeyboardEvent) => {
         const target = e.target as HTMLElement | null
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
@@ -1472,83 +1729,9 @@ export function World3D({
         // `jumpRequested` é consumido, no loop de render. `!keysDown[key]` evita re-latch por
         // key-repeat do SO enquanto o jogador segura a tecla.
         if (key === ' ' && !keysDown[key]) jumpRequested = true
-        // Entrar/sair do carro (lab-25, pedido do usuário: "pressionar alguma tecla e entrar
-        // no carro") — `e`, alternando: perto de um carro parado vira "dirigindo"; dirigindo
-        // vira "a pé" de novo, reaparecendo do lado do carro. `!keysDown[key]` evita alternar
-        // várias vezes num só toque por causa de key-repeat do SO.
-        if (key === 'e' && !keysDown[key]) {
-          if (drivingCar) {
-            const exitUp = drivingCar.root.position.clone().normalize()
-            const exitFwd = Vector3.TransformNormal(Vector3.Forward(), drivingCar.root.getWorldMatrix()).normalize()
-            const exitRight = Vector3.Cross(exitUp, exitFwd).normalize()
-            const exitSpot = exitUp.scale(PLANET_RADIUS).add(exitRight.scale(1.3))
-            const exitSpotUp = exitSpot.clone().normalize()
-            if (avatarMesh && avatarBody) {
-              // Teleporte físico seguro (mesmo padrão usado em todo o resto do jogo pra mover o
-              // avatar direto, ex. respawn) — `disablePreStep = false` + `scene.render()` fazem
-              // o corpo físico sincronizar de verdade com a posição escrita aqui; sem isso, o
-              // corpo físico (que roda em `disablePreStep = true` durante o jogo normal) ignora
-              // completamente a escrita direta em `avatarMesh.position` e volta pra onde estava
-              // no próximo passo de física — bug real encontrado testando esta função: o jogador
-              // saía do carro mas continuava "preso" na posição de quando entrou.
-              avatarBody.body.disablePreStep = false
-              avatarMesh.position.copyFrom(
-                exitSpotUp.scale(PLANET_RADIUS + terrainHeight(exitSpotUp) + AVATAR_RADIUS + 0.05),
-              )
-              scene.render()
-              avatarBody.body.setLinearVelocity(Vector3.Zero())
-              avatarBody.body.setAngularVelocity(Vector3.Zero())
-              avatarBody.body.disablePreStep = true
-            }
-            facing = exitFwd.subtract(exitSpotUp.scale(Vector3.Dot(exitFwd, exitSpotUp)))
-            if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(exitSpotUp, Vector3.Right())
-            facing.normalize()
-            // Desparenta do carro (lab-27) — volta a ser posicionada pelo loop de física normal
-            // do avatar a pé (que retoma no próximo quadro, já que `drivingCar` vira null aqui).
-            studentFigure.root.parent = null
-            drivingCar = null
-          } else if (!suspendRef.current && !chatOpenRef.current && avatarMesh) {
-            let nearestCar: Carro | null = null
-            let nearestDist = CAR_ENTER_DISTANCE
-            for (const car of carros) {
-              const d = Vector3.Distance(avatarMesh.position, car.root.position)
-              if (d < nearestDist) {
-                nearestCar = car
-                nearestDist = d
-              }
-            }
-            if (nearestCar) {
-              drivingCar = nearestCar
-              if (avatarBody) {
-                avatarBody.body.setLinearVelocity(Vector3.Zero())
-                avatarBody.body.setAngularVelocity(Vector3.Zero())
-              }
-              // Boneco visível em cima do carro (lab-27, pedido do usuário: "o boneco deve
-              // ficar em cima do carro ao apertar E" — antes ficava escondido) — parentado no
-              // carro com offset local fixo (sentado por cima da cabine); herda posição/rotação
-              // do carro automaticamente a cada quadro (`positionOnLoopPath` já atualiza
-              // `drivingCar.root`), sem precisar sincronizar manualmente.
-              studentFigure.root.parent = nearestCar.root
-              studentFigure.root.position = new Vector3(0, 0.56, -0.05)
-              studentFigure.root.rotationQuaternion = Quaternion.Identity()
-              // Pose sentada (lab-28, pedido do usuário: "o boneco deve ir sentado em cima do
-              // carro" — antes ficava na pose parada padrão) — aplicada uma vez ao entrar, não
-              // animada: coxa levantada pra frente, joelho dobrado de volta, braços apoiados
-              // como se estivesse no volante. Congelada enquanto dirige (o ciclo de caminhada só
-              // roda com `!drivingCar`), volta ao normal sozinha no próximo passo andando a pé
-              // (o loop de caminhada recalcula essas mesmas rotações a cada quadro).
-              studentFigure.legPivotL.rotation.x = -1.3
-              studentFigure.legPivotR.rotation.x = -1.3
-              studentFigure.kneePivotL.rotation.x = 1.3
-              studentFigure.kneePivotR.rotation.x = 1.3
-              studentFigure.armPivotL.rotation.x = -0.3
-              studentFigure.armPivotR.rotation.x = -0.3
-              studentFigure.elbowPivotL.rotation.x = 0.6
-              studentFigure.elbowPivotR.rotation.x = 0.6
-              for (const car of carros) car.hintLabel.alpha = 0
-            }
-          }
-        }
+        // Entrar/sair do carro (lab-25) ou embarcar/desembarcar do foguete (lab-58) — `e`.
+        // `!keysDown[key]` evita repetir várias vezes num só toque por causa de key-repeat do SO.
+        if (key === 'e' && !keysDown[key]) handleInteractPress()
         keysDown[key] = true
       }
       const onKeyUp = (e: KeyboardEvent) => (keysDown[e.key.toLowerCase()] = false)
@@ -2682,6 +2865,123 @@ export function World3D({
       if (import.meta.env.DEV) {
         ;(window as any).__carros = carros
         ;(window as any).__streetCenter = streetCenter
+      }
+
+      // Estação de lançamento (lab-58, pedido do usuário: "crie um foguete e uma estação de
+      // decolagem espacial... como se fosse um prédio, em que você aperta a tecla E e consegue
+      // voar pra um outro planetinha"). `settleMeshOnTerrain` (mesma função usada nas rochas de
+      // montanha) garante que a plataforma toda fique apoiada de verdade no relevo real, não só
+      // na fórmula analítica de altura, igual ao resto dos "prédios" do jogo (escolas/lojinha).
+      // `settleMeshOnTerrain` (usada nas rochas de montanha) NÃO serve aqui de propósito: ela
+      // pega o ponto mais baixo de CADA malha-filha dentro do próprio contorno, pra decidir
+      // "quanto baixar" — funciona bem pra um pedregulho de silhueta baixa e uniforme, mas o
+      // nariz do foguete é uma malha-filha isolada, alta, que nunca encosta no chão; seu "ponto
+      // mais baixo" (~3 unidades acima da base) foi lido como "está flutuando 3 unidades",
+      // afundando o foguete inteiro no chão até a ponta do nariz "pousar". Bug real encontrado
+      // testando ao vivo (`window.__scene.getTransformNodeByName('rocketRoot').position` batendo
+      // ~3 unidades mais perto da origem do que o avatar recém-teleportado pro mesmo lugar).
+      {
+        const rocketRoot = buildRocket(scene, shadowGenerator)
+        rocketRoot.position = ROCKET_LAUNCH_DIR.scale(terrainGroundRadial(ROCKET_LAUNCH_DIR, terrainHeight(ROCKET_LAUNCH_DIR)))
+        rocketRoot.rotationQuaternion = alignmentQuaternion(ROCKET_LAUNCH_DIR)
+
+        const rocketColliderDiameter = 2.6
+        const rocketCollider = MeshBuilder.CreateCylinder(
+          'rocketCollider',
+          { diameter: rocketColliderDiameter, height: 3 },
+          scene,
+        )
+        rocketCollider.position = ROCKET_LAUNCH_DIR.scale(
+          terrainGroundRadial(ROCKET_LAUNCH_DIR, terrainHeight(ROCKET_LAUNCH_DIR)) + 1.4,
+        )
+        rocketCollider.rotationQuaternion = alignmentQuaternion(ROCKET_LAUNCH_DIR)
+        rocketCollider.isVisible = false
+        new PhysicsAggregate(rocketCollider, PhysicsShapeType.CYLINDER, { mass: 0 }, scene)
+
+        const rocketHint = new TextBlock('rocketHint', 'Pressione E pra embarcar')
+        rocketHint.color = 'white'
+        rocketHint.fontSize = 18
+        rocketHint.fontWeight = 'bold'
+        rocketHint.outlineWidth = 3
+        rocketHint.outlineColor = 'rgba(0,0,0,0.6)'
+        rocketHint.alpha = 0
+        guiTexture.addControl(rocketHint)
+        rocketHint.linkWithMesh(rocketRoot)
+        rocketHint.linkOffsetY = -230
+        mainRocket = { root: rocketRoot, hintLabel: rocketHint }
+      }
+
+      // Planetinha secundário (lab-58) — só construído quando o jogador embarca no foguete pela
+      // primeira vez ("só aparece quando você embarca na nave", pedido do usuário), não fica
+      // sempre presente na cena. Bem mais simples que o principal de propósito (pedido do
+      // usuário: "por enquanto o planetinha pode ter só árvores e rochas, não precisa NPC") —
+      // esfera lisa sem relevo/bacias/biomas, colisor físico esférico único (bem mais barato que
+      // a malha deformada do planeta principal).
+      function buildSecondPlanetIfNeeded() {
+        if (secondPlanetBuilt) return
+        secondPlanetBuilt = true
+
+        const secondPlanetRoot = new TransformNode('secondPlanetRoot', scene)
+        secondPlanetRoot.position = SECOND_PLANET_CENTER
+
+        // Cor distinta do planeta principal (verde-oliva mais acinzentado) — sinaliza "lugar
+        // diferente" mesmo sem trocar céu/luz (globais, compartilhados com o planeta principal;
+        // trocar exigiria salvar/restaurar o estado inteiro ao ir e voltar — fora de escopo do
+        // "por enquanto" pedido pelo usuário).
+        const groundMat = new PBRMaterial('secondPlanetGroundMat', scene)
+        groundMat.albedoColor = new Color3(0.48, 0.56, 0.4)
+        groundMat.roughness = 0.9
+        const groundSphere = MeshBuilder.CreateSphere(
+          'secondPlanetGround',
+          { diameter: SECOND_PLANET_RADIUS * 2, segments: 28 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = secondPlanetRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Árvores e rochas — reaproveita os mesmos modelos glTF já carregados pro planeta
+        // principal (índices 0-5 árvore, 6-11 rocha em `propFiles`). Sem shadow caster: o
+        // ShadowGenerator já tem o alcance ajustado pro planeta principal, e este é um bônus
+        // pequeno e distante — não vale o custo de sombra própria.
+        const SECOND_PLANET_PROP_COUNT = 22
+        const treeAndRockIndices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        for (let i = 0; i < SECOND_PLANET_PROP_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / SECOND_PLANET_PROP_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.3
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          // Não planta nada perto do foguete de volta.
+          if (Vector3.Dot(localUp, SECOND_PLANET_LANDING_UP) > Math.cos(0.4)) continue
+          const templateIndex = treeAndRockIndices[i % treeAndRockIndices.length]
+          const instance = propTemplates[templateIndex].clone(`secondPlanetProp-${i}`, null)
+          if (!instance) continue
+          instance.parent = secondPlanetRoot
+          instance.setEnabled(true)
+          instance.position = localUp.scale(SECOND_PLANET_RADIUS)
+          instance.rotationQuaternion = alignmentQuaternion(localUp)
+          instance.scaling.setAll(0.9 + ((i * 7) % 5) * 0.15)
+          instance.freezeWorldMatrix()
+          instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+        }
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = secondPlanetRoot
+        returnRocketRoot.position = SECOND_PLANET_LANDING_UP.scale(SECOND_PLANET_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(SECOND_PLANET_LANDING_UP)
+        const returnHint = new TextBlock('secondPlanetRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = 18
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        secondPlanetReturnRocket = { root: returnRocketRoot, hintLabel: returnHint }
       }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num
@@ -4187,8 +4487,15 @@ export function World3D({
         if (avatarBody && avatarMesh) {
           const body = avatarBody.body
           const pos = avatarMesh.position
-          const dist = pos.length()
-          const localUp = dist > 0.0001 ? pos.scale(1 / dist) : new Vector3(0, 1, 0)
+          // Relativo a `currentWorldCenter` (lab-58), não à origem fixa — a origem continua sendo
+          // o centro do planeta principal na maior parte do jogo (`currentWorldCenter` fica
+          // `Vector3.Zero()`), mas vira o centro do planetinha secundário enquanto o jogador
+          // estiver lá (ver `travelToOtherPlanet`). Todo o resto deste bloco (gravidade, chão,
+          // pulo, orientação visual) já era só relativo a `pos`/`localUp`, então generalizar só
+          // este cálculo basta pra funcionar em qualquer um dos dois planetas sem duplicar lógica.
+          const relPos = pos.subtract(currentWorldCenter)
+          const dist = relPos.length()
+          const localUp = dist > 0.0001 ? relPos.scale(1 / dist) : new Vector3(0, 1, 0)
 
           // Chuva acompanha o jogador — reorienta o emissor pro "up" local atual, senão a chuva
           // continuaria caindo na direção de onde o jogador nasceu conforme ele anda pela esfera.
@@ -4230,7 +4537,7 @@ export function World3D({
           // simplesmente não acontecia, de forma intermitente e sem erro nenhum. Consumido (e
           // zerado) a cada quadro, então nunca fica um pulo "pendente" esperando o jogador
           // aterrissar.
-          const groundDist = PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05
+          const groundDist = currentGroundBaseFn(localUp) + AVATAR_RADIUS + 0.05
 
           // Bug real relatado pelo usuário: "o parkour só funciona o primeiro pulo, depois que
           // estou em cima do degrau o pulo não funciona". Causa: `grounded` comparava só contra
@@ -4334,7 +4641,7 @@ export function World3D({
           // sem isso o personagem visual ficava sempre preso na superfície e o pulo não aparecia.
           const airHeight = Math.max(0, dist - groundDist)
           studentFigure.root.position.copyFrom(
-            localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + 0.02 + airHeight)
+            currentWorldCenter.add(localUp.scale(currentGroundBaseFn(localUp) + 0.02 + airHeight))
           )
 
           // Ciclo de caminhada — só avança enquanto o personagem realmente anda (e não está
@@ -4820,6 +5127,19 @@ export function World3D({
           for (const car of carros) car.hintLabel.alpha = 0
         }
 
+        // Dica "pressione E" do foguete (lab-58) — mesmo padrão do carro acima: só o foguete do
+        // planeta em que o jogador está agora (o outro fica escondido/distante, sem custo real de
+        // checar já que é só uma comparação de distância).
+        if (avatarMesh) {
+          const activeRocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
+          if (activeRocket) {
+            // `getAbsolutePosition()` — mesmo motivo do outro ponto de checagem em
+            // `handleInteractPress` (o foguete de volta é filho de `secondPlanetRoot`).
+            const d = Vector3.Distance(avatarMesh.position, activeRocket.root.getAbsolutePosition())
+            activeRocket.hintLabel.alpha = d < ROCKET_ENTER_DISTANCE ? 1 : 0
+          }
+        }
+
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
         // fase próprios), orientados pra frente da direção de nado.
         for (const pc of pondCritters) {
@@ -4927,8 +5247,47 @@ export function World3D({
     }
     window.addEventListener('resize', onResize)
 
+    // Auto-ajuste de resolução por FPS medido de verdade (lab-58) — em vez de continuar
+    // adivinhando um `hardwareScalingLevel` fixo às cegas (lab-53: 1.5, lab-56: 1.75 — pesado
+    // demais borrado num Poco C75, lab-57: de volta pra 1.5 — usuário ainda reportou "qualidade
+    // gráfica muito baixa"), mede o FPS real depois do carregamento inicial (~6s, já passou dos
+    // picos de carregar física/glTF/texturas) e ajusta uma vez só, pro valor que ESSE aparelho
+    // específico realmente precisa — pode inclusive VOLTAR pra quase resolução cheia se o
+    // aparelho aguentar, coisa que um valor fixo nunca conseguiria.
+    let fpsAutoTuneInterval: number | null = null
+    let fpsAutoTuneTimeout: number | null = null
+    if (isLowEndDevice) {
+      // Espera 6s antes da PRIMEIRA amostra (não só entre amostras) — sem isso mediria FPS
+      // ainda durante o carregamento inicial (física/glTF/texturas), que é enganosamente baixo
+      // e não representa o jogo já rodando de verdade.
+      fpsAutoTuneTimeout = window.setTimeout(() => {
+        if (disposed) return
+        const fpsSamples: number[] = []
+        fpsAutoTuneInterval = window.setInterval(() => {
+          if (disposed) {
+            if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
+            return
+          }
+          fpsSamples.push(engine.getFps())
+          if (fpsSamples.length >= 3) {
+            if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
+            const avgFps = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length
+            let scaling: number
+            if (avgFps < 20) scaling = 2.2
+            else if (avgFps < 30) scaling = 1.8
+            else if (avgFps < 45) scaling = 1.3
+            else scaling = 1.0
+            engine.setHardwareScalingLevel(scaling)
+            ;(scene as any).__syncGuiResolution?.()
+          }
+        }, 1300)
+      }, 6000)
+    }
+
     return () => {
       disposed = true
+      if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
+      if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
       window.removeEventListener('resize', onResize)
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
@@ -4969,6 +5328,14 @@ export function World3D({
 
   function handleCameraRotateRightRelease() {
     cameraRotateRightRef.current = false
+  }
+
+  // Botão de toque genérico pra ação da tecla E (lab-58, pedido do usuário: "se você estiver no
+  // celular precisa de um pequeno botão transparente de função de ação da tecla E") — entrar/sair
+  // do carro (lab-25, antes só teclado) ou embarcar/desembarcar do foguete (lab-58), o que
+  // estiver por perto. Mesma função que o `onKeyDown` já chama pra tecla 'e' de verdade.
+  function handleTouchInteractPress() {
+    ;(sceneRef.current as any)?.__handleInteractPress?.()
   }
 
   function handleToggleMute() {
@@ -5017,6 +5384,7 @@ export function World3D({
         onPress={handleCameraRotateRightPress}
         onRelease={handleCameraRotateRightRelease}
       />
+      <TouchActionButton className="touch-action-interact" label="E" onPress={handleTouchInteractPress} />
       {chatOpen && (
         <ChatPanel
           messages={chatMessages}
