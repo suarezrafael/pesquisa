@@ -5,8 +5,10 @@ instantâneo — agora o boneco entra na nave e pilota, avanço/recuo com as mes
 do carro, viajando ao longo de um arco real entre os dois planetas; planetinha secundário
 reskinado como Marte — chão marrom, só rochas, entradas de caverna, sem árvores; depois do
 primeiro deploy, feedback do usuário em produção pediu decolagem vertical de verdade — em vez de
-"de lado" — e reduzir a distância entre os planetas pra ~1,5 diâmetro do planeta principal, ambos
-corrigidos e redeployados no mesmo dia)
+"de lado" — e reduzir a distância entre os planetas pra ~1,5 diâmetro do planeta principal; numa
+segunda rodada de feedback, corrigido um bug real de orientação que deixava a nave "torta"
+saindo/"achatada" voltando do planetinha (rotação incremental quadro a quadro em vez de
+reconstruir a base do zero) e adicionado som de motor do foguete durante o voo)
 Contexto para o próximo laboratório: labs/lab-59-foguete-pilotavel-e-marte/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
