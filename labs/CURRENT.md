@@ -19,7 +19,11 @@ rodada, corrigida a câmera do voo (usava a tangente crua da curva, degenerava p
 do mundo — trocada pelo nariz de verdade da nave), o HUD fixo/legendas do mundo 3D encolhidos de
 novo pro celular (clamp() trocado de vw pra vmin — vw media o lado longo em paisagem — e as
 legendas do Babylon.GUI ganharam ajuste de tamanho pela primeira vez), e a qualidade 3D no celular
-favorecida sobre FPS (teto do ajuste automático reduzido, FXAA ligado no mobile))
+favorecida sobre FPS (teto do ajuste automático reduzido, FXAA ligado no mobile); numa sexta
+rodada, corrigido o lag reportado no Redmi Pad 2 (tablet, aparelho diferente do Poco C75) — a
+faixa mais crítica do ajuste automático de resolução subiu pra 2.4 (mais agressiva que o original)
+mantendo o teto baixo só nas faixas com folga, e cortadas mais contagens de props/bichos/nuvens
+pra dispositivo fraco)
 Contexto para o próximo laboratório: labs/lab-59-foguete-pilotavel-e-marte/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
