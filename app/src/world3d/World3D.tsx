@@ -48,6 +48,7 @@ import { TouchJoystick } from './TouchJoystick'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
 import { RankingPanel } from './RankingPanel'
+import { MarsHealthBar } from './MarsHealthBar'
 import {
   playBirdChirp,
   playCoinCollect,
@@ -65,6 +66,8 @@ import {
   playLaserZap,
   startRocketEngine,
   stopRocketEngine,
+  playEnemyHit,
+  playKnockedOut,
 } from './ambientAudio'
 import {
   connect as connectMultiplayer,
@@ -301,6 +304,21 @@ const SECOND_PLANET_CENTER = new Vector3(0, 0, 58)
 // usuário: "por enquanto o planetinha pode ter só árvores e rochas, não precisa NPC") de onde o
 // foguete de volta pousa.
 const SECOND_PLANET_LANDING_UP = new Vector3(0, 1, 0)
+
+// Combate em Marte (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
+// tenta matar o nosso boneco, nós temos que ter uma barra de vida se a barra esvaziar, você morre
+// e volta pro planetinha e tem que voltar de foguete pra poder seguir em Marte"). Contagem baixa
+// de propósito (metade em dispositivo fraco) — cada inimigo roda IA por quadro, e o lab-59 acabou
+// de cortar contagens de props/bichos pra recuperar FPS no Redmi Pad 2; não faz sentido adicionar
+// uma feature nova que reintroduza o mesmo problema.
+const MARS_ENEMY_COUNT_LOW_END = 3
+const MARS_ENEMY_COUNT = 6
+const MARS_MAX_HEALTH = 100
+const MARS_ENEMY_AGGRO_RADIUS = 6
+const MARS_ENEMY_ATTACK_RADIUS = 1.3
+const MARS_ENEMY_ATTACK_INTERVAL = 1.3
+const MARS_ENEMY_DAMAGE = 12
+const MARS_ENEMY_MOVE_SPEED = 0.55
 
 // Direção de cada escola, calculada aqui com a MESMA fórmula do loop que monta as escolas em
 // `setup()` (fonte única — copiada, não importada, porque `quests.forEach` também precisa rodar
@@ -848,6 +866,23 @@ interface Critter {
   // Som engraçado (pedido do usuário: "sons engraçados de conversa e pum") — qualquer bicho
   // pode disparar de vez em quando quando o jogador está perto, não só os 3 novos tipos.
   funnyTimer?: number
+}
+
+// Inimigos de Marte (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
+// tenta matar o nosso boneco"). Mesmo esquema de IA de vagar/perseguir dos bichos (`up`/
+// `targetUp`/`forward`, ver `rotateAroundAxis` no laço de física) — perseguem o jogador quando
+// ele entra no raio de detecção, senão vagam perto de onde nasceram (`homeUp`) como os bichos.
+type MarsEnemyKind = 'et' | 'robo'
+
+interface MarsEnemy {
+  kind: MarsEnemyKind
+  root: TransformNode
+  up: Vector3
+  targetUp: Vector3
+  forward: Vector3
+  homeUp: Vector3
+  restTimer: number
+  attackCooldown: number
 }
 
 function buildCoelho(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
@@ -1474,6 +1509,116 @@ function buildCaveEntrance(scene: Scene): TransformNode {
   return root
 }
 
+// ET marciano (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que tenta
+// matar o nosso boneco") — cabeça grande ovalada + olhos amendoados escuros + corpo/membros
+// finos, só primitivas, mesmo padrão do resto do jogo (cacto, foguete, bichos).
+function buildAlien(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('alienRoot', scene)
+
+  const skinMat = new PBRMaterial('alienSkinMat', scene)
+  skinMat.albedoColor = new Color3(0.55, 0.85, 0.45)
+  skinMat.roughness = 0.55
+
+  const eyeMat = new PBRMaterial('alienEyeMat', scene)
+  eyeMat.albedoColor = new Color3(0.02, 0.02, 0.02)
+  eyeMat.emissiveColor = new Color3(0.04, 0.14, 0.05)
+
+  function add(mesh: Mesh, mat: PBRMaterial) {
+    mesh.material = mat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const head = MeshBuilder.CreateSphere(
+    'alienHead',
+    { diameterX: 0.5, diameterY: 0.42, diameterZ: 0.46, segments: 10 },
+    scene,
+  )
+  head.position.y = 0.85
+  add(head, skinMat)
+
+  for (const side of [-1, 1]) {
+    const eye = MeshBuilder.CreateSphere(
+      `alienEye${side}`,
+      { diameterX: 0.15, diameterY: 0.08, diameterZ: 0.08, segments: 6 },
+      scene,
+    )
+    eye.position = new Vector3(side * 0.14, 0.87, 0.36)
+    eye.rotation.y = side * -0.3
+    add(eye, eyeMat)
+  }
+
+  const body = MeshBuilder.CreateCylinder(
+    'alienBody',
+    { diameterTop: 0.28, diameterBottom: 0.2, height: 0.55, tessellation: 10 },
+    scene,
+  )
+  body.position.y = 0.42
+  add(body, skinMat)
+
+  for (const side of [-1, 1]) {
+    const arm = MeshBuilder.CreateCylinder(`alienArm${side}`, { diameter: 0.07, height: 0.45, tessellation: 6 }, scene)
+    arm.position = new Vector3(side * 0.19, 0.5, 0)
+    arm.rotation.z = side * 0.5
+    add(arm, skinMat)
+    const leg = MeshBuilder.CreateCylinder(`alienLeg${side}`, { diameter: 0.08, height: 0.3, tessellation: 6 }, scene)
+    leg.position = new Vector3(side * 0.09, 0.15, 0)
+    add(leg, skinMat)
+  }
+
+  return root
+}
+
+// Robô marciano (lab-60) — corpo/cabeça em caixa metálica, olho vermelho emissivo, antena, braços
+// e pernas retangulares. Mesmo padrão de primitivas do ET acima.
+function buildRobo(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('roboRoot', scene)
+
+  const metalMat = new PBRMaterial('roboMetalMat', scene)
+  metalMat.albedoColor = new Color3(0.55, 0.58, 0.62)
+  metalMat.roughness = 0.4
+  metalMat.metallic = 0.7
+
+  const eyeMat = new PBRMaterial('roboEyeMat', scene)
+  eyeMat.albedoColor = new Color3(0.5, 0.05, 0.05)
+  eyeMat.emissiveColor = new Color3(0.9, 0.1, 0.1)
+
+  function add(mesh: Mesh, mat: PBRMaterial) {
+    mesh.material = mat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateBox('roboBody', { width: 0.42, height: 0.55, depth: 0.28 }, scene)
+  body.position.y = 0.55
+  add(body, metalMat)
+
+  const head = MeshBuilder.CreateBox('roboHead', { width: 0.26, height: 0.22, depth: 0.24 }, scene)
+  head.position.y = 0.94
+  add(head, metalMat)
+
+  const eye = MeshBuilder.CreateSphere('roboEye', { diameter: 0.08 }, scene)
+  eye.position = new Vector3(0, 0.95, 0.14)
+  add(eye, eyeMat)
+
+  const antenna = MeshBuilder.CreateCylinder('roboAntenna', { diameter: 0.03, height: 0.2, tessellation: 6 }, scene)
+  antenna.position.y = 1.15
+  add(antenna, metalMat)
+
+  for (const side of [-1, 1]) {
+    const arm = MeshBuilder.CreateBox(`roboArm${side}`, { width: 0.1, height: 0.4, depth: 0.1 }, scene)
+    arm.position = new Vector3(side * 0.28, 0.5, 0)
+    add(arm, metalMat)
+    const leg = MeshBuilder.CreateBox(`roboLeg${side}`, { width: 0.12, height: 0.3, depth: 0.12 }, scene)
+    leg.position = new Vector3(side * 0.12, 0.15, 0)
+    add(leg, metalMat)
+  }
+
+  return root
+}
+
 export function World3D({
   profile,
   progress,
@@ -1518,6 +1663,15 @@ export function World3D({
   const [mpConnected, setMpConnected] = useState(false)
   const [rankingOpen, setRankingOpen] = useState(false)
   const [rankingEntries, setRankingEntries] = useState<RankingEntry[]>([])
+  // Vida em Marte (lab-60) — `marsHealthRef` é a fonte de verdade (lida/escrita direto pelo laço
+  // de física, sem esperar re-render); `marsHealthDisplay` só espelha esse valor pra desenhar a
+  // barra. `onMarsCombatZone` controla se a barra aparece (só faz sentido em Marte, ver
+  // `landRocket`/`respawnFromMarsDeath`). `marsDeathMessage` é o aviso transitório mostrado ao
+  // "nocautear" (limpo sozinho depois de alguns segundos).
+  const marsHealthRef = useRef(MARS_MAX_HEALTH)
+  const [marsHealthDisplay, setMarsHealthDisplay] = useState(MARS_MAX_HEALTH)
+  const [onMarsCombatZone, setOnMarsCombatZone] = useState(false)
+  const [marsDeathMessage, setMarsDeathMessage] = useState<string | null>(null)
   const chatOpenRef = useRef(false)
   chatOpenRef.current = chatOpen
 
@@ -1713,6 +1867,9 @@ export function World3D({
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
     let rocketFlameSystem: ParticleSystem | null = null
+    // Inimigos de Marte (lab-60) — populado dentro de `buildSecondPlanetIfNeeded`, lido/mutado
+    // pelo laço de IA/combate por quadro (só roda quando `onSecondPlanet` é verdadeiro).
+    const marsEnemies: MarsEnemy[] = []
     if (import.meta.env.DEV) {
       ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
     }
@@ -1882,6 +2039,11 @@ export function World3D({
             offsetLandingUp(SECOND_PLANET_LANDING_UP, SECOND_PLANET_RADIUS, 1.8),
             currentGroundBaseFn,
           )
+          // Vida cheia a cada nova ida a Marte (lab-60) — cada expedição começa do zero, não
+          // carrega dano de uma visita anterior.
+          marsHealthRef.current = MARS_MAX_HEALTH
+          setMarsHealthDisplay(MARS_MAX_HEALTH)
+          setOnMarsCombatZone(true)
         } else {
           onSecondPlanet = false
           currentWorldCenter = Vector3.Zero()
@@ -1891,7 +2053,39 @@ export function World3D({
             offsetLandingUp(ROCKET_LAUNCH_DIR, PLANET_RADIUS, 2.2),
             currentGroundBaseFn,
           )
+          setOnMarsCombatZone(false)
         }
+      }
+
+      // Dano de inimigo de Marte (lab-60, pedido do usuário: "nós temos que ter uma barra de
+      // vida"). `marsHealthRef` é a fonte de verdade (lida/escrita direto aqui, sem esperar
+      // re-render) — `ignore hits enquanto já chegou a zero` evita disparar `respawnFromMarsDeath`
+      // várias vezes se dois inimigos acertarem no mesmo quadro.
+      function applyMarsDamage(amount: number) {
+        if (marsHealthRef.current <= 0) return
+        marsHealthRef.current = Math.max(0, marsHealthRef.current - amount)
+        setMarsHealthDisplay(marsHealthRef.current)
+        playEnemyHit()
+        if (marsHealthRef.current <= 0) respawnFromMarsDeath()
+      }
+
+      // Vida zerada em Marte (lab-60, pedido do usuário: "se a barra esvaziar, você morre e volta
+      // pro planetinha e tem que voltar de foguete pra poder seguir em Marte") — mesmo teleporte
+      // de "pouso no planeta principal" já usado por `landRocket`, disparado sem precisar do
+      // foguete. Como o único jeito de VOLTAR a Marte continua sendo embarcar no foguete de novo
+      // (`boardRocket`/`handleInteractPress`), "precisa voltar de foguete" já sai satisfeito de
+      // graça — não precisa de nenhum bloqueio adicional.
+      function respawnFromMarsDeath() {
+        onSecondPlanet = false
+        currentWorldCenter = Vector3.Zero()
+        currentGroundBaseFn = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
+        teleportAvatarTo(Vector3.Zero(), offsetLandingUp(ROCKET_LAUNCH_DIR, PLANET_RADIUS, 2.2), currentGroundBaseFn)
+        marsHealthRef.current = MARS_MAX_HEALTH
+        setMarsHealthDisplay(MARS_MAX_HEALTH)
+        setOnMarsCombatZone(false)
+        playKnockedOut()
+        setMarsDeathMessage('Nocauteado! Volte de foguete pra continuar explorando Marte.')
+        window.setTimeout(() => setMarsDeathMessage(null), 4000)
       }
 
       // Ação genérica da tecla E — entrar/sair do carro OU embarcar/desembarcar do foguete,
@@ -3321,6 +3515,36 @@ export function World3D({
         returnHint.linkWithMesh(returnRocketRoot)
         returnHint.linkOffsetY = -230
         secondPlanetReturnRocket = { root: returnRocketRoot, hintLabel: returnHint }
+
+        // Inimigos (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
+        // tenta matar o nosso boneco") — distribuição própria (multiplicador de theta diferente
+        // do loop de props acima) pra não nascerem em cima de rocha/caverna nenhuma; mesma
+        // exclusão perto do foguete de volta (senão o jogador já nasceria sendo atacado ao
+        // pousar). Metade da contagem em dispositivo fraco, mesmo espírito dos cortes de
+        // performance do lab-59 — cada inimigo roda IA por quadro.
+        const enemyCount = isLowEndDevice ? MARS_ENEMY_COUNT_LOW_END : MARS_ENEMY_COUNT
+        for (let i = 0; i < enemyCount; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / enemyCount))
+          const theta = i * GOLDEN_ANGLE * 5.1 + 1.7
+          const enemyUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(enemyUp, SECOND_PLANET_LANDING_UP) > Math.cos(0.6)) continue
+
+          const kind: MarsEnemyKind = i % 2 === 0 ? 'et' : 'robo'
+          const enemyRoot = kind === 'et' ? buildAlien(scene, shadowGenerator) : buildRobo(scene, shadowGenerator)
+          enemyRoot.parent = secondPlanetRoot
+          enemyRoot.position = enemyUp.scale(SECOND_PLANET_RADIUS)
+          enemyRoot.rotationQuaternion = alignmentQuaternion(enemyUp)
+          marsEnemies.push({
+            kind,
+            root: enemyRoot,
+            up: enemyUp,
+            targetUp: enemyUp,
+            forward: Vector3.Cross(enemyUp, Vector3.Right()).normalize(),
+            homeUp: enemyUp,
+            restTimer: Math.random() * 2,
+            attackCooldown: 0,
+          })
+        }
       }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num
@@ -5318,6 +5542,84 @@ export function World3D({
           c.root.rotationQuaternion = tmpQuat.clone()
         }
 
+        // Inimigos de Marte (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e
+        // robôs que tenta matar o nosso boneco") — só roda quando o jogador está lá (sem custo
+        // nenhum no planeta principal). Mesmo esquema de IA de vagar dos bichos acima (`up`/
+        // `targetUp`/`rotateAroundAxis`), mas perseguem o jogador (`targetUp` = posição dele)
+        // dentro do raio de detecção, em vez de vagar aleatoriamente perto de onde nasceram.
+        // `secondPlanetRoot` não tem rotação própria (só translação pra `SECOND_PLANET_CENTER`),
+        // então posição local ↔ mundo é só somar/subtrair o centro — mesma conversão simples já
+        // usada pelo laço de física principal pra calcular `localUp` em qualquer planeta.
+        if (onSecondPlanet && avatarMesh) {
+          const avatarLocalPos = avatarMesh.position.subtract(SECOND_PLANET_CENTER)
+          // `.normalize()` do Babylon muta o vetor NO LUGAR (diferente de `.add()`/`.subtract()`,
+          // que devolvem um vetor novo) — chamar direto em `avatarLocalPos` encolheria ele pra
+          // magnitude 1 também, corrompendo a distância calculada logo abaixo (bug real
+          // encontrado ao vivo: `distToPlayer` ficava travado em ~5 — a diferença entre a
+          // magnitude do inimigo, ~6, e a do jogador encolhido pra ~1 — mesmo com os dois bem
+          // perto de verdade). `.clone()` primeiro evita a mutação indesejada.
+          const avatarUp =
+            avatarLocalPos.length() > 0.0001 ? avatarLocalPos.clone().normalize() : SECOND_PLANET_LANDING_UP
+          for (const enemy of marsEnemies) {
+            const enemyLocalPos = enemy.up.scale(SECOND_PLANET_RADIUS)
+            const distToPlayer = Vector3.Distance(enemyLocalPos, avatarLocalPos)
+            const chasing = distToPlayer < MARS_ENEMY_AGGRO_RADIUS
+            if (chasing) {
+              enemy.targetUp = avatarUp
+            } else {
+              const angleToHomeTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(enemy.up, enemy.targetUp))))
+              if (angleToHomeTarget < 0.03) {
+                enemy.restTimer -= dt
+                if (enemy.restTimer <= 0) {
+                  const seed = Math.abs(enemy.homeUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+                  const tangentA = Vector3.Cross(enemy.homeUp, seed).normalize()
+                  const tangentB = Vector3.Cross(enemy.homeUp, tangentA).normalize()
+                  const wanderAngle = Math.random() * Math.PI * 2
+                  const wanderRadius = 0.1 + Math.random() * 0.15
+                  const offset = tangentA
+                    .scale(Math.cos(wanderAngle) * wanderRadius)
+                    .add(tangentB.scale(Math.sin(wanderAngle) * wanderRadius))
+                  enemy.targetUp = enemy.homeUp.add(offset).normalize()
+                  enemy.restTimer = 1.5 + Math.random() * 3
+                }
+              }
+            }
+
+            const angleToTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(enemy.up, enemy.targetUp))))
+            if (angleToTarget > 0.01) {
+              const axis = Vector3.Cross(enemy.up, enemy.targetUp)
+              if (axis.lengthSquared() > 1e-8) {
+                axis.normalize()
+                const speed = chasing ? MARS_ENEMY_MOVE_SPEED * 1.6 : MARS_ENEMY_MOVE_SPEED
+                const step = Math.min(speed * dt, angleToTarget)
+                enemy.up = rotateAroundAxis(enemy.up, axis, step).normalize()
+              }
+            }
+
+            let enemyFwd = enemy.targetUp.subtract(enemy.up.scale(Vector3.Dot(enemy.targetUp, enemy.up)))
+            if (enemyFwd.lengthSquared() > 1e-6) {
+              enemyFwd.normalize()
+              enemy.forward = enemyFwd
+            } else {
+              enemyFwd = enemy.forward
+            }
+
+            enemy.root.position.copyFrom(enemy.up.scale(SECOND_PLANET_RADIUS))
+            const enemyRight = Vector3.Cross(enemy.up, enemyFwd).normalize()
+            Matrix.FromXYZAxesToRef(enemyRight, enemy.up, enemyFwd, tmpMatrix)
+            Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+            enemy.root.rotationQuaternion = tmpQuat.clone()
+
+            // Ataque com intervalo entre golpes (não dano contínuo instantâneo) — dá chance do
+            // jogador reagir/fugir em vez de perder vida toda de uma vez encostando sem querer.
+            enemy.attackCooldown -= dt
+            if (distToPlayer < MARS_ENEMY_ATTACK_RADIUS && enemy.attackCooldown <= 0) {
+              enemy.attackCooldown = MARS_ENEMY_ATTACK_INTERVAL
+              applyMarsDamage(MARS_ENEMY_DAMAGE)
+            }
+          }
+        }
+
         // Gatos no topo dos platôs/telhados: parados, só um giro lento de "olhando ao redor" —
         // não usam a IA de vagar (ver comentário onde são criados).
         for (const cat of perchedCats) {
@@ -5782,6 +6084,8 @@ export function World3D({
         onOpenChat={() => setChatOpen(true)}
         onOpenRanking={() => setRankingOpen(true)}
       />
+      {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}
+      {marsDeathMessage && <p className="mars-death-message">{marsDeathMessage}</p>}
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
       <TouchActionButton className="touch-action-jump" label="⬆️" onPress={handleTouchJumpPress} />

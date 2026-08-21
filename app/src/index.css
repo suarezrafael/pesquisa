@@ -221,7 +221,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: clamp(0.3rem, 1.6vmin, 1rem);
 }
 
 .hub-avatar {
@@ -249,7 +249,12 @@ body {
 .xp-bar {
   background: #e2e8f8;
   border-radius: 999px;
-  height: 10px;
+  /* Altura fixa (10px) não encolhia com a tela — numa janela baixa (notebook com viewport de
+     ~650px, relatado pelo usuário com captura de tela) essa barra sozinha dominava boa parte da
+     altura do painel avatar+nível+moedas, que já tinha o resto (avatar, nome, moedas) em
+     `clamp(..., vmin, ...)` mas não a barra. `clamp()` com `vmin` a deixa consistente com o
+     resto do painel — encolhe em telas baixas, não só estreitas. */
+  height: clamp(5px, 1.4vmin, 10px);
   overflow: hidden;
 }
 
@@ -370,6 +375,75 @@ body {
 .hud-overlay .badge-row {
   pointer-events: none;
   filter: drop-shadow(0 2px 6px rgba(23, 44, 102, 0.25));
+}
+
+/* Barra de vida em Marte (lab-60, pedido do usuário: "nós temos que ter uma barra de vida") — só
+   renderizada em Marte (ver `onMarsCombatZone`), abaixo do painel avatar/nível pra não competir
+   com ele nem com as faixas de emblema ("Semana do Sábio" etc.), longe do joystick de toque
+   (canto inferior esquerdo). `clamp()`/`vmin` seguindo o mesmo padrão do resto do HUD (lab-59). */
+.mars-health-bar {
+  position: absolute;
+  top: clamp(7.4rem, 25vmin, 9.6rem);
+  left: clamp(0.5rem, 2.8vmin, 1.1rem);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  padding: clamp(0.2rem, 1vmin, 0.35rem) clamp(0.5rem, 2vmin, 0.8rem);
+  box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.mars-health-icon {
+  font-size: clamp(0.75rem, 2.6vmin, 1.05rem);
+}
+
+.mars-health-track {
+  width: clamp(64px, 18vmin, 130px);
+  height: clamp(6px, 1.6vmin, 10px);
+  background: #e2c8c8;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.mars-health-fill {
+  height: 100%;
+  background: #e14545;
+  transition: width 0.25s ease;
+}
+
+.mars-health-bar-low .mars-health-fill {
+  background: #ff2020;
+  animation: mars-health-pulse 0.6s ease-in-out infinite;
+}
+
+@keyframes mars-health-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.mars-death-message {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(20, 20, 25, 0.8);
+  color: white;
+  padding: 0.8rem 1.4rem;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: clamp(0.8rem, 2.6vmin, 1.05rem);
+  text-align: center;
+  max-width: 80vw;
+  z-index: 30;
+  pointer-events: none;
 }
 
 .world3d-hint {
@@ -871,11 +945,16 @@ body {
   /* lab-55 (pedido do usuário): ranking no canto superior direito, não mais embaixo — `top`
      abaixo da faixa de ícones do HUD (evita sobrepor), `bottom: auto` solta a altura pra crescer
      pra baixo a partir daí. Chat continua ancorado embaixo à direita (herdado de .chat-panel);
-     os dois cabem na tela ao mesmo tempo sem se sobrepor porque ficam em cantos diferentes.*/
-  top: 5.5rem;
+     os dois cabem na tela ao mesmo tempo sem se sobrepor porque ficam em cantos diferentes.
+     `top` reduzido no lab-60 (5.5rem → 4.6rem, usuário viu numa janela baixa que o ranking podia
+     crescer o bastante — com mais jogadores conectados — pra alcançar o chat ancorado embaixo)
+     — mais folga vertical antes de chegar no chat, e um teto de altura próprio (menor que os
+     60vh herdados de `.chat-panel`) pra garantir a folga mesmo com muitos jogadores na lista. */
+  top: 4.6rem;
   right: 1rem;
   bottom: auto;
   left: auto;
+  max-height: 42vh;
 }
 
 .ranking-row {

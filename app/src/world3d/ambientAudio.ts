@@ -615,6 +615,62 @@ export function stopRocketEngine(): void {
   rocketEngine = null
 }
 
+// Golpe de inimigo (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
+// tenta matar o nosso boneco") — "zap" curto e áspero (dente-de-serra descendente + ruído grave),
+// diferente do `playLaserZap` do parkour (mais agudo/elétrico) pra não confundir os dois efeitos.
+export function playEnemyHit(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.22
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(320, now)
+  osc.frequency.exponentialRampToValueAtTime(70, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.16, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  osc.connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + duration)
+
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 500
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0.09, now)
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  src.connect(lowpass).connect(noiseGain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+}
+
+// "Nocauteado" — tom grave descendente longo, diferente de qualquer efeito já existente (mais
+// solene/triste que o "zap" do golpe acima), tocado uma vez quando a vida chega a zero.
+export function playKnockedOut(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.9
+  const osc = ctx.createOscillator()
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(330, now)
+  osc.frequency.exponentialRampToValueAtTime(80, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.001, now)
+  gain.gain.linearRampToValueAtTime(0.18, now + 0.05)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  osc.connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + duration)
+}
+
 export function toggleMute(): boolean {
   muted = !muted
   if (audioCtx) {

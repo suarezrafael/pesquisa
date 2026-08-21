@@ -1,43 +1,22 @@
 # Laboratório atual
 
-Último concluído: labs/lab-59-foguete-pilotavel-e-marte/ (foguete deixou de ser teleporte
-instantâneo — agora o boneco entra na nave e pilota, avanço/recuo com as mesmas setas/direcional
-do carro, viajando ao longo de um arco real entre os dois planetas; planetinha secundário
-reskinado como Marte — chão marrom, só rochas, entradas de caverna, sem árvores; depois do
-primeiro deploy, feedback do usuário em produção pediu decolagem vertical de verdade — em vez de
-"de lado" — e reduzir a distância entre os planetas pra ~1,5 diâmetro do planeta principal; numa
-segunda rodada de feedback, corrigido um bug real de orientação que deixava a nave "torta"
-saindo/"achatada" voltando do planetinha (rotação incremental quadro a quadro em vez de
-reconstruir a base do zero) e adicionado som de motor do foguete durante o voo; numa terceira
-rodada, corrigido o pouso "de cabeça" em Marte (agora pousa de ré — interpolação esférica entre as
-rotações de repouso das duas plataformas, não a tangente da curva), removido o "prato" que a nave
-voadora carregava embaixo (reaproveitava a malha inteira da plataforma fixa; separado veículo de
-plataforma), dado uma cauda afunilada mais aerodinâmica, e adicionada chama saindo dos motores;
-numa quarta rodada, corrigida a decolagem "de lado" da Terra — a rotação agora fica travada reta
-nos primeiros 20% do voo, vira suavemente só no meio, e trava de pé nos 20% finais; numa quinta
-rodada, corrigida a câmera do voo (usava a tangente crua da curva, degenerava perto do "pra cima"
-do mundo — trocada pelo nariz de verdade da nave), o HUD fixo/legendas do mundo 3D encolhidos de
-novo pro celular (clamp() trocado de vw pra vmin — vw media o lado longo em paisagem — e as
-legendas do Babylon.GUI ganharam ajuste de tamanho pela primeira vez), e a qualidade 3D no celular
-favorecida sobre FPS (teto do ajuste automático reduzido, FXAA ligado no mobile); numa sexta
-rodada, corrigido o lag reportado no Redmi Pad 2 (tablet, aparelho diferente do Poco C75) — a
-faixa mais crítica do ajuste automático de resolução subiu pra 2.4 (mais agressiva que o original)
-mantendo o teto baixo só nas faixas com folga, e cortadas mais contagens de props/bichos/nuvens
-pra dispositivo fraco)
-Contexto para o próximo laboratório: labs/lab-59-foguete-pilotavel-e-marte/CONTEXT.md
+Último concluído: labs/lab-60-inimigos-e-vida-em-marte/ (ETs e robôs em Marte que perseguem e
+atacam o jogador, barra de vida no HUD, e vida zerada teleporta de volta pro planeta principal —
+precisa pilotar o foguete de novo pra voltar a Marte)
+Contexto para o próximo laboratório: labs/lab-60-inimigos-e-vida-em-marte/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
-**Relay de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
+**Relé de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
 
 Trabalho acontece numa branch de worktree (`worktree-abstract-wobbling-owl`), a partir de `main`.
-PRs #2-#5 já foram mesclados pelo usuário — este laboratório abre mais um PR novo (ver link no
-resumo da sessão; esta sessão não pode mesclar/apagar branch diretamente).
+PR #5 (labs 58-59) ainda está aberto — este laboratório abre mais um PR novo (ver link no resumo
+da sessão; esta sessão não pode mesclar/apagar branch diretamente).
 
-Pedidos pendentes: (1) usuário testar no Poco C75/Redmi Pad 2 — a pilotagem do foguete e a
-aparência de Marte; (2) recolorir os modelos de rocha reaproveitados pro tom de Marte (cosmético
-menor, ver CONTEXT.md do lab-59); (3) se ainda pesado mesmo com qualidade adaptativa, thin
-instancing de verdade continua sendo o próximo alavanca (documentado desde o lab-53); (4) decidir
-sobre desligar o Fly.io (v1, sem uso desde o lab-54).
+Pedidos pendentes: (1) usuário testar ao vivo — combate em Marte (dificuldade, clareza do aviso de
+morte, posição da barra de vida na tela) e as correções de foguete/HUD/qualidade do lab-59;
+(2) thin instancing continua sendo o maior alavanca de performance não puxado (documentado desde o
+lab-53) — o combate em Marte soma mais IA por quadro, vale reconsiderar se pesa no Redmi Pad 2;
+(3) decidir sobre desligar o Fly.io (v1, sem uso desde o lab-54).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-59-foguete-pilotavel-e-marte/CONTEXT.md`.
+`labs/lab-60-inimigos-e-vida-em-marte/CONTEXT.md`.
