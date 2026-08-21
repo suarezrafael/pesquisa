@@ -1553,6 +1553,13 @@ export function World3D({
     // e inconsistentes entre navegadores), usa o mesmo sinal que já decide mostrar os controles de
     // toque: é um aparelho móvel/tablet.
     const isLowEndDevice = /Android|iPad|iPhone|iPod|Tablet|Mobi/i.test(navigator.userAgent)
+    // Legendas flutuantes (Babylon.GUI, número da escolinha/dica de interação/etc.) — o lab-57 já
+    // corrigiu o bug de RESOLUÇÃO da textura de GUI (borrada, upscaled), mas o TAMANHO da fonte em
+    // si continuava fixo em pixels reais de dispositivo — grande demais numa tela física pequena
+    // mesmo renderizado nítido. Reduz só no celular/tablet, mantendo o tamanho de desktop intacto.
+    function mobileFontSize(px: number): number {
+      return isLowEndDevice ? Math.round(px * 0.72) : px
+    }
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
     // Valor inicial moderado — nem o melhor nem o pior caso — só até a medição real de FPS (ver
@@ -1561,7 +1568,11 @@ export function World3D({
     // conseguir testar no aparelho real vinha errando pra mais ou pra menos dependendo do
     // dispositivo (lab-56 pesado demais borrado num Poco C75, lab-53 nem sempre leve o bastante
     // num Redmi Pad 2) — medir de verdade resolve os dois lados do mesmo problema de uma vez.
-    if (isLowEndDevice) engine.setHardwareScalingLevel(1.3)
+    // 1.3 → 1.15 (lab-59, usuário reportou de novo "a qualidade do 3D está muito baixa" no Poco
+    // C75, mesmo com a medição de FPS já ligada desde o lab-58) — o teto do ajuste automático
+    // logo abaixo também baixou; começar mais perto de nítido custa pouco (só ~6s até a primeira
+    // medição real ajustar pro valor certo desse aparelho).
+    if (isLowEndDevice) engine.setHardwareScalingLevel(1.15)
     const scene = new Scene(engine)
     sceneRef.current = scene
     if (import.meta.env.DEV) {
@@ -1580,7 +1591,11 @@ export function World3D({
 
     const pipeline = new DefaultRenderingPipeline('quality', true, scene, [camera])
     pipeline.samples = isLowEndDevice ? 1 : 4
-    pipeline.fxaaEnabled = !isLowEndDevice
+    // FXAA ligado também no mobile (lab-59, usuário: "a qualidade do 3D está muito baixa no
+    // telefone") — MSAA (`samples`) continua desligado (caro, custa por amostra), mas FXAA é um
+    // único passe de pós-processamento barato que suaviza serrilhado sem custo por amostra;
+    // ajuda a disfarçar um pouco o efeito de `hardwareScalingLevel` reduzido.
+    pipeline.fxaaEnabled = true
     pipeline.imageProcessing.toneMappingEnabled = true
     pipeline.imageProcessing.toneMappingType = 1 // ACES
     pipeline.imageProcessing.exposure = 0.9
@@ -3103,7 +3118,7 @@ export function World3D({
 
         const hintLabel = new TextBlock(`carHint-${i}`, 'Pressione E pra entrar')
         hintLabel.color = 'white'
-        hintLabel.fontSize = 18
+        hintLabel.fontSize = mobileFontSize(18)
         hintLabel.fontWeight = 'bold'
         hintLabel.outlineWidth = 3
         hintLabel.outlineColor = 'rgba(0,0,0,0.6)'
@@ -3158,7 +3173,7 @@ export function World3D({
 
         const rocketHint = new TextBlock('rocketHint', 'Pressione E pra embarcar')
         rocketHint.color = 'white'
-        rocketHint.fontSize = 18
+        rocketHint.fontSize = mobileFontSize(18)
         rocketHint.fontWeight = 'bold'
         rocketHint.outlineWidth = 3
         rocketHint.outlineColor = 'rgba(0,0,0,0.6)'
@@ -3292,7 +3307,7 @@ export function World3D({
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(SECOND_PLANET_LANDING_UP)
         const returnHint = new TextBlock('secondPlanetRocketHint', 'Pressione E pra voltar')
         returnHint.color = 'white'
-        returnHint.fontSize = 18
+        returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
         returnHint.outlineWidth = 3
         returnHint.outlineColor = 'rgba(0,0,0,0.6)'
@@ -3485,7 +3500,7 @@ export function World3D({
       // `__setAvatarShirtColor`/`__setPlayerHat` acima.
       const localChatLabel = new TextBlock('localChat', '')
       localChatLabel.color = 'white'
-      localChatLabel.fontSize = 18
+      localChatLabel.fontSize = mobileFontSize(18)
       localChatLabel.outlineWidth = 3
       localChatLabel.outlineColor = 'rgba(0,0,0,0.5)'
       localChatLabel.alpha = 0
@@ -3651,7 +3666,7 @@ export function World3D({
 
         const label = new TextBlock(`label-${quest.id}`, `${index + 1}`)
         label.color = 'white'
-        label.fontSize = 28
+        label.fontSize = mobileFontSize(28)
         label.fontWeight = 'bold'
         label.outlineWidth = 4
         label.outlineColor = 'rgba(0,0,0,0.5)'
@@ -3810,7 +3825,7 @@ export function World3D({
 
       const shopLabel = new TextBlock('shopLabel', 'Lojinha')
       shopLabel.color = 'white'
-      shopLabel.fontSize = 26
+      shopLabel.fontSize = mobileFontSize(26)
       shopLabel.fontWeight = 'bold'
       shopLabel.outlineWidth = 4
       shopLabel.outlineColor = 'rgba(0,0,0,0.5)'
@@ -3987,7 +4002,7 @@ export function World3D({
 
       const towerLabel = new TextBlock('towerLabel', 'Torre do Tesouro')
       towerLabel.color = 'white'
-      towerLabel.fontSize = 24
+      towerLabel.fontSize = mobileFontSize(24)
       towerLabel.fontWeight = 'bold'
       towerLabel.outlineWidth = 4
       towerLabel.outlineColor = 'rgba(0,0,0,0.5)'
@@ -4286,7 +4301,7 @@ export function World3D({
         shadowGenerator.addShadowCaster(markerMesh)
         const markerLabel = new TextBlock(`quizMarkerLabel-${floor}`, '?')
         markerLabel.color = 'white'
-        markerLabel.fontSize = 32
+        markerLabel.fontSize = mobileFontSize(32)
         markerLabel.fontWeight = 'bold'
         markerLabel.outlineWidth = 4
         markerLabel.outlineColor = 'rgba(0,0,0,0.5)'
@@ -4308,7 +4323,7 @@ export function World3D({
 
       const qtLabel = new TextBlock('quizTowerLabel', 'Prédio dos Enigmas')
       qtLabel.color = 'white'
-      qtLabel.fontSize = 24
+      qtLabel.fontSize = mobileFontSize(24)
       qtLabel.fontWeight = 'bold'
       qtLabel.outlineWidth = 4
       qtLabel.outlineColor = 'rgba(0,0,0,0.5)'
@@ -4465,7 +4480,7 @@ export function World3D({
         // conversando (não é chat de verdade, é decoração ambiente).
         const chatLabel = new TextBlock(`poolChat-${i}`, '')
         chatLabel.color = 'white'
-        chatLabel.fontSize = 20
+        chatLabel.fontSize = mobileFontSize(20)
         chatLabel.outlineWidth = 3
         chatLabel.outlineColor = 'rgba(0,0,0,0.5)'
         chatLabel.alpha = 0
@@ -4533,7 +4548,7 @@ export function World3D({
 
         const chatLabel = new TextBlock(`npcChat-${i}`, '')
         chatLabel.color = 'white'
-        chatLabel.fontSize = 18
+        chatLabel.fontSize = mobileFontSize(18)
         chatLabel.outlineWidth = 3
         chatLabel.outlineColor = 'rgba(0,0,0,0.5)'
         chatLabel.alpha = 0
@@ -4580,7 +4595,7 @@ export function World3D({
           applyBonecoFeatures(rFigure, bonecoFeaturesFromEmoji(state.avatarEmoji), scene, shadowGenerator)
           const rLabel = new TextBlock(`remote-${state.id}`, state.name)
           rLabel.color = 'white'
-          rLabel.fontSize = 20
+          rLabel.fontSize = mobileFontSize(20)
           rLabel.fontWeight = 'bold'
           rLabel.outlineWidth = 3
           rLabel.outlineColor = 'rgba(0,0,0,0.6)'
@@ -4594,7 +4609,7 @@ export function World3D({
           rLabel.linkOffsetY = -115
           const rChatLabel = new TextBlock(`remoteChat-${state.id}`, '')
           rChatLabel.color = 'white'
-          rChatLabel.fontSize = 18
+          rChatLabel.fontSize = mobileFontSize(18)
           rChatLabel.outlineWidth = 3
           rChatLabel.outlineColor = 'rgba(0,0,0,0.5)'
           rChatLabel.alpha = 0
@@ -5446,7 +5461,7 @@ export function World3D({
             0,
             Math.min(1, drivingRocket.progress + rocketThrottle * ROCKET_FLIGHT_SPEED * dt),
           )
-          const { position: shipPos, tangent: shipFwd } = sampleFlightArc(
+          const { position: shipPos } = sampleFlightArc(
             drivingRocket.p0,
             drivingRocket.c1,
             drivingRocket.c2,
@@ -5467,11 +5482,24 @@ export function World3D({
             drivingRocket.toRestQuat,
             holdFlipHoldCurve(drivingRocket.progress, 0.2, 0.8),
           )
-          // Câmera continua usando "pra cima" fixo do mundo (independente do nariz da nave) —
-          // simples e estável, sem planeta nenhum por perto pra derivar uma superfície.
-          const shipUp = Vector3.Up()
+          // Câmera posicionada atrás da CAUDA da nave (nariz invertido), não atrás da tangente
+          // crua da curva — bug real reportado pelo usuário ("o foguete tem que viajar na
+          // horizontal da câmera, eu deveria enxergar os motores dele na perspectiva de 3ª
+          // pessoa, mas ele tá viajando na vertical"): a tangente da curva muda bruscamente de
+          // direção e passa boa parte do voo quase paralela ao "pra cima" fixo do mundo (usado
+          // antes como referência da câmera), o que deixava a câmera olhando quase reto pra
+          // cima/baixo — a nave parecia subir/descer na tela em vez de voar "de lado", e o
+          // ângulo não mostrava os motores. Usar o NARIZ DE VERDADE da nave (derivado da rotação
+          // que ela já tem, suave por construção via `holdFlipHoldCurve`/`Slerp` acima) resolve
+          // os dois problemas de uma vez: a câmera sempre fica do lado oposto ao nariz — vendo os
+          // motores — e nunca mais degenera perto do "pra cima" do mundo.
+          flyingRocket.computeWorldMatrix(true)
+          const shipNoseDir = Vector3.TransformNormal(Vector3.Up(), flyingRocket.getWorldMatrix()).normalize()
+          let upReference = Vector3.Up()
+          if (Math.abs(Vector3.Dot(shipNoseDir, upReference)) > 0.9) upReference = Vector3.Right()
+          const shipUp = upReference.subtract(shipNoseDir.scale(Vector3.Dot(upReference, shipNoseDir))).normalize()
 
-          const desiredShipCamPos = shipPos.subtract(shipFwd.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
+          const desiredShipCamPos = shipPos.subtract(shipNoseDir.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
           camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
           camera.upVector = Vector3.Lerp(camera.upVector, shipUp, 0.15).normalize()
           camera.setTarget(shipPos)
@@ -5626,6 +5654,12 @@ export function World3D({
     // picos de carregar física/glTF/texturas) e ajusta uma vez só, pro valor que ESSE aparelho
     // específico realmente precisa — pode inclusive VOLTAR pra quase resolução cheia se o
     // aparelho aguentar, coisa que um valor fixo nunca conseguiria.
+    //
+    // Teto reduzido no lab-59 (2.2/1.8/1.3 → 1.6/1.35/1.1): mesmo com a medição real ligada desde
+    // o lab-58, o usuário reportou de novo "a qualidade do 3D está muito baixa" no Poco C75 — o
+    // pedido não menciona travamento/lentidão, só nitidez, então a faixa inteira de valores
+    // passou a favorecer resolução mais alta, aceitando FPS um pouco menor nos aparelhos mais
+    // fracos em troca de uma imagem bem menos borrada.
     let fpsAutoTuneInterval: number | null = null
     let fpsAutoTuneTimeout: number | null = null
     if (isLowEndDevice) {
@@ -5645,9 +5679,9 @@ export function World3D({
             if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
             const avgFps = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length
             let scaling: number
-            if (avgFps < 20) scaling = 2.2
-            else if (avgFps < 30) scaling = 1.8
-            else if (avgFps < 45) scaling = 1.3
+            if (avgFps < 20) scaling = 1.6
+            else if (avgFps < 30) scaling = 1.35
+            else if (avgFps < 45) scaling = 1.1
             else scaling = 1.0
             engine.setHardwareScalingLevel(scaling)
             ;(scene as any).__syncGuiResolution?.()

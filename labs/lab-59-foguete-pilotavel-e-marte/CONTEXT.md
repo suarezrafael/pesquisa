@@ -186,6 +186,56 @@ da Terra, tá bizarro, ele tem que sair pra cima e depois pousar de ré."
   final de cada pouso batendo exatamente com `alignmentQuaternion(fromUp/toUp)`) — só o MEIO do
   caminho mudou de forma.
 
+## Quinta correção pós-verificação (mesmo dia, câmera de voo + HUD/qualidade móvel)
+
+Novo pedido do usuário testando de novo em produção, misturando um bug do foguete com dois
+pedidos antigos de qualidade móvel que voltaram a aparecer:
+
+> o foguete tem viajar na horizontal da camera eu deveria enxergar os motores dele na
+> prspqctiva de 3 pessoa. mas ele ta viajando na vertical
+
+> quando abro no celular as legendas das casinhas e o menu fixo com o avatar e as moedas esta
+> muito grando para o celular poco c75... a qualidade do 3d esta muito baixa no telefone
+
+- **Câmera do voo "vertical" em vez de "horizontal"**: a câmera usava a TANGENTE crua da curva de
+  voo (`shipFwd`) como referência de "atrás da nave" — só que essa tangente muda bruscamente de
+  direção ao longo do voo e passa boa parte do trajeto quase paralela ao "pra cima" fixo do mundo
+  (usado como referência do `upVector`), degenerando pra uma câmera olhando quase reto pra
+  cima/baixo (a nave "subindo/descendo" na tela, sem ângulo nenhum pra ver os motores). Corrigido
+  usando o NARIZ DE VERDADE da nave (extraído da própria `rotationQuaternion`, já suave por
+  construção via `holdFlipHoldCurve`/`Slerp`) como referência: a câmera fica sempre do lado oposto
+  ao nariz — vendo os motores, como pedido — e o `upVector` é recalculado por Gram-Schmidt
+  (projeção do "pra cima" do mundo no plano perpendicular ao nariz) pra nunca mais degenerar perto
+  de nenhum eixo fixo.
+- **Painel fixo (avatar/moedas) ainda grande + legendas das casinhas grandes**: dois problemas
+  distintos na mesma reclamação.
+  1. O `clamp()` do lab-58 usava `vw` (largura da viewport) — correto em retrato, mas errado em
+     PAISAGEM (bem provável neste jogo em terceira pessoa): em paisagem, `vw` mede o lado LONGO do
+     celular, dando um resultado grande mesmo numa tela fisicamente pequena. Trocado `vw` → `vmin`
+     (o menor entre largura/altura) em todo o HUD (`index.css`) — acompanha o lado realmente
+     apertado em qualquer orientação; idêntico ao `vw` em retrato, menor (e mais correto) em
+     paisagem. Os pisos (mínimos) do `clamp()` também baixaram mais uma vez (ex.: avatar de 2.2rem
+     pra 1.7rem, cabeçalho de 0.8rem pra 0.65rem).
+  2. As legendas do MUNDO 3D (número da escolinha, dicas "Pressione E", chat, etc. — Babylon.GUI,
+     não DOM) nunca tinham ganhado nenhum ajuste de tamanho pro celular: o lab-57 corrigiu a
+     RESOLUÇÃO da textura de GUI (borrada), mas o tamanho da fonte em si continuava fixo em
+     pixels reais de dispositivo, grande numa tela física pequena mesmo nítido. Nova função
+     `mobileFontSize(px)` (72% do tamanho original só em `isLowEndDevice`) aplicada a TODAS as 13
+     atribuições de `fontSize` do arquivo (consistente, não só a legenda da escolinha).
+- **Qualidade 3D "muito baixa"**: mesmo com a medição real de FPS ligada desde o lab-58, o usuário
+  reportou de novo. Como o pedido não menciona travamento/lentidão, só nitidez, a resposta foi
+  favorecer resolução em vez de FPS em toda a faixa adaptativa: `hardwareScalingLevel` inicial
+  (antes da primeira medição) de 1.3 → 1.15; teto do ajuste automático de 2.2/1.8/1.3 → 1.6/1.35/
+  1.1 (índice de FPS→escala inteiro deslocado pra baixo). FXAA (suavização de serrilhado barata,
+  um único passe, sem custo por amostra como MSAA) ligado também no mobile — antes só rodava em
+  desktop.
+- Build passa. Testado ao vivo (dev server + teleporte de debug): câmera do voo verificada sem
+  erro no console e com `upVector` não-degenerado numa amostra real; ida/volta completas com
+  quaternion final batendo exatamente com `alignmentQuaternion` em ambas as pontas. O ajuste de
+  HUD/legendas/qualidade não dá pra verificar visualmente sem o aparelho físico (mesma limitação
+  documentada desde o lab-53) — próxima verificação real depende do usuário testar de novo no
+  Poco C75.
+
 ## Pendências / dívidas conhecidas
 
 - **Cor original do glTF nas rochas reaproveitadas** — algumas mantêm um tom ligeiramente
