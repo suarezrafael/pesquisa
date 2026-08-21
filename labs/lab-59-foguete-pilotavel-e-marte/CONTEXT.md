@@ -236,6 +236,39 @@ pedidos antigos de qualidade móvel que voltaram a aparecer:
   documentada desde o lab-53) — próxima verificação real depende do usuário testar de novo no
   Poco C75.
 
+## Sexta correção pós-verificação (mesmo dia, lag no Redmi Pad 2)
+
+Novo feedback do usuário, num aparelho DIFERENTE dos anteriores: "os graficos do tablet readmi
+pad 2 ainda estao com muito lag, precisa melhorar o fps pra ter uma boa jogabilidade, no notebook
+acer aspire go 15 roda muito bem." (o notebook não é afetado pelo ramo `isLowEndDevice` —
+`navigator.userAgent` de um notebook Windows não bate com `/Android|iPad|iPhone|iPod|Tablet|Mobi/`
+— roda em qualidade máxima o tempo todo, coerente com "roda muito bem".)
+
+- **Causa raiz direta**: a correção anterior (mesmo dia) baixou o TETO do ajuste automático de
+  resolução (2.2/1.8/1.3 → 1.6/1.35/1.1) especificamente porque o Poco C75 (celular) reclamou de
+  pouca nitidez. Só que essa tabela é COMPARTILHADA entre todos os aparelhos móveis — baixar o
+  teto ajudou o celular mas tirou justamente o alívio que um tablet mais fraco (tela bem maior,
+  mais pixels pra sombrear no MESMO `hardwareScalingLevel`) precisava pra manter FPS jogável.
+- **Correção**: a tabela não voltou ao valor antigo uniformemente — foi differenciada por faixa.
+  A faixa mais crítica (`avgFps < 20`, aparelho realmente lutando pra rodar) subiu pra 2.4 (MAIS
+  agressiva que o valor original do lab-58, 2.2 — jogabilidade importa mais que nitidez quando o
+  aparelho já está claramente sofrendo). As faixas "ok" (30-45, >45 — aparelho com folga) mantêm
+  o teto baixo da correção anterior, preservando o ganho de nitidez pro Poco C75. Cada aparelho
+  cai na faixa que a PRÓPRIA medição de FPS dele indicar — os dois pedidos (nitidez no celular,
+  FPS no tablet) continuam satisfeitos ao mesmo tempo, sem o código precisar saber qual aparelho é
+  qual.
+- **Cortes adicionais de contagem** (`isLowEndDevice`, todos mecânicos, mesmo padrão já usado
+  desde os labs 53/55/56): `PROP_COUNT` 34→24, `CRITTER_COUNT` 20→14, `CLOUD_COUNT` 5→4,
+  `WALKER_COUNT` 5→3 (o mais caro dos figurantes — corpo físico animado + rig completo, não só
+  malha parada), `GRASS_COUNT` 1300→900. Nenhum desses usa thin instancing (só a grama já usava);
+  cada prop a menos é um mesh e um draw call a menos de verdade.
+- Build passa. Como nas rodadas anteriores de ajuste de contagem/qualidade (labs 53/55/56/58),
+  não dá pra verificar o ganho de FPS sem o aparelho físico — próxima confirmação depende do
+  usuário testar de novo no Redmi Pad 2. **Thin instancing continua sendo o maior alavanca de
+  performance NÃO puxado** (documentado desde o lab-53) — se o lag persistir mesmo depois deste
+  corte, é o próximo passo real (props/rochas/bichos parados convertidos de `.clone()` por
+  instância pra um buffer de thin instances por template, como a grama já faz).
+
 ## Pendências / dívidas conhecidas
 
 - **Cor original do glTF nas rochas reaproveitadas** — algumas mantêm um tom ligeiramente

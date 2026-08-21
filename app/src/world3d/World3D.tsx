@@ -2318,11 +2318,12 @@ export function World3D({
         ...OTHER_INDICES,
       ]
 
-      // Metade da contagem em dispositivo fraco (lab-55: "ainda está muito pesado pra tablet") —
-      // cada prop a menos é um mesh a menos (sem instancing nenhum nesses loops), então reduzir a
-      // quantidade em cenário puramente decorativo é o jeito mais simples e seguro de cortar
-      // draw calls sem arriscar um refactor de instancing sem poder testar no aparelho real.
-      const PROP_COUNT = isLowEndDevice ? 34 : 65
+      // Cortada de novo no lab-59 (34 → 24, usuário: "os gráficos do tablet Redmi Pad 2 ainda
+      // estão com muito lag") — cada prop a menos é um mesh a menos (sem instancing nenhum nesses
+      // loops, ver comentário histórico do lab-55 abaixo), então reduzir a quantidade em cenário
+      // puramente decorativo é o jeito mais simples e seguro de cortar draw calls sem arriscar um
+      // refactor de instancing sem poder testar no aparelho real.
+      const PROP_COUNT = isLowEndDevice ? 24 : 65
       for (let i = 0; i < PROP_COUNT; i++) {
         const t = i / PROP_COUNT
         // Cobre de perto do polo (onde a bola nasce) até um pouco além do equador —
@@ -2832,7 +2833,9 @@ export function World3D({
       const FRIEND_RADIUS = 1.4 // bem mais perto que o raio de som (3.5) — precisa "ir até" o bicho, não só passar perto
 
       const critters: Critter[] = []
-      const CRITTER_COUNT = isLowEndDevice ? 20 : 39
+      // 20 → 14 (lab-59, mesmo pedido de FPS do Redmi Pad 2 acima) — cada bicho tem IA de vagar
+      // rodando por quadro além do custo de malha, então corta trabalho de CPU e não só GPU.
+      const CRITTER_COUNT = isLowEndDevice ? 14 : 39
       for (let i = 0; i < CRITTER_COUNT; i++) {
         const kind: CritterKind =
           i < 8 ? 'coelho'
@@ -2909,7 +2912,9 @@ export function World3D({
       const CLOUD_MIN_ALPHA = 0.2
 
       const cloudGroups: { node: Mesh; puffs: Mesh[]; basePos: Vector3; speed: number }[] = []
-      const CLOUD_COUNT = isLowEndDevice ? 5 : 9
+      // 5 → 4 (lab-59, mesmo pedido de FPS do Redmi Pad 2) — cada nuvem é vários "puffs"
+      // (esferas), não uma malha só.
+      const CLOUD_COUNT = isLowEndDevice ? 4 : 9
       for (let i = 0; i < CLOUD_COUNT; i++) {
         const phi = Math.PI * 0.15 + (i / CLOUD_COUNT) * Math.PI * 0.55
         const theta = i * GOLDEN_ANGLE * 2.2
@@ -3431,8 +3436,9 @@ export function World3D({
       grassBlade.receiveShadows = false
 
       // Já é 1 draw call só (thin instances), mas cada instância ainda é vértices/fragmentos de
-      // verdade pra GPU processar — metade da densidade em dispositivo fraco (lab-56).
-      const GRASS_COUNT = isLowEndDevice ? 1300 : 2600
+      // verdade pra GPU processar — reduzida de novo no lab-59 (1300 → 900, usuário: "os gráficos
+      // do tablet Redmi Pad 2 ainda estão com muito lag").
+      const GRASS_COUNT = isLowEndDevice ? 900 : 2600
       const grassMatrices = new Float32Array(GRASS_COUNT * 16)
       for (let i = 0; i < GRASS_COUNT; i++) {
         // Resorteia (poucas tentativas bastam) até cair fora do bioma do deserto (lab-23) E fora
@@ -4534,7 +4540,10 @@ export function World3D({
         colliderBody: PhysicsAggregate['body']
       }
       const walkerNpcs: WalkerNpc[] = []
-      const WALKER_COUNT = isLowEndDevice ? 5 : 10
+      // 5 → 3 (lab-59, mesmo pedido de FPS do Redmi Pad 2) — cada NPC andante é o mais caro dos
+      // figurantes: corpo físico animado (`PhysicsAggregate`) + rig articulado completo (várias
+      // malhas), não só decoração parada.
+      const WALKER_COUNT = isLowEndDevice ? 3 : 10
       // lab-19: colisor cápsula por NPC, corpo ANIMATED (não DYNAMIC nem STATIC) — eles se movem
       // via IA de vagar (posição escrita direto no transform a cada quadro), não por forças de
       // física, mas ainda precisam bloquear o jogador. ANIMATED é o modo certo pra isso: o motor
@@ -5655,11 +5664,15 @@ export function World3D({
     // específico realmente precisa — pode inclusive VOLTAR pra quase resolução cheia se o
     // aparelho aguentar, coisa que um valor fixo nunca conseguiria.
     //
-    // Teto reduzido no lab-59 (2.2/1.8/1.3 → 1.6/1.35/1.1): mesmo com a medição real ligada desde
-    // o lab-58, o usuário reportou de novo "a qualidade do 3D está muito baixa" no Poco C75 — o
-    // pedido não menciona travamento/lentidão, só nitidez, então a faixa inteira de valores
-    // passou a favorecer resolução mais alta, aceitando FPS um pouco menor nos aparelhos mais
-    // fracos em troca de uma imagem bem menos borrada.
+    // Tabela ajustada duas vezes no lab-59, em direções opostas — e isso é esperado, não um erro:
+    // o Poco C75 (celular, tela pequena) reportou "qualidade muito baixa" (pediu nitidez), o Redmi
+    // Pad 2 (tablet, tela bem maior — mais pixels pra sombrear no MESMO `hardwareScalingLevel")
+    // reportou "muito lag" (pediu FPS) — dois aparelhos DIFERENTES, medidos independentemente por
+    // este mesmo mecanismo. A correção: baixar o teto só das faixas de FPS "ok" (30-45, >45 —
+    // aparelho com folga, favorece nitidez) enquanto SOBE o teto da faixa mais crítica (<20 —
+    // aparelho realmente lutando pra rodar, onde jogabilidade importa mais que nitidez). Cada
+    // aparelho cai na faixa que a PRÓPRIA medição de FPS dele indicar, então os dois pedidos
+    // continuam satisfeitos ao mesmo tempo sem precisar saber qual aparelho é qual.
     let fpsAutoTuneInterval: number | null = null
     let fpsAutoTuneTimeout: number | null = null
     if (isLowEndDevice) {
@@ -5679,9 +5692,9 @@ export function World3D({
             if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
             const avgFps = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length
             let scaling: number
-            if (avgFps < 20) scaling = 1.6
-            else if (avgFps < 30) scaling = 1.35
-            else if (avgFps < 45) scaling = 1.1
+            if (avgFps < 20) scaling = 2.4
+            else if (avgFps < 30) scaling = 1.8
+            else if (avgFps < 45) scaling = 1.15
             else scaling = 1.0
             engine.setHardwareScalingLevel(scaling)
             ;(scene as any).__syncGuiResolution?.()
