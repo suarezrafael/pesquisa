@@ -14,7 +14,12 @@ rotações de repouso das duas plataformas, não a tangente da curva), removido 
 voadora carregava embaixo (reaproveitava a malha inteira da plataforma fixa; separado veículo de
 plataforma), dado uma cauda afunilada mais aerodinâmica, e adicionada chama saindo dos motores;
 numa quarta rodada, corrigida a decolagem "de lado" da Terra — a rotação agora fica travada reta
-nos primeiros 20% do voo, vira suavemente só no meio, e trava de pé nos 20% finais)
+nos primeiros 20% do voo, vira suavemente só no meio, e trava de pé nos 20% finais; numa quinta
+rodada, corrigida a câmera do voo (usava a tangente crua da curva, degenerava perto do "pra cima"
+do mundo — trocada pelo nariz de verdade da nave), o HUD fixo/legendas do mundo 3D encolhidos de
+novo pro celular (clamp() trocado de vw pra vmin — vw media o lado longo em paisagem — e as
+legendas do Babylon.GUI ganharam ajuste de tamanho pela primeira vez), e a qualidade 3D no celular
+favorecida sobre FPS (teto do ajuste automático reduzido, FXAA ligado no mobile))
 Contexto para o próximo laboratório: labs/lab-59-foguete-pilotavel-e-marte/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
