@@ -334,6 +334,20 @@ const SWORD_LOCATION_DIR = new Vector3(0.65, 0.55, -0.52).normalize()
 const GUN_LOCATION_DIR = new Vector3(-0.25, -0.45, -0.85).normalize()
 const WEAPON_PICKUP_RADIUS = 1.3
 const MARS_COMBAT_RADIUS = 1.6
+// Duração da animação de golpe/tiro (lab-62, pedido do usuário: "ao apertar E ele sacode o braço,
+// ou atira o laser?") — curta o bastante pra não atrapalhar o jogo, longa o bastante pra dar pra
+// ver o braço se mexer.
+const ATTACK_ANIM_DURATION = 0.4
+// "Colisão" com o jogador (lab-62, pedido do usuário: "os ET e o robô também têm que ter colisão
+// ... ele não pode entrar dentro do meu corpo") — sem física de verdade nos inimigos (cara demais
+// por unidade, decisão de performance já tomada no lab-60); em vez disso, empurra o inimigo de
+// volta pra fora desse raio sempre que a perseguição o traria pra mais perto. O anel visual (ver
+// `soundRing` em `setup()`) usa esse mesmo raio como referência.
+const MARS_ENEMY_PERSONAL_SPACE = 0.9
+// Duração do "solavanco" visual do inimigo ao atacar (lab-62, pedido do usuário: "mostrar uma
+// animação... não só de soco") — pulso de escala rápido, já que ET/robô não têm braço articulado
+// pra animar um soco de verdade.
+const MARS_ENEMY_LUNGE_DURATION = 0.25
 
 // Direção de cada escola, calculada aqui com a MESMA fórmula do loop que monta as escolas em
 // `setup()` (fonte única — copiada, não importada, porque `quests.forEach` também precisa rodar
@@ -922,6 +936,8 @@ interface MarsEnemy {
   // para nocautear o ET/o robô") — inimigo morto para de perseguir/atacar e some da cena, sem
   // precisar removê-lo do array (mais simples que filtrar `marsEnemies` toda hora).
   alive: boolean
+  // "Solavanco" visual (pulso de escala) tocado ao atacar (lab-62) — ver `MARS_ENEMY_LUNGE_DURATION`.
+  lungeTimer: number
 }
 
 function buildCoelho(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
@@ -1976,6 +1992,20 @@ export function World3D({
     // exibição + detecção de "pegou o item") e por `handleInteractPress` (combate em Marte).
     let swordPickup: { root: TransformNode; label: TextBlock } | null = null
     let gunPickup: { root: TransformNode; label: TextBlock } | null = null
+    // Versões "equipadas" (lab-62, pedido do usuário: "como eu sei que peguei o item, tem
+    // animação que eu estou segurando o item?") — cópias pequenas presas na mão do boneco
+    // (`elbowPivotR`/`elbowPivotL`), escondidas até o item ser coletado. `attackAnimTimer`/
+    // `attackAnimKind` tocam uma animação curta de braço (espada) ou "atira" (arma) ao nocautear
+    // um inimigo, sobrescrevendo o ciclo de caminhada por um instante — ver laço de física.
+    let equippedSword: TransformNode | null = null
+    let equippedGun: TransformNode | null = null
+    let attackAnimTimer = 0
+    let attackAnimKind: 'sword' | 'gun' | null = null
+    // Anel de onda sonora (lab-62, pedido do usuário: "um anel de onda sonora em volta do boneco
+    // e ele não pode entrar dentro no meu corpo") — reforço visual do raio de "colisão"
+    // (`MARS_ENEMY_PERSONAL_SPACE`), pulsando continuamente. Só visível em Marte (só lá tem
+    // inimigo pra indicar limite nenhum).
+    let soundRing: Mesh | null = null
     // Piloto do foguete (lab-59, pedido do usuário: "o lance da viagem do foguete é o boneco
     // entrar no foguete, deve ter como controlar como tem no carro... ir pra trás e pra frente
     // com as setas... e viajar pelo espaço entre os dois planetas") — os dois foguetes das
@@ -2205,15 +2235,75 @@ export function World3D({
         }
       }
 
+      // Choque elétrico do robô (lab-62, pedido do usuário: "animação de ataque, o robô tem que
+      // ser choque elétrico") — segmentos finos em ziguezague (offset aleatório em cada ponto
+      // intermediário) do robô até o jogador, amarelo-branco emissivo, somem sozinhos.
+      function spawnRoboShock(fromPos: Vector3, toPos: Vector3) {
+        const segmentCount = 3
+        const points: Vector3[] = [fromPos]
+        for (let i = 1; i < segmentCount; i++) {
+          const base = Vector3.Lerp(fromPos, toPos, i / segmentCount)
+          points.push(base.add(new Vector3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3)))
+        }
+        points.push(toPos)
+        const shockMat = new PBRMaterial('roboShockMat', scene)
+        shockMat.albedoColor = new Color3(1, 1, 0.6)
+        shockMat.emissiveColor = new Color3(1, 1, 0.5)
+        const segs: Mesh[] = []
+        for (let i = 0; i < points.length - 1; i++) {
+          const delta = points[i + 1].subtract(points[i])
+          const length = delta.length()
+          if (length < 0.01) continue
+          const dir = delta.clone().normalize()
+          const seg = MeshBuilder.CreateCylinder(`roboShockSeg${i}`, { diameter: 0.035, height: length, tessellation: 5 }, scene)
+          seg.position.copyFrom(Vector3.Lerp(points[i], points[i + 1], 0.5))
+          const up = Vector3.Up()
+          if (Math.abs(Vector3.Dot(dir, up)) > 0.999) {
+            seg.rotationQuaternion = Quaternion.Identity()
+          } else {
+            const axis = Vector3.Cross(up, dir).normalize()
+            const angle = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(up, dir))))
+            seg.rotationQuaternion = Quaternion.RotationAxis(axis, angle)
+          }
+          seg.material = shockMat
+          segs.push(seg)
+        }
+        window.setTimeout(() => segs.forEach((s) => s.dispose()), 220)
+      }
+
+      // Fumaça verde do ET (lab-62, pedido do usuário: "o ET com fumaça verde") — punhado de
+      // esferas espalhadas ao redor do ponto de ataque, verde translúcido, somem sozinhas.
+      function spawnEtSmoke(atPos: Vector3) {
+        const smokeMat = new PBRMaterial('etSmokeMat', scene)
+        smokeMat.albedoColor = new Color3(0.3, 0.75, 0.35)
+        smokeMat.emissiveColor = new Color3(0.15, 0.4, 0.15)
+        smokeMat.alpha = 0.6
+        const puffs: Mesh[] = []
+        for (let i = 0; i < 5; i++) {
+          const puff = MeshBuilder.CreateSphere(`etSmokePuff${i}`, { diameter: 0.22 + Math.random() * 0.14, segments: 6 }, scene)
+          puff.position = atPos.add(new Vector3((Math.random() - 0.5) * 0.35, Math.random() * 0.35, (Math.random() - 0.5) * 0.35))
+          puff.material = smokeMat
+          puffs.push(puff)
+        }
+        window.setTimeout(() => puffs.forEach((p) => p.dispose()), 450)
+      }
+
       // Dano de inimigo de Marte (lab-60, pedido do usuário: "nós temos que ter uma barra de
       // vida"). `marsHealthRef` é a fonte de verdade (lida/escrita direto aqui, sem esperar
       // re-render) — `ignore hits enquanto já chegou a zero` evita disparar `respawnFromMarsDeath`
-      // várias vezes se dois inimigos acertarem no mesmo quadro.
-      function applyMarsDamage(amount: number) {
+      // várias vezes se dois inimigos acertarem no mesmo quadro. Recebe o inimigo atacante
+      // (lab-62) pra disparar o efeito certo (choque/fumaça) e o "solavanco" visual dele.
+      function applyMarsDamage(amount: number, attacker: MarsEnemy) {
         if (marsHealthRef.current <= 0) return
         marsHealthRef.current = Math.max(0, marsHealthRef.current - amount)
         setMarsHealthDisplay(marsHealthRef.current)
         playEnemyHit()
+        attacker.lungeTimer = MARS_ENEMY_LUNGE_DURATION
+        if (avatarMesh) {
+          const attackerWorldPos = SECOND_PLANET_CENTER.add(attacker.up.scale(SECOND_PLANET_RADIUS))
+          if (attacker.kind === 'robo') spawnRoboShock(attackerWorldPos, avatarMesh.position.clone())
+          else spawnEtSmoke(avatarMesh.position.clone())
+        }
         if (marsHealthRef.current <= 0) respawnFromMarsDeath()
       }
 
@@ -2234,6 +2324,33 @@ export function World3D({
         playKnockedOut()
         setMarsDeathMessage('Nocauteado! Volte de foguete pra continuar explorando Marte.')
         window.setTimeout(() => setMarsDeathMessage(null), 4000)
+      }
+
+      // Feixe de laser (lab-62, pedido do usuário: "ao apertar E... atira o laser?") — cilindro
+      // temporário do jogador até o robô, some sozinho depois de ~180ms. `.clone()` antes de
+      // `.normalize()` é de propósito — `Vector3.normalize()` muta o vetor no lugar (bug real já
+      // encontrado nesta sessão, ver `avatarLocalPos` no laço de IA de Marte), então normalizar
+      // `delta` direto corromperia ele se algo mais fosse lido dele depois.
+      function fireLaserBeam(fromPos: Vector3, toPos: Vector3) {
+        const delta = toPos.subtract(fromPos)
+        const length = delta.length()
+        if (length < 0.01) return
+        const dir = delta.clone().normalize()
+        const beam = MeshBuilder.CreateCylinder('laserBeam', { diameter: 0.05, height: length, tessellation: 6 }, scene)
+        beam.position.copyFrom(Vector3.Lerp(fromPos, toPos, 0.5))
+        const up = Vector3.Up()
+        if (Math.abs(Vector3.Dot(dir, up)) > 0.999) {
+          beam.rotationQuaternion = Quaternion.Identity()
+        } else {
+          const axis = Vector3.Cross(up, dir).normalize()
+          const angle = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(up, dir))))
+          beam.rotationQuaternion = Quaternion.RotationAxis(axis, angle)
+        }
+        const beamMat = new PBRMaterial('laserBeamMat', scene)
+        beamMat.albedoColor = new Color3(0.2, 0.8, 0.9)
+        beamMat.emissiveColor = new Color3(0.3, 0.9, 1)
+        beam.material = beamMat
+        window.setTimeout(() => beam.dispose(), 180)
       }
 
       // Ação genérica da tecla E — entrar/sair do carro OU embarcar/desembarcar do foguete,
@@ -2333,6 +2450,14 @@ export function World3D({
             const canDefeat =
               (enemy.kind === 'et' && hasSwordRef.current) || (enemy.kind === 'robo' && hasGunRef.current)
             if (canDefeat) {
+              // Animação de golpe/tiro (lab-62, pedido do usuário: "ao apertar E ele sacode o
+              // braço, ou atira o laser?") — sobrescreve o ciclo de caminhada por um instante
+              // (ver `attackAnimTimer`/`attackAnimKind` no laço de física).
+              attackAnimTimer = ATTACK_ANIM_DURATION
+              attackAnimKind = enemy.kind === 'et' ? 'sword' : 'gun'
+              if (enemy.kind === 'robo') {
+                fireLaserBeam(avatarMesh.position.clone(), SECOND_PLANET_CENTER.add(enemyLocalPos))
+              }
               enemy.alive = false
               enemy.root.setEnabled(false)
               playEnemyHit()
@@ -3750,6 +3875,7 @@ export function World3D({
             restTimer: Math.random() * 2,
             attackCooldown: 0,
             alive: true,
+            lungeTimer: 0,
           })
         }
       }
@@ -3916,6 +4042,41 @@ export function World3D({
       applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
       if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure
+
+      // Espada/arma "equipadas" (lab-62, pedido do usuário: "como eu sei que peguei o item, tem
+      // animação que eu estou segurando o item?") — cópias pequenas presas na mão (parentadas no
+      // cotovelo, que já é o fim do antebraço), escondidas até o item ser coletado (ver detecção
+      // de coleta no laço de física, mais abaixo). Espada na mão direita, arma na esquerda — cada
+      // uma no seu braço, sem competir pelo mesmo espaço.
+      equippedSword = buildSword(scene, shadowGenerator)
+      equippedSword.scaling.setAll(0.55)
+      equippedSword.parent = studentFigure.elbowPivotR
+      equippedSword.position = new Vector3(0.02, -0.22, 0.04)
+      equippedSword.rotation = new Vector3(-0.3, 0, 0.25)
+      equippedSword.setEnabled(false)
+
+      equippedGun = buildLaserGun(scene, shadowGenerator)
+      equippedGun.scaling.setAll(0.65)
+      equippedGun.parent = studentFigure.elbowPivotL
+      equippedGun.position = new Vector3(-0.02, -0.22, 0.04)
+      equippedGun.rotation = new Vector3(-0.2, 0, -0.2)
+      equippedGun.setEnabled(false)
+
+      // Anel de onda sonora (lab-62, pedido do usuário: "um anel de onda sonora em volta do
+      // boneco e ele não pode entrar dentro no meu corpo") — parentado em `studentFigure.root`
+      // (cujo eixo Y local já É o "pra cima" do planeta, ver a montagem da rotação do boneco no
+      // laço de física), deitado no chão sem rotação extra: `CreateTorus` já nasce plano no
+      // plano XZ, com o Y passando pelo "buraco da rosquinha" — exatamente o eixo que já
+      // corresponde a "reto pra cima" nesse nó. Só visível em Marte (`onSecondPlanet`).
+      soundRing = MeshBuilder.CreateTorus('soundRing', { diameter: MARS_ENEMY_PERSONAL_SPACE * 2, thickness: 0.04, tessellation: 24 }, scene)
+      soundRing.parent = studentFigure.root
+      soundRing.position.y = 0.03
+      const soundRingMat = new PBRMaterial('soundRingMat', scene)
+      soundRingMat.albedoColor = new Color3(0.6, 0.9, 1)
+      soundRingMat.emissiveColor = new Color3(0.5, 0.85, 1)
+      soundRingMat.alpha = 0.5
+      soundRing.material = soundRingMat
+      soundRing.setEnabled(false)
 
       // Trocar de avatar na lojinha não reconstrói a cena inteira (custoso) — só recolore a
       // camisa e remonta as peças do boneco (orelhas/rabo/etc., lab-13) do personagem já em
@@ -5456,6 +5617,23 @@ export function World3D({
             studentFigure.head.position.y += (1.15 - studentFigure.head.position.y) * 0.2
             lastFootSign = 0
           }
+
+          // Animação de golpe/tiro (lab-62) — sobrescreve o braço calculado pelo ciclo de
+          // caminhada acima por um instante curto (`ATTACK_ANIM_DURATION`), disparada em
+          // `handleInteractPress` ao nocautear um inimigo em Marte. Espada: braço direito faz um
+          // arco de corte. Arma: braço esquerdo levanta com um "coice" de recuo.
+          if (attackAnimTimer > 0) {
+            attackAnimTimer -= dt
+            const swingT = Math.min(1, 1 - attackAnimTimer / ATTACK_ANIM_DURATION)
+            if (attackAnimKind === 'sword') {
+              studentFigure.armPivotR.rotation.x = -1.9 + Math.sin(swingT * Math.PI) * 2.4
+              studentFigure.elbowPivotR.rotation.x = -0.4
+            } else if (attackAnimKind === 'gun') {
+              studentFigure.armPivotL.rotation.x = -1.3 - Math.sin(swingT * Math.PI) * 0.35
+              studentFigure.elbowPivotL.rotation.x = 0.35
+            }
+            if (attackAnimTimer <= 0) attackAnimKind = null
+          }
           } // fim do `if (!drivingCar && !drivingRocket)` — resto do bloco (câmera/multiplayer/
             // ranking/portais) continua rodando normalmente dirigindo ou não.
 
@@ -5749,6 +5927,18 @@ export function World3D({
           c.root.rotationQuaternion = tmpQuat.clone()
         }
 
+        // Anel de onda sonora (lab-62) — só visível/animado em Marte, pulsando continuamente
+        // ("sonar", cresce e desaparece, recomeça). `soundRingMat` foi dado o `alpha` inicial na
+        // construção; aqui só o `alpha` muda por quadro, então o cast é seguro.
+        if (soundRing) {
+          soundRing.setEnabled(onSecondPlanet)
+          if (onSecondPlanet) {
+            const pingT = (time % 1.2) / 1.2
+            soundRing.scaling.setAll(0.6 + pingT * 1.0)
+            ;(soundRing.material as PBRMaterial).alpha = 0.5 * (1 - pingT)
+          }
+        }
+
         // Espada/arma (lab-61) — giro de exibição (ajuda a chamar atenção, funciona como parte
         // da "dica" de localização pedida pelo usuário, já que a legenda flutuante sozinha pode
         // passar despercebida) + detecção de "pegou o item" (anda por cima, mesmo raio de coleta
@@ -5763,8 +5953,9 @@ export function World3D({
               hasSwordRef.current = true
               swordPickup.root.setEnabled(false)
               swordPickup.label.alpha = 0
+              if (equippedSword) equippedSword.setEnabled(true)
               playCoinCollect()
-              setWeaponMessage('Você encontrou a Espada! Pressione E perto de um ET em Marte pra nocauteá-lo.')
+              setWeaponMessage('Você encontrou a Espada! Agora ela fica na sua mão — pressione E perto de um ET em Marte pra nocauteá-lo.')
               window.setTimeout(() => setWeaponMessage(null), 4500)
             }
           }
@@ -5776,8 +5967,9 @@ export function World3D({
               hasGunRef.current = true
               gunPickup.root.setEnabled(false)
               gunPickup.label.alpha = 0
+              if (equippedGun) equippedGun.setEnabled(true)
               playCoinCollect()
-              setWeaponMessage('Você encontrou a Arma a Laser! Pressione E perto de um robô em Marte pra nocauteá-lo.')
+              setWeaponMessage('Você encontrou a Arma a Laser! Agora ela fica na sua mão — pressione E perto de um robô em Marte pra nocauteá-lo.')
               window.setTimeout(() => setWeaponMessage(null), 4500)
             }
           }
@@ -5838,6 +6030,22 @@ export function World3D({
               }
             }
 
+            // "Colisão" com o jogador (lab-62, pedido do usuário: "os ET e o robô também têm que
+            // ter colisão... ele não pode entrar dentro do meu corpo") — sem física de verdade
+            // (cara demais por inimigo, decisão já tomada no lab-60): se a perseguição trouxe o
+            // inimigo pra mais perto do que `MARS_ENEMY_PERSONAL_SPACE`, empurra ele de volta pra
+            // fora desse raio, na direção oposta ao jogador. `.normalize()` no fim re-projeta na
+            // esfera (o "empurrão" sozinho não garante ficar exatamente no raio do planeta).
+            const enemyPosAfterMove = enemy.up.scale(SECOND_PLANET_RADIUS)
+            const distAfterMove = Vector3.Distance(enemyPosAfterMove, avatarLocalPos)
+            if (distAfterMove < MARS_ENEMY_PERSONAL_SPACE) {
+              const awayFromPlayer = enemyPosAfterMove.subtract(avatarLocalPos)
+              if (awayFromPlayer.lengthSquared() > 1e-6) {
+                const pushedPos = avatarLocalPos.add(awayFromPlayer.normalize().scale(MARS_ENEMY_PERSONAL_SPACE))
+                enemy.up = pushedPos.normalize()
+              }
+            }
+
             let enemyFwd = enemy.targetUp.subtract(enemy.up.scale(Vector3.Dot(enemy.targetUp, enemy.up)))
             if (enemyFwd.lengthSquared() > 1e-6) {
               enemyFwd.normalize()
@@ -5852,12 +6060,23 @@ export function World3D({
             Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
             enemy.root.rotationQuaternion = tmpQuat.clone()
 
+            // "Solavanco" visual ao atacar (lab-62, pedido do usuário: "mostrar uma animação...
+            // não só de soco") — pulso de escala rápido (ET/robô não têm braço articulado pra
+            // animar um soco de verdade). `lungeTimer` é setado em `applyMarsDamage`.
+            if (enemy.lungeTimer > 0) {
+              enemy.lungeTimer -= dt
+              const lungeT = Math.max(0, enemy.lungeTimer / MARS_ENEMY_LUNGE_DURATION)
+              enemy.root.scaling.setAll(1 + Math.sin(lungeT * Math.PI) * 0.28)
+            } else if (enemy.root.scaling.x !== 1) {
+              enemy.root.scaling.setAll(1)
+            }
+
             // Ataque com intervalo entre golpes (não dano contínuo instantâneo) — dá chance do
             // jogador reagir/fugir em vez de perder vida toda de uma vez encostando sem querer.
             enemy.attackCooldown -= dt
             if (distToPlayer < MARS_ENEMY_ATTACK_RADIUS && enemy.attackCooldown <= 0) {
               enemy.attackCooldown = MARS_ENEMY_ATTACK_INTERVAL
-              applyMarsDamage(MARS_ENEMY_DAMAGE)
+              applyMarsDamage(MARS_ENEMY_DAMAGE, enemy)
             }
           }
         }
