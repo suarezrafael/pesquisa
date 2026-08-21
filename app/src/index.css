@@ -446,6 +446,15 @@ body {
   pointer-events: none;
 }
 
+/* Aviso de espada/arma (lab-61) — mesmo visual do aviso de "nocauteado" acima, mas mais pra baixo
+   e em tom âmbar (não vermelho) pra ler como aviso/dica, não como punição — os dois nunca
+   deveriam aparecer ao mesmo tempo na prática (um é sobre embarcar em Marte, o outro sobre
+   morrer LÁ), mas a posição diferente evita sobreposição no caso raro de coincidirem. */
+.weapon-message {
+  top: 58%;
+  background: rgba(90, 60, 10, 0.85);
+}
+
 .world3d-hint {
   position: absolute;
   bottom: 1.1rem;

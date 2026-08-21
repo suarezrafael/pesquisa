@@ -292,6 +292,12 @@ const ROCKET_FLIGHT_SPEED = 1 / 9
 // destino — pequena o bastante pra não virar um balão gigante agora que os dois planetas ficam
 // perto um do outro (era 45, calibrado pra quando o planetinha ficava a 400 unidades de distância).
 const ROCKET_ARC_HEIGHT = 14
+// Fronteiras das três fases de orientação do voo (lab-61, pedido do usuário: "ele deve voar
+// apontando pro planeta de destino e pousar de ré") — decolagem travada até aqui, cruzeiro
+// (nariz aponta pra tangente da curva) até ali, "flip" pra pouso de ré dali até o fim. Ver laço
+// de voo mais abaixo.
+const ROCKET_LAUNCH_HOLD_END = 0.15
+const ROCKET_LANDING_FLIP_START = 0.75
 // O planetinha secundário só é construído (e só existe) quando o jogador embarca na nave pela
 // primeira vez — "aparece quando você embarca" (pedido do usuário), não fica sempre presente na
 // cena. Pedido do usuário (lab-59): "o planetinha não deve estar muito longe na viagem, como se
@@ -319,6 +325,15 @@ const MARS_ENEMY_ATTACK_RADIUS = 1.3
 const MARS_ENEMY_ATTACK_INTERVAL = 1.3
 const MARS_ENEMY_DAMAGE = 12
 const MARS_ENEMY_MOVE_SPEED = 0.55
+
+// Espada e arma a laser (lab-61, pedido do usuário: "crie uma espada que deve ser pega na terra
+// para usar no planeta pra nocautear o ET e uma arma para usar no robô, dê dicas de como
+// encontrar a espada e a arma senão não tem como sobreviver"). Direções escolhidas longe dos
+// outros marcos conhecidos do planeta principal (foguete, lagoa, deserto, ponto de nascimento).
+const SWORD_LOCATION_DIR = new Vector3(0.65, 0.55, -0.52).normalize()
+const GUN_LOCATION_DIR = new Vector3(-0.25, -0.45, -0.85).normalize()
+const WEAPON_PICKUP_RADIUS = 1.3
+const MARS_COMBAT_RADIUS = 1.6
 
 // Direção de cada escola, calculada aqui com a MESMA fórmula do loop que monta as escolas em
 // `setup()` (fonte única — copiada, não importada, porque `quests.forEach` também precisa rodar
@@ -421,6 +436,26 @@ function alignmentQuaternion(up: Vector3): Quaternion {
   if (dot > 0.9999) return Quaternion.Identity()
   if (dot < -0.9999) return Quaternion.RotationAxis(new Vector3(1, 0, 0), Math.PI)
   const axis = Vector3.Cross(defaultUp, up).normalize()
+  const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
+  return Quaternion.RotationAxis(axis, angle)
+}
+
+// Menor rotação que leva o vetor `from` até `to` — usada pra girar o foguete durante o TRECHO DE
+// CRUZEIRO do voo (lab-61, pedido do usuário: "ele deve voar apontando pro planeta de destino"),
+// quadro a quadro, do nariz atual pra tangente nova da curva. Rotação incremental nunca degenera
+// (não existe eixo de referência fixo pra ficar paralelo a nada, diferente de reconstruir a base
+// via produto vetorial contra um eixo fixo — bug já visto numa versão anterior desta mesma
+// função).
+function quaternionBetweenVectors(from: Vector3, to: Vector3): Quaternion {
+  const dot = Vector3.Dot(from, to)
+  if (dot > 0.9999) return Quaternion.Identity()
+  if (dot < -0.9999) {
+    let axis = Vector3.Cross(Vector3.Right(), from)
+    if (axis.lengthSquared() < 1e-6) axis = Vector3.Cross(Vector3.Up(), from)
+    axis.normalize()
+    return Quaternion.RotationAxis(axis, Math.PI)
+  }
+  const axis = Vector3.Cross(from, to).normalize()
   const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
   return Quaternion.RotationAxis(axis, angle)
 }
@@ -883,6 +918,10 @@ interface MarsEnemy {
   homeUp: Vector3
   restTimer: number
   attackCooldown: number
+  // Nocauteado com a arma certa (lab-61, pedido do usuário: "crie uma espada... e uma arma...
+  // para nocautear o ET/o robô") — inimigo morto para de perseguir/atacar e some da cena, sem
+  // precisar removê-lo do array (mais simples que filtrar `marsEnemies` toda hora).
+  alive: boolean
 }
 
 function buildCoelho(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
@@ -1619,6 +1658,96 @@ function buildRobo(scene: Scene, shadowGenerator: ShadowGenerator): TransformNod
   return root
 }
 
+// Espada e arma a laser (lab-61, pedido do usuário: "crie uma espada que deve ser pega na terra
+// para usar no planeta pra nocautear o ET e uma arma para usar no robô") — pegáveis no planeta
+// principal, só primitivas, mesmo padrão do resto do jogo. Sem elas, o jogador não tem como se
+// defender em Marte (motivo do próprio pedido: "ao pousar em Marte já morri, não tem como dar
+// golpe").
+function buildSword(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('swordRoot', scene)
+
+  const bladeMat = new PBRMaterial('swordBladeMat', scene)
+  bladeMat.albedoColor = new Color3(0.82, 0.84, 0.88)
+  bladeMat.roughness = 0.25
+  bladeMat.metallic = 0.85
+
+  const hiltMat = new PBRMaterial('swordHiltMat', scene)
+  hiltMat.albedoColor = new Color3(0.62, 0.46, 0.16)
+  hiltMat.roughness = 0.5
+  hiltMat.metallic = 0.6
+
+  function add(mesh: Mesh, mat: PBRMaterial) {
+    mesh.material = mat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  // Lâmina — cilindro de 4 lados (tessellation baixa dá um perfil losangular, mais "lâmina" que
+  // um cilindro redondo) afunilando até a ponta.
+  const blade = MeshBuilder.CreateCylinder(
+    'swordBlade',
+    { diameterTop: 0, diameterBottom: 0.1, height: 0.85, tessellation: 4 },
+    scene,
+  )
+  blade.position.y = 0.78
+  add(blade, bladeMat)
+
+  const guard = MeshBuilder.CreateBox('swordGuard', { width: 0.32, height: 0.05, depth: 0.08 }, scene)
+  guard.position.y = 0.34
+  add(guard, hiltMat)
+
+  const hilt = MeshBuilder.CreateCylinder('swordHilt', { diameter: 0.07, height: 0.28, tessellation: 8 }, scene)
+  hilt.position.y = 0.2
+  add(hilt, hiltMat)
+
+  const pommel = MeshBuilder.CreateSphere('swordPommel', { diameter: 0.1 }, scene)
+  pommel.position.y = 0.05
+  add(pommel, hiltMat)
+
+  return root
+}
+
+function buildLaserGun(scene: Scene, shadowGenerator: ShadowGenerator): TransformNode {
+  const root = new TransformNode('gunRoot', scene)
+
+  const metalMat = new PBRMaterial('gunMetalMat', scene)
+  metalMat.albedoColor = new Color3(0.28, 0.3, 0.34)
+  metalMat.roughness = 0.4
+  metalMat.metallic = 0.7
+
+  const glowMat = new PBRMaterial('gunGlowMat', scene)
+  glowMat.albedoColor = new Color3(0.2, 0.8, 0.9)
+  glowMat.emissiveColor = new Color3(0.2, 0.8, 0.9)
+
+  function add(mesh: Mesh, mat: PBRMaterial) {
+    mesh.material = mat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateBox('gunBody', { width: 0.14, height: 0.16, depth: 0.4 }, scene)
+  body.position.y = 0.32
+  add(body, metalMat)
+
+  const barrel = MeshBuilder.CreateCylinder('gunBarrel', { diameter: 0.07, height: 0.35, tessellation: 10 }, scene)
+  barrel.rotation.x = Math.PI / 2
+  barrel.position = new Vector3(0, 0.32, 0.36)
+  add(barrel, metalMat)
+
+  const tip = MeshBuilder.CreateSphere('gunTip', { diameter: 0.08 }, scene)
+  tip.position = new Vector3(0, 0.32, 0.54)
+  add(tip, glowMat)
+
+  const grip = MeshBuilder.CreateBox('gunGrip', { width: 0.1, height: 0.28, depth: 0.12 }, scene)
+  grip.rotation.x = -0.35
+  grip.position = new Vector3(0, 0.15, 0.1)
+  add(grip, metalMat)
+
+  return root
+}
+
 export function World3D({
   profile,
   progress,
@@ -1672,6 +1801,12 @@ export function World3D({
   const [marsHealthDisplay, setMarsHealthDisplay] = useState(MARS_MAX_HEALTH)
   const [onMarsCombatZone, setOnMarsCombatZone] = useState(false)
   const [marsDeathMessage, setMarsDeathMessage] = useState<string | null>(null)
+  // Espada/arma (lab-61) — mesmo padrão do `marsHealthRef`: fonte de verdade em ref (lida direto
+  // pelo laço de física/`handleInteractPress`, sem esperar re-render), `weaponMessage` só pro
+  // aviso transitório de "achou o item"/"embarcando sem os dois".
+  const hasSwordRef = useRef(false)
+  const hasGunRef = useRef(false)
+  const [weaponMessage, setWeaponMessage] = useState<string | null>(null)
   const chatOpenRef = useRef(false)
   chatOpenRef.current = chatOpen
 
@@ -1837,6 +1972,10 @@ export function World3D({
     let secondPlanetBuilt = false
     let mainRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
     let secondPlanetReturnRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
+    // Espada/arma (lab-61) — construídas uma vez em `setup()`, lidas pelo laço de física (giro de
+    // exibição + detecção de "pegou o item") e por `handleInteractPress` (combate em Marte).
+    let swordPickup: { root: TransformNode; label: TextBlock } | null = null
+    let gunPickup: { root: TransformNode; label: TextBlock } | null = null
     // Piloto do foguete (lab-59, pedido do usuário: "o lance da viagem do foguete é o boneco
     // entrar no foguete, deve ter como controlar como tem no carro... ir pra trás e pra frente
     // com as setas... e viajar pelo espaço entre os dois planetas") — os dois foguetes das
@@ -1854,15 +1993,15 @@ export function World3D({
       p1: Vector3
       toSecondPlanet: boolean
       // Rotação de "repouso" da nave em cada ponta (a mesma que `alignmentQuaternion` dá ao
-      // foguete parado numa plataforma — nariz apontando pra longe do planeta) — a orientação em
-      // voo é uma interpolação esférica (`Quaternion.Slerp`) entre as duas, não a tangente da
-      // curva. Bug real reportado pelo usuário ("o foguete pousa de cabeça em Marte, tem que
-      // pousar de ré"): seguir a tangente da curva faz o nariz apontar pra DENTRO do planeta de
-      // chegada (mergulho de cabeça); interpolar as rotações de repouso garante que a nave chega
-      // já na MESMA orientação "de pé" que teria parada na plataforma — motores (cauda) na frente,
-      // descendo de ré, como um pouso de foguete de verdade.
+      // foguete parado numa plataforma — nariz apontando pra longe do planeta). Usada nas DUAS
+      // pontas do voo: decolagem trava nela (`fromRestQuat`), pouso converge pra ela
+      // (`toRestQuat`) — motores (cauda) na frente descendo, como um pouso de foguete de verdade.
       fromRestQuat: Quaternion
       toRestQuat: Quaternion
+      // Capturada na hora que o voo entra na fase de pouso (ver `holdFlipHoldCurve`/laço de voo
+      // mais abaixo) — de onde o "flip" pra orientação de pouso começa a interpolar. `null` até
+      // lá; type real é `Quaternion`, mas começa vazia porque só existe a partir desse instante.
+      flipStartQuat: Quaternion | null
     }
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
@@ -1984,7 +2123,7 @@ export function World3D({
         // PRÓPRIO primeiro quadro do voo, desfazendo o embarque na hora, antes de qualquer input.
         const fromRestQuat = alignmentQuaternion(fromUp)
         const toRestQuat = alignmentQuaternion(toUp)
-        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet, fromRestQuat, toRestQuat }
+        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet, fromRestQuat, toRestQuat, flipStartQuat: null }
         flyingRocket.setEnabled(true)
         flyingRocket.position.copyFrom(p0)
         // Começa com a MESMA rotação da plataforma parada (`alignmentQuaternion(fromUp)`, igual
@@ -1993,6 +2132,15 @@ export function World3D({
         flyingRocket.rotationQuaternion = fromRestQuat.clone()
         startRocketEngine()
         if (rocketFlameSystem) rocketFlameSystem.emitRate = 80
+        // Aviso ao decolar rumo a Marte sem os dois itens de combate (lab-61, pedido do usuário:
+        // "dê dicas de como encontrar a espada e a arma senão não tem como sobreviver") — só na
+        // ida (`toSecondPlanet`), não faz sentido avisar na volta pro planeta principal.
+        if (toSecondPlanet && (!hasSwordRef.current || !hasGunRef.current)) {
+          setWeaponMessage(
+            'Cuidado: você ainda não achou a Espada e/ou a Arma a Laser na Terra — sem elas, não dá pra nocautear o ET e o robô em Marte!',
+          )
+          window.setTimeout(() => setWeaponMessage(null), 5000)
+        }
 
         if (avatarBody) {
           avatarBody.body.setLinearVelocity(Vector3.Zero())
@@ -2170,6 +2318,28 @@ export function World3D({
           studentFigure.elbowPivotR.rotation.x = 0.6
           for (const car of carros) car.hintLabel.alpha = 0
           return
+        }
+        // Combate em Marte (lab-61, pedido do usuário: "crie uma espada... e uma arma... para
+        // nocautear o ET/o robô") — checado ANTES do embarque no foguete: perto de um inimigo
+        // vivo com a arma certa equipada, apertar E nocauteia em vez de embarcar. Sem a arma
+        // certa, não faz nada (o jogador precisa achar o item primeiro — ver aviso ao embarcar
+        // sem os dois, em `boardRocket`).
+        if (onSecondPlanet) {
+          const avatarLocalPos = avatarMesh.position.subtract(SECOND_PLANET_CENTER)
+          for (const enemy of marsEnemies) {
+            if (!enemy.alive) continue
+            const enemyLocalPos = enemy.up.scale(SECOND_PLANET_RADIUS)
+            if (Vector3.Distance(enemyLocalPos, avatarLocalPos) >= MARS_COMBAT_RADIUS) continue
+            const canDefeat =
+              (enemy.kind === 'et' && hasSwordRef.current) || (enemy.kind === 'robo' && hasGunRef.current)
+            if (canDefeat) {
+              enemy.alive = false
+              enemy.root.setEnabled(false)
+              playEnemyHit()
+              onCollectCoinRef.current()
+            }
+            return
+          }
         }
         const rocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
         if (rocket) {
@@ -3383,6 +3553,42 @@ export function World3D({
         mainRocket = { root: rocketRoot, hintLabel: rocketHint }
       }
 
+      // Espada e arma a laser (lab-61, pedido do usuário: "crie uma espada que deve ser pega na
+      // terra para usar no planeta pra nocautear o ET e uma arma para usar no robô, dê dicas de
+      // como encontrar"). Legendas flutuantes SEMPRE visíveis (não só de perto, diferente das
+      // dicas "Pressione E") — funcionam como a própria dica de localização pedida pelo usuário,
+      // visíveis de longe enquanto o jogador explora o planeta principal.
+      {
+        const swordRoot = buildSword(scene, shadowGenerator)
+        swordRoot.position = SWORD_LOCATION_DIR.scale(
+          terrainGroundRadial(SWORD_LOCATION_DIR, terrainHeight(SWORD_LOCATION_DIR)),
+        )
+        const swordLabel = new TextBlock('swordLabel', '🗡️ Espada')
+        swordLabel.color = 'white'
+        swordLabel.fontSize = mobileFontSize(18)
+        swordLabel.fontWeight = 'bold'
+        swordLabel.outlineWidth = 3
+        swordLabel.outlineColor = 'rgba(0,0,0,0.6)'
+        guiTexture.addControl(swordLabel)
+        swordLabel.linkWithMesh(swordRoot)
+        swordLabel.linkOffsetY = -60
+        swordPickup = { root: swordRoot, label: swordLabel }
+      }
+      {
+        const gunRoot = buildLaserGun(scene, shadowGenerator)
+        gunRoot.position = GUN_LOCATION_DIR.scale(terrainGroundRadial(GUN_LOCATION_DIR, terrainHeight(GUN_LOCATION_DIR)))
+        const gunLabel = new TextBlock('gunLabel', '🔫 Arma a laser')
+        gunLabel.color = 'white'
+        gunLabel.fontSize = mobileFontSize(18)
+        gunLabel.fontWeight = 'bold'
+        gunLabel.outlineWidth = 3
+        gunLabel.outlineColor = 'rgba(0,0,0,0.6)'
+        guiTexture.addControl(gunLabel)
+        gunLabel.linkWithMesh(gunRoot)
+        gunLabel.linkOffsetY = -60
+        gunPickup = { root: gunRoot, label: gunLabel }
+      }
+
       // Foguete voador (lab-59) — o veículo de verdade usado durante o trecho pilotado entre as
       // duas plataformas (ver `boardRocket`/`landRocket`). `buildRocketVehicle`, não `buildRocket`
       // — sem a base/pilares da plataforma fixa (ver comentário em `addRocketBody`). Escondido até
@@ -3543,6 +3749,7 @@ export function World3D({
             homeUp: enemyUp,
             restTimer: Math.random() * 2,
             attackCooldown: 0,
+            alive: true,
           })
         }
       }
@@ -5542,6 +5749,40 @@ export function World3D({
           c.root.rotationQuaternion = tmpQuat.clone()
         }
 
+        // Espada/arma (lab-61) — giro de exibição (ajuda a chamar atenção, funciona como parte
+        // da "dica" de localização pedida pelo usuário, já que a legenda flutuante sozinha pode
+        // passar despercebida) + detecção de "pegou o item" (anda por cima, mesmo raio de coleta
+        // espiritualmente parecido com o das moedas). Só roda no planeta principal — os itens não
+        // existem em Marte.
+        if (!onSecondPlanet && avatarMesh) {
+          if (swordPickup && !hasSwordRef.current) {
+            swordPickup.root.rotationQuaternion = alignmentQuaternion(SWORD_LOCATION_DIR).multiply(
+              Quaternion.RotationAxis(Vector3.Up(), time * 1.2),
+            )
+            if (Vector3.Distance(avatarMesh.position, swordPickup.root.position) < WEAPON_PICKUP_RADIUS) {
+              hasSwordRef.current = true
+              swordPickup.root.setEnabled(false)
+              swordPickup.label.alpha = 0
+              playCoinCollect()
+              setWeaponMessage('Você encontrou a Espada! Pressione E perto de um ET em Marte pra nocauteá-lo.')
+              window.setTimeout(() => setWeaponMessage(null), 4500)
+            }
+          }
+          if (gunPickup && !hasGunRef.current) {
+            gunPickup.root.rotationQuaternion = alignmentQuaternion(GUN_LOCATION_DIR).multiply(
+              Quaternion.RotationAxis(Vector3.Up(), time * 1.2),
+            )
+            if (Vector3.Distance(avatarMesh.position, gunPickup.root.position) < WEAPON_PICKUP_RADIUS) {
+              hasGunRef.current = true
+              gunPickup.root.setEnabled(false)
+              gunPickup.label.alpha = 0
+              playCoinCollect()
+              setWeaponMessage('Você encontrou a Arma a Laser! Pressione E perto de um robô em Marte pra nocauteá-lo.')
+              window.setTimeout(() => setWeaponMessage(null), 4500)
+            }
+          }
+        }
+
         // Inimigos de Marte (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e
         // robôs que tenta matar o nosso boneco") — só roda quando o jogador está lá (sem custo
         // nenhum no planeta principal). Mesmo esquema de IA de vagar dos bichos acima (`up`/
@@ -5561,6 +5802,7 @@ export function World3D({
           const avatarUp =
             avatarLocalPos.length() > 0.0001 ? avatarLocalPos.clone().normalize() : SECOND_PLANET_LANDING_UP
           for (const enemy of marsEnemies) {
+            if (!enemy.alive) continue
             const enemyLocalPos = enemy.up.scale(SECOND_PLANET_RADIUS)
             const distToPlayer = Vector3.Distance(enemyLocalPos, avatarLocalPos)
             const chasing = distToPlayer < MARS_ENEMY_AGGRO_RADIUS
@@ -5772,7 +6014,7 @@ export function World3D({
             0,
             Math.min(1, drivingRocket.progress + rocketThrottle * ROCKET_FLIGHT_SPEED * dt),
           )
-          const { position: shipPos } = sampleFlightArc(
+          const { position: shipPos, tangent: shipTangent } = sampleFlightArc(
             drivingRocket.p0,
             drivingRocket.c1,
             drivingRocket.c2,
@@ -5780,19 +6022,39 @@ export function World3D({
             drivingRocket.progress,
           )
           flyingRocket.position.copyFrom(shipPos)
-          // Orientação da nave = interpolação esférica entre a rotação "de pé" na plataforma de
-          // partida e a "de pé" na plataforma de chegada — NÃO a tangente da curva de voo (faria o
-          // nariz apontar pra DENTRO do planeta de chegada, mergulho de cabeça). O parâmetro dessa
-          // interpolação não é `progress` puro — é `holdFlipHoldCurve(progress, 0.2, 0.8)`: trava
-          // a orientação de decolagem por 20% do voo (sai reto, sem guinada perto da plataforma —
-          // bug real reportado pelo usuário: "está saindo meio de lado, tem que sair pra cima"),
-          // vira suavemente no meio, e trava a orientação de pouso nos 20% finais (chega já "de
-          // pé", pronta pra descer de ré).
-          flyingRocket.rotationQuaternion = Quaternion.Slerp(
-            drivingRocket.fromRestQuat,
-            drivingRocket.toRestQuat,
-            holdFlipHoldCurve(drivingRocket.progress, 0.2, 0.8),
-          )
+          // Orientação da nave em três trechos (lab-61, pedido do usuário: "ele deve voar
+          // apontando pro planeta de destino e pousar de ré" — a versão anterior só interpolava
+          // entre as duas rotações de repouso, então nunca apontava pra onde estava indo de
+          // verdade durante o cruzeiro):
+          // 1) decolagem (até `ROCKET_LAUNCH_HOLD_END`): trava na rotação de repouso da
+          //    plataforma de partida — sai reto pra cima, sem guinada.
+          // 2) cruzeiro (até `ROCKET_LANDING_FLIP_START`): nariz gira INCREMENTALMENTE
+          //    (`quaternionBetweenVectors`, nunca degenera) atrás da tangente da curva a cada
+          //    quadro — aponta pra onde a nave está indo de verdade, pedido do usuário.
+          // 3) pouso: "flip" — interpola (Slerp) da orientação capturada no instante em que essa
+          //    fase começa até a rotação de repouso da plataforma de chegada, terminando "de pé",
+          //    motores (cauda) na frente descendo — pouso de ré.
+          if (drivingRocket.progress <= ROCKET_LAUNCH_HOLD_END) {
+            flyingRocket.rotationQuaternion = drivingRocket.fromRestQuat.clone()
+            drivingRocket.flipStartQuat = null
+          } else if (drivingRocket.progress < ROCKET_LANDING_FLIP_START) {
+            flyingRocket.computeWorldMatrix(true)
+            const currentNose = Vector3.TransformNormal(Vector3.Up(), flyingRocket.getWorldMatrix()).normalize()
+            const deltaRotation = quaternionBetweenVectors(currentNose, shipTangent)
+            flyingRocket.rotationQuaternion = deltaRotation.multiply(
+              flyingRocket.rotationQuaternion ?? Quaternion.Identity(),
+            )
+            drivingRocket.flipStartQuat = null
+          } else {
+            if (!drivingRocket.flipStartQuat) {
+              drivingRocket.flipStartQuat = (flyingRocket.rotationQuaternion ?? drivingRocket.fromRestQuat).clone()
+            }
+            flyingRocket.rotationQuaternion = Quaternion.Slerp(
+              drivingRocket.flipStartQuat,
+              drivingRocket.toRestQuat,
+              holdFlipHoldCurve(drivingRocket.progress, ROCKET_LANDING_FLIP_START, 1),
+            )
+          }
           // Câmera posicionada atrás da CAUDA da nave (nariz invertido), não atrás da tangente
           // crua da curva — bug real reportado pelo usuário ("o foguete tem que viajar na
           // horizontal da câmera, eu deveria enxergar os motores dele na perspectiva de 3ª
@@ -6086,6 +6348,7 @@ export function World3D({
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}
       {marsDeathMessage && <p className="mars-death-message">{marsDeathMessage}</p>}
+      {weaponMessage && <p className="mars-death-message weapon-message">{weaponMessage}</p>}
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
       <TouchActionButton className="touch-action-jump" label="⬆️" onPress={handleTouchJumpPress} />
