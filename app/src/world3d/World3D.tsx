@@ -2068,9 +2068,21 @@ export function World3D({
     // Legendas flutuantes (Babylon.GUI, número da escolinha/dica de interação/etc.) — o lab-57 já
     // corrigiu o bug de RESOLUÇÃO da textura de GUI (borrada, upscaled), mas o TAMANHO da fonte em
     // si continuava fixo em pixels reais de dispositivo — grande demais numa tela física pequena
-    // mesmo renderizado nítido. Reduz só no celular/tablet, mantendo o tamanho de desktop intacto.
+    // mesmo renderizado nítido.
+    //
+    // Reduzir baseado em `isLowEndDevice` (GPU fraca) em vez do tamanho físico da tela era o bug
+    // errado pra resolver aqui (lab-67, relatado ao vivo pelo usuário testando no Redmi Pad 2:
+    // "os texto de legendas dos objetos ficaram muito pequeno quase não dá pra ler" assim que o
+    // user-agent parou de ser mascarado pelo modo "Site para computador" do Chrome e o jogo
+    // passou a reconhecer o tablet como aparelho fraco de verdade). GPU fraca e tela física
+    // pequena são dois problemas DIFERENTES que só coincidem em celular — um tablet grande (ex.:
+    // Redmi Pad 2, ~11") tem a MESMA GPU fraca de um celular, mas a tela é grande o bastante pra
+    // não precisar de fonte reduzida nenhuma. `isSmallScreen` usa a MENOR dimensão da janela (não
+    // fixa em largura, pra não confundir celular deitado com tablet) — só isso decide a fonte;
+    // `isLowEndDevice` continua controlando resolução/sombra/contagem de props, sem mudar aqui.
+    const isSmallScreen = Math.min(window.innerWidth, window.innerHeight) < 500
     function mobileFontSize(px: number): number {
-      return isLowEndDevice ? Math.round(px * 0.72) : px
+      return isSmallScreen ? Math.round(px * 0.72) : px
     }
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
@@ -6823,8 +6835,12 @@ export function World3D({
           }
         }
 
-        if (import.meta.env.DEV && debugRef.current) {
-          debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes`
+        // Contador de FPS sempre visível, também em produção (lab-67, pedido do usuário:
+        // "preciso de informações de FPS na tela em produção") — antes só aparecia em DEV; sem
+        // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
+        // de performance realmente ajudou ou não.
+        if (debugRef.current) {
+          debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -6871,10 +6887,9 @@ export function World3D({
     // Auto-ajuste de resolução por FPS medido de verdade (lab-58) — em vez de continuar
     // adivinhando um `hardwareScalingLevel` fixo às cegas (lab-53: 1.5, lab-56: 1.75 — pesado
     // demais borrado num Poco C75, lab-57: de volta pra 1.5 — usuário ainda reportou "qualidade
-    // gráfica muito baixa"), mede o FPS real depois do carregamento inicial (~6s, já passou dos
-    // picos de carregar física/glTF/texturas) e ajusta uma vez só, pro valor que ESSE aparelho
-    // específico realmente precisa — pode inclusive VOLTAR pra quase resolução cheia se o
-    // aparelho aguentar, coisa que um valor fixo nunca conseguiria.
+    // gráfica muito baixa"), mede o FPS real e ajusta pro valor que ESSE aparelho específico
+    // realmente precisa — pode inclusive VOLTAR pra quase resolução cheia se o aparelho aguentar,
+    // coisa que um valor fixo nunca conseguiria.
     //
     // Tabela ajustada duas vezes no lab-59, em direções opostas — e isso é esperado, não um erro:
     // o Poco C75 (celular, tela pequena) reportou "qualidade muito baixa" (pediu nitidez), o Redmi
@@ -6885,13 +6900,21 @@ export function World3D({
     // aparelho realmente lutando pra rodar, onde jogabilidade importa mais que nitidez). Cada
     // aparelho cai na faixa que a PRÓPRIA medição de FPS dele indicar, então os dois pedidos
     // continuam satisfeitos ao mesmo tempo sem precisar saber qual aparelho é qual.
+    //
+    // Virou CONTÍNUO no lab-67 (pedido do usuário: "ainda tem lag ao mover a câmera e se percebe
+    // baixo FPS ao andar") — a versão anterior (lab-58) media só uma vez, ~6s depois de carregar,
+    // e travava esse valor pro resto da sessão inteira. Como a cena perto do ponto de nascimento é
+    // mais leve que áreas densas do mapa (floresta cheia de props, perto da estação alienígena em
+    // Marte etc.), uma amostra única logo no início podia escolher uma resolução alta demais pra
+    // aguentar essas áreas mais pesadas depois — daí "lag ao andar" mesmo com o auto-ajuste já
+    // tendo rodado uma vez. Agora repete o ciclo de amostragem indefinidamente (a cada ~12s: 6s de
+    // descanso + ~4s de amostragem), reagindo tanto pra PIOR (entrou numa área pesada) quanto pra
+    // MELHOR (voltou pra uma área leve) ao longo de toda a sessão, não só no carregamento.
     let fpsAutoTuneInterval: number | null = null
     let fpsAutoTuneTimeout: number | null = null
     if (isLowEndDevice) {
-      // Espera 6s antes da PRIMEIRA amostra (não só entre amostras) — sem isso mediria FPS
-      // ainda durante o carregamento inicial (física/glTF/texturas), que é enganosamente baixo
-      // e não representa o jogo já rodando de verdade.
-      fpsAutoTuneTimeout = window.setTimeout(() => {
+      let currentScaling = engine.getHardwareScalingLevel()
+      const runAutoTuneCycle = () => {
         if (disposed) return
         const fpsSamples: number[] = []
         fpsAutoTuneInterval = window.setInterval(() => {
@@ -6908,11 +6931,21 @@ export function World3D({
             else if (avgFps < 30) scaling = 1.8
             else if (avgFps < 45) scaling = 1.15
             else scaling = 1.0
-            engine.setHardwareScalingLevel(scaling)
-            ;(scene as any).__syncGuiResolution?.()
+            if (scaling !== currentScaling) {
+              currentScaling = scaling
+              engine.setHardwareScalingLevel(scaling)
+              ;(scene as any).__syncGuiResolution?.()
+            }
+            // Descanso entre ciclos — não precisa reagir a cada quadro, só acompanhar mudanças
+            // reais de área/cena ao longo do tempo.
+            fpsAutoTuneTimeout = window.setTimeout(runAutoTuneCycle, 6000)
           }
         }, 1300)
-      }, 6000)
+      }
+      // Espera 6s antes do PRIMEIRO ciclo (não só entre ciclos) — sem isso mediria FPS ainda
+      // durante o carregamento inicial (física/glTF/texturas), que é enganosamente baixo e não
+      // representa o jogo já rodando de verdade.
+      fpsAutoTuneTimeout = window.setTimeout(runAutoTuneCycle, 6000)
     }
 
     return () => {
@@ -6982,7 +7015,7 @@ export function World3D({
   return (
     <div className="world3d-container">
       <canvas ref={canvasRef} className="world3d-canvas" />
-      {import.meta.env.DEV && <div ref={debugRef} className="world3d-debug" />}
+      <div ref={debugRef} className="world3d-debug" />
       <HudHeader
         profile={profile}
         progress={progress}
