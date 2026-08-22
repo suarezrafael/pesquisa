@@ -49,6 +49,7 @@ import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
 import { RankingPanel } from './RankingPanel'
 import { MarsHealthBar } from './MarsHealthBar'
+import { WeaponBagPanel } from './WeaponBagPanel'
 import {
   playBirdChirp,
   playCoinCollect,
@@ -1823,6 +1824,16 @@ export function World3D({
   const hasSwordRef = useRef(false)
   const hasGunRef = useRef(false)
   const [weaponMessage, setWeaponMessage] = useState<string | null>(null)
+  // Mochila (lab-63, pedido do usuário: "se eu peguei ambas o boneco deve ter uma bolsa virtual
+  // em que voce ve o item e pode selecionar navegando no painel e clicando") — `hasSword`/`hasGun`
+  // espelham os refs acima só pra decidir o que desenhar no painel (o combate continua lendo os
+  // refs direto, sem esperar re-render). Selecionar um item no painel é só informativo — a regra
+  // de combate (espada nocauteia ET, arma nocauteia robô) é automática por tipo de inimigo desde
+  // o lab-61 e não muda por causa da seleção.
+  const [hasSword, setHasSword] = useState(false)
+  const [hasGun, setHasGun] = useState(false)
+  const [bagOpen, setBagOpen] = useState(false)
+  const [selectedWeapon, setSelectedWeapon] = useState<'sword' | 'gun' | null>(null)
   const chatOpenRef = useRef(false)
   chatOpenRef.current = chatOpen
 
@@ -5955,6 +5966,7 @@ export function World3D({
               swordPickup.label.alpha = 0
               if (equippedSword) equippedSword.setEnabled(true)
               playCoinCollect()
+              setHasSword(true)
               setWeaponMessage('Você encontrou a Espada! Agora ela fica na sua mão — pressione E perto de um ET em Marte pra nocauteá-lo.')
               window.setTimeout(() => setWeaponMessage(null), 4500)
             }
@@ -5969,6 +5981,7 @@ export function World3D({
               gunPickup.label.alpha = 0
               if (equippedGun) equippedGun.setEnabled(true)
               playCoinCollect()
+              setHasGun(true)
               setWeaponMessage('Você encontrou a Arma a Laser! Agora ela fica na sua mão — pressione E perto de um robô em Marte pra nocauteá-lo.')
               window.setTimeout(() => setWeaponMessage(null), 4500)
             }
@@ -6564,10 +6577,21 @@ export function World3D({
         onToggleMute={handleToggleMute}
         onOpenChat={() => setChatOpen(true)}
         onOpenRanking={() => setRankingOpen(true)}
+        showBag={hasSword || hasGun}
+        onOpenBag={() => setBagOpen(true)}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}
       {marsDeathMessage && <p className="mars-death-message">{marsDeathMessage}</p>}
       {weaponMessage && <p className="mars-death-message weapon-message">{weaponMessage}</p>}
+      {bagOpen && (
+        <WeaponBagPanel
+          hasSword={hasSword}
+          hasGun={hasGun}
+          selected={selectedWeapon}
+          onSelect={setSelectedWeapon}
+          onClose={() => setBagOpen(false)}
+        />
+      )}
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} />
       <TouchActionButton className="touch-action-jump" label="⬆️" onPress={handleTouchJumpPress} />

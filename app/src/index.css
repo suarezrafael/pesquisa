@@ -989,3 +989,55 @@ body {
   font-weight: 700;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
+
+/* Mochila (lab-63) — canto oposto ao ranking/chat (ambos à direita) pra nunca sobrepor mesmo se
+   os dois painéis ficarem abertos ao mesmo tempo. */
+.bag-panel {
+  top: 4.6rem;
+  left: 1rem;
+  right: auto;
+  bottom: auto;
+  max-height: 42vh;
+}
+
+.bag-panel-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.bag-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 12px;
+  border: 2px solid #e2e8f8;
+  background: #f4f6ff;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.bag-item-selected {
+  border-color: var(--primary);
+  background: #eaf0ff;
+}
+
+.bag-item-emoji {
+  font-size: 1.6rem;
+}
+
+.bag-item-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #2a3358;
+}
+
+.bag-item-hint {
+  margin: 0;
+  padding: 0 0.8rem 0.8rem;
+  font-size: 0.8rem;
+  color: #4a5482;
+}

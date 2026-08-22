@@ -12,6 +12,8 @@ interface HudHeaderProps {
   onToggleMute: () => void
   onOpenChat: () => void
   onOpenRanking: () => void
+  showBag: boolean
+  onOpenBag: () => void
 }
 
 export function HudHeader({
@@ -24,6 +26,8 @@ export function HudHeader({
   onToggleMute,
   onOpenChat,
   onOpenRanking,
+  showBag,
+  onOpenBag,
 }: HudHeaderProps) {
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
@@ -65,6 +69,11 @@ export function HudHeader({
         <button type="button" className="help-button" onClick={onOpenRanking} aria-label="Ver ranking">
           🏆
         </button>
+        {showBag && (
+          <button type="button" className="help-button" onClick={onOpenBag} aria-label="Ver mochila">
+            🎒
+          </button>
+        )}
         <button type="button" className="help-button" onClick={onOpenHelp} aria-label="Como jogar">
           ?
         </button>
