@@ -15,6 +15,33 @@ export interface RemoteState {
   facing: [number, number, number]
   xp: number
   coins: number
+  // Aparência visível pros outros jogadores (lab-73, pedido do usuário: "quando um outro usuario
+  // multiplayer estiver usando chapeu personalizado o outro usuario deve poder enxergar esse
+  // chapeu, se ele estiver segurando a espada ou a arma tbm"). `null` nos ids de cor/cabelo =
+  // usa o visual padrão, mesmo significado de `Profile.equippedXxxId` (ver `types.ts`).
+  hatId: string | null
+  hasSword: boolean
+  hasGun: boolean
+  shirtColorId: string | null
+  pantsColorId: string | null
+  shoeColorId: string | null
+  backpackColorId: string | null
+  hairShapeId: string | null
+}
+
+// Efeito de combate transmitido pra todo mundo (lab-73, pedido do usuário: "o efeito de espada e
+// arma deve ser visto por todos como num jogo multiplayer") — evento avulso, não um campo de
+// `RemoteState` (o ataque é instantâneo, não um estado contínuo que precisa ficar sincronizado
+// enquanto não muda, como posição/aparência). O relay já inclui o `id` de quem mandou em
+// qualquer mensagem repassada (`broadcast(id, {...msg, id})`, ver `app/server/relay.cjs`), então
+// não precisa vir aqui — quem recebe descobre de qual jogador remoto é o ataque puramente pelo
+// `id` da mensagem.
+export interface AttackEvent {
+  id: string
+  kind: 'sword' | 'gun'
+  enemyKind: 'et' | 'robo'
+  fromPos: [number, number, number]
+  toPos: [number, number, number]
 }
 
 // Ranking local (lab-20): entrada derivada do próprio jogador + do `RemoteState` de cada peer
@@ -41,6 +68,7 @@ type StateHandler = (state: RemoteState) => void
 type LeaveHandler = (id: string) => void
 type ChatHandler = (msg: ChatMessage) => void
 type ConnectionHandler = (connected: boolean) => void
+type AttackHandler = (attack: AttackEvent) => void
 
 const RELAY_PORT = 3001
 
@@ -50,6 +78,7 @@ let stateHandlers: StateHandler[] = []
 let leaveHandlers: LeaveHandler[] = []
 let chatHandlers: ChatHandler[] = []
 let connectionHandlers: ConnectionHandler[] = []
+let attackHandlers: AttackHandler[] = []
 
 function relayUrl(): string {
   const configured = import.meta.env.VITE_RELAY_URL as string | undefined
@@ -83,6 +112,7 @@ export function connect(): void {
       return
     }
     if (msg.type === 'state') stateHandlers.forEach((h) => h(msg as RemoteState))
+    else if (msg.type === 'attack') attackHandlers.forEach((h) => h(msg as AttackEvent))
     else if (msg.type === 'chat') {
       // Nunca confia em texto vindo da rede — só repassa se `messageId` bater com uma entrada
       // conhecida do catálogo (o relay já valida isso também, mas checar de novo aqui é
@@ -121,9 +151,31 @@ export function sendState(
   facing: [number, number, number],
   xp: number,
   coins: number,
+  appearance: {
+    hatId: string | null
+    hasSword: boolean
+    hasGun: boolean
+    shirtColorId: string | null
+    pantsColorId: string | null
+    shoeColorId: string | null
+    backpackColorId: string | null
+    hairShapeId: string | null
+  },
 ): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) return
-  socket.send(JSON.stringify({ type: 'state', name, avatarEmoji, position, facing, xp, coins }))
+  socket.send(JSON.stringify({ type: 'state', name, avatarEmoji, position, facing, xp, coins, ...appearance }))
+}
+
+// Efeito de combate visto por todos (lab-73) — disparado uma vez só no momento do golpe/tiro,
+// não repetido a cada quadro como `sendState`.
+export function sendAttack(
+  kind: 'sword' | 'gun',
+  enemyKind: 'et' | 'robo',
+  fromPos: [number, number, number],
+  toPos: [number, number, number],
+): void {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return
+  socket.send(JSON.stringify({ type: 'attack', kind, enemyKind, fromPos, toPos }))
 }
 
 export function sendChat(name: string, messageId: string): void {
@@ -150,6 +202,13 @@ export function onChat(handler: ChatHandler): () => void {
   chatHandlers.push(handler)
   return () => {
     chatHandlers = chatHandlers.filter((h) => h !== handler)
+  }
+}
+
+export function onRemoteAttack(handler: AttackHandler): () => void {
+  attackHandlers.push(handler)
+  return () => {
+    attackHandlers = attackHandlers.filter((h) => h !== handler)
   }
 }
 

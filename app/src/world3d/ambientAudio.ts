@@ -327,6 +327,35 @@ export function playLaserZap(): void {
   src.start(now)
 }
 
+// Golpe de espada (lab-76, pedido do usuário: "ao pressionar E deve fazer o som de espada e mexer
+// o braço, mesmo sem estar em marte") — "whoosh" de ar cortado: ruído filtrado por um passa-faixa
+// cuja frequência central desce rápido (o próprio filtro varrendo simula o deslocamento de ar da
+// lâmina), sem tom/oscilador nenhum (diferente do zap eletrônico do laser) — dura menos que o
+// golpe de robô (`playEnemyHit`) porque é só o som do movimento, não de impacto.
+export function playSwordSwing(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.18
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const bandpass = ctx.createBiquadFilter()
+  bandpass.type = 'bandpass'
+  bandpass.Q.value = 0.9
+  bandpass.frequency.setValueAtTime(2600, now)
+  bandpass.frequency.exponentialRampToValueAtTime(500, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.16, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  src.connect(bandpass).connect(gain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+}
+
 // Passarinho cantando baixinho perto do jogador (pedido do usuário) — dois bipes agudos rápidos
 // ("piu-piu"), bem mais quieto que o passo, disparado só quando um pássaro está perto (ver
 // World3D.tsx, IA de vagar dos bichos).
@@ -520,6 +549,155 @@ export function playCoinCollect(): void {
     osc.start(t)
     osc.stop(t + 0.2)
   })
+}
+
+// Ronco do motor do foguete (lab-59, pedido do usuário: "faça um barulho de foguete") — ruído
+// grave filtrado (o "sopro"/turbulência, mesma técnica do vento) somado a um oscilador grave em
+// dente-de-serra com vibrato lento (o "ronco" do motor, mesma técnica do rosnado da onça) — liga
+// com fade-in ao embarcar, desliga com fade-out ao pousar, igual ao ciclo liga/desliga da chuva.
+interface RocketEngineNodes {
+  noiseSrc: AudioBufferSourceNode
+  noiseGain: GainNode
+  osc: OscillatorNode
+  oscGain: GainNode
+  wobble: OscillatorNode
+}
+let rocketEngine: RocketEngineNodes | null = null
+const ROCKET_ENGINE_VOLUME = 0.1
+
+export function startRocketEngine(): void {
+  if (!audioCtx || rocketEngine) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+
+  const bufferSize = ctx.sampleRate * 2
+  const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = noiseBuffer.getChannelData(0)
+  let last = 0
+  for (let i = 0; i < bufferSize; i++) {
+    const white = Math.random() * 2 - 1
+    last = (last + 0.08 * white) / 1.08
+    data[i] = last * 2.6
+  }
+  const noiseSrc = ctx.createBufferSource()
+  noiseSrc.buffer = noiseBuffer
+  noiseSrc.loop = true
+
+  const rumbleFilter = ctx.createBiquadFilter()
+  rumbleFilter.type = 'lowpass'
+  rumbleFilter.frequency.value = 440
+  rumbleFilter.Q.value = 0.5
+
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0, now)
+  noiseGain.gain.linearRampToValueAtTime(ROCKET_ENGINE_VOLUME, now + 0.4)
+  noiseSrc.connect(rumbleFilter).connect(noiseGain).connect(ctx.destination)
+  noiseSrc.start(now)
+
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(38, now)
+  osc.frequency.exponentialRampToValueAtTime(66, now + 0.6)
+  const wobble = ctx.createOscillator()
+  wobble.frequency.value = 8
+  const wobbleGain = ctx.createGain()
+  wobbleGain.gain.value = 5
+  wobble.connect(wobbleGain).connect(osc.frequency)
+  const oscGain = ctx.createGain()
+  oscGain.gain.setValueAtTime(0, now)
+  oscGain.gain.linearRampToValueAtTime(ROCKET_ENGINE_VOLUME * 0.7, now + 0.4)
+  osc.connect(oscGain).connect(ctx.destination)
+  osc.start(now)
+  wobble.start(now)
+
+  rocketEngine = { noiseSrc, noiseGain, osc, oscGain, wobble }
+}
+
+export function stopRocketEngine(): void {
+  if (!audioCtx || !rocketEngine) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const { noiseSrc, noiseGain, osc, oscGain, wobble } = rocketEngine
+  noiseGain.gain.cancelScheduledValues(now)
+  noiseGain.gain.setValueAtTime(noiseGain.gain.value, now)
+  noiseGain.gain.linearRampToValueAtTime(0, now + 0.4)
+  oscGain.gain.cancelScheduledValues(now)
+  oscGain.gain.setValueAtTime(oscGain.gain.value, now)
+  oscGain.gain.linearRampToValueAtTime(0, now + 0.4)
+  window.setTimeout(() => {
+    try {
+      noiseSrc.stop()
+    } catch {
+      // já pode ter sido parado (ex.: dispose da cena) — ignora.
+    }
+    try {
+      osc.stop()
+    } catch {
+      // idem
+    }
+    try {
+      wobble.stop()
+    } catch {
+      // idem
+    }
+  }, 500)
+  rocketEngine = null
+}
+
+// Golpe de inimigo (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
+// tenta matar o nosso boneco") — "zap" curto e áspero (dente-de-serra descendente + ruído grave),
+// diferente do `playLaserZap` do parkour (mais agudo/elétrico) pra não confundir os dois efeitos.
+export function playEnemyHit(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.22
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(320, now)
+  osc.frequency.exponentialRampToValueAtTime(70, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.16, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  osc.connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + duration)
+
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 500
+  const noiseGain = ctx.createGain()
+  noiseGain.gain.setValueAtTime(0.09, now)
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  src.connect(lowpass).connect(noiseGain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+}
+
+// "Nocauteado" — tom grave descendente longo, diferente de qualquer efeito já existente (mais
+// solene/triste que o "zap" do golpe acima), tocado uma vez quando a vida chega a zero.
+export function playKnockedOut(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.9
+  const osc = ctx.createOscillator()
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(330, now)
+  osc.frequency.exponentialRampToValueAtTime(80, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.001, now)
+  gain.gain.linearRampToValueAtTime(0.18, now + 0.05)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  osc.connect(gain).connect(ctx.destination)
+  osc.start(now)
+  osc.stop(now + duration)
 }
 
 export function toggleMute(): boolean {

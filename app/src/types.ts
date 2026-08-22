@@ -24,6 +24,16 @@ export interface Profile {
   // Chapéu equipado (lab-24) — eixo de customização independente da criatura (`avatarEmoji`):
   // null = nenhum chapéu, não amarrado a qual criatura está em uso.
   equippedHatId: string | null
+  // Cores/cabelo do boneco (lab-73, pedido do usuário: "escolher na lojinha a cor da camiseta e
+  // da mochila... a cor da calça, a cor do sapato, e o formato do cabelo") — cada eixo é
+  // independente dos outros e da criatura escolhida, mesmo espírito do chapéu. `null` = usa o
+  // visual padrão atual (não a primeira opção do catálogo — são a mesma cor, mas `null` cobre
+  // perfis salvos antes deste laboratório sem precisar de migração).
+  equippedShirtColorId: string | null
+  equippedPantsColorId: string | null
+  equippedShoeColorId: string | null
+  equippedBackpackColorId: string | null
+  equippedHairShapeId: string | null
 }
 
 export interface Progress {
@@ -33,4 +43,9 @@ export interface Progress {
   badges: string[]
   unlockedAvatarIds: string[]
   unlockedHatIds: string[]
+  unlockedShirtColorIds: string[]
+  unlockedPantsColorIds: string[]
+  unlockedShoeColorIds: string[]
+  unlockedBackpackColorIds: string[]
+  unlockedHairShapeIds: string[]
 }

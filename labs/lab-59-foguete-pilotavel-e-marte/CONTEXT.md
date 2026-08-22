@@ -1,0 +1,311 @@
+# Contexto — Laboratório 59 — Foguete pilotável + Marte
+
+Preenchido em: 2026-08-20
+Commit inicial → final: 16087c7ca9e25b354a7038b85145b9dbf3236ab0..HEAD
+
+## O que foi feito
+
+1. **Pilotagem do foguete** (`World3D.tsx`): substituído o teleporte instantâneo do lab-58 por um
+   ciclo embarcar/pilotar/pousar. `boardRocket()` prende o boneco (parenting) a uma instância
+   dedicada e reutilizável do foguete (`flyingRocket`, construída uma vez via `buildRocket()` e
+   mantida desabilitada até o embarque — os dois foguetes fixos nas plataformas continuam parados
+   como marcos visuais) e aplica a mesma pose "sentado" já usada no carro (pernas/joelhos/
+   braços/cotovelos). No laço de física por quadro, um novo bloco (`if (drivingRocket &&
+   flyingRocket)`) lê o mesmo `y` combinado (joystick + teclado) que já move o carro, converte em
+   `rocketThrottle = clamp(-y, -1, 1)`, avança `drivingRocket.progress` (0→1) e reorienta a nave
+   e a câmera a cada quadro.
+2. **Trajeto real pelo espaço** (`sampleFlightArc`): substitui `travelToOtherPlanet` (teleporte
+   direto do lab-58). Arco de Bézier quadrático entre a posição absoluta da plataforma de partida
+   e a de chegada, com um ponto de controle elevado (`ROCKET_ARC_HEIGHT = 45`) na direção média
+   entre `ROCKET_LAUNCH_DIR` e `SECOND_PLANET_LANDING_UP` — cria uma curva visível "subindo e
+   descendo" em vez de uma reta pelo centro dos planetas. `ROCKET_FLIGHT_SPEED = 1/9` por segundo
+   de aceleração máxima ⇒ ~9s de viagem em linha reta de aceleração constante.
+3. **Marte** (`buildSecondPlanetIfNeeded`): chão trocado pra marrom (`Color3(0.56, 0.35, 0.22)`,
+   roughness alta); a lista de props passou a usar só os índices de rocha (`rockIndices = [6..11]`
+   dos mesmos `propFiles` já carregados), nenhuma árvore; a cada 4º slot da distribuição, em vez de
+   rocha, entra uma nova decoração (`buildCaveEntrance` — dois montes de rocha ovalados + um
+   cilindro escuro fazendo a "boca" da caverna, só primitivas, sem asset externo, mesmo padrão do
+   resto do jogo).
+4. **Sistema de gravidade multi-planeta do lab-58 reaproveitado sem mudança de forma** —
+   `currentWorldCenter`/`currentGroundBaseFn` já existiam pra abstrair "qual planeta é o chão
+   agora"; só precisaram ser trocados no momento do pouso (`landRocket()`), não durante o voo (o
+   avatar fica parented ao foguete, fora do laço de gravidade normal, enquanto `drivingRocket`
+   estiver ativo — mesmo padrão já usado pelo carro).
+
+## Decisões técnicas tomadas
+
+- **`drivingRocket.progress` inicia em `0.001`, não `0`** — bug real encontrado ao vivo: a
+  condição de pouso por quadro é `progress >= 1 || progress <= 0`; como `progress` é sempre
+  clampado pra nunca ficar negativo, iniciar em exatamente `0` fazia o primeiro quadro já disparar
+  `landRocket()` antes de qualquer input ser processado (embarque desfeito instantaneamente).
+  Confirmado ao vivo checando `window.__playerFigure.root.parent` (ficava `null` logo após
+  embarcar, devia ser `"rocketRoot"`) e o estado `isEnabled()` do `flyingRocket`.
+- **`ROCKET_ENTER_DISTANCE` aumentada de `2.6` pra `4`** — segundo bug real: mesmo com o pouso
+  calculado corretamente (verificado com um hook de debug temporário comparando o `landingUp`
+  calculado com o valor esperado à mão — bateram exatamente), a posição final de repouso do avatar
+  ficava mais longe do foguete de volta do que o esperado, porque a física (gravidade residual,
+  assentamento no chão) continua rodando por alguns quadros depois do teleporte inicial e o avatar
+  "escorrega" um pouco antes do jogador poder interagir de novo — mais perceptível no planetinha
+  pequeno (raio 6) do que no principal (raio 13), já que a mesma distância angular de escorregão
+  representa uma fração maior da superfície. Aumentar a margem foi mais simples e robusto do que
+  tentar zerar velocidade residual num momento exato.
+- **Foguete de voo é uma instância separada, não o foguete da plataforma** — os dois foguetes
+  fixos (`mainRocket`, `secondPlanetReturnRocket`) continuam sempre visíveis nas plataformas como
+  marcos (não fazia sentido "sumir" o prédio/plataforma quando alguém embarca); uma terceira
+  instância (`flyingRocket`, construída uma vez, escondida até o primeiro embarque) é o que
+  realmente se move — evita ter que mover/animar o objeto que é filho de uma plataforma estática
+  ou duplicar geometria por viagem.
+- **Sem controle de pitch/yaw livre** — só avanço/recuo ao longo de um trajeto fixo (like o carro
+  não sai da pista), consistente com o pedido literal do usuário ("ir pra trás e pra frente com as
+  setas") e mais simples de garantir que a nave sempre chega no destino certo.
+
+## Correção pós-verificação (mesmo dia, feedback do usuário em produção)
+
+Depois do primeiro deploy deste laboratório, o usuário testou em produção e reportou dois problemas
+reais (que a verificação ao vivo no dev server não tinha pego, porque o teleporte de debug começa
+sempre na mesma posição/ângulo): "o foguete deve decolar na vertical, não de lado, e o planetinha
+não deve estar muito longe na viagem, como se fosse uma distância de um planeta e meio."
+
+- **Decolagem de lado, não vertical** — bug real de orientação: o quadro-a-quadro que gira o
+  foguete durante o voo (`Matrix.FromXYZAxesToRef(shipRight, shipUp, shipFwd, ...)`) travava o
+  nariz do foguete (eixo Y local, o mesmo que `alignmentQuaternion` alinha à superfície quando ele
+  está parado na plataforma) no "pra cima" FIXO do mundo, e a direção de voo ficava no eixo Z —
+  então a nave sempre voava "de lado" (nariz apontando pro céu do mundo, casco deslizando na
+  direção do voo) em vez de apontar pra onde estava indo. Corrigido trocando os eixos: o nariz
+  (Y local) agora acompanha a tangente da curva de voo a cada quadro.
+- **Curva sem tangente garantida na decolagem/pouso** — a curva antiga (Bézier quadrática, um
+  único ponto "meio" elevado numa direção genérica) não garantia que a tangente no EXATO instante
+  da decolagem apontasse pra cima da plataforma — só "mais ou menos". Trocada por uma Bézier
+  CÚBICA com dois pontos de controle, cada um deslocado da própria plataforma na direção "pra
+  cima" local dela (`ROCKET_LAUNCH_DIR` na partida do planeta principal, `SECOND_PLANET_LANDING_UP`
+  na do planetinha) — isso garante matematicamente (não só visualmente) que a tangente em t=0 e
+  t=1 é exatamente a direção vertical de cada plataforma.
+- **Planetinha longe demais (400 unidades)** — reduzido pra uma distância de centro-a-centro de
+  58 (13 + 39 + 6 ⇒ ~1,5 diâmetro do planeta principal de vão livre entre as duas superfícies,
+  "uma distância de um planeta e meio" como pedido). `ROCKET_ARC_HEIGHT` (a distância que os
+  pontos de controle da curva se afastam de cada plataforma) também reduzida de 45 pra 14 —
+  calibrada pra 400 unidades de distância, ficaria desproporcionalmente gigante pra uma viagem de
+  ~58 unidades.
+- Verificado ao vivo de novo depois da correção (teleporte de debug + `__handleInteractPress` +
+  tecla real): ida e volta completas, chão de Marte confirmado marrom via inspeção direta do
+  material (`secondPlanetGround`, `Color3(0.56, 0.35, 0.22)`), distância nova de 58 unidades
+  confirmada pela posição real do foguete de volta. A decolagem vertical em si não deu pra
+  observar quadro a quadro (o mesmo throttle de aba em segundo plano documentado em memória fez o
+  voo inteiro completar num único quadro forçado de novo), mas a garantia é matemática — a
+  tangente da cúbica em t=0 é exatamente `(c1-p0)`, e `c1 = p0 + fromUp * ROCKET_ARC_HEIGHT`, ou
+  seja, sempre `fromUp` normalizado por construção, não por coincidência.
+
+## Segunda correção pós-verificação (mesmo dia, novo feedback do usuário em produção)
+
+Depois da primeira correção (decolagem vertical + distância reduzida), o usuário testou de novo e
+reportou mais dois problemas reais: "o foguete sai todo torto do planetinha e quando volta volta
+todo achatado. melhore o algulo de sauda e de volta e faca um barulho de foguete."
+
+- **"Torto"/"achatado" — causa raiz**: a orientação da nave durante o voo era reconstruída DO
+  ZERO a cada quadro via produto vetorial (`Cross`) contra um eixo de referência fixo (`Vector3.
+  Up()`, com uma troca pra `Vector3.Right()` quando quase paralelo, pra evitar produto vetorial
+  degenerado). Essa troca de eixo de referência acontecia bem perto de decolar/pousar no
+  planetinha secundário — porque o "pra cima" do planetinha (`SECOND_PLANET_LANDING_UP`) já É o
+  próprio eixo `Vector3.Up()` usado como referência, então a tangente do voo passa quase paralela
+  a ele exatamente nesses dois momentos, disparando a troca de eixo (e a mudança abrupta de
+  "rolagem" que vem junto) bem na hora mais visível — saindo/chegando no planetinha.
+- **Correção**: trocada a reconstrução do zero por rotação INCREMENTAL, quadro a quadro — uma
+  nova função `quaternionBetweenVectors(from, to)` calcula a menor rotação entre o nariz atual da
+  nave e a tangente nova da curva, aplicada em cima da rotação já existente
+  (`deltaRotation.multiply(flyingRocket.rotationQuaternion)`). Isso nunca degenera (não existe
+  "eixo de referência" pra ficar paralelo a nada) e preserva a rolagem continuamente — a nave sai
+  literalmente na mesma orientação que já tinha sentada na plataforma
+  (`flyingRocket.rotationQuaternion = alignmentQuaternion(fromUp)`, ajustado ao embarcar) e vai
+  girando suavemente dali, sem nenhum "salto"/reconstrução do zero em nenhum instante do voo.
+- **Barulho de foguete**: duas funções novas em `ambientAudio.ts` — `startRocketEngine()`/
+  `stopRocketEngine()` — seguindo o MESMO padrão liga/desliga com fade já usado pra chuva
+  (`startRain`/`stopRain`): ruído grave filtrado (turbulência) + oscilador grave em dente-de-serra
+  com vibrato lento (o "ronco" do motor, mesma técnica já usada no rosnado da onça). Chamadas em
+  `boardRocket()` (liga, com uma pequena subida de tom simulando a ignição) e `landRocket()`
+  (desliga com fade-out) — toca durante TODA a viagem, não só um efeito pontual.
+- Verificado ao vivo de novo (dev server + teleporte de debug): ida e volta completas, sem erro no
+  console, quaternion final da nave confirmado unitário (`length() === 1`, sem distorção/"achatado"
+  de verdade) e escala intacta (`[1,1,1]`) via inspeção direta do estado da cena.
+
+## Terceira correção pós-verificação (mesmo dia, terceiro round de feedback do usuário)
+
+Depois da correção de "torto/achatado", o usuário testou de novo e reportou mais três problemas:
+"o foguete pousa de cabeça em marte, tem que pousar de ré. e tem que sair fogo dos motores., e
+ele tem que ter um formato mais e foguete com uma cauda mas aero dinamica, nao um prato em baixo."
+
+- **"Pousa de cabeça" — causa raiz**: a orientação em voo seguia a TANGENTE da curva de Bézier
+  (`shipFwd`). Perto da chegada, essa tangente aponta pra DENTRO do planeta de destino (é assim
+  que a nave desacelera/desce) — então o nariz (que seguia a tangente) apontava pro chão bem na
+  hora de pousar, um mergulho de cabeça. Correção: a rotação em voo virou uma interpolação esférica
+  (`Quaternion.Slerp`) entre a rotação de REPOUSO na plataforma de partida
+  (`alignmentQuaternion(fromUp)`) e a de repouso na de chegada (`alignmentQuaternion(toUp)`) — a
+  MESMA rotação que o foguete tem parado numa base, nariz longe do planeta. Em t=1 a nave chega
+  EXATAMENTE na orientação "de pé" da plataforma de destino: motores (cauda) na frente descendo,
+  nariz apontando pra longe do planeta — um pouso de ré de verdade. Verificado matematicamente ao
+  vivo: o quaternion final da nave batia, casa decimal por casa decimal, com
+  `alignmentQuaternion(ROCKET_LAUNCH_DIR)` calculado à mão. Essa troca também tornou a função
+  `quaternionBetweenVectors` (rotação incremental, da correção anterior) desnecessária — removida
+  (Slerp entre dois quaternions fixos é ainda mais simples e nunca degenera).
+- **"Prato embaixo" — causa raiz**: `flyingRocket` (o veículo que realmente voa/pousa) reaproveitava
+  a MESMA malha `buildRocket()` usada pelas plataformas fixas — disco + 4 pilares da base
+  INCLUÍDOS. Voando, isso lia como "um prato" grudado embaixo da nave. Correção: `addRocketBody`
+  virou uma função compartilhada (bocais dos motores + cauda afunilada + corpo + nariz + janela +
+  barbatanas, SEM base), chamada tanto por `buildRocket` (plataforma fixa: base/pilares +
+  `addRocketBody`) quanto pela nova `buildRocketVehicle` (só `addRocketBody`, usada só pra
+  `flyingRocket`). De quebra, o corpo ganhou uma cauda afunilada ("boat-tail", mais estreita na
+  base que no corpo) no lugar de um cilindro reto terminando de repente — pedido do usuário: "uma
+  cauda mais aerodinâmica".
+- **Fogo dos motores**: novo `ParticleSystem` (`rocketFlame`, mesma técnica de textura por
+  `DynamicTexture` já usada na chuva) ancorado bem embaixo dos bocais dos motores, `isLocal = true`
+  (as partículas nascem já na orientação atual da nave a cada quadro, sem recalcular direção
+  manualmente conforme ela gira). Liga (`emitRate = 80`) junto com o som do motor em
+  `boardRocket()`, desliga (`emitRate = 0`) em `landRocket()` — confirmado ao vivo nos dois
+  momentos via inspeção direta do `ParticleSystem`.
+- Verificado ao vivo de novo (dev server + teleporte de debug): ida e volta completas, sem erro no
+  console, malha do veículo voador confirmada SEM `rocketPad`/`rocketPillar*` (só
+  `rocketNozzle*`/`rocketTail`/`rocketBody`/`rocketNose`/`rocketWindow`/`rocketFin*`), quaternion
+  final do pouso no planeta principal batendo exatamente com `alignmentQuaternion(ROCKET_LAUNCH_DIR)`.
+
+## Quarta correção pós-verificação (mesmo dia, quarto round de feedback do usuário)
+
+Depois da correção "pousa de ré", o usuário testou de novo: "o foguete está saindo meio de lado
+da Terra, tá bizarro, ele tem que sair pra cima e depois pousar de ré."
+
+- **Causa raiz**: a correção anterior interpolava a rotação (`Quaternion.Slerp` entre a orientação
+  de repouso da plataforma de partida e a de chegada) linearmente com `progress` (0 a 1) — o que
+  corrige os dois EXTREMOS (decola e pousa "de pé"), mas faz a nave começar a virar rumo à
+  orientação de CHEGADA desde o primeiro instante do voo, ainda bem perto da plataforma de
+  partida, mal saindo do chão — visualmente "de lado" logo na decolagem, exatamente como reportado.
+- **Correção**: nova função `holdFlipHoldCurve(t, holdStart, holdEnd)` — trava a rotação em 0
+  (orientação de decolagem, sem NENHUMA guinada) até `progress = 0.2`, sobe suavemente (smoothstep)
+  até `progress = 0.8`, e trava em 1 (orientação de pouso) dali até o fim. Usada como parâmetro do
+  `Quaternion.Slerp` no lugar de `progress` puro. Resultado: decola reto por 20% do voo, vira só no
+  trecho do meio (longe de qualquer planeta, onde não há "chão" pra parecer errado), e chega já
+  "de pé" nos 20% finais — literalmente "sai pra cima e depois pousa de ré", como pedido.
+- Os dois extremos continuam matematicamente garantidos (verificado ao vivo de novo: quaternion
+  final de cada pouso batendo exatamente com `alignmentQuaternion(fromUp/toUp)`) — só o MEIO do
+  caminho mudou de forma.
+
+## Quinta correção pós-verificação (mesmo dia, câmera de voo + HUD/qualidade móvel)
+
+Novo pedido do usuário testando de novo em produção, misturando um bug do foguete com dois
+pedidos antigos de qualidade móvel que voltaram a aparecer:
+
+> o foguete tem viajar na horizontal da camera eu deveria enxergar os motores dele na
+> prspqctiva de 3 pessoa. mas ele ta viajando na vertical
+
+> quando abro no celular as legendas das casinhas e o menu fixo com o avatar e as moedas esta
+> muito grando para o celular poco c75... a qualidade do 3d esta muito baixa no telefone
+
+- **Câmera do voo "vertical" em vez de "horizontal"**: a câmera usava a TANGENTE crua da curva de
+  voo (`shipFwd`) como referência de "atrás da nave" — só que essa tangente muda bruscamente de
+  direção ao longo do voo e passa boa parte do trajeto quase paralela ao "pra cima" fixo do mundo
+  (usado como referência do `upVector`), degenerando pra uma câmera olhando quase reto pra
+  cima/baixo (a nave "subindo/descendo" na tela, sem ângulo nenhum pra ver os motores). Corrigido
+  usando o NARIZ DE VERDADE da nave (extraído da própria `rotationQuaternion`, já suave por
+  construção via `holdFlipHoldCurve`/`Slerp`) como referência: a câmera fica sempre do lado oposto
+  ao nariz — vendo os motores, como pedido — e o `upVector` é recalculado por Gram-Schmidt
+  (projeção do "pra cima" do mundo no plano perpendicular ao nariz) pra nunca mais degenerar perto
+  de nenhum eixo fixo.
+- **Painel fixo (avatar/moedas) ainda grande + legendas das casinhas grandes**: dois problemas
+  distintos na mesma reclamação.
+  1. O `clamp()` do lab-58 usava `vw` (largura da viewport) — correto em retrato, mas errado em
+     PAISAGEM (bem provável neste jogo em terceira pessoa): em paisagem, `vw` mede o lado LONGO do
+     celular, dando um resultado grande mesmo numa tela fisicamente pequena. Trocado `vw` → `vmin`
+     (o menor entre largura/altura) em todo o HUD (`index.css`) — acompanha o lado realmente
+     apertado em qualquer orientação; idêntico ao `vw` em retrato, menor (e mais correto) em
+     paisagem. Os pisos (mínimos) do `clamp()` também baixaram mais uma vez (ex.: avatar de 2.2rem
+     pra 1.7rem, cabeçalho de 0.8rem pra 0.65rem).
+  2. As legendas do MUNDO 3D (número da escolinha, dicas "Pressione E", chat, etc. — Babylon.GUI,
+     não DOM) nunca tinham ganhado nenhum ajuste de tamanho pro celular: o lab-57 corrigiu a
+     RESOLUÇÃO da textura de GUI (borrada), mas o tamanho da fonte em si continuava fixo em
+     pixels reais de dispositivo, grande numa tela física pequena mesmo nítido. Nova função
+     `mobileFontSize(px)` (72% do tamanho original só em `isLowEndDevice`) aplicada a TODAS as 13
+     atribuições de `fontSize` do arquivo (consistente, não só a legenda da escolinha).
+- **Qualidade 3D "muito baixa"**: mesmo com a medição real de FPS ligada desde o lab-58, o usuário
+  reportou de novo. Como o pedido não menciona travamento/lentidão, só nitidez, a resposta foi
+  favorecer resolução em vez de FPS em toda a faixa adaptativa: `hardwareScalingLevel` inicial
+  (antes da primeira medição) de 1.3 → 1.15; teto do ajuste automático de 2.2/1.8/1.3 → 1.6/1.35/
+  1.1 (índice de FPS→escala inteiro deslocado pra baixo). FXAA (suavização de serrilhado barata,
+  um único passe, sem custo por amostra como MSAA) ligado também no mobile — antes só rodava em
+  desktop.
+- Build passa. Testado ao vivo (dev server + teleporte de debug): câmera do voo verificada sem
+  erro no console e com `upVector` não-degenerado numa amostra real; ida/volta completas com
+  quaternion final batendo exatamente com `alignmentQuaternion` em ambas as pontas. O ajuste de
+  HUD/legendas/qualidade não dá pra verificar visualmente sem o aparelho físico (mesma limitação
+  documentada desde o lab-53) — próxima verificação real depende do usuário testar de novo no
+  Poco C75.
+
+## Sexta correção pós-verificação (mesmo dia, lag no Redmi Pad 2)
+
+Novo feedback do usuário, num aparelho DIFERENTE dos anteriores: "os graficos do tablet readmi
+pad 2 ainda estao com muito lag, precisa melhorar o fps pra ter uma boa jogabilidade, no notebook
+acer aspire go 15 roda muito bem." (o notebook não é afetado pelo ramo `isLowEndDevice` —
+`navigator.userAgent` de um notebook Windows não bate com `/Android|iPad|iPhone|iPod|Tablet|Mobi/`
+— roda em qualidade máxima o tempo todo, coerente com "roda muito bem".)
+
+- **Causa raiz direta**: a correção anterior (mesmo dia) baixou o TETO do ajuste automático de
+  resolução (2.2/1.8/1.3 → 1.6/1.35/1.1) especificamente porque o Poco C75 (celular) reclamou de
+  pouca nitidez. Só que essa tabela é COMPARTILHADA entre todos os aparelhos móveis — baixar o
+  teto ajudou o celular mas tirou justamente o alívio que um tablet mais fraco (tela bem maior,
+  mais pixels pra sombrear no MESMO `hardwareScalingLevel`) precisava pra manter FPS jogável.
+- **Correção**: a tabela não voltou ao valor antigo uniformemente — foi differenciada por faixa.
+  A faixa mais crítica (`avgFps < 20`, aparelho realmente lutando pra rodar) subiu pra 2.4 (MAIS
+  agressiva que o valor original do lab-58, 2.2 — jogabilidade importa mais que nitidez quando o
+  aparelho já está claramente sofrendo). As faixas "ok" (30-45, >45 — aparelho com folga) mantêm
+  o teto baixo da correção anterior, preservando o ganho de nitidez pro Poco C75. Cada aparelho
+  cai na faixa que a PRÓPRIA medição de FPS dele indicar — os dois pedidos (nitidez no celular,
+  FPS no tablet) continuam satisfeitos ao mesmo tempo, sem o código precisar saber qual aparelho é
+  qual.
+- **Cortes adicionais de contagem** (`isLowEndDevice`, todos mecânicos, mesmo padrão já usado
+  desde os labs 53/55/56): `PROP_COUNT` 34→24, `CRITTER_COUNT` 20→14, `CLOUD_COUNT` 5→4,
+  `WALKER_COUNT` 5→3 (o mais caro dos figurantes — corpo físico animado + rig completo, não só
+  malha parada), `GRASS_COUNT` 1300→900. Nenhum desses usa thin instancing (só a grama já usava);
+  cada prop a menos é um mesh e um draw call a menos de verdade.
+- Build passa. Como nas rodadas anteriores de ajuste de contagem/qualidade (labs 53/55/56/58),
+  não dá pra verificar o ganho de FPS sem o aparelho físico — próxima confirmação depende do
+  usuário testar de novo no Redmi Pad 2. **Thin instancing continua sendo o maior alavanca de
+  performance NÃO puxado** (documentado desde o lab-53) — se o lag persistir mesmo depois deste
+  corte, é o próximo passo real (props/rochas/bichos parados convertidos de `.clone()` por
+  instância pra um buffer de thin instances por template, como a grama já faz).
+
+## Pendências / dívidas conhecidas
+
+- **Cor original do glTF nas rochas reaproveitadas** — algumas mantêm um tom ligeiramente
+  esverdeado/azulado do modelo original em vez de marrom-avermelhado "de Marte" — cosmético menor,
+  observado ao vivo, não documentado como bug (as rochas em si fazem sentido geologicamente, só a
+  cor destoa um pouco do restante do cenário).
+- **Overshoot de `progress` em quadros forçados manualmente** — durante o teste ao vivo desta
+  sessão (aba de automação em segundo plano, mesmo padrão documentado desde o lab-58), quadros
+  forçados via screenshot tiveram `dt` muito grandes entre si (chegando a "0 FPS"/"1 FPS" no HUD de
+  debug), fazendo a viagem inteira (~9s pretendida) completar num único quadro forçado. Isso é um
+  artefato do ambiente de teste automatizado (aba não realmente em primeiro plano), não um bug de
+  gameplay — em uso normal, com quadros reais a 30-60fps, a viagem dura os ~9s pretendidos.
+
+## Funcionalidades planejadas que NÃO foram concluídas
+
+Nenhuma — tudo que foi pedido nesta rodada foi entregue e verificado ao vivo (embarque, voo
+pilotado ida e volta, pouso em Marte com chão marrom/só rochas/cavernas, pouso de volta no planeta
+principal).
+
+## O que o próximo laboratório deve desenvolver
+
+1. Usuário testar no celular/tablet real: sensação de pilotagem do foguete (o botão de toque "E"
+   já cobre embarque/desembarque; avanço/recuo usa o mesmo joystick/direcional já existente do
+   carro, não precisa de UI nova) e a aparência de Marte.
+2. Se sobrar tempo: recolorir os modelos de rocha reaproveitados especificamente pro bioma de
+   Marte (ver "Pendências" acima).
+3. Itens antigos ainda pendentes do lab-58: thin instancing de verdade se a qualidade adaptativa
+   não for suficiente no Redmi Pad 2; decidir sobre desligar o Fly.io (v1, sem uso desde o lab-54).
+
+## Estado do repositório ao final
+
+- Branch: `worktree-abstract-wobbling-owl`, a partir de `main`. PRs #2-#5 já foram mesclados pelo
+  usuário — este laboratório abre mais um PR novo (ver link no resumo final da sessão).
+- Jogo ao vivo (republicado com este laboratório): https://app-two-flax-92.vercel.app
+- Como rodar/verificar localmente: `cd app && npm install && npm run dev`.
+- Como testar o foguete sem andar até lá: no console do navegador (`npm run dev`, não o build de
+  produção — o helper só existe em DEV), `window.__debugTeleport(-0.3797213687147455,
+  -0.913545457642601, 0.14576137678401327)` teleporta bem em cima da estação de lançamento; depois
+  `window.__scene.__handleInteractPress()` embarca, e segurar seta-pra-cima pilota a nave.
+- Como redeployar o jogo: `cd app && npx vercel --prod --yes`.

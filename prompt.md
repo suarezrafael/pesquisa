@@ -42,6 +42,17 @@ Classifique como P0, P1, P2:
 - P2: mundos extras, customização avançada, chat expandido com moderação, relatórios de progresso automatizados por e-mail, múltiplos perfis por conta família, moeda bônus por assinatura.
 
 ## 7) Stack Recomendada (sem custo inicial)
+
+> **Nota de status (atualizada em 2026-08-22, 76 laboratórios depois):** as Opções A/B/C abaixo,
+> a seção 8 (hospedagem de backend/banco) e a seção 15 (monetização via Supabase + Stripe) são o
+> plano ORIGINAL — nada disso foi implementado até agora. O MVP construído ficou 100% front-end:
+> sem conta, sem banco de dados, sem pagamento. Progresso/perfil vivem só em `localStorage`
+> (reseta ao trocar de aparelho — decisão consciente, não esquecimento); o único servidor de
+> verdade é um relay WebSocket sem estado pro multiplayer (posição/chat/combate em tempo real),
+> hoje no Cloudflare Workers (ver `app/server-cf-relay/README.md`). O motor 3D real (§7.1 abaixo)
+> é Babylon.js + Havok, dentro da Opção B. Se o produto avançar pra contas/assinatura de verdade,
+> as seções 7-8 e 15 continuam válidas como ponto de partida — só não foram construídas ainda.
+> Ver `README.md` (raiz do repo) pra stack real e lista completa do que já existe.
 ### Opção A (mais rápida para MVP web/mobile)
 - **Front-end:** React + TypeScript + Vite
 - **Game engine:** Phaser 3 (2D)

@@ -7,6 +7,11 @@ import {
   type CompletionResult,
   unlockAvatar as applyAvatarUnlock,
   unlockHat as applyHatUnlock,
+  unlockShirtColor as applyShirtColorUnlock,
+  unlockPantsColor as applyPantsColorUnlock,
+  unlockShoeColor as applyShoeColorUnlock,
+  unlockBackpackColor as applyBackpackColorUnlock,
+  unlockHairShape as applyHairShapeUnlock,
 } from './progression'
 
 export function useProgress() {
@@ -43,5 +48,57 @@ export function useProgress() {
     })
   }
 
-  return { progress, completeQuest, collectCoin, unlockAvatar, unlockHat }
+  // Personalização de cores/cabelo (lab-73) — mesmo formato do `unlockHat` acima, um por eixo.
+  function unlockShirtColor(id: string): void {
+    setProgress((prev) => {
+      const next = applyShirtColorUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  function unlockPantsColor(id: string): void {
+    setProgress((prev) => {
+      const next = applyPantsColorUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  function unlockShoeColor(id: string): void {
+    setProgress((prev) => {
+      const next = applyShoeColorUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  function unlockBackpackColor(id: string): void {
+    setProgress((prev) => {
+      const next = applyBackpackColorUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  function unlockHairShape(id: string): void {
+    setProgress((prev) => {
+      const next = applyHairShapeUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  return {
+    progress,
+    completeQuest,
+    collectCoin,
+    unlockAvatar,
+    unlockHat,
+    unlockShirtColor,
+    unlockPantsColor,
+    unlockShoeColor,
+    unlockBackpackColor,
+    unlockHairShape,
+  }
 }
