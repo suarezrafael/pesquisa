@@ -311,6 +311,10 @@ const SECOND_PLANET_CENTER = new Vector3(0, 0, 58)
 // usuário: "por enquanto o planetinha pode ter só árvores e rochas, não precisa NPC") de onde o
 // foguete de volta pousa.
 const SECOND_PLANET_LANDING_UP = new Vector3(0, 1, 0)
+// Estação alienígena (lab-65, pedido do usuário: "uma estação extraterrestre avançada e moderna
+// parecendo um disco voador em que é possível entrar") — direção fixa, longe do ponto de pouso do
+// foguete de volta (evita as duas estruturas ficarem coladas uma na outra).
+const MARS_UFO_DIR = new Vector3(-0.5535, 0.3522, 0.7548).normalize()
 
 // Combate em Marte (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
 // tenta matar o nosso boneco, nós temos que ter uma barra de vida se a barra esvaziar, você morre
@@ -326,6 +330,11 @@ const MARS_ENEMY_ATTACK_RADIUS = 1.3
 const MARS_ENEMY_ATTACK_INTERVAL = 1.3
 const MARS_ENEMY_DAMAGE = 12
 const MARS_ENEMY_MOVE_SPEED = 0.55
+// Alerta de perigo (lab-65, pedido do usuário: "ao estar dentro de um raio de distância deles um
+// alerta de perigo ser emitido, com algum efeito em vermelho na tela") — maior que o raio de
+// ataque (dá aviso ANTES de já estar sendo atingido) e menor que o raio de perseguição (não fica
+// vermelho o mapa inteiro assim que um inimigo distante começa a andar em direção ao jogador).
+const MARS_DANGER_RADIUS = 3
 
 // Espada e arma a laser (lab-61, pedido do usuário: "crie uma espada que deve ser pega na terra
 // para usar no planeta pra nocautear o ET e uma arma para usar no robô, dê dicas de como
@@ -1572,6 +1581,175 @@ function buildCaveEntrance(scene: Scene): TransformNode {
   return root
 }
 
+// Morro de Marte (lab-65, pedido do usuário: "ele deve ter alguns rochedos pequenos, morros...")
+// — mesma técnica da entrada de caverna (dome via `CreateSphere` com `slice`, não uma bola
+// inteira), só maior e sem a "boca": um monte principal + um secundário menor pra silhueta menos
+// perfeitamente circular.
+function buildMarsHill(scene: Scene): TransformNode {
+  const root = new TransformNode('marsHillRoot', scene)
+
+  const hillMat = new PBRMaterial('marsHillMat', scene)
+  hillMat.albedoColor = new Color3(0.46, 0.28, 0.19)
+  hillMat.roughness = 0.96
+
+  const main = MeshBuilder.CreateSphere('marsHillMain', { diameter: 3.4, slice: 0.55, segments: 12 }, scene)
+  main.scaling = new Vector3(1.15, 0.8, 1.05)
+  main.material = hillMat
+  main.parent = root
+
+  const shoulder = MeshBuilder.CreateSphere('marsHillShoulder', { diameter: 1.8, slice: 0.6, segments: 10 }, scene)
+  shoulder.position = new Vector3(1.1, -0.35, 0.6)
+  shoulder.scaling = new Vector3(1, 0.85, 1)
+  shoulder.material = hillMat
+  shoulder.parent = root
+
+  return root
+}
+
+const UFO_RADIUS = 3.2
+const UFO_WALL_HEIGHT = 1.7
+const UFO_SEGMENTS = 14
+// Segmentos consecutivos pulados no anel de paredes = a porta (largura ≈ 2 segmentos ≈ 2.9m, bem
+// folgada — evita qualquer aperto de câmera/personagem entrando).
+const UFO_DOOR_SEGMENTS = 2
+
+// Estação alienígena / disco voador (lab-65, pedido do usuário: "uma estação extraterrestre
+// avançada e moderna parecendo um disco voador em que é possível entrar e ver um painel de nave
+// espacial"). Estrutura: anel de segmentos de parede (um trecho pulado = porta, mesma técnica de
+// "malha em volta de um círculo" já usada nos degraus da escada em espiral do Prédio dos
+// Enigmas) + casco/domo achatado por cima (visual, sem colisão — a parede já barra a passagem) +
+// bolha de cockpit translúcida no topo + anel luminoso de acabamento. Dentro, um console/painel
+// decorativo (base + tela emissiva + botões coloridos).
+// `parent`/`anchorUp` já resolvidos ANTES de construir as paredes — física estática (`PhysicsAggregate`
+// nas paredes abaixo) lê a transformação de mundo no momento em que é criada; construir os filhos
+// primeiro e só posicionar/parentar `root` depois (como um `TransformNode` solto, na origem da
+// cena) grudaria os colisores das paredes lá na origem, não em Marte. Mesmo motivo pelo qual o
+// Prédio dos Enigmas posiciona `quizTowerBase` antes de montar qualquer parede/piso.
+function buildUfoStation(
+  scene: Scene,
+  shadowGenerator: ShadowGenerator,
+  parent: TransformNode,
+  anchorUp: Vector3,
+  radius: number,
+): TransformNode {
+  const root = new TransformNode('ufoRoot', scene)
+  root.parent = parent
+  root.position = anchorUp.scale(radius)
+  root.rotationQuaternion = alignmentQuaternion(anchorUp)
+
+  const hullMat = new PBRMaterial('ufoHullMat', scene)
+  hullMat.albedoColor = new Color3(0.78, 0.8, 0.85)
+  hullMat.metallic = 0.85
+  hullMat.roughness = 0.25
+
+  const trimMat = new PBRMaterial('ufoTrimMat', scene)
+  trimMat.albedoColor = new Color3(0.1, 0.9, 0.85)
+  trimMat.emissiveColor = new Color3(0.1, 0.8, 0.75)
+  trimMat.roughness = 0.4
+
+  const glassMat = new PBRMaterial('ufoGlassMat', scene)
+  glassMat.albedoColor = new Color3(0.5, 0.85, 0.9)
+  glassMat.emissiveColor = new Color3(0.15, 0.3, 0.35)
+  glassMat.alpha = 0.55
+  glassMat.roughness = 0.1
+
+  // Anel de paredes — caixas tangentes a um círculo, uma delas (a "porta") pulada.
+  const segAngle = (Math.PI * 2) / UFO_SEGMENTS
+  const segWidth = 2 * UFO_RADIUS * Math.sin(segAngle / 2) * 1.05 // levemente maior, sem frestas
+  for (let i = 0; i < UFO_SEGMENTS; i++) {
+    if (i < UFO_DOOR_SEGMENTS) continue
+    const angle = i * segAngle
+    const wall = MeshBuilder.CreateBox(
+      `ufoWall-${i}`,
+      { width: segWidth, height: UFO_WALL_HEIGHT, depth: 0.18 },
+      scene,
+    )
+    wall.position = new Vector3(Math.sin(angle) * UFO_RADIUS, UFO_WALL_HEIGHT / 2, Math.cos(angle) * UFO_RADIUS)
+    wall.rotation.y = angle
+    wall.material = hullMat
+    wall.parent = root
+    wall.receiveShadows = true
+    shadowGenerator.addShadowCaster(wall)
+    new PhysicsAggregate(wall, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+  }
+
+  // Anel luminoso no topo da parede — acabamento "avançado" clássico de disco voador.
+  const trimRing = MeshBuilder.CreateTorus('ufoTrimRing', { diameter: UFO_RADIUS * 2, thickness: 0.08, tessellation: 24 }, scene)
+  trimRing.position.y = UFO_WALL_HEIGHT
+  trimRing.material = trimMat
+  trimRing.parent = root
+
+  // Piso interno decorativo — sem colisor próprio, a esfera de Marte já sustenta o jogador aqui;
+  // só marca visualmente "você está dentro" com um material diferente do solo externo.
+  const floorMat = new PBRMaterial('ufoFloorMat', scene)
+  floorMat.albedoColor = new Color3(0.25, 0.27, 0.32)
+  floorMat.metallic = 0.3
+  floorMat.roughness = 0.5
+  const floor = MeshBuilder.CreateCylinder(
+    'ufoFloor',
+    { diameter: UFO_RADIUS * 2 - 0.2, height: 0.05, tessellation: UFO_SEGMENTS },
+    scene,
+  )
+  floor.position.y = 0.03
+  floor.material = floorMat
+  floor.parent = root
+  floor.receiveShadows = true
+
+  // Casco (domo achatado, look de "disco") + bolha de cockpit translúcida no topo — só visual,
+  // a parede abaixo já é o único obstáculo de verdade.
+  const hull = MeshBuilder.CreateSphere('ufoHull', { diameter: UFO_RADIUS * 2.3, slice: 0.32, segments: 16 }, scene)
+  hull.scaling.y = 0.6
+  hull.position.y = UFO_WALL_HEIGHT
+  hull.material = hullMat
+  hull.parent = root
+  hull.receiveShadows = true
+  shadowGenerator.addShadowCaster(hull)
+
+  const dome = MeshBuilder.CreateSphere('ufoDome', { diameter: UFO_RADIUS * 0.9, slice: 0.55, segments: 14 }, scene)
+  dome.position.y = UFO_WALL_HEIGHT + 0.5
+  dome.material = glassMat
+  dome.parent = root
+
+  // Console/painel de nave espacial (lab-65) — base angulada tipo dashboard, tela emissiva e
+  // botõezinhos coloridos, só decoração (sem interação nova, pedido do usuário foi só "ver").
+  const panelMat = new PBRMaterial('ufoPanelMat', scene)
+  panelMat.albedoColor = new Color3(0.15, 0.16, 0.2)
+  panelMat.metallic = 0.4
+  panelMat.roughness = 0.4
+  const panelZ = -UFO_RADIUS * 0.55
+  const panelBase = MeshBuilder.CreateBox('ufoPanelBase', { width: 1.6, height: 0.9, depth: 0.5 }, scene)
+  panelBase.position = new Vector3(0, 0.45, panelZ)
+  panelBase.rotation.x = -0.3
+  panelBase.material = panelMat
+  panelBase.parent = root
+  panelBase.receiveShadows = true
+  shadowGenerator.addShadowCaster(panelBase)
+
+  const screenMat = new PBRMaterial('ufoScreenMat', scene)
+  screenMat.albedoColor = new Color3(0.05, 0.4, 0.5)
+  screenMat.emissiveColor = new Color3(0.1, 0.65, 0.8)
+  screenMat.roughness = 0.3
+  const screen = MeshBuilder.CreateBox('ufoScreen', { width: 1.3, height: 0.5, depth: 0.05 }, scene)
+  screen.position = new Vector3(0, 0.85, panelZ + 0.15)
+  screen.rotation.x = -0.3
+  screen.material = screenMat
+  screen.parent = root
+
+  const buttonColors = [new Color3(0.9, 0.2, 0.2), new Color3(0.2, 0.8, 0.3), new Color3(0.9, 0.8, 0.1), new Color3(0.3, 0.5, 0.9)]
+  for (let i = 0; i < buttonColors.length; i++) {
+    const btnMat = new PBRMaterial(`ufoButtonMat-${i}`, scene)
+    btnMat.albedoColor = buttonColors[i]
+    btnMat.emissiveColor = buttonColors[i].scale(0.5)
+    const btn = MeshBuilder.CreateSphere(`ufoButton-${i}`, { diameter: 0.12 }, scene)
+    btn.position = new Vector3(-0.5 + i * 0.34, 0.5, panelZ + 0.22)
+    btn.rotation.x = -0.3
+    btn.material = btnMat
+    btn.parent = root
+  }
+
+  return root
+}
+
 // ET marciano (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que tenta
 // matar o nosso boneco") — cabeça grande ovalada + olhos amendoados escuros + corpo/membros
 // finos, só primitivas, mesmo padrão do resto do jogo (cacto, foguete, bichos).
@@ -1825,6 +2003,17 @@ export function World3D({
   const [marsHealthDisplay, setMarsHealthDisplay] = useState(MARS_MAX_HEALTH)
   const [onMarsCombatZone, setOnMarsCombatZone] = useState(false)
   const [marsDeathMessage, setMarsDeathMessage] = useState<string | null>(null)
+  // Contagem de marcianos vivos (lab-65, pedido do usuário: "ao chegar em Marte teve ter uma
+  // informação de quantos marcianos tem no planeta") — espelha `marsEnemies.filter(alive).length`
+  // (calculado no laço de física, que já percorre esse array todo quadro pra IA) só quando o
+  // valor muda, evitando re-render a cada quadro por um número que só muda ao nocautear alguém.
+  const [marsEnemyCount, setMarsEnemyCount] = useState(0)
+  // Alerta de perigo (lab-65, pedido do usuário: "estar dentro de um raio de distância deles um
+  // alerta de perigo ser emitido, com algum efeito em vermelho na tela") — manipulado direto no
+  // DOM pelo laço de física (mesmo padrão de `debugRef`), não por `useState`: a intensidade
+  // precisa variar suavemente quadro a quadro com a distância do inimigo mais próximo, e recriar
+  // esse valor via React 60x/s geraria re-render sem necessidade nenhuma.
+  const dangerOverlayRef = useRef<HTMLDivElement>(null)
   // Espada/arma (lab-61) — mesmo padrão do `marsHealthRef`: fonte de verdade em ref (lida direto
   // pelo laço de física/`handleInteractPress`, sem esperar re-render), `weaponMessage` só pro
   // aviso transitório de "achou o item"/"embarcando sem os dois".
@@ -2019,6 +2208,9 @@ export function World3D({
     let equippedGun: TransformNode | null = null
     let attackAnimTimer = 0
     let attackAnimKind: 'sword' | 'gun' | null = null
+    // Contagem de marcianos vivos exibida no HUD (lab-65) — só chama `setMarsEnemyCount` quando o
+    // valor muda (ver laço de IA de Marte), não a cada quadro.
+    let lastMarsEnemyCount = -1
     // Anel de onda sonora (lab-62, pedido do usuário: "um anel de onda sonora em volta do boneco
     // e ele não pode entrar dentro no meu corpo") — reforço visual do raio de "colisão"
     // (`MARS_ENEMY_PERSONAL_SPACE`), pulsando continuamente. Só visível em Marte (só lá tem
@@ -3837,21 +4029,40 @@ export function World3D({
 
         // Só rocha, sem árvore nenhuma (pedido do usuário: "não tem árvores só rocha") —
         // reaproveita os mesmos modelos glTF de rocha já carregados pro planeta principal
-        // (índices 6-11 em `propFiles`), intercalados com algumas entradas de caverna
+        // (índices 6-10 em `propFiles`), intercalados com algumas entradas de caverna
         // (`buildCaveEntrance`, pedido do usuário: "o que tem lá são cavernas"). Sem shadow
         // caster: o ShadowGenerator já tem o alcance ajustado pro planeta principal, e este é um
         // bônus pequeno e distante — não vale o custo de sombra própria.
+        //
+        // `stone_smallA` (índice 11) ficou de fora aqui (lab-65, pedido do usuário: "tem umas
+        // bolas gigantes em Marte que não se parecem rocha marciana, parece só bolas esquisita")
+        // — esse modelo do Kenney Nature Kit é um seixo liso e arredondado por design, lendo como
+        // uma bola em vez de rocha quando ampliado; os outros 5 índices são mais angulares/
+        // irregulares e continuam soando "rocha" em qualquer escala. Ainda usado no planeta
+        // principal (`DESERT_ROCK_INDICES`), onde faz sentido junto de rochas maiores.
         const SECOND_PLANET_PROP_COUNT = 22
-        const rockIndices = [6, 7, 8, 9, 10, 11]
+        const rockIndices = [6, 7, 8, 9, 10]
+        // Mesmo raciocínio do colisor-esfera invisível das props do planeta principal (ver
+        // `PROP_COLLIDER_PROTRUSION` acima) — sem física de verdade na malha do glTF (cara e
+        // desnecessária pra bloquear passagem), uma esfera invisível pequena o bastante pra não
+        // virar plataforma, grande o bastante pra bloquear esbarrão lateral. Resolve o outro
+        // pedido do usuário: "mas sem física de colisão".
+        const MARS_ROCK_COLLIDER_PROTRUSION = 0.15
         for (let i = 0; i < SECOND_PLANET_PROP_COUNT; i++) {
           const phi = Math.acos(1 - 2 * ((i + 0.5) / SECOND_PLANET_PROP_COUNT))
           const theta = i * GOLDEN_ANGLE * 3.3
           const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
-          // Não planta nada perto do foguete de volta.
+          // Não planta nada perto do foguete de volta nem da estação alienígena.
           if (Vector3.Dot(localUp, SECOND_PLANET_LANDING_UP) > Math.cos(0.4)) continue
+          // Raio de exclusão maior que o raio angular da própria estação (UFO_RADIUS=3.2 num
+          // planeta de raio 6 já ocupa ~0.56 rad sozinha) — bug real encontrado testando ao vivo:
+          // com 0.5 rad, uma rocha (`rock_tallA`) nascia perto o bastante pra atravessar visualmente
+          // a estrutura da estação.
+          if (Vector3.Dot(localUp, MARS_UFO_DIR) > Math.cos(0.8)) continue
 
           let instance: TransformNode | null
-          if (i % 4 === 0) {
+          const isCave = i % 4 === 0
+          if (isCave) {
             instance = buildCaveEntrance(scene)
           } else {
             const templateIndex = rockIndices[i % rockIndices.length]
@@ -3860,12 +4071,88 @@ export function World3D({
           }
           if (!instance) continue
           instance.parent = secondPlanetRoot
-          instance.position = localUp.scale(SECOND_PLANET_RADIUS)
+          const propPos = localUp.scale(SECOND_PLANET_RADIUS)
+          const propScale = 0.9 + ((i * 7) % 5) * 0.15
+          instance.position = propPos
           instance.rotationQuaternion = alignmentQuaternion(localUp)
-          instance.scaling.setAll(0.9 + ((i * 7) % 5) * 0.15)
+          instance.scaling.setAll(propScale)
           instance.freezeWorldMatrix()
           instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+
+          // Colisão só nas rochas — a entrada de caverna continua vazada de propósito (você anda
+          // pra dentro dela, não é um obstáculo).
+          if (!isCave) {
+            const colliderDiameter = 0.7 * propScale
+            const colliderRadius = colliderDiameter / 2
+            const collider = MeshBuilder.CreateSphere(
+              `secondPlanetPropCollider-${i}`,
+              { diameter: colliderDiameter },
+              scene,
+            )
+            // Parentado no `secondPlanetRoot` como a prop visual — sem isso, `.position` seria
+            // interpretado em espaço de mundo (origem do jogo, não o centro de Marte), plantando
+            // o colisor bem longe da rocha de verdade.
+            collider.parent = secondPlanetRoot
+            collider.position = propPos.add(localUp.scale(MARS_ROCK_COLLIDER_PROTRUSION - colliderRadius))
+            collider.isVisible = false
+            collider.computeWorldMatrix(true)
+            new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+          }
         }
+
+        // Morros (lab-65, pedido do usuário: "ele deve ter alguns rochedos pequenos, morros...")
+        // — distribuição própria, bem mais esparsa que as rochas (só uns poucos, senão vira uma
+        // parede de morro em vez de um relevo ocasional), com uma fase angular diferente
+        // (`* 2.1` em vez de `* 3.3`) pra não empilhar em cima das rochas/cavernas acima.
+        const MARS_HILL_COUNT = 4
+        for (let i = 0; i < MARS_HILL_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / MARS_HILL_COUNT))
+          const theta = i * GOLDEN_ANGLE * 2.1 + 0.9
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, SECOND_PLANET_LANDING_UP) > Math.cos(0.5)) continue
+          // Mesmo raciocínio da exclusão das rochas acima, com mais folga ainda (morro é maior).
+          if (Vector3.Dot(localUp, MARS_UFO_DIR) > Math.cos(0.95)) continue
+
+          const hill = buildMarsHill(scene)
+          hill.parent = secondPlanetRoot
+          const hillPos = localUp.scale(SECOND_PLANET_RADIUS)
+          hill.position = hillPos
+          hill.rotationQuaternion = alignmentQuaternion(localUp).multiply(Quaternion.RotationAxis(Vector3.Up(), i * 1.7))
+          hill.freezeWorldMatrix()
+          hill.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+
+          // Mesmo colisor-esfera invisível e embutido das rochas acima, só maior — bloqueia
+          // esbarrão lateral sem virar plataforma.
+          const hillColliderDiameter = 2.1
+          const hillColliderRadius = hillColliderDiameter / 2
+          const hillCollider = MeshBuilder.CreateSphere(
+            `marsHillCollider-${i}`,
+            { diameter: hillColliderDiameter },
+            scene,
+          )
+          hillCollider.parent = secondPlanetRoot
+          hillCollider.position = hillPos.add(localUp.scale(MARS_ROCK_COLLIDER_PROTRUSION - hillColliderRadius))
+          hillCollider.isVisible = false
+          hillCollider.computeWorldMatrix(true)
+          new PhysicsAggregate(hillCollider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+        }
+
+        // Estação alienígena / disco voador (lab-65, pedido do usuário: "uma estação
+        // extraterrestre avançada e moderna parecendo um disco voador em que é possível entrar e
+        // ver um painel de nave espacial").
+        const ufoRoot = buildUfoStation(scene, shadowGenerator, secondPlanetRoot, MARS_UFO_DIR, SECOND_PLANET_RADIUS)
+        ufoRoot.freezeWorldMatrix()
+        ufoRoot.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+
+        const ufoLabel = new TextBlock('ufoLabel', 'Estação Alienígena')
+        ufoLabel.color = 'white'
+        ufoLabel.fontSize = mobileFontSize(22)
+        ufoLabel.fontWeight = 'bold'
+        ufoLabel.outlineWidth = 4
+        ufoLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(ufoLabel)
+        ufoLabel.linkWithMesh(ufoRoot)
+        ufoLabel.linkOffsetY = -130
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -6084,10 +6371,14 @@ export function World3D({
           // perto de verdade). `.clone()` primeiro evita a mutação indesejada.
           const avatarUp =
             avatarLocalPos.length() > 0.0001 ? avatarLocalPos.clone().normalize() : SECOND_PLANET_LANDING_UP
+          let aliveEnemyCount = 0
+          let nearestEnemyDist = Infinity
           for (const enemy of marsEnemies) {
             if (!enemy.alive) continue
+            aliveEnemyCount++
             const enemyLocalPos = enemy.up.scale(SECOND_PLANET_RADIUS)
             const distToPlayer = Vector3.Distance(enemyLocalPos, avatarLocalPos)
+            if (distToPlayer < nearestEnemyDist) nearestEnemyDist = distToPlayer
             const chasing = distToPlayer < MARS_ENEMY_AGGRO_RADIUS
             if (chasing) {
               enemy.targetUp = avatarUp
@@ -6170,6 +6461,26 @@ export function World3D({
               applyMarsDamage(MARS_ENEMY_DAMAGE, enemy)
             }
           }
+
+          if (aliveEnemyCount !== lastMarsEnemyCount) {
+            lastMarsEnemyCount = aliveEnemyCount
+            setMarsEnemyCount(aliveEnemyCount)
+          }
+
+          // Alerta de perigo (lab-65) — intensidade cresce conforme o inimigo mais próximo se
+          // aproxima, de 0 (fora de `MARS_DANGER_RADIUS`) até o máximo já dentro do raio de
+          // ataque; um pulso senoidal por cima (reaproveitando `time`, já incrementado acima)
+          // dá a sensação de "alerta piscando" em vez de uma cor fixa.
+          if (dangerOverlayRef.current) {
+            const dangerT = Math.max(
+              0,
+              Math.min(1, 1 - (nearestEnemyDist - MARS_ENEMY_ATTACK_RADIUS) / (MARS_DANGER_RADIUS - MARS_ENEMY_ATTACK_RADIUS)),
+            )
+            const pulse = 0.7 + 0.3 * Math.sin(time * 6)
+            dangerOverlayRef.current.style.opacity = String(dangerT * pulse * 0.6)
+          }
+        } else if (dangerOverlayRef.current && dangerOverlayRef.current.style.opacity !== '0') {
+          dangerOverlayRef.current.style.opacity = '0'
         }
 
         // Gatos no topo dos platôs/telhados: parados, só um giro lento de "olhando ao redor" —
@@ -6659,6 +6970,12 @@ export function World3D({
         onOpenBag={() => setBagOpen(true)}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}
+      {onMarsCombatZone && (
+        <p className="mars-enemy-count">
+          👽🤖 {marsEnemyCount} {marsEnemyCount === 1 ? 'marciano restante' : 'marcianos restantes'}
+        </p>
+      )}
+      <div ref={dangerOverlayRef} className="mars-danger-overlay" style={{ opacity: 0 }} />
       {marsDeathMessage && <p className="mars-death-message">{marsDeathMessage}</p>}
       {weaponMessage && <p className="mars-death-message weapon-message">{weaponMessage}</p>}
       {bagOpen && (

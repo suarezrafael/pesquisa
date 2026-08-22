@@ -8,6 +8,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registro manual (`main.tsx`, via `virtual:pwa-register`) em vez do script
+      // auto-injetado — pedido do usuário: "fui instalar no celular e ainda estava a versão
+      // antiga". `skipWaiting`/`clientsClaim` (abaixo) já fazem o novo service worker assumir,
+      // mas isso só troca o que RESPONDE a próximas requisições — a aba/app já aberto continua
+      // rodando o JS antigo carregado em memória até recarregar. O registro manual escuta
+      // `onNeedRefresh` e força um reload assim que uma versão nova é detectada, em vez de
+      // depender do usuário fechar/reabrir o app por conta própria.
+      injectRegister: false,
       includeAssets: ['favicon.svg'],
       workbox: {
         // Babylon.js + Havok (motor 3D/física) passam do limite padrão de 2MB;

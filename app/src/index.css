@@ -429,6 +429,34 @@ body {
   }
 }
 
+.mars-enemy-count {
+  position: absolute;
+  top: clamp(9.6rem, 32vmin, 12.4rem);
+  left: clamp(0.5rem, 2.8vmin, 1.1rem);
+  margin: 0;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  padding: clamp(0.2rem, 1vmin, 0.35rem) clamp(0.6rem, 2.2vmin, 0.9rem);
+  box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
+  pointer-events: none;
+  z-index: 5;
+  font-size: clamp(0.7rem, 2.2vmin, 0.85rem);
+  font-weight: 700;
+  color: #2a3358;
+}
+
+/* Alerta de perigo (lab-65) — vinheta vermelha nas bordas da tela, opacidade controlada direto
+   pelo laço de física (ver `dangerOverlayRef`) conforme a distância do inimigo mais próximo em
+   Marte. Cobre a tela inteira mas não intercepta clique/toque nenhum. */
+.mars-danger-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(200, 0, 0, 0.9) 100%);
+  transition: opacity 0.1s linear;
+}
+
 .mars-death-message {
   position: absolute;
   top: 40%;
