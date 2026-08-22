@@ -4209,56 +4209,69 @@ export function World3D({
       // lagoa se movem em círculos num plano local tangente à esfera (aproximação razoável pro
       // raio pequeno da lagoa — a curvatura do planeta nessa escala é desprezível), não com a
       // mesma IA de "vagar pela esfera toda" dos bichos de terra, porque ficam confinados aqui.
-      const pondUp = POND_CENTER_DIR
-      const pondCenterPos = pondUp.scale(PLANET_RADIUS + terrainHeight(pondUp) + 0.3)
-      const pondForward = Vector3.Cross(pondUp, Vector3.Right()).normalize()
-      const pondRight = Vector3.Cross(pondUp, pondForward).normalize()
-      const pondRadius = 1.6
-
-      // Cilindro baixo, não CreateDisc — o disco nasce de pé (normal no eixo Z), então
-      // `alignmentQuaternion` (que assume a face "de cima" no eixo Y) deixaria a lagoa em pé
-      // feito uma parede. O cilindro já nasce deitado (eixo Y, igual à moeda), sem esse problema.
-      const pond = MeshBuilder.CreateCylinder('pond', { diameter: pondRadius * 2, height: 0.04, tessellation: 32 }, scene)
-      const pondMat = new PBRMaterial('pondMat', scene)
-      pondMat.albedoColor = new Color3(0.1, 0.32, 0.55)
-      // Reflexo de água (lab-28, pedido do usuário) — `roughness` bem baixo + `metallic` alto
-      // fazem a água refletir de verdade o `environmentTexture` HDRI já carregado na cena (céu/
-      // nuvens), em vez de só uma cor azul lisa sem brilho.
-      pondMat.roughness = 0.04
-      pondMat.metallic = 0.65
-      pondMat.alpha = 0.92
-      pond.material = pondMat
-      pond.position.copyFrom(pondCenterPos)
-      pond.rotationQuaternion = alignmentQuaternion(pondUp)
-      pond.receiveShadows = true
-
+      //
+      // Removida em aparelho fraco (lab-66, pedido do usuário: "os FPS ficam muito pesados no
+      // tablet... se ajudar renderizar menos elementos pode excluir... o lago e os peixes") —
+      // `pondUp`/`pondCenterPos`/`pondForward`/`pondRight` continuam declaradas fora do `if`
+      // (com um valor padrão nunca lido de verdade) porque o laço de animação mais abaixo lê
+      // esses nomes; como fica vazio sem nenhum `pondCritters.push(...)` aqui, esse laço nunca
+      // itera em aparelho fraco — sem precisar duplicar/condicionar o laço também.
+      let pondUp = Vector3.Up()
+      let pondCenterPos = Vector3.Zero()
+      let pondForward = Vector3.Right()
+      let pondRight = Vector3.Forward()
       const pondCritters: PondCritter[] = []
-      for (let i = 0; i < 3; i++) {
+      if (!isLowEndDevice) {
+        pondUp = POND_CENTER_DIR
+        pondCenterPos = pondUp.scale(PLANET_RADIUS + terrainHeight(pondUp) + 0.3)
+        pondForward = Vector3.Cross(pondUp, Vector3.Right()).normalize()
+        pondRight = Vector3.Cross(pondUp, pondForward).normalize()
+        const pondRadius = 1.6
+
+        // Cilindro baixo, não CreateDisc — o disco nasce de pé (normal no eixo Z), então
+        // `alignmentQuaternion` (que assume a face "de cima" no eixo Y) deixaria a lagoa em pé
+        // feito uma parede. O cilindro já nasce deitado (eixo Y, igual à moeda), sem esse problema.
+        const pond = MeshBuilder.CreateCylinder('pond', { diameter: pondRadius * 2, height: 0.04, tessellation: 32 }, scene)
+        const pondMat = new PBRMaterial('pondMat', scene)
+        pondMat.albedoColor = new Color3(0.1, 0.32, 0.55)
+        // Reflexo de água (lab-28, pedido do usuário) — `roughness` bem baixo + `metallic` alto
+        // fazem a água refletir de verdade o `environmentTexture` HDRI já carregado na cena (céu/
+        // nuvens), em vez de só uma cor azul lisa sem brilho.
+        pondMat.roughness = 0.04
+        pondMat.metallic = 0.65
+        pondMat.alpha = 0.92
+        pond.material = pondMat
+        pond.position.copyFrom(pondCenterPos)
+        pond.rotationQuaternion = alignmentQuaternion(pondUp)
+        pond.receiveShadows = true
+
+        for (let i = 0; i < 3; i++) {
+          pondCritters.push({
+            root: buildPeixe(scene, i / 2),
+            angleOffset: (i / 3) * Math.PI * 2,
+            radius: 0.5 + i * 0.25,
+            speed: 0.9 + i * 0.15,
+            bobPhase: Math.random() * Math.PI * 2,
+            depth: -0.06,
+          })
+        }
         pondCritters.push({
-          root: buildPeixe(scene, i / 2),
-          angleOffset: (i / 3) * Math.PI * 2,
-          radius: 0.5 + i * 0.25,
-          speed: 0.9 + i * 0.15,
+          root: buildPato(scene, shadowGenerator),
+          angleOffset: Math.random() * Math.PI * 2,
+          radius: 1.05,
+          speed: 0.4,
           bobPhase: Math.random() * Math.PI * 2,
-          depth: -0.06,
+          depth: 0.03,
+        })
+        pondCritters.push({
+          root: buildTartaruga(scene, shadowGenerator),
+          angleOffset: Math.random() * Math.PI * 2,
+          radius: 1.2,
+          speed: 0.18,
+          bobPhase: Math.random() * Math.PI * 2,
+          depth: 0.01,
         })
       }
-      pondCritters.push({
-        root: buildPato(scene, shadowGenerator),
-        angleOffset: Math.random() * Math.PI * 2,
-        radius: 1.05,
-        speed: 0.4,
-        bobPhase: Math.random() * Math.PI * 2,
-        depth: 0.03,
-      })
-      pondCritters.push({
-        root: buildTartaruga(scene, shadowGenerator),
-        angleOffset: Math.random() * Math.PI * 2,
-        radius: 1.2,
-        speed: 0.18,
-        bobPhase: Math.random() * Math.PI * 2,
-        depth: 0.01,
-      })
 
       // Grama animada por vento — shader customizado (não textura), milhares de lâminas via
       // thin instances (1 draw call). O balanço acontece em espaço local do vértice, antes da
@@ -5358,35 +5371,18 @@ export function World3D({
       // (theta bem distante: lagoa fica em 2.6, rio em 0.15-1.35). Reaproveita o mesmo boneco
       // do personagem/professor (buildStudentFigure), só que parado (sem ciclo de caminhada) e
       // afundado até a altura da água, com um balancinho de "boiando" no loop de render.
-      const poolUp = POOL_CENTER_DIR
-      const poolCenterPos = poolUp.scale(PLANET_RADIUS + terrainHeight(poolUp) + 0.25)
-      const poolForward = Vector3.Cross(poolUp, Vector3.Right()).normalize()
-      const poolRight = Vector3.Cross(poolUp, poolForward).normalize()
-      const poolRadius = 1.1
-
-      const poolWaterMat = new PBRMaterial('poolWaterMat', scene)
-      poolWaterMat.albedoColor = new Color3(0.2, 0.55, 0.85)
-      poolWaterMat.roughness = 0.08
-      poolWaterMat.metallic = 0.05
-      poolWaterMat.alpha = 0.85
-      // Cilindro baixo, não CreateDisc — mesmo motivo da lagoa (disco nasce em pé, cilindro já
-      // nasce deitado no eixo Y e alinha certo com `alignmentQuaternion`).
-      const poolWater = MeshBuilder.CreateCylinder('poolWater', { diameter: poolRadius * 2, height: 0.04, tessellation: 32 }, scene)
-      poolWater.material = poolWaterMat
-      poolWater.position.copyFrom(poolCenterPos)
-      poolWater.rotationQuaternion = alignmentQuaternion(poolUp)
-
-      const poolRimMat = new PBRMaterial('poolRimMat', scene)
-      poolRimMat.albedoColor = new Color3(0.88, 0.86, 0.8)
-      poolRimMat.roughness = 0.6
-      const poolRim = MeshBuilder.CreateTorus('poolRim', { diameter: poolRadius * 2 + 0.16, thickness: 0.16, tessellation: 32 }, scene)
-      poolRim.material = poolRimMat
-      // A água já está bem acima do chão real (bacia rebaixada + offset), então a borda só
-      // precisa de um empurrãozinho pra ficar rente à linha d'água, não afundada nela.
-      poolRim.position.copyFrom(poolCenterPos.add(poolUp.scale(0.02)))
-      poolRim.rotationQuaternion = alignmentQuaternion(poolUp)
-      shadowGenerator.addShadowCaster(poolRim)
-
+      //
+      // Removida em aparelho fraco (lab-66, pedido do usuário: "os FPS ficam muito pesados no
+      // tablet... se ajudar renderizar menos elementos pode excluir os NPCs da piscina e a
+      // própria piscina") — é a decoração mais cara do mapa (cada pessoa reaproveita o boneco
+      // completo do jogador, `buildStudentFigure`, não uma malha simples feito peixe/pato/
+      // tartaruga). Mesmo esquema de variáveis hoisted da lagoa acima — o laço de animação mais
+      // abaixo lê `poolCenterPos`/`poolForward`/`poolRight`/`poolUp`, mas nunca itera de verdade
+      // porque `poolPeople` fica vazio.
+      let poolUp = Vector3.Up()
+      let poolCenterPos = Vector3.Zero()
+      let poolForward = Vector3.Right()
+      let poolRight = Vector3.Forward()
       const POOL_SHIRT_COLORS = [
         new Color3(0.9, 0.35, 0.35),
         new Color3(0.3, 0.65, 0.85),
@@ -5394,7 +5390,6 @@ export function World3D({
         new Color3(0.5, 0.8, 0.4),
         new Color3(0.75, 0.4, 0.85),
       ]
-      const POOL_PEOPLE_COUNT = isLowEndDevice ? 3 : 5
       const POOL_CHAT_LINES = [
         'Oi!',
         'kkk',
@@ -5417,32 +5412,64 @@ export function World3D({
         chatLabel: TextBlock
         chatTimer: number
       }[] = []
-      for (let i = 0; i < POOL_PEOPLE_COUNT; i++) {
-        const figure = buildStudentFigure(scene, POOL_SHIRT_COLORS[i], shadowGenerator)
-        const angle = (i / POOL_PEOPLE_COUNT) * Math.PI * 2
-        const localX = Math.cos(angle) * poolRadius * 0.5
-        const localZ = Math.sin(angle) * poolRadius * 0.5
+      if (!isLowEndDevice) {
+        poolUp = POOL_CENTER_DIR
+        poolCenterPos = poolUp.scale(PLANET_RADIUS + terrainHeight(poolUp) + 0.25)
+        poolForward = Vector3.Cross(poolUp, Vector3.Right()).normalize()
+        poolRight = Vector3.Cross(poolUp, poolForward).normalize()
+        const poolRadius = 1.1
 
-        // Bolha de fala que pisca de vez em quando — só pra dar a impressão de estarem
-        // conversando (não é chat de verdade, é decoração ambiente).
-        const chatLabel = new TextBlock(`poolChat-${i}`, '')
-        chatLabel.color = 'white'
-        chatLabel.fontSize = mobileFontSize(20)
-        chatLabel.outlineWidth = 3
-        chatLabel.outlineColor = 'rgba(0,0,0,0.5)'
-        chatLabel.alpha = 0
-        guiTexture.addControl(chatLabel)
-        chatLabel.linkWithMesh(figure.head)
-        chatLabel.linkOffsetY = -55
+        const poolWaterMat = new PBRMaterial('poolWaterMat', scene)
+        poolWaterMat.albedoColor = new Color3(0.2, 0.55, 0.85)
+        poolWaterMat.roughness = 0.08
+        poolWaterMat.metallic = 0.05
+        poolWaterMat.alpha = 0.85
+        // Cilindro baixo, não CreateDisc — mesmo motivo da lagoa (disco nasce em pé, cilindro já
+        // nasce deitado no eixo Y e alinha certo com `alignmentQuaternion`).
+        const poolWater = MeshBuilder.CreateCylinder('poolWater', { diameter: poolRadius * 2, height: 0.04, tessellation: 32 }, scene)
+        poolWater.material = poolWaterMat
+        poolWater.position.copyFrom(poolCenterPos)
+        poolWater.rotationQuaternion = alignmentQuaternion(poolUp)
 
-        poolPeople.push({
-          figure,
-          localX,
-          localZ,
-          phase: Math.random() * Math.PI * 2,
-          chatLabel,
-          chatTimer: 2 + Math.random() * 4,
-        })
+        const poolRimMat = new PBRMaterial('poolRimMat', scene)
+        poolRimMat.albedoColor = new Color3(0.88, 0.86, 0.8)
+        poolRimMat.roughness = 0.6
+        const poolRim = MeshBuilder.CreateTorus('poolRim', { diameter: poolRadius * 2 + 0.16, thickness: 0.16, tessellation: 32 }, scene)
+        poolRim.material = poolRimMat
+        // A água já está bem acima do chão real (bacia rebaixada + offset), então a borda só
+        // precisa de um empurrãozinho pra ficar rente à linha d'água, não afundada nela.
+        poolRim.position.copyFrom(poolCenterPos.add(poolUp.scale(0.02)))
+        poolRim.rotationQuaternion = alignmentQuaternion(poolUp)
+        shadowGenerator.addShadowCaster(poolRim)
+
+        const POOL_PEOPLE_COUNT = 5
+        for (let i = 0; i < POOL_PEOPLE_COUNT; i++) {
+          const figure = buildStudentFigure(scene, POOL_SHIRT_COLORS[i], shadowGenerator)
+          const angle = (i / POOL_PEOPLE_COUNT) * Math.PI * 2
+          const localX = Math.cos(angle) * poolRadius * 0.5
+          const localZ = Math.sin(angle) * poolRadius * 0.5
+
+          // Bolha de fala que pisca de vez em quando — só pra dar a impressão de estarem
+          // conversando (não é chat de verdade, é decoração ambiente).
+          const chatLabel = new TextBlock(`poolChat-${i}`, '')
+          chatLabel.color = 'white'
+          chatLabel.fontSize = mobileFontSize(20)
+          chatLabel.outlineWidth = 3
+          chatLabel.outlineColor = 'rgba(0,0,0,0.5)'
+          chatLabel.alpha = 0
+          guiTexture.addControl(chatLabel)
+          chatLabel.linkWithMesh(figure.head)
+          chatLabel.linkOffsetY = -55
+
+          poolPeople.push({
+            figure,
+            localX,
+            localZ,
+            phase: Math.random() * Math.PI * 2,
+            chatLabel,
+            chatTimer: 2 + Math.random() * 4,
+          })
+        }
       }
 
       // Pessoas civis andando pelo planeta (pedido do usuário: "pessoas andando por ai" /
