@@ -2894,6 +2894,7 @@ export function World3D({
           }
         }
         const rocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
+        let boardedRocket = false
         if (rocket) {
           // `getAbsolutePosition()`, não `.position` — o foguete de volta é filho de
           // `secondPlanetRoot` (posição local, não em coordenadas de mundo); `.position` sozinho
@@ -2905,7 +2906,21 @@ export function World3D({
           if (d < ROCKET_ENTER_DISTANCE) {
             boardRocket()
             rocket.hintLabel.alpha = 0
+            boardedRocket = true
           }
+        }
+        // Disparo livre da arma a laser (lab-74, pedido do usuário: "quando eu pego a arma laser
+        // mesmo nao estando em marte, ao apertar E tem que disparar o laser e fazer som") — antes
+        // só disparava dentro do combate de Marte, perto de um robô vivo. Fallback de menor
+        // prioridade: só dispara se nada acima (carro/combate/foguete) já respondeu ao "E".
+        if (!boardedRocket && hasGunRef.current) {
+          const fromPos = avatarMesh.position.clone()
+          const toPos = avatarMesh.position.add(facing.scale(6))
+          attackAnimTimer = ATTACK_ANIM_DURATION
+          attackAnimKind = 'gun'
+          fireLaserBeam(fromPos, toPos)
+          playLaserZap()
+          sendAttack('gun', 'robo', fromPos.asArray() as [number, number, number], toPos.asArray() as [number, number, number])
         }
       }
       ;(scene as any).__handleInteractPress = handleInteractPress
