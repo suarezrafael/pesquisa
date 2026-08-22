@@ -28,10 +28,12 @@ zero. Este README dá a visão geral; os laboratórios têm o histórico detalha
 - **PWA**: instalável, `vite-plugin-pwa`/Workbox.
 - **Persistência**: só `localStorage` — sem conta/backend (decisão consciente, ver seção
   "Limitações conhecidas").
-- **Multiplayer**: WebSocket cru. Relay v1 (`app/server/relay.cjs`, Node, hospedado no Fly.io) →
-  relay v2 (`app/server-cf-relay/`, Cloudflare Workers + Durable Objects) — migrado porque o
-  plano gratuito do Fly.io encolheu pra um trial de 2h/7 dias, exigindo cartão de crédito depois
-  disso. O v2 fala exatamente o mesmo protocolo do v1.
+- **Multiplayer**: WebSocket cru. Relay v1 (`app/server/relay.cjs`, Node, Fly.io — **suspenso, sem
+  uso**, ver seu `README.md`) → relay v2 (`app/server-cf-relay/`, Cloudflare Workers + Durable
+  Objects — **ativo, em produção**) — migrado porque o plano gratuito do Fly.io encolheu pra um
+  trial de 2h/7 dias, exigindo cartão de crédito depois disso. O v2 fala exatamente o mesmo
+  protocolo do v1; detalhes de arquitetura e capacidade do plano Free em
+  `app/server-cf-relay/README.md`.
 - **Deploy**: frontend no Vercel (`vercel --prod`), relay no Cloudflare Workers (plano Free, sem
   cartão de crédito).
 
@@ -45,7 +47,7 @@ comprovado na prática: o hub trocou de 2D pra 3D (lab-02) sem tocar em nenhum d
 ```
 app/
   src/
-    data/          # quests, avatares, chapéus, eventos semanais, catálogo de chat — dados puros
+    data/          # quests, avatares, chapéus, customização (cor/cabelo), eventos semanais, catálogo de chat — dados puros
     state/         # progressão (XP/nível/badges), regras de desbloqueio — sem I/O, sem Babylon
     world3d/       # tudo Babylon.js: cena, física, avatar, multiplayer, áudio, HUD
       World3D.tsx       # arquivo principal da cena — setup, loop de física/render, todos os builders
@@ -61,12 +63,18 @@ docs/prompts/        # padrão de qualidade de engenharia (segurança, design, a
 ### Multiplayer: v1 → v2
 
 Os dois relays (`app/server/relay.cjs` e `app/server-cf-relay/src/index.ts`) falam o **mesmo
-protocolo**: mensagens `welcome`/`state`/`chat`/`leave` em JSON puro sobre WebSocket, broadcast
-simples (sem salas — todo mundo que conecta cai no mesmo grupo). `app/src/world3d/multiplayer.ts`
-não sabe qual dos dois está do outro lado — só lê `VITE_RELAY_URL` (`app/.env.production`) em
-tempo de build. O v1 usa `ws` (Node) num processo sempre ligado no Fly.io; o v2 usa a WebSocket
-Hibernation API de um Durable Object no Cloudflare Workers (permite hibernar entre mensagens,
-plano Free, sem cartão de crédito — o motivo real da migração).
+protocolo**: mensagens `welcome`/`state`/`attack`/`chat`/`leave` em JSON puro sobre WebSocket,
+broadcast simples (sem salas — todo mundo que conecta cai no mesmo grupo). `state` carrega
+posição/aparência (chapéu, cor de roupa/cabelo, arma na mão) e `attack` é um evento avulso
+(golpe/tiro), disparado uma vez no instante do ataque, não sincronizado continuamente como
+posição. Além de `chat` (só `state`/`attack`/`leave`/`welcome` são validados por formato — o
+relay é **agnóstico de esquema** pra qualquer outro campo, repassando `{ ...msg, id }` sem
+exigir mudança de servidor quando o cliente ganha um campo novo), tudo mais passa direto.
+`app/src/world3d/multiplayer.ts` não sabe qual dos dois relays está do outro lado — só lê
+`VITE_RELAY_URL` (`app/.env.production`) em tempo de build. O v1 usa `ws` (Node) num processo
+sempre ligado no Fly.io (hoje suspenso); o v2 usa a WebSocket Hibernation API de um Durable Object
+no Cloudflare Workers (permite hibernar entre mensagens, plano Free, sem cartão de crédito — o
+motivo real da migração), e é o único ativo em produção.
 
 ### Otimização pra dispositivos fracos
 
@@ -90,19 +98,33 @@ básica, leitura/interpretação — com desbloqueio sequencial. Um prédio à p
 Enigmas") com quiz surpresa em cada um dos 4 andares, recompensa só em moedas.
 
 **Progressão**: XP, moedas, níveis, badges — tudo local (`localStorage`). Lojinha de avatares (12
-criaturas, cada uma com peças 3D próprias — orelha/rabo/chifre/etc., não só cor) e chapéus
-(eixo de customização independente). Eventos semanais determinísticos (sem servidor: calculados a
-partir do número da semana ISO).
+criaturas, cada uma com peças 3D próprias — orelha/rabo/chifre/etc., não só cor), chapéus, e mais
+quatro eixos de customização independentes (cor de camisa/calça/sapato/mochila, 3 opções + padrão
+cada) e formato de cabelo (3 opções) — cada eixo trocável por moedas na lojinha, sem afetar os
+outros. Eventos semanais determinísticos (sem servidor: calculados a partir do número da semana
+ISO).
 
 **Mundo vivo**: bioma de deserto, 12 montanhas com rochas de verdade, 7 espécies de bicho (coelho,
 esquilo, pássaro, gato, cachorro, onça, falcão — 39 no total, com IA de vagar e mini-jogo "Amigo
 dos Bichos"), lagoa com peixe/pato/tartaruga, clima dinâmico (chuva + trovão/raio), estrada com
-carros dirigíveis, 21 escolas + professor em cada, lojinha navegável, torre do tesouro, 4 cursos
-de parkour (incluindo um com laser que precisa pular por cima).
+carros dirigíveis, 21 escolas + professor em cada, lojinha navegável, torre do tesouro, Prédio dos
+Enigmas (quiz surpresa em cada andar), 4 cursos de parkour (incluindo um com laser que precisa
+pular por cima).
 
-**Multiplayer**: outros jogadores conectados aparecem em tempo real (posição, animação de andar,
-som de passo, balão de chat), ranking por XP/moedas, chat por catálogo fechado de mensagens
-pré-definidas (nunca texto livre — ver "Segurança" abaixo).
+**Marte (segundo planeta)**: acessível por foguete pilotável a partir do planeta principal. Achar
+uma espada ou uma arma a laser no planeta principal dá acesso a combate contra ETs (espada) e
+robôs (arma) — nocauteia o inimigo certo por tipo, com animação de golpe/tiro e efeito visual
+(fumaça verde do ET, choque elétrico do robô), barra de vida do jogador, contador de inimigos
+vivos, tela de perigo quando um inimigo está perto, e uma estação alienígena em formato de UFO pra
+explorar. A mochila (🎒) mostra as armas já encontradas — a arma **selecionada** ali fica visível
+na mão do personagem, e apertar "E" com ela equipada dispara/golpeia (com som) em qualquer lugar,
+não só em combate de verdade contra um inimigo.
+
+**Multiplayer**: outros jogadores conectados aparecem em tempo real — posição, animação de andar,
+som de passo, balão de chat, chapéu/cor de roupa/cabelo equipados, arma na mão, e o efeito visual
+do golpe/tiro quando alguém ataca (todo mundo vê e ouve, não só quem atacou). Jogadores não
+atravessam uns aos outros (empurrão suave). Ranking por XP/moedas, chat por catálogo fechado de
+mensagens pré-definidas (nunca texto livre — ver "Segurança" abaixo).
 
 ## Segurança e privacidade infantil
 
@@ -147,9 +169,24 @@ cd app/server-cf-relay && npx wrangler deploy               # relay v2 (Cloudfla
   arquitetura de draw calls; converter os maiores grupos (props/pedras/bichos) pra thin instances
   é o próximo alavanca de performance se a redução atual não for suficiente.
 
+## Skills do Claude Code usadas neste projeto
+
+- **`lab`** (`.claude/skills/lab/SKILL.md`, local deste repositório) — a única skill efetivamente
+  usada no fluxo de trabalho: inicia, encerra e consulta o status de cada laboratório
+  (`labs/lab-NN-slug/`), gerando `CONTEXT.md` a partir do `git diff` real, não da memória da
+  conversa. Invocada em praticamente todo laboratório desta lista.
+- `skills-lock.json` (raiz do repositório) fixa outras ~25 skills genéricas disponíveis no
+  ambiente (Firebase, Supabase, Azure, shadcn, TDD, deploy-to-vercel, etc.) — nenhuma delas foi
+  escrita especificamente pra este projeto, e a maioria (Firebase/Supabase/Azure/shadcn) nem se
+  aplica, já que o jogo não tem backend. Ficam disponíveis, mas não fazem parte da convenção real
+  deste repositório.
+
 ## Mais contexto
 
-- `prompt.md` — brief de produto original (hipóteses de mercado, escopo do MVP, stack recomendada).
+- `prompt.md` — brief de produto original (hipóteses de mercado, escopo do MVP, stack recomendada
+  incluindo opções de backend/monetização **planejadas, não implementadas** — ver nota de status
+  perto da seção 7 do próprio arquivo).
 - `docs/prompts/` — padrão de qualidade de engenharia (segurança, design, arquitetura, clean code)
   aplicado a todo o código do jogo.
-- `labs/` — histórico completo, laboratório por laboratório, com o "porquê" de cada decisão.
+- `labs/` — histórico completo, laboratório por laboratório (76 até agora), com o "porquê" de cada
+  decisão.
