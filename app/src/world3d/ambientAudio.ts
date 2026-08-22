@@ -327,6 +327,35 @@ export function playLaserZap(): void {
   src.start(now)
 }
 
+// Golpe de espada (lab-76, pedido do usuário: "ao pressionar E deve fazer o som de espada e mexer
+// o braço, mesmo sem estar em marte") — "whoosh" de ar cortado: ruído filtrado por um passa-faixa
+// cuja frequência central desce rápido (o próprio filtro varrendo simula o deslocamento de ar da
+// lâmina), sem tom/oscilador nenhum (diferente do zap eletrônico do laser) — dura menos que o
+// golpe de robô (`playEnemyHit`) porque é só o som do movimento, não de impacto.
+export function playSwordSwing(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const duration = 0.18
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  const bandpass = ctx.createBiquadFilter()
+  bandpass.type = 'bandpass'
+  bandpass.Q.value = 0.9
+  bandpass.frequency.setValueAtTime(2600, now)
+  bandpass.frequency.exponentialRampToValueAtTime(500, now + duration)
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0.16, now)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+  src.connect(bandpass).connect(gain).connect(ctx.destination)
+  src.start(now)
+  src.stop(now + duration)
+}
+
 // Passarinho cantando baixinho perto do jogador (pedido do usuário) — dois bipes agudos rápidos
 // ("piu-piu"), bem mais quieto que o passo, disparado só quando um pássaro está perto (ver
 // World3D.tsx, IA de vagar dos bichos).

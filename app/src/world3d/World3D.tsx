@@ -74,6 +74,7 @@ import {
   playFunnyTalk,
   playFart,
   playLaserZap,
+  playSwordSwing,
   startRocketEngine,
   stopRocketEngine,
   playEnemyHit,
@@ -2151,13 +2152,20 @@ export function World3D({
   // Mochila (lab-63, pedido do usuário: "se eu peguei ambas o boneco deve ter uma bolsa virtual
   // em que voce ve o item e pode selecionar navegando no painel e clicando") — `hasSword`/`hasGun`
   // espelham os refs acima só pra decidir o que desenhar no painel (o combate continua lendo os
-  // refs direto, sem esperar re-render). Selecionar um item no painel é só informativo — a regra
-  // de combate (espada nocauteia ET, arma nocauteia robô) é automática por tipo de inimigo desde
-  // o lab-61 e não muda por causa da seleção.
+  // refs direto, sem esperar re-render). A regra de COMBATE EM MARTE (espada nocauteia ET, arma
+  // nocauteia robô) continua automática por tipo de inimigo desde o lab-61, não muda por causa da
+  // seleção — mas a partir do lab-76 (pedido do usuário: "quando eu estiver com espada
+  // selecionada ela deve aparecer na mão do boneco e ao pressionar E deve fazer o som de espada e
+  // mexer o braço, mesmo sem estar em marte") a seleção passou a controlar QUAL arma fica visível
+  // na mão e qual delas o "E" livre (fora de combate) usa — ver `selectedWeaponRef` logo abaixo.
   const [hasSword, setHasSword] = useState(false)
   const [hasGun, setHasGun] = useState(false)
   const [bagOpen, setBagOpen] = useState(false)
   const [selectedWeapon, setSelectedWeapon] = useState<'sword' | 'gun' | null>(null)
+  // Mesmo padrão de `hasSwordRef`/`hasGunRef` acima — lido direto por `handleInteractPress`
+  // (dentro do closure de `setup()`) sem esperar re-render.
+  const selectedWeaponRef = useRef<'sword' | 'gun' | null>(null)
+  selectedWeaponRef.current = selectedWeapon
   const chatOpenRef = useRef(false)
   chatOpenRef.current = chatOpen
 
@@ -2180,6 +2188,12 @@ export function World3D({
   useEffect(() => {
     ;(sceneRef.current as any)?.__setPlayerHat?.(profile.equippedHatId)
   }, [profile.equippedHatId])
+
+  // Espada/arma visível na mão conforme a seleção da mochila (lab-76) — mesmo padrão do chapéu
+  // acima, só que a fonte não é `profile` (persistido), é o estado local `selectedWeapon`.
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setSelectedWeapon?.(selectedWeapon)
+  }, [selectedWeapon])
 
   // Personalização de cores/cabelo (lab-73) — mesmo padrão dos dois `useEffect`s acima, um por
   // eixo, cada um só troca quando o campo correspondente do perfil muda.
@@ -2872,6 +2886,11 @@ export function World3D({
               const enemyWorldPos = SECOND_PLANET_CENTER.add(enemyLocalPos)
               attackAnimTimer = ATTACK_ANIM_DURATION
               attackAnimKind = attackKind
+              // A regra de qual arma nocauteia qual inimigo continua automática por tipo (lab-61,
+              // não muda por causa da seleção), mas a partir do lab-76 só a arma SELECIONADA fica
+              // visível na mão — sem isto, nocautear um ET com a arma a laser selecionada
+              // sacudiria o braço da espada sem nenhuma espada visível na mão.
+              if (selectedWeaponRef.current !== attackKind) setSelectedWeapon(attackKind)
               if (enemy.kind === 'robo') {
                 fireLaserBeam(avatarMesh.position.clone(), enemyWorldPos)
               }
@@ -2909,11 +2928,16 @@ export function World3D({
             boardedRocket = true
           }
         }
-        // Disparo livre da arma a laser (lab-74, pedido do usuário: "quando eu pego a arma laser
-        // mesmo nao estando em marte, ao apertar E tem que disparar o laser e fazer som") — antes
-        // só disparava dentro do combate de Marte, perto de um robô vivo. Fallback de menor
-        // prioridade: só dispara se nada acima (carro/combate/foguete) já respondeu ao "E".
-        if (!boardedRocket && hasGunRef.current) {
+        // Disparo/golpe livre da arma SELECIONADA (lab-74 pro laser, lab-76 pra espada — pedido
+        // do usuário: "quando eu pego a arma laser mesmo nao estando em marte, ao apertar E tem
+        // que disparar o laser e fazer som" / depois "quando eu estiver com espada selecionada
+        // ela deve aparecer na mao do boneco e ao pressionar E deve faser o som de espada e mexer
+        // o braco, mesmo sem estar em marte") — antes só reagia dentro do combate de Marte, perto
+        // de um inimigo vivo. Fallback de menor prioridade: só age se nada acima (carro/combate/
+        // foguete) já respondeu ao "E", e usa a arma que está EMPUNHADA no momento (`selectedWeaponRef`,
+        // ver `__setSelectedWeapon`), não simplesmente "o jogador tem a arma" — golpear/atirar no
+        // ar sem ela estar na mão ficaria visualmente incoerente.
+        if (!boardedRocket && selectedWeaponRef.current === 'gun' && hasGunRef.current) {
           const fromPos = avatarMesh.position.clone()
           const toPos = avatarMesh.position.add(facing.scale(6))
           attackAnimTimer = ATTACK_ANIM_DURATION
@@ -2921,6 +2945,16 @@ export function World3D({
           fireLaserBeam(fromPos, toPos)
           playLaserZap()
           sendAttack('gun', 'robo', fromPos.asArray() as [number, number, number], toPos.asArray() as [number, number, number])
+        } else if (!boardedRocket && selectedWeaponRef.current === 'sword' && hasSwordRef.current) {
+          attackAnimTimer = ATTACK_ANIM_DURATION
+          attackAnimKind = 'sword'
+          playSwordSwing()
+          sendAttack(
+            'sword',
+            'et',
+            avatarMesh.position.asArray() as [number, number, number],
+            avatarMesh.position.add(facing.scale(2)).asArray() as [number, number, number],
+          )
         }
       }
       ;(scene as any).__handleInteractPress = handleInteractPress
@@ -4680,6 +4714,15 @@ export function World3D({
       // reconstrói `accessories`. Ver useEffect que observa `profile.equippedHatId`.
       ;(scene as any).__setPlayerHat = (hatId: string | null) => {
         applyHat(studentFigure, hatId ? findHatById(hatId) ?? null : null, scene, shadowGenerator)
+      }
+
+      // Espada/arma na mão conforme a seleção da mochila (lab-76, pedido do usuário: "quando eu
+      // estiver com espada selecionada ela deve aparecer na mão do boneco") — só a arma
+      // SELECIONADA fica visível, mesmo que as duas já tenham sido coletadas; nenhuma selecionada
+      // = mão vazia. Ver useEffect que observa `selectedWeapon`.
+      ;(scene as any).__setSelectedWeapon = (weapon: 'sword' | 'gun' | null) => {
+        if (equippedSword) equippedSword.setEnabled(weapon === 'sword')
+        if (equippedGun) equippedGun.setEnabled(weapon === 'gun')
       }
 
       // Personalização de cores/cabelo (lab-73) — mesmo padrão de `__setAvatarShirtColor`/
@@ -6766,10 +6809,13 @@ export function World3D({
               hasSwordRef.current = true
               swordPickup.root.setEnabled(false)
               swordPickup.label.alpha = 0
-              if (equippedSword) equippedSword.setEnabled(true)
               playCoinCollect()
               setHasSword(true)
-              setWeaponMessage('Você encontrou a Espada! Agora ela fica na sua mão — pressione E perto de um ET em Marte pra nocauteá-lo.')
+              // Só "empunha" automaticamente se nada mais já estava selecionado (lab-76) — assim
+              // a arma continua visível se o jogador já tinha escolhido ela antes de achar a
+              // espada, em vez de trocar sozinha o que está na mão sem pedir.
+              if (selectedWeaponRef.current === null) setSelectedWeapon('sword')
+              setWeaponMessage('Você encontrou a Espada! Agora ela fica na sua mão — pressione E perto de um ET em Marte pra nocauteá-lo (ou em qualquer lugar, pra só golpear no ar).')
               window.setTimeout(() => setWeaponMessage(null), 4500)
             }
           }
@@ -6781,10 +6827,11 @@ export function World3D({
               hasGunRef.current = true
               gunPickup.root.setEnabled(false)
               gunPickup.label.alpha = 0
-              if (equippedGun) equippedGun.setEnabled(true)
               playCoinCollect()
               setHasGun(true)
-              setWeaponMessage('Você encontrou a Arma a Laser! Agora ela fica na sua mão — pressione E perto de um robô em Marte pra nocauteá-lo.')
+              // Ver comentário equivalente na espada acima (lab-76).
+              if (selectedWeaponRef.current === null) setSelectedWeapon('gun')
+              setWeaponMessage('Você encontrou a Arma a Laser! Agora ela fica na sua mão — pressione E perto de um robô em Marte pra nocauteá-lo (ou em qualquer lugar, pra só atirar no ar).')
               window.setTimeout(() => setWeaponMessage(null), 4500)
             }
           }

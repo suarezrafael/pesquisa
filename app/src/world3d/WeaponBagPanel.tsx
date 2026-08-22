@@ -21,9 +21,9 @@ const WEAPON_INFO: Record<'sword' | 'gun', { emoji: string; name: string; hint: 
 
 // Mochila (lab-63, pedido do usuário: "se eu peguei ambas o boneco deve ter uma bolsa virtual em
 // que voce ve o item e pode selecionar navegando no painel e clicando") — mostra só os itens já
-// coletados. Selecionar aqui é informativo (destaca o item e mostra a dica de uso); a espada e a
-// arma já ficam as duas sempre visíveis na mão do boneco, e a regra de combate (espada vs. ET,
-// arma vs. robô) é automática por tipo de inimigo desde o lab-61, não depende dessa seleção.
+// coletados. Selecionar aqui troca qual arma fica visível na mão do boneco e qual delas o "E"
+// livre (fora de combate) usa, desde o lab-76 — a regra de COMBATE EM MARTE (espada vs. ET, arma
+// vs. robô) continua automática por tipo de inimigo desde o lab-61, não depende dessa seleção.
 export function WeaponBagPanel({ hasSword, hasGun, selected, onSelect, onClose }: WeaponBagPanelProps) {
   const items: Array<'sword' | 'gun'> = []
   if (hasSword) items.push('sword')
