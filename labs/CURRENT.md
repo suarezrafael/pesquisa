@@ -1,23 +1,39 @@
 # Laboratório atual
 
-Último concluído: labs/lab-77-atualizar-documentacao/ (README/CLAUDE.md/prompt.md atualizados pra
-refletir Marte/combate/customização/multiplayer que cobrem os labs 58-76; skills do projeto
-documentadas; branch remota já mesclada apagada da origem)
-Contexto para o próximo laboratório: labs/lab-77-atualizar-documentacao/CONTEXT.md
+Último concluído: labs/lab-78-backend-comercial-fase-a/ (Fase A do plano de backend comercial —
+projeto Neon Postgres em São Paulo + Neon Auth + Worker Cloudflare novo `app/server-accounts/`,
+tudo no plano Free, verificado em produção)
+Contexto para o próximo laboratório: labs/lab-78-backend-comercial-fase-a/CONTEXT.md
+
+**Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A concluída; B-F não
+iniciadas). Ler antes de continuar qualquer trabalho de contas/assinatura/cosméticos pagos.
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
 **Relé de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
 (documentado em `app/server-cf-relay/README.md`)
+**Backend de contas (novo, só health-check por enquanto)**:
+https://missao-aprender-accounts.rafaelvs.workers.dev (documentado em `app/server-accounts/README.md`)
 
 Trabalho acontece numa branch de worktree (`worktree-abstract-wobbling-owl`), a partir de `main`.
-PR #5 (labs 58-61) ainda está aberto — este laboratório continua no mesmo PR até o usuário
-mesclar. Esta sessão não pode mesclar/apagar branch diretamente.
+**PR #5 foi mesclado pelo usuário** — a branch voltou a ficar alguns commits à frente da `main`
+depois disso (trabalho de documentação + Fase A do backend). Esta sessão não pode mesclar/apagar
+a branch diretamente; avise o usuário quando um novo PR fizer sentido.
+
+**Infraestrutura nova fora do git** (não tem como "clonar" isso via código — documentado aqui pra
+quem retomar saber que existe): projeto Neon `missao-aprender` (id `plain-waterfall-72629169`,
+região São Paulo), conta `rafaelv_s@hotmail.com` (login GitHub). Uma API key pessoal do Neon
+("missao-aprender-agent", escopo amplo — toda a conta, não só este projeto) foi usada pra
+provisionar isso; considerar revogar/restringir antes de qualquer automação recorrente.
 
 **Fly.io v1 (`missao-aprender-relay`)**: usuário pediu pra apagar, mas `flyctl apps destroy`
 falhou — a conta Fly.io está com o trial expirado e a própria plataforma bloqueia TODA chamada de
 API (inclusive apagar, que é grátis) até um cartão ser cadastrado. Sem contorno por CLI. O app já
-está `suspended` (não roda/não é cobrado), só não pôde ser removido da conta. Só o usuário pode
-desbloquear isso (cadastrando um cartão, ainda que temporariamente).
+está `suspended` (não roda/não é cobrado), só não pôde ser removido da conta.
+
+**Decisões de produto pendentes (usuário)**, antes de avançar pra Fase C/E do backend comercial:
+(1) preço da assinatura; (2) lista exata de cosméticos exclusivos; (3) resolver se a "biblioteca
+de material didático" mencionada pelo usuário fica de fora do gate de assinatura (recomendado,
+por causa da regra de nunca gatear conteúdo pedagógico em `prompt.md` §15.1) ou não.
 
 **Se o usuário reportar objetos flutuando de novo** (lab-75): pedir um print com o jogador parado
 bem perto do objeto. Lembrar também que o sistema de chuva dinâmica
@@ -34,10 +50,5 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 1.6x, o próximo passo é revisar CONTRASTE (`outlineWidth`/`outlineColor`), não aumentar o tamanho
 de novo.
 
-**Branches na origem**: só `main` e `worktree-abstract-wobbling-owl` (a `copilot/...` já mesclada
-foi apagada no lab-77). `worktree-abstract-wobbling-owl` continua 35 commits à frente da `main`
-(PR #5 aberto) — só apagar depois de confirmar merge de verdade
-(`git merge-base --is-ancestor origin/worktree-abstract-wobbling-owl origin/main`).
-
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-77-atualizar-documentacao/CONTEXT.md`.
+`labs/lab-78-backend-comercial-fase-a/CONTEXT.md`.
