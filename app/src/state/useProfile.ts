@@ -6,7 +6,17 @@ export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile())
 
   function createProfile(name: string, avatarEmoji: string) {
-    const next: Profile = { name, avatarEmoji, createdAt: new Date().toISOString(), equippedHatId: null }
+    const next: Profile = {
+      name,
+      avatarEmoji,
+      createdAt: new Date().toISOString(),
+      equippedHatId: null,
+      equippedShirtColorId: null,
+      equippedPantsColorId: null,
+      equippedShoeColorId: null,
+      equippedBackpackColorId: null,
+      equippedHairShapeId: null,
+    }
     saveProfile(next)
     setProfile(next)
   }
@@ -29,5 +39,63 @@ export function useProfile() {
     })
   }
 
-  return { profile, createProfile, equipAvatar, equipHat }
+  // Personalização de cores/cabelo (lab-73) — mesmo formato do `equipHat` acima, um por eixo
+  // (`null` = volta pro visual padrão). Repetitivo de propósito: cada função é só duas linhas,
+  // não vale a pena generalizar num helper genérico só pra economizar isso.
+  function equipShirtColor(id: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, equippedShirtColorId: id }
+      saveProfile(next)
+      return next
+    })
+  }
+
+  function equipPantsColor(id: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, equippedPantsColorId: id }
+      saveProfile(next)
+      return next
+    })
+  }
+
+  function equipShoeColor(id: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, equippedShoeColorId: id }
+      saveProfile(next)
+      return next
+    })
+  }
+
+  function equipBackpackColor(id: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, equippedBackpackColorId: id }
+      saveProfile(next)
+      return next
+    })
+  }
+
+  function equipHairShape(id: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, equippedHairShapeId: id }
+      saveProfile(next)
+      return next
+    })
+  }
+
+  return {
+    profile,
+    createProfile,
+    equipAvatar,
+    equipHat,
+    equipShirtColor,
+    equipPantsColor,
+    equipShoeColor,
+    equipBackpackColor,
+    equipHairShape,
+  }
 }

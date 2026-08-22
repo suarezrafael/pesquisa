@@ -13,6 +13,15 @@ export const emptyProgress: Progress = {
   badges: [],
   unlockedAvatarIds: DEFAULT_UNLOCKED_AVATAR_IDS,
   unlockedHatIds: DEFAULT_UNLOCKED_HAT_IDS,
+  // Personalização de cores/cabelo (lab-73) — só a primeira opção (custo 0) de cada catálogo
+  // vem desbloqueada; as outras duas se compram na lojinha. IDs fixos aqui em vez de importar
+  // `customization.ts` e filtrar por custo (como os avatares/chapéus fazem) só pra manter este
+  // arquivo sem mais uma dependência — os catálogos raramente mudam a ordem dos itens grátis.
+  unlockedShirtColorIds: ['camisa_padrao'],
+  unlockedPantsColorIds: ['calca_azul'],
+  unlockedShoeColorIds: ['sapato_preto'],
+  unlockedBackpackColorIds: ['mochila_padrao'],
+  unlockedHairShapeIds: ['cabelo_padrao'],
 }
 
 export function loadProfile(): Profile | null {
@@ -23,8 +32,17 @@ export function loadProfile(): Profile | null {
     // têm esse campo gravado ainda — sem isso, `profile.equippedHatId` ficaria `undefined` em
     // vez de `null` pra quem já tinha perfil salvo, um valor fora do tipo declarado. `Partial`
     // no cast (não `Profile` direto) porque dado salvo antes deste lab pode legitimamente não
-    // ter o campo — sem isso o TS assume que o spread sempre sobrescreve o default.
-    return { equippedHatId: null, ...(JSON.parse(raw) as Partial<Profile>) } as Profile
+    // ter o campo — sem isso o TS assume que o spread sempre sobrescreve o default. Mesmo
+    // raciocínio pros campos de personalização do lab-73.
+    return {
+      equippedHatId: null,
+      equippedShirtColorId: null,
+      equippedPantsColorId: null,
+      equippedShoeColorId: null,
+      equippedBackpackColorId: null,
+      equippedHairShapeId: null,
+      ...(JSON.parse(raw) as Partial<Profile>),
+    } as Profile
   } catch {
     return null
   }

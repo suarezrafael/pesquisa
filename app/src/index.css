@@ -881,6 +881,15 @@ body {
   font-size: 2rem;
 }
 
+/* Amostra de cor (lab-73) — mesmo espaço visual do emoji acima, só que uma bolinha da cor de
+   verdade em vez de um símbolo, pros catálogos de camisa/calça/sapato/mochila. */
+.avatar-shop-swatch {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+}
+
 .avatar-shop-name {
   font-size: 0.8rem;
   font-weight: 700;

@@ -20,8 +20,29 @@ const World3D = lazy(() => import('./world3d/World3D').then((m) => ({ default: m
 type PreProfileScreen = 'title' | 'onboarding'
 
 function App() {
-  const { profile, createProfile, equipAvatar, equipHat } = useProfile()
-  const { progress, completeQuest, collectCoin, unlockAvatar, unlockHat } = useProgress()
+  const {
+    profile,
+    createProfile,
+    equipAvatar,
+    equipHat,
+    equipShirtColor,
+    equipPantsColor,
+    equipShoeColor,
+    equipBackpackColor,
+    equipHairShape,
+  } = useProfile()
+  const {
+    progress,
+    completeQuest,
+    collectCoin,
+    unlockAvatar,
+    unlockHat,
+    unlockShirtColor,
+    unlockPantsColor,
+    unlockShoeColor,
+    unlockBackpackColor,
+    unlockHairShape,
+  } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [reward, setReward] = useState<{ quest: Quest; newBadges: string[]; awardedXp: number; awardedCoins: number } | null>(
@@ -140,6 +161,16 @@ function App() {
           onEquip={equipAvatar}
           onUnlockHat={unlockHat}
           onEquipHat={equipHat}
+          onUnlockShirtColor={unlockShirtColor}
+          onEquipShirtColor={equipShirtColor}
+          onUnlockPantsColor={unlockPantsColor}
+          onEquipPantsColor={equipPantsColor}
+          onUnlockShoeColor={unlockShoeColor}
+          onEquipShoeColor={equipShoeColor}
+          onUnlockBackpackColor={unlockBackpackColor}
+          onEquipBackpackColor={equipBackpackColor}
+          onUnlockHairShape={unlockHairShape}
+          onEquipHairShape={equipHairShape}
           onClose={() => setShowShop(false)}
         />
       )}

@@ -2,6 +2,13 @@ import type { Progress, Quest } from '../types'
 import { quests } from '../data/quests'
 import { findAvatarById } from '../data/avatars'
 import { findHatById } from '../data/hats'
+import {
+  BACKPACK_COLOR_CATALOG,
+  HAIR_SHAPE_CATALOG,
+  PANTS_COLOR_CATALOG,
+  SHIRT_COLOR_CATALOG,
+  SHOE_COLOR_CATALOG,
+} from '../data/customization'
 import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -105,4 +112,50 @@ export function unlockHat(progress: Progress, hatId: string): Progress {
     coins: progress.coins - hat.cost,
     unlockedHatIds: [...progress.unlockedHatIds, hatId],
   }
+}
+
+// Personalização de cores/cabelo (lab-73) — mesma regra de compra de `unlockAvatar`/`unlockHat`,
+// só extraída num helper porque agora são CINCO catálogos iguais (camisa/calça/sapato/mochila/
+// cabelo) em vez de repetir a mesma checagem cinco vezes.
+function unlockGeneric<T extends { id: string; cost: number }>(
+  coins: number,
+  unlockedIds: string[],
+  catalog: T[],
+  id: string,
+): { coins: number; unlockedIds: string[] } | null {
+  const item = catalog.find((c) => c.id === id)
+  if (!item) return null
+  if (unlockedIds.includes(id)) return null
+  if (coins < item.cost) return null
+  return { coins: coins - item.cost, unlockedIds: [...unlockedIds, id] }
+}
+
+export function unlockShirtColor(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(progress.coins, progress.unlockedShirtColorIds, SHIRT_COLOR_CATALOG, id)
+  if (!result) return progress
+  return { ...progress, coins: result.coins, unlockedShirtColorIds: result.unlockedIds }
+}
+
+export function unlockPantsColor(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(progress.coins, progress.unlockedPantsColorIds, PANTS_COLOR_CATALOG, id)
+  if (!result) return progress
+  return { ...progress, coins: result.coins, unlockedPantsColorIds: result.unlockedIds }
+}
+
+export function unlockShoeColor(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(progress.coins, progress.unlockedShoeColorIds, SHOE_COLOR_CATALOG, id)
+  if (!result) return progress
+  return { ...progress, coins: result.coins, unlockedShoeColorIds: result.unlockedIds }
+}
+
+export function unlockBackpackColor(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(progress.coins, progress.unlockedBackpackColorIds, BACKPACK_COLOR_CATALOG, id)
+  if (!result) return progress
+  return { ...progress, coins: result.coins, unlockedBackpackColorIds: result.unlockedIds }
+}
+
+export function unlockHairShape(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(progress.coins, progress.unlockedHairShapeIds, HAIR_SHAPE_CATALOG, id)
+  if (!result) return progress
+  return { ...progress, coins: result.coins, unlockedHairShapeIds: result.unlockedIds }
 }

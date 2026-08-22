@@ -40,6 +40,15 @@ import { quests } from '../data/quests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findAvatarByEmoji, type BonecoFeatures } from '../data/avatars'
 import { findHatById, type HatOption } from '../data/hats'
+import {
+  findColorOption,
+  findHairShapeOption,
+  BACKPACK_COLOR_CATALOG,
+  PANTS_COLOR_CATALOG,
+  SHIRT_COLOR_CATALOG,
+  SHOE_COLOR_CATALOG,
+  type HairShape,
+} from '../data/customization'
 import { questTypeColor } from './questVisuals'
 import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
@@ -76,10 +85,13 @@ import {
   isConnected as isMultiplayerConnected,
   onChat,
   onConnectionChange,
+  onRemoteAttack,
   onRemoteLeave,
   onRemoteState,
+  sendAttack,
   sendChat,
   sendState,
+  type AttackEvent,
   type ChatMessage,
   type RankingEntry,
   type RemoteState,
@@ -354,6 +366,16 @@ const ATTACK_ANIM_DURATION = 0.4
 // volta pra fora desse raio sempre que a perseguição o traria pra mais perto. O anel visual (ver
 // `soundRing` em `setup()`) usa esse mesmo raio como referência.
 const MARS_ENEMY_PERSONAL_SPACE = 0.9
+// Colisão entre jogadores (lab-73, pedido do usuário: "O boneco multiplayer e o meu boneco deve
+// ter colisao, nao deve ser possivel passar por dentro dele") — mesma ideia de "empurrão suave"
+// acima, não física de corpo-a-corpo real: cada cliente empurra o PRÓPRIO avatar (via força
+// radial, igual a `GRAVITY` abaixo) pra fora do raio sempre que fica perto demais de um jogador
+// remoto. Como todo cliente conectado faz o mesmo empurrão em si mesmo, o efeito visual final é
+// simétrico (nenhum dos dois atravessa o outro) sem precisar sincronizar física entre máquinas —
+// os jogadores remotos são só posições interpoladas (`Vector3.Lerp`), não corpos físicos de
+// verdade, então não dá pra empurrá-los de volta como se faz com os inimigos de Marte.
+const PLAYER_PERSONAL_SPACE = AVATAR_RADIUS * 2
+const PLAYER_PUSH_FORCE = 30
 // Duração do "solavanco" visual do inimigo ao atacar (lab-62, pedido do usuário: "mostrar uma
 // animação... não só de soco") — pulso de escala rápido, já que ET/robô não têm braço articulado
 // pra animar um soco de verdade.
@@ -487,6 +509,15 @@ function quaternionBetweenVectors(from: Vector3, to: Vector3): Quaternion {
 interface StudentFigure {
   root: TransformNode
   shirtMat: PBRMaterial
+  // Cores de calça/sapato/mochila (lab-73) — expostas junto de `shirtMat` pro mesmo padrão de
+  // recolorir ao vivo (ver `__setAvatarShirtColor`) funcionar pros outros eixos também.
+  pantsMat: PBRMaterial
+  shoeMat: PBRMaterial
+  backpackMat: PBRMaterial
+  hairMat: PBRMaterial
+  // Cabelo (lab-73) — separado de `accessories`/`hatMeshes` porque tem seu próprio eixo de troca
+  // de FORMATO (não só cor), populado por `applyHairShape` (mesmo padrão de `applyHat`).
+  hairMeshes: Mesh[]
   head: Mesh
   legPivotL: TransformNode
   legPivotR: TransformNode
@@ -546,12 +577,51 @@ interface RemotePlayer {
   // saber se aquele jogador remoto está perto de Marte ou não (ver loop de render).
   ring: Mesh
   ringPhaseOffset: number
+  // Aparência sincronizada (lab-73, pedido do usuário: "quando um outro usuário multiplayer
+  // estiver usando chapéu personalizado o outro usuário deve poder enxergar esse chapéu, se ele
+  // estiver segurando a espada ou a arma também") — `lastXxx` guarda o que já foi APLICADO
+  // visualmente, comparado contra o próximo `RemoteState` recebido; sem isso, cada atualização de
+  // posição (a cada ~120ms) recriaria chapéu/cabelo/etc. do zero mesmo quando nada nesse eixo
+  // mudou, um desperdício e um risco de piscar visualmente.
+  lastHatId: string | null
+  hasSword: boolean
+  hasGun: boolean
+  equippedSword: TransformNode | null
+  equippedGun: TransformNode | null
+  lastShirtColorId: string | null
+  lastPantsColorId: string | null
+  lastShoeColorId: string | null
+  lastBackpackColorId: string | null
+  lastHairShapeId: string | null
+  // Animação de golpe/tiro (lab-73, pedido do usuário: "o efeito de espada e arma deve ser visto
+  // por todos") — mesmo mecanismo do jogador local (`attackAnimTimer`/`attackAnimKind`), só que
+  // um estado por jogador remoto em vez de uma variável só, já que vários podem atacar ao mesmo
+  // tempo.
+  attackAnimTimer: number
+  attackAnimKind: 'sword' | 'gun' | null
 }
 
 // Personagem estudante estilo "avatar de app" (torso, cabeça, cabelo, mochila, 2 pernas,
 // 2 braços) construído só com primitivas — sem asset externo. As pernas/braços são
 // TransformNodes-pivô (quadril/ombro) pra poder girar em ciclo de caminhada.
-function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: ShadowGenerator): StudentFigure {
+// Cores opcionais (lab-73, pedido do usuário: "escolher na lojinha a cor da camiseta e da
+// mochila... a cor da calça, a cor do sapato") — sem valor, mantém exatamente o visual de sempre
+// (todo NPC/professor/lojista/civil continua chamando `buildStudentFigure` com só 3 argumentos,
+// sem precisar saber que esses eixos existem). Só o jogador local e os jogadores remotos passam
+// isto — o formato do cabelo é aplicado à parte, depois, via `applyHairShape` (mesmo padrão de
+// `applyHat`: dá pra trocar de novo mais tarde sem reconstruir a figura inteira).
+interface StudentFigureColorOptions {
+  pantsColor?: Color3
+  shoeColor?: Color3
+  backpackColor?: Color3
+}
+
+function buildStudentFigure(
+  scene: Scene,
+  shirtColor: Color3,
+  shadowGenerator: ShadowGenerator,
+  colorOptions?: StudentFigureColorOptions,
+): StudentFigure {
   const root = new TransformNode('studentRoot', scene)
 
   const skinMat = new PBRMaterial('skinMat', scene)
@@ -563,11 +633,15 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
   shirtMat.roughness = 0.7
 
   const pantsMat = new PBRMaterial('pantsMat', scene)
-  pantsMat.albedoColor = new Color3(0.22, 0.28, 0.48)
+  pantsMat.albedoColor = colorOptions?.pantsColor ?? new Color3(0.22, 0.28, 0.48)
   pantsMat.roughness = 0.8
 
+  const shoeMat = new PBRMaterial('shoeMat', scene)
+  shoeMat.albedoColor = colorOptions?.shoeColor ?? new Color3(0.12, 0.12, 0.14)
+  shoeMat.roughness = 0.7
+
   const backpackMat = new PBRMaterial('backpackMat', scene)
-  backpackMat.albedoColor = Color3.Lerp(shirtColor, new Color3(0.5, 0.15, 0.1), 0.5)
+  backpackMat.albedoColor = colorOptions?.backpackColor ?? Color3.Lerp(shirtColor, new Color3(0.5, 0.15, 0.1), 0.5)
   backpackMat.roughness = 0.75
 
   const hairMat = new PBRMaterial('hairMat', scene)
@@ -588,10 +662,6 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
   const head = MeshBuilder.CreateSphere('head', { diameter: 0.32 }, scene)
   head.position.y = 1.15
   addMesh(head, skinMat, root)
-
-  const hair = MeshBuilder.CreateSphere('hair', { diameter: 0.35, slice: 0.55 }, scene)
-  hair.position.y = 1.24
-  addMesh(hair, hairMat, root)
 
   // Mochila com detalhes que dão pra reconhecer de costas (única vista que a câmera em 3ª
   // pessoa mostra durante o jogo): corpo alto/estreito (proporção de mochila, não cubo), aba no
@@ -651,6 +721,14 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
     lowerMesh.position.y = -lowerLen / 2
     addMesh(lowerMesh, mat, lowerPivot)
 
+    // Tênis (lab-73, pedido do usuário: "a cor do sapato") — só nas pernas, na ponta da canela,
+    // um pouco pra frente (eixo Z) pra ficar visível saindo da calça em vez de escondido atrás.
+    if (isLeg) {
+      const shoe = MeshBuilder.CreateBox(`${name}Shoe`, { width: 0.1, height: 0.06, depth: 0.16 }, scene)
+      shoe.position = new Vector3(0, -lowerLen - 0.01, 0.04)
+      addMesh(shoe, shoeMat, lowerPivot)
+    }
+
     return { upperPivot, lowerPivot }
   }
 
@@ -659,9 +737,14 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
   const arm1 = buildTwoSegmentLimb('armL', -1, false)
   const arm2 = buildTwoSegmentLimb('armR', 1, false)
 
-  return {
+  const figure: StudentFigure = {
     root,
     shirtMat,
+    pantsMat,
+    shoeMat,
+    backpackMat,
+    hairMat,
+    hairMeshes: [],
     head,
     legPivotL: leg1.upperPivot,
     legPivotR: leg2.upperPivot,
@@ -674,6 +757,10 @@ function buildStudentFigure(scene: Scene, shirtColor: Color3, shadowGenerator: S
     accessories: [],
     hatMeshes: [],
   }
+  // Cabelo padrão — trocável depois via `applyHairShape` (ver `__setHairShape`), mesmo padrão de
+  // `applyHat` sendo chamado de novo quando o jogador troca de item na lojinha em cena.
+  applyHairShape(figure, 'padrao', scene, shadowGenerator)
+  return figure
 }
 
 // Peças 3D que dão a cada avatar do catálogo (src/data/avatars.ts) uma forma de verdade — não só
@@ -900,6 +987,47 @@ function applyHat(
       spike.position = new Vector3(Math.cos(angle) * 0.13, HAT_Y + 0.06, Math.sin(angle) * 0.13)
       add(spike)
     }
+  }
+}
+
+// Formato do cabelo (lab-73, pedido do usuário: "o formato do cabelo, pode ser 3 opções") — mesmo
+// padrão de `applyHat` (descarta as peças antigas, monta as novas), mas continua usando
+// `figure.hairMat` (não um material novo por chamada) já que cor de cabelo não é um eixo de
+// customização pedido — só o formato muda.
+function applyHairShape(figure: StudentFigure, shape: HairShape, scene: Scene, shadowGenerator: ShadowGenerator): void {
+  for (const mesh of figure.hairMeshes) mesh.dispose()
+  figure.hairMeshes = []
+
+  function add(mesh: Mesh) {
+    mesh.material = figure.hairMat
+    mesh.parent = figure.root
+    shadowGenerator.addShadowCaster(mesh)
+    figure.hairMeshes.push(mesh)
+    return mesh
+  }
+
+  if (shape === 'moicano') {
+    const fin = MeshBuilder.CreateBox('hairMoicanoFin', { width: 0.05, height: 0.18, depth: 0.3 }, scene)
+    fin.position.y = 1.32
+    add(fin)
+    const sides = MeshBuilder.CreateSphere('hairMoicanoSides', { diameter: 0.33, slice: 0.4 }, scene)
+    sides.position.y = 1.22
+    add(sides)
+  } else if (shape === 'longo') {
+    const top = MeshBuilder.CreateSphere('hairLongoTop', { diameter: 0.35, slice: 0.55 }, scene)
+    top.position.y = 1.24
+    add(top)
+    // Rabo/franja caindo pelas costas — cápsula inclinada, mais estreita embaixo (escala não
+    // uniforme) pra não parecer um cilindro reto.
+    const back = MeshBuilder.CreateCapsule('hairLongoBack', { height: 0.34, radius: 0.1 }, scene)
+    back.scaling = new Vector3(0.75, 1, 0.5)
+    back.rotation.x = 0.2
+    back.position = new Vector3(0, 1.03, -0.14)
+    add(back)
+  } else {
+    const hair = MeshBuilder.CreateSphere('hair', { diameter: 0.35, slice: 0.55 }, scene)
+    hair.position.y = 1.24
+    add(hair)
   }
 }
 
@@ -2053,6 +2181,28 @@ export function World3D({
     ;(sceneRef.current as any)?.__setPlayerHat?.(profile.equippedHatId)
   }, [profile.equippedHatId])
 
+  // Personalização de cores/cabelo (lab-73) — mesmo padrão dos dois `useEffect`s acima, um por
+  // eixo, cada um só troca quando o campo correspondente do perfil muda.
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setPlayerShirtColor?.(profile.equippedShirtColorId)
+  }, [profile.equippedShirtColorId])
+
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setPlayerPantsColor?.(profile.equippedPantsColorId)
+  }, [profile.equippedPantsColorId])
+
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setPlayerShoeColor?.(profile.equippedShoeColorId)
+  }, [profile.equippedShoeColorId])
+
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setPlayerBackpackColor?.(profile.equippedBackpackColorId)
+  }, [profile.equippedBackpackColorId])
+
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setPlayerHairShape?.(profile.equippedHairShapeId)
+  }, [profile.equippedHairShapeId])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -2718,11 +2868,23 @@ export function World3D({
               // Animação de golpe/tiro (lab-62, pedido do usuário: "ao apertar E ele sacode o
               // braço, ou atira o laser?") — sobrescreve o ciclo de caminhada por um instante
               // (ver `attackAnimTimer`/`attackAnimKind` no laço de física).
+              const attackKind = enemy.kind === 'et' ? 'sword' : 'gun'
+              const enemyWorldPos = SECOND_PLANET_CENTER.add(enemyLocalPos)
               attackAnimTimer = ATTACK_ANIM_DURATION
-              attackAnimKind = enemy.kind === 'et' ? 'sword' : 'gun'
+              attackAnimKind = attackKind
               if (enemy.kind === 'robo') {
-                fireLaserBeam(avatarMesh.position.clone(), SECOND_PLANET_CENTER.add(enemyLocalPos))
+                fireLaserBeam(avatarMesh.position.clone(), enemyWorldPos)
               }
+              // Efeito visto por todos (lab-73, pedido do usuário: "o efeito de espada e arma
+              // deve ser visto por todos como num jogo multiplayer") — manda uma vez só, no
+              // instante do golpe/tiro, pros outros clientes reproduzirem a mesma animação +
+              // choque/fumaça/laser (ver `onRemoteAttack` mais abaixo).
+              sendAttack(
+                attackKind,
+                enemy.kind,
+                avatarMesh.position.asArray() as [number, number, number],
+                enemyWorldPos.asArray() as [number, number, number],
+              )
               enemy.alive = false
               enemy.root.setEnabled(false)
               playEnemyHit()
@@ -4410,9 +4572,20 @@ export function World3D({
         scene,
       )
 
-      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator)
+      const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, profile.equippedPantsColorId)
+      const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, profile.equippedShoeColorId)
+      const initialBackpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, profile.equippedBackpackColorId)
+      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator, {
+        pantsColor: initialPantsOpt ? new Color3(...initialPantsOpt.colorRgb) : undefined,
+        shoeColor: initialShoeOpt ? new Color3(...initialShoeOpt.colorRgb) : undefined,
+        backpackColor: initialBackpackOpt ? new Color3(...initialBackpackOpt.colorRgb) : undefined,
+      })
+      const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, profile.equippedShirtColorId)
+      if (initialShirtOpt) studentFigure.shirtMat.albedoColor = new Color3(...initialShirtOpt.colorRgb)
       applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
       applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
+      const initialHair = findHairShapeOption(profile.equippedHairShapeId)
+      if (initialHair) applyHairShape(studentFigure, initialHair.shape, scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
       if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure
 
@@ -4463,6 +4636,31 @@ export function World3D({
       // reconstrói `accessories`. Ver useEffect que observa `profile.equippedHatId`.
       ;(scene as any).__setPlayerHat = (hatId: string | null) => {
         applyHat(studentFigure, hatId ? findHatById(hatId) ?? null : null, scene, shadowGenerator)
+      }
+
+      // Personalização de cores/cabelo (lab-73) — mesmo padrão de `__setAvatarShirtColor`/
+      // `__setPlayerHat` acima: um por eixo, cada um observado por um `useEffect` próprio.
+      ;(scene as any).__setPlayerShirtColor = (id: string | null) => {
+        const opt = findColorOption(SHIRT_COLOR_CATALOG, id)
+        studentFigure.shirtMat.albedoColor = opt ? new Color3(...opt.colorRgb) : avatarColorFromEmoji(profileRef.current.avatarEmoji)
+      }
+      ;(scene as any).__setPlayerPantsColor = (id: string | null) => {
+        const opt = findColorOption(PANTS_COLOR_CATALOG, id)
+        studentFigure.pantsMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.22, 0.28, 0.48)
+      }
+      ;(scene as any).__setPlayerShoeColor = (id: string | null) => {
+        const opt = findColorOption(SHOE_COLOR_CATALOG, id)
+        studentFigure.shoeMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.12, 0.12, 0.14)
+      }
+      ;(scene as any).__setPlayerBackpackColor = (id: string | null) => {
+        const opt = findColorOption(BACKPACK_COLOR_CATALOG, id)
+        studentFigure.backpackMat.albedoColor = opt
+          ? new Color3(...opt.colorRgb)
+          : Color3.Lerp(avatarColorFromEmoji(profileRef.current.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5)
+      }
+      ;(scene as any).__setPlayerHairShape = (id: string | null) => {
+        const opt = findHairShapeOption(id)
+        applyHairShape(studentFigure, opt?.shape ?? 'padrao', scene, shadowGenerator)
       }
 
       // Bolha de fala sobre a própria cabeça (lab-55) — o relay não devolve a própria mensagem
@@ -5642,6 +5840,25 @@ export function World3D({
           rRingMat.alpha = 0.5
           rRing.material = rRingMat
           rRing.setEnabled(false)
+
+          // Espada/arma visíveis pros outros (lab-73, pedido do usuário: "se ele estiver
+          // segurando a espada ou a arma também [deve aparecer]") — mesma malha/posição/escala
+          // do jogador local (`equippedSword`/`equippedGun` em `setup()`), começam escondidas até
+          // o primeiro `RemoteState` dizer que esse jogador já tem o item.
+          const rSword = buildSword(scene, shadowGenerator)
+          rSword.scaling.setAll(0.55)
+          rSword.parent = rFigure.elbowPivotR
+          rSword.position = new Vector3(0.02, -0.22, 0.04)
+          rSword.rotation = new Vector3(-0.3, 0, 0.25)
+          rSword.setEnabled(false)
+
+          const rGun = buildLaserGun(scene, shadowGenerator)
+          rGun.scaling.setAll(0.65)
+          rGun.parent = rFigure.elbowPivotL
+          rGun.position = new Vector3(-0.02, -0.22, 0.04)
+          rGun.rotation = new Vector3(-0.2, 0, -0.2)
+          rGun.setEnabled(false)
+
           rp = {
             figure: rFigure,
             label: rLabel,
@@ -5658,10 +5875,70 @@ export function World3D({
             chatBubbleTimeout: null,
             ring: rRing,
             ringPhaseOffset: Math.random() * 1.2,
+            lastHatId: null,
+            hasSword: false,
+            hasGun: false,
+            equippedSword: rSword,
+            equippedGun: rGun,
+            lastShirtColorId: null,
+            lastPantsColorId: null,
+            lastShoeColorId: null,
+            lastBackpackColorId: null,
+            lastHairShapeId: null,
+            attackAnimTimer: 0,
+            attackAnimKind: null,
           }
           remotePlayers.set(state.id, rp)
+          applyRemoteAppearance(rp, state, scene, shadowGenerator)
         }
         return rp
+      }
+
+      // Aplica chapéu/arma/cores/cabelo sincronizados (lab-73) num jogador remoto — chamado na
+      // criação (pra já nascer com a aparência certa, não só na atualização seguinte) e a cada
+      // `RemoteState` recebido. Cada eixo só reconstrói/recolore de verdade se o id mudou desde a
+      // última vez (`rp.lastXxx`) — sem essa checagem, cada atualização de posição (~a cada
+      // 120ms) recriaria chapéu/cabelo do zero à toa, mesmo quando nada nesse eixo mudou.
+      function applyRemoteAppearance(rp: RemotePlayer, state: RemoteState, scene: Scene, shadowGenerator: ShadowGenerator) {
+        if (state.hatId !== rp.lastHatId) {
+          rp.lastHatId = state.hatId
+          applyHat(rp.figure, state.hatId ? findHatById(state.hatId) ?? null : null, scene, shadowGenerator)
+        }
+        if (state.hasSword !== rp.hasSword) {
+          rp.hasSword = state.hasSword
+          rp.equippedSword?.setEnabled(state.hasSword)
+        }
+        if (state.hasGun !== rp.hasGun) {
+          rp.hasGun = state.hasGun
+          rp.equippedGun?.setEnabled(state.hasGun)
+        }
+        if (state.shirtColorId !== rp.lastShirtColorId) {
+          rp.lastShirtColorId = state.shirtColorId
+          const opt = findColorOption(SHIRT_COLOR_CATALOG, state.shirtColorId)
+          rp.figure.shirtMat.albedoColor = opt ? new Color3(...opt.colorRgb) : avatarColorFromEmoji(state.avatarEmoji)
+        }
+        if (state.pantsColorId !== rp.lastPantsColorId) {
+          rp.lastPantsColorId = state.pantsColorId
+          const opt = findColorOption(PANTS_COLOR_CATALOG, state.pantsColorId)
+          rp.figure.pantsMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.22, 0.28, 0.48)
+        }
+        if (state.shoeColorId !== rp.lastShoeColorId) {
+          rp.lastShoeColorId = state.shoeColorId
+          const opt = findColorOption(SHOE_COLOR_CATALOG, state.shoeColorId)
+          rp.figure.shoeMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.12, 0.12, 0.14)
+        }
+        if (state.backpackColorId !== rp.lastBackpackColorId) {
+          rp.lastBackpackColorId = state.backpackColorId
+          const opt = findColorOption(BACKPACK_COLOR_CATALOG, state.backpackColorId)
+          rp.figure.backpackMat.albedoColor = opt
+            ? new Color3(...opt.colorRgb)
+            : Color3.Lerp(avatarColorFromEmoji(state.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5)
+        }
+        if (state.hairShapeId !== rp.lastHairShapeId) {
+          rp.lastHairShapeId = state.hairShapeId
+          const opt = findHairShapeOption(state.hairShapeId)
+          applyHairShape(rp.figure, opt?.shape ?? 'padrao', scene, shadowGenerator)
+        }
       }
 
       function removeRemotePlayer(id: string) {
@@ -5695,6 +5972,7 @@ export function World3D({
         rp.lastSeen = performance.now()
         rp.xp = state.xp
         rp.coins = state.coins
+        applyRemoteAppearance(rp, state, scene, shadowGenerator)
       })
       const unsubLeave = onRemoteLeave((id) => removeRemotePlayer(id))
       const unsubChat = onChat((msg) => {
@@ -5703,6 +5981,21 @@ export function World3D({
         const quickMsg = findQuickChatMessage(msg.messageId)
         if (rp && quickMsg) {
           rp.chatBubbleTimeout = showChatBubbleText(rp.chatLabel, `${quickMsg.emoji} ${quickMsg.text}`, rp.chatBubbleTimeout)
+        }
+      })
+      // Efeito de combate visto por todos (lab-73) — evento avulso (não um campo contínuo de
+      // `RemoteState`), então recebido aqui e não em `applyRemoteAppearance`. Toca a mesma VFX
+      // (choque/fumaça/laser) do jogador local, ancorada na posição informada, e dispara a
+      // animação de braço do jogador remoto que atacou (`rp.attackAnimTimer`/`attackAnimKind`,
+      // lida no laço de física abaixo).
+      const unsubAttack = onRemoteAttack((attack: AttackEvent) => {
+        const rp = remotePlayers.get(attack.id)
+        if (rp) {
+          rp.attackAnimTimer = ATTACK_ANIM_DURATION
+          rp.attackAnimKind = attack.kind
+        }
+        if (attack.kind === 'gun') {
+          fireLaserBeam(Vector3.FromArray(attack.fromPos), Vector3.FromArray(attack.toPos))
         }
       })
       const unsubConnection = onConnectionChange((connected) => setMpConnected(connected))
@@ -5746,6 +6039,7 @@ export function World3D({
         unsubState()
         unsubLeave()
         unsubChat()
+        unsubAttack()
         unsubConnection()
         disconnectMultiplayer()
         window.clearInterval(rankingInterval)
@@ -5872,6 +6166,16 @@ export function World3D({
           // Gravidade radial real — puxa sempre pro centro do planeta (origem),
           // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
           body.applyForce(localUp.scale(-GRAVITY), pos)
+
+          // Colisão entre jogadores (lab-73) — ver `PLAYER_PERSONAL_SPACE` acima.
+          for (const [, otherPlayer] of remotePlayers) {
+            const awayFromOther = pos.subtract(otherPlayer.figure.root.position)
+            const otherDist = awayFromOther.length()
+            if (otherDist > 0.0001 && otherDist < PLAYER_PERSONAL_SPACE) {
+              const overlap = PLAYER_PERSONAL_SPACE - otherDist
+              body.applyForce(awayFromOther.scale((1 / otherDist) * overlap * PLAYER_PUSH_FORCE), pos)
+            }
+          }
 
           // Mantém "facing" tangente à superfície conforme a bola rola pela curvatura
           // (transporte paralelo simplificado: remove a componente radial e renormaliza).
@@ -6091,6 +6395,16 @@ export function World3D({
               facing.asArray() as [number, number, number],
               progressRef.current.xp,
               progressRef.current.coins,
+              {
+                hatId: profileRef.current.equippedHatId,
+                hasSword: hasSwordRef.current,
+                hasGun: hasGunRef.current,
+                shirtColorId: profileRef.current.equippedShirtColorId,
+                pantsColorId: profileRef.current.equippedPantsColorId,
+                shoeColorId: profileRef.current.equippedShoeColorId,
+                backpackColorId: profileRef.current.equippedBackpackColorId,
+                hairShapeId: profileRef.current.equippedHairShapeId,
+              },
             )
           }
           const nowMs = performance.now()
@@ -6147,6 +6461,22 @@ export function World3D({
               rp.figure.elbowPivotR.rotation.x *= 0.8
               rp.figure.head.position.y += (1.15 - rp.figure.head.position.y) * 0.2
               rp.lastFootSign = 0
+            }
+
+            // Animação de golpe/tiro visível pros outros jogadores (lab-73, pedido do usuário:
+            // "o efeito de espada e arma deve ser visto por todos") — mesmo cálculo do jogador
+            // local acima, disparado por `onRemoteAttack` em vez de `handleInteractPress`.
+            if (rp.attackAnimTimer > 0) {
+              rp.attackAnimTimer -= dt
+              const rSwingT = Math.min(1, 1 - rp.attackAnimTimer / ATTACK_ANIM_DURATION)
+              if (rp.attackAnimKind === 'sword') {
+                rp.figure.armPivotR.rotation.x = -1.9 + Math.sin(rSwingT * Math.PI) * 2.4
+                rp.figure.elbowPivotR.rotation.x = -0.4
+              } else if (rp.attackAnimKind === 'gun') {
+                rp.figure.armPivotL.rotation.x = -1.3 - Math.sin(rSwingT * Math.PI) * 0.35
+                rp.figure.elbowPivotL.rotation.x = 0.35
+              }
+              if (rp.attackAnimTimer <= 0) rp.attackAnimKind = null
             }
 
             // Anel de onda sonora nos jogadores remotos (lab-64) — mesmo cálculo de "perto de
