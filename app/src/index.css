@@ -514,8 +514,18 @@ body {
 
 .world3d-debug {
   position: absolute;
-  top: 0.5rem;
+  /* lab-72, bug real visto num screenshot do celular do usuário: numa tela estreita, essa string
+     (uma linha só, sem largura máxima) ficava mais larga que o viewport inteiro — como é ancorada
+     pela borda DIREITA, a sobra ia parar por baixo/atrás do painel avatar+nome+moedas em vez de
+     simplesmente cortar, virando uma bagunça ilegível dos dois textos sobrepostos. `max-width` +
+     quebra de linha normal fazem ela virar 2-3 linhas curtas dentro da tela, sem invadir o canto
+     esquerdo onde o painel do HUD já está. Descida um pouco (`top`) pra ficar abaixo da fileira
+     de ícones do HUD em vez de disputar a mesma linha. */
+  top: 3.6rem;
   right: 0.75rem;
+  max-width: min(60vw, 320px);
+  white-space: normal;
+  text-align: right;
   background: rgba(0, 0, 0, 0.55);
   color: #7CFC9A;
   font-family: monospace;

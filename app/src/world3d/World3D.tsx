@@ -2102,8 +2102,11 @@ export function World3D({
     // comentário acima), só o efeito em `mobileFontSize` inverteu de direção.
     const isSmallScreen =
       /iPhone|iPod/i.test(navigator.userAgent) || (/Android/i.test(navigator.userAgent) && /Mobile/i.test(navigator.userAgent))
+    // lab-72 — 1.2x (lab-70) não bastou: usuário mandou um screenshot real do Poco C75 mostrando
+    // nomes/legendas dos personagens ainda ilegíveis, com FPS já bom (25) e sobra pra gastar mais
+    // com texto maior. Subiu pra 1.6x.
     function mobileFontSize(px: number): number {
-      return isSmallScreen ? Math.round(px * 1.2) : px
+      return isSmallScreen ? Math.round(px * 1.6) : px
     }
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
