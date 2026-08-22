@@ -1,9 +1,8 @@
 # Laboratório atual
 
-Último concluído: labs/lab-73-multiplayer-visual-e-personalizacao/ (chapéu/arma/efeito de ataque
-agora visíveis pros outros jogadores no multiplayer, colisão jogador-jogador via empurrão suave, e
-lojinha com cor de camisa/calça/sapato/mochila + formato de cabelo, 3 opções cada)
-Contexto para o próximo laboratório: labs/lab-73-multiplayer-visual-e-personalizacao/CONTEXT.md
+Último concluído: labs/lab-74-disparo-livre-arma-laser/ (apertar E com a arma a laser equipada
+agora dispara o feixe + som em qualquer lugar, não só durante combate em Marte)
+Contexto para o próximo laboratório: labs/lab-74-disparo-livre-arma-laser/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
 **Relé de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
@@ -23,4 +22,4 @@ fonte no celular (labs 67-72) voltar a ser reportada como insuficiente mesmo em 
 passo é revisar CONTRASTE (`outlineWidth`/`outlineColor`), não aumentar o tamanho de novo.
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-73-multiplayer-visual-e-personalizacao/CONTEXT.md`.
+`labs/lab-74-disparo-livre-arma-laser/CONTEXT.md`.
