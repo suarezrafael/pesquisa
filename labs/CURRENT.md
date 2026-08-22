@@ -1,9 +1,9 @@
 # Laboratório atual
 
-Último concluído: labs/lab-76-espada-selecionada-e-doc-relay/ (seleção da mochila agora controla
-qual arma fica visível na mão + som/animação de espada fora de combate; README técnico novo em
-app/server-cf-relay/)
-Contexto para o próximo laboratório: labs/lab-76-espada-selecionada-e-doc-relay/CONTEXT.md
+Último concluído: labs/lab-77-atualizar-documentacao/ (README/CLAUDE.md/prompt.md atualizados pra
+refletir Marte/combate/customização/multiplayer que cobrem os labs 58-76; skills do projeto
+documentadas; branch remota já mesclada apagada da origem)
+Contexto para o próximo laboratório: labs/lab-77-atualizar-documentacao/CONTEXT.md
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app
 **Relé de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
@@ -34,5 +34,10 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 1.6x, o próximo passo é revisar CONTRASTE (`outlineWidth`/`outlineColor`), não aumentar o tamanho
 de novo.
 
+**Branches na origem**: só `main` e `worktree-abstract-wobbling-owl` (a `copilot/...` já mesclada
+foi apagada no lab-77). `worktree-abstract-wobbling-owl` continua 35 commits à frente da `main`
+(PR #5 aberto) — só apagar depois de confirmar merge de verdade
+(`git merge-base --is-ancestor origin/worktree-abstract-wobbling-owl origin/main`).
+
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-76-espada-selecionada-e-doc-relay/CONTEXT.md`.
+`labs/lab-77-atualizar-documentacao/CONTEXT.md`.
