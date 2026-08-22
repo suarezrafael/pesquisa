@@ -1,0 +1,18 @@
+{
+  "name": "missao-aprender-accounts",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate": "node migrate.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260819.1",
+    "wrangler": "^4.124.0",
+    "pg": "^8.16.0"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

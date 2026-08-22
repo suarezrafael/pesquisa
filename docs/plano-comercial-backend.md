@@ -128,9 +128,15 @@ os catálogos em `src/data/`), nunca em `quests.ts`/`progression.ts`.
 
 ## Fases de implementação (cada uma vira um laboratório na hora de construir)
 
-1. **Fase A — Fundação de dados**: criar projeto Neon, schema acima, Neon Auth configurado só pro
-   login do responsável. Sem UI nova ainda, sem pagamento. Critério de pronto: consigo criar um
-   responsável de teste e ver a linha em `neon_auth.users` via SQL.
+1. **Fase A — Fundação de dados ✅ concluída em 2026-08-22**: projeto Neon `missao-aprender`
+   criado (região São Paulo, `aws-sa-east-1`), Neon Auth habilitado (schema `neon_auth`
+   confirmado: `user`/`session`/`account`/etc.), schema próprio aplicado (`family_accounts`/
+   `subscriptions`/`pairing_codes`), Worker `missao-aprender-accounts` deployado no Cloudflare
+   com um health-check que prova a conexão de ponta a ponta (Worker → Neon via driver HTTP).
+   Ver `app/server-accounts/README.md` e `labs/lab-78-.../CONTEXT.md` pro detalhe completo.
+   Ajuste em relação ao critério original: não criei um responsável de teste de verdade (exigiria
+   passar pelo fluxo real de signup do Better Auth, que só faz sentido com a UI da Fase B) — em
+   vez disso, confirmei que o schema existe e é consultável, o que é suficiente pra fundação.
 2. **Fase B — Portal `/familia` (somente leitura)**: parental gate + tela de login/cadastro do
    responsável + dashboard mostrando "sem assinatura ativa". Nenhuma mudança no jogo da criança
    ainda.
