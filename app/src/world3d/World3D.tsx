@@ -530,6 +530,13 @@ interface RemotePlayer {
   // NPCs (`chatLabel` em `WalkerNpc`/pool people): alpha 0/1, ligada à cabeça da figura.
   chatLabel: TextBlock
   chatBubbleTimeout: number | null
+  // Anel de onda sonora (lab-64, pedido do usuário: "o efeito de fumaça circular que aparece
+  // quando estou em Marte devem aparecer quando estou visualizando outros usuários logados no
+  // server também") — mesmo anel do próprio jogador (lab-62), mas ligado/desligado por posição:
+  // sem campo novo no protocolo de rede, a posição já sincronizada (`targetPos`) já basta pra
+  // saber se aquele jogador remoto está perto de Marte ou não (ver loop de render).
+  ring: Mesh
+  ringPhaseOffset: number
 }
 
 // Personagem estudante estilo "avatar de app" (torso, cabeça, cabelo, mochila, 2 pernas,
@@ -2233,6 +2240,25 @@ export function World3D({
           marsHealthRef.current = MARS_MAX_HEALTH
           setMarsHealthDisplay(MARS_MAX_HEALTH)
           setOnMarsCombatZone(true)
+          // Novos marcianos a cada chegada em Marte (lab-64, pedido do usuário: "se voltar pra
+          // marte, tem que ter novos marcianos pra matar, senão o planeta fica vazio") — sem
+          // isso, inimigos já nocauteados numa visita anterior ficavam mortos pra sempre (o
+          // array é reaproveitado, nunca recriado), deixando o planeta esvaziado depois da
+          // primeira exploração. Reaparecem no próprio ponto de nascimento (`homeUp`), com o
+          // mesmo estado inicial de repouso — cobre tanto "voltar depois de nocauteado" quanto
+          // "voltar de novo por escolha própria depois de já ter limpado o planeta".
+          for (const enemy of marsEnemies) {
+            enemy.alive = true
+            enemy.up = enemy.homeUp.clone()
+            enemy.targetUp = enemy.homeUp.clone()
+            enemy.forward = Vector3.Cross(enemy.homeUp, Vector3.Right()).normalize()
+            enemy.restTimer = Math.random() * 2
+            enemy.attackCooldown = 0
+            enemy.lungeTimer = 0
+            enemy.root.position = enemy.homeUp.scale(SECOND_PLANET_RADIUS)
+            enemy.root.rotationQuaternion = alignmentQuaternion(enemy.homeUp)
+            enemy.root.setEnabled(true)
+          }
         } else {
           onSecondPlanet = false
           currentWorldCenter = Vector3.Zero()
@@ -4173,6 +4199,31 @@ export function World3D({
         ;(window as any).__debugSetFacing = (x: number, y: number, z: number) => {
           facing = new Vector3(x, y, z).normalize()
         }
+        // Gatilho de QA pra animação de golpe/tiro (lab-64) — o combate de verdade em Marte
+        // resolve rápido demais (o jogador costuma morrer em poucos quadros) pra flagrar a
+        // animação/VFX num teste automatizado por screenshot, ver "Pendências" no CONTEXT.md do
+        // lab-62/lab-63. Dispara exatamente o mesmo estado (`attackAnimTimer`/`attackAnimKind`)
+        // que `handleInteractPress` já usa ao nocautear um inimigo de verdade — sem efeito
+        // nenhum na regra de jogo, só pra poder ver a animação isolada.
+        ;(window as any).__debugTriggerAttackAnim = (kind: 'sword' | 'gun') => {
+          attackAnimTimer = ATTACK_ANIM_DURATION
+          attackAnimKind = kind
+        }
+        // Mesma ideia acima, mas pros efeitos dos INIMIGOS (choque do robô / fumaça do ET) e pro
+        // feixe de laser do jogador — chama as mesmas funções que `applyMarsDamage`/
+        // `handleInteractPress` já usam de verdade, só com posições de teste perto do avatar em
+        // vez de depender de um combate real acontecendo (que resolve rápido demais pra flagrar
+        // num teste automatizado).
+        ;(window as any).__debugTriggerEnemyVfx = (kind: 'robo' | 'et') => {
+          if (!avatarMesh) return
+          const nearby = avatarMesh.position.add(new Vector3(1, 0, 0))
+          if (kind === 'robo') spawnRoboShock(nearby, avatarMesh.position.clone())
+          else spawnEtSmoke(avatarMesh.position.clone())
+        }
+        ;(window as any).__debugTriggerLaser = () => {
+          if (!avatarMesh) return
+          fireLaserBeam(avatarMesh.position.clone(), avatarMesh.position.add(new Vector3(2, 0, 0)))
+        }
       }
 
       // Posicionamento das escolas usa `terrainGroundRadial` (raycast físico real, declarada logo
@@ -5228,6 +5279,19 @@ export function World3D({
           guiTexture.addControl(rChatLabel)
           rChatLabel.linkWithMesh(rFigure.head)
           rChatLabel.linkOffsetY = -55
+          const rRing = MeshBuilder.CreateTorus(
+            `remoteSoundRing-${state.id}`,
+            { diameter: MARS_ENEMY_PERSONAL_SPACE * 2, thickness: 0.04, tessellation: 24 },
+            scene,
+          )
+          rRing.parent = rFigure.root
+          rRing.position.y = 0.03
+          const rRingMat = new PBRMaterial(`remoteSoundRingMat-${state.id}`, scene)
+          rRingMat.albedoColor = new Color3(0.6, 0.9, 1)
+          rRingMat.emissiveColor = new Color3(0.5, 0.85, 1)
+          rRingMat.alpha = 0.5
+          rRing.material = rRingMat
+          rRing.setEnabled(false)
           rp = {
             figure: rFigure,
             label: rLabel,
@@ -5242,6 +5306,8 @@ export function World3D({
             lastFootSign: 0,
             chatLabel: rChatLabel,
             chatBubbleTimeout: null,
+            ring: rRing,
+            ringPhaseOffset: Math.random() * 1.2,
           }
           remotePlayers.set(state.id, rp)
         }
@@ -5731,6 +5797,18 @@ export function World3D({
               rp.figure.elbowPivotR.rotation.x *= 0.8
               rp.figure.head.position.y += (1.15 - rp.figure.head.position.y) * 0.2
               rp.lastFootSign = 0
+            }
+
+            // Anel de onda sonora nos jogadores remotos (lab-64) — mesmo cálculo de "perto de
+            // Marte" usado pra decidir a barra de vida (`onSecondPlanet`), mas por distância
+            // direta até `SECOND_PLANET_CENTER`, já que o estado remoto só traz posição (sem
+            // campo "planeta atual" — não precisa: a posição sozinha já resolve).
+            const remoteNearMars = Vector3.Distance(rp.figure.root.position, SECOND_PLANET_CENTER) < SECOND_PLANET_RADIUS + 3
+            rp.ring.setEnabled(remoteNearMars)
+            if (remoteNearMars) {
+              const pingT = ((time + rp.ringPhaseOffset) % 1.2) / 1.2
+              rp.ring.scaling.setAll(0.6 + pingT * 1.0)
+              ;(rp.ring.material as PBRMaterial).alpha = 0.5 * (1 - pingT)
             }
           }
 
