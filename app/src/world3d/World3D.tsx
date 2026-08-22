@@ -2077,12 +2077,24 @@ export function World3D({
     // passou a reconhecer o tablet como aparelho fraco de verdade). GPU fraca e tela física
     // pequena são dois problemas DIFERENTES que só coincidem em celular — um tablet grande (ex.:
     // Redmi Pad 2, ~11") tem a MESMA GPU fraca de um celular, mas a tela é grande o bastante pra
-    // não precisar de fonte reduzida nenhuma. `isSmallScreen` usa a MENOR dimensão da janela (não
-    // fixa em largura, pra não confundir celular deitado com tablet) — só isso decide a fonte;
-    // `isLowEndDevice` continua controlando resolução/sombra/contagem de props, sem mudar aqui.
-    const isSmallScreen = Math.min(window.innerWidth, window.innerHeight) < 500
+    // não precisar de fonte reduzida nenhuma.
+    //
+    // lab-68 (usuário testou de novo e relatou "as legendas... ficou com tamanho muito pequenos
+    // pros dispositivos pequenos ajustar"): a primeira versão usava `window.innerWidth/innerHeight`
+    // pra decidir — mas esses valores são pixels CSS, afetados por escala de DPI/orientação/zoom
+    // de um jeito que não dá pra prever sem o aparelho real na mão (um tablet em pé pode reportar
+    // uma largura CSS "de celular" dependendo da densidade de pixels configurada). Trocado pelo
+    // sinal padrão que o próprio Android já usa pra diferenciar celular de tablet: o token
+    // "Mobile" no user-agent (tablets Android normalmente NÃO o incluem; celulares Android
+    // sempre incluem). Cuidado real ao testar essa troca: "Mobile" sozinho NÃO basta pra iOS — o
+    // Safari inclui "Mobile/15E148" (número de build do WebKit, não um sinal de "é celular") em
+    // QUALQUER aparelho iOS, iPad incluso, então checar só `/Mobile/` classificaria iPad como tela
+    // pequena por engano. Por isso o "Mobile" só conta quando combinado com "Android"; iPhone/iPod
+    // são sempre tela pequena por nome mesmo (iPad nunca cai nesse primeiro teste).
+    const isSmallScreen =
+      /iPhone|iPod/i.test(navigator.userAgent) || (/Android/i.test(navigator.userAgent) && /Mobile/i.test(navigator.userAgent))
     function mobileFontSize(px: number): number {
-      return isSmallScreen ? Math.round(px * 0.72) : px
+      return isSmallScreen ? Math.round(px * 0.85) : px
     }
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
@@ -6840,7 +6852,7 @@ export function World3D({
         // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
         // de performance realmente ajudou ou não.
         if (debugRef.current) {
-          debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes`
+          debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
