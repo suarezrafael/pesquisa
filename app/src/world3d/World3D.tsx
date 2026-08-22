@@ -6922,10 +6922,36 @@ export function World3D({
     // tendo rodado uma vez. Agora repete o ciclo de amostragem indefinidamente (a cada ~12s: 6s de
     // descanso + ~4s de amostragem), reagindo tanto pra PIOR (entrou numa área pesada) quanto pra
     // MELHOR (voltou pra uma área leve) ao longo de toda a sessão, não só no carregamento.
+    //
+    // Tabela + passo gradual retrabalhados no lab-69 (usuário, Poco C75: "o fps estabilizou acima
+    // de 35 fps está bom, pode melhorar a qualidade gráfica" — ou seja, o celular tinha folga de
+    // FPS de sobra mas ficou preso numa resolução baixa demais pra ler o texto). Dois problemas
+    // corrigidos juntos:
+    // 1) Os limiares antigos só davam resolução cheia (1.0) a partir de 45fps — um aparelho
+    //    estável em 35-44fps (bom o bastante, segundo o próprio usuário) ficava preso na faixa
+    //    "1.15" pra sempre. Novo limiar: >=35fps já é resolução cheia.
+    // 2) Pular direto pro pior nível (2.4) por causa de UMA amostra ruim (ex.: um pico de carga
+    //    momentâneo) e nunca mais subir de novo seria o "flip-flop" que o comentário do lab-59 já
+    //    evitava trocando os limiares — mas o mecanismo antigo ainda podia ficar preso embaixo se
+    //    a amostra ruim batesse bem na janela de medição. Agora os níveis formam uma escada
+    //    (`SCALING_TIERS`, do melhor pro pior) e cada ciclo só anda UM degrau por vez em direção
+    //    ao nível que o FPS atual pede — a primeira medição (logo após carregar) ainda pode pular
+    //    direto pro degrau certo, só os ciclos SEGUINTES ficam graduais. Isso amortece tanto uma
+    //    queda pontual (não desaba direto pro pior nível) quanto uma melhora pontual (não sobe
+    //    resolução cheia de repente só por uma amostra boa isolada), sem deixar de convergir pro
+    //    nível certo em poucos ciclos (~12s cada).
+    const SCALING_TIERS = [1.0, 1.15, 1.6, 2.2]
+    function desiredTierIndex(avgFps: number): number {
+      if (avgFps < 20) return 3
+      if (avgFps < 30) return 2
+      if (avgFps < 35) return 1
+      return 0
+    }
     let fpsAutoTuneInterval: number | null = null
     let fpsAutoTuneTimeout: number | null = null
     if (isLowEndDevice) {
-      let currentScaling = engine.getHardwareScalingLevel()
+      let currentTier = 1 // nível moderado inicial (ver `engine.setHardwareScalingLevel` mais acima)
+      let firstCycle = true
       const runAutoTuneCycle = () => {
         if (disposed) return
         const fpsSamples: number[] = []
@@ -6938,13 +6964,17 @@ export function World3D({
           if (fpsSamples.length >= 3) {
             if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
             const avgFps = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length
-            let scaling: number
-            if (avgFps < 20) scaling = 2.4
-            else if (avgFps < 30) scaling = 1.8
-            else if (avgFps < 45) scaling = 1.15
-            else scaling = 1.0
-            if (scaling !== currentScaling) {
-              currentScaling = scaling
+            const target = desiredTierIndex(avgFps)
+            if (firstCycle) {
+              firstCycle = false
+              currentTier = target
+            } else if (target > currentTier) {
+              currentTier += 1
+            } else if (target < currentTier) {
+              currentTier -= 1
+            }
+            const scaling = SCALING_TIERS[currentTier]
+            if (scaling !== engine.getHardwareScalingLevel()) {
               engine.setHardwareScalingLevel(scaling)
               ;(scene as any).__syncGuiResolution?.()
             }
