@@ -3280,19 +3280,29 @@ export function World3D({
         const inDesert =
           Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(localUp, DESERT_CENTER_DIR)))) < DESERT_RADIUS
         const DESERT_ROCK_INDICES = [6, 7, 8, 9, 10, 11] // rock_*/stone_smallA em propFiles
+        const ROCK_TEMPLATE_INDICES = new Set([6, 7, 8, 9, 10, 11]) // rock_*/stone_smallA
         let instance: TransformNode | null
         let isHandBuiltCactus = false
+        // Só rocha/cacto precisam do assentamento multi-vértice abaixo — são compactos, então a
+        // base mais baixa da malha reflete de verdade o contato com o chão. Árvore/flor/cogumelo
+        // têm copa/folhas bem mais largas que o tronco: a mesma lógica pegaria uma folha alta como
+        // "ponto mais baixo" de um canto sem tronco por perto e afundaria a árvore inteira no chão
+        // (bug real encontrado testando este fix: tronco até ~1,9 unidade dentro do relevo).
+        let isCompactProp = false
         if (inDesert && i % 3 === 0) {
           instance = buildCactus(scene, shadowGenerator)
           instance.scaling.setAll(scale)
           isHandBuiltCactus = true
+          isCompactProp = true
         } else if (inDesert) {
           const rockTemplate = propTemplates[DESERT_ROCK_INDICES[i % DESERT_ROCK_INDICES.length]]
           instance = rockTemplate.clone(`prop-${i}`, null)
+          isCompactProp = true
         } else {
           const templateIndex = PROP_WEIGHTED_INDICES[i % PROP_WEIGHTED_INDICES.length]
           const template = propTemplates[templateIndex]
           instance = template.clone(`prop-${i}`, null)
+          isCompactProp = ROCK_TEMPLATE_INDICES.has(templateIndex)
         }
         if (!instance) continue
         instance.setEnabled(true)
@@ -3304,6 +3314,16 @@ export function World3D({
           instance.scaling.setAll(scale)
           instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
         }
+        // Encosta no relevo de verdade (lab-75, relatado pelo usuário com print: "os morros...
+        // ficam invisíveis... eu ando sobre o morro invisível" — rochas grandes deste sorteio
+        // geral caindo perto da borda íngreme de um platô ficavam visivelmente flutuando acima
+        // do chão de verdade, porque só usavam `terrainGroundRadial` num único ponto (o pivô),
+        // sem a correção multi-vértice que rochas de montanha/escolas/torre já recebem — a mesma
+        // classe de erro documentada em `terrainGroundRadial` acima ("maior perto de bordas
+        // íngremes"), só que nunca corrigida aqui. Precisa vir ANTES do `freezeWorldMatrix`
+        // abaixo, que trava a matriz de mundo pro resto da sessão. Só objetos compactos (ver
+        // `isCompactProp` acima) — árvore/flor/cogumelo ficam de fora de propósito.
+        if (isCompactProp) settleMeshOnTerrain(instance, localUp)
         // Prop decorativa: posição/rotação/escala não mudam mais depois daqui — congela a matriz
         // de mundo (custo de recálculo por quadro vira zero) em vez de recalcular à toa todo
         // quadro pros ~65 props + filhos do glTF, um ganho de CPU sem risco visual nenhum (lab-55,
@@ -3338,7 +3358,10 @@ export function World3D({
         const colliderDiameter = 0.7 * scale
         const colliderRadius = colliderDiameter / 2
         const collider = MeshBuilder.CreateSphere(`propCollider-${i}`, { diameter: colliderDiameter }, scene)
-        collider.position = pos.add(localUp.scale(PROP_COLLIDER_PROTRUSION - colliderRadius))
+        // `instance.position` (não `pos`) — já corrigida por `settleMeshOnTerrain` acima; usar
+        // `pos` aqui deixaria o colisor invisível pra trás depois que a malha visual desce pra
+        // encostar no chão de verdade.
+        collider.position = instance.position.add(localUp.scale(PROP_COLLIDER_PROTRUSION - colliderRadius))
         collider.isVisible = false
         new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
       }
@@ -3388,13 +3411,19 @@ export function World3D({
           // `buildCactus` já registra seus próprios shadow casters internamente (ver função) —
           // registrar de novo aqui duplicaria a malha na lista de sombra do Havok/Babylon.
           if (!isCactus) instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
+          // Mesma correção do scatter geral acima (lab-75) — o raio do deserto pode encostar na
+          // borda de um platô próximo, então vale a mesma proteção contra flutuar.
+          settleMeshOnTerrain(instance, localUp)
           instance.freezeWorldMatrix()
           instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
 
           const colliderDiameter = 0.7 * scale
           const colliderRadius = colliderDiameter / 2
           const collider = MeshBuilder.CreateSphere(`desertPropCollider-${i}`, { diameter: colliderDiameter }, scene)
-          collider.position = pos.add(localUp.scale(0.15 - colliderRadius))
+          // `instance.position` (não `pos`) — já corrigida por `settleMeshOnTerrain` acima; usar
+          // `pos` aqui deixaria o colisor invisível pra trás depois que a malha visual desce pra
+          // encostar no chão de verdade.
+          collider.position = instance.position.add(localUp.scale(0.15 - colliderRadius))
           collider.isVisible = false
           new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
         }
