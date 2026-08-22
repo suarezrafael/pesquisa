@@ -352,7 +352,11 @@ body {
   border-radius: 999px;
   padding: clamp(0.2rem, 1.6vmin, 0.5rem) clamp(0.35rem, 2.6vmin, 0.9rem);
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
-  max-width: 420px;
+  /* lab-70, pedido do usuário: "o painel que mostra o avatar o nome e as moedas é muito largo,
+     diminuir a largura, ocupa muita tela" — 420px fixo dominava telas de celular estreitas
+     (o painel sozinho quase igualava a largura toda da tela). `min()` com `vw` mantém o mesmo
+     teto em telas largas (desktop/tablet) mas encolhe proporcionalmente em telas estreitas. */
+  max-width: min(420px, 62vw);
   flex: 1;
   min-width: 0;
 }

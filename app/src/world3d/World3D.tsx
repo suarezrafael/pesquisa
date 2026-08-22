@@ -2091,10 +2091,19 @@ export function World3D({
     // QUALQUER aparelho iOS, iPad incluso, então checar só `/Mobile/` classificaria iPad como tela
     // pequena por engano. Por isso o "Mobile" só conta quando combinado com "Android"; iPhone/iPod
     // são sempre tela pequena por nome mesmo (iPad nunca cai nesse primeiro teste).
+    // lab-70 — a teoria original (celular = tela física pequena = precisa de fonte MENOR) não se
+    // confirmou na prática: testando ao vivo no Poco C75 depois do lab-69, o usuário reportou "não
+    // dá pra ver as legendas dos personagens" mesmo já sem a redução do lab-67/68, e pediu
+    // direto: "aumentar a escala das legendas também ajuda". Duas voltas tentando ENCOLHER a
+    // fonte pra celular (labs 67, 68) sem sucesso — a fonte da engine (Babylon.GUI, já renderizada
+    // em resolução cheia de dispositivo desde o lab-57, independente de `hardwareScalingLevel`)
+    // aparentemente já não é grande o bastante pra esse tamanho de tela/distância de uso, então
+    // agora AUMENTA em vez de reduzir. `isSmallScreen` continua o mesmo sinal (user-agent, ver
+    // comentário acima), só o efeito em `mobileFontSize` inverteu de direção.
     const isSmallScreen =
       /iPhone|iPod/i.test(navigator.userAgent) || (/Android/i.test(navigator.userAgent) && /Mobile/i.test(navigator.userAgent))
     function mobileFontSize(px: number): number {
-      return isSmallScreen ? Math.round(px * 0.85) : px
+      return isSmallScreen ? Math.round(px * 1.2) : px
     }
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
@@ -6940,7 +6949,14 @@ export function World3D({
     //    queda pontual (não desaba direto pro pior nível) quanto uma melhora pontual (não sobe
     //    resolução cheia de repente só por uma amostra boa isolada), sem deixar de convergir pro
     //    nível certo em poucos ciclos (~12s cada).
-    const SCALING_TIERS = [1.0, 1.15, 1.6, 2.2]
+    // Teto do pior nível reduzido de 2.2 pra 1.6 no lab-70 — usuário testou o Poco C75 depois do
+    // lab-69 e reportou que mesmo no pior nível o FPS não passava de ~20 (o gargalo desse
+    // aparelho não é fill-rate/resolução, é outra coisa — física/JS por quadro, não afetado por
+    // `hardwareScalingLevel`), então baixar a resolução além de certo ponto só piorava a
+    // legibilidade sem ganhar FPS o bastante pra compensar ("não compensa ter FPS mas não dá pra
+    // ver as legendas... mesmo assim sem condição visual de jogabilidade"). Aceitar um piso de
+    // FPS mais baixo em troca de continuar enxergando alguma coisa é a troca certa aqui.
+    const SCALING_TIERS = [1.0, 1.15, 1.4, 1.6]
     function desiredTierIndex(avgFps: number): number {
       if (avgFps < 20) return 3
       if (avgFps < 30) return 2
