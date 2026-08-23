@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isAuthApiError } from '@neondatabase/neon-js/auth'
 import { authClient } from '../auth/neonAuthClient'
 
 // Portal dos responsáveis (Fase B do plano comercial, ver docs/plano-comercial-backend.md) —
@@ -74,16 +75,25 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
     e.preventDefault()
     setError(null)
     setBusy(true)
-    const result =
-      mode === 'sign-up'
-        ? await authClient.signUp.email({ name: name.trim() || email.split('@')[0], email, password })
-        : await authClient.signIn.email({ email, password })
-    setBusy(false)
-    if (result.error) {
-      setError(result.error.message ?? 'Não foi possível continuar. Confira e-mail e senha.')
-      return
+    // O cliente do Neon Auth ora REJEITA a promise pra erros de autenticação (ex.: senha errada
+    // — `AuthApiError`, confirmado ao vivo em produção), ora resolve com `{ error }` — trata os
+    // dois casos, senão um login errado deixava o botão preso em "Um momento..." pra sempre (bug
+    // real encontrado testando isto ao vivo antes de considerar a Fase B pronta).
+    try {
+      const result =
+        mode === 'sign-up'
+          ? await authClient.signUp.email({ name: name.trim() || email.split('@')[0], email, password })
+          : await authClient.signIn.email({ email, password })
+      if (result.error) {
+        setError(result.error.message ?? 'Não foi possível continuar. Confira e-mail e senha.')
+        return
+      }
+      onAuthenticated()
+    } catch (err) {
+      setError(isAuthApiError(err) ? err.message : 'Não foi possível continuar. Confira e-mail e senha.')
+    } finally {
+      setBusy(false)
     }
-    onAuthenticated()
   }
 
   return (
@@ -152,8 +162,14 @@ export function FamilyPortal() {
   const [session, setSession] = useState<{ email: string } | null | 'loading'>('loading')
 
   async function refreshSession() {
-    const result = await authClient.getSession()
-    setSession(result.data?.user ? { email: result.data.user.email } : null)
+    try {
+      const result = await authClient.getSession()
+      setSession(result.data?.user ? { email: result.data.user.email } : null)
+    } catch {
+      // Sem sessão válida (ou erro de rede) — trata como "não logado", não deixa preso em
+      // 'loading' pra sempre (mesmo risco do bug corrigido em `LoginScreen` acima).
+      setSession(null)
+    }
   }
 
   useEffect(() => {
