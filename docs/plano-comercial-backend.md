@@ -79,11 +79,12 @@ abaixo preserva isso:
 
 ```sql
 -- gerenciado pelo Neon Auth, não criamos à mão:
--- schema neon_auth.* (usuários responsáveis, sessões)
+-- schema neon_auth.* (usuários responsáveis, sessões) -- tabela real confirmada como
+-- `neon_auth."user"` (minúsculo, singular), não `neon_auth.users` como uma suposição inicial.
 
 create table family_accounts (
   id uuid primary key default gen_random_uuid(),
-  owner_user_id uuid not null references neon_auth.users(id),
+  owner_user_id uuid not null references neon_auth."user"(id),
   created_at timestamptz not null default now()
 );
 
@@ -112,7 +113,7 @@ como hoje.
 
 | Rota | Quem chama | Função |
 |---|---|---|
-| `POST /auth/*` | Portal `/familia` | Delega pro handler do Neon Auth (login/cadastro do responsável) |
+| ~~`POST /auth/*`~~ | Portal `/familia` | **Não existe no nosso Worker** — o client (`@neondatabase/neon-js/auth`) fala DIRETO com o endpoint gerenciado do Neon Auth (`https://<endpoint>.neonauth.<região>.aws.neon.tech/<db>/auth`), sem passar pelo nosso backend. Descoberto na Fase B: mais simples do que o desenho original previa. |
 | `POST /checkout` | Portal, autenticado | Cria sessão Stripe Checkout pra `family_account_id`, devolve URL |
 | `POST /webhooks/stripe` | Stripe (servidor a servidor) | Verifica assinatura, atualiza `subscriptions.status` |
 | `POST /pairing/generate` | Portal, autenticado | Gera `pairing_codes` novo pra família |
@@ -137,9 +138,13 @@ os catálogos em `src/data/`), nunca em `quests.ts`/`progression.ts`.
    Ajuste em relação ao critério original: não criei um responsável de teste de verdade (exigiria
    passar pelo fluxo real de signup do Better Auth, que só faz sentido com a UI da Fase B) — em
    vez disso, confirmei que o schema existe e é consultável, o que é suficiente pra fundação.
-2. **Fase B — Portal `/familia` (somente leitura)**: parental gate + tela de login/cadastro do
-   responsável + dashboard mostrando "sem assinatura ativa". Nenhuma mudança no jogo da criança
-   ainda.
+2. **Fase B — Portal `/familia` (somente leitura) ✅ concluída em 2026-08-23**: rota `/familia`
+   (com rewrite SPA no `vercel.json`, code-splitted — a criança nunca baixa esse chunk), parental
+   gate, login/cadastro real via Neon Auth (client direto no navegador, sem passar pelo nosso
+   Worker — ver ajuste na tabela de endpoints acima), dashboard mostrando "sem assinatura ativa".
+   Testado ao vivo de ponta a ponta (cadastro → linha real em `neon_auth.user` → sessão persiste
+   entre reloads → logout → login de novo). Nenhuma mudança no jogo da criança. Ver
+   `labs/lab-79-.../CONTEXT.md` pro detalhe completo.
 3. **Fase C — Pagamento de verdade**: Stripe Checkout (modo teste primeiro) + webhook + tabela
    `subscriptions` atualizando ao vivo. Critério de pronto: assinar/cancelar no Stripe test mode
    reflete no portal em segundos.

@@ -1,18 +1,21 @@
 # Laboratório atual
 
-Último concluído: labs/lab-78-backend-comercial-fase-a/ (Fase A do plano de backend comercial —
-projeto Neon Postgres em São Paulo + Neon Auth + Worker Cloudflare novo `app/server-accounts/`,
-tudo no plano Free, verificado em produção)
-Contexto para o próximo laboratório: labs/lab-78-backend-comercial-fase-a/CONTEXT.md
+Último concluído: labs/lab-79-backend-comercial-fase-b/ (Fase B do plano de backend comercial —
+rota `/familia` com parental gate + login/cadastro real do responsável via Neon Auth, testado ao
+vivo de ponta a ponta)
+Contexto para o próximo laboratório: labs/lab-79-backend-comercial-fase-b/CONTEXT.md
 
-**Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A concluída; B-F não
-iniciadas). Ler antes de continuar qualquer trabalho de contas/assinatura/cosméticos pagos.
+**Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A e B concluídas; C-F
+não iniciadas). Ler antes de continuar qualquer trabalho de contas/assinatura/cosméticos pagos.
+Backend confirmado com o usuário como TypeScript/Cloudflare (não migra pra C#/.NET).
 
-**Jogo ao vivo**: https://app-two-flax-92.vercel.app
+**Jogo ao vivo**: https://app-two-flax-92.vercel.app (agora com rota `/familia`, portal dos
+responsáveis)
 **Relé de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
 (documentado em `app/server-cf-relay/README.md`)
-**Backend de contas (novo, só health-check por enquanto)**:
-https://missao-aprender-accounts.rafaelvs.workers.dev (documentado em `app/server-accounts/README.md`)
+**Backend de contas (Cloudflare Worker, só health-check por enquanto — login/cadastro fala direto
+com o Neon Auth, sem passar por aqui)**: https://missao-aprender-accounts.rafaelvs.workers.dev
+(documentado em `app/server-accounts/README.md`)
 
 Trabalho acontece numa branch de worktree (`worktree-abstract-wobbling-owl`), a partir de `main`.
 **PR #5 foi mesclado pelo usuário** — a branch voltou a ficar alguns commits à frente da `main`
@@ -51,4 +54,4 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 de novo.
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-78-backend-comercial-fase-a/CONTEXT.md`.
+`labs/lab-79-backend-comercial-fase-b/CONTEXT.md`.
