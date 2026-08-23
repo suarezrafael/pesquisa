@@ -17,9 +17,28 @@ import type { Quest } from './types'
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
 const World3D = lazy(() => import('./world3d/World3D').then((m) => ({ default: m.World3D })))
 
+// Portal dos responsáveis (Fase B do plano comercial) — carregado sob demanda, só quem acessa
+// `/familia` baixa o cliente de autenticação; a criança nunca paga esse custo de bundle.
+const FamilyPortal = lazy(() => import('./components/FamilyPortal').then((m) => ({ default: m.FamilyPortal })))
+
 type PreProfileScreen = 'title' | 'onboarding'
 
+// Rota separada do jogo (Fase B do plano comercial) — decidida ANTES de qualquer hook do jogo
+// rodar, por isso vira um componente à parte (`GameApp`) em vez de um `return` antecipado dentro
+// dele: um `return` no meio de `GameApp`, antes dos hooks de perfil/progresso, violaria a regra
+// de hooks do React (chamados incondicionalmente, sempre na mesma ordem).
 function App() {
+  if (window.location.pathname === '/familia') {
+    return (
+      <Suspense fallback={<div className="world-loading">Carregando…</div>}>
+        <FamilyPortal />
+      </Suspense>
+    )
+  }
+  return <GameApp />
+}
+
+function GameApp() {
   const {
     profile,
     createProfile,
