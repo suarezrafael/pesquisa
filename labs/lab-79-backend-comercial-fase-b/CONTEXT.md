@@ -1,7 +1,7 @@
 # Contexto — Laboratório 79 — backend comercial, Fase B (portal dos responsáveis)
 
 Preenchido em: 2026-08-23
-Commit inicial → final: e8428b27968d0cb5e4c4b5e9985c112e3df203c5..a7ec7cd
+Commit inicial → final: e8428b27968d0cb5e4c4b5e9985c112e3df203c5..c04ff29
 
 ## O que foi feito
 - **Decisão de linguagem confirmada com o usuário antes de codificar**: perguntou se o Worker
@@ -47,6 +47,16 @@ Commit inicial → final: e8428b27968d0cb5e4c4b5e9985c112e3df203c5..a7ec7cd
   confirmado no output do `npm run build`) — a criança, que nunca visita `/familia`, não paga esse
   custo.
 
+## Bug real encontrado testando em produção (corrigido antes de fechar o laboratório)
+Depois do primeiro deploy, testar `/familia` em produção com credenciais erradas travou o botão
+em "Um momento..." pra sempre, com um `AuthApiError: Invalid email or password` aparecendo só
+como EXCEÇÃO NÃO TRATADA no console — nunca uma mensagem pro usuário. Causa: `authClient.signIn
+.email`/`signUp.email` **rejeita a promise** pra erros de autenticação (não resolve com `{ error
+}` como os exemplos da documentação sugeriam). Corrigido com `try/catch/finally` em
+`handleSubmit` (usando `isAuthApiError` do próprio pacote pra extrair a mensagem) e a mesma
+proteção em `refreshSession`, por segurança. Sem esse teste ao vivo em produção (não só local),
+esse bug teria ido pro ar sem ninguém notar até um responsável de verdade errar a senha.
+
 ## Decisões técnicas tomadas
 - **`App` vira um roteador fino em vez de um `if` dentro do componente antigo** — evita violar a
   regra de hooks do React (hooks precisam rodar sempre na mesma ordem/quantidade a cada render do
@@ -73,6 +83,12 @@ Commit inicial → final: e8428b27968d0cb5e4c4b5e9985c112e3df203c5..a7ec7cd
 - `VITE_NEON_AUTH_URL` está hardcoded em `app/.env` com o `endpoint_id` específico deste projeto
   Neon (`ep-cool-meadow-aclfdwm0`) — se o projeto Neon for recriado/migrado algum dia, esse valor
   precisa ser atualizado manualmente (não há nada que descubra isso dinamicamente).
+- **Nota pra quem testar `/familia` de novo**: um navegador que já visitou
+  `app-two-flax-92.vercel.app` antes (PWA com service worker instalado) pode continuar mostrando o
+  JOGO em `/familia` por um tempo, mesmo com o deploy novo já no ar — o service worker antigo
+  precisa detectar e aplicar a atualização primeiro (mesmo mecanismo dos labs 69-71). Não é um bug
+  desta fase; confirmado ao vivo limpando o service worker/cache manualmente que o código novo
+  funciona certinho assim que a atualização é aplicada.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 Nenhuma das planejadas pra Fase B — todas concluídas e testadas ao vivo.
