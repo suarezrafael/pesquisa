@@ -13,7 +13,7 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
-import { generatePairingCode, isEntitlementActive, isPairingCodeUsable, toIsoOrNull } from './domain'
+import { generatePairingCode, isEntitlementActive, toIsoOrNull } from './domain'
 
 type Sql = NeonQueryFunction<false, false>
 
@@ -23,6 +23,30 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET: string
   STRIPE_PRICE_ID: string
   ENTITLEMENT_SECRET: string
+  // Rate limiting nativo do Workers (lab-88, pedido do usuário: "o jogo precisa estar seguro com
+  // sobrecarga de servidor") — um namespace por rota sensível, configurado em wrangler.toml.
+  PAIRING_REDEEM_LIMITER: RateLimit
+  HEALTH_LIMITER: RateLimit
+  CLIENT_ERROR_LIMITER: RateLimit
+  CHECKOUT_LIMITER: RateLimit
+  PAIRING_GENERATE_LIMITER: RateLimit
+}
+
+// IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
+// de fora da rede deles, mas aqui é a própria Cloudflare quem está setando, então é seguro usar
+// como chave de rate limit). Sem IP (ex.: `wrangler dev` local), cai num valor fixo — rate limit
+// vira "por processo local" em vez de "por IP", suficiente pra não travar o desenvolvimento.
+function clientIp(request: Request): string {
+  return request.headers.get('CF-Connecting-IP') ?? 'dev-local'
+}
+
+// `RateLimit.limit()` conta a chamada mesmo quando o resultado é "estourou" — chamar de novo pra
+// "descontar" a tentativa bloqueada só inflaria a contagem à toa; só chama uma vez e devolve
+// `null` (segue o fluxo normal) ou a `Response` 429 já pronta pra devolver.
+async function rateLimited(limiter: RateLimit, key: string): Promise<Response | null> {
+  const { success } = await limiter.limit({ key })
+  if (success) return null
+  return Response.json({ error: 'muitas tentativas, aguarde um pouco e tente de novo' }, { status: 429 })
 }
 
 // Endpoint real descoberto testando ao vivo (ver labs/lab-79.../CONTEXT.md) — a documentação
@@ -70,6 +94,9 @@ function stripeClient(env: Env) {
 async function handleCheckout(request: Request, env: Env): Promise<Response> {
   const userId = await requireUserId(request)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const limited = await rateLimited(env.CHECKOUT_LIMITER, clientIp(request))
+  if (limited) return limited
 
   const sql = neon(env.DATABASE_URL)
   const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
@@ -127,7 +154,10 @@ async function handleBillingPortal(request: Request, env: Env): Promise<Response
 // propósito (o erro pode acontecer antes do jogo saber se há sessão), sem persistir em banco
 // (não é dado que precise de retenção/gestão própria) e sem nenhum dado pessoal da criança —
 // só mensagem/stack/URL/user-agent do navegador.
-async function handleClientError(request: Request): Promise<Response> {
+async function handleClientError(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.CLIENT_ERROR_LIMITER, clientIp(request))
+  if (limited) return limited
+
   const body = await request.text()
   if (body.length > 8000) return new Response(null, { status: 413 })
 
@@ -176,6 +206,9 @@ async function handlePairingGenerate(request: Request, env: Env): Promise<Respon
   const userId = await requireUserId(request)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
+  const limited = await rateLimited(env.PAIRING_GENERATE_LIMITER, clientIp(request))
+  if (limited) return limited
+
   const sql = neon(env.DATABASE_URL)
   const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
   const expiresAt = new Date(Date.now() + PAIRING_CODE_TTL_MS).toISOString()
@@ -197,22 +230,76 @@ async function handlePairingGenerate(request: Request, env: Env): Promise<Respon
   return Response.json({ error: 'não foi possível gerar um código, tente de novo' }, { status: 500 })
 }
 
+const PAIRING_REDEEM_ATTEMPT_LIMIT = 8
+const PAIRING_REDEEM_WINDOW_MS = 60 * 1000
+
+// Rate limit de verdade pra `/pairing/redeem`, guardado no Postgres (lab-88). Achado real
+// durante este laboratório: o binding nativo de Rate Limiting do Workers (`PAIRING_REDEEM_LIMITER`
+// abaixo) simula corretamente em `wrangler dev` local (bloqueia exatamente no limite configurado,
+// testado ao vivo), mas em PRODUÇÃO não bloqueou nenhuma de 100 chamadas concorrentes contra um
+// limite de 20/60s — motivo não confirmado (não documentado pela Cloudflare se é limitação do
+// plano Free ou bug da plataforma). Esta é a rota mais crítica da auditoria (sem limite de
+// tentativas, força bruta do código de 6 dígitos é praticamente garantida dentro da janela de
+// validade), então a defesa principal não pode depender de um mecanismo não verificado em
+// produção — um UPSERT atômico no Postgres (já a peça de infra comprovadamente confiável deste
+// Worker) implementa o mesmo limite sem essa incerteza. O binding nativo continua chamado logo
+// abaixo como camada extra, sem custo real de manter.
+async function checkPairingRedeemAttempts(sql: Sql, ip: string): Promise<boolean> {
+  const now = new Date()
+  const windowCutoff = new Date(now.getTime() - PAIRING_REDEEM_WINDOW_MS)
+  const rows = (await sql`
+    insert into pairing_redeem_attempts (ip, window_start, count)
+    values (${ip}, ${now.toISOString()}, 1)
+    on conflict (ip) do update set
+      count = case
+        when pairing_redeem_attempts.window_start < ${windowCutoff.toISOString()} then 1
+        else pairing_redeem_attempts.count + 1
+      end,
+      window_start = case
+        when pairing_redeem_attempts.window_start < ${windowCutoff.toISOString()} then ${now.toISOString()}
+        else pairing_redeem_attempts.window_start
+      end
+    returning count
+  `) as { count: number }[]
+  return rows[0].count <= PAIRING_REDEEM_ATTEMPT_LIMIT
+}
+
 async function handlePairingRedeem(request: Request, env: Env): Promise<Response> {
+  // Achado crítico da auditoria de segurança (lab-88): sem isso, um único script conseguia
+  // tentar as ~900.000 combinações do código de 6 dígitos dentro da janela de validade de 15 min
+  // (900.000 ÷ 900s = só 1.000 tentativas/s, trivial de sustentar) — sequestrar a assinatura de
+  // qualquer família enquanto o código dela estivesse ativo era praticamente garantido.
+  const ip = clientIp(request)
+  // Binding nativo primeiro (barato, sem tocar o banco quando funciona) — ver comentário acima
+  // sobre por que não é a defesa principal.
+  const limited = await rateLimited(env.PAIRING_REDEEM_LIMITER, ip)
+  if (limited) return limited
+
+  const sql = neon(env.DATABASE_URL)
+  const withinLimit = await checkPairingRedeemAttempts(sql, ip)
+  if (!withinLimit) {
+    return Response.json({ error: 'muitas tentativas, aguarde um pouco e tente de novo' }, { status: 429 })
+  }
+
   const body = (await request.json().catch(() => null)) as { code?: string } | null
   const code = body?.code?.trim()
   if (!code) return Response.json({ error: 'código obrigatório' }, { status: 400 })
-
-  const sql = neon(env.DATABASE_URL)
+  // UPDATE atômico com a condição de validade embutida no WHERE, em vez de `select` + `update`
+  // separados (achado da auditoria: duas chamadas simultâneas com o mesmo código conseguiam
+  // resgatar o mesmo código duas vezes, gerando dois tokens de 180 dias). Uma linha só volta se
+  // o código existir, não tiver sido resgatado ainda E estiver dentro da validade — a mesma
+  // checagem de `isPairingCodeUsable`, só que expressa como condição SQL pra ser atômica.
   const rows = (await sql`
-    select family_account_id, expires_at, redeemed_at from pairing_codes where code = ${code}
-  `) as { family_account_id: string; expires_at: string; redeemed_at: string | null }[]
+    update pairing_codes
+    set redeemed_at = now()
+    where code = ${code} and redeemed_at is null and expires_at >= now()
+    returning family_account_id
+  `) as { family_account_id: string }[]
 
-  if (!isPairingCodeUsable(rows[0])) {
+  if (rows.length === 0) {
     return Response.json({ error: 'código inválido ou expirado' }, { status: 400 })
   }
   const row = rows[0]
-
-  await sql`update pairing_codes set redeemed_at = now() where code = ${code}`
 
   const secret = new TextEncoder().encode(env.ENTITLEMENT_SECRET)
   const token = await new SignJWT({ familyAccountId: row.family_account_id })
@@ -363,19 +450,24 @@ export default {
     }
 
     if (url.pathname === '/health') {
-      try {
-        const sql = neon(env.DATABASE_URL)
-        const [{ family_count }] = (await sql`select count(*)::int as family_count from family_accounts`) as [
-          { family_count: number },
-        ]
-        return Response.json({ ok: true, familyCount: family_count })
-      } catch (err) {
-        return Response.json({ ok: false, error: (err as Error).message }, { status: 500 })
-      }
+      // Achado da auditoria de segurança (lab-88, `docs/prompts/05-escala-e-viabilidade.md` G9):
+      // isto consultava o Neon a cada chamada — um monitor de disponibilidade normal (batendo a
+      // cada minuto, uso completamente legítimo) já bastava pra impedir o compute do Neon de
+      // suspender (scale-to-zero), queimando a cota gratuita de 100 CU-horas/mês e podendo
+      // derrubar assinaturas pagas de verdade no meio do mês. `/health` público precisa ser
+      // barato/estático por definição — prova que o Worker está de pé, não que o banco está
+      // acessível. Rate limit aqui é defesa em profundidade (mesmo uma resposta estática ainda
+      // consome a cota de requests do Worker se inundada) — best-effort: ver nota em
+      // `checkPairingRedeemAttempts` sobre o binding nativo não bloquear nada em produção nesta
+      // conta; aceitável aqui porque `/health` não toca banco nem faz nada custoso, diferente de
+      // `/pairing/redeem`.
+      const limited = await rateLimited(env.HEALTH_LIMITER, clientIp(request))
+      if (limited) return limited
+      return Response.json({ ok: true })
     }
 
     if (url.pathname === '/client-error' && request.method === 'POST') {
-      return withCors(await handleClientError(request))
+      return withCors(await handleClientError(request, env))
     }
 
     if (url.pathname === '/checkout' && request.method === 'POST') {

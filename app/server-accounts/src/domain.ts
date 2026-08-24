@@ -26,10 +26,16 @@ export function isPairingCodeUsable(row: PairingCodeRow | undefined, now: number
 }
 
 // Código de 6 dígitos, curto de propósito: é digitado à mão por uma criança pequena, num
-// dispositivo que pode nem ter teclado físico. Não precisa ser críptico — a segurança real está
-// na expiração curta (15min) e no uso único (`redeemed_at`), não no tamanho do espaço de busca.
+// dispositivo que pode nem ter teclado físico. A segurança real está no rate limit de
+// `/pairing/redeem` (lab-88) e na expiração curta (15min) + uso único (`redeemed_at`), não no
+// tamanho do espaço de busca — mas gerar com `Math.random()` (não criptográfico, previsível em
+// teoria a partir de amostras suficientes) era uma fraqueza desnecessária fácil de evitar.
+// `crypto.getRandomValues` está disponível no runtime do Workers (Web Crypto API), sem
+// dependência nova.
 export function generatePairingCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  const buf = new Uint32Array(1)
+  crypto.getRandomValues(buf)
+  return (100000 + (buf[0] % 900000)).toString()
 }
 
 export function toIsoOrNull(unixSeconds: number | null | undefined): string | null {

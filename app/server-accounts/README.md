@@ -15,7 +15,7 @@ por esse entitlement (parte da Fase E) já existe do lado do jogo — ver
 
 | Rota | Método | Autenticação | Função |
 |---|---|---|---|
-| `/health` | GET | nenhuma | Prova que o Worker fala com o Neon (`{ ok, familyCount }`) |
+| `/health` | GET | nenhuma | Resposta estática barata (`{ ok: true }`) — prova só que o Worker está de pé, não consulta o Neon (lab-88: consultar o banco aqui deixava qualquer monitor de disponibilidade normal impedir o compute do Neon de suspender, queimando a cota gratuita) |
 | `/checkout` | POST | Bearer JWT (Neon Auth) | Cria a sessão do Stripe Checkout, devolve `{ url }` |
 | `/subscription` | GET | Bearer JWT (Neon Auth) | Status da assinatura da família do usuário (`{ status }`) |
 | `/billing-portal` | POST | Bearer JWT (Neon Auth) | Cria uma sessão do Stripe Customer Portal, devolve `{ url }` (gerenciar pagamento/cancelar) |
@@ -49,10 +49,10 @@ Não tem nenhuma relação com o Neon Auth: a criança nunca tem conta lá.
   da criança — ver princípio de design no plano). Nenhuma UI de login existe ainda (Fase B).
 - **Schema próprio** (`schema.sql`, aplicado via `npm run migrate`): `family_accounts`,
   `subscriptions`, `pairing_codes` — ver o arquivo pra estrutura exata e comentários.
-- **Worker de health-check** (`src/index.ts`): `GET /health` roda uma query real contra o Neon
-  via `@neondatabase/serverless` (driver HTTP, feito pra runtime de borda — sem conexão TCP
-  persistente) e devolve `{ ok: true, familyCount: N }`. Prova que o caminho Worker → Neon
-  funciona de ponta a ponta antes de construir qualquer rota de verdade.
+- **Worker de health-check** (`src/index.ts`): `GET /health` devolve `{ ok: true }` sem tocar o
+  Neon (lab-88 — ver tabela de rotas acima pro motivo). A conectividade Worker → Neon é validada
+  organicamente pelas rotas de verdade (`/subscription`, `/entitlement`, etc.), que já rodam
+  queries reais e são autenticadas/rate-limitadas.
 
 ## Segredos (nunca comitados)
 

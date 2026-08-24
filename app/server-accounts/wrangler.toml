@@ -10,3 +10,50 @@ STRIPE_PRICE_ID = "price_1U7k0BDLQrb3UkMn0MFvRcVf"
 
 # DATABASE_URL, STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET são secrets, não vars comuns — nunca
 # comitados. Local: app/server-accounts/.dev.vars (gitignored). Produção: `wrangler secret put <NOME>`.
+
+# Rate limiting nativo do Workers (lab-88, pedido do usuário: "o jogo precisa estar seguro com
+# sobrecarga de servidor") — binding disponível no plano Free (confirmado com um deploy real
+# antes de desenhar a correção, não estava documentado com clareza nas páginas de preço da
+# Cloudflare). Cada rota sensível tem seu próprio namespace — um IP estourando o limite de
+# `/pairing/redeem` não afeta a cota de `/checkout`, por exemplo. `namespace_id` só precisa ser
+# único dentro desta conta/Worker; os números abaixo não têm significado especial.
+[[ratelimits]]
+name = "PAIRING_REDEEM_LIMITER"
+namespace_id = "1001"
+  # Achado crítico da auditoria: sem isso, um único script guessava as ~900.000 combinações do
+  # código de 6 dígitos dentro da janela de validade de 15 min (900.000 códigos / 900s = só
+  # 1.000 tentativas/s, trivial). 8 tentativas/min por IP deixa margem generosa pra erro de
+  # digitação de uma criança, mas reduz o espaço de busca prático em várias ordens de grandeza.
+  [ratelimits.simple]
+  limit = 8
+  period = 60
+
+[[ratelimits]]
+name = "HEALTH_LIMITER"
+namespace_id = "1002"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[ratelimits]]
+name = "CLIENT_ERROR_LIMITER"
+namespace_id = "1003"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[ratelimits]]
+name = "CHECKOUT_LIMITER"
+namespace_id = "1004"
+  # Autenticado (exige JWT válido), então o limite pode ser mais folgado que as rotas públicas —
+  # é só pra evitar abuso de uma conta comprometida/mal-intencionada, não o vetor principal.
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[[ratelimits]]
+name = "PAIRING_GENERATE_LIMITER"
+namespace_id = "1005"
+  [ratelimits.simple]
+  limit = 10
+  period = 60
