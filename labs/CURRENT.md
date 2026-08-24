@@ -1,14 +1,21 @@
 # Laboratório atual
 
-Último concluído: labs/lab-81-backend-comercial-fase-d/ (Fase D do plano de backend comercial —
-pareamento do entitlement de assinatura com o cliente do jogo via código curto de 6 dígitos,
-testado ao vivo de ponta a ponta incluindo cancelamento refletindo no jogo)
-Contexto para o próximo laboratório: labs/lab-81-backend-comercial-fase-d/CONTEXT.md
+Último concluído: labs/lab-82-cosmeticos-fase-e-chat-expandido/ (parte da Fase E do plano
+comercial — cosméticos exclusivos de assinante reaproveitando geometria já existente — + catálogo
+de quick-chat expandido de 10 pra 35 frases em categorias, testado ao vivo)
+Contexto para o próximo laboratório: labs/lab-82-cosmeticos-fase-e-chat-expandido/CONTEXT.md
 
 **Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A, B, C e D
-concluídas; E-F não iniciadas). Ler antes de continuar qualquer trabalho de contas/assinatura/
-cosméticos pagos. Backend confirmado com o usuário como TypeScript/Cloudflare (não migra pra
-C#/.NET). Preço da assinatura confirmado: R$ 4,99/mês.
+concluídas; E em andamento — parte de catálogo pronta, falta "Minha Casa"; F não iniciada). Ler
+antes de continuar qualquer trabalho de contas/assinatura/cosméticos pagos. Backend confirmado
+com o usuário como TypeScript/Cloudflare (não migra pra C#/.NET). Preço da assinatura confirmado:
+R$ 4,99/mês.
+
+**Pedido de "chat livre" recusado (2026-08-24)**: usuário pediu chat de texto livre entre
+crianças. Não implementado — é requisito `[MUST]` de `docs/prompts/01-seguranca.md`/`prompt.md`
+§11 (risco de assédio/vazamento de dado pessoal, exposição LGPD/ECA). Resposta dada: catálogo de
+quick-chat bem maior (ver lab-82). Se o pedido voltar, reapresentar o mesmo argumento antes de
+considerar qualquer coisa que pareça abrir texto livre de verdade.
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app **e também** https://missaoaprendizado.com
 (domínio próprio, comprado pelo usuário em 2026-08-24 via Cloudflare Registrar — ver
@@ -50,10 +57,9 @@ API (inclusive apagar, que é grátis) até um cartão ser cadastrado. Sem conto
 está `suspended` (não roda/não é cobrado), só não pôde ser removido da conta.
 
 **Decisões de produto já confirmadas** (não são mais pendências): preço R$ 4,99/mês; direção dos
-cosméticos da Fase E inspirada em Brookhaven RP/Roblox (casa pra montar, guarda-roupa amplo —
-ver `docs/plano-comercial-backend.md`, seção "Catálogo de cosméticos (Fase E)"); biblioteca de
-material didático fica de fora dos exclusivos, sempre grátis. Nenhuma decisão de produto pendente
-no momento — Fase E pode ser construída direto a partir do desenho já registrado no plano.
+cosméticos da Fase E inspirada em Brookhaven RP/Roblox (guarda-roupa amplo — já construído no
+lab-82; casa pra montar — ainda não construída); biblioteca de material didático fica de fora dos
+exclusivos, sempre grátis.
 
 **Se o usuário reportar objetos flutuando de novo** (lab-75): pedir um print com o jogador parado
 bem perto do objeto. Lembrar também que o sistema de chuva dinâmica
@@ -71,4 +77,4 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 de novo.
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-81-backend-comercial-fase-d/CONTEXT.md`.
+`labs/lab-82-cosmeticos-fase-e-chat-expandido/CONTEXT.md`.

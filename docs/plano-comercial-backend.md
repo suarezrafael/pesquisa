@@ -223,12 +223,11 @@ gate pra maximizar o desejo de assinar, não se o modelo de assinatura funciona.
    (`GET /entitlement`) contra o status real da assinatura. Testado ao vivo de ponta a ponta,
    incluindo cancelamento da assinatura refletindo no jogo na revalidação seguinte. Ver
    `labs/lab-81-.../CONTEXT.md` pro detalhe completo.
-5. **Fase E — Cosmético de verdade gateado**: itens novos marcados `subscriptionOnly` na lojinha
-   (chapéus/óculos/roupas/criaturas), escondidos/bloqueados sem entitlement ativo — a entrega
-   concreta do pedido "cosméticos desbloqueáveis por assinatura". Ver a seção "Catálogo de
-   cosméticos (Fase E)" acima pro desenho completo (inspiração Brookhaven RP/Roblox, confirmado
-   pelo usuário em 2026-08-24) — provavelmente vira 2 laboratórios: um pras extensões dos
-   catálogos existentes (mais simples), outro pra "Minha Casa" (maior, feature nova).
+5. **Fase E — Cosmético de verdade gateado (parcialmente concluída em 2026-08-24)**: extensão
+   dos catálogos existentes concluída — 3 criaturas, 3 chapéus e 4 cores marcados
+   `subscriptionOnly`, escondidos/bloqueados na lojinha sem entitlement ativo (ver
+   `labs/lab-82-.../CONTEXT.md`). Falta "Minha Casa" (feature nova, maior, ainda não iniciada —
+   ver a seção "Catálogo de cosméticos (Fase E)" acima pro desenho).
 6. **Fase F — Lançamento comercial**: migrar hospedagem do front-end pro Cloudflare Pages (ver
    achado crítico acima) OU assinar Vercel Pro, sair do modo teste do Stripe, e (opcional, pode
    vir depois) relatório semanal por e-mail via Resend.
