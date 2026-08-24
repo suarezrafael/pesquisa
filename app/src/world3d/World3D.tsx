@@ -148,6 +148,19 @@ const BIRD_CHIRP_RADIUS = 3.5 // pedido do usuário: pássaros cantam baixinho q
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const CAMERA_ROTATE_SPEED = 1.6 // rad/s — velocidade de giro da câmera segurando os botões ◀/▶
+// Orçamento de rede do multiplayer (lab-85, docs/prompts/05-escala-e-viabilidade.md achado G1):
+// antes, `sendState` disparava incondicionalmente a cada 0,12s (8,33 msg/s por jogador) — a cota
+// gratuita de Durable Objects (100.000 requests/dia, cada mensagem WebSocket conta como uma)
+// esgotava com ~13 crianças jogando 15 min cada. Agora só manda quando a posição/direção mudou
+// mais que o limiar abaixo (checado a cada NET_SEND_CHECK_INTERVAL, que também vira o teto de
+// ~2 msg/s andando pedido pelo documento) ou quando o keepalive vence (parado, ~0,2 msg/s).
+const NET_SEND_CHECK_INTERVAL = 0.5 // s — também o teto de frequência andando (≤2 msg/s)
+const NET_POSITION_EPSILON = 0.05 // metros
+const NET_FACING_EPSILON = 0.02 // diferença de vetor normalizado (~poucos graus)
+const NET_KEEPALIVE_INTERVAL_MS = 5000 // parado: mantém `rp.lastSeen` vivo pros outros (ver
+// NET_PEER_TIMEOUT_MS abaixo, tem que ficar bem menor que o timeout de remoção do peer)
+const NET_PEER_TIMEOUT_MS = 16000 // ~3x o keepalive — margem pra jitter de rede sem remover
+// um jogador remoto que só está parado
 const TRIGGER_DISTANCE = 2.4
 const RESET_DISTANCE = 3.6
 // Carro dirigível (lab-25): distância pra mostrar a dica "pressione E" / poder entrar, e
@@ -2366,6 +2379,10 @@ export function World3D({
     const portalMeshes: { quest: (typeof quests)[number]; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
     const remotePlayers = new Map<string, RemotePlayer>()
     let netSendTimer = 0
+    let lastSentPos: Vector3 | null = null
+    let lastSentFacing: Vector3 | null = null
+    let lastSentAppearanceKey = ''
+    let lastNetSendMs = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
     // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
@@ -6472,33 +6489,70 @@ export function World3D({
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
           camera.setTarget(pos)
 
-          // Multiplayer: manda o próprio estado (posição/direção) num ritmo baixo (não todo
-          // quadro) e atualiza a posição/orientação suavizada (lerp) dos jogadores remotos.
+          // Multiplayer: manda o próprio estado só quando algo muda de verdade (posição/direção
+          // além do limiar, ou aparência trocada) ou quando o keepalive vence parado — ver
+          // NET_SEND_CHECK_INTERVAL acima pro motivo (orçamento de cota do Durable Object). O
+          // keepalive garante duas coisas ao mesmo tempo: mantém `rp.lastSeen` vivo pros outros
+          // enquanto parado (evita ser removido, ver NET_PEER_TIMEOUT_MS abaixo) e reenvia a
+          // aparência completa periodicamente — sem isso um jogador que entra na sala depois de
+          // outro já parado nunca aprenderia o chapéu/cor dele, já que aparência não tem mais
+          // mensagem própria disparada por evento de "novo jogador" (o relay não avisa quem já
+          // está conectado quando alguém novo entra).
           netSendTimer += dt
-          if (netSendTimer > 0.12) {
+          if (netSendTimer >= NET_SEND_CHECK_INTERVAL) {
             netSendTimer = 0
-            sendState(
-              profileRef.current.name,
-              profileRef.current.avatarEmoji,
-              studentFigure.root.position.asArray() as [number, number, number],
-              facing.asArray() as [number, number, number],
-              progressRef.current.xp,
-              progressRef.current.coins,
-              {
-                hatId: profileRef.current.equippedHatId,
-                hasSword: hasSwordRef.current,
-                hasGun: hasGunRef.current,
-                shirtColorId: profileRef.current.equippedShirtColorId,
-                pantsColorId: profileRef.current.equippedPantsColorId,
-                shoeColorId: profileRef.current.equippedShoeColorId,
-                backpackColorId: profileRef.current.equippedBackpackColorId,
-                hairShapeId: profileRef.current.equippedHairShapeId,
-              },
-            )
+            const currentPos = studentFigure.root.position
+            const moved =
+              !lastSentPos ||
+              !lastSentFacing ||
+              Vector3.Distance(currentPos, lastSentPos) > NET_POSITION_EPSILON ||
+              Vector3.Distance(facing, lastSentFacing) > NET_FACING_EPSILON
+            const appearanceKey = [
+              profileRef.current.equippedHatId,
+              hasSwordRef.current,
+              hasGunRef.current,
+              profileRef.current.equippedShirtColorId,
+              profileRef.current.equippedPantsColorId,
+              profileRef.current.equippedShoeColorId,
+              profileRef.current.equippedBackpackColorId,
+              profileRef.current.equippedHairShapeId,
+            ].join('|')
+            const appearanceChanged = appearanceKey !== lastSentAppearanceKey
+            const nowMsNet = performance.now()
+            const dueForKeepalive = nowMsNet - lastNetSendMs >= NET_KEEPALIVE_INTERVAL_MS
+            if (moved || appearanceChanged || dueForKeepalive) {
+              sendState(
+                profileRef.current.name,
+                profileRef.current.avatarEmoji,
+                currentPos.asArray() as [number, number, number],
+                facing.asArray() as [number, number, number],
+                progressRef.current.xp,
+                progressRef.current.coins,
+                {
+                  hatId: profileRef.current.equippedHatId,
+                  hasSword: hasSwordRef.current,
+                  hasGun: hasGunRef.current,
+                  shirtColorId: profileRef.current.equippedShirtColorId,
+                  pantsColorId: profileRef.current.equippedPantsColorId,
+                  shoeColorId: profileRef.current.equippedShoeColorId,
+                  backpackColorId: profileRef.current.equippedBackpackColorId,
+                  hairShapeId: profileRef.current.equippedHairShapeId,
+                },
+              )
+              lastSentPos = currentPos.clone()
+              lastSentFacing = facing.clone()
+              lastSentAppearanceKey = appearanceKey
+              lastNetSendMs = nowMsNet
+            }
           }
           const nowMs = performance.now()
           for (const [remoteId, rp] of remotePlayers) {
-            if (nowMs - rp.lastSeen > 8000) {
+            // Antes do lab-85, `sendState` disparava a cada 0,12s então 8s de silêncio já
+            // significava ~66 mensagens perdidas — sinal forte de desconexão real. Agora um
+            // jogador parado só manda keepalive a cada NET_KEEPALIVE_INTERVAL_MS (5s); um timeout
+            // de remoção também em ~8s deixaria margem curta demais pra um único keepalive
+            // atrasado por jitter de rede não derrubar o jogador remoto à toa da tela dos outros.
+            if (nowMs - rp.lastSeen > NET_PEER_TIMEOUT_MS) {
               removeRemotePlayer(remoteId)
               continue
             }

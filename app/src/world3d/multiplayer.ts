@@ -72,8 +72,27 @@ type AttackHandler = (attack: AttackEvent) => void
 
 const RELAY_PORT = 3001
 
+// Reconexão com backoff exponencial + jitter (lab-85, docs/prompts/05-escala-e-viabilidade.md
+// achado G2) — antes, uma queda de conexão reconectava incondicionalmente a cada 3s pra sempre,
+// sem limite. Se a queda for por estouro de cota do relay (o cenário mais provável, ver G1), isso
+// vira uma tempestade de reconexão martelando um serviço que já está sem cota — o pior
+// comportamento possível bem no momento de maior tráfego. Backoff exponencial (1s→2s→4s→…→60s)
+// com "full jitter" (multiplica por um fator aleatório entre 0,5 e 1) espalha as tentativas no
+// tempo em vez de todos os clientes baterem no mesmo instante; um limite de tentativas por sessão
+// com desistência silenciosa (o jogo já funciona sozinho, ver "modo solo") evita insistir pra
+// sempre contra um relay que não vai voltar tão cedo.
+export const RECONNECT_BASE_DELAY_MS = 1000
+export const RECONNECT_MAX_DELAY_MS = 60000
+export const RECONNECT_MAX_ATTEMPTS = 10
+
+export function computeReconnectDelayMs(attempt: number, random: () => number = Math.random): number {
+  const exponential = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** (attempt - 1))
+  return exponential * (0.5 + random() * 0.5)
+}
+
 let socket: WebSocket | null = null
 let reconnectTimer: number | null = null
+let reconnectAttempt = 0
 let stateHandlers: StateHandler[] = []
 let leaveHandlers: LeaveHandler[] = []
 let chatHandlers: ChatHandler[] = []
@@ -91,18 +110,40 @@ function notifyConnection(connected: boolean) {
   connectionHandlers.forEach((h) => h(connected))
 }
 
+// Extraída como função pura (sem `window`/timer de verdade) só pra ficar testável sem precisar
+// simular um `WebSocket`/DOM inteiro — a decisão de "desistir ou não" é a parte que mais importa
+// verificar automaticamente; agendar o `setTimeout` de fato é só encanamento em cima disso.
+export function shouldGiveUpReconnecting(attempt: number): boolean {
+  return attempt > RECONNECT_MAX_ATTEMPTS
+}
+
+// Agenda a próxima tentativa com backoff+jitter, ou desiste em silêncio se já estourou o limite
+// de tentativas — o jogo continua 100% jogável sozinho (ver README/`05-escala-e-viabilidade.md`
+// seção 3, "modo solo é o padrão funcional"), só para de tentar reconectar sozinho nesta sessão.
+function scheduleReconnect(): void {
+  reconnectAttempt += 1
+  if (shouldGiveUpReconnecting(reconnectAttempt)) return
+  reconnectTimer = window.setTimeout(connect, computeReconnectDelayMs(reconnectAttempt))
+}
+
 export function connect(): void {
   if (socket) return
   let ws: WebSocket
   try {
     ws = new WebSocket(relayUrl())
   } catch {
-    reconnectTimer = window.setTimeout(connect, 4000)
+    scheduleReconnect()
     return
   }
   socket = ws
 
-  ws.onopen = () => notifyConnection(true)
+  ws.onopen = () => {
+    // Conexão bem-sucedida — zera o contador pra uma futura queda (rede caiu de novo depois de
+    // uma sessão longa e saudável, por exemplo) começar o backoff do zero, em vez de herdar um
+    // contador quase esgotado de tentativas antigas já resolvidas.
+    reconnectAttempt = 0
+    notifyConnection(true)
+  }
 
   ws.onmessage = (ev) => {
     let msg: any
@@ -127,7 +168,7 @@ export function connect(): void {
   ws.onclose = () => {
     socket = null
     notifyConnection(false)
-    reconnectTimer = window.setTimeout(connect, 3000)
+    scheduleReconnect()
   }
 
   ws.onerror = () => {
@@ -140,6 +181,7 @@ export function disconnect(): void {
     window.clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
+  reconnectAttempt = 0
   socket?.close()
   socket = null
 }
