@@ -5,23 +5,32 @@ plano completo em [`../../docs/plano-comercial-backend.md`](../../docs/plano-com
 antes de mexer aqui — este README documenta só o que já existe (Fase A), não o desenho inteiro.
 
 **URL em produção**: `https://missao-aprender-accounts.rafaelvs.workers.dev`
-**Status**: Fases A-C concluídas — login/cadastro (direto no Neon Auth, Fase B) + Stripe
-Checkout/webhook/status de assinatura (Fase C). Pareamento com o jogo (Fase D) ainda não existe.
+**Status**: Fases A-D concluídas — login/cadastro (direto no Neon Auth, Fase B), Stripe
+Checkout/webhook/status de assinatura (Fase C), pareamento do entitlement com o jogo (Fase D).
+Cosmético de verdade gateado por esse entitlement (Fase E) ainda não existe.
 
-## Rotas (Fase C)
+## Rotas
 
 | Rota | Método | Autenticação | Função |
 |---|---|---|---|
 | `/health` | GET | nenhuma | Prova que o Worker fala com o Neon (`{ ok, familyCount }`) |
 | `/checkout` | POST | Bearer JWT (Neon Auth) | Cria a sessão do Stripe Checkout, devolve `{ url }` |
 | `/subscription` | GET | Bearer JWT (Neon Auth) | Status da assinatura da família do usuário (`{ status }`) |
+| `/pairing/generate` | POST | Bearer JWT (Neon Auth) | Gera um código de 6 dígitos (`pairing_codes`, expira em 15min) |
+| `/pairing/redeem` | POST | nenhuma (chamado pelo jogo, criança sem conta) | Troca o código por um token de entitlement (HMAC, 180 dias) |
+| `/entitlement` | GET | Bearer = token de entitlement (**não** o JWT do Neon Auth) | `{ active, expiresAt }` — status real da assinatura da família pareada |
 | `/webhooks/stripe` | POST | assinatura HMAC do Stripe | Atualiza `subscriptions` a partir dos eventos do Stripe |
 
-O JWT é obtido pelo front-end via `fetch('<VITE_NEON_AUTH_URL>/token', { credentials: 'include' })`
-— **não** via `authClient.token()` do SDK `@neondatabase/auth`, que se mostrou não confiável
-nesta versão (bug real encontrado e documentado em `labs/lab-80-.../CONTEXT.md`: retornava dados
-de sessão em vez de um JWT). O Worker verifica esse JWT contra o JWKS do Neon Auth (`jose`), sem
-segredo compartilhado entre os dois serviços.
+O JWT do responsável é obtido pelo front-end via
+`fetch('<VITE_NEON_AUTH_URL>/token', { credentials: 'include' })` — **não** via
+`authClient.token()` do SDK `@neondatabase/auth`, que se mostrou não confiável nesta versão (bug
+real encontrado e documentado em `labs/lab-80-.../CONTEXT.md`: retornava dados de sessão em vez
+de um JWT). O Worker verifica esse JWT contra o JWKS do Neon Auth (`jose`), sem segredo
+compartilhado entre os dois serviços.
+
+O token de entitlement (Fase D) é um tipo DIFERENTE de token — assinado pelo próprio Worker
+(HMAC/HS256, `ENTITLEMENT_SECRET`), emitido só pra quem resgata um código de pareamento válido.
+Não tem nenhuma relação com o Neon Auth: a criança nunca tem conta lá.
 
 ## O que existe agora (Fase A)
 
@@ -45,6 +54,9 @@ segredo compartilhado entre os dois serviços.
   `.dev.vars` local, `wrangler secret put <NOME>` em produção (já configurados).
 - `STRIPE_PRICE_ID` **não** é secreto — é uma var comum em `[vars]` no `wrangler.toml` (só um
   identificador público do catálogo de produtos do Stripe).
+- `ENTITLEMENT_SECRET` (Fase D) — segredo próprio do Worker pra assinar/verificar o token de
+  entitlement do jogo (HMAC/HS256), sem relação com o Neon Auth. Mesmo esquema: `.dev.vars`
+  local, `wrangler secret put ENTITLEMENT_SECRET` em produção (já configurado).
 - Existe também uma **API key pessoal do Neon** (`missao-aprender-agent`, visível em
   Account Settings → API keys no console do Neon) usada só nesta sessão pra criar o projeto/rodar
   migrações via `neonctl`/scripts locais — não fica em nenhum arquivo do repositório. Se for
@@ -71,6 +83,6 @@ npm run deploy
 
 ## Próximas fases (ver o plano)
 
-Fase D (pareamento com o jogo), Fase E (cosmético gateado de verdade), Fase F (lançamento
-comercial — inclui migrar a hospedagem do front-end pro Cloudflare Pages, porque o Vercel Hobby
-proíbe uso comercial).
+Fase E (cosmético gateado de verdade, consultando `entitlement.active` no front-end), Fase F
+(lançamento comercial — inclui migrar a hospedagem do front-end pro Cloudflare Pages, porque o
+Vercel Hobby proíbe uso comercial).

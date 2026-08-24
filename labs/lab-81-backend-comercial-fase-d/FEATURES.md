@@ -1,8 +1,8 @@
 # Laboratório 81 — backend comercial, Fase D (pareamento com o jogo)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-24
-Fim: -
+Fim: 2026-08-24
 Commit inicial: ca719138ebecae9e8e343375eda15c3971d69e55
 
 ## Objetivo do laboratório
@@ -15,23 +15,24 @@ Referência: CONTEXT.md do lab-80, seção "O que o próximo laboratório deve d
 anônima").
 
 ## Funcionalidades planejadas
-- [ ] `POST /pairing/generate` no Worker (autenticado, Bearer JWT do responsável) — gera uma
+- [x] `POST /pairing/generate` no Worker (autenticado, Bearer JWT do responsável) — gera uma
   linha em `pairing_codes` (código de 6 dígitos, expira em ~15min), devolve o código
-- [ ] `POST /pairing/redeem` no Worker (sem autenticação — quem chama é o jogo da criança) —
+- [x] `POST /pairing/redeem` no Worker (sem autenticação — quem chama é o jogo da criança) —
   troca um código válido/não expirado/não resgatado por um token de entitlement assinado
   (JWT curto, HMAC, verificável só pelo próprio Worker)
-- [ ] `GET /entitlement` no Worker — recebe o token de entitlement, responde
+- [x] `GET /entitlement` no Worker — recebe o token de entitlement, responde
   `{ active: boolean, expiresAt }`; usado pro jogo revalidar em background
-- [ ] Botão "Gerar código" no Dashboard do portal (`FamilyPortal.tsx`), mostrando o código e
+- [x] Botão "Gerar código" no Dashboard do portal (`FamilyPortal.tsx`), mostrando o código e
   contagem regressiva até expirar
-- [ ] Tela nova no jogo (fora do fluxo normal da criança, ex. acessível pelas configurações) pra
-  digitar o código de pareamento uma vez — sem teclado de e-mail/senha
-- [ ] Módulo de domínio pro entitlement (ex. `app/src/state/useEntitlement.ts` ou
-  `app/src/domain/entitlement.ts`), desacoplado do Babylon.js/UI, guardando o token em
-  `localStorage` e revalidando em background (silencioso, cai pro cache local se offline —
-  mesma filosofia do PWA já aplicada no projeto)
-- [ ] Testado ao vivo, fim a fim: gerar código no portal → digitar no jogo → jogo reconhece
-  entitlement ativo → revogar/deixar expirar → jogo reflete a mudança na próxima revalidação
+- [x] Tela nova no jogo (botão 🔗 no HUD) pra digitar o código de pareamento uma vez — sem
+  teclado de e-mail/senha
+- [x] Módulo de domínio pro entitlement (`app/src/state/useEntitlement.ts` +
+  `entitlementStorage.ts`), desacoplado do Babylon.js/UI, guardando o token em `localStorage` e
+  revalidando em background (silencioso, cai pro cache local se offline — mesma filosofia do PWA
+  já aplicada no projeto)
+- [x] Testado ao vivo, fim a fim: gerar código no portal → digitar no jogo → jogo reconhece
+  entitlement ativo → cancelar a assinatura via API do Stripe → próxima revalidação em background
+  reflete o cancelamento
 
 ## Fora de escopo (explicitamente adiado)
 - Qualquer cosmético de verdade gateado por esse entitlement (Fase E) — este laboratório só

@@ -145,11 +145,18 @@ os catálogos em `src/data/`), nunca em `quests.ts`/`progression.ts`.
    Testado ao vivo de ponta a ponta (cadastro → linha real em `neon_auth.user` → sessão persiste
    entre reloads → logout → login de novo). Nenhuma mudança no jogo da criança. Ver
    `labs/lab-79-.../CONTEXT.md` pro detalhe completo.
-3. **Fase C — Pagamento de verdade (em andamento, 2026-08-23)**: preço confirmado pelo usuário
+3. **Fase C — Pagamento de verdade ✅ concluída em 2026-08-24**: preço confirmado pelo usuário
    (R$ 4,99/mês). Stripe Checkout (modo teste) + webhook + tabela `subscriptions` atualizando ao
-   vivo. Ver `labs/lab-80-.../CONTEXT.md` pro detalhe completo quando fechado.
-4. **Fase D — Pareamento com o jogo**: portal gera código, jogo tem uma tela pra digitar (uma vez
-   só), token de entitlement local com revalidação em background.
+   vivo, testado de ponta a ponta (assinar e cancelar refletem no portal em segundos). Ver
+   `labs/lab-80-.../CONTEXT.md` pro detalhe completo, incluindo um bug real do SDK do Neon Auth
+   encontrado e corrigido durante o teste ao vivo.
+4. **Fase D — Pareamento com o jogo ✅ concluída em 2026-08-24**: portal gera um código de 6
+   dígitos (`POST /pairing/generate`), a criança digita esse código uma vez no jogo
+   (`POST /pairing/redeem`) e recebe um token de entitlement assinado por HMAC (não relacionado ao
+   JWT do Neon Auth), guardado em `localStorage` e revalidado em background
+   (`GET /entitlement`) contra o status real da assinatura. Testado ao vivo de ponta a ponta,
+   incluindo cancelamento da assinatura refletindo no jogo na revalidação seguinte. Ver
+   `labs/lab-81-.../CONTEXT.md` pro detalhe completo.
 5. **Fase E — Cosmético de verdade gateado**: 1-2 itens novos na lojinha marcados
    `subscriptionOnly`, escondidos/bloqueados sem entitlement ativo — a entrega concreta do pedido
    "cosméticos desbloqueáveis por assinatura".
