@@ -1,11 +1,17 @@
 # Laboratório atual
 
-Ativo: nenhum (aguardando o próximo `lab start` — ver recomendação abaixo)
-Último concluído: labs/lab-86-correcao-orcamento-cota/ (achado importante: Cloudflare cobra
-mensagens WebSocket recebidas numa razão de 20:1, não 1:1 — nem o documento original nem o lab-85
-tinham aplicado isso. Corrige 38,2% → 1,91% da cota diária pra 30 jogadores/30min. Laboratório só
-de documentação, nenhum código mudou)
-Contexto do laboratório anterior: labs/lab-86-correcao-orcamento-cota/CONTEXT.md
+Ativo: nenhum (aguardando o próximo `lab start`)
+Último concluído: labs/lab-87-correcoes-visuais-e-cosmeticos/ (legendas maiores em todo aparelho —
+não só celular; shadow acne do planeta corrigida com bias/normalBias, não confirmada 100% ao vivo;
+casas flutuando corrigidas na causa raiz com `settleMeshOnTerrain`, mesma correção das rochas de
+montanha; catálogo de cosméticos de assinante dobrou, 10→20 itens; lojinha reorganizada em 4 abas
+com preview 3D real do boneco — `AvatarPreview3D.tsx`/`studentFigure.ts` novos)
+Contexto do laboratório anterior: labs/lab-87-correcoes-visuais-e-cosmeticos/CONTEXT.md
+
+**A recomendação de G3/G5 + G4 abaixo (endurecimento do relay + apelido deixar de ser texto
+livre) continua valendo** — o lab-87 foi um redirecionamento explícito do usuário pra bugs
+visuais/produto, não uma mudança de prioridade permanente. Retomar G3-G5 no próximo laboratório a
+menos que o usuário peça outra coisa.
 
 **LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 tinha medido 38,2% da cota diária
 pra 30 jogadores/30min e deixado como pendência decidir se "salas com teto de 12 jogadores" era o
@@ -84,10 +90,14 @@ cosméticos da Fase E inspirada em Brookhaven RP/Roblox (guarda-roupa amplo — 
 lab-82; casa pra montar — ainda não construída); biblioteca de material didático fica de fora dos
 exclusivos, sempre grátis.
 
-**Se o usuário reportar objetos flutuando de novo** (lab-75): pedir um print com o jogador parado
-bem perto do objeto. Lembrar também que o sistema de chuva dinâmica
-(`window.__forceRain(true/false)` em dev) pode deixar a cena inteira acinzentada por 20-90s — não
-confundir com bug de renderização antes de descartar isso.
+**Se o usuário reportar objetos/escolas flutuando de novo** (lab-75, lab-87): pedir um print com o
+jogador parado bem perto do objeto — pro caso de escola, pedir também o NÚMERO dela (rótulo tipo
+"14"), já corrigida em geral no lab-87 (`settleMeshOnTerrain` aplicado às escolas), mas sem
+confirmação visual de uma escola especificamente afetada. Lembrar também que o sistema de chuva
+dinâmica (`window.__forceRain(true/false)` em dev) pode deixar a cena inteira acinzentada por
+20-90s — não confundir com bug de renderização antes de descartar isso. Se o usuário reportar
+"manchas pretas no chão" de novo, checar primeiro se não é a chuva (lab-87 já ajustou
+`shadowGenerator.bias`/`normalBias` pra shadow acne, sem confirmação visual completa).
 
 **Pendência de verificação (lab-73)**: chapéu remoto foi confirmado ao vivo em duas abas; arma/
 efeito de ataque compartilhado e colisão jogador-jogador só foram verificados por leitura de
@@ -95,17 +105,25 @@ código + build limpo, não ao vivo — ver `labs/lab-73-multiplayer-visual-e-pe
 CONTEXT.md` pra detalhes.
 
 Outros pedidos pendentes, sem mudança: (1) confirmar se a recompensa em moeda do combate atualiza
-o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como insuficiente mesmo em
-1.6x, o próximo passo é revisar CONTRASTE (`outlineWidth`/`outlineColor`), não aumentar o tamanho
-de novo.
+o HUD; (2) legibilidade de fonte — lab-87 aplicou `READABILITY_SCALE = 1.4` pra TODO aparelho
+(antes só celular ganhava aumento); se voltar a ser reportada como insuficiente mesmo assim, o
+próximo passo é revisar CONTRASTE (`outlineWidth`/`outlineColor`), não aumentar o tamanho de novo.
 
 **Frentes de profissionalização ainda não construídas** (monitoramento de erro + analytics
-básico concluídos no lab-84): (1) code-splitting de `World3D.tsx` (chunk de 6,4MB / 1,37MB gzip);
-(2) auditoria de acessibilidade WCAG AA sistemática (além do item de contraste de fonte acima).
-Ambos ficam atrás da prioridade de escala/viabilidade descrita acima (`05-escala-e-viabilidade.md`)
-na ordem de ataque recomendada (seção 7 do documento, itens 8 e 9).
+básico concluídos no lab-84): (1) code-splitting de `World3D.tsx` (chunk de ~898KB/194KB gzip
+depois do lab-87 separar `studentFigure.ts` — melhorou incidentalmente, mas /familia/termos/
+privacidade ainda não carregam Babylon algum, que é o que G12 pede de verdade); (2) auditoria de
+acessibilidade WCAG AA sistemática (além do item de contraste de fonte acima). Ambos ficam atrás
+da prioridade de escala/viabilidade (`05-escala-e-viabilidade.md`, seção 7 itens 8 e 9).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-86-correcao-orcamento-cota/
-CONTEXT.md` (último laboratório concluído, com a correção da cota e a prioridade revisada) e
-`docs/prompts/05-escala-e-viabilidade.md` (a motivação original — leia o adendo no topo primeiro,
-os números do corpo do documento estão desatualizados em 20x).
+**Módulos novos do lab-87** (útil pra quem for mexer em avatar/cosméticos): `world3d/
+studentFigure.ts` tem a lógica de montar/vestir o boneco (extraída de `World3D.tsx` — importada
+por ele E por `world3d/AvatarPreview3D.tsx`, o preview 3D da lojinha). Qualquer mudança na
+aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, não de volta pra
+`World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
+seção "Decisões técnicas", pra entender por quê).
+
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-87-correcoes-visuais-e-cosmeticos/
+CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
+`docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
+documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).
