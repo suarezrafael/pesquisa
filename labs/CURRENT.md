@@ -1,10 +1,13 @@
 # Laboratório atual
 
+Ativo: labs/lab-84-observabilidade/ (monitoramento de erro + analytics básico, usando só
+infraestrutura que a conta Cloudflare do usuário já tem — Sentry descartado por exigir criar
+conta nova em nome do usuário, o que não posso fazer)
 Último concluído: labs/lab-83-profissionalizacao-produto/ (Termos de Uso + Política de
 Privacidade, Customer Portal do Stripe pra autoatendimento de cobrança/cancelamento, primeiro
 test runner do projeto (Vitest, 36 testes) cobrindo lógica de recompensa/entitlement, e um bug
 real corrigido: itens exclusivos de assinante podiam ser obtidos de graça via `unlockXxx`)
-Contexto para o próximo laboratório: labs/lab-83-profissionalizacao-produto/CONTEXT.md
+Contexto do laboratório anterior: labs/lab-83-profissionalizacao-produto/CONTEXT.md
 
 **Comandos de teste (novo, lab-83)**: `cd app && npm run test` (22 testes, lógica de jogo) e
 `cd app/server-accounts && npm run test` (14 testes, lógica de entitlement/pareamento). Rodar
@@ -82,12 +85,10 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 1.6x, o próximo passo é revisar CONTRASTE (`outlineWidth`/`outlineColor`), não aumentar o tamanho
 de novo.
 
-**Frentes de profissionalização identificadas (lab-83) mas ainda não construídas**, sem
-prioridade única definida — perguntar ao usuário ou escolher pelo contexto da próxima sessão:
-(1) monitoramento de erro (Sentry) — nada existe hoje; (2) analytics básico (retenção D1/D7,
-conversão — as métricas que `prompt.md` §12/§15.4 já pedem, hoje impossíveis de medir); (3)
-code-splitting de `World3D.tsx` (chunk de 1,37MB gzip); (4) auditoria de acessibilidade WCAG AA
-sistemática (além do item de contraste de fonte acima).
+**Frentes de profissionalização ainda não construídas** (monitoramento de erro + analytics
+básico entraram em construção no lab-84 — ver acima): (1) code-splitting de `World3D.tsx` (chunk
+de 1,37MB gzip); (2) auditoria de acessibilidade WCAG AA sistemática (além do item de contraste
+de fonte acima).
 
-Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-83-profissionalizacao-produto/CONTEXT.md`.
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-84-observabilidade/FEATURES.md`
+(laboratório ativo) e `labs/lab-83-profissionalizacao-produto/CONTEXT.md` (o anterior).
