@@ -88,6 +88,27 @@ export const HAT_CATALOG: HatOption[] = [
     colorRgb: [0.25, 0.2, 0.65],
     subscriptionOnly: true,
   },
+  // lab-87, pedido do usuário: mais itens de assinante na lojinha — completa os formatos de
+  // chapéu que ainda não tinham versão exclusiva (`party`/`flower`), mesma regra de nunca usar
+  // geometria nova.
+  {
+    id: 'festa_holografica',
+    name: 'Chapéu de Festa Holográfico',
+    emoji: '🎉',
+    cost: 0,
+    shape: 'party',
+    colorRgb: [0.3, 0.85, 0.75],
+    subscriptionOnly: true,
+  },
+  {
+    id: 'flor_dourada',
+    name: 'Flor Dourada',
+    emoji: '🌟',
+    cost: 0,
+    shape: 'flower',
+    colorRgb: [0.92, 0.75, 0.25],
+    subscriptionOnly: true,
+  },
 ]
 
 export const DEFAULT_UNLOCKED_HAT_IDS: string[] = HAT_CATALOG.filter(

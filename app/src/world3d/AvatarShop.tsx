@@ -1,3 +1,4 @@
+import { lazy, Suspense, useState } from 'react'
 import { AVATAR_CATALOG } from '../data/avatars'
 import { HAT_CATALOG } from '../data/hats'
 import {
@@ -10,6 +11,16 @@ import {
   type HairShapeOption,
 } from '../data/customization'
 import type { Profile, Progress } from '../types'
+
+// Carregado sob demanda, não no bundle principal (mesmo raciocínio de `World3D`/`FamilyPortal`
+// em App.tsx) — `AvatarPreview3D` importa `@babylonjs/core` pra desenhar o preview de verdade, e
+// `AvatarShop.tsx` é importado direto (não via `lazy()`) por `App.tsx`. Sem isso, abrir /familia,
+// /termos ou /privacidade baixaria o motor 3D à toa, só por `AvatarShop` existir no grafo de
+// imports estático — quebraria o mesmo code-splitting que motivou `World3D` ser `lazy()` (ver
+// docs/prompts/05-escala-e-viabilidade.md G12). Na prática quem abre a lojinha já carregou o
+// mundo 3D de qualquer forma (só dá pra chegar nela jogando), então o custo real é baixo — o que
+// importa aqui é não pagar esse custo em rotas que nunca precisam dele.
+const AvatarPreview3D = lazy(() => import('./AvatarPreview3D').then((m) => ({ default: m.AvatarPreview3D })))
 
 interface AvatarShopProps {
   profile: Profile
@@ -34,6 +45,20 @@ interface AvatarShopProps {
   onEquipHairShape: (id: string | null) => void
   onClose: () => void
 }
+
+// Abas (lab-87, pedido do usuário: "se ficar muita opção, segmente por abas") — o catálogo
+// cresceu de ~15 pra mais de 50 itens neste laboratório (mais cosméticos de assinante); uma lista
+// só, rolando infinitamente, deixou de caber numa experiência boa pra criança escolher. Camisa/
+// calça/sapato/mochila viram uma aba só ("Roupas") — são o mesmo tipo de escolha (cor de uma peça
+// de roupa), separar em 4 abas ficaria fragmentado demais pro benefício de organização que dá.
+type ShopTab = 'avatares' | 'chapeus' | 'roupas' | 'cabelo'
+
+const TABS: { id: ShopTab; label: string; emoji: string }[] = [
+  { id: 'avatares', label: 'Avatares', emoji: '🐾' },
+  { id: 'chapeus', label: 'Chapéus', emoji: '🎩' },
+  { id: 'roupas', label: 'Roupas', emoji: '👕' },
+  { id: 'cabelo', label: 'Cabelo', emoji: '💇' },
+]
 
 // Seção de cor (lab-73) — os quatro eixos de cor (camisa/calça/sapato/mochila) têm exatamente a
 // mesma estrutura (`ColorOption`), só o catálogo/título/callbacks mudam; extraído aqui em vez de
@@ -183,6 +208,8 @@ export function AvatarShop({
   onEquipHairShape,
   onClose,
 }: AvatarShopProps) {
+  const [tab, setTab] = useState<ShopTab>('avatares')
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Loja de avatares">
       <div className="modal avatar-shop-modal">
@@ -194,159 +221,204 @@ export function AvatarShop({
           Troque as moedas que você coletou por novos personagens. Itens com 👑 são exclusivos de
           assinantes — peça pra quem cuida de você conferir a área dos responsáveis.
         </p>
+
+        {/* Preview 3D (lab-87, pedido do usuário: "mostrar um menu com um preview 3D do avatar e
+            do boneco") — reflete a combinação EQUIPADA agora, atualiza sozinho assim que algo é
+            trocado em qualquer aba (o motor 3D vive à parte, ver AvatarPreview3D.tsx). */}
+        <div className="avatar-preview-3d-wrap">
+          <Suspense fallback={<div className="avatar-preview-3d-canvas avatar-preview-3d-loading" />}>
+            <AvatarPreview3D
+              avatarEmoji={profile.avatarEmoji}
+              hatId={profile.equippedHatId}
+              shirtColorId={profile.equippedShirtColorId}
+              pantsColorId={profile.equippedPantsColorId}
+              shoeColorId={profile.equippedShoeColorId}
+              backpackColorId={profile.equippedBackpackColorId}
+              hairShapeId={profile.equippedHairShapeId}
+            />
+          </Suspense>
+        </div>
+
         <div className="hub-coins avatar-shop-balance">🪙 {progress.coins}</div>
 
-        <div className="avatar-shop-grid">
-          {AVATAR_CATALOG.map((avatar) => {
-            const usable = avatar.subscriptionOnly ? entitlementActive : progress.unlockedAvatarIds.includes(avatar.id)
-            const equipped = profile.avatarEmoji === avatar.emoji
-            const affordable = progress.coins >= avatar.cost
-
-            return (
-              <div
-                key={avatar.id}
-                className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}
-              >
-                <span className="avatar-shop-emoji">{avatar.emoji}</span>
-                <span className="avatar-shop-name">
-                  {avatar.name} {avatar.subscriptionOnly && '👑'}
-                </span>
-
-                {equipped && <span className="avatar-shop-tag">Em uso</span>}
-
-                {!equipped && usable && (
-                  <button type="button" className="avatar-shop-action" onClick={() => onEquip(avatar.emoji)}>
-                    Usar
-                  </button>
-                )}
-
-                {!equipped && !usable && avatar.subscriptionOnly && (
-                  <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
-                )}
-
-                {!usable && !avatar.subscriptionOnly && (
-                  <button
-                    type="button"
-                    className="avatar-shop-action buy"
-                    disabled={!affordable}
-                    onClick={() => onUnlock(avatar.id)}
-                  >
-                    🪙 {avatar.cost}
-                  </button>
-                )}
-              </div>
-            )
-          })}
+        <div className="avatar-shop-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`avatar-shop-tab ${tab === t.id ? 'active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              <span aria-hidden="true">{t.emoji}</span> {t.label}
+            </button>
+          ))}
         </div>
 
-        <h2>Chapéus</h2>
-        <p className="subtitle">
-          Chapéus são independentes do personagem — troque de bicho sem perder o chapéu.
-        </p>
+        {tab === 'avatares' && (
+          <div className="avatar-shop-grid">
+            {AVATAR_CATALOG.map((avatar) => {
+              const usable = avatar.subscriptionOnly ? entitlementActive : progress.unlockedAvatarIds.includes(avatar.id)
+              const equipped = profile.avatarEmoji === avatar.emoji
+              const affordable = progress.coins >= avatar.cost
 
-        <div className="avatar-shop-grid">
-          <div className={`avatar-shop-item ${!profile.equippedHatId ? 'equipped' : ''}`}>
-            <span className="avatar-shop-emoji">🚫</span>
-            <span className="avatar-shop-name">Nenhum</span>
-            {!profile.equippedHatId ? (
-              <span className="avatar-shop-tag">Em uso</span>
-            ) : (
-              <button type="button" className="avatar-shop-action" onClick={() => onEquipHat(null)}>
-                Usar
-              </button>
-            )}
+              return (
+                <div
+                  key={avatar.id}
+                  className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}
+                >
+                  <span className="avatar-shop-emoji">{avatar.emoji}</span>
+                  <span className="avatar-shop-name">
+                    {avatar.name} {avatar.subscriptionOnly && '👑'}
+                  </span>
+
+                  {equipped && <span className="avatar-shop-tag">Em uso</span>}
+
+                  {!equipped && usable && (
+                    <button type="button" className="avatar-shop-action" onClick={() => onEquip(avatar.emoji)}>
+                      Usar
+                    </button>
+                  )}
+
+                  {!equipped && !usable && avatar.subscriptionOnly && (
+                    <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+                  )}
+
+                  {!usable && !avatar.subscriptionOnly && (
+                    <button
+                      type="button"
+                      className="avatar-shop-action buy"
+                      disabled={!affordable}
+                      onClick={() => onUnlock(avatar.id)}
+                    >
+                      🪙 {avatar.cost}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
           </div>
+        )}
 
-          {HAT_CATALOG.map((hat) => {
-            const usable = hat.subscriptionOnly ? entitlementActive : progress.unlockedHatIds.includes(hat.id)
-            const equipped = profile.equippedHatId === hat.id
-            const affordable = progress.coins >= hat.cost
+        {tab === 'chapeus' && (
+          <>
+            <p className="subtitle">
+              Chapéus são independentes do personagem — troque de bicho sem perder o chapéu.
+            </p>
 
-            return (
-              <div key={hat.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
-                <span className="avatar-shop-emoji">{hat.emoji}</span>
-                <span className="avatar-shop-name">
-                  {hat.name} {hat.subscriptionOnly && '👑'}
-                </span>
-
-                {equipped && <span className="avatar-shop-tag">Em uso</span>}
-
-                {!equipped && usable && (
-                  <button type="button" className="avatar-shop-action" onClick={() => onEquipHat(hat.id)}>
+            <div className="avatar-shop-grid">
+              <div className={`avatar-shop-item ${!profile.equippedHatId ? 'equipped' : ''}`}>
+                <span className="avatar-shop-emoji">🚫</span>
+                <span className="avatar-shop-name">Nenhum</span>
+                {!profile.equippedHatId ? (
+                  <span className="avatar-shop-tag">Em uso</span>
+                ) : (
+                  <button type="button" className="avatar-shop-action" onClick={() => onEquipHat(null)}>
                     Usar
                   </button>
                 )}
-
-                {!equipped && !usable && hat.subscriptionOnly && (
-                  <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
-                )}
-
-                {!usable && !hat.subscriptionOnly && (
-                  <button
-                    type="button"
-                    className="avatar-shop-action buy"
-                    disabled={!affordable}
-                    onClick={() => onUnlockHat(hat.id)}
-                  >
-                    🪙 {hat.cost}
-                  </button>
-                )}
               </div>
-            )
-          })}
-        </div>
+
+              {HAT_CATALOG.map((hat) => {
+                const usable = hat.subscriptionOnly ? entitlementActive : progress.unlockedHatIds.includes(hat.id)
+                const equipped = profile.equippedHatId === hat.id
+                const affordable = progress.coins >= hat.cost
+
+                return (
+                  <div key={hat.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
+                    <span className="avatar-shop-emoji">{hat.emoji}</span>
+                    <span className="avatar-shop-name">
+                      {hat.name} {hat.subscriptionOnly && '👑'}
+                    </span>
+
+                    {equipped && <span className="avatar-shop-tag">Em uso</span>}
+
+                    {!equipped && usable && (
+                      <button type="button" className="avatar-shop-action" onClick={() => onEquipHat(hat.id)}>
+                        Usar
+                      </button>
+                    )}
+
+                    {!equipped && !usable && hat.subscriptionOnly && (
+                      <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+                    )}
+
+                    {!usable && !hat.subscriptionOnly && (
+                      <button
+                        type="button"
+                        className="avatar-shop-action buy"
+                        disabled={!affordable}
+                        onClick={() => onUnlockHat(hat.id)}
+                      >
+                        🪙 {hat.cost}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
 
         {/* Personalização (lab-73, pedido do usuário: "dar pra escolher na lojinha a cor da
             camiseta e da mochila... a cor da calça, a cor do sapato, e o formato do cabelo") —
             cada eixo é independente dos outros e da criatura/chapéu escolhidos. */}
-        <ColorSection
-          title="Camisa"
-          catalog={SHIRT_COLOR_CATALOG}
-          unlockedIds={progress.unlockedShirtColorIds}
-          equippedId={profile.equippedShirtColorId}
-          coins={progress.coins}
-          entitlementActive={entitlementActive}
-          onUnlock={onUnlockShirtColor}
-          onEquip={onEquipShirtColor}
-        />
-        <ColorSection
-          title="Calça"
-          catalog={PANTS_COLOR_CATALOG}
-          unlockedIds={progress.unlockedPantsColorIds}
-          equippedId={profile.equippedPantsColorId}
-          coins={progress.coins}
-          entitlementActive={entitlementActive}
-          onUnlock={onUnlockPantsColor}
-          onEquip={onEquipPantsColor}
-        />
-        <ColorSection
-          title="Sapato"
-          catalog={SHOE_COLOR_CATALOG}
-          unlockedIds={progress.unlockedShoeColorIds}
-          equippedId={profile.equippedShoeColorId}
-          coins={progress.coins}
-          entitlementActive={entitlementActive}
-          onUnlock={onUnlockShoeColor}
-          onEquip={onEquipShoeColor}
-        />
-        <ColorSection
-          title="Mochila"
-          catalog={BACKPACK_COLOR_CATALOG}
-          unlockedIds={progress.unlockedBackpackColorIds}
-          equippedId={profile.equippedBackpackColorId}
-          coins={progress.coins}
-          entitlementActive={entitlementActive}
-          onUnlock={onUnlockBackpackColor}
-          onEquip={onEquipBackpackColor}
-        />
-        <HairShapeSection
-          catalog={HAIR_SHAPE_CATALOG}
-          unlockedIds={progress.unlockedHairShapeIds}
-          equippedId={profile.equippedHairShapeId}
-          coins={progress.coins}
-          onUnlock={onUnlockHairShape}
-          onEquip={onEquipHairShape}
-        />
+        {tab === 'roupas' && (
+          <>
+            <ColorSection
+              title="Camisa"
+              catalog={SHIRT_COLOR_CATALOG}
+              unlockedIds={progress.unlockedShirtColorIds}
+              equippedId={profile.equippedShirtColorId}
+              coins={progress.coins}
+              entitlementActive={entitlementActive}
+              onUnlock={onUnlockShirtColor}
+              onEquip={onEquipShirtColor}
+            />
+            <ColorSection
+              title="Calça"
+              catalog={PANTS_COLOR_CATALOG}
+              unlockedIds={progress.unlockedPantsColorIds}
+              equippedId={profile.equippedPantsColorId}
+              coins={progress.coins}
+              entitlementActive={entitlementActive}
+              onUnlock={onUnlockPantsColor}
+              onEquip={onEquipPantsColor}
+            />
+            <ColorSection
+              title="Sapato"
+              catalog={SHOE_COLOR_CATALOG}
+              unlockedIds={progress.unlockedShoeColorIds}
+              equippedId={profile.equippedShoeColorId}
+              coins={progress.coins}
+              entitlementActive={entitlementActive}
+              onUnlock={onUnlockShoeColor}
+              onEquip={onEquipShoeColor}
+            />
+            <ColorSection
+              title="Mochila"
+              catalog={BACKPACK_COLOR_CATALOG}
+              unlockedIds={progress.unlockedBackpackColorIds}
+              equippedId={profile.equippedBackpackColorId}
+              coins={progress.coins}
+              entitlementActive={entitlementActive}
+              onUnlock={onUnlockBackpackColor}
+              onEquip={onEquipBackpackColor}
+            />
+          </>
+        )}
+
+        {tab === 'cabelo' && (
+          <HairShapeSection
+            catalog={HAIR_SHAPE_CATALOG}
+            unlockedIds={progress.unlockedHairShapeIds}
+            equippedId={profile.equippedHairShapeId}
+            coins={progress.coins}
+            onUnlock={onUnlockHairShape}
+            onEquip={onEquipHairShape}
+          />
+        )}
       </div>
     </div>
   )

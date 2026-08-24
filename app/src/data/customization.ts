@@ -33,6 +33,13 @@ export const PANTS_COLOR_CATALOG: ColorOption[] = [
     colorRgb: [0.14, 0.12, 0.32],
     subscriptionOnly: true,
   },
+  {
+    id: 'calca_galactica',
+    name: 'Calça Galáctica',
+    cost: 0,
+    colorRgb: [0.32, 0.12, 0.42],
+    subscriptionOnly: true,
+  },
 ]
 
 export const SHOE_COLOR_CATALOG: ColorOption[] = [
@@ -44,6 +51,13 @@ export const SHOE_COLOR_CATALOG: ColorOption[] = [
     name: 'Tênis Neon',
     cost: 0,
     colorRgb: [0.3, 0.95, 0.55],
+    subscriptionOnly: true,
+  },
+  {
+    id: 'sapato_dourado',
+    name: 'Tênis Dourado',
+    cost: 0,
+    colorRgb: [0.85, 0.68, 0.22],
     subscriptionOnly: true,
   },
 ]
@@ -59,6 +73,13 @@ export const BACKPACK_COLOR_CATALOG: ColorOption[] = [
     colorRgb: [0.85, 0.7, 0.25],
     subscriptionOnly: true,
   },
+  {
+    id: 'mochila_estelar',
+    name: 'Mochila Estelar',
+    cost: 0,
+    colorRgb: [0.16, 0.18, 0.38],
+    subscriptionOnly: true,
+  },
 ]
 
 // Camisa é o eixo mais visível (maior área do boneco) — preço um pouco mais alto que os outros.
@@ -71,6 +92,13 @@ export const SHIRT_COLOR_CATALOG: ColorOption[] = [
     name: 'Camisa Holográfica',
     cost: 0,
     colorRgb: [0.78, 0.35, 0.9],
+    subscriptionOnly: true,
+  },
+  {
+    id: 'camisa_prisma',
+    name: 'Camisa Prisma',
+    cost: 0,
+    colorRgb: [0.4, 0.62, 0.92],
     subscriptionOnly: true,
   },
 ]

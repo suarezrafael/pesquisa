@@ -160,6 +160,45 @@ export const AVATAR_CATALOG: AvatarOption[] = [
     features: { earStyle: 'none', tailStyle: 'none', special: 'none', accentColorRgb: [0.8, 0.85, 0.98] },
     subscriptionOnly: true,
   },
+  // lab-87, pedido do usuário: "crie mais recursos pro plano de assinatura... coisas que pode
+  // comprar na lojinha" — mesma regra da Fase E (reaproveita `EarStyle`/`TailStyle`/
+  // `SpecialAccessory` já existentes, nenhuma peça 3D nova), só combinações/cores novas.
+  {
+    id: 'dinossauro',
+    emoji: '🦖',
+    name: 'Dinossauro',
+    cost: 0,
+    colorRgb: [0.22, 0.55, 0.28],
+    features: { earStyle: 'none', tailStyle: 'tufted', special: 'horns', accentColorRgb: [0.85, 0.68, 0.15] },
+    subscriptionOnly: true,
+  },
+  {
+    id: 'golfinho',
+    emoji: '🐬',
+    name: 'Golfinho',
+    cost: 0,
+    colorRgb: [0.35, 0.62, 0.85],
+    features: { earStyle: 'none', tailStyle: 'thin', special: 'none', accentColorRgb: [0.85, 0.92, 0.98] },
+    subscriptionOnly: true,
+  },
+  {
+    id: 'pavao',
+    emoji: '🦚',
+    name: 'Pavão',
+    cost: 0,
+    colorRgb: [0.15, 0.55, 0.52],
+    features: { earStyle: 'none', tailStyle: 'fluffy', special: 'none', accentColorRgb: [0.35, 0.2, 0.6] },
+    subscriptionOnly: true,
+  },
+  {
+    id: 'esquilo',
+    emoji: '🐿️',
+    name: 'Esquilo',
+    cost: 0,
+    colorRgb: [0.72, 0.42, 0.18],
+    features: { earStyle: 'round', tailStyle: 'fluffy', special: 'none', accentColorRgb: [0.92, 0.85, 0.72] },
+    subscriptionOnly: true,
+  },
 ]
 
 export const DEFAULT_UNLOCKED_AVATAR_IDS: string[] = AVATAR_CATALOG.filter(
