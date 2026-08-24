@@ -1,5 +1,28 @@
 # Critérios de Escala e Viabilidade Comercial em Infraestrutura Gratuita
 
+> ## ⚠️ Correção (2026-08-24, `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`)
+> O texto abaixo (seção 1, "A conta que ninguém fez ainda no repositório") calcula o teto da cota
+> de Durable Objects tratando **1 mensagem WebSocket recebida = 1 request cobrado**. A página
+> oficial de preços da Cloudflare (`developers.cloudflare.com/durable-objects/platform/pricing/`,
+> verificada em 2026-08-24) documenta uma **razão de cobrança de 20:1** pra mensagens WebSocket
+> recebidas ("100 WebSocket incoming messages would be charged as 5 requests for billing
+> purposes") — mensagens enviadas (broadcast) não são cobradas. Isso muda o cálculo da seção 1 em
+> 20x: em vez de "~13 crianças jogando 15 min esgotam a cota", o protocolo antigo (8,33 msg/s)
+> levaria **~267 crianças jogando 15 min** pra esgotar os 100.000 requests/dia. Com as otimizações
+> do lab-85 (envio por mudança + keepalive), uma sessão de 30 jogadores por 30 minutos consome
+> **~1,9% da cota diária**, não os 38,2% que o lab-85 havia medido sem aplicar essa razão. O texto
+> original abaixo não foi reescrito (preserva o trabalho original de quem trouxe este documento) —
+> esta correção só avisa que os números de cota da seção 1 e o "Critério de aceite" da seção 3
+> precisam ser lidos com o fator 20x em mente. O achado de G1 sobre o protocolo em si (mandar
+> estado a 8,33 msg/s incondicional é um desperdício, deveria ser por mudança) continua válido e já
+> foi implementado no lab-85 — só a URGÊNCIA/matemática da cota estava superestimada.
+> **Recurso que passa a merecer mais atenção depois desta correção**: "Duration" (13.000 GB-s/dia,
+> cobrada pelo tempo de parede em que o Durable Object está ativo, os 128MB de memória inteiros por
+> instância) — se a sala global ficar ocupada por pelo menos um jogador ~24h/dia, isso sozinho já
+> consome ~83% desse orçamento, um resultado que "salas" (múltiplas instâncias simultâneas) pode
+> piorar em vez de ajudar, dependendo de quantas salas ficam ativas ao mesmo tempo. Ver
+> `labs/lab-86-correcao-orcamento-cota/CONTEXT.md` pra a análise completa.
+
 > **Destino sugerido no repo**: `docs/prompts/05-escala-e-viabilidade.md` (quinto documento da série
 > `docs/prompts/`, mesma convenção `[MUST]`/`[SHOULD]` de `01-seguranca.md`).
 >

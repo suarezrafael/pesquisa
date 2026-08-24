@@ -3,6 +3,17 @@
 Preenchido em: 2026-08-24
 Commit inicial → final: b8e1bbeb5fccfb0aa493fa72ecbeb616f00a81c4..HEAD
 
+> **⚠️ Correção (2026-08-24, `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`)**: os números da
+> seção "Números medidos" abaixo (38,2% da cota pra 30 jogadores/30min) tratam 1 mensagem
+> WebSocket recebida como 1 request cobrado. A Cloudflare cobra mensagens WebSocket recebidas numa
+> razão de **20:1** (confirmado na página oficial de preços dos Durable Objects) — o número real,
+> aplicando essa razão, é **~1,9%** da cota diária, não 38,2%. A conclusão qualitativa (envio por
+> mudança + backoff reduzem a carga em ~12x frente ao protocolo antigo) continua correta e válida;
+> só a comparação contra o teto de 20% do critério de aceite estava base no denominador errado.
+> Isso também muda a recomendação de "O que o próximo laboratório deve desenvolver" abaixo: salas
+> com teto de 12 jogadores deixaram de ser urgentes pela ótica de requests/dia. Detalhes completos
+> em `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`.
+
 ## O que foi feito
 - **Envio por mudança em vez de por relógio** (`app/src/world3d/World3D.tsx`): o laço de multiplayer
   antes mandava `sendState` incondicionalmente a cada 0,12s (8,33 msg/s por jogador, sempre, mesmo

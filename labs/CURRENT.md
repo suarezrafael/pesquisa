@@ -1,24 +1,26 @@
 # Laboratório atual
 
 Ativo: nenhum (aguardando o próximo `lab start` — ver recomendação abaixo)
-Último concluído: labs/lab-85-protocolo-tempo-real/ (envio-por-mudança + reconexão com
-backoff/jitter em `multiplayer.ts`/`World3D.tsx`; 11,8x menos requests medido ao vivo com script
-de carga próprio; testado com duas abas reais contra o relay de produção antes do deploy)
-Contexto do laboratório anterior: labs/lab-85-protocolo-tempo-real/CONTEXT.md
+Último concluído: labs/lab-86-correcao-orcamento-cota/ (achado importante: Cloudflare cobra
+mensagens WebSocket recebidas numa razão de 20:1, não 1:1 — nem o documento original nem o lab-85
+tinham aplicado isso. Corrige 38,2% → 1,91% da cota diária pra 30 jogadores/30min. Laboratório só
+de documentação, nenhum código mudou)
+Contexto do laboratório anterior: labs/lab-86-correcao-orcamento-cota/CONTEXT.md
 
-**LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 mediu ao vivo (script de carga
-versionado em `app/server-cf-relay/scripts/load-test.mjs`) que envio-por-mudança + backoff
-sozinhos cortam a carga do relay em **11,8x**, mas ainda ficam em **38,2%** da cota diária pra 30
-jogadores/30min — acima dos 20% que `docs/prompts/05-escala-e-viabilidade.md` seção 3 pede como
-critério de aceite. O próximo passo óbvio da ordem de ataque (seção 7) é "salas com teto de 12
-jogadores", MAS **antes de implementar isso, resolver uma dúvida real e não respondida**: não está
-claro nos docs oficiais da Cloudflare se a cota de 100.000 requests/dia de Durable Objects é **por
-conta** (um bucket só, compartilhado por tudo) ou **por instância de Durable Object**. Se for por
-conta, dividir em salas não aumenta a cota total disponível — só ajuda com CPU/duração/fan-out, não
-com contagem de requests, que é o problema principal. Ver "O que o próximo laboratório deve
-desenvolver" em `labs/lab-85-protocolo-tempo-real/CONTEXT.md` pra como investigar isso antes de
-codar. Depois disso, a ordem segue com G3-G5 (endurecimento do relay + moderação de apelido — este
-último é o único achado com risco legal/reputacional imediato).
+**LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 tinha medido 38,2% da cota diária
+pra 30 jogadores/30min e deixado como pendência decidir se "salas com teto de 12 jogadores" era o
+próximo passo certo. O lab-86 descobriu que esse número estava errado por um fator de 20x — a
+Cloudflare cobra mensagens WebSocket recebidas numa razão de 20:1 (confirmado na página oficial de
+preços dos Durable Objects), então o número real é **~1,91%**. **Isso muda a prioridade**: não há
+mais uma crise de cota de requests que justifique "salas" com urgência — o próximo passo real da
+ordem de ataque de `docs/prompts/05-escala-e-viabilidade.md` seção 7 é **G3/G5 (endurecimento do
+relay + socket autenticado) e G4 (apelido deixa de ser texto livre — o único achado com risco
+legal/reputacional imediato)**. "Salas" volta pro backlog, sem urgência, até o produto ter uso
+real o suficiente pra justificar (nesse ponto, também vale medir "Duration" — 13.000 GB-s/dia,
+outro recurso que o lab-86 identificou como potencialmente mais apertado que requests pra uma
+sala sempre ativa; ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`). Ler esse CONTEXT.md
+inteiro antes de continuar — tem a tabela de recálculo completa e as dúvidas que ainda ficaram em
+aberto (cota por conta vs. por instância, tanto de requests quanto de duration).
 
 **Comandos de teste (lab-83, contagem atualizada no lab-85)**: `cd app && npm run test` (31
 testes: lógica de jogo + backoff/modo-solo de `multiplayer.ts`) e `cd app/server-accounts && npm
@@ -103,6 +105,7 @@ básico concluídos no lab-84): (1) code-splitting de `World3D.tsx` (chunk de 6,
 Ambos ficam atrás da prioridade de escala/viabilidade descrita acima (`05-escala-e-viabilidade.md`)
 na ordem de ataque recomendada (seção 7 do documento, itens 8 e 9).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-85-protocolo-tempo-real/
-CONTEXT.md` (último laboratório concluído, com a dúvida de escala em aberto) e
-`docs/prompts/05-escala-e-viabilidade.md` (a motivação original, com os números).
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-86-correcao-orcamento-cota/
+CONTEXT.md` (último laboratório concluído, com a correção da cota e a prioridade revisada) e
+`docs/prompts/05-escala-e-viabilidade.md` (a motivação original — leia o adendo no topo primeiro,
+os números do corpo do documento estão desatualizados em 20x).
