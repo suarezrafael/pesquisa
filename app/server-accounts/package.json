@@ -5,11 +5,13 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "migrate": "node migrate.mjs"
+    "migrate": "node migrate.mjs",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260819.1",
     "pg": "^8.16.0",
+    "vitest": "^4.1.11",
     "wrangler": "^4.124.0"
   },
   "dependencies": {

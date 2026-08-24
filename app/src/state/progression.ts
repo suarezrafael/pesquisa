@@ -86,11 +86,15 @@ export function applyCoinCollected(progress: Progress): Progress {
 }
 
 // Troca moedas por um novo avatar na loja. Não faz nada (retorna o mesmo progress) se o avatar
-// não existir, já estiver desbloqueado, ou faltar moeda — a UI decide o que mostrar em cada caso,
-// mas a regra de "pode comprar?" mora aqui, não no componente.
+// não existir, já estiver desbloqueado, faltar moeda, ou for exclusivo de assinante — a UI decide
+// o que mostrar em cada caso, mas a regra de "pode comprar?" mora aqui, não no componente.
+// Itens `subscriptionOnly` (Fase E, ver docs/plano-comercial-backend.md) NUNCA entram aqui: o
+// acesso deles é dinâmico via `entitlementActive` (useEntitlement), não uma compra permanente —
+// sem esse bloqueio, qualquer chamada a esta função pra um id exclusivo (mesmo por engano, já que
+// o custo desses itens é sempre 0) liberaria o item de graça pra sempre.
 export function unlockAvatar(progress: Progress, avatarId: string): Progress {
   const avatar = findAvatarById(avatarId)
-  if (!avatar) return progress
+  if (!avatar || avatar.subscriptionOnly) return progress
   if (progress.unlockedAvatarIds.includes(avatarId)) return progress
   if (progress.coins < avatar.cost) return progress
   return {
@@ -104,7 +108,7 @@ export function unlockAvatar(progress: Progress, avatarId: string): Progress {
 // customização independente (trocar de criatura não desbloqueia/perde chapéu nenhum).
 export function unlockHat(progress: Progress, hatId: string): Progress {
   const hat = findHatById(hatId)
-  if (!hat) return progress
+  if (!hat || hat.subscriptionOnly) return progress
   if (progress.unlockedHatIds.includes(hatId)) return progress
   if (progress.coins < hat.cost) return progress
   return {
@@ -117,14 +121,14 @@ export function unlockHat(progress: Progress, hatId: string): Progress {
 // Personalização de cores/cabelo (lab-73) — mesma regra de compra de `unlockAvatar`/`unlockHat`,
 // só extraída num helper porque agora são CINCO catálogos iguais (camisa/calça/sapato/mochila/
 // cabelo) em vez de repetir a mesma checagem cinco vezes.
-function unlockGeneric<T extends { id: string; cost: number }>(
+function unlockGeneric<T extends { id: string; cost: number; subscriptionOnly?: boolean }>(
   coins: number,
   unlockedIds: string[],
   catalog: T[],
   id: string,
 ): { coins: number; unlockedIds: string[] } | null {
   const item = catalog.find((c) => c.id === id)
-  if (!item) return null
+  if (!item || item.subscriptionOnly) return null
   if (unlockedIds.includes(id)) return null
   if (coins < item.cost) return null
   return { coins: coins - item.cost, unlockedIds: [...unlockedIds, id] }

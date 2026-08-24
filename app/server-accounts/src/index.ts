@@ -13,6 +13,7 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
+import { generatePairingCode, isEntitlementActive, isPairingCodeUsable, toIsoOrNull } from './domain'
 
 type Sql = NeonQueryFunction<false, false>
 
@@ -87,6 +88,39 @@ async function handleCheckout(request: Request, env: Env): Promise<Response> {
   return Response.json({ url: session.url })
 }
 
+// Profissionalização do produto (pedido do usuário em 2026-08-24): sem isso, cancelar a
+// assinatura exigia contato manual com suporte — inaceitável pra um produto que cobra
+// recorrência de pais de verdade, e uma exigência de fato do CDC (cancelamento tem que ser tão
+// fácil quanto a contratação). Devolve a URL do Customer Portal hospedado pelo próprio Stripe
+// (gerencia forma de pagamento, histórico de fatura e cancelamento sem nenhum código nosso).
+async function handleBillingPortal(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const sql = neon(env.DATABASE_URL)
+  const rows = (await sql`
+    select s.stripe_customer_id
+    from subscriptions s
+    join family_accounts f on f.id = s.family_account_id
+    where f.owner_user_id = ${userId}
+    order by s.updated_at desc
+    limit 1
+  `) as { stripe_customer_id: string }[]
+
+  if (rows.length === 0) {
+    return Response.json({ error: 'nenhuma assinatura encontrada' }, { status: 404 })
+  }
+
+  const origin = request.headers.get('origin') ?? 'https://app-two-flax-92.vercel.app'
+  const stripe = stripeClient(env)
+  const session = await stripe.billingPortal.sessions.create({
+    customer: rows[0].stripe_customer_id,
+    return_url: `${origin}/familia`,
+  })
+
+  return Response.json({ url: session.url })
+}
+
 async function handleSubscriptionStatus(request: Request, env: Env): Promise<Response> {
   const userId = await requireUserId(request)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
@@ -103,13 +137,6 @@ async function handleSubscriptionStatus(request: Request, env: Env): Promise<Res
 
   if (rows.length === 0) return Response.json({ status: 'none' })
   return Response.json({ status: rows[0].status, currentPeriodEnd: rows[0].current_period_end })
-}
-
-// Código de 6 dígitos, curto de propósito: é digitado à mão por uma criança pequena, num
-// dispositivo que pode nem ter teclado físico. Não precisa ser críptico — a segurança real está
-// na expiração curta (15min) e no uso único (`redeemed_at`), não no tamanho do espaço de busca.
-function generatePairingCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
 const PAIRING_CODE_TTL_MS = 15 * 60 * 1000
@@ -149,10 +176,10 @@ async function handlePairingRedeem(request: Request, env: Env): Promise<Response
     select family_account_id, expires_at, redeemed_at from pairing_codes where code = ${code}
   `) as { family_account_id: string; expires_at: string; redeemed_at: string | null }[]
 
-  const row = rows[0]
-  if (!row || row.redeemed_at || new Date(row.expires_at).getTime() < Date.now()) {
+  if (!isPairingCodeUsable(rows[0])) {
     return Response.json({ error: 'código inválido ou expirado' }, { status: 400 })
   }
+  const row = rows[0]
 
   await sql`update pairing_codes set redeemed_at = now() where code = ${code}`
 
@@ -189,7 +216,7 @@ async function handleEntitlement(request: Request, env: Env): Promise<Response> 
     limit 1
   `) as { status: string; current_period_end: string | null }[]
 
-  const active = rows.length > 0 && (rows[0].status === 'active' || rows[0].status === 'trialing')
+  const active = rows.length > 0 && isEntitlementActive(rows[0].status)
   return Response.json({ active, expiresAt: active ? rows[0].current_period_end : null })
 }
 
@@ -228,10 +255,6 @@ async function upsertSubscription(
          ${params.status}, ${params.currentPeriodEnd})
     `
   }
-}
-
-function toIsoOrNull(unixSeconds: number | null | undefined): string | null {
-  return typeof unixSeconds === 'number' ? new Date(unixSeconds * 1000).toISOString() : null
 }
 
 async function handleStripeWebhook(request: Request, env: Env): Promise<Response> {
@@ -326,6 +349,10 @@ export default {
 
     if (url.pathname === '/subscription' && request.method === 'GET') {
       return withCors(await handleSubscriptionStatus(request, env))
+    }
+
+    if (url.pathname === '/billing-portal' && request.method === 'POST') {
+      return withCors(await handleBillingPortal(request, env))
     }
 
     if (url.pathname === '/pairing/generate' && request.method === 'POST') {

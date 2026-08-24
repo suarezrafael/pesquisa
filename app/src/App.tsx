@@ -23,6 +23,10 @@ const World3D = lazy(() => import('./world3d/World3D').then((m) => ({ default: m
 // `/familia` baixa o cliente de autenticação; a criança nunca paga esse custo de bundle.
 const FamilyPortal = lazy(() => import('./components/FamilyPortal').then((m) => ({ default: m.FamilyPortal })))
 
+// Termos de Uso / Política de Privacidade — mesmo raciocínio de bundle sob demanda do
+// FamilyPortal; a criança nunca visita essas rotas no fluxo normal de jogo.
+const LegalPage = lazy(() => import('./components/LegalPage').then((m) => ({ default: m.LegalPage })))
+
 type PreProfileScreen = 'title' | 'onboarding'
 
 // Rota separada do jogo (Fase B do plano comercial) — decidida ANTES de qualquer hook do jogo
@@ -30,10 +34,18 @@ type PreProfileScreen = 'title' | 'onboarding'
 // dele: um `return` no meio de `GameApp`, antes dos hooks de perfil/progresso, violaria a regra
 // de hooks do React (chamados incondicionalmente, sempre na mesma ordem).
 function App() {
-  if (window.location.pathname === '/familia') {
+  const path = window.location.pathname
+  if (path === '/familia') {
     return (
       <Suspense fallback={<div className="world-loading">Carregando…</div>}>
         <FamilyPortal />
+      </Suspense>
+    )
+  }
+  if (path === '/termos' || path === '/privacidade') {
+    return (
+      <Suspense fallback={<div className="world-loading">Carregando…</div>}>
+        <LegalPage page={path === '/termos' ? 'termos' : 'privacidade'} />
       </Suspense>
     )
   }

@@ -14,10 +14,11 @@ brief that drives what gets built.
 - `npm run dev` — start the Vite dev server.
 - `npm run build` — typecheck (`tsc -b`) + production build (also generates the PWA manifest/service worker).
 - `npm run preview` — serve the production build locally.
-
-There is no test runner configured yet — see `docs/prompts/04-manutencao-clean-code.md` §5 for the
-testing bar to introduce as soon as domain logic (quest/reward/entitlement rules) grows past what's
-trivially eyeballed.
+- `npm run test` — run the Vitest unit suite (domain logic only — quest reward calculation, level
+  progression, cosmetic unlock rules including the subscription-only gate). Introduced in lab-83
+  per `docs/prompts/04-manutencao-clean-code.md` §5. `app/server-accounts/` has its own
+  `npm run test` for the Worker's pure domain logic (entitlement/pairing-code rules, in
+  `src/domain.ts`) — run it from that directory.
 
 ## Contents
 
@@ -27,16 +28,26 @@ trivially eyeballed.
 - `prompt.md` — a structured Portuguese-language brief (market hypotheses, MVP scope, tech stack
   recommendations incl. a .NET/C# backend option, hosting plan, backlog priorities, monetization
   strategy, and an "operational prompt" at the end meant to be fed to a product-design AI session)
-  for prototyping an educational game aimed at ~10-year-olds. Sections 7-8 and 15 describe a
-  *planned* backend (Supabase/Firebase/Azure, Stripe subscriptions) that was never built — the
-  MVP actually implemented stayed frontend-only (`localStorage`, no accounts, no payments); see
-  the status note near the top of section 7 and `README.md`'s "Stack técnica" for what's real.
+  for prototyping an educational game aimed at ~10-year-olds. Sections 7-8 describe backend
+  options (Supabase/Firebase/Azure) that were **not** what got built — the actual commercial
+  backend (Neon + Cloudflare Workers + Stripe, TypeScript throughout) is documented in
+  `docs/plano-comercial-backend.md`, not in `prompt.md` §7. Section 15's monetization strategy
+  (parent-facing subscription, cosmetics-only gating, modeled on Prodigy) **is implemented** as
+  of lab-83 — see the status note near the top of section 7 and `docs/plano-comercial-backend.md`
+  for what's real and which phases (A-D, plus part of E) are done.
 - `docs/prompts/` — engineering-quality standards (Portuguese) that apply across every lab: `01-seguranca.md` (security + child-safety/compliance, MUST items are merge-blocking), `02-design-profissional.md` (game feel, accessibility, design system), `03-arquitetura-sistema.md` (layering: presentation/game vs. domain vs. data-access vs. backend — keep game-rule logic out of UI/engine code), `04-manutencao-clean-code.md` (naming, folder-by-feature, tests, commit hygiene, documenting tech debt in each lab's `CONTEXT.md`). Read `docs/prompts/README.md` first. Apply these when writing or reviewing any game code — they're the quality bar, not optional style notes.
-- `app/` — the game itself (React + TypeScript + Vite + Babylon.js/Havok), plus `app/server/`
-  (legacy Node relay, Fly.io, suspended — see its `README.md`) and `app/server-cf-relay/` (active
-  multiplayer relay, Cloudflare Workers + Durable Objects — see its `README.md` for architecture,
-  hosting, and Free-tier capacity). Structure and current stack are whatever the latest lab's
-  `CONTEXT.md` documents (stack can change between labs, e.g. 2D→3D pivots — check before assuming).
+- `app/` — the game itself (React + TypeScript + Vite + Babylon.js/Havok), plus:
+  - `app/server/` — legacy Node relay, Fly.io, suspended (see its `README.md`).
+  - `app/server-cf-relay/` — active multiplayer relay, Cloudflare Workers + Durable Objects.
+  - `app/server-accounts/` — commercial backend Worker (Neon Postgres + Neon Auth, Stripe
+    subscriptions, entitlement pairing with the game client) — see its `README.md` for routes and
+    `docs/plano-comercial-backend.md` for the full design/phase history.
+  Structure and current stack are whatever the latest lab's `CONTEXT.md` documents (stack can
+  change between labs, e.g. 2D→3D pivots — check before assuming).
+- `docs/plano-comercial-backend.md` — the commercial backend plan (accounts, Stripe subscriptions,
+  cosmetic entitlements): architecture, phase-by-phase history (A-F), the non-negotiable
+  cosmetics-only gating rule, and the Fase E cosmetics catalog (Brookhaven RP/Roblox-inspired).
+  Read before touching anything in `app/server-accounts/` or subscription/entitlement logic.
 - `labs/` — the iteration workflow for implementation work (see below).
 
 ## Working in this repo
@@ -48,12 +59,21 @@ trivially eyeballed.
   Section 14 contains the exact operational prompt intended to drive that work. Section 15 covers
   the monetization strategy (parent-facing subscription, never gating educational content —
   modeled on Prodigy Math Game) — planned, not implemented.
-- The stack actually running today is Babylon.js + Havok (3D/physics, since lab-02) + React/Vite,
-  no backend/database — see `README.md`'s "Stack técnica" section, which supersedes the Section 7
-  options in `prompt.md` for anything already built. Section 11's child-safety constraints (no
-  open chat, language filtering, data minimization) DO apply to the current build and are already
-  implemented (closed chat catalog, nickname-only identity — see `README.md`'s "Segurança" section).
-- Domain logic (quest data, progression/reward rules, entitlements) must stay decoupled from the rendering engine (Babylon.js) per `docs/prompts/03-arquitetura-sistema.md` §1 — this is what let lab-02 swap the 2D hub for a 3D one without touching `quests.ts`/`progression.ts`.
+- The game client is Babylon.js + Havok (3D/physics, since lab-02) + React/Vite, still
+  frontend-only for gameplay (`localStorage`, no accounts, no child PII) — see `README.md`'s
+  "Stack técnica" section. As of lab-78+ there **is** a backend, but it's scoped strictly to the
+  commercial layer (accounts, subscriptions, entitlements) and never touches gameplay/progression
+  data — see `docs/plano-comercial-backend.md`. Section 11's child-safety constraints (no open
+  chat, language filtering, data minimization) DO apply and are implemented (closed/categorized
+  quick-chat catalog, nickname-only identity for the child, parent-only accounts — see
+  `README.md`'s "Segurança" section and `app/src/data/chatMessages.ts`).
+- Domain logic (quest data, progression/reward rules, cosmetic unlock/entitlement rules) must stay
+  decoupled from the rendering engine (Babylon.js) per `docs/prompts/03-arquitetura-sistema.md`
+  §1 — this is what let lab-02 swap the 2D hub for a 3D one without touching
+  `quests.ts`/`progression.ts`, and what makes `progression.ts`/`app/server-accounts/src/domain.ts`
+  unit-testable in isolation (see `npm run test` above). Never gate quests, progression, or
+  cooperation behind a subscription check — only cosmetics (`prompt.md` §15.1,
+  `docs/plano-comercial-backend.md`'s "Regra inegociável").
 
 ## Skills
 

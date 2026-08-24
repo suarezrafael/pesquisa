@@ -152,6 +152,19 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
           />
         </label>
         {error && <p className="field-hint">{error}</p>}
+        {mode === 'sign-up' && (
+          <p className="field-hint legal-consent-hint">
+            Ao criar conta, você concorda com os{' '}
+            <a href="/termos" target="_blank" rel="noreferrer">
+              Termos de Uso
+            </a>{' '}
+            e a{' '}
+            <a href="/privacidade" target="_blank" rel="noreferrer">
+              Política de Privacidade
+            </a>
+            .
+          </p>
+        )}
         <button type="submit" className="primary-button" disabled={busy}>
           {busy ? 'Um momento…' : mode === 'sign-up' ? 'Criar conta' : 'Entrar'}
         </button>
@@ -280,8 +293,27 @@ function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void 
     }
   }
 
+  async function handleManageBilling() {
+    setError(null)
+    setBusy(true)
+    try {
+      const res = await authorizedFetch('/billing-portal', { method: 'POST' })
+      const body = (await res.json()) as { url?: string; error?: string }
+      if (!body.url) {
+        setError(body.error ?? 'Não foi possível abrir o gerenciamento da assinatura.')
+        return
+      }
+      window.location.href = body.url
+    } catch {
+      setError('Não foi possível abrir o gerenciamento da assinatura.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const canSubscribe = status === 'none' || status === 'canceled'
   const canPair = status === 'active' || status === 'trialing'
+  const canManageBilling = status !== 'none' && status !== 'loading'
 
   return (
     <div className="screen onboarding">
@@ -294,6 +326,11 @@ function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void 
       {canSubscribe && (
         <button type="button" className="primary-button" onClick={handleSubscribe} disabled={busy}>
           {busy ? 'Um momento…' : 'Assinar por R$ 4,99/mês'}
+        </button>
+      )}
+      {canManageBilling && (
+        <button type="button" className="nickname-generate-btn" onClick={handleManageBilling} disabled={busy}>
+          {busy ? 'Um momento…' : 'Gerenciar assinatura / cancelar'}
         </button>
       )}
       {error && <p className="field-hint">{error}</p>}
