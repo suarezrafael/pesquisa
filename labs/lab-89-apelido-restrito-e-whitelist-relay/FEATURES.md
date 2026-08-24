@@ -1,8 +1,8 @@
 # Laboratório 89 — apelido restrito a letras + lista branca de mensagens do relay
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-24
-Fim: -
+Fim: 2026-08-24
 Commit inicial: faf6c91cf8424f0e8a88497652f00be09fec5307
 
 ## Objetivo do laboratório
@@ -20,30 +20,40 @@ pedido detecção de PII (padrão de telefone, "meu insta é...", etc.) — fora
 explícita do usuário, fica pra uma iteração futura se algum caso real aparecer.
 
 ## Funcionalidades planejadas
-- [ ] **Restringir o campo de apelido a letras** (`Onboarding.tsx`, atualmente
-  `<input maxLength={20}>` sem nenhuma validação de caractere) — permitir letras (incl. acentos
-  em português) e espaço, bloquear dígitos/símbolos, no cliente (`onChange`/validação de
-  formulário) — referência: `docs/prompts/05-escala-e-viabilidade.md` G4.
-- [ ] **Lista de bloqueio de palavras** aplicada ao apelido — catálogo próprio do projeto (não
-  existe hoje), checagem client-side no Onboarding antes de aceitar o apelido.
-- [ ] **Validação no relay também, não só no cliente** (`docs/prompts/01-seguranca.md §3`: "o
-  relay nunca confia só na validação do client") — auditar todo lugar em que o `name`/apelido do
-  jogador trafega pelo relay (`server-cf-relay/src/index.ts`: hoje só o `chat.name` passa por
-  `.slice(0, 40)`, sem checagem de caractere/blocklist; falta confirmar se mensagens de `state`
-  também carregam o nome e, se sim, aplicar a mesma validação lá) — mensagem rejeitada/normalizada
-  se não passar, mesma filosofia do `messageId` do quick-chat (validação fechada, não melhor
-  esforço).
-- [ ] **Lista branca de tipos de mensagem no relay** (G5) — hoje `broadcast(ws, { ...msg, id })`
-  repassa qualquer `msg.type` desconhecido sem checagem. Levantar o protocolo real em uso hoje
-  (grep por `type:` no client, `multiplayer.ts`/`World3D.tsx`) e trocar o repasse genérico por uma
-  lista fechada de tipos conhecidos + validação mínima de formato de cada um, preservando
-  compatibilidade com todo tráfego legítimo atual (testado ao vivo com o script de carga do
-  lab-85 antes de considerar concluído).
-- [ ] **Testar ao vivo** que apelidos com número/símbolo são recusados (cliente E relay,
-  conectando direto via WebSocket cru pra confirmar que o relay não confia só no cliente), que
-  uma palavra da lista de bloqueio é recusada, e que uma mensagem de tipo desconhecido enviada
-  direto ao relay (fora do cliente oficial) é descartada sem derrubar a conexão nem quebrar o
-  jogo pros outros jogadores.
+- [x] **Restringir o campo de apelido a letras** (`Onboarding.tsx`) — `onChange` agora passa por
+  `sanitizeNicknameChars` (`app/src/data/nicknameFilter.ts`, novo), removendo ao vivo qualquer
+  caractere que não seja letra (incl. acentuada) ou espaço enquanto a criança digita, não só na
+  submissão. `generateNickname()` (`data/nicknames.ts`) perdeu o sufixo numérico pelo mesmo
+  motivo — senão o próprio botão "Gerar" produziria um apelido que o campo recusaria.
+- [x] **Lista de bloqueio de palavras** — `NICKNAME_BLOCKED_TERMS` em
+  `app/src/data/nicknameFilter.ts` (~40 termos: xingamento comum, calão sexual, referência a
+  violência/ódio), comparada após normalizar (NFD + minúsculo + só a-z, pega variação de
+  acento/espaçamento). `isNicknameAllowed()` é chamado no submit do Onboarding e desabilita o
+  botão com uma mensagem de erro inline se o apelido bater na lista.
+- [x] **Validação no relay também, não só no cliente** — confirmado na auditoria que o apelido
+  trafega em DUAS mensagens, não só `chat`: toda mensagem `state` (enviada continuamente enquanto
+  o jogador se move, `multiplayer.ts:sendState`) também carrega `name` cru. `server-cf-relay/
+  src/index.ts` ganhou uma cópia própria da mesma lógica (`sanitizedNameForBroadcast`, mesmo
+  motivo de duplicação do `QUICK_CHAT_IDS` já existente — Worker não importa TS do app). Diferença
+  de propósito importante: o relay **sanitiza** em vez de recusar a mensagem inteira — um cliente
+  com um apelido salvo antes desta correção continua sincronizando posição/estado normalmente, só
+  o nome de exibição vira "Jogador" se não passar na validação, em vez de a conexão simplesmente
+  parar de funcionar.
+- [x] **Lista branca de tipos de mensagem no relay** (G5) — protocolo real levantado em
+  `multiplayer.ts`: só `state`, `attack` e `chat` são originados pelo cliente hoje (`welcome`/
+  `leave` são gerados só pelo próprio relay). `ALLOWED_CLIENT_MESSAGE_TYPES` filtra qualquer outro
+  `msg.type` antes de sequer entrar na lógica de broadcast, e cada um dos três tipos aceitos ganhou
+  validação mínima de formato (`isVec3` pra `position`/`facing`/`fromPos`/`toPos`, enum fechado
+  pra `kind`/`enemyKind` do ataque, tipo primitivo checado nos demais campos) — uma mensagem
+  malformada é descartada, não repassada pros outros jogadores.
+- [x] **Testado ao vivo contra produção** (script próprio, WebSocket cru — não o cliente oficial,
+  justamente pra confirmar que o relay não confia só na validação do client): apelido com
+  número+símbolo+palavra bloqueada (`"Idiota123!!"`) chegou como `"Jogador"` tanto em `state`
+  quanto em `chat`; apelido limpo (`"Raposa Corajosa"`) passou sem alteração (sem regressão);
+  `state` malformado (faltando `position`) não foi repassado; mensagem de tipo desconhecido
+  (`"evil-broadcast-test"`) não foi repassada. Script de carga do lab-85 confirma tráfego
+  legítimo intacto depois do deploy: 8/8 jogadores conectados, 56 mensagens `state` enviadas, 374
+  recebidas de volta, mesma redução de 14,3x vs. o protocolo antigo já medida no lab-85.
 
 ## Fora de escopo (explicitamente adiado)
 - **Detecção de PII** (telefone, nome+sobrenome, "me chama no insta") — decisão explícita do

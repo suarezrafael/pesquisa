@@ -1,23 +1,23 @@
 # Laboratório atual
 
-Ativo: labs/lab-89-apelido-restrito-e-whitelist-relay/ (G4: apelido restrito a letras + lista de
-bloqueio de palavras, sem detecção de PII — direção confirmada com o usuário 2026-08-24; G5: lista
-branca de tipos de mensagem no relay, hoje `broadcast(ws, {...msg, id})` repassa qualquer tipo
-desconhecido)
-Último concluído: labs/lab-88-protecao-contra-sobrecarga/ (pedido direto do usuário: auditoria de
-DDoS/sobrecarga — corrigida a corrida real em `/pairing/redeem` (UPDATE atômico), código de
-pareamento agora usa `crypto.getRandomValues()`, `/health` parou de consultar o banco. **Achado
-crítico não previsto**: o binding nativo de Rate Limiting do Cloudflare Workers não bloqueia NADA
-em produção nesta conta (funciona perfeitamente em `wrangler dev` local, mas 100/100 e 30/30
-requisições passaram contra limites configurados em produção real) — motivo desconhecido, sem
-ticket de suporte aberto ainda. Defesas reais para as rotas críticas usam mecanismos verificados
-ao vivo: rate limiter próprio em Postgres para `/pairing/redeem` (8/60s, testado 8 passaram/12
-bloqueados) e contagem de conexões `getWebSockets()` do próprio Durable Object para o relay (teto
-15 por IP, testado 15 passaram/10 bloqueados) + limite de tamanho (4KB) e taxa de mensagem
-(10 msg/s) por conexão. `/health`, `/client-error`, `/checkout`, `/pairing/generate` seguem
-dependendo só do binding nativo não confiável — risco aceito, severidade menor. Ver
-`labs/lab-88-protecao-contra-sobrecarga/CONTEXT.md` para os números completos e o raciocínio.)
-Contexto do laboratório anterior: labs/lab-88-protecao-contra-sobrecarga/CONTEXT.md
+Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Último concluído: labs/lab-89-apelido-restrito-e-whitelist-relay/ (G4: apelido continua texto
+livre editável, mas restrito a só letras/espaço + lista de bloqueio de ~40 termos — sem detecção
+de PII, direção confirmada com o usuário 2026-08-24 via `AskUserQuestion`. Auditoria achou que o
+apelido trafega em `state` E `chat`, não só `chat`; o relay ganhou validação própria que
+**sanitiza** (vira "Jogador") em vez de recusar a mensagem inteira, pra não quebrar sincronização
+de perfis criados antes desta correção. G5: `server-cf-relay` ganhou lista branca de tipos de
+mensagem — só `state`/`attack`/`chat` são aceitos do cliente, com validação mínima de formato de
+cada um. Tudo testado ao vivo contra produção com WebSocket cru: nome sujo virou "Jogador", nome
+limpo passou sem alteração, `state` malformado e tipo de mensagem desconhecido foram descartados
+sem quebrar a conexão; load-test do lab-85 confirma tráfego legítimo sem regressão. Ver
+`labs/lab-89-apelido-restrito-e-whitelist-relay/CONTEXT.md`.)
+Contexto do laboratório anterior: labs/lab-89-apelido-restrito-e-whitelist-relay/CONTEXT.md
+
+**Ticket de suporte aberto com a Cloudflare (2026-08-24)** sobre o binding nativo de Rate Limiting
+não bloquear nada em produção (achado do lab-88) — aguardando resposta. Não é bloqueador: as rotas
+críticas já têm defesa verificada que não depende desse binding (ver `labs/
+lab-88-protecao-contra-sobrecarga/CONTEXT.md`).
 
 **Duas correções de produção fora de um laboratório formal** (pedido direto do usuário no chat,
 2026-08-24, não vale a pena um `labs/lab-NN/` próprio pelo tamanho, mas registrado aqui pra não
@@ -39,10 +39,11 @@ se perder):
    usuário (usa o provedor de e-mail compartilhado do próprio Neon, `auth@mail.myneon.app`, sem
    precisar configurar SMTP/Resend). Deployado em produção.
 
-**G3 (endurecimento do relay) foi resolvido no lab-88** — limite de conexão por IP, tamanho e
-taxa de mensagem, tudo testado ao vivo em produção. **G4 (apelido deixar de ser texto livre) e o
-resto de G5 (lista branca completa de tipos de mensagem do relay) continuam pendentes** — próximo
-passo recomendado, a menos que o usuário peça outra coisa.
+**G3 (lab-88), G4 e G5 (lab-89) — endurecimento do relay + apelido restrito + lista branca de
+mensagens — estão todos resolvidos.** Da ordem de ataque de `docs/prompts/05-escala-e-viabilidade.md`
+seção 7, o próximo item de maior severidade ainda em aberto é **G6 (entitlement/progresso 100%
+client-side — editar uma chave de `localStorage` libera conteúdo de assinante pago)**, a menos que
+o usuário peça outra coisa.
 
 **LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 tinha medido 38,2% da cota diária
 pra 30 jogadores/30min e deixado como pendência decidir se "salas com teto de 12 jogadores" era o
@@ -154,7 +155,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-88-protecao-contra-sobrecarga/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-89-apelido-restrito-e-whitelist-relay/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).
