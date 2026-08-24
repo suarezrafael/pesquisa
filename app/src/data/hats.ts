@@ -12,6 +12,11 @@ export interface HatOption {
   cost: number
   shape: HatShape
   colorRgb: [number, number, number]
+  /** Fase E do plano comercial (ver docs/plano-comercial-backend.md) — item exclusivo de
+   * assinante em vez de comprável com moeda. Reaproveita as mesmas formas primitivas já
+   * existentes (nenhuma geometria nova no Babylon), só com uma cor nova — nunca reclassifica um
+   * item que já era comprável com moeda antes desta fase. */
+  subscriptionOnly?: boolean
 }
 
 export const HAT_CATALOG: HatOption[] = [
@@ -55,9 +60,39 @@ export const HAT_CATALOG: HatOption[] = [
     shape: 'crown',
     colorRgb: [0.95, 0.78, 0.2],
   },
+  // Exclusivos de assinante (Fase E) — a partir daqui.
+  {
+    id: 'coroa_diamante',
+    name: 'Coroa de Diamante',
+    emoji: '💎',
+    cost: 0,
+    shape: 'crown',
+    colorRgb: [0.8, 0.92, 0.98],
+    subscriptionOnly: true,
+  },
+  {
+    id: 'bone_holografico',
+    name: 'Boné Holográfico',
+    emoji: '🧢',
+    cost: 0,
+    shape: 'cap',
+    colorRgb: [0.72, 0.35, 0.95],
+    subscriptionOnly: true,
+  },
+  {
+    id: 'laco_estelar',
+    name: 'Laço Estelar',
+    emoji: '✨',
+    cost: 0,
+    shape: 'bow',
+    colorRgb: [0.25, 0.2, 0.65],
+    subscriptionOnly: true,
+  },
 ]
 
-export const DEFAULT_UNLOCKED_HAT_IDS: string[] = HAT_CATALOG.filter((h) => h.cost === 0).map((h) => h.id)
+export const DEFAULT_UNLOCKED_HAT_IDS: string[] = HAT_CATALOG.filter(
+  (h) => h.cost === 0 && !h.subscriptionOnly,
+).map((h) => h.id)
 
 export function findHatById(id: string): HatOption | undefined {
   return HAT_CATALOG.find((h) => h.id === id)

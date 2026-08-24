@@ -14,6 +14,10 @@ import type { Profile, Progress } from '../types'
 interface AvatarShopProps {
   profile: Profile
   progress: Progress
+  // Fase E do plano comercial (ver docs/plano-comercial-backend.md) — itens `subscriptionOnly`
+  // ficam disponíveis pra usar (não pra comprar com moeda) enquanto a assinatura da família
+  // estiver ativa, sem precisar entrar em `unlockedXxxIds`. Vem de `useEntitlement()` (lab-81).
+  entitlementActive: boolean
   onUnlock: (avatarId: string) => void
   onEquip: (avatarEmoji: string) => void
   onUnlockHat: (hatId: string) => void
@@ -41,6 +45,7 @@ function ColorSection({
   unlockedIds,
   equippedId,
   coins,
+  entitlementActive,
   onUnlock,
   onEquip,
 }: {
@@ -49,6 +54,7 @@ function ColorSection({
   unlockedIds: string[]
   equippedId: string | null
   coins: number
+  entitlementActive: boolean
   onUnlock: (id: string) => void
   onEquip: (id: string | null) => void
 }) {
@@ -57,25 +63,34 @@ function ColorSection({
       <h2>{title}</h2>
       <div className="avatar-shop-grid">
         {catalog.map((opt) => {
-          const unlocked = unlockedIds.includes(opt.id)
-          const equipped = equippedId === opt.id || (equippedId === null && opt.cost === 0)
+          const usable = opt.subscriptionOnly ? entitlementActive : unlockedIds.includes(opt.id)
+          // `cost === 0` também identifica os itens exclusivos de assinante (preço "N/A"), não só
+          // o item padrão de cada catálogo — sem o `!opt.subscriptionOnly`, um item exclusivo
+          // apareceria marcado "Em uso" só por ter custo 0, mesmo sem estar equipado de verdade.
+          const equipped = equippedId === opt.id || (equippedId === null && opt.cost === 0 && !opt.subscriptionOnly)
           const affordable = coins >= opt.cost
           const [r, g, b] = opt.colorRgb.map((c) => Math.round(c * 255))
 
           return (
-            <div key={opt.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!unlocked ? 'locked' : ''}`}>
+            <div key={opt.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
               <span className="avatar-shop-swatch" style={{ background: `rgb(${r}, ${g}, ${b})` }} />
-              <span className="avatar-shop-name">{opt.name}</span>
+              <span className="avatar-shop-name">
+                {opt.name} {opt.subscriptionOnly && '👑'}
+              </span>
 
               {equipped && <span className="avatar-shop-tag">Em uso</span>}
 
-              {!equipped && unlocked && (
+              {!equipped && usable && (
                 <button type="button" className="avatar-shop-action" onClick={() => onEquip(opt.id)}>
                   Usar
                 </button>
               )}
 
-              {!unlocked && (
+              {!equipped && !usable && opt.subscriptionOnly && (
+                <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+              )}
+
+              {!usable && !opt.subscriptionOnly && (
                 <button
                   type="button"
                   className="avatar-shop-action buy"
@@ -151,6 +166,7 @@ function HairShapeSection({
 export function AvatarShop({
   profile,
   progress,
+  entitlementActive,
   onUnlock,
   onEquip,
   onUnlockHat,
@@ -174,32 +190,41 @@ export function AvatarShop({
           ×
         </button>
         <h2>Lojinha de avatares</h2>
-        <p className="subtitle">Troque as moedas que você coletou por novos personagens.</p>
+        <p className="subtitle">
+          Troque as moedas que você coletou por novos personagens. Itens com 👑 são exclusivos de
+          assinantes — peça pra quem cuida de você conferir a área dos responsáveis.
+        </p>
         <div className="hub-coins avatar-shop-balance">🪙 {progress.coins}</div>
 
         <div className="avatar-shop-grid">
           {AVATAR_CATALOG.map((avatar) => {
-            const unlocked = progress.unlockedAvatarIds.includes(avatar.id)
+            const usable = avatar.subscriptionOnly ? entitlementActive : progress.unlockedAvatarIds.includes(avatar.id)
             const equipped = profile.avatarEmoji === avatar.emoji
             const affordable = progress.coins >= avatar.cost
 
             return (
               <div
                 key={avatar.id}
-                className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!unlocked ? 'locked' : ''}`}
+                className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}
               >
                 <span className="avatar-shop-emoji">{avatar.emoji}</span>
-                <span className="avatar-shop-name">{avatar.name}</span>
+                <span className="avatar-shop-name">
+                  {avatar.name} {avatar.subscriptionOnly && '👑'}
+                </span>
 
                 {equipped && <span className="avatar-shop-tag">Em uso</span>}
 
-                {!equipped && unlocked && (
+                {!equipped && usable && (
                   <button type="button" className="avatar-shop-action" onClick={() => onEquip(avatar.emoji)}>
                     Usar
                   </button>
                 )}
 
-                {!unlocked && (
+                {!equipped && !usable && avatar.subscriptionOnly && (
+                  <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+                )}
+
+                {!usable && !avatar.subscriptionOnly && (
                   <button
                     type="button"
                     className="avatar-shop-action buy"
@@ -233,24 +258,30 @@ export function AvatarShop({
           </div>
 
           {HAT_CATALOG.map((hat) => {
-            const unlocked = progress.unlockedHatIds.includes(hat.id)
+            const usable = hat.subscriptionOnly ? entitlementActive : progress.unlockedHatIds.includes(hat.id)
             const equipped = profile.equippedHatId === hat.id
             const affordable = progress.coins >= hat.cost
 
             return (
-              <div key={hat.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!unlocked ? 'locked' : ''}`}>
+              <div key={hat.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
                 <span className="avatar-shop-emoji">{hat.emoji}</span>
-                <span className="avatar-shop-name">{hat.name}</span>
+                <span className="avatar-shop-name">
+                  {hat.name} {hat.subscriptionOnly && '👑'}
+                </span>
 
                 {equipped && <span className="avatar-shop-tag">Em uso</span>}
 
-                {!equipped && unlocked && (
+                {!equipped && usable && (
                   <button type="button" className="avatar-shop-action" onClick={() => onEquipHat(hat.id)}>
                     Usar
                   </button>
                 )}
 
-                {!unlocked && (
+                {!equipped && !usable && hat.subscriptionOnly && (
+                  <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+                )}
+
+                {!usable && !hat.subscriptionOnly && (
                   <button
                     type="button"
                     className="avatar-shop-action buy"
@@ -274,6 +305,7 @@ export function AvatarShop({
           unlockedIds={progress.unlockedShirtColorIds}
           equippedId={profile.equippedShirtColorId}
           coins={progress.coins}
+          entitlementActive={entitlementActive}
           onUnlock={onUnlockShirtColor}
           onEquip={onEquipShirtColor}
         />
@@ -283,6 +315,7 @@ export function AvatarShop({
           unlockedIds={progress.unlockedPantsColorIds}
           equippedId={profile.equippedPantsColorId}
           coins={progress.coins}
+          entitlementActive={entitlementActive}
           onUnlock={onUnlockPantsColor}
           onEquip={onEquipPantsColor}
         />
@@ -292,6 +325,7 @@ export function AvatarShop({
           unlockedIds={progress.unlockedShoeColorIds}
           equippedId={profile.equippedShoeColorId}
           coins={progress.coins}
+          entitlementActive={entitlementActive}
           onUnlock={onUnlockShoeColor}
           onEquip={onEquipShoeColor}
         />
@@ -301,6 +335,7 @@ export function AvatarShop({
           unlockedIds={progress.unlockedBackpackColorIds}
           equippedId={profile.equippedBackpackColorId}
           coins={progress.coins}
+          entitlementActive={entitlementActive}
           onUnlock={onUnlockBackpackColor}
           onEquip={onEquipBackpackColor}
         />

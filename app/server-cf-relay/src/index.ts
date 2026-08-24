@@ -19,7 +19,11 @@ export interface Env {
 // Requisito [MUST] de docs/prompts/01-seguranca.md §3: o relay nunca confia só na validação do
 // client — mensagens de chat com `messageId` fora deste conjunto são descartadas aqui.
 const QUICK_CHAT_IDS = new Set([
-  'oi', 'legal', 'consegui', 'vamos', 'vem_aqui', 'espera', 'ajuda', 'combinado', 'adorei', 'tchau',
+  'oi', 'bom_dia', 'boa_tarde', 'boa_noite', 'tchau', 'ate_mais', 'prazer',
+  'legal', 'adorei', 'uau', 'haha', 'nossa', 'triste', 'surpresa',
+  'vamos', 'vem_aqui', 'espera', 'ajuda', 'combinado', 'trocar', 'escolinha', 'explorar', 'sigam_me',
+  'voce_demais', 'boa_ideia', 'muito_bem', 'roupa_legal', 'chapeu_legal', 'inteligente',
+  'consegui', 'quase_la', 'tentar_de_novo', 'moeda', 'cuidado', 'missao_dificil', 'nivel_up',
 ])
 
 interface SocketAttachment {

@@ -16,24 +16,49 @@ export interface ColorOption {
   name: string
   cost: number
   colorRgb: [number, number, number]
+  /** Fase E do plano comercial (ver docs/plano-comercial-backend.md) — item exclusivo de
+   * assinante em vez de comprável com moeda. Nunca reclassifica um item que já era comprável
+   * com moeda antes desta fase — só entradas novas. */
+  subscriptionOnly?: boolean
 }
 
 export const PANTS_COLOR_CATALOG: ColorOption[] = [
   { id: 'calca_azul', name: 'Calça Azul', cost: 0, colorRgb: [0.22, 0.28, 0.48] },
   { id: 'calca_verde', name: 'Calça Verde', cost: 10, colorRgb: [0.2, 0.45, 0.3] },
   { id: 'calca_vermelha', name: 'Calça Vermelha', cost: 10, colorRgb: [0.55, 0.18, 0.18] },
+  {
+    id: 'calca_estelar',
+    name: 'Calça Estelar',
+    cost: 0,
+    colorRgb: [0.14, 0.12, 0.32],
+    subscriptionOnly: true,
+  },
 ]
 
 export const SHOE_COLOR_CATALOG: ColorOption[] = [
   { id: 'sapato_preto', name: 'Tênis Preto', cost: 0, colorRgb: [0.12, 0.12, 0.14] },
   { id: 'sapato_branco', name: 'Tênis Branco', cost: 8, colorRgb: [0.92, 0.92, 0.9] },
   { id: 'sapato_amarelo', name: 'Tênis Amarelo', cost: 8, colorRgb: [0.9, 0.75, 0.15] },
+  {
+    id: 'sapato_neon',
+    name: 'Tênis Neon',
+    cost: 0,
+    colorRgb: [0.3, 0.95, 0.55],
+    subscriptionOnly: true,
+  },
 ]
 
 export const BACKPACK_COLOR_CATALOG: ColorOption[] = [
   { id: 'mochila_padrao', name: 'Mochila Padrão', cost: 0, colorRgb: [0.5, 0.25, 0.2] },
   { id: 'mochila_roxa', name: 'Mochila Roxa', cost: 12, colorRgb: [0.45, 0.25, 0.55] },
   { id: 'mochila_laranja', name: 'Mochila Laranja', cost: 12, colorRgb: [0.85, 0.45, 0.15] },
+  {
+    id: 'mochila_dourada',
+    name: 'Mochila Dourada',
+    cost: 0,
+    colorRgb: [0.85, 0.7, 0.25],
+    subscriptionOnly: true,
+  },
 ]
 
 // Camisa é o eixo mais visível (maior área do boneco) — preço um pouco mais alto que os outros.
@@ -41,6 +66,13 @@ export const SHIRT_COLOR_CATALOG: ColorOption[] = [
   { id: 'camisa_padrao', name: 'Camisa Padrão', cost: 0, colorRgb: [0.3, 0.55, 0.75] },
   { id: 'camisa_rosa', name: 'Camisa Rosa', cost: 15, colorRgb: [0.85, 0.4, 0.55] },
   { id: 'camisa_amarela', name: 'Camisa Amarela', cost: 15, colorRgb: [0.9, 0.75, 0.2] },
+  {
+    id: 'camisa_holografica',
+    name: 'Camisa Holográfica',
+    cost: 0,
+    colorRgb: [0.78, 0.35, 0.9],
+    subscriptionOnly: true,
+  },
 ]
 
 export type HairShape = 'padrao' | 'moicano' | 'longo'

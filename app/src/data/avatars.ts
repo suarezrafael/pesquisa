@@ -23,10 +23,16 @@ export interface AvatarOption {
   id: string
   emoji: string
   name: string
-  /** Custo em moedas pra desbloquear. 0 = já disponível desde o início (onboarding). */
+  /** Custo em moedas pra desbloquear. 0 = já disponível desde o início (onboarding), a menos que
+   * `subscriptionOnly` seja true. */
   cost: number
   colorRgb: [number, number, number]
   features: BonecoFeatures
+  /** Fase E do plano comercial (ver docs/plano-comercial-backend.md) — item exclusivo de
+   * assinante em vez de comprável com moeda. Reaproveita a mesma geometria/vocabulário de
+   * `features` já existente (nenhuma peça 3D nova) — só uma criatura nova de verdade, nunca
+   * reclassifica uma já comprável com moeda. */
+  subscriptionOnly?: boolean
 }
 
 export const AVATAR_CATALOG: AvatarOption[] = [
@@ -126,11 +132,39 @@ export const AVATAR_CATALOG: AvatarOption[] = [
     colorRgb: [0.72, 0.22, 0.55],
     features: { earStyle: 'none', tailStyle: 'none', special: 'tentacles', accentColorRgb: [0.72, 0.22, 0.55] },
   },
+  // Exclusivos de assinante (Fase E) — a partir daqui.
+  {
+    id: 'fenix',
+    emoji: '🔥',
+    name: 'Fênix',
+    cost: 0,
+    colorRgb: [0.95, 0.4, 0.15],
+    features: { earStyle: 'none', tailStyle: 'fluffy', special: 'mane', accentColorRgb: [0.98, 0.75, 0.2] },
+    subscriptionOnly: true,
+  },
+  {
+    id: 'robo',
+    emoji: '🤖',
+    name: 'Robô',
+    cost: 0,
+    colorRgb: [0.55, 0.6, 0.68],
+    features: { earStyle: 'none', tailStyle: 'none', special: 'eyes', accentColorRgb: [0.3, 0.85, 0.95] },
+    subscriptionOnly: true,
+  },
+  {
+    id: 'fantasma',
+    emoji: '👻',
+    name: 'Fantasma',
+    cost: 0,
+    colorRgb: [0.92, 0.92, 0.98],
+    features: { earStyle: 'none', tailStyle: 'none', special: 'none', accentColorRgb: [0.8, 0.85, 0.98] },
+    subscriptionOnly: true,
+  },
 ]
 
-export const DEFAULT_UNLOCKED_AVATAR_IDS: string[] = AVATAR_CATALOG.filter((a) => a.cost === 0).map(
-  (a) => a.id,
-)
+export const DEFAULT_UNLOCKED_AVATAR_IDS: string[] = AVATAR_CATALOG.filter(
+  (a) => a.cost === 0 && !a.subscriptionOnly,
+).map((a) => a.id)
 
 export function findAvatarByEmoji(emoji: string): AvatarOption | undefined {
   return AVATAR_CATALOG.find((a) => a.emoji === emoji)

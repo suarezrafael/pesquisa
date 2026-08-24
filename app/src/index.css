@@ -925,6 +925,12 @@ body {
   color: var(--primary-dark);
 }
 
+/* Item exclusivo de assinante (Fase E) — mesmo espaço visual do botão de compra, sem ação de
+   clique (a criança não tem como comprar nada; o pagamento só existe no portal do responsável). */
+.avatar-shop-tag.subscription-lock {
+  color: #9a6b1a;
+}
+
 .avatar-shop-action {
   font-size: 0.8rem;
   font-weight: 700;
@@ -995,13 +1001,38 @@ body {
   word-break: break-word;
 }
 
+.chat-panel-categories {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.5rem 0.8rem 0;
+  border-top: 1px solid #e2e8f8;
+  overflow-x: auto;
+}
+
+.chat-category-btn {
+  flex-shrink: 0;
+  border: none;
+  background: #eef1fb;
+  color: #4a5578;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chat-category-btn.active {
+  background: var(--primary);
+  color: white;
+}
+
 .chat-panel-quickbar {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.4rem;
   padding: 0.6rem 0.8rem;
-  border-top: 1px solid #e2e8f8;
-  max-height: 40vh;
+  max-height: 32vh;
   overflow-y: auto;
 }
 

@@ -182,6 +182,7 @@ function GameApp() {
         <AvatarShop
           profile={profile}
           progress={progress}
+          entitlementActive={entitlement?.active ?? false}
           onUnlock={unlockAvatar}
           onEquip={equipAvatar}
           onUnlockHat={unlockHat}
