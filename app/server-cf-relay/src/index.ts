@@ -46,6 +46,49 @@ const QUICK_CHAT_IDS = new Set([
   'consegui', 'quase_la', 'tentar_de_novo', 'moeda', 'cuidado', 'missao_dificil', 'nivel_up',
 ])
 
+// Achado G4 da auditoria de segurança (lab-88/lab-89): o apelido do jogador trafega cru em toda
+// mensagem `chat` E `state` (não só chat) — sem checagem aqui, uma criança digitando o próprio
+// nome real no cliente antigo (ou um cliente adulterado mandando qualquer string) chegava sem
+// filtro em todo mundo conectado. Mesma cópia proposital de `src/data/nicknameFilter.ts` (não dá
+// pra importar TS do app aqui, mesmo motivo do `QUICK_CHAT_IDS` acima) — mantenha em sincronia.
+// Diferença de propósito: aqui SANITIZA em vez de recusar a mensagem inteira — um cliente antigo
+// com um apelido salvo antes desta correção não pode ficar sem sincronizar posição/estado só por
+// causa do nome; o pior caso vira o nome de exibição "Jogador", não uma conexão quebrada.
+const NICKNAME_DISALLOWED_CHARS = /[^\p{L} ]/gu
+const NICKNAME_BLOCKED_TERMS = [
+  'idiota', 'estupido', 'estupida', 'imbecil', 'babaca', 'otario', 'otaria', 'retardado',
+  'retardada', 'burro', 'burra', 'porra', 'merda', 'caralho', 'bosta', 'putaria', 'puta',
+  'piranha', 'vagabundo', 'vagabunda', 'cacete', 'fdp', 'pqp', 'buceta', 'xoxota', 'viado',
+  'veado', 'bicha', 'macaco', 'nazista', 'hitler', 'estuprador', 'estupradora', 'pedofilo',
+  'pedofila', 'suicida', 'suicidio', 'estuprar', 'sexo', 'pornografia', 'foder', 'fudido',
+  'desgraca', 'corno', 'corna',
+]
+const FALLBACK_NAME = 'Jogador'
+
+function containsBlockedTerm(normalized: string): boolean {
+  return NICKNAME_BLOCKED_TERMS.some((term) => normalized.includes(term))
+}
+
+// Nunca lança, nunca recusa a mensagem toda — só devolve um nome seguro pra usar no broadcast.
+function sanitizedNameForBroadcast(rawName: unknown): string {
+  if (typeof rawName !== 'string') return FALLBACK_NAME
+  const cleaned = rawName.replace(NICKNAME_DISALLOWED_CHARS, '').trim().slice(0, 40)
+  if (!cleaned) return FALLBACK_NAME
+  const normalized = cleaned.normalize('NFD').toLowerCase().replace(/[^a-z]/g, '')
+  return containsBlockedTerm(normalized) ? FALLBACK_NAME : cleaned
+}
+
+// Achado G5: `broadcast(ws, {...msg, id})` repassava qualquer `msg.type` desconhecido pra todo
+// mundo, sem checagem — um canal arbitrário aberto entre clientes. Só estes três tipos são
+// originados pelo cliente hoje (ver `src/world3d/multiplayer.ts`: `sendState`/`sendAttack`/
+// `sendChat`); `welcome`/`leave` são gerados só pelo próprio relay, nunca esperados vindos de um
+// cliente.
+const ALLOWED_CLIENT_MESSAGE_TYPES = new Set(['state', 'attack', 'chat'])
+
+function isVec3(v: unknown): v is [number, number, number] {
+  return Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number' && Number.isFinite(n))
+}
+
 interface SocketAttachment {
   id: string
   // IP de quem abriu esta conexão (lab-88) — guardado aqui pra `Relay.fetch` conseguir contar
@@ -158,14 +201,28 @@ export class Relay implements DurableObject {
       return
     }
 
+    if (typeof msg.type !== 'string' || !ALLOWED_CLIENT_MESSAGE_TYPES.has(msg.type)) return
+
     try {
       if (msg.type === 'chat') {
         if (typeof msg.messageId !== 'string' || !QUICK_CHAT_IDS.has(msg.messageId)) return
-        if (typeof msg.name !== 'string') return
-        this.broadcast(ws, { type: 'chat', name: msg.name.slice(0, 40), messageId: msg.messageId, id })
+        this.broadcast(ws, { type: 'chat', name: sanitizedNameForBroadcast(msg.name), messageId: msg.messageId, id })
         return
       }
-      this.broadcast(ws, { ...msg, id })
+      if (msg.type === 'state') {
+        if (typeof msg.avatarEmoji !== 'string') return
+        if (!isVec3(msg.position) || !isVec3(msg.facing)) return
+        if (typeof msg.xp !== 'number' || typeof msg.coins !== 'number') return
+        this.broadcast(ws, { ...msg, name: sanitizedNameForBroadcast(msg.name), id })
+        return
+      }
+      if (msg.type === 'attack') {
+        if (msg.kind !== 'sword' && msg.kind !== 'gun') return
+        if (msg.enemyKind !== 'et' && msg.enemyKind !== 'robo') return
+        if (!isVec3(msg.fromPos) || !isVec3(msg.toPos)) return
+        this.broadcast(ws, { ...msg, id })
+        return
+      }
     } catch (err) {
       // lab-84: mesma filosofia de visibilidade do server-accounts — nunca deixa um erro aqui
       // desaparecer em silêncio, mas também nunca deixa ele derrubar a conexão do jogador.
