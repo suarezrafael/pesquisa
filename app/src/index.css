@@ -210,6 +210,10 @@ a.nickname-generate-btn {
   color: #6b76a0;
 }
 
+.field-hint-error {
+  color: #d1435b;
+}
+
 .primary-button {
   width: 100%;
   font-size: 1.1rem;

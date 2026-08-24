@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AVATAR_CATALOG } from '../data/avatars'
 import { generateNickname } from '../data/nicknames'
+import { isNicknameAllowed, sanitizeNicknameChars } from '../data/nicknameFilter'
 
 // Só os avatares gratuitos aparecem na criação de perfil — os demais são desbloqueados com
 // moedas na lojinha (world3d/AvatarShop.tsx), depois de já estar jogando.
@@ -14,11 +15,13 @@ export function Onboarding({ onDone }: OnboardingProps) {
   const [name, setName] = useState('')
   const [avatarEmoji, setAvatarEmoji] = useState(AVATAR_OPTIONS[0])
 
+  const trimmedName = name.trim()
+  const nicknameBlocked = trimmedName.length > 0 && !isNicknameAllowed(trimmedName)
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const trimmed = name.trim()
-    if (!trimmed) return
-    onDone(trimmed, avatarEmoji)
+    if (!trimmedName || !isNicknameAllowed(trimmedName)) return
+    onDone(trimmedName, avatarEmoji)
   }
 
   return (
@@ -46,8 +49,8 @@ export function Onboarding({ onDone }: OnboardingProps) {
           <div className="nickname-row">
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: RaposaCorajosa42"
+              onChange={(e) => setName(sanitizeNicknameChars(e.target.value).slice(0, 20))}
+              placeholder="Ex: Raposa Corajosa"
               maxLength={20}
               autoFocus
             />
@@ -60,10 +63,16 @@ export function Onboarding({ onDone }: OnboardingProps) {
               🎲 Gerar
             </button>
           </div>
-          <small className="field-hint">Use um apelido, não seu nome real — outros jogadores podem ver!</small>
+          {nicknameBlocked ? (
+            <small className="field-hint field-hint-error">Esse apelido não pode ser usado — tente outro.</small>
+          ) : (
+            <small className="field-hint">
+              Use um apelido, não seu nome real — outros jogadores podem ver! Só letras, sem número ou símbolo.
+            </small>
+          )}
         </label>
 
-        <button type="submit" className="primary-button" disabled={!name.trim()}>
+        <button type="submit" className="primary-button" disabled={!trimmedName || nicknameBlocked}>
           Começar aventura {avatarEmoji}
         </button>
       </form>
