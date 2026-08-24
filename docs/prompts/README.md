@@ -19,6 +19,12 @@ específico.
 4. **[04-manutencao-clean-code.md](./04-manutencao-clean-code.md)** — clean code, testes, estrutura de
    pastas, convenções de commit/review, dívida técnica — como manter o código fácil de dar
    manutenção conforme o jogo cresce.
+5. **[05-escala-e-viabilidade.md](./05-escala-e-viabilidade.md)** — critérios de escala e viabilidade
+   comercial rodando em infraestrutura gratuita: teto conhecido de cada cota, degradação prevista,
+   aviso antes do teto, saída barata. Contém a auditoria real das cotas (Cloudflare Durable Objects,
+   Workers, Vercel Hobby, Neon) contra o protocolo de tempo real atual, achados numerados (G1-G15)
+   e a ordem de ataque recomendada — leia antes de escalar multiplayer, pagamento ou qualquer coisa
+   que dependa de uma camada gratuita continuar gratuita.
 
 ## Como usar
 

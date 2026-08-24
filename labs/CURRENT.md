@@ -1,13 +1,24 @@
 # Laboratório atual
 
-Ativo: labs/lab-84-observabilidade/ (monitoramento de erro + analytics básico, usando só
-infraestrutura que a conta Cloudflare do usuário já tem — Sentry descartado por exigir criar
-conta nova em nome do usuário, o que não posso fazer)
-Último concluído: labs/lab-83-profissionalizacao-produto/ (Termos de Uso + Política de
-Privacidade, Customer Portal do Stripe pra autoatendimento de cobrança/cancelamento, primeiro
-test runner do projeto (Vitest, 36 testes) cobrindo lógica de recompensa/entitlement, e um bug
-real corrigido: itens exclusivos de assinante podiam ser obtidos de graça via `unlockXxx`)
-Contexto do laboratório anterior: labs/lab-83-profissionalizacao-produto/CONTEXT.md
+Ativo: nenhum (aguardando o próximo `lab start` — ver recomendação abaixo)
+Último concluído: labs/lab-84-observabilidade/ (Cloudflare Web Analytics via JS snippet manual,
+`POST /client-error` nos dois Workers + handler global no client, mesma captura de erro aplicada
+ao relay — tudo testado ao vivo; Sentry descartado por exigir criar conta nova em nome do
+usuário, o que não posso fazer; corrigido também um bug de build introduzido no lab-83, `tsc -b`
+falhava por falta de referência de tipos do Vitest em `vite.config.ts`)
+Contexto do laboratório anterior: labs/lab-84-observabilidade/CONTEXT.md
+
+**LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: `docs/prompts/05-escala-e-viabilidade.md`
+(trazido pelo usuário em 2026-08-24, arquivado no repo no lab-84) redefine a prioridade do
+projeto com números medidos, não estimativa. Achado mais urgente: `World3D.tsx` envia `sendState`
+a 8,33 msg/s por jogador; a cota gratuita de Durable Objects (100.000 requests/dia) esgota com
+**~13 crianças jogando 15 min cada**, e a reconexão sem backoff de `multiplayer.ts` (fixa a cada
+3s, sem limite de tentativas) transforma o estouro de cota num auto-DDoS contra o próprio relay
+no pior momento possível. A seção 7 do documento propõe uma ordem de ataque (G1/G2 protocolo de
+tempo real primeiro, depois G3-G5 endurecimento do relay + moderação de apelido — este último é
+o único achado com risco legal/reputacional imediato). Ver "O que o próximo laboratório deve
+desenvolver" em `labs/lab-84-observabilidade/CONTEXT.md` para o resumo já adaptado ao estado do
+repo.
 
 **Comandos de teste (novo, lab-83)**: `cd app && npm run test` (22 testes, lógica de jogo) e
 `cd app/server-accounts && npm run test` (14 testes, lógica de entitlement/pareamento). Rodar
@@ -86,9 +97,10 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 de novo.
 
 **Frentes de profissionalização ainda não construídas** (monitoramento de erro + analytics
-básico entraram em construção no lab-84 — ver acima): (1) code-splitting de `World3D.tsx` (chunk
-de 1,37MB gzip); (2) auditoria de acessibilidade WCAG AA sistemática (além do item de contraste
-de fonte acima).
+básico concluídos no lab-84): (1) code-splitting de `World3D.tsx` (chunk de 6,4MB / 1,37MB gzip);
+(2) auditoria de acessibilidade WCAG AA sistemática (além do item de contraste de fonte acima).
+Ambos ficam atrás da prioridade de escala/viabilidade descrita acima (`05-escala-e-viabilidade.md`)
+na ordem de ataque recomendada (seção 7 do documento, itens 8 e 9).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-84-observabilidade/FEATURES.md`
-(laboratório ativo) e `labs/lab-83-profissionalizacao-produto/CONTEXT.md` (o anterior).
+Para retomar o trabalho numa nova sessão, leia primeiro `docs/prompts/05-escala-e-viabilidade.md`
+e `labs/lab-84-observabilidade/CONTEXT.md` (último laboratório concluído).

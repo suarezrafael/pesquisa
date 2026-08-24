@@ -1,8 +1,8 @@
 # Laboratório 84 — observabilidade (erro + analytics básico)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-24
-Fim: -
+Fim: 2026-08-24
 Commit inicial: e49b50fd3dcc69307e0519332976b755911a8142
 
 ## Objetivo do laboratório
@@ -22,17 +22,17 @@ visita, sem cookie, gratuito) + um endpoint próprio de captura de erro do clien
 Cloudflare (visível em `wrangler tail`/dashboard), sem depender de nenhum serviço/conta nova.
 
 ## Funcionalidades planejadas
-- [ ] Cloudflare Web Analytics habilitado pro domínio do jogo (beacon script, sem cookie) —
+- [x] Cloudflare Web Analytics habilitado pro domínio do jogo (beacon script, sem cookie) —
   primeira fonte real de métrica de uso (visitas, países, dispositivo) sem precisar de conta nova
-- [ ] `POST /client-error` no Worker `server-accounts` — recebe erros JS não tratados do jogo
+- [x] `POST /client-error` no Worker `server-accounts` — recebe erros JS não tratados do jogo
   (`window.onerror`/`unhandledrejection`) e loga estruturado (visível via `wrangler tail`/painel
   Cloudflare), sem enviar nenhum dado pessoal da criança
-- [ ] Handler global de erro no client (`app/src/main.tsx` ou equivalente) que captura exceções
+- [x] Handler global de erro no client (`app/src/main.tsx` ou equivalente) que captura exceções
   não tratadas e reporta pro endpoint acima, silenciosamente (nunca interrompe o jogo pra
   criança)
-- [ ] Mesma captura de erro aplicada aos dois Workers (`server-accounts`, `server-cf-relay`) —
+- [x] Mesma captura de erro aplicada aos dois Workers (`server-accounts`, `server-cf-relay`) —
   garantir que uma falha ali também fica visível nos logs, não só silenciosamente descartada
-- [ ] Testado ao vivo: forçar um erro de propósito e confirmar que aparece no log
+- [x] Testado ao vivo: forçar um erro de propósito e confirmar que aparece no log
 
 ## Fora de escopo (explicitamente adiado)
 - Code-splitting de `World3D.tsx` — refactor grande, fica pra depois com mais testes no lugar.
