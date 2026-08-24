@@ -106,6 +106,7 @@ interface World3DProps {
   onOpenHelp: () => void
   onOpenQuestList: () => void
   onOpenShop: () => void
+  onOpenPairing: () => void
   onCollectCoin: () => void
   suspendTriggers: boolean
 }
@@ -2087,6 +2088,7 @@ export function World3D({
   onOpenHelp,
   onOpenQuestList,
   onOpenShop,
+  onOpenPairing,
   onCollectCoin,
   suspendTriggers,
 }: World3DProps) {
@@ -7510,6 +7512,7 @@ export function World3D({
         onOpenRanking={() => setRankingOpen(true)}
         showBag={hasSword || hasGun}
         onOpenBag={() => setBagOpen(true)}
+        onOpenPairing={onOpenPairing}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}
       {onMarsCombatZone && (

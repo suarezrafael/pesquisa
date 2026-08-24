@@ -3,12 +3,15 @@
 // Fase A: health-check (Neon via driver HTTP, sem conexão TCP persistente).
 // Fase B: nenhuma rota nova aqui — login/cadastro do responsável fala direto com o Neon Auth
 // gerenciado (ver app/src/components/FamilyPortal.tsx), sem passar por este Worker.
-// Fase C (esta): checkout de assinatura + webhook do Stripe + status de assinatura. O Worker
-// nunca vê e-mail/senha do responsável — só um JWT de curta duração (~15min) emitido pelo Neon
-// Auth, verificado aqui via JWKS (chave pública, sem segredo compartilhado com o Neon).
+// Fase C: checkout de assinatura + webhook do Stripe + status de assinatura. O Worker nunca vê
+// e-mail/senha do responsável — só um JWT de curta duração (~15min) emitido pelo Neon Auth,
+// verificado aqui via JWKS (chave pública, sem segredo compartilhado com o Neon).
+// Fase D (esta): pareamento com o jogo. A criança NUNCA autentica com e-mail/senha — troca um
+// código curto (gerado pelo responsável no portal) por um token de entitlement assinado por nós
+// mesmos (HMAC, `ENTITLEMENT_SECRET`), guardado localmente no jogo e revalidado em background.
 
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
 
 type Sql = NeonQueryFunction<false, false>
@@ -18,6 +21,7 @@ export interface Env {
   STRIPE_SECRET_KEY: string
   STRIPE_WEBHOOK_SECRET: string
   STRIPE_PRICE_ID: string
+  ENTITLEMENT_SECRET: string
 }
 
 // Endpoint real descoberto testando ao vivo (ver labs/lab-79.../CONTEXT.md) — a documentação
@@ -99,6 +103,94 @@ async function handleSubscriptionStatus(request: Request, env: Env): Promise<Res
 
   if (rows.length === 0) return Response.json({ status: 'none' })
   return Response.json({ status: rows[0].status, currentPeriodEnd: rows[0].current_period_end })
+}
+
+// Código de 6 dígitos, curto de propósito: é digitado à mão por uma criança pequena, num
+// dispositivo que pode nem ter teclado físico. Não precisa ser críptico — a segurança real está
+// na expiração curta (15min) e no uso único (`redeemed_at`), não no tamanho do espaço de busca.
+function generatePairingCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString()
+}
+
+const PAIRING_CODE_TTL_MS = 15 * 60 * 1000
+
+async function handlePairingGenerate(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const sql = neon(env.DATABASE_URL)
+  const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
+  const expiresAt = new Date(Date.now() + PAIRING_CODE_TTL_MS).toISOString()
+
+  // Colisão de código de 6 dígitos entre famílias diferentes é rara mas possível (`code` é a
+  // chave primária da tabela); tenta algumas vezes em vez de assumir que nunca colide.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generatePairingCode()
+    try {
+      await sql`
+        insert into pairing_codes (code, family_account_id, expires_at)
+        values (${code}, ${familyAccountId}, ${expiresAt})
+      `
+      return Response.json({ code, expiresAt })
+    } catch {
+      // colisão de chave primária — tenta outro código
+    }
+  }
+  return Response.json({ error: 'não foi possível gerar um código, tente de novo' }, { status: 500 })
+}
+
+async function handlePairingRedeem(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as { code?: string } | null
+  const code = body?.code?.trim()
+  if (!code) return Response.json({ error: 'código obrigatório' }, { status: 400 })
+
+  const sql = neon(env.DATABASE_URL)
+  const rows = (await sql`
+    select family_account_id, expires_at, redeemed_at from pairing_codes where code = ${code}
+  `) as { family_account_id: string; expires_at: string; redeemed_at: string | null }[]
+
+  const row = rows[0]
+  if (!row || row.redeemed_at || new Date(row.expires_at).getTime() < Date.now()) {
+    return Response.json({ error: 'código inválido ou expirado' }, { status: 400 })
+  }
+
+  await sql`update pairing_codes set redeemed_at = now() where code = ${code}`
+
+  const secret = new TextEncoder().encode(env.ENTITLEMENT_SECRET)
+  const token = await new SignJWT({ familyAccountId: row.family_account_id })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(row.family_account_id)
+    .setIssuedAt()
+    .setExpirationTime('180d')
+    .sign(secret)
+
+  return Response.json({ token })
+}
+
+async function handleEntitlement(request: Request, env: Env): Promise<Response> {
+  const auth = request.headers.get('authorization')
+  if (!auth?.startsWith('Bearer ')) return Response.json({ active: false }, { status: 401 })
+
+  let familyAccountId: string
+  try {
+    const secret = new TextEncoder().encode(env.ENTITLEMENT_SECRET)
+    const { payload } = await jwtVerify(auth.slice('Bearer '.length), secret)
+    if (typeof payload.sub !== 'string') return Response.json({ active: false }, { status: 401 })
+    familyAccountId = payload.sub
+  } catch {
+    return Response.json({ active: false }, { status: 401 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  const rows = (await sql`
+    select status, current_period_end from subscriptions
+    where family_account_id = ${familyAccountId}
+    order by updated_at desc
+    limit 1
+  `) as { status: string; current_period_end: string | null }[]
+
+  const active = rows.length > 0 && (rows[0].status === 'active' || rows[0].status === 'trialing')
+  return Response.json({ active, expiresAt: active ? rows[0].current_period_end : null })
 }
 
 // Upsert manual (sem constraint única em `family_account_id`, de propósito — uma família pode
@@ -195,10 +287,11 @@ async function handleStripeWebhook(request: Request, env: Env): Promise<Response
   return Response.json({ received: true })
 }
 
-// CORS liberado (`*`) só em /checkout e /subscription: são chamadas via `fetch` do navegador do
-// responsável (app-two-flax-92.vercel.app ou localhost em dev) autenticadas por um Bearer token no
-// header `Authorization` — nunca por cookie —, então não há superfície de CSRF em abrir a origem.
-// /webhooks/stripe nunca é chamado por um navegador (é o Stripe chamando o Worker direto).
+// CORS liberado (`*`) em todas as rotas chamadas via `fetch` do navegador (portal do responsável
+// OU o próprio jogo da criança) — todas autenticadas por Bearer token no header `Authorization`
+// (Neon Auth JWT ou o token de entitlement, dependendo da rota), nunca por cookie, então não há
+// superfície de CSRF em abrir a origem. `/webhooks/stripe` fica de fora: nunca é chamado por um
+// navegador, é o Stripe chamando o Worker direto.
 function withCors(response: Response): Response {
   const headers = new Headers(response.headers)
   headers.set('Access-Control-Allow-Origin', '*')
@@ -233,6 +326,18 @@ export default {
 
     if (url.pathname === '/subscription' && request.method === 'GET') {
       return withCors(await handleSubscriptionStatus(request, env))
+    }
+
+    if (url.pathname === '/pairing/generate' && request.method === 'POST') {
+      return withCors(await handlePairingGenerate(request, env))
+    }
+
+    if (url.pathname === '/pairing/redeem' && request.method === 'POST') {
+      return withCors(await handlePairingRedeem(request, env))
+    }
+
+    if (url.pathname === '/entitlement' && request.method === 'GET') {
+      return withCors(await handleEntitlement(request, env))
     }
 
     if (url.pathname === '/webhooks/stripe' && request.method === 'POST') {

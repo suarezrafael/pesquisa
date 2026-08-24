@@ -215,6 +215,29 @@ body {
   cursor: not-allowed;
 }
 
+/* Portal dos responsáveis — código de pareamento (Fase D) */
+
+.pairing-code-box {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border-radius: 16px;
+  border: 2px solid #d8dff5;
+  background: var(--card);
+  text-align: center;
+}
+
+.pairing-code-box h3 {
+  margin: 0 0 0.35rem;
+}
+
+.pairing-code {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: 0.3rem;
+  margin: 0.75rem 0 0.25rem;
+  color: var(--primary-dark);
+}
+
 /* Hub */
 
 .hub-header {

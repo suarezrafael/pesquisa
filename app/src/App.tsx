@@ -4,10 +4,12 @@ import { Onboarding } from './components/Onboarding'
 import { Tutorial } from './components/Tutorial'
 import { QuestModal } from './components/QuestModal'
 import { RewardToast } from './components/RewardToast'
+import { PairingScreen } from './components/PairingScreen'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
+import { useEntitlement } from './state/useEntitlement'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
 import { hasTutorialBeenSeen, markTutorialSeen } from './state/storage'
@@ -72,6 +74,8 @@ function GameApp() {
   const [showHelp, setShowHelp] = useState(false)
   const [showQuestList, setShowQuestList] = useState(false)
   const [showShop, setShowShop] = useState(false)
+  const [showPairing, setShowPairing] = useState(false)
+  const { entitlement, redeemCode, redeeming, redeemError } = useEntitlement()
 
   if (!profile) {
     if (preProfileScreen === 'title') {
@@ -129,6 +133,7 @@ function GameApp() {
           onOpenHelp={() => setShowHelp(true)}
           onOpenQuestList={() => setShowQuestList(true)}
           onOpenShop={() => setShowShop(true)}
+          onOpenPairing={() => setShowPairing(true)}
           onCollectCoin={collectCoin}
           suspendTriggers={
             activeQuest !== null ||
@@ -136,7 +141,8 @@ function GameApp() {
             reward !== null ||
             showHelp ||
             showQuestList ||
-            showShop
+            showShop ||
+            showPairing
           }
         />
       </Suspense>
@@ -191,6 +197,16 @@ function GameApp() {
           onUnlockHairShape={unlockHairShape}
           onEquipHairShape={equipHairShape}
           onClose={() => setShowShop(false)}
+        />
+      )}
+
+      {showPairing && (
+        <PairingScreen
+          active={entitlement?.active ?? false}
+          redeeming={redeeming}
+          redeemError={redeemError}
+          onRedeem={redeemCode}
+          onClose={() => setShowPairing(false)}
         />
       )}
     </>

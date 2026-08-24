@@ -175,6 +175,71 @@ const STATUS_LABEL: Record<Exclude<SubscriptionStatus, 'loading'>, string> = {
   canceled: 'Assinatura cancelada',
 }
 
+interface PairingCode {
+  code: string
+  expiresAt: string
+}
+
+// Gera o código de pareamento (Fase D, ver docs/plano-comercial-backend.md) — a criança digita
+// esse código UMA VEZ no jogo pra vincular o entitlement da família, sem nunca precisar de
+// e-mail/senha. Componente à parte pra isolar o `setInterval` da contagem regressiva do resto do
+// Dashboard.
+function PairingCodeGenerator() {
+  const [pairing, setPairing] = useState<PairingCode | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [secondsLeft, setSecondsLeft] = useState(0)
+
+  useEffect(() => {
+    if (!pairing) return
+    const tick = () => {
+      const remaining = Math.max(0, Math.round((new Date(pairing.expiresAt).getTime() - Date.now()) / 1000))
+      setSecondsLeft(remaining)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [pairing])
+
+  async function handleGenerate() {
+    setError(null)
+    setBusy(true)
+    try {
+      const res = await authorizedFetch('/pairing/generate', { method: 'POST' })
+      const body = (await res.json()) as { code?: string; expiresAt?: string; error?: string }
+      if (!body.code || !body.expiresAt) {
+        setError(body.error ?? 'Não foi possível gerar um código. Tente novamente.')
+        return
+      }
+      setPairing({ code: body.code, expiresAt: body.expiresAt })
+    } catch {
+      setError('Não foi possível gerar um código. Tente novamente.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const expired = pairing !== null && secondsLeft <= 0
+
+  return (
+    <div className="pairing-code-box">
+      <h3>Vincular com o jogo</h3>
+      <p className="subtitle">Gere um código e peça pra criança digitar ele uma vez no jogo.</p>
+      {pairing && !expired ? (
+        <>
+          <p className="pairing-code">{pairing.code}</p>
+          <p className="field-hint">Expira em {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</p>
+        </>
+      ) : (
+        <button type="button" className="primary-button" onClick={handleGenerate} disabled={busy}>
+          {busy ? 'Um momento…' : expired ? 'Gerar novo código' : 'Gerar código'}
+        </button>
+      )}
+      {error && <p className="field-hint">{error}</p>}
+    </div>
+  )
+}
+
 function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   const [status, setStatus] = useState<SubscriptionStatus>('loading')
   const [busy, setBusy] = useState(false)
@@ -216,6 +281,7 @@ function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void 
   }
 
   const canSubscribe = status === 'none' || status === 'canceled'
+  const canPair = status === 'active' || status === 'trialing'
 
   return (
     <div className="screen onboarding">
@@ -231,6 +297,7 @@ function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void 
         </button>
       )}
       {error && <p className="field-hint">{error}</p>}
+      {canPair && <PairingCodeGenerator />}
       <button type="button" className="nickname-generate-btn" onClick={onSignOut}>
         Sair
       </button>
