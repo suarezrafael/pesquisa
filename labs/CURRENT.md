@@ -1,21 +1,23 @@
 # Laboratório atual
 
-Último concluído: labs/lab-79-backend-comercial-fase-b/ (Fase B do plano de backend comercial —
-rota `/familia` com parental gate + login/cadastro real do responsável via Neon Auth, testado ao
-vivo de ponta a ponta)
-Contexto para o próximo laboratório: labs/lab-79-backend-comercial-fase-b/CONTEXT.md
+Último concluído: labs/lab-80-backend-comercial-fase-c/ (Fase C do plano de backend comercial —
+Stripe Checkout + webhook + status real de assinatura no portal `/familia`, testado ao vivo de
+ponta a ponta: assinar com cartão de teste e cancelar refletem no banco em segundos)
+Contexto para o próximo laboratório: labs/lab-80-backend-comercial-fase-c/CONTEXT.md
 
-**Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A e B concluídas; C-F
-não iniciadas). Ler antes de continuar qualquer trabalho de contas/assinatura/cosméticos pagos.
-Backend confirmado com o usuário como TypeScript/Cloudflare (não migra pra C#/.NET).
+**Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A, B e C concluídas;
+D-F não iniciadas). Ler antes de continuar qualquer trabalho de contas/assinatura/cosméticos
+pagos. Backend confirmado com o usuário como TypeScript/Cloudflare (não migra pra C#/.NET). Preço
+da assinatura confirmado: R$ 4,99/mês.
 
-**Jogo ao vivo**: https://app-two-flax-92.vercel.app (agora com rota `/familia`, portal dos
-responsáveis)
+**Jogo ao vivo**: https://app-two-flax-92.vercel.app (rota `/familia` com portal dos responsáveis
++ assinatura real via Stripe, modo teste)
 **Relé de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
 (documentado em `app/server-cf-relay/README.md`)
-**Backend de contas (Cloudflare Worker, só health-check por enquanto — login/cadastro fala direto
-com o Neon Auth, sem passar por aqui)**: https://missao-aprender-accounts.rafaelvs.workers.dev
-(documentado em `app/server-accounts/README.md`)
+**Backend de contas (Cloudflare Worker)**: https://missao-aprender-accounts.rafaelvs.workers.dev
+— rotas `/health`, `/checkout`, `/subscription`, `/webhooks/stripe`; login/cadastro do
+responsável continua falando direto com o Neon Auth, sem passar por aqui (documentado em
+`app/server-accounts/README.md`)
 
 Trabalho acontece numa branch de worktree (`worktree-abstract-wobbling-owl`), a partir de `main`.
 **PR #5 foi mesclado pelo usuário** — a branch voltou a ficar alguns commits à frente da `main`
@@ -33,10 +35,10 @@ falhou — a conta Fly.io está com o trial expirado e a própria plataforma blo
 API (inclusive apagar, que é grátis) até um cartão ser cadastrado. Sem contorno por CLI. O app já
 está `suspended` (não roda/não é cobrado), só não pôde ser removido da conta.
 
-**Decisões de produto pendentes (usuário)**, antes de avançar pra Fase C/E do backend comercial:
-(1) preço da assinatura; (2) lista exata de cosméticos exclusivos; (3) resolver se a "biblioteca
-de material didático" mencionada pelo usuário fica de fora do gate de assinatura (recomendado,
-por causa da regra de nunca gatear conteúdo pedagógico em `prompt.md` §15.1) ou não.
+**Decisões de produto pendentes (usuário)**, antes de avançar pra Fase E do backend comercial:
+(1) lista exata de cosméticos exclusivos; (2) resolver se a "biblioteca de material didático"
+mencionada pelo usuário fica de fora do gate de assinatura (recomendado, por causa da regra de
+nunca gatear conteúdo pedagógico em `prompt.md` §15.1) ou não. Preço já confirmado: R$ 4,99/mês.
 
 **Se o usuário reportar objetos flutuando de novo** (lab-75): pedir um print com o jogador parado
 bem perto do objeto. Lembrar também que o sistema de chuva dinâmica
@@ -54,4 +56,4 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 de novo.
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-79-backend-comercial-fase-b/CONTEXT.md`.
+`labs/lab-80-backend-comercial-fase-c/CONTEXT.md`.

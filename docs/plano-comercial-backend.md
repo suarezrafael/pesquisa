@@ -145,9 +145,9 @@ os catálogos em `src/data/`), nunca em `quests.ts`/`progression.ts`.
    Testado ao vivo de ponta a ponta (cadastro → linha real em `neon_auth.user` → sessão persiste
    entre reloads → logout → login de novo). Nenhuma mudança no jogo da criança. Ver
    `labs/lab-79-.../CONTEXT.md` pro detalhe completo.
-3. **Fase C — Pagamento de verdade**: Stripe Checkout (modo teste primeiro) + webhook + tabela
-   `subscriptions` atualizando ao vivo. Critério de pronto: assinar/cancelar no Stripe test mode
-   reflete no portal em segundos.
+3. **Fase C — Pagamento de verdade (em andamento, 2026-08-23)**: preço confirmado pelo usuário
+   (R$ 4,99/mês). Stripe Checkout (modo teste) + webhook + tabela `subscriptions` atualizando ao
+   vivo. Ver `labs/lab-80-.../CONTEXT.md` pro detalhe completo quando fechado.
 4. **Fase D — Pareamento com o jogo**: portal gera código, jogo tem uma tela pra digitar (uma vez
    só), token de entitlement local com revalidação em background.
 5. **Fase E — Cosmético de verdade gateado**: 1-2 itens novos na lojinha marcados
@@ -176,8 +176,13 @@ Pro em vez de migrar.
 
 ## Pendências que exigem decisão do usuário (não técnicas — de produto)
 
-- Preço da assinatura (prompt.md §15.4 sugere R$19,90-29,90/mês) — confirmar antes da Fase C.
-- Quais cosméticos específicos ficam exclusivos de assinante na Fase E (sugestão: 1-2 novos, não
-  reclassificar nada que já é comprável com moeda hoje — mudar a regra de itens existentes seria
-  visto como "downgrade" por quem já jogou).
+- ~~Preço da assinatura~~ — confirmado pelo usuário: **R$ 4,99/mês** (abaixo da faixa sugerida em
+  `prompt.md` §15.4, de propósito: "tem que ser bem barato pra clientes brasileiro").
+- Quais cosméticos específicos ficam exclusivos de assinante na Fase E (sugestão do usuário:
+  skins novas, chapéus novos, uma "escolinha" e uma biblioteca com banco de material didático —
+  ver nota abaixo sobre a biblioteca).
 - Se migra pra Cloudflare Pages (recomendado, mantém tudo grátis) ou aceita Vercel Pro na Fase F.
+- **Biblioteca de material didático**: o usuário sugeriu incluí-la entre os itens desbloqueáveis
+  por assinatura. Recomendação (não confirmada pelo usuário): manter o conteúdo pedagógico em si
+  sempre grátis (regra inegociável, `prompt.md` §15.1) e gatear só a apresentação/organização
+  premium (ex. capas ilustradas, download offline, trilha curada) — a decidir na Fase E.
