@@ -1,9 +1,14 @@
 # Laboratório atual
 
-Último concluído: labs/lab-82-cosmeticos-fase-e-chat-expandido/ (parte da Fase E do plano
-comercial — cosméticos exclusivos de assinante reaproveitando geometria já existente — + catálogo
-de quick-chat expandido de 10 pra 35 frases em categorias, testado ao vivo)
-Contexto para o próximo laboratório: labs/lab-82-cosmeticos-fase-e-chat-expandido/CONTEXT.md
+Último concluído: labs/lab-83-profissionalizacao-produto/ (Termos de Uso + Política de
+Privacidade, Customer Portal do Stripe pra autoatendimento de cobrança/cancelamento, primeiro
+test runner do projeto (Vitest, 36 testes) cobrindo lógica de recompensa/entitlement, e um bug
+real corrigido: itens exclusivos de assinante podiam ser obtidos de graça via `unlockXxx`)
+Contexto para o próximo laboratório: labs/lab-83-profissionalizacao-produto/CONTEXT.md
+
+**Comandos de teste (novo, lab-83)**: `cd app && npm run test` (22 testes, lógica de jogo) e
+`cd app/server-accounts && npm run test` (14 testes, lógica de entitlement/pareamento). Rodar
+antes de mexer em `progression.ts` ou `server-accounts/src/domain.ts`.
 
 **Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A, B, C e D
 concluídas; E em andamento — parte de catálogo pronta, falta "Minha Casa"; F não iniciada). Ler
@@ -25,9 +30,10 @@ gerador de código de pareamento; HUD do jogo com botão 🔗 pra digitar esse c
 **Relé de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
 (documentado em `app/server-cf-relay/README.md`)
 **Backend de contas (Cloudflare Worker)**: https://missao-aprender-accounts.rafaelvs.workers.dev
-— rotas `/health`, `/checkout`, `/subscription`, `/pairing/generate`, `/pairing/redeem`,
-`/entitlement`, `/webhooks/stripe`; login/cadastro do responsável continua falando direto com o
-Neon Auth, sem passar por aqui (documentado em `app/server-accounts/README.md`)
+— rotas `/health`, `/checkout`, `/subscription`, `/billing-portal`, `/pairing/generate`,
+`/pairing/redeem`, `/entitlement`, `/webhooks/stripe`; login/cadastro do responsável continua
+falando direto com o Neon Auth, sem passar por aqui (documentado em
+`app/server-accounts/README.md`)
 
 Trabalho acontece numa branch de worktree (`worktree-abstract-wobbling-owl`), a partir de `main`.
 **PR #5 foi mesclado pelo usuário** — a branch voltou a ficar alguns commits à frente da `main`
@@ -76,5 +82,12 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 1.6x, o próximo passo é revisar CONTRASTE (`outlineWidth`/`outlineColor`), não aumentar o tamanho
 de novo.
 
+**Frentes de profissionalização identificadas (lab-83) mas ainda não construídas**, sem
+prioridade única definida — perguntar ao usuário ou escolher pelo contexto da próxima sessão:
+(1) monitoramento de erro (Sentry) — nada existe hoje; (2) analytics básico (retenção D1/D7,
+conversão — as métricas que `prompt.md` §12/§15.4 já pedem, hoje impossíveis de medir); (3)
+code-splitting de `World3D.tsx` (chunk de 1,37MB gzip); (4) auditoria de acessibilidade WCAG AA
+sistemática (além do item de contraste de fonte acima).
+
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-82-cosmeticos-fase-e-chat-expandido/CONTEXT.md`.
+`labs/lab-83-profissionalizacao-produto/CONTEXT.md`.

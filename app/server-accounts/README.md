@@ -6,8 +6,10 @@ antes de mexer aqui — este README documenta só o que já existe (Fase A), nã
 
 **URL em produção**: `https://missao-aprender-accounts.rafaelvs.workers.dev`
 **Status**: Fases A-D concluídas — login/cadastro (direto no Neon Auth, Fase B), Stripe
-Checkout/webhook/status de assinatura (Fase C), pareamento do entitlement com o jogo (Fase D).
-Cosmético de verdade gateado por esse entitlement (Fase E) ainda não existe.
+Checkout/webhook/status de assinatura (Fase C), pareamento do entitlement com o jogo (Fase D),
+Customer Portal do Stripe pra autoatendimento de cobrança (lab-83). Cosmético de verdade gateado
+por esse entitlement (parte da Fase E) já existe do lado do jogo — ver
+`docs/plano-comercial-backend.md` e `labs/lab-82-.../CONTEXT.md`.
 
 ## Rotas
 
@@ -16,10 +18,16 @@ Cosmético de verdade gateado por esse entitlement (Fase E) ainda não existe.
 | `/health` | GET | nenhuma | Prova que o Worker fala com o Neon (`{ ok, familyCount }`) |
 | `/checkout` | POST | Bearer JWT (Neon Auth) | Cria a sessão do Stripe Checkout, devolve `{ url }` |
 | `/subscription` | GET | Bearer JWT (Neon Auth) | Status da assinatura da família do usuário (`{ status }`) |
+| `/billing-portal` | POST | Bearer JWT (Neon Auth) | Cria uma sessão do Stripe Customer Portal, devolve `{ url }` (gerenciar pagamento/cancelar) |
 | `/pairing/generate` | POST | Bearer JWT (Neon Auth) | Gera um código de 6 dígitos (`pairing_codes`, expira em 15min) |
 | `/pairing/redeem` | POST | nenhuma (chamado pelo jogo, criança sem conta) | Troca o código por um token de entitlement (HMAC, 180 dias) |
 | `/entitlement` | GET | Bearer = token de entitlement (**não** o JWT do Neon Auth) | `{ active, expiresAt }` — status real da assinatura da família pareada |
 | `/webhooks/stripe` | POST | assinatura HMAC do Stripe | Atualiza `subscriptions` a partir dos eventos do Stripe |
+
+A lógica de negócio pura (quais status do Stripe contam como entitlement ativo, regras do código
+de pareamento) mora em `src/domain.ts`, sem import de `neon`/`Stripe`/`jose` — é o que permite
+`npm run test` (Vitest) cobrir essas regras sem mockar banco/rede. Rode os testes antes de mexer
+em qualquer coisa relacionada a entitlement/assinatura.
 
 O JWT do responsável é obtido pelo front-end via
 `fetch('<VITE_NEON_AUTH_URL>/token', { credentials: 'include' })` — **não** via
