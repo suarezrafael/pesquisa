@@ -78,13 +78,19 @@ export class Relay implements DurableObject {
       return
     }
 
-    if (msg.type === 'chat') {
-      if (typeof msg.messageId !== 'string' || !QUICK_CHAT_IDS.has(msg.messageId)) return
-      if (typeof msg.name !== 'string') return
-      this.broadcast(ws, { type: 'chat', name: msg.name.slice(0, 40), messageId: msg.messageId, id })
-      return
+    try {
+      if (msg.type === 'chat') {
+        if (typeof msg.messageId !== 'string' || !QUICK_CHAT_IDS.has(msg.messageId)) return
+        if (typeof msg.name !== 'string') return
+        this.broadcast(ws, { type: 'chat', name: msg.name.slice(0, 40), messageId: msg.messageId, id })
+        return
+      }
+      this.broadcast(ws, { ...msg, id })
+    } catch (err) {
+      // lab-84: mesma filosofia de visibilidade do server-accounts — nunca deixa um erro aqui
+      // desaparecer em silêncio, mas também nunca deixa ele derrubar a conexão do jogador.
+      console.error('[relay-error]', JSON.stringify({ id, msgType: msg?.type, error: String(err) }))
     }
-    this.broadcast(ws, { ...msg, id })
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
@@ -97,7 +103,9 @@ export class Relay implements DurableObject {
     }
   }
 
-  async webSocketError(ws: WebSocket): Promise<void> {
+  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+    const attachment = ws.deserializeAttachment() as SocketAttachment | null
+    console.error('[relay-error]', JSON.stringify({ id: attachment?.id, error: String(error) }))
     await this.webSocketClose(ws)
   }
 
@@ -107,8 +115,10 @@ export class Relay implements DurableObject {
       if (ws === sender) continue
       try {
         ws.send(raw)
-      } catch {
-        // socket morto, ignora — webSocketClose cuida da limpeza
+      } catch (err) {
+        // socket morto — não é um erro real (webSocketClose cuida da limpeza), mas loga mesmo
+        // assim porque em teoria também poderia ser payload inválido; barato de descartar depois.
+        console.error('[relay-send-failed]', String(err))
       }
     }
   }

@@ -1,8 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
+import { installErrorReporting } from './errorReporting'
 import './index.css'
 import App from './App.tsx'
+
+installErrorReporting()
 
 // Pedido do usuário: "fui instalar no celular e ainda estava a versão antiga" — o registro
 // auto-injetado do plugin PWA (agora desligado, ver `injectRegister: false` em vite.config.ts)

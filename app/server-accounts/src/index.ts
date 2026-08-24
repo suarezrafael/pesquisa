@@ -121,6 +121,37 @@ async function handleBillingPortal(request: Request, env: Env): Promise<Response
   return Response.json({ url: session.url })
 }
 
+// Captura de erro do client (lab-84) — em vez de um serviço de terceiro (exigiria criar conta
+// nova, ver labs/lab-84-.../CONTEXT.md), loga via `console.error` — visível em `wrangler tail` e
+// no painel de Logs da Cloudflare (mesma conta que já hospeda este Worker). Sem autenticação de
+// propósito (o erro pode acontecer antes do jogo saber se há sessão), sem persistir em banco
+// (não é dado que precise de retenção/gestão própria) e sem nenhum dado pessoal da criança —
+// só mensagem/stack/URL/user-agent do navegador.
+async function handleClientError(request: Request): Promise<Response> {
+  const body = await request.text()
+  if (body.length > 8000) return new Response(null, { status: 413 })
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(body)
+  } catch {
+    return new Response(null, { status: 400 })
+  }
+  if (!payload || typeof payload !== 'object') return new Response(null, { status: 400 })
+
+  const { message, stack, url, userAgent } = payload as Record<string, unknown>
+  console.error(
+    '[client-error]',
+    JSON.stringify({
+      message: typeof message === 'string' ? message.slice(0, 2000) : undefined,
+      stack: typeof stack === 'string' ? stack.slice(0, 4000) : undefined,
+      url: typeof url === 'string' ? url.slice(0, 500) : undefined,
+      userAgent: typeof userAgent === 'string' ? userAgent.slice(0, 300) : undefined,
+    }),
+  )
+  return new Response(null, { status: 204 })
+}
+
 async function handleSubscriptionStatus(request: Request, env: Env): Promise<Response> {
   const userId = await requireUserId(request)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
@@ -341,6 +372,10 @@ export default {
       } catch (err) {
         return Response.json({ ok: false, error: (err as Error).message }, { status: 500 })
       }
+    }
+
+    if (url.pathname === '/client-error' && request.method === 'POST') {
+      return withCors(await handleClientError(request))
     }
 
     if (url.pathname === '/checkout' && request.method === 'POST') {
