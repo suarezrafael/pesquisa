@@ -1,14 +1,16 @@
 # Laboratório atual
 
-Último concluído: labs/lab-80-backend-comercial-fase-c/ (Fase C do plano de backend comercial —
-Stripe Checkout + webhook + status real de assinatura no portal `/familia`, testado ao vivo de
-ponta a ponta: assinar com cartão de teste e cancelar refletem no banco em segundos)
-Contexto para o próximo laboratório: labs/lab-80-backend-comercial-fase-c/CONTEXT.md
+Ativo: labs/lab-81-backend-comercial-fase-d/ (Fase D do plano de backend comercial — pareamento
+do entitlement de assinatura com o cliente do jogo, código curto gerado no portal e digitado uma
+vez pela criança)
+Último concluído: labs/lab-80-backend-comercial-fase-c/ (Fase C — Stripe Checkout + webhook +
+status real de assinatura no portal `/familia`, testado ao vivo de ponta a ponta)
+Contexto do laboratório anterior: labs/lab-80-backend-comercial-fase-c/CONTEXT.md
 
-**Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A, B e C concluídas;
-D-F não iniciadas). Ler antes de continuar qualquer trabalho de contas/assinatura/cosméticos
-pagos. Backend confirmado com o usuário como TypeScript/Cloudflare (não migra pra C#/.NET). Preço
-da assinatura confirmado: R$ 4,99/mês.
+**Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A, B e C concluídas; D
+em andamento; E-F não iniciadas). Ler antes de continuar qualquer trabalho de contas/assinatura/
+cosméticos pagos. Backend confirmado com o usuário como TypeScript/Cloudflare (não migra pra
+C#/.NET). Preço da assinatura confirmado: R$ 4,99/mês.
 
 **Jogo ao vivo**: https://app-two-flax-92.vercel.app (rota `/familia` com portal dos responsáveis
 + assinatura real via Stripe, modo teste)
@@ -55,5 +57,5 @@ o HUD; (2) se a legibilidade de fonte no celular voltar a ser reportada como ins
 1.6x, o próximo passo é revisar CONTRASTE (`outlineWidth`/`outlineColor`), não aumentar o tamanho
 de novo.
 
-Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-80-backend-comercial-fase-c/CONTEXT.md`.
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-81-backend-comercial-fase-d/
+FEATURES.md` (laboratório ativo) e `labs/lab-80-backend-comercial-fase-c/CONTEXT.md` (o anterior).
