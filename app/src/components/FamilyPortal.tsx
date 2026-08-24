@@ -87,7 +87,18 @@ function ParentalGateScreen({ gate }: { gate: ReturnType<typeof useParentalGate>
   )
 }
 
-type AuthMode = 'sign-in' | 'sign-up'
+type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password'
+
+// "Esqueci minha senha" (lab-88, pedido do usuário: "quero o mecanismo... isso é básico"). O
+// Neon Auth deste projeto tem o plugin de e-mail-OTP configurado no servidor (confirmado pelo
+// tipo real do SDK — `authClient.forgetPassword` não é a função clássica de link mágico, é um
+// objeto com só `emailOtp`), então o fluxo é: pede um código de 6 dígitos por e-mail
+// (`forgetPassword.emailOtp`), depois troca o código + a senha nova numa chamada só
+// (`emailOtp.resetPassword`) — tudo dentro da mesma página, sem depender de abrir um link de
+// e-mail separado. O provedor de e-mail do Neon já está configurado (compartilhado,
+// `auth@mail.myneon.app`), então o código é enviado de verdade, sem precisar configurar SMTP por
+// conta própria.
+type ForgotPasswordStep = 'request' | 'confirm'
 
 function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [mode, setMode] = useState<AuthMode>('sign-in')
@@ -96,6 +107,10 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [forgotStep, setForgotStep] = useState<ForgotPasswordStep>('request')
+  const [otp, setOtp] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [resetDone, setResetDone] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -106,6 +121,24 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
     // dois casos, senão um login errado deixava o botão preso em "Um momento..." pra sempre (bug
     // real encontrado testando isto ao vivo antes de considerar a Fase B pronta).
     try {
+      if (mode === 'forgot-password') {
+        if (forgotStep === 'request') {
+          const result = await authClient.forgetPassword.emailOtp({ email })
+          if (result.error) {
+            setError(result.error.message ?? 'Não foi possível enviar o código. Confira o e-mail.')
+            return
+          }
+          setForgotStep('confirm')
+          return
+        }
+        const result = await authClient.emailOtp.resetPassword({ email, otp, password: newPassword })
+        if (result.error) {
+          setError(result.error.message ?? 'Código incorreto ou expirado — peça um código novo.')
+          return
+        }
+        setResetDone(true)
+        return
+      }
       const result =
         mode === 'sign-up'
           ? await authClient.signUp.email({ name: name.trim() || email.split('@')[0], email, password })
@@ -122,13 +155,44 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
     }
   }
 
+  function backToSignIn() {
+    setMode('sign-in')
+    setForgotStep('request')
+    setOtp('')
+    setNewPassword('')
+    setResetDone(false)
+    setError(null)
+  }
+
+  if (mode === 'forgot-password' && resetDone) {
+    return (
+      <div className="screen onboarding">
+        <h1>Senha alterada!</h1>
+        <p className="subtitle">Agora é só entrar com a senha nova.</p>
+        <button type="button" className="primary-button" onClick={backToSignIn}>
+          Ir para o login
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="screen onboarding">
-      <h1>{mode === 'sign-up' ? 'Criar conta de responsável' : 'Entrar'}</h1>
+      <h1>
+        {mode === 'sign-up'
+          ? 'Criar conta de responsável'
+          : mode === 'forgot-password'
+            ? 'Esqueci minha senha'
+            : 'Entrar'}
+      </h1>
       <p className="subtitle">
         {mode === 'sign-up'
           ? 'Sua conta aqui é só pra gerenciar a assinatura da família — nada disso aparece pra criança.'
-          : 'Entre com o e-mail e senha da sua conta de responsável.'}
+          : mode === 'forgot-password'
+            ? forgotStep === 'request'
+              ? 'Digite o e-mail da sua conta — mandamos um código de 6 dígitos pra você trocar a senha.'
+              : `Digite o código que mandamos pra ${email} e a senha nova.`
+            : 'Entre com o e-mail e senha da sua conta de responsável.'}
       </p>
       <form onSubmit={handleSubmit}>
         {mode === 'sign-up' && (
@@ -137,20 +201,48 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
             <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </label>
         )}
-        <label className="field">
-          <span>E-mail</span>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Senha</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-            required
-          />
-        </label>
+        {!(mode === 'forgot-password' && forgotStep === 'confirm') && (
+          <label className="field">
+            <span>E-mail</span>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </label>
+        )}
+        {mode === 'forgot-password' && forgotStep === 'confirm' && (
+          <>
+            <label className="field">
+              <span>Código recebido por e-mail</span>
+              <input
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                inputMode="numeric"
+                autoFocus
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Senha nova</span>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+            </label>
+          </>
+        )}
+        {mode !== 'forgot-password' && (
+          <label className="field">
+            <span>Senha</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
+              required
+            />
+          </label>
+        )}
         {error && <p className="field-hint">{error}</p>}
         {mode === 'sign-up' && (
           <p className="field-hint legal-consent-hint">
@@ -166,15 +258,40 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
           </p>
         )}
         <button type="submit" className="primary-button" disabled={busy}>
-          {busy ? 'Um momento…' : mode === 'sign-up' ? 'Criar conta' : 'Entrar'}
+          {busy
+            ? 'Um momento…'
+            : mode === 'sign-up'
+              ? 'Criar conta'
+              : mode === 'forgot-password'
+                ? forgotStep === 'request'
+                  ? 'Enviar código'
+                  : 'Trocar senha'
+                : 'Entrar'}
         </button>
       </form>
+      {mode === 'forgot-password' && forgotStep === 'confirm' && (
+        <button
+          type="button"
+          className="nickname-generate-btn"
+          onClick={() => {
+            setForgotStep('request')
+            setError(null)
+          }}
+        >
+          Pedir um código novo
+        </button>
+      )}
+      {mode === 'sign-in' && (
+        <button type="button" className="nickname-generate-btn" onClick={() => setMode('forgot-password')}>
+          Esqueci minha senha
+        </button>
+      )}
       <button
         type="button"
         className="nickname-generate-btn"
-        onClick={() => setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up')}
+        onClick={() => (mode === 'forgot-password' ? backToSignIn() : setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up'))}
       >
-        {mode === 'sign-up' ? 'Já tenho conta' : 'Ainda não tenho conta'}
+        {mode === 'sign-up' ? 'Já tenho conta' : mode === 'forgot-password' ? 'Voltar pro login' : 'Ainda não tenho conta'}
       </button>
     </div>
   )

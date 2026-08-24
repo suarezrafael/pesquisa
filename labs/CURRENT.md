@@ -8,6 +8,26 @@ montanha; catálogo de cosméticos de assinante dobrou, 10→20 itens; lojinha r
 com preview 3D real do boneco — `AvatarPreview3D.tsx`/`studentFigure.ts` novos)
 Contexto do laboratório anterior: labs/lab-87-correcoes-visuais-e-cosmeticos/CONTEXT.md
 
+**Duas correções de produção fora de um laboratório formal** (pedido direto do usuário no chat,
+2026-08-24, não vale a pena um `labs/lab-NN/` próprio pelo tamanho, mas registrado aqui pra não
+se perder):
+1. **Domínio confiável do Neon Auth**: `https://missaoaprendizado.com` nunca tinha sido adicionado
+   à lista de domínios confiáveis do Neon Auth (Configuration → Domains) — só
+   `app-two-flax-92.vercel.app` estava lá desde a Fase B. Isso bloqueava QUALQUER cadastro/login
+   feito a partir do domínio novo com `403 Invalid Origin` (o usuário achou que era senha
+   esquecida; era isso). Corrigido adicionando o domínio na lista, direto no console do Neon
+   (`console.neon.tech` → projeto `missao-aprender` → Auth → Configuration → Domains). **Se um
+   domínio novo for apontado pro jogo no futuro, lembrar de adicionar ele aqui também** — não é
+   automático.
+2. **"Esqueci minha senha"** (`FamilyPortal.tsx`, `LoginScreen`) — não existia nenhum mecanismo de
+   recuperação. Implementado com o que o servidor do Neon Auth já tinha configurado: plugin de
+   e-mail-OTP (`authClient.forgetPassword.emailOtp({email})` pra pedir o código,
+   `authClient.emailOtp.resetPassword({email, otp, password})` pra confirmar) — não é o fluxo de
+   link mágico clássico do Better Auth (`forgetPassword`/`resetPassword` simples), que não está
+   disponível nesta instância. Testado ao vivo: código de 6 dígitos chegou de verdade no e-mail do
+   usuário (usa o provedor de e-mail compartilhado do próprio Neon, `auth@mail.myneon.app`, sem
+   precisar configurar SMTP/Resend). Deployado em produção.
+
 **A recomendação de G3/G5 + G4 abaixo (endurecimento do relay + apelido deixar de ser texto
 livre) continua valendo** — o lab-87 foi um redirecionamento explícito do usuário pra bugs
 visuais/produto, não uma mudança de prioridade permanente. Retomar G3-G5 no próximo laboratório a
