@@ -9,10 +9,12 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260819.1",
-    "wrangler": "^4.124.0",
-    "pg": "^8.16.0"
+    "pg": "^8.16.0",
+    "wrangler": "^4.124.0"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4"
+    "@neondatabase/serverless": "^0.10.4",
+    "jose": "^6.2.10",
+    "stripe": "^22.5.0"
   }
 }

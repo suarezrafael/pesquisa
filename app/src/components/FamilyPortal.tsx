@@ -2,6 +2,32 @@ import { useEffect, useState } from 'react'
 import { isAuthApiError } from '@neondatabase/neon-js/auth'
 import { authClient } from '../auth/neonAuthClient'
 
+const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
+const NEON_AUTH_URL = import.meta.env.VITE_NEON_AUTH_URL as string
+
+type SubscriptionStatus = 'loading' | 'none' | 'trialing' | 'active' | 'past_due' | 'canceled'
+
+// `authClient.token()` (plugin JWT do Better Auth) se mostrou não confiável nesta versão do SDK —
+// testado ao vivo e retorna o formato de `getSession()` (`{session, user}`), não um JWT (bug real
+// encontrado no lab-80, não suposição). Em vez disso, busca o JWT direto no endpoint gerenciado do
+// Neon Auth (`GET /token`, confirmado ao vivo retornando `{ token: "..." }`), com a sessão via
+// cookie (`credentials: 'include'`, necessário por ser um domínio diferente do jogo).
+async function fetchJwt(): Promise<string | null> {
+  const res = await fetch(`${NEON_AUTH_URL}/token`, { credentials: 'include' })
+  if (!res.ok) return null
+  const body = (await res.json()) as { token?: string }
+  return body.token ?? null
+}
+
+// O Worker de contas (Fase C, ver docs/plano-comercial-backend.md) nunca vê e-mail/senha do
+// responsável — só o JWT de curta duração (~15min) acima.
+async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
+  const token = await fetchJwt()
+  const headers = new Headers(init?.headers)
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  return fetch(`${ACCOUNTS_API_URL}${path}`, { ...init, headers })
+}
+
 // Portal dos responsáveis (Fase B do plano comercial, ver docs/plano-comercial-backend.md) —
 // rota separada (`/familia`, ver App.tsx) do jogo da criança, nunca alcançável pelo fluxo normal
 // de jogo. Só o responsável faz login aqui; a criança nunca vê esta tela nem tem conta.
@@ -141,16 +167,71 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
   )
 }
 
+const STATUS_LABEL: Record<Exclude<SubscriptionStatus, 'loading'>, string> = {
+  none: 'Nenhuma assinatura ativa',
+  trialing: 'Assinatura em teste',
+  active: 'Assinatura ativa',
+  past_due: 'Pagamento pendente — verifique o cartão',
+  canceled: 'Assinatura cancelada',
+}
+
 function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+  const [status, setStatus] = useState<SubscriptionStatus>('loading')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function refreshStatus() {
+    try {
+      const res = await authorizedFetch('/subscription')
+      const body = (await res.json()) as { status: SubscriptionStatus }
+      setStatus(body.status)
+    } catch {
+      // Sem conexão com o Worker — trata como "sem assinatura" em vez de travar a tela pra
+      // sempre (mesmo cuidado do bug corrigido em LoginScreen/refreshSession).
+      setStatus('none')
+    }
+  }
+
+  useEffect(() => {
+    refreshStatus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleSubscribe() {
+    setError(null)
+    setBusy(true)
+    try {
+      const res = await authorizedFetch('/checkout', { method: 'POST' })
+      const body = (await res.json()) as { url?: string; error?: string }
+      if (!body.url) {
+        setError(body.error ?? 'Não foi possível iniciar a assinatura. Tente novamente.')
+        return
+      }
+      window.location.href = body.url
+    } catch {
+      setError('Não foi possível iniciar a assinatura. Tente novamente.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const canSubscribe = status === 'none' || status === 'canceled'
+
   return (
     <div className="screen onboarding">
       <h1>Olá, responsável!</h1>
       <p className="subtitle">Conta: {email}</p>
       <p>
-        <strong>Assinatura:</strong> nenhuma ativa ainda — em breve esta tela vai mostrar o status
-        de verdade e permitir assinar.
+        <strong>Assinatura:</strong>{' '}
+        {status === 'loading' ? 'Verificando…' : STATUS_LABEL[status]}
       </p>
-      <button type="button" className="primary-button" onClick={onSignOut}>
+      {canSubscribe && (
+        <button type="button" className="primary-button" onClick={handleSubscribe} disabled={busy}>
+          {busy ? 'Um momento…' : 'Assinar por R$ 4,99/mês'}
+        </button>
+      )}
+      {error && <p className="field-hint">{error}</p>}
+      <button type="button" className="nickname-generate-btn" onClick={onSignOut}>
         Sair
       </button>
     </div>

@@ -3,5 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2026-08-22"
 compatibility_flags = ["nodejs_compat"]
 
-# DATABASE_URL (string de conexão do Neon) é um secret, não uma var comum — nunca comitado.
-# Local: app/server-accounts/.dev.vars (gitignored). Produção: `wrangler secret put DATABASE_URL`.
+[vars]
+# ID do Price recorrente (R$ 4,99/mês) no Stripe, modo teste — não é secreto, é só um
+# identificador público do catálogo de produtos.
+STRIPE_PRICE_ID = "price_1U7k0BDLQrb3UkMn0MFvRcVf"
+
+# DATABASE_URL, STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET são secrets, não vars comuns — nunca
+# comitados. Local: app/server-accounts/.dev.vars (gitignored). Produção: `wrangler secret put <NOME>`.
