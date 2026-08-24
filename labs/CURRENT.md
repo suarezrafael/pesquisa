@@ -1,29 +1,29 @@
 # Laboratório atual
 
-Ativo: labs/lab-85-protocolo-tempo-real/ (protocolo de multiplayer com orçamento de cota —
-envio-por-mudança, separar estado contínuo/raro, reconexão com backoff+jitter, medição real de
-requests de Durable Object por jogador-minuto antes/depois)
-Último concluído: labs/lab-84-observabilidade/ (Cloudflare Web Analytics via JS snippet manual,
-`POST /client-error` nos dois Workers + handler global no client, mesma captura de erro aplicada
-ao relay — tudo testado ao vivo; Sentry descartado por exigir criar conta nova em nome do
-usuário, o que não posso fazer; corrigido também um bug de build introduzido no lab-83, `tsc -b`
-falhava por falta de referência de tipos do Vitest em `vite.config.ts`)
-Contexto do laboratório anterior: labs/lab-84-observabilidade/CONTEXT.md
+Ativo: nenhum (aguardando o próximo `lab start` — ver recomendação abaixo)
+Último concluído: labs/lab-85-protocolo-tempo-real/ (envio-por-mudança + reconexão com
+backoff/jitter em `multiplayer.ts`/`World3D.tsx`; 11,8x menos requests medido ao vivo com script
+de carga próprio; testado com duas abas reais contra o relay de produção antes do deploy)
+Contexto do laboratório anterior: labs/lab-85-protocolo-tempo-real/CONTEXT.md
 
-**Por que este laboratório existe**: `docs/prompts/05-escala-e-viabilidade.md` (trazido pelo
-usuário em 2026-08-24, arquivado no repo no lab-84) redefine a prioridade do projeto com números
-medidos, não estimativa. Achado mais urgente (G1): `World3D.tsx` envia `sendState` a 8,33 msg/s
-por jogador; a cota gratuita de Durable Objects (100.000 requests/dia) esgota com **~13 crianças
-jogando 15 min cada**, e a reconexão sem backoff de `multiplayer.ts` (G2, fixa a cada 3s, sem
-limite de tentativas) transforma o estouro de cota num auto-DDoS contra o próprio relay no pior
-momento possível. Escopo completo e o que ficou deliberadamente fora dele:
-`labs/lab-85-protocolo-tempo-real/FEATURES.md`. Depois dele, a ordem de ataque da seção 7 do
-documento segue com salas com teto explícito, e então G3-G5 (endurecimento do relay + moderação
-de apelido — este último é o único achado com risco legal/reputacional imediato).
+**LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 mediu ao vivo (script de carga
+versionado em `app/server-cf-relay/scripts/load-test.mjs`) que envio-por-mudança + backoff
+sozinhos cortam a carga do relay em **11,8x**, mas ainda ficam em **38,2%** da cota diária pra 30
+jogadores/30min — acima dos 20% que `docs/prompts/05-escala-e-viabilidade.md` seção 3 pede como
+critério de aceite. O próximo passo óbvio da ordem de ataque (seção 7) é "salas com teto de 12
+jogadores", MAS **antes de implementar isso, resolver uma dúvida real e não respondida**: não está
+claro nos docs oficiais da Cloudflare se a cota de 100.000 requests/dia de Durable Objects é **por
+conta** (um bucket só, compartilhado por tudo) ou **por instância de Durable Object**. Se for por
+conta, dividir em salas não aumenta a cota total disponível — só ajuda com CPU/duração/fan-out, não
+com contagem de requests, que é o problema principal. Ver "O que o próximo laboratório deve
+desenvolver" em `labs/lab-85-protocolo-tempo-real/CONTEXT.md` pra como investigar isso antes de
+codar. Depois disso, a ordem segue com G3-G5 (endurecimento do relay + moderação de apelido — este
+último é o único achado com risco legal/reputacional imediato).
 
-**Comandos de teste (novo, lab-83)**: `cd app && npm run test` (22 testes, lógica de jogo) e
-`cd app/server-accounts && npm run test` (14 testes, lógica de entitlement/pareamento). Rodar
-antes de mexer em `progression.ts` ou `server-accounts/src/domain.ts`.
+**Comandos de teste (lab-83, contagem atualizada no lab-85)**: `cd app && npm run test` (31
+testes: lógica de jogo + backoff/modo-solo de `multiplayer.ts`) e `cd app/server-accounts && npm
+run test` (14 testes, lógica de entitlement/pareamento). Rodar antes de mexer em `progression.ts`,
+`multiplayer.ts` ou `server-accounts/src/domain.ts`.
 
 **Plano comercial completo**: `docs/plano-comercial-backend.md` — 6 fases (A, B, C e D
 concluídas; E em andamento — parte de catálogo pronta, falta "Minha Casa"; F não iniciada). Ler
@@ -104,5 +104,5 @@ Ambos ficam atrás da prioridade de escala/viabilidade descrita acima (`05-escal
 na ordem de ataque recomendada (seção 7 do documento, itens 8 e 9).
 
 Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-85-protocolo-tempo-real/
-FEATURES.md` (laboratório ativo), `docs/prompts/05-escala-e-viabilidade.md` (a motivação, com os
-números) e `labs/lab-84-observabilidade/CONTEXT.md` (o laboratório anterior).
+CONTEXT.md` (último laboratório concluído, com a dúvida de escala em aberto) e
+`docs/prompts/05-escala-e-viabilidade.md` (a motivação original, com os números).
