@@ -1,6 +1,9 @@
 # Laboratório atual
 
-Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Ativo: labs/lab-89-apelido-restrito-e-whitelist-relay/ (G4: apelido restrito a letras + lista de
+bloqueio de palavras, sem detecção de PII — direção confirmada com o usuário 2026-08-24; G5: lista
+branca de tipos de mensagem no relay, hoje `broadcast(ws, {...msg, id})` repassa qualquer tipo
+desconhecido)
 Último concluído: labs/lab-88-protecao-contra-sobrecarga/ (pedido direto do usuário: auditoria de
 DDoS/sobrecarga — corrigida a corrida real em `/pairing/redeem` (UPDATE atômico), código de
 pareamento agora usa `crypto.getRandomValues()`, `/health` parou de consultar o banco. **Achado
