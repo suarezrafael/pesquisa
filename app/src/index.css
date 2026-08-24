@@ -872,6 +872,66 @@ body {
   margin-top: 0.25rem;
 }
 
+/* Preview 3D (lab-87) — canvas pequeno e fixo, centralizado, com um degradê sutil de fundo pra
+   o boneco (fundo transparente no Babylon) não flutuar sobre o branco liso do card do modal. */
+.avatar-preview-3d-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.avatar-preview-3d-canvas {
+  width: 180px;
+  height: 180px;
+  border-radius: 20px;
+  background: radial-gradient(circle at 50% 35%, #eef2fc 0%, #dbe3f5 100%);
+  touch-action: none;
+  outline: none;
+}
+
+.avatar-preview-3d-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: avatar-preview-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes avatar-preview-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Abas (lab-87) — mesmo visual de "pill" já usado noutros seletores do jogo, sem introduzir um
+   componente novo de UI. */
+.avatar-shop-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0.25rem;
+  overflow-x: auto;
+}
+
+.avatar-shop-tab {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 999px;
+  border: none;
+  background: #eef1fa;
+  color: #4a5b8c;
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.avatar-shop-tab.active {
+  background: #4a5bc4;
+  color: #fff;
+}
+
 .avatar-shop-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

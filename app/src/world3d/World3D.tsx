@@ -38,8 +38,7 @@ import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
 import { findQuickChatMessage } from '../data/chatMessages'
-import { findAvatarByEmoji, type BonecoFeatures } from '../data/avatars'
-import { findHatById, type HatOption } from '../data/hats'
+import { findHatById } from '../data/hats'
 import {
   findColorOption,
   findHairShapeOption,
@@ -47,8 +46,16 @@ import {
   PANTS_COLOR_CATALOG,
   SHIRT_COLOR_CATALOG,
   SHOE_COLOR_CATALOG,
-  type HairShape,
 } from '../data/customization'
+import {
+  applyBonecoFeatures,
+  applyHairShape,
+  applyHat,
+  avatarColorFromEmoji,
+  bonecoFeaturesFromEmoji,
+  buildStudentFigure,
+  type StudentFigure,
+} from './studentFigure'
 import { questTypeColor } from './questVisuals'
 import { isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
@@ -469,26 +476,6 @@ function terrainHeight(dir: Vector3): number {
   return height
 }
 
-// Cor da camisa vem do catálogo de avatares (src/data/avatars.ts) — fonte única de verdade,
-// compartilhada com a lojinha (AvatarShop.tsx). O fallback cobre só o caso de um emoji não
-// catalogado chegar aqui (não deveria acontecer, mas evita crash).
-function avatarColorFromEmoji(emoji: string): Color3 {
-  const avatar = findAvatarByEmoji(emoji)
-  if (!avatar) return new Color3(0.96, 0.51, 0.68)
-  return new Color3(...avatar.colorRgb)
-}
-
-const FALLBACK_BONECO_FEATURES: BonecoFeatures = {
-  earStyle: 'none',
-  tailStyle: 'none',
-  special: 'none',
-  accentColorRgb: [0.96, 0.51, 0.68],
-}
-
-function bonecoFeaturesFromEmoji(emoji: string): BonecoFeatures {
-  return findAvatarByEmoji(emoji)?.features ?? FALLBACK_BONECO_FEATURES
-}
-
 // Menor rotação que leva o "para cima" padrão (0,1,0) até `up` — usada pra apoiar
 // props/portais deitados sobre a curvatura da esfera, não flutuando na orientação do mundo.
 function alignmentQuaternion(up: Vector3): Quaternion {
@@ -519,36 +506,6 @@ function quaternionBetweenVectors(from: Vector3, to: Vector3): Quaternion {
   const axis = Vector3.Cross(from, to).normalize()
   const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
   return Quaternion.RotationAxis(axis, angle)
-}
-
-interface StudentFigure {
-  root: TransformNode
-  shirtMat: PBRMaterial
-  // Cores de calça/sapato/mochila (lab-73) — expostas junto de `shirtMat` pro mesmo padrão de
-  // recolorir ao vivo (ver `__setAvatarShirtColor`) funcionar pros outros eixos também.
-  pantsMat: PBRMaterial
-  shoeMat: PBRMaterial
-  backpackMat: PBRMaterial
-  hairMat: PBRMaterial
-  // Cabelo (lab-73) — separado de `accessories`/`hatMeshes` porque tem seu próprio eixo de troca
-  // de FORMATO (não só cor), populado por `applyHairShape` (mesmo padrão de `applyHat`).
-  hairMeshes: Mesh[]
-  head: Mesh
-  legPivotL: TransformNode
-  legPivotR: TransformNode
-  kneePivotL: TransformNode
-  kneePivotR: TransformNode
-  armPivotL: TransformNode
-  armPivotR: TransformNode
-  elbowPivotL: TransformNode
-  elbowPivotR: TransformNode
-  // Peças do "boneco 3D" trocável na lojinha (lab-13: orelhas/rabo/chifre/etc., não só cor da
-  // camisa) — populado por `applyBonecoFeatures`, guardado aqui pra poder descartar e remontar
-  // quando o jogador troca de avatar em cena (sem reconstruir a figura inteira).
-  accessories: Mesh[]
-  // Chapéu equipado (lab-24) — eixo de customização INDEPENDENTE de `accessories`: populado por
-  // `applyHat`, sobrevive a troca de criatura (não é descartado por `applyBonecoFeatures`).
-  hatMeshes: Mesh[]
 }
 
 // Carro (lab-15/lab-25) — em escopo de módulo (não dentro de `setup()`) porque o handler de
@@ -614,436 +571,6 @@ interface RemotePlayer {
   // tempo.
   attackAnimTimer: number
   attackAnimKind: 'sword' | 'gun' | null
-}
-
-// Personagem estudante estilo "avatar de app" (torso, cabeça, cabelo, mochila, 2 pernas,
-// 2 braços) construído só com primitivas — sem asset externo. As pernas/braços são
-// TransformNodes-pivô (quadril/ombro) pra poder girar em ciclo de caminhada.
-// Cores opcionais (lab-73, pedido do usuário: "escolher na lojinha a cor da camiseta e da
-// mochila... a cor da calça, a cor do sapato") — sem valor, mantém exatamente o visual de sempre
-// (todo NPC/professor/lojista/civil continua chamando `buildStudentFigure` com só 3 argumentos,
-// sem precisar saber que esses eixos existem). Só o jogador local e os jogadores remotos passam
-// isto — o formato do cabelo é aplicado à parte, depois, via `applyHairShape` (mesmo padrão de
-// `applyHat`: dá pra trocar de novo mais tarde sem reconstruir a figura inteira).
-interface StudentFigureColorOptions {
-  pantsColor?: Color3
-  shoeColor?: Color3
-  backpackColor?: Color3
-}
-
-function buildStudentFigure(
-  scene: Scene,
-  shirtColor: Color3,
-  shadowGenerator: ShadowGenerator,
-  colorOptions?: StudentFigureColorOptions,
-): StudentFigure {
-  const root = new TransformNode('studentRoot', scene)
-
-  const skinMat = new PBRMaterial('skinMat', scene)
-  skinMat.albedoColor = new Color3(0.94, 0.76, 0.6)
-  skinMat.roughness = 0.6
-
-  const shirtMat = new PBRMaterial('shirtMat', scene)
-  shirtMat.albedoColor = shirtColor
-  shirtMat.roughness = 0.7
-
-  const pantsMat = new PBRMaterial('pantsMat', scene)
-  pantsMat.albedoColor = colorOptions?.pantsColor ?? new Color3(0.22, 0.28, 0.48)
-  pantsMat.roughness = 0.8
-
-  const shoeMat = new PBRMaterial('shoeMat', scene)
-  shoeMat.albedoColor = colorOptions?.shoeColor ?? new Color3(0.12, 0.12, 0.14)
-  shoeMat.roughness = 0.7
-
-  const backpackMat = new PBRMaterial('backpackMat', scene)
-  backpackMat.albedoColor = colorOptions?.backpackColor ?? Color3.Lerp(shirtColor, new Color3(0.5, 0.15, 0.1), 0.5)
-  backpackMat.roughness = 0.75
-
-  const hairMat = new PBRMaterial('hairMat', scene)
-  hairMat.albedoColor = new Color3(0.24, 0.15, 0.09)
-  hairMat.roughness = 0.9
-
-  function addMesh(mesh: Mesh, material: PBRMaterial, parent: TransformNode) {
-    mesh.material = material
-    mesh.parent = parent
-    shadowGenerator.addShadowCaster(mesh)
-    return mesh
-  }
-
-  const torso = MeshBuilder.CreateCapsule('torso', { height: 0.5, radius: 0.19 }, scene)
-  torso.position.y = 0.78
-  addMesh(torso, shirtMat, root)
-
-  const head = MeshBuilder.CreateSphere('head', { diameter: 0.32 }, scene)
-  head.position.y = 1.15
-  addMesh(head, skinMat, root)
-
-  // Mochila com detalhes que dão pra reconhecer de costas (única vista que a câmera em 3ª
-  // pessoa mostra durante o jogo): corpo alto/estreito (proporção de mochila, não cubo), aba no
-  // topo, duas bolsas laterais e as pontas das alças aparecendo por cima dos ombros.
-  const backpackFlapMat = new PBRMaterial('backpackFlapMat', scene)
-  backpackFlapMat.albedoColor = backpackMat.albedoColor.scale(0.75)
-  backpackFlapMat.roughness = 0.8
-  const strapMat = new PBRMaterial('backpackStrapMat', scene)
-  strapMat.albedoColor = new Color3(0.15, 0.13, 0.12)
-  strapMat.roughness = 0.85
-
-  const backpack = MeshBuilder.CreateBox('backpack', { width: 0.28, height: 0.38, depth: 0.15 }, scene)
-  backpack.position = new Vector3(0, 0.79, -0.21)
-  addMesh(backpack, backpackMat, root)
-
-  const backpackFlap = MeshBuilder.CreateBox('backpackFlap', { width: 0.3, height: 0.09, depth: 0.16 }, scene)
-  backpackFlap.position = new Vector3(0, 0.79 + 0.19 + 0.03, -0.21)
-  addMesh(backpackFlap, backpackFlapMat, root)
-
-  for (const side of [-1, 1]) {
-    const pouch = MeshBuilder.CreateCapsule(`backpackPouch${side}`, { height: 0.22, radius: 0.045 }, scene)
-    pouch.rotation.x = Math.PI / 2
-    pouch.position = new Vector3(side * 0.16, 0.72, -0.21)
-    addMesh(pouch, backpackFlapMat, root)
-
-    const strap = MeshBuilder.CreateCapsule(`backpackStrap${side}`, { height: 0.16, radius: 0.028 }, scene)
-    strap.rotation.x = 0.55
-    strap.position = new Vector3(side * 0.1, 0.98, -0.06)
-    addMesh(strap, strapMat, root)
-  }
-
-  // Cada membro tem 2 segmentos (coxa+canela, ou braço+antebraço) com uma junta no meio
-  // (joelho/cotovelo) — evita o visual "robotizado" de uma perna/braço só, rígida.
-  function buildTwoSegmentLimb(
-    name: string,
-    side: number,
-    isLeg: boolean,
-  ): { upperPivot: TransformNode; lowerPivot: TransformNode } {
-    const hipY = isLeg ? 0.53 : 0.92
-    const upperLen = isLeg ? 0.27 : 0.22
-    const lowerLen = isLeg ? 0.26 : 0.2
-    const upperRadius = isLeg ? 0.085 : 0.06
-    const lowerRadius = upperRadius * 0.85
-    const mat = isLeg ? pantsMat : skinMat
-
-    const upperPivot = new TransformNode(`${name}UpperPivot`, scene)
-    upperPivot.position = new Vector3(side * (isLeg ? 0.1 : 0.24), hipY, 0)
-    upperPivot.parent = root
-    const upperMesh = MeshBuilder.CreateCapsule(`${name}Upper`, { height: upperLen, radius: upperRadius }, scene)
-    upperMesh.position.y = -upperLen / 2
-    addMesh(upperMesh, mat, upperPivot)
-
-    const lowerPivot = new TransformNode(`${name}LowerPivot`, scene)
-    lowerPivot.position = new Vector3(0, -upperLen, 0)
-    lowerPivot.parent = upperPivot
-    const lowerMesh = MeshBuilder.CreateCapsule(`${name}Lower`, { height: lowerLen, radius: lowerRadius }, scene)
-    lowerMesh.position.y = -lowerLen / 2
-    addMesh(lowerMesh, mat, lowerPivot)
-
-    // Tênis (lab-73, pedido do usuário: "a cor do sapato") — só nas pernas, na ponta da canela,
-    // um pouco pra frente (eixo Z) pra ficar visível saindo da calça em vez de escondido atrás.
-    if (isLeg) {
-      const shoe = MeshBuilder.CreateBox(`${name}Shoe`, { width: 0.1, height: 0.06, depth: 0.16 }, scene)
-      shoe.position = new Vector3(0, -lowerLen - 0.01, 0.04)
-      addMesh(shoe, shoeMat, lowerPivot)
-    }
-
-    return { upperPivot, lowerPivot }
-  }
-
-  const leg1 = buildTwoSegmentLimb('legL', -1, true)
-  const leg2 = buildTwoSegmentLimb('legR', 1, true)
-  const arm1 = buildTwoSegmentLimb('armL', -1, false)
-  const arm2 = buildTwoSegmentLimb('armR', 1, false)
-
-  const figure: StudentFigure = {
-    root,
-    shirtMat,
-    pantsMat,
-    shoeMat,
-    backpackMat,
-    hairMat,
-    hairMeshes: [],
-    head,
-    legPivotL: leg1.upperPivot,
-    legPivotR: leg2.upperPivot,
-    kneePivotL: leg1.lowerPivot,
-    kneePivotR: leg2.lowerPivot,
-    armPivotL: arm1.upperPivot,
-    armPivotR: arm2.upperPivot,
-    elbowPivotL: arm1.lowerPivot,
-    elbowPivotR: arm2.lowerPivot,
-    accessories: [],
-    hatMeshes: [],
-  }
-  // Cabelo padrão — trocável depois via `applyHairShape` (ver `__setHairShape`), mesmo padrão de
-  // `applyHat` sendo chamado de novo quando o jogador troca de item na lojinha em cena.
-  applyHairShape(figure, 'padrao', scene, shadowGenerator)
-  return figure
-}
-
-// Peças 3D que dão a cada avatar do catálogo (src/data/avatars.ts) uma forma de verdade — não só
-// uma cor de camisa (pedido do usuário: "bonecos 3d pra trocar não só de avatar", lab-13).
-// Descarta as peças antigas (se houver — troca de avatar em cena já com a cena montada) e monta
-// as novas a partir de `features`, tudo parentado em `figure.root` (mesmo padrão da mochila/
-// cabelo: offset absoluto, não aninhado na cabeça) reaproveitando primitivas simples, sem asset
-// externo, igual ao resto do jogo.
-function applyBonecoFeatures(
-  figure: StudentFigure,
-  features: BonecoFeatures,
-  scene: Scene,
-  shadowGenerator: ShadowGenerator,
-): void {
-  for (const mesh of figure.accessories) mesh.dispose()
-  figure.accessories = []
-
-  const accentMat = new PBRMaterial('bonecoAccentMat', scene)
-  accentMat.albedoColor = new Color3(...features.accentColorRgb)
-  accentMat.roughness = 0.75
-
-  function add(mesh: Mesh) {
-    mesh.material = accentMat
-    mesh.parent = figure.root
-    shadowGenerator.addShadowCaster(mesh)
-    figure.accessories.push(mesh)
-    return mesh
-  }
-
-  const HEAD_Y = 1.15
-
-  if (features.earStyle === 'triangle') {
-    for (const side of [-1, 1]) {
-      const ear = MeshBuilder.CreateCylinder(
-        `earTriangle${side}`,
-        { height: 0.14, diameterTop: 0, diameterBottom: 0.09, tessellation: 3 },
-        scene,
-      )
-      ear.position = new Vector3(side * 0.13, HEAD_Y + 0.16, 0.03)
-      ear.rotation.z = side * 0.35
-      add(ear)
-    }
-  } else if (features.earStyle === 'round') {
-    for (const side of [-1, 1]) {
-      const ear = MeshBuilder.CreateSphere(`earRound${side}`, { diameter: 0.14 }, scene)
-      ear.scaling.z = 0.6
-      ear.position = new Vector3(side * 0.15, HEAD_Y + 0.14, 0.02)
-      add(ear)
-    }
-  } else if (features.earStyle === 'tufted') {
-    for (const side of [-1, 1]) {
-      const ear = MeshBuilder.CreateCylinder(
-        `earTufted${side}`,
-        { height: 0.1, diameterTop: 0, diameterBottom: 0.05, tessellation: 3 },
-        scene,
-      )
-      ear.position = new Vector3(side * 0.07, HEAD_Y + 0.18, 0.05)
-      ear.rotation.z = side * 0.2
-      add(ear)
-    }
-  }
-
-  if (features.tailStyle === 'fluffy') {
-    const tail = MeshBuilder.CreateCapsule('tailFluffy', { height: 0.4, radius: 0.075 }, scene)
-    tail.position = new Vector3(0, 0.62, -0.24)
-    tail.rotation.x = -0.9
-    add(tail)
-    const tip = MeshBuilder.CreateSphere('tailFluffyTip', { diameter: 0.14 }, scene)
-    tip.position = new Vector3(0, 0.82, -0.42)
-    add(tip)
-  } else if (features.tailStyle === 'thin') {
-    const tail = MeshBuilder.CreateCapsule('tailThin', { height: 0.32, radius: 0.032 }, scene)
-    tail.position = new Vector3(0, 0.58, -0.22)
-    tail.rotation.x = -0.6
-    add(tail)
-  } else if (features.tailStyle === 'tufted') {
-    const tail = MeshBuilder.CreateCapsule('tailTufted', { height: 0.36, radius: 0.035 }, scene)
-    tail.position = new Vector3(0, 0.6, -0.24)
-    tail.rotation.x = -0.75
-    add(tail)
-    const tip = MeshBuilder.CreateSphere('tailTuftedTip', { diameter: 0.1 }, scene)
-    tip.position = new Vector3(0, 0.78, -0.4)
-    add(tip)
-  }
-
-  if (features.special === 'horn') {
-    const horn = MeshBuilder.CreateCylinder('horn', { height: 0.24, diameterTop: 0, diameterBottom: 0.06, tessellation: 6 }, scene)
-    horn.position = new Vector3(0, HEAD_Y + 0.22, 0.08)
-    horn.rotation.x = -0.3
-    add(horn)
-  } else if (features.special === 'horns') {
-    for (const side of [-1, 1]) {
-      const horn = MeshBuilder.CreateCylinder(
-        `horns${side}`,
-        { height: 0.14, diameterTop: 0, diameterBottom: 0.04, tessellation: 5 },
-        scene,
-      )
-      horn.position = new Vector3(side * 0.09, HEAD_Y + 0.18, 0.06)
-      horn.rotation.z = side * 0.3
-      horn.rotation.x = -0.2
-      add(horn)
-    }
-  } else if (features.special === 'beak') {
-    const beak = MeshBuilder.CreateCylinder('beak', { height: 0.09, diameterTop: 0, diameterBottom: 0.055 }, scene)
-    beak.rotation.x = Math.PI / 2
-    beak.position = new Vector3(0, HEAD_Y - 0.01, 0.16)
-    add(beak)
-  } else if (features.special === 'mane') {
-    const spikeCount = 10
-    for (let s = 0; s < spikeCount; s++) {
-      const angle = (s / spikeCount) * Math.PI * 2
-      const spike = MeshBuilder.CreateCylinder(
-        `mane${s}`,
-        { height: 0.13, diameterTop: 0, diameterBottom: 0.06, tessellation: 3 },
-        scene,
-      )
-      spike.position = new Vector3(Math.cos(angle) * 0.16, HEAD_Y + Math.sin(angle) * 0.1, Math.sin(angle) * 0.05 + 0.02)
-      spike.rotation.z = angle + Math.PI / 2
-      add(spike)
-    }
-  } else if (features.special === 'eyes') {
-    for (const side of [-1, 1]) {
-      const eye = MeshBuilder.CreateSphere(`eyes${side}`, { diameter: 0.1 }, scene)
-      eye.position = new Vector3(side * 0.08, HEAD_Y + 0.13, 0.1)
-      add(eye)
-    }
-  } else if (features.special === 'tentacles') {
-    const tentacleCount = 3
-    for (let t = 0; t < tentacleCount; t++) {
-      const angle = (t / tentacleCount) * Math.PI * 2
-      const tentacle = MeshBuilder.CreateCapsule(`tentacles${t}`, { height: 0.22, radius: 0.028 }, scene)
-      tentacle.position = new Vector3(Math.cos(angle) * 0.14, HEAD_Y - 0.05, Math.sin(angle) * 0.14)
-      tentacle.rotation.x = 0.6
-      add(tentacle)
-    }
-  }
-}
-
-// Chapéu equipado (lab-24) — eixo de customização independente de `applyBonecoFeatures`: guardado
-// em `figure.hatMeshes` (não em `figure.accessories`), pra trocar de criatura não descartar o
-// chapéu e vice-versa. `hat` null = remove qualquer chapéu (descarta as malhas e sai).
-function applyHat(
-  figure: StudentFigure,
-  hat: HatOption | null,
-  scene: Scene,
-  shadowGenerator: ShadowGenerator,
-): void {
-  for (const mesh of figure.hatMeshes) mesh.dispose()
-  figure.hatMeshes = []
-  if (!hat) return
-
-  const hatMat = new PBRMaterial(`hatMat-${hat.id}`, scene)
-  hatMat.albedoColor = new Color3(...hat.colorRgb)
-  hatMat.roughness = 0.6
-
-  function add(mesh: Mesh) {
-    mesh.material = hatMat
-    mesh.parent = figure.root
-    shadowGenerator.addShadowCaster(mesh)
-    figure.hatMeshes.push(mesh)
-    return mesh
-  }
-
-  // Acima do cabelo (hair vai até HEAD_Y+0.24ish, diâmetro 0.35 slice 0.55) — HAT_Y evita
-  // z-fighting com a touca de cabelo por baixo.
-  const HAT_Y = 1.34
-
-  if (hat.shape === 'cap') {
-    const brim = MeshBuilder.CreateCylinder('hatCapBrim', { height: 0.03, diameter: 0.34, tessellation: 16 }, scene)
-    brim.position = new Vector3(0, HAT_Y - 0.06, 0.08)
-    add(brim)
-    const dome = MeshBuilder.CreateSphere('hatCapDome', { diameter: 0.34, slice: 0.55 }, scene)
-    dome.position.y = HAT_Y
-    add(dome)
-  } else if (hat.shape === 'party') {
-    const cone = MeshBuilder.CreateCylinder(
-      'hatPartyCone',
-      { height: 0.32, diameterTop: 0.02, diameterBottom: 0.26, tessellation: 12 },
-      scene,
-    )
-    cone.position.y = HAT_Y + 0.14
-    add(cone)
-    const pom = MeshBuilder.CreateSphere('hatPartyPom', { diameter: 0.07 }, scene)
-    pom.position.y = HAT_Y + 0.31
-    add(pom)
-  } else if (hat.shape === 'flower') {
-    const petalCount = 5
-    for (let p = 0; p < petalCount; p++) {
-      const angle = (p / petalCount) * Math.PI * 2
-      const petal = MeshBuilder.CreateSphere(`hatFlowerPetal${p}`, { diameter: 0.09 }, scene)
-      petal.scaling.y = 0.5
-      petal.position = new Vector3(Math.cos(angle) * 0.08, HAT_Y - 0.02, Math.sin(angle) * 0.08 + 0.1)
-      add(petal)
-    }
-    const center = MeshBuilder.CreateSphere('hatFlowerCenter', { diameter: 0.06 }, scene)
-    center.position = new Vector3(0, HAT_Y - 0.02, 0.1)
-    add(center)
-  } else if (hat.shape === 'bow') {
-    for (const side of [-1, 1]) {
-      const loop = MeshBuilder.CreateBox(`hatBowLoop${side}`, { width: 0.12, height: 0.08, depth: 0.03 }, scene)
-      loop.position = new Vector3(side * 0.07, HAT_Y - 0.04, 0.1)
-      loop.rotation.z = side * 0.5
-      add(loop)
-    }
-    const knot = MeshBuilder.CreateSphere('hatBowKnot', { diameter: 0.05 }, scene)
-    knot.position = new Vector3(0, HAT_Y - 0.04, 0.1)
-    add(knot)
-  } else if (hat.shape === 'crown') {
-    const band = MeshBuilder.CreateCylinder(
-      'hatCrownBand',
-      { height: 0.09, diameterTop: 0.32, diameterBottom: 0.3, tessellation: 16 },
-      scene,
-    )
-    band.position.y = HAT_Y - 0.03
-    add(band)
-    const spikeCount = 5
-    for (let s = 0; s < spikeCount; s++) {
-      const angle = (s / spikeCount) * Math.PI * 2
-      const spike = MeshBuilder.CreateCylinder(
-        `hatCrownSpike${s}`,
-        { height: 0.1, diameterTop: 0, diameterBottom: 0.06, tessellation: 4 },
-        scene,
-      )
-      spike.position = new Vector3(Math.cos(angle) * 0.13, HAT_Y + 0.06, Math.sin(angle) * 0.13)
-      add(spike)
-    }
-  }
-}
-
-// Formato do cabelo (lab-73, pedido do usuário: "o formato do cabelo, pode ser 3 opções") — mesmo
-// padrão de `applyHat` (descarta as peças antigas, monta as novas), mas continua usando
-// `figure.hairMat` (não um material novo por chamada) já que cor de cabelo não é um eixo de
-// customização pedido — só o formato muda.
-function applyHairShape(figure: StudentFigure, shape: HairShape, scene: Scene, shadowGenerator: ShadowGenerator): void {
-  for (const mesh of figure.hairMeshes) mesh.dispose()
-  figure.hairMeshes = []
-
-  function add(mesh: Mesh) {
-    mesh.material = figure.hairMat
-    mesh.parent = figure.root
-    shadowGenerator.addShadowCaster(mesh)
-    figure.hairMeshes.push(mesh)
-    return mesh
-  }
-
-  if (shape === 'moicano') {
-    const fin = MeshBuilder.CreateBox('hairMoicanoFin', { width: 0.05, height: 0.18, depth: 0.3 }, scene)
-    fin.position.y = 1.32
-    add(fin)
-    const sides = MeshBuilder.CreateSphere('hairMoicanoSides', { diameter: 0.33, slice: 0.4 }, scene)
-    sides.position.y = 1.22
-    add(sides)
-  } else if (shape === 'longo') {
-    const top = MeshBuilder.CreateSphere('hairLongoTop', { diameter: 0.35, slice: 0.55 }, scene)
-    top.position.y = 1.24
-    add(top)
-    // Rabo/franja caindo pelas costas — cápsula inclinada, mais estreita embaixo (escala não
-    // uniforme) pra não parecer um cilindro reto.
-    const back = MeshBuilder.CreateCapsule('hairLongoBack', { height: 0.34, radius: 0.1 }, scene)
-    back.scaling = new Vector3(0.75, 1, 0.5)
-    back.rotation.x = 0.2
-    back.position = new Vector3(0, 1.03, -0.14)
-    add(back)
-  } else {
-    const hair = MeshBuilder.CreateSphere('hair', { diameter: 0.35, slice: 0.55 }, scene)
-    hair.position.y = 1.24
-    add(hair)
-  }
 }
 
 // Bichinhos que vagam pelo planeta (pedido do usuário: "animais no mundo, animais aleatorios")
@@ -2284,8 +1811,16 @@ export function World3D({
     // lab-72 — 1.2x (lab-70) não bastou: usuário mandou um screenshot real do Poco C75 mostrando
     // nomes/legendas dos personagens ainda ilegíveis, com FPS já bom (25) e sobra pra gastar mais
     // com texto maior. Subiu pra 1.6x.
+    // lab-87 — pedido do usuário voltou, mas agora sem citar um aparelho específico ("legenda dos
+    // objetos e NPC está com baixa qualidade... aumentar a fonte, na escala 1.40"): até aqui só
+    // celular (`isSmallScreen`) recebia qualquer aumento — tablet/desktop sempre saíam no tamanho
+    // base (18-32px), pequeno pra um rótulo 3D visto de longe. `READABILITY_SCALE` aplica o 1.4x
+    // pedido em CIMA do que já existe, pra todo aparelho, sem mexer no ajuste de celular já
+    // validado nos labs 67-72.
+    const READABILITY_SCALE = 1.4
     function mobileFontSize(px: number): number {
-      return isSmallScreen ? Math.round(px * 1.6) : px
+      const deviceScale = isSmallScreen ? 1.6 : 1
+      return Math.round(px * deviceScale * READABILITY_SCALE)
     }
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
@@ -2352,6 +1887,17 @@ export function World3D({
     const shadowGenerator = new ShadowGenerator(isLowEndDevice ? 512 : 1024, sunLight)
     shadowGenerator.useBlurExponentialShadowMap = !isLowEndDevice
     shadowGenerator.blurKernel = 32
+    // lab-87, pedido do usuário: "manchas pretas ao caminhar" no chão do planeta. Suspeita: shadow
+    // acne — o planeta é uma esfera deformada com relevo real (curvatura contínua, normais mudando
+    // o tempo todo), e sem bias o mapa de sombra compara profundidade contra a própria superfície
+    // que a gerou, autossombreando pixels que deveriam estar totalmente iluminados; o artefato muda
+    // de posição/aparece e some conforme o ângulo câmera-luz muda — bate com "ao caminhar". Mais
+    // visível em dispositivo fraco (`isLowEndDevice`), que cai pro shadow map padrão sem blur (mais
+    // sujeito a esse artefato que o `useBlurExponentialShadowMap` do resto). `normalBias` importa
+    // mais que `bias` aqui — desloca a amostra na direção da normal, o que compensa a curvatura
+    // contínua do terreno melhor que só afastar ao longo da direção da luz.
+    shadowGenerator.bias = 0.001
+    shadowGenerator.normalBias = 0.035
     // Sombra dinâmica é barata por caster individual, mas o jogo tem ~1900 meshes e quase todo
     // builder (props, pedras, bichos, moedas, degraus) chama addShadowCaster — em GPU fraca isso
     // some ainda mais rápido que o próprio SSAO. Em vez de caçar e editar cada um dos ~40 pontos
@@ -4963,6 +4509,22 @@ export function World3D({
         teacher.root.scaling.setAll(0.92)
         teacher.root.position = new Vector3(0.95, 0, 0.55)
         teacher.root.parent = base
+
+        // lab-87, mesmo bug relatado de novo ("morros invisíveis, casas flutuando em algo
+        // transparente") apesar da fundação maior do lab-28 — causa raiz real: a fundação fixa
+        // (1,72 x 1,52) cobre a variação de relevo TÍPICA sob a escola, mas não a PIOR, que
+        // depende de onde a escola caiu (perto da borda íngreme de um platô alto, ver
+        // `PLATEAU_CENTERS`, pode variar bem mais que isso na mesma pegada). Em vez de adivinhar
+        // um tamanho de caixa maior de novo, usa a mesma correção multi-vértice que já resolve
+        // isso pras rochas de montanha (`settleMeshOnTerrain`, lab-75): amostra o ponto mais baixo
+        // de cada malha filha (paredes/fundação/porta/telhado/professor) contra o relevo real
+        // (raycast, não a fórmula) e desce a escola inteira o suficiente pra nenhum canto ficar
+        // boiando — a fundação continua ajudando (evita o pior caso comum), isso cobre o resto.
+        settleMeshOnTerrain(base, localUp)
+        // `settleMeshOnTerrain` pode ter descido `base` — `surfacePos` (usada mais abaixo pra
+        // distância de gatilho da missão e pro topo do telhado) precisa refletir a posição FINAL,
+        // não a de antes do ajuste, senão o gatilho fica levemente descolado da escola visível.
+        surfacePos.copyFrom(base.position)
 
         const label = new TextBlock(`label-${quest.id}`, `${index + 1}`)
         label.color = 'white'
