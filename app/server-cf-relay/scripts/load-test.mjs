@@ -99,6 +99,14 @@ function spawnFakePlayer(index) {
 
     ws.addEventListener('error', (ev) => {
       stats.error = String(ev.message || ev)
+      // lab-88: uma conexão REJEITADA na própria troca de protocolo (ex.: 429 do rate limit de
+      // conexão) dispara 'error' mas pode nunca disparar 'close' na implementação de WebSocket
+      // do Node — sem isso, o script travava pra sempre esperando um 'close' que não vinha,
+      // achado testando o endurecimento do relay ao vivo (não é um bug do relay, é do script).
+      if (!stats.opened) {
+        if (sendTimer) clearInterval(sendTimer)
+        resolve(stats)
+      }
     })
 
     ws.addEventListener('close', () => {
