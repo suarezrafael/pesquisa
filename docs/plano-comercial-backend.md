@@ -127,6 +127,72 @@ bônus se vier a existir). **Nunca** gateia quest, progressão, cooperação ou 
 pedagógico — a checagem de assinatura só pode aparecer no código da lojinha (`AvatarShop.tsx` e
 os catálogos em `src/data/`), nunca em `quests.ts`/`progression.ts`.
 
+## Catálogo de cosméticos (Fase E) — inspiração Roblox (Brookhaven RP e afins)
+
+Direção de produto do usuário (2026-08-24): os itens exclusivos devem ter a "pegada" dos jogos de
+roleplay/customização mais populares do Roblox — Brookhaven RP é a referência citada — cuja
+mecânica central é exatamente a que já engaja essa faixa etária em escala: casa própria pra montar
+e decorar, guarda-roupa com muitas opções, e autoexpressão via avatar. Isso complementa (não
+substitui) o case do Prodigy (§15.2 do `prompt.md`) — Prodigy valida o FUNIL de assinatura
+(portal separado, parental gate, upsell sobre conveniência); Brookhaven RP valida O QUE tem valor
+percebido suficiente pra uma criança pedir a assinatura pros pais (colecionismo, personalização do
+espaço pessoal, exibir pra amigos). Os dois modelos são compatíveis com a regra inegociável acima
+— nenhum deles gateia o loop pedagógico.
+
+**Regra explícita confirmada pelo usuário**: a biblioteca de material didático (mencionada no
+plano original como possível item de assinatura) fica **de fora** dos exclusivos — sempre grátis,
+sem exceção. Só cosméticos puramente visuais entram no gate.
+
+### Extensão dos catálogos já existentes (avatares/chapéus/cores/cabelo)
+
+Mesma estrutura de dados já usada em `app/src/data/{avatars,hats,customization}.ts` (cada item
+tem `id`/`name`/`cost`/uma forma geométrica primitiva pro Babylon renderizar — nada de textura
+foto-realista, mantém o estilo cartoon low-poly já estabelecido), só adicionando um novo campo
+`subscriptionOnly?: boolean` em vez de `cost` pros itens exclusivos:
+
+- **Chapéus novos**: Chapéu de Mago 🧙 (shape nova `wizard`, cone listrado com estrelas), Fone de
+  Ouvido Gamer 🎧 (shape nova `headset`), Chifres de Dragão 🐉 (shape nova `horns`), Coroa de
+  Diamante 💎 (variante brilhante da coroa já existente).
+- **Óculos** (eixo de customização novo, mesmo padrão do chapéu — independente, `equippedGlassesId`):
+  Óculos de Sol Estiloso 😎, Óculos de Realidade Virtual 🥽.
+- **Roupas novas** (estende `SHIRT_COLOR_CATALOG`/`PANTS_COLOR_CATALOG`/`SHOE_COLOR_CATALOG` com
+  padrões, não só cor sólida — precisa de um campo `pattern` novo no lugar de `colorRgb` puro):
+  Camisa Holográfica (gradiente arco-íris), Calça Estelar (padrão de estrelas), Tênis "Led"
+  (efeito de emissive pulsante, já existe suporte a emissive nos materiais do Babylon usados hoje).
+- **Mochila voadora** 🎒✨ — mesma mochila existente, com uma pequena hélice/asas animadas.
+- **Criaturas novas** (estende `avatars.ts`): Dragãozinho 🐲, Robô 🤖, Fênix 🔥.
+
+### Feature nova: "Minha Casa" — maior aposta de engajamento desta fase
+
+A mecânica mais pedida por quem joga jogos como Brookhaven RP é ter um espaço PRÓPRIO pra montar.
+Proposta (a decidir em detalhe quando esta fase for construída, viraria seu próprio laboratório
+dado o tamanho):
+
+- **A casa em si é grátis pra todo mundo** (não é o cosmético — é uma área nova do jogo, mesmo
+  espírito de "nunca gatear conteúdo/funcionalidade central", só que aplicado a uma feature social
+  em vez de pedagógica). Cada jogador ganha um terreno/cômodo simples ao lado do mini-planeta.
+  - Justificativa: dividir DIVERSÃO (autoexpressão, criatividade — deve continuar acessível) de
+    CONVENIÊNCIA/EXCLUSIVIDADE (temas de mobília prontos, itens raros) é a mesma lógica já aplicada
+    às quests — mantém a proposta educacional livre de crítica "pay-to-win" mesmo estendendo pra
+    uma feature não-pedagógica.
+- **Mobília avulsa** (cama, mesa, cadeira, tapete, planta, luminária) compra-se com moeda do jogo,
+  igual chapéus/roupas hoje — grátis de assinatura, só custa progressão normal.
+- **Sets temáticos exclusivos de assinante**: "Quarto Espacial" 🚀 (cama-nave, luminária-planeta,
+  tapete de estrelas) e "Jardim Encantado" 🌷 (grama florida, banco de madeira, borboletas
+  animadas) — só esses sets ficam atrás do entitlement, não a casa nem a mobília básica.
+- **Ideia de expansão futura (P2, não desta fase)**: "modo visita" pra ver a casa de um amigo —
+  exige a mesma revisão de segurança já aplicada ao chat fechado (`docs/prompts/01-seguranca.md`)
+  antes de existir; não entra no escopo da Fase E.
+
+### Por que isso funciona pra essa faixa etária (sem inventar estatística que não temos)
+
+Os mecanismos por trás do sucesso desses jogos no Roblox são bem documentados qualitativamente:
+autoexpressão via avatar, colecionismo (querer "completar" o catálogo), personalização de um
+espaço que é seu, e exibição social (mostrar pra amigos o que você montou/vestiu). Não temos (nem
+fabricamos) um número de conversão específico pra citar aqui — a validação de que ESSA MONETIZAÇÃO
+funciona continua sendo o case do Prodigy (§15.2); esta seção só define O QUE colocar atrás do
+gate pra maximizar o desejo de assinar, não se o modelo de assinatura funciona.
+
 ## Fases de implementação (cada uma vira um laboratório na hora de construir)
 
 1. **Fase A — Fundação de dados ✅ concluída em 2026-08-22**: projeto Neon `missao-aprender`
@@ -157,9 +223,12 @@ os catálogos em `src/data/`), nunca em `quests.ts`/`progression.ts`.
    (`GET /entitlement`) contra o status real da assinatura. Testado ao vivo de ponta a ponta,
    incluindo cancelamento da assinatura refletindo no jogo na revalidação seguinte. Ver
    `labs/lab-81-.../CONTEXT.md` pro detalhe completo.
-5. **Fase E — Cosmético de verdade gateado**: 1-2 itens novos na lojinha marcados
-   `subscriptionOnly`, escondidos/bloqueados sem entitlement ativo — a entrega concreta do pedido
-   "cosméticos desbloqueáveis por assinatura".
+5. **Fase E — Cosmético de verdade gateado**: itens novos marcados `subscriptionOnly` na lojinha
+   (chapéus/óculos/roupas/criaturas), escondidos/bloqueados sem entitlement ativo — a entrega
+   concreta do pedido "cosméticos desbloqueáveis por assinatura". Ver a seção "Catálogo de
+   cosméticos (Fase E)" acima pro desenho completo (inspiração Brookhaven RP/Roblox, confirmado
+   pelo usuário em 2026-08-24) — provavelmente vira 2 laboratórios: um pras extensões dos
+   catálogos existentes (mais simples), outro pra "Minha Casa" (maior, feature nova).
 6. **Fase F — Lançamento comercial**: migrar hospedagem do front-end pro Cloudflare Pages (ver
    achado crítico acima) OU assinar Vercel Pro, sair do modo teste do Stripe, e (opcional, pode
    vir depois) relatório semanal por e-mail via Resend.
@@ -185,11 +254,11 @@ Pro em vez de migrar.
 
 - ~~Preço da assinatura~~ — confirmado pelo usuário: **R$ 4,99/mês** (abaixo da faixa sugerida em
   `prompt.md` §15.4, de propósito: "tem que ser bem barato pra clientes brasileiro").
-- Quais cosméticos específicos ficam exclusivos de assinante na Fase E (sugestão do usuário:
-  skins novas, chapéus novos, uma "escolinha" e uma biblioteca com banco de material didático —
-  ver nota abaixo sobre a biblioteca).
+- ~~Quais cosméticos ficam exclusivos~~ — direção confirmada pelo usuário em 2026-08-24: inspirado
+  em Brookhaven RP/Roblox (casa pra montar, guarda-roupa amplo, muitos itens). Lista concreta
+  proposta na seção "Catálogo de cosméticos (Fase E)" acima; itens exatos ainda podem ser
+  refinados na hora de construir cada laboratório da fase.
 - Se migra pra Cloudflare Pages (recomendado, mantém tudo grátis) ou aceita Vercel Pro na Fase F.
-- **Biblioteca de material didático**: o usuário sugeriu incluí-la entre os itens desbloqueáveis
-  por assinatura. Recomendação (não confirmada pelo usuário): manter o conteúdo pedagógico em si
-  sempre grátis (regra inegociável, `prompt.md` §15.1) e gatear só a apresentação/organização
-  premium (ex. capas ilustradas, download offline, trilha curada) — a decidir na Fase E.
+- ~~Biblioteca de material didático~~ — **confirmado pelo usuário em 2026-08-24: fica de fora dos
+  exclusivos**, sempre grátis, sem exceção (nem a apresentação/organização, ao contrário da
+  recomendação intermediária cogitada antes).
