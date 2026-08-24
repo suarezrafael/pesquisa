@@ -54,4 +54,10 @@ export default defineConfig({
       },
     }),
   ],
+  test: {
+    // Sem isso, `npm run test` aqui também varre e roda os testes de `server-accounts/` e
+    // `server-cf-relay/` (cada um tem seu próprio `npm run test` e `node_modules`/deploy
+    // separado) — mantém a mesma separação de pacotes já existente entre o jogo e os Workers.
+    exclude: ['**/node_modules/**', 'server-accounts/**', 'server-cf-relay/**', 'server/**'],
+  },
 })
