@@ -10,9 +10,11 @@ concluídas; E-F não iniciadas). Ler antes de continuar qualquer trabalho de co
 cosméticos pagos. Backend confirmado com o usuário como TypeScript/Cloudflare (não migra pra
 C#/.NET). Preço da assinatura confirmado: R$ 4,99/mês.
 
-**Jogo ao vivo**: https://app-two-flax-92.vercel.app (rota `/familia` com portal dos responsáveis
-+ assinatura real via Stripe modo teste + gerador de código de pareamento; HUD do jogo com botão
-🔗 pra digitar esse código)
+**Jogo ao vivo**: https://app-two-flax-92.vercel.app **e também** https://missaoaprendizado.com
+(domínio próprio, comprado pelo usuário em 2026-08-24 via Cloudflare Registrar — ver
+"Infraestrutura nova fora do git" abaixo — DNS apontado direto pro mesmo projeto Vercel, hospedagem
+não mudou). Rota `/familia` com portal dos responsáveis + assinatura real via Stripe modo teste +
+gerador de código de pareamento; HUD do jogo com botão 🔗 pra digitar esse código.
 **Relé de multiplayer ao vivo (Cloudflare)**: https://missao-aprender-relay-v2.rafaelvs.workers.dev
 (documentado em `app/server-cf-relay/README.md`)
 **Backend de contas (Cloudflare Worker)**: https://missao-aprender-accounts.rafaelvs.workers.dev
@@ -31,15 +33,27 @@ região São Paulo), conta `rafaelv_s@hotmail.com` (login GitHub). Uma API key p
 ("missao-aprender-agent", escopo amplo — toda a conta, não só este projeto) foi usada pra
 provisionar isso; considerar revogar/restringir antes de qualquer automação recorrente.
 
+**Domínio `missaoaprendizado.com`** (2026-08-24): registrado pelo usuário via Cloudflare Registrar
+(mesma conta Cloudflare dos Workers), US$10,46/ano, expira 23/08/2027, auto-renovação ativa por
+padrão (desativável no dashboard Cloudflare). `missaoaprender.com` e `missaoaprender.com.br`
+(o nome exato do jogo) já estavam registrados por terceiros — este foi o melhor disponível
+preservando o nome. Zona DNS criada automaticamente na Cloudflare; dois registros A adicionados
+manualmente (`@` e `www` → `76.76.21.21`, modo "DNS only"/sem proxy — obrigatório, já que quem
+serve o site é o Vercel, não a Cloudflare) apontando pro mesmo projeto Vercel que já hospedava
+`app-two-flax-92.vercel.app`. Vercel sugere trocar pro CNAME dele
+(`86cbd73d3d7878f5.vercel-dns-017.com`) como otimização futura — não obrigatório, os registros A
+atuais já funcionam (`vercel domains verify` confirma `ok: true`, `misconfigured: false`).
+
 **Fly.io v1 (`missao-aprender-relay`)**: usuário pediu pra apagar, mas `flyctl apps destroy`
 falhou — a conta Fly.io está com o trial expirado e a própria plataforma bloqueia TODA chamada de
 API (inclusive apagar, que é grátis) até um cartão ser cadastrado. Sem contorno por CLI. O app já
 está `suspended` (não roda/não é cobrado), só não pôde ser removido da conta.
 
-**Decisões de produto pendentes (usuário)**, antes de construir a Fase E do backend comercial:
-(1) lista exata de cosméticos exclusivos; (2) resolver se a "biblioteca de material didático"
-mencionada pelo usuário fica de fora do gate de assinatura (recomendado, por causa da regra de
-nunca gatear conteúdo pedagógico em `prompt.md` §15.1) ou não. Preço já confirmado: R$ 4,99/mês.
+**Decisões de produto já confirmadas** (não são mais pendências): preço R$ 4,99/mês; direção dos
+cosméticos da Fase E inspirada em Brookhaven RP/Roblox (casa pra montar, guarda-roupa amplo —
+ver `docs/plano-comercial-backend.md`, seção "Catálogo de cosméticos (Fase E)"); biblioteca de
+material didático fica de fora dos exclusivos, sempre grátis. Nenhuma decisão de produto pendente
+no momento — Fase E pode ser construída direto a partir do desenho já registrado no plano.
 
 **Se o usuário reportar objetos flutuando de novo** (lab-75): pedir um print com o jogador parado
 bem perto do objeto. Lembrar também que o sistema de chuva dinâmica
