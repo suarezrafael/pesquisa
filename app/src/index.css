@@ -179,6 +179,25 @@ body {
   background: var(--card);
   cursor: pointer;
   white-space: nowrap;
+  /* Também usado em `<a>` (link pra `/familia`, PairingScreen.tsx) — sem isso, um link herdaria
+     sublinhado/cor azul padrão do navegador em vez de parecer o mesmo botão pill dos `<button>`.
+     Padding continua 0 aqui de propósito: dentro de `.nickname-row` (Onboarding.tsx) esse botão
+     fica ao lado de um `<input>` e usa o padding 0 + altura do próprio texto pra bater com a
+     altura do campo — mudar isso quebraria esse alinhamento. O link novo ganha padding próprio
+     logo abaixo, sem afetar os botões existentes. */
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+  color: inherit;
+}
+
+/* Só o uso como link solto (não dentro de `.nickname-row`) precisa de padding vertical próprio —
+   um `<a>` não tem a mesma caixa de formulário que um `<button>` teria pra dar altura sozinho.
+   Margem também: sem `.nickname-row` ao redor pra dar espaçamento, o link ficaria colado no
+   parágrafo/form vizinho (nem `<p>` nem `<form>` tem margem própria nesse contexto de `.modal`). */
+a.nickname-generate-btn {
+  padding: 0.6rem 0.9rem;
+  margin: 0.75rem 0;
 }
 
 .nickname-generate-btn:hover {

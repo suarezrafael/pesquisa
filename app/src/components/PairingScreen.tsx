@@ -46,6 +46,12 @@ export function PairingScreen({ active, redeeming, redeemError, onRedeem, onClos
               Peça pra quem cuida de você abrir a área dos responsáveis e gerar um código. Digite
               esse código aqui, uma única vez.
             </p>
+            {/* Pedido do usuário (2026-08-24): não tinha nenhum link de verdade pra `/familia` em
+                lugar nenhum do jogo, só esse texto — quem cuida da criança não tinha como achar a
+                área dos responsáveis sem já saber o endereço de cor. */}
+            <a href="/familia" target="_blank" rel="noreferrer" className="nickname-generate-btn">
+              Abrir área dos responsáveis
+            </a>
             <form onSubmit={handleSubmit}>
               <label className="field">
                 <span>Código de 6 dígitos</span>
