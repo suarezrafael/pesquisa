@@ -6,6 +6,7 @@ import { QuestModal } from './components/QuestModal'
 import { RewardToast } from './components/RewardToast'
 import { PairingScreen } from './components/PairingScreen'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
+import { AchievementsPanel } from './world3d/AchievementsPanel'
 import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
@@ -89,6 +90,7 @@ function GameApp() {
   const [showQuestList, setShowQuestList] = useState(false)
   const [showShop, setShowShop] = useState(false)
   const [showPairing, setShowPairing] = useState(false)
+  const [showAchievements, setShowAchievements] = useState(false)
   const { entitlement, redeemCode, redeeming, redeemError } = useEntitlement()
 
   // lab-91: carimba "última vez jogado" pro painel de progresso do `/familia` — só quando já
@@ -155,6 +157,7 @@ function GameApp() {
           onOpenQuestList={() => setShowQuestList(true)}
           onOpenShop={() => setShowShop(true)}
           onOpenPairing={() => setShowPairing(true)}
+          onOpenAchievements={() => setShowAchievements(true)}
           onCollectCoin={collectCoin}
           suspendTriggers={
             activeQuest !== null ||
@@ -163,7 +166,8 @@ function GameApp() {
             showHelp ||
             showQuestList ||
             showShop ||
-            showPairing
+            showPairing ||
+            showAchievements
           }
         />
       </Suspense>
@@ -197,6 +201,10 @@ function GameApp() {
 
       {showQuestList && (
         <QuestListOverlay progress={progress} onClose={() => setShowQuestList(false)} />
+      )}
+
+      {showAchievements && (
+        <AchievementsPanel progress={progress} onClose={() => setShowAchievements(false)} />
       )}
 
       {showShop && (

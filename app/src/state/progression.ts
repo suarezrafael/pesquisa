@@ -29,9 +29,11 @@ export function xpIntoLevel(xp: number): { current: number; needed: number } {
   return { current: xp - floor, needed: xpForLevel(level) - floor }
 }
 
-const BADGE_FIRST_QUEST = 'Primeira Missão'
-const BADGE_HALFWAY = 'Metade do Caminho'
-const BADGE_ALL_DONE = 'Mestre das Missões'
+// Exportadas (lab-93) pra `data/achievements.ts` usar como fonte única de verdade — sem isso, o
+// catálogo de conquistas teria que duplicar essas strings, arriscando os dois lados divergirem.
+export const BADGE_FIRST_QUEST = 'Primeira Missão'
+export const BADGE_HALFWAY = 'Metade do Caminho'
+export const BADGE_ALL_DONE = 'Mestre das Missões'
 
 export function badgesEarnedAt(completedCount: number): string[] {
   const earned: string[] = []

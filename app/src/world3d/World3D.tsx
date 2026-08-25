@@ -116,6 +116,7 @@ interface World3DProps {
   onOpenQuestList: () => void
   onOpenShop: () => void
   onOpenPairing: () => void
+  onOpenAchievements: () => void
   onCollectCoin: () => void
   suspendTriggers: boolean
 }
@@ -1632,6 +1633,7 @@ export function World3D({
   onOpenQuestList,
   onOpenShop,
   onOpenPairing,
+  onOpenAchievements,
   onCollectCoin,
   suspendTriggers,
 }: World3DProps) {
@@ -1658,6 +1660,7 @@ export function World3D({
   const suspendRef = useRef(suspendTriggers)
   const onSelectQuestRef = useRef(onSelectQuest)
   const onSelectSurpriseQuizRef = useRef(onSelectSurpriseQuiz)
+  const onOpenAchievementsRef = useRef(onOpenAchievements)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
   const sceneRef = useRef<Scene | null>(null)
@@ -1719,6 +1722,7 @@ export function World3D({
   suspendRef.current = suspendTriggers
   onSelectQuestRef.current = onSelectQuest
   onSelectSurpriseQuizRef.current = onSelectSurpriseQuiz
+  onOpenAchievementsRef.current = onOpenAchievements
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
 
@@ -1950,6 +1954,12 @@ export function World3D({
     // de teclado da tecla `e` (ver `onKeyDown`), lido pelo loop de física/câmera do avatar (pra
     // se congelar) e pelo loop dos carros (pra saber qual pular da IA e mover por input).
     let drivingCar: Carro | null = null
+    // Sentado na carteira de estudos (lab-93) — mesmo espírito de `drivingCar`: congela o corpo
+    // físico e a pose do boneco (sem recalcular o ciclo de caminhada), setado ao disparar o
+    // gatilho de proximidade da carteira, limpo quando o jogador se afasta o suficiente (ver
+    // `RESET_DISTANCE` no loop de física). Ao contrário do carro, não precisa de tecla `E`/estado
+    // de "qual carro" — só um boolean, porque só existe uma carteira no mundo.
+    let sittingAtDesk = false
     // Reaproveitado a cada quadro pra checar "grounded" via raycast físico real (ver comentário
     // onde é usado) — evita alocar um objeto novo por quadro.
     const groundRayResult = new PhysicsRaycastResult()
@@ -4558,6 +4568,78 @@ export function World3D({
         portalMeshes.push({ quest, roof, base, surfacePos })
       })
 
+      // Carteira de estudos (lab-93, pedido do usuário: "uma carteira de estudo em que o boneco
+      // pode sentar, acessar seu catálogo de conquistas") — objeto FIXO e único no mundo, mesmo
+      // padrão de posicionamento das escolinhas acima (`terrainGroundRadial` +
+      // `settleMeshOnTerrain`), mas sem vínculo com missão nenhuma — perto do spawn (`spawnUp =
+      // (0,1,0)`, definido mais acima), deslocada o bastante pra não competir com o ponto de
+      // chegada.
+      const deskUp = new Vector3(0.35, 1, 0.12).normalize()
+      const deskGroundRadial = terrainGroundRadial(deskUp, terrainHeight(deskUp))
+      const deskSurfacePos = deskUp.scale(deskGroundRadial)
+
+      const deskBase = new TransformNode('carteira-estudos', scene)
+      deskBase.position = deskSurfacePos
+      deskBase.rotationQuaternion = alignmentQuaternion(deskUp)
+
+      const deskWoodMat = new PBRMaterial('deskWoodMat', scene)
+      deskWoodMat.albedoColor = new Color3(0.55, 0.35, 0.2)
+      deskWoodMat.roughness = 0.7
+      const deskMetalMat = new PBRMaterial('deskMetalMat', scene)
+      deskMetalMat.albedoColor = new Color3(0.35, 0.38, 0.42)
+      deskMetalMat.roughness = 0.4
+      deskMetalMat.metallic = 0.5
+      const deskBookMat = new PBRMaterial('deskBookMat', scene)
+      deskBookMat.albedoColor = new Color3(0.75, 0.2, 0.25)
+      deskBookMat.roughness = 0.8
+
+      function addDeskMesh(mesh: Mesh, mat: PBRMaterial) {
+        mesh.material = mat
+        mesh.parent = deskBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        return mesh
+      }
+
+      const deskTop = MeshBuilder.CreateBox('deskTop', { width: 0.7, height: 0.05, depth: 0.45 }, scene)
+      deskTop.position = new Vector3(0, 0.62, 0.2)
+      addDeskMesh(deskTop, deskWoodMat)
+
+      for (const side of [-1, 1]) {
+        const leg = MeshBuilder.CreateCylinder(`deskLeg${side}`, { height: 0.6, diameter: 0.05, tessellation: 8 }, scene)
+        leg.position = new Vector3(side * 0.28, 0.3, 0.05)
+        addDeskMesh(leg, deskMetalMat)
+      }
+
+      const book = MeshBuilder.CreateBox('deskBook', { width: 0.22, height: 0.03, depth: 0.16 }, scene)
+      book.position = new Vector3(0.1, 0.66, 0.22)
+      book.rotation.y = 0.3
+      addDeskMesh(book, deskBookMat)
+
+      // Banquinho — só decorativo (a pose "sentado" é congelada nos pivôs do boneco, não depende
+      // de encaixar geometricamente no assento), vende a ideia de "lugar pra sentar" à frente da
+      // mesa.
+      const deskSeat = MeshBuilder.CreateBox('deskSeat', { width: 0.4, height: 0.05, depth: 0.4 }, scene)
+      deskSeat.position = new Vector3(0, 0.42, -0.28)
+      addDeskMesh(deskSeat, deskWoodMat)
+      for (const side of [-1, 1]) {
+        const leg = MeshBuilder.CreateCylinder(`deskSeatLeg${side}`, { height: 0.4, diameter: 0.04, tessellation: 8 }, scene)
+        leg.position = new Vector3(side * 0.15, 0.2, -0.28)
+        addDeskMesh(leg, deskMetalMat)
+      }
+
+      settleMeshOnTerrain(deskBase, deskUp)
+      deskSurfacePos.copyFrom(deskBase.position)
+
+      const deskLabel = new TextBlock('deskLabel', '🏆')
+      deskLabel.color = 'white'
+      deskLabel.fontSize = mobileFontSize(28)
+      deskLabel.outlineWidth = 4
+      deskLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(deskLabel)
+      deskLabel.linkWithMesh(deskTop)
+      deskLabel.linkOffsetY = -60
+
       function applyPortalVisual(entry: (typeof portalMeshes)[number]) {
         const p = progressRef.current
         const idx = quests.findIndex((q) => q.id === entry.quest.id)
@@ -5235,6 +5317,13 @@ export function World3D({
       // gatilho, no loop de física por quadro).
       const QT_QUIZ_TRIGGER_DISTANCE = 0.85
 
+      // Distância de gatilho da carteira de estudos (lab-93) — maior que a do quiz (a mesa/banco
+      // ocupam mais espaço que a esfera do marcador), mas ainda exige chegar perto de verdade, não
+      // só entrar na mesma região do planeta (mesmo espírito do quiz, valor emprestado do meio
+      // termo entre os dois: menor que `TRIGGER_DISTANCE` das escolas, maior que
+      // `QT_QUIZ_TRIGGER_DISTANCE`).
+      const DESK_TRIGGER_DISTANCE = 1.2
+
       // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
       // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
       // alto de cada uma (`plateau.height`, o mesmo valor usado por `terrainHeight` — o centro do
@@ -5854,6 +5943,9 @@ export function World3D({
           // gravidade/velocidade nova) e a figura visual escondida (ver handler de entrar/sair)
           // — o input de teclado vira controle do carro, não do personagem a pé, então nada
           // aqui deve mexer no avatar enquanto isso. Mesma coisa pilotando o foguete (lab-59).
+          // `sittingAtDesk` (lab-93) NÃO entra aqui de propósito — ver comentário mais abaixo, no
+          // ciclo de caminhada: travar o bloco inteiro impediria o jogador de andar embora da
+          // carteira (a própria saída depende do gatilho de distância rodando com posição real).
           if (!drivingCar && !drivingRocket) {
           // Gravidade radial real — puxa sempre pro centro do planeta (origem),
           // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
@@ -6005,8 +6097,18 @@ export function World3D({
           // Ciclo de caminhada — só avança enquanto o personagem realmente anda (e não está
           // caindo do laser — a cambalhota acima já cuida da pose nesse caso); som de passo
           // sintetizado disparado a cada troca de perna (cruzamento de zero do seno).
-          const moving = laserStunTimer <= 0 && Math.abs(throttle) > 0.05
-          if (moving) {
+          //
+          // Sentado na carteira de estudos (lab-93, `sittingAtDesk`): só esta recálculo de pose
+          // fica de fora (não o bloco inteiro acima) — gravidade/posição/input continuam
+          // funcionando normalmente, senão o jogador ficaria fisicamente preso sem conseguir
+          // andar embora (a saída depende do gatilho de distância da carteira rodando com a
+          // posição real do avatar, mais abaixo). A pose fica congelada onde foi deixada
+          // (`legPivotL.rotation.x = -1.1` etc., setado no gatilho) até `sittingAtDesk` voltar a
+          // `false` sozinho.
+          const moving = !sittingAtDesk && laserStunTimer <= 0 && Math.abs(throttle) > 0.05
+          if (sittingAtDesk) {
+            // não mexe em nada — pose fica exatamente como o gatilho da carteira deixou.
+          } else if (moving) {
             walkPhase += dt * Math.abs(throttle) * (running ? RUN_CYCLE_SPEED : WALK_CYCLE_SPEED)
             const swing = Math.sin(walkPhase) * LEG_SWING_MAX
             studentFigure.legPivotL.rotation.x = swing
@@ -6058,7 +6160,7 @@ export function World3D({
             if (attackAnimTimer <= 0) attackAnimKind = null
           }
           } // fim do `if (!drivingCar && !drivingRocket)` — resto do bloco (câmera/multiplayer/
-            // ranking/portais) continua rodando normalmente dirigindo ou não.
+            // ranking/portais) continua rodando normalmente em qualquer caso.
 
           // câmera segue a bola acompanhando a orientação local do planeta (sobrescrita pela
           // câmera do carro logo abaixo, se `drivingCar` estiver setado neste quadro)
@@ -6284,6 +6386,31 @@ export function World3D({
                 onSelectSurpriseQuizRef.current(marker.id)
               } else if (d > RESET_DISTANCE) {
                 triggered.delete(marker.id)
+              }
+            }
+
+            // Carteira de estudos (lab-93) — mesmo padrão de gatilho do quiz acima, mas só um
+            // objeto (sem laço). Congela a pose "sentado" nos pivôs do boneco (mesmos valores da
+            // pose usada ao dirigir o carro, ver comentário lá) e abre o catálogo de conquistas.
+            // `sittingAtDesk` só volta a `false` quando o jogador se afasta o bastante — o corpo
+            // continua congelado mesmo depois de fechar o painel, até andar embora de verdade.
+            {
+              const d = Vector3.Distance(pos, deskSurfacePos)
+              if (d < DESK_TRIGGER_DISTANCE && !triggered.has('carteira-estudos')) {
+                triggered.add('carteira-estudos')
+                sittingAtDesk = true
+                studentFigure.legPivotL.rotation.x = -1.1
+                studentFigure.legPivotR.rotation.x = -1.1
+                studentFigure.kneePivotL.rotation.x = 1.5
+                studentFigure.kneePivotR.rotation.x = 1.5
+                studentFigure.armPivotL.rotation.x = -0.4
+                studentFigure.armPivotR.rotation.x = -0.4
+                studentFigure.elbowPivotL.rotation.x = 0.9
+                studentFigure.elbowPivotR.rotation.x = 0.9
+                onOpenAchievementsRef.current()
+              } else if (d > RESET_DISTANCE) {
+                triggered.delete('carteira-estudos')
+                sittingAtDesk = false
               }
             }
 
