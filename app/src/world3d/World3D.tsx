@@ -2985,6 +2985,17 @@ export function World3D({
       planetMat.albedoColor = Color3.White()
       planetMat.roughness = 0.97
       planetMat.metallic = 0
+      // lab-95 (pedido do usuário: "os morros estão invisíveis... as casas que estão sobre o
+      // morro aparecem flutuando no espaço") — causa raiz: as rampas de `PLATEAU_CENTERS` erguem
+      // o relevo até 3,2 unidades numa malha de só 48 segmentos (~1,7m por segmento); nas rampas
+      // mais íngremes, o deslocamento radial por vértice dobra alguns triângulos sobre si mesmos
+      // o bastante pra inverter a ordem de enrolamento (winding) deles em relação ao restante da
+      // esfera — com culling de face traseira ligado (padrão do `PBRMaterial`), esses triângulos
+      // ficam invisíveis de fora, mesmo com a colisão física continuando correta (por isso a casa,
+      // posicionada por raycast contra o corpo físico de verdade, fica na altura certa, mas sem
+      // morro visível embaixo). Mesma correção já usada em `cloudMat`/`grassMaterial` neste
+      // arquivo pro mesmo tipo de problema (malha fina/dobrada vista de ângulo inesperado).
+      planetMat.backFaceCulling = false
       planet.material = planetMat
       planet.receiveShadows = true
       new PhysicsAggregate(planet, PhysicsShapeType.MESH, { mass: 0, friction: 0.7 }, scene)
