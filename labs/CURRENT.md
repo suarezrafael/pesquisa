@@ -1,6 +1,9 @@
 # Laboratório atual
 
-Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Ativo: labs/lab-92-oculos-novo-eixo-de-colecionaveis/ (item 2 do pedido maior do usuário — mais
+colecionáveis free+assinatura. Achado: `docs/plano-comercial-backend.md` já especificava um eixo
+de "Óculos" pra Fase E que nunca foi construído — este lab implementa exatamente isso, novo eixo
+`equippedGlassesId`, mesmo padrão do chapéu)
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios** (registrado aqui pra não
 se perder):
@@ -9,7 +12,7 @@ se perder):
    dado de criança saindo do aparelho); `.avatar-shop-tab`/`.avatar-shop-action` corrigidos pro
    `[MUST]` de 44×44px (`docs/prompts/02-design-profissional.md`); abas com fade de borda em vez
    de corte de texto. Ver `labs/lab-91-dashboard-de-progresso-e-lojinha-mobile/CONTEXT.md`.
-2. **Mais itens colecionáveis (free + assinatura) → próximo laboratório recomendado.**
+2. Mais itens colecionáveis (free + assinatura) → **lab-92 (este)**: novo eixo "Óculos".
 3. "Centro de estudo"/carteira onde o boneco senta + acessa catálogo de conquistas → laboratório
    próprio (mobiliário novo no mundo 3D + UI de conquistas dedicada, não existe hoje).
 4. Brinde ao vencer o chefe de Marte (ETs + robô) → vira um COLECIONÁVEL EXCLUSIVO in-game, não
