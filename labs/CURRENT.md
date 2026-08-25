@@ -1,6 +1,9 @@
 # Laboratório atual
 
-Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Ativo: labs/lab-94-brinde-de-marte/ (item 4, último do pedido maior do usuário — brinde ao limpar
+Marte. Achado: não existe "chefe" — só os 6 inimigos regulares já existentes (3 ET + 3 robô); o
+pedido é "derrotar todos", não uma luta de chefe nova; virou um chapéu exclusivo desbloqueado uma
+única vez, nunca comprável com moeda, ver FEATURES.md do lab-94)
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios** (registrado aqui pra não
 se perder):
@@ -25,10 +28,10 @@ se perder):
    `RESET_DISTANCE` conseguia disparar, já que a posição parava de atualizar) — corrigido gateando
    só a recalculagem da pose, não física/input/posição. Ver
    `labs/lab-93-carteira-de-estudos-e-conquistas/CONTEXT.md` pro relato completo.
-4. **Brinde ao vencer o chefe de Marte (ETs + robô) → próximo laboratório recomendado.** Vira um
-   COLECIONÁVEL EXCLUSIVO in-game, não físico (o jogo não coleta endereço/PII de criança pra
-   enviar nada). Pesquisa rápida de mercado nacional (2026-08-24): tendência forte de
-   colecionáveis/trading-card-style (Pokémon 30 anos, Squishmallows) — informa o design.
+4. Brinde ao vencer o chefe de Marte (ETs + robô) → **lab-94 (este)**. COLECIONÁVEL EXCLUSIVO
+   in-game, não físico (o jogo não coleta endereço/PII de criança pra enviar nada). Pesquisa
+   rápida de mercado nacional (2026-08-24): tendência forte de colecionáveis/trading-card-style
+   (Pokémon 30 anos, Squishmallows) — informa o design.
 Último concluído: labs/lab-93-carteira-de-estudos-e-conquistas/ — ver acima.
 
 Último antes desse: labs/lab-90-corrige-bypass-de-assinatura-local/ (G6, metade "bypass": um `401`
