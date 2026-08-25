@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  AbstractMesh,
   Color3,
   Color4,
   DefaultRenderingPipeline,
@@ -14,6 +15,7 @@ import {
   Matrix,
   Mesh,
   MeshBuilder,
+  Node,
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
@@ -501,69 +503,17 @@ const SCHOOL_FOOTPRINT_ANGULAR_RADIUS = 1.3 / PLANET_RADIUS
 // Variação de altura (metros) que a fundação (1,6 de altura, ~1,45 enterrada) ainda absorve sem
 // que as paredes ou o professor fiquem visíveis debaixo do nível do chão real.
 const SCHOOL_SAFE_TERRAIN_VARIANCE = 0.6
-
-function terrainVarianceNearby(dir: Vector3, angularRadius: number, sampleCount: number): number {
-  const seed = Math.abs(dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
-  const tangentA = Vector3.Cross(dir, seed).normalize()
-  const tangentB = Vector3.Cross(dir, tangentA).normalize()
-  let min = terrainHeight(dir)
-  let max = min
-  for (let i = 0; i < sampleCount; i++) {
-    const angle = (i / sampleCount) * Math.PI * 2
-    const sampleDir = dir
-      .add(tangentA.scale(Math.sin(angle) * angularRadius))
-      .add(tangentB.scale(Math.cos(angle) * angularRadius))
-      .normalize()
-    const height = terrainHeight(sampleDir)
-    if (height < min) min = height
-    if (height > max) max = height
-  }
-  return max - min
-}
-
-// Busca em anéis crescentes ao redor de `baseUp` por um ponto com variação de relevo segura o
-// bastante pra escolinha não afundar — nunca se afasta mais que ~0.35 rad (~4,5m) do slot original
-// do ângulo áureo, pra não destemperar a distribuição espalhada das escolas pelo planeta. Sempre
-// devolve alguma direção (o melhor candidato achado, mesmo que nenhum fique 100% dentro do limite
-// seguro) — nunca trava esperando um ponto perfeito.
-function findFlatterSchoolUp(baseUp: Vector3): Vector3 {
-  let best = baseUp
-  let bestVariance = terrainVarianceNearby(baseUp, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, 6)
-  if (bestVariance <= SCHOOL_SAFE_TERRAIN_VARIANCE) return baseUp
-
-  const seed = Math.abs(baseUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
-  const tangentA = Vector3.Cross(baseUp, seed).normalize()
-  const tangentB = Vector3.Cross(baseUp, tangentA).normalize()
-
-  for (let ring = 1; ring <= 5; ring++) {
-    const ringRadius = ring * 0.07
-    for (let a = 0; a < 8; a++) {
-      const angle = (a / 8) * Math.PI * 2
-      const candidate = baseUp
-        .add(tangentA.scale(Math.sin(angle) * ringRadius))
-        .add(tangentB.scale(Math.cos(angle) * ringRadius))
-        .normalize()
-      const variance = terrainVarianceNearby(candidate, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, 6)
-      if (variance < bestVariance) {
-        bestVariance = variance
-        best = candidate
-      }
-      if (bestVariance <= SCHOOL_SAFE_TERRAIN_VARIANCE) return best
-    }
-  }
-  return best
-}
-
-// Posição final (já afastada de rampa íngreme) de cada escola — computada UMA vez, em escopo de
-// módulo, e reaproveitada tanto por `nearAnySchool`/bacias acima quanto pelo laço que monta as
-// escolas de verdade em `World3D` (`quests.forEach`). Substitui o padrão antigo de "duas cópias
-// da mesma fórmula mantidas em sincronia por convenção" (arriscado — ver comentário histórico
-// perto de `SCHOOL_DIRS` acima) por uma única fonte de verdade de fato.
-const SCHOOL_UPS: Vector3[] = SCHOOL_DIRS.map((rawDir, index) => {
-  const fixed = QUEST_FIXED_UP[quests[index].id]
-  if (fixed) return fixed
-  return findFlatterSchoolUp(rawDir)
-})
+// lab-95: a primeira versão deste reposicionamento media a variação de relevo com `terrainHeight`
+// (a FÓRMULA analítica, disponível em escopo de módulo, antes de existir física). Bug real
+// confirmado com diagnóstico ao vivo em produção: a malha de verdade do planeta (esfera de só 48
+// segmentos, ~1,7m por segmento) se afasta MUITO mais da fórmula suave perto das rampas de
+// `PLATEAU_CENTERS` do que uma checagem de variação puramente analítica consegue prever — a busca
+// achava um ponto "plano" pela fórmula que, na malha renderizada de verdade, ainda tinha quase 1,5
+// unidade de degrau real. `settleMeshOnTerrain` então descia o prédio inteiro por esse tanto,
+// enterrando paredes e professor. A correção de verdade (função + array abaixo, dentro de
+// `World3D`) mede a variação usando `terrainGroundRadial` (raycast físico real, a MESMA fonte de
+// verdade que posiciona tudo de fato) em vez da fórmula — só pode rodar depois de `havokPlugin`
+// existir, por isso não é mais escopo de módulo.
 
 // Menor rotação que leva o "para cima" padrão (0,1,0) até `up` — usada pra apoiar
 // props/portais deitados sobre a curvatura da esfera, não flutuando na orientação do mundo.
@@ -2737,14 +2687,42 @@ export function World3D({
         return PLANET_RADIUS + formulaHeight
       }
 
-      function settleMeshOnTerrain(root: TransformNode, up: Vector3): void {
+      // lab-95 (causa raiz real do bug de escolinhas enterradas — confirmado com medição direta
+      // ao vivo): `settleMeshOnTerrain` some as ALL child meshes, incluindo o telhado (beiral
+      // largo, `diameterBottom: 2.1`, chega a ~1,05m do centro — bem além da pegada das paredes)
+      // e o professor (deslocado ~1,1m do centro). Nenhum dos dois TOCA o chão de verdade — o
+      // telhado fica apoiado em cima das paredes, o professor fica de pé sobre seu próprio pedaço
+      // de terreno, não sobre uma extensão rígida do prédio. Medido ao vivo repetidas vezes: o
+      // telhado aparecia como a amostra "mais alta" (a que decide quanto descer o prédio INTEIRO)
+      // com folga de até +0,45 mesmo depois de reposicionar a escola pra longe de relevo íngreme
+      // (`findFlatterSchoolUpReal`) — ou seja, mesmo numa área "plana o bastante" pro CENTRO da
+      // escola, o beiral do telhado (mais de 1m de raio) e o professor (deslocado) ainda alcançam
+      // relevo diferente o bastante pra distorcer a decisão de descida de TODO o prédio, enterrando
+      // paredes/fundação/professor pra compensar um canto do telhado que nunca ia tocar o chão
+      // mesmo. `excludeFromSampling` deixa o chamador tirar essas peças da AMOSTRAGEM (ainda se
+      // movem junto quando o resto do prédio desce — só não participam da decisão de quanto descer).
+      function settleMeshOnTerrain(
+        root: TransformNode,
+        up: Vector3,
+        excludeFromSampling: (TransformNode | AbstractMesh)[] = [],
+      ): void {
         root.computeWorldMatrix(true)
         const samples: Vector3[] = []
         const seed = Math.abs(up.y) < 0.9 ? Vector3.Up() : Vector3.Right()
         const tangentA = Vector3.Cross(up, seed).normalize()
         const tangentB = Vector3.Cross(up, tangentA).normalize()
 
+        const isExcluded = (mesh: AbstractMesh): boolean => {
+          let current: Node | null = mesh
+          while (current) {
+            if (excludeFromSampling.includes(current as TransformNode | AbstractMesh)) return true
+            current = current.parent
+          }
+          return false
+        }
+
         for (const mesh of root.getChildMeshes()) {
+          if (isExcluded(mesh)) continue
           const positions = mesh.getVerticesData(VertexBuffer.PositionKind)
           if (!positions) continue
           mesh.computeWorldMatrix(true)
@@ -2794,6 +2772,76 @@ export function World3D({
           root.computeWorldMatrix(true)
         }
       }
+
+      // lab-95: variação de relevo REAL (raycast físico, não a fórmula `terrainHeight`) ao redor
+      // de uma direção candidata — ver comentário longo perto de `SCHOOL_FOOTPRINT_ANGULAR_RADIUS`
+      // (escopo de módulo) pra por que a versão baseada em fórmula não bastava (a malha de 48
+      // segmentos se afasta demais da fórmula suave perto das rampas de `PLATEAU_CENTERS`).
+      function terrainVarianceNearbyReal(dir: Vector3, angularRadius: number, sampleCount: number): number {
+        const seed = Math.abs(dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+        const tangentA = Vector3.Cross(dir, seed).normalize()
+        const tangentB = Vector3.Cross(dir, tangentA).normalize()
+        let min = terrainGroundRadial(dir, terrainHeight(dir))
+        let max = min
+        for (let i = 0; i < sampleCount; i++) {
+          const angle = (i / sampleCount) * Math.PI * 2
+          const sampleDir = dir
+            .add(tangentA.scale(Math.sin(angle) * angularRadius))
+            .add(tangentB.scale(Math.cos(angle) * angularRadius))
+            .normalize()
+          const height = terrainGroundRadial(sampleDir, terrainHeight(sampleDir))
+          if (height < min) min = height
+          if (height > max) max = height
+        }
+        return max - min
+      }
+
+      // Busca em anéis crescentes ao redor de `baseUp` por um ponto com variação de relevo REAL
+      // segura o bastante pra escolinha não afundar — nunca se afasta mais que ~0.26 rad (~3,4m) do
+      // slot original do ângulo áureo. Orçamento de busca reduzido em relação à primeira versão
+      // (que usava a fórmula, bem mais barata) porque cada amostra aqui é um raycast físico de
+      // verdade, não uma conta analítica — ainda assim, roda só uma vez por escola, no carregamento.
+      // Sempre devolve alguma direção (o melhor candidato achado, mesmo que nenhum fique 100%
+      // dentro do limite seguro) — nunca trava esperando um ponto perfeito.
+      function findFlatterSchoolUpReal(baseUp: Vector3): Vector3 {
+        let best = baseUp
+        let bestVariance = terrainVarianceNearbyReal(baseUp, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, 4)
+        if (bestVariance <= SCHOOL_SAFE_TERRAIN_VARIANCE) return baseUp
+
+        const seed = Math.abs(baseUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+        const tangentA = Vector3.Cross(baseUp, seed).normalize()
+        const tangentB = Vector3.Cross(baseUp, tangentA).normalize()
+
+        for (let ring = 1; ring <= 3; ring++) {
+          const ringRadius = ring * 0.065
+          for (let a = 0; a < 6; a++) {
+            const angle = (a / 6) * Math.PI * 2
+            const candidate = baseUp
+              .add(tangentA.scale(Math.sin(angle) * ringRadius))
+              .add(tangentB.scale(Math.cos(angle) * ringRadius))
+              .normalize()
+            const variance = terrainVarianceNearbyReal(candidate, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, 4)
+            if (variance < bestVariance) {
+              bestVariance = variance
+              best = candidate
+            }
+            if (bestVariance <= SCHOOL_SAFE_TERRAIN_VARIANCE) return best
+          }
+        }
+        return best
+      }
+
+      // Posição final (já afastada de rampa íngreme, com relevo REAL medido por raycast) de cada
+      // escola — computada UMA vez aqui (não em escopo de módulo, já que depende de `havokPlugin`
+      // existir) e reaproveitada pelo laço que monta as escolas de verdade (`quests.forEach`,
+      // mais abaixo). `SCHOOL_DIRS` (escopo de módulo, baseado só na fórmula de ângulo áureo)
+      // continua servindo de ponto de partida e de proteção de bacia (`nearAnySchool`) — não
+      // precisa ser raycast-precisa pra isso.
+      const schoolUps: Vector3[] = SCHOOL_DIRS.map((rawDir, index) => {
+        const fixed = QUEST_FIXED_UP[quests[index].id]
+        if (fixed) return fixed
+        return findFlatterSchoolUpReal(rawDir)
+      })
 
       // Camada de UI 2D sobreposta ao mundo 3D (rótulos flutuantes: nome das escolas, bolhas de
       // fala dos NPCs, "pressione E" dos carros lab-25, etc.) — criada cedo (antes de qualquer
@@ -2943,25 +2991,44 @@ export function World3D({
 
       // lab-95 (causa raiz real do bug de escolinhas enterradas — confirmado com diagnóstico em
       // produção, dado real do aparelho do usuário: "ENTERRADAS:q01(-0.35),q02(-0.47),q03(-0.32)",
-      // só nas primeiras escolas construídas depois desta linha, nenhuma nas de depois). Um raio
-      // que atravessa de fora pra dentro de uma esfera fechada com colisor `MESH` deveria SEMPRE
-      // acertar alguma coisa — mas logo após criar o `PhysicsAggregate` do planeta, o Havok pode
-      // ainda não estar pronto pra aceitar raycast contra essa malha recém-cozida na MESMA tick
-      // síncrona (mais provável num aparelho/carga mais lenta — daí só afetar o que é posicionado
-      // por raycast BEM no início, antes de qualquer coisa "acordar" o física). `terrainGroundRadial`
-      // (mais abaixo) trata "nenhum acerto" como "não achei o planeta" e cai pra fórmula (que pode
-      // discordar da malha real o bastante pra enterrar o prédio inteiro). Descartar um bloco de
-      // raycasts aqui, contra o próprio planeta, força qualquer inicialização preguiçosa do Havok a
-      // terminar ANTES de qualquer posicionamento de verdade (escolas, rochas, props) depender do
-      // resultado — não é um `scene.render()` (mudaria o timing de outras coisas ainda não prontas
-      // nesse ponto do `setup()`), só chama a mesma API de raycast que o resto do código já usa.
+      // e depois, testando de novo com mais concorrência de CPU na máquina de teste, TODAS as 30
+      // escolas mostraram o mesmo padrão — a gravidade do problema varia com o quanto a CPU está
+      // ocupada no momento exato do carregamento, não é fixo). Duas tentativas anteriores de
+      // "aquecer" o Havok falharam: raycasts síncronos em sequência não mudaram nada (a malha
+      // `MESH` do planeta, 48 segmentos, não fica pronta só de tentar de novo na mesma tick), e
+      // uma única checagem com `await` (ceder o event loop uma vez, repetir até acertar 'planet'
+      // numa ÚNICA direção) também não foi suficiente — sugere que o Havok não fica pronto de uma
+      // vez só (binário), e sim aos poucos (o quanto da malha já foi "cozida" no WASM varia por
+      // região, então uma direção só acertar não prova que TODAS as direções já funcionam).
+      // Correção mais robusta: exige que um conjunto de 12 direções bem espalhadas pela esfera
+      // acertem 'planet' TODAS JUNTAS na mesma rodada antes de seguir em frente — cada rodada cede
+      // o event loop de verdade (`setTimeout`), dando tempo real pro WASM avançar. Limite de ~3s
+      // (180 rodadas × 16ms) pra nunca travar o carregamento pra sempre num aparelho onde isso não
+      // aconteça por outro motivo — nesse caso raro, segue em frente mesmo sem confirmar (mesmo
+      // risco de antes, não pior).
       {
         const warmupResult = new PhysicsRaycastResult()
-        const warmupDirs = [Vector3.Up(), Vector3.Down(), Vector3.Forward(), Vector3.Backward(), Vector3.Left(), Vector3.Right()]
-        for (let i = 0; i < 20; i++) {
-          const dir = warmupDirs[i % warmupDirs.length]
-          warmupResult.reset()
-          havokPlugin.raycast(dir.scale(PLANET_RADIUS + 6), dir.scale(PLANET_RADIUS - 2), warmupResult)
+        const warmupDirs = [
+          new Vector3(1, 0, 0), new Vector3(-1, 0, 0),
+          new Vector3(0, 1, 0), new Vector3(0, -1, 0),
+          new Vector3(0, 0, 1), new Vector3(0, 0, -1),
+          new Vector3(1, 1, 1).normalize(), new Vector3(-1, 1, 1).normalize(),
+          new Vector3(1, -1, 1).normalize(), new Vector3(-1, -1, 1).normalize(),
+          new Vector3(1, 1, -1).normalize(), new Vector3(-1, -1, -1).normalize(),
+        ]
+        for (let round = 0; round < 180; round++) {
+          let allHit = true
+          for (const dir of warmupDirs) {
+            warmupResult.reset()
+            havokPlugin.raycast(dir.scale(PLANET_RADIUS + 6), dir.scale(PLANET_RADIUS - 2), warmupResult)
+            if (!warmupResult.hasHit || warmupResult.body?.transformNode?.name !== 'planet') {
+              allHit = false
+              break
+            }
+          }
+          if (allHit) break
+          await new Promise<void>((resolve) => setTimeout(resolve, 16))
+          if (disposed) return
         }
       }
 
@@ -4594,12 +4661,11 @@ export function World3D({
       foundationMatShared.roughness = 0.95
 
       quests.forEach((quest, index) => {
-        // lab-95: posição final já vem de `SCHOOL_UPS` (escopo de módulo) — `QUEST_FIXED_UP`
+        // lab-95: posição final já vem de `schoolUps` (calculado logo no início de `setup()`,
+        // com relevo REAL medido por raycast — ver comentário longo perto dele) — `QUEST_FIXED_UP`
         // (lab-26, só `q21`) ou a fórmula de ângulo áureo já afastada de rampa de platô íngreme
-        // demais (ver comentário longo perto de `findFlatterSchoolUp`). Antes esta fórmula era
-        // recalculada aqui, copiada letra por letra do bloco em escopo de módulo (`SCHOOL_DIRS`)
-        // — `SCHOOL_UPS` elimina essa duplicação por completo.
-        const localUp = SCHOOL_UPS[index]
+        // demais.
+        const localUp = schoolUps[index]
         const groundRadial = terrainGroundRadial(localUp, terrainHeight(localUp))
         const surfacePos = localUp.scale(groundRadial)
 
@@ -4680,10 +4746,13 @@ export function World3D({
         // `PLATEAU_CENTERS`, pode variar bem mais que isso na mesma pegada). Em vez de adivinhar
         // um tamanho de caixa maior de novo, usa a mesma correção multi-vértice que já resolve
         // isso pras rochas de montanha (`settleMeshOnTerrain`, lab-75): amostra o ponto mais baixo
-        // de cada malha filha (paredes/fundação/porta/telhado/professor) contra o relevo real
-        // (raycast, não a fórmula) e desce a escola inteira o suficiente pra nenhum canto ficar
-        // boiando — a fundação continua ajudando (evita o pior caso comum), isso cobre o resto.
-        settleMeshOnTerrain(base, localUp)
+        // de cada malha filha (paredes/fundação/porta) contra o relevo real (raycast, não a
+        // fórmula) e desce a escola inteira o suficiente pra nenhum canto ficar boiando — a
+        // fundação continua ajudando (evita o pior caso comum), isso cobre o resto. Telhado e
+        // professor ficam de fora da AMOSTRAGEM (lab-95, ver comentário longo em
+        // `settleMeshOnTerrain`) — nenhum dos dois toca o chão de verdade, e seu alcance além da
+        // pegada das paredes distorcia a decisão de descida do prédio inteiro.
+        settleMeshOnTerrain(base, localUp, [roof, teacher.root])
         // `settleMeshOnTerrain` pode ter descido `base` — `surfacePos` (usada mais abaixo pra
         // distância de gatilho da missão e pro topo do telhado) precisa refletir a posição FINAL,
         // não a de antes do ajuste, senão o gatilho fica levemente descolado da escola visível.
