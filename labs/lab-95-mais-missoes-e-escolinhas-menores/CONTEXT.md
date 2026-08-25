@@ -1,7 +1,7 @@
 # Contexto — Laboratório 95 — mais missões + escolinhas menores
 
 Preenchido em: 2026-08-25
-Commit inicial → final: a3c52a5b96ec6a13185caa1a7ccee7654e3e3aee..(este commit)
+Commit inicial → final: a3c52a5b96ec6a13185caa1a7ccee7654e3e3aee..aa9cb25606405a9b8cd5abb8fa3f6c80d5a80f76
 
 ## O que foi feito
 - **9 missões novas** (`data/quests.ts`, `q22`-`q30`), acrescentadas no FIM do array de propósito
@@ -108,8 +108,22 @@ Commit inicial → final: a3c52a5b96ec6a13185caa1a7ccee7654e3e3aee..(este commit
       Corrigido com `planetMat.backFaceCulling = false`. Confirmado por A/B ao vivo (alternando a
       flag e recarregando, mesma posição) numa das escolas testadas — com a flag ligada (bug), o
       morro sumia numa neblina branca; desligada (correção), o morro aparecia sólido e colorido.
-      Deploy em produção feito; **confirmação do usuário ainda pendente** no momento em que este
-      `CONTEXT.md` foi escrito.
+      Deploy em produção feito.
+  15. **O usuário testou de novo e o morro CONTINUA invisível** — ou seja, `backFaceCulling = false`
+      não resolveu o caso real dele (só resolveu o cenário de teste específico do A/B). Adicionado
+      um carimbo de horário de build (`__BUILD_STAMP__`, `vite.config.ts` + HUD) a pedido do
+      usuário ("coloque no log visual o bundle que a UI está usando pra você ter certeza") — o
+      usuário mandou print com esse carimbo, e **conferido byte a byte contra o bundle real
+      publicado em produção: é EXATAMENTE a última versão**, eliminando cache como explicação de
+      vez. Fui até o local exato do print dele (mesmos números de escola visíveis: 25, 28, 22, 19,
+      11, 8, 5, Torre do Tesouro) usando esse mesmo build, de vários ângulos/distâncias — tudo
+      renderizou sólido, sem buraco nenhum, do meu lado. **Não consegui reproduzir.** Hipóteses não
+      testadas por falta de resposta do usuário: (a) artefato específico de GPU/driver do aparelho
+      dele (bugs de culling/normal costumam variar entre fabricantes de GPU); (b) um buraco de
+      verdade (geometria faltando, não só triângulo virado ao contrário) que só aparece de um
+      ângulo bem específico que não bati por acaso. Perguntei ao usuário se dá pra ANDAR através do
+      buraco (testa se é só visual ou se falta chão de verdade) e qual aparelho/navegador ele usa —
+      **sem resposta ainda**; o usuário pediu pra seguir pro próximo laboratório antes de responder.
 
 ## Decisões técnicas tomadas
 - **Reverter primeiro, investigar depois (Rodada 1)** — dado que a causa raiz não estava
@@ -159,10 +173,15 @@ Commit inicial → final: a3c52a5b96ec6a13185caa1a7ccee7654e3e3aee..(este commit
   aparelho do usuário sem ferramenta de desenvolvedor, mas é ruído visual permanente que não devia
   ficar pra sempre. **Remover num próximo laboratório** depois de mais alguns dias de confirmação
   de que o bug não voltou (o usuário já confirmou uma vez: "testei denovo agora ficou certo").
-- **Correção de morros invisíveis (`planetMat.backFaceCulling = false`) ainda sem confirmação do
-  usuário** no momento em que este arquivo foi escrito — deployada, verificada por A/B ao vivo
-  (alternando a flag) numa posição testada, mas não confirmada na posição exata que o usuário
-  reportou originalmente.
+- **Morros/platôs invisíveis — NÃO RESOLVIDO, ainda em aberto.** `planetMat.backFaceCulling = false`
+  foi deployado e confirmado por A/B ao vivo NUM cenário de teste, mas o usuário testou no local
+  real (confirmado pelo carimbo de build — é a versão certa, cache descartado) e o morro continua
+  invisível. Tentei reproduzir no mesmo local exato (mesmos números de escola do print do usuário)
+  e não consegui — tudo renderizou sólido do meu lado. Isso é sinal de algo específico do
+  aparelho/GPU do usuário, ou um buraco de geometria real que só aparece de um ângulo que não bati.
+  **Perguntas feitas ao usuário, ainda sem resposta**: (1) dá pra ANDAR através do buraco (visual
+  vs. falta de chão de verdade)? (2) qual aparelho/navegador/GPU ele está usando? Isso é o ponto de
+  partida obrigatório do próximo laboratório se o usuário retomar esse assunto.
 - **Gap residual de ~0,14 a 0,58 unidade** (de um total de 1,10) mesmo depois da correção —
   média 0,86 nas 30 escolas, pior caso 0,52 (`q04`, perto do platô mais alto). Não é mais um bug
   visível (parede continua majoritariamente acima do chão, telhado não fica sozinho), mas é uma
@@ -184,8 +203,15 @@ Commit inicial → final: a3c52a5b96ec6a13185caa1a7ccee7654e3e3aee..(este commit
   reavaliação com o planeta já sem os bugs de afundamento/transparência.
 
 ## O que o próximo laboratório deve desenvolver
-- Remover o diagnóstico temporário do HUD (`ENTERRADAS:...`) depois de confirmação continuada.
-- Confirmar com o usuário se a correção de morros invisíveis resolveu no caso exato que ele viu.
+- **Se o usuário voltar a falar de morros invisíveis**: começar pelas duas perguntas em aberto
+  (anda através do buraco? qual aparelho/GPU?) antes de tentar mais correções às cegas —
+  `backFaceCulling = false` já foi tentado e não resolveu o caso real, então mais uma tentativa sem
+  dado novo do usuário tem boa chance de repetir o mesmo ciclo. Se for GPU-específico, pode exigir
+  pedir o `chrome://gpu` do aparelho dele, ou testar em WebGL1 em vez de WebGL2, ou investigar se a
+  malha tem vértices duplicados/degenerados nas bordas de `PLATEAU_CENTERS` (buraco de geometria de
+  verdade, não só culling).
+- Remover o diagnóstico temporário do HUD (`ENTERRADAS:...`) depois de confirmação continuada de
+  que o afundamento das escolas não voltou.
 - **Se "sobrecarregado" ainda for um problema visual**: considerar aumentar levemente a faixa de
   `phi`/espaçamento em vez de encolher a geometria — evita reabrir risco de regressão em
   `settleMeshOnTerrain`/`schoolUps`.

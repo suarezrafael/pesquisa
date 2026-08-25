@@ -8,12 +8,19 @@ Commit inicial: a3c52a5b96ec6a13185caa1a7ccee7654e3e3aee
 **Nota importante**: a redução de tamanho da escolinha foi tentada, implantada em produção, e
 causou um bug real relatado pelo usuário ao vivo ("todas as casa estão dentro da terra, até os NPC
 estão enterrado... as casinhas só aparecem o telhado"). Revertida de volta ao tamanho original —
-mas **o bug persistiu, idêntico, mesmo com o tamanho original** (o usuário reportou de novo depois
-do revert). Causa raiz de verdade encontrada por medição ao vivo (não tinha nada a ver com o
-tamanho): rampas de platô (`PLATEAU_CENTERS`) íngremes demais pra qualquer escola que caísse perto,
-enterrando o prédio inteiro. Corrigido de verdade afastando a posição de cada escola de terreno
-íngreme (`SCHOOL_UPS`/`findFlatterSchoolUp`), verificado ao vivo em 14/14 escolas testadas e
-redeployado. Ver `CONTEXT.md` pra timeline completa.
+mas **o bug persistiu, idêntico, mesmo com o tamanho original**. Causa raiz de verdade (não tinha
+nada a ver com o tamanho): `settleMeshOnTerrain` incluía o telhado e o professor — que nunca tocam
+o chão — na decisão de quanto afundar o prédio inteiro. Corrigido excluindo os dois da amostragem e
+usando raycast físico real (não a fórmula) pra decidir se uma posição é plana o bastante. **Corrigido
+e confirmado pelo próprio usuário** ("testei denovo agora ficou certo") depois de verificação
+exaustiva em 30/30 escolas.
+
+Em seguida, o usuário reportou um bug relacionado: morros/platôs aparecendo invisíveis (casas
+"flutuando no espaço"). Uma correção (`backFaceCulling = false` no material do planeta) foi tentada
+e deployada, mas **o usuário testou de novo e o morro continua invisível — NÃO RESOLVIDO**. Um
+carimbo de build foi adicionado ao HUD a pedido do usuário e confirmou que ele está na versão certa
+(não é cache). Não consegui reproduzir o bug no mesmo local exato do print dele. Fica em aberto pro
+próximo laboratório — ver `CONTEXT.md` pra timeline completa e as perguntas pendentes.
 
 ## Objetivo do laboratório
 Pedido direto do usuário: "aumente o numero de desafio, hoje acho que tem 21, talvez as vasinhas
@@ -71,6 +78,27 @@ o planeta pequeno (`PLANET_RADIUS = 13`).
   raycast físico, não só screenshot) em 14 escolas (incluindo `q01`, a pior antes da correção) — 0
   enterradas, todas com as paredes flush no chão (folga = altura total da parede, exatamente como
   esperado) e o professor a poucos centímetros do nível real do terreno. Deployado em produção.
+  **Essa verificação não se sustentou** — ver o item seguinte.
+- [x] **Causa raiz de verdade do afundamento (Rodada 3)**: a verificação acima usava a MESMA
+  fórmula analítica (`terrainHeight`) que a correção usava pra decidir posição — não pegava erro da
+  própria fórmula. O usuário reportou o bug de novo depois do deploy. Causa raiz real:
+  `settleMeshOnTerrain` incluía o telhado (beiral largo) e o professor (deslocado do centro) — que
+  nunca tocam o chão — na decisão de quanto descer o prédio inteiro. Corrigido com
+  `excludeFromSampling` (telhado/professor ainda se movem junto, mas não decidem mais quanto descer)
+  e trocando a busca de posição plana pra usar raycast físico real (`terrainGroundRadial`) em vez da
+  fórmula. Verificado exaustivamente em 30/30 escolas (folga média 0,86 de um máximo de 1,10, pior
+  caso 0,52, zero enterradas). **Confirmado pelo usuário**: "testei denovo agora ficou certo".
+- [ ] **Morros/platôs invisíveis — NÃO RESOLVIDO.** Bug relacionado reportado pelo usuário: casas em
+  cima de platôs "flutuando no espaço" porque o morro embaixo delas fica invisível. Causa
+  identificada (triângulos com ordem de enrolamento invertida nas rampas mais íngremes, culling de
+  face traseira escondendo eles) e uma correção (`planetMat.backFaceCulling = false`) foi deployada,
+  mas o usuário testou de novo (confirmado pelo carimbo de build que é a versão certa) e o morro
+  continua invisível. Não consegui reproduzir no mesmo local exato do print dele. Perguntas feitas
+  ao usuário sem resposta ainda: anda através do buraco? qual aparelho/GPU? Fica pro próximo
+  laboratório — ver `CONTEXT.md`.
+- [x] **Carimbo de build no HUD** (`__BUILD_STAMP__`, sempre visível) — pedido do usuário pra
+  conseguir confirmar que está testando a versão certa sem depender de mim. Confirmado funcionando:
+  o carimbo no print do usuário bateu exatamente com o publicado em produção.
 
 ## Fora de escopo (explicitamente adiado)
 - **Mudar `TRIGGER_DISTANCE`/`RESET_DISTANCE`** (raio de proximidade que abre a missão) — não

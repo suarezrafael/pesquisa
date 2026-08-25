@@ -20,21 +20,28 @@ de posição mais plana pra usar raycast físico real em vez da fórmula. **Veri
 em 30/30 escolas** (folga média subiu de negativa/enterrada pra 0,86 de um máximo de 1,10) e
 **confirmado pelo próprio usuário testando de novo**: "testei denovo agora ficou certo".
 
-Logo em seguida, o usuário reportou um bug RELACIONADO: morros/platôs aparecendo invisíveis
-("as casas que estão sobre o morro aparecem flutuando no espaço"). Causa: a malha do planeta (só
-48 segmentos) dobra alguns triângulos sobre si mesma nas rampas mais íngremes, invertendo a ordem
-de enrolamento — com culling de face traseira ligado (padrão do material, nunca desligado pro
-planeta, diferente de outros materiais deste arquivo), esses triângulos ficam invisíveis, um buraco
-de verdade na malha visual (a física/colisão sempre esteve correta). Corrigido com
-`planetMat.backFaceCulling = false`, confirmado por A/B ao vivo — **confirmação do usuário sobre
-esse bug específico ainda pendente** no momento em que este arquivo foi atualizado.
+Logo em seguida, o usuário reportou um bug RELACIONADO **que ficou SEM RESOLVER**: morros/platôs
+aparecendo invisíveis ("as casas que estão sobre o morro aparecem flutuando no espaço"). Causa
+identificada: a malha do planeta (só 48 segmentos) dobra alguns triângulos sobre si mesma nas
+rampas mais íngremes, invertendo a ordem de enrolamento — com culling de face traseira ligado
+(padrão do material, nunca desligado pro planeta, diferente de outros materiais deste arquivo),
+esses triângulos ficam invisíveis. Tentativa de correção: `planetMat.backFaceCulling = false`,
+confirmada por A/B ao vivo NUM cenário de teste. **Mas o usuário testou de novo no local real e o
+morro CONTINUA invisível.** Um carimbo de build foi adicionado ao HUD (`__BUILD_STAMP__`, a pedido
+do usuário) e confirmou que ele está testando a versão certa — não é cache. Fui até o local exato
+do print dele (mesmos números de escola visíveis) usando essa mesma versão e não consegui
+reproduzir — tudo sólido do meu lado. Suspeita: algo específico do aparelho/GPU do usuário, ou um
+buraco de geometria real (não só culling) visível só de um ângulo específico. Perguntei se dá pra
+ANDAR através do buraco e qual aparelho ele usa — **sem resposta**; usuário pediu pra seguir pro
+próximo laboratório. **Esse bug fica em aberto, não resolvido.**
 
 Um diagnóstico temporário (`ENTERRADAS:...`) foi deixado no HUD, sempre visível inclusive em
 produção, pra conseguir dado real do aparelho do usuário sem ferramenta de desenvolvedor — precisa
-ser removido num próximo laboratório depois de confirmação continuada. Meta de "escolinhas
-menores" (tamanho) segue em aberto. Ver `labs/lab-95-mais-missoes-e-escolinhas-menores/CONTEXT.md`
-pra timeline completa (vale a leitura completa — tem a lição de por que um teste "passou" duas
-vezes antes de a correção estar realmente certa).
+ser removido num próximo laboratório depois de confirmação continuada de que o afundamento não
+voltou. Meta de "escolinhas menores" (tamanho) segue em aberto. Ver
+`labs/lab-95-mais-missoes-e-escolinhas-menores/CONTEXT.md` pra timeline completa (vale a leitura
+completa — tem a lição de por que um teste "passou" duas vezes antes de a correção estar realmente
+certa, e as perguntas pendentes sobre o bug de morros invisíveis).
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios — TODOS OS 4 ITENS
 CONCLUÍDOS** (registrado aqui como histórico):
