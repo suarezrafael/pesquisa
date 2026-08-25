@@ -1,6 +1,9 @@
 # Laboratório atual
 
-Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Ativo: labs/lab-93-carteira-de-estudos-e-conquistas/ (item 3 do pedido maior do usuário — carteira
+de estudos fixa no mundo, mesmo padrão das escolinhas, boneco senta em pose congelada ao chegar
+perto, abre um painel novo de conquistas — NÃO é "Minha Casa"/mobília comprável, ver
+FEATURES.md do lab-93 pro porquê)
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios** (registrado aqui pra não
 se perder):
@@ -17,8 +20,8 @@ se perder):
    cena foi mais confiável que screenshot). Visibilidade multiplayer NÃO testada ao vivo com duas
    abas (só paridade de código com o chapéu, já comprovado desde o lab-73) — ver
    `labs/lab-92-oculos-novo-eixo-de-colecionaveis/CONTEXT.md`.
-3. "Centro de estudo"/carteira onde o boneco senta + acessa catálogo de conquistas → laboratório
-   próprio (mobiliário novo no mundo 3D + UI de conquistas dedicada, não existe hoje).
+3. "Centro de estudo"/carteira onde o boneco senta + acessa catálogo de conquistas → **lab-93
+   (este)**.
 4. Brinde ao vencer o chefe de Marte (ETs + robô) → vira um COLECIONÁVEL EXCLUSIVO in-game, não
    físico (o jogo não coleta endereço/PII de criança pra enviar nada). Pesquisa rápida de mercado
    nacional (2026-08-24): tendência forte de colecionáveis/trading-card-style (Pokémon 30 anos,
