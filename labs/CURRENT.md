@@ -1,9 +1,16 @@
 # Laboratório atual
 
-Ativo: labs/lab-95-mais-missoes-e-escolinhas-menores/ (pedido do usuário 2026-08-25: aumentar o
-número de missões além das 21 atuais + encolher as escolinhas pra não sobrecarregar o
-planetinha — +9 missões novas (`q22`-`q30`, ids nunca reordenados/renumerados pra não quebrar
-progresso salvo) e escolinhas ~20% menores)
+Último concluído: labs/lab-95-mais-missoes-e-escolinhas-menores/ (pedido do usuário 2026-08-25:
+aumentar o número de missões além das 21 atuais + encolher as escolinhas pra não sobrecarregar o
+planetinha). **Resultado misto**: +9 missões novas (`q22`-`q30`, ids nunca reordenados/renumerados
+pra não quebrar progresso salvo) — concluído e deployado com sucesso. Escolinhas ~20% menores —
+**tentado, deployado, causou um bug real em produção** relatado ao vivo pelo usuário ("todas as
+casa estão dentro da terra, até os NPC estão enterrado... as casinhas só aparecem o telhado") —
+**revertido** de volta ao tamanho original no mesmo laboratório, redeploy confirmado
+(`dpl_6sZxmUSCj6DqjPi8ovcrw85UwwFv`). Causa raiz da interação com `settleMeshOnTerrain` NÃO
+confirmada — meta de "escolinhas menores" continua em aberto pra um laboratório futuro, com
+abordagem mais cuidadosa (ver "O que o próximo laboratório deve desenvolver" em
+`labs/lab-95-mais-missoes-e-escolinhas-menores/CONTEXT.md`).
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios — TODOS OS 4 ITENS
 CONCLUÍDOS** (registrado aqui como histórico):
@@ -199,7 +206,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-94-brinde-de-marte/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-95-mais-missoes-e-escolinhas-menores/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).

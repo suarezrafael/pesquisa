@@ -1,9 +1,15 @@
 # Laboratório 95 — mais missões + escolinhas menores
 
-Status: em andamento
+Status: concluído (parcial — ver nota abaixo)
 Início: 2026-08-25
-Fim: -
+Fim: 2026-08-25
 Commit inicial: a3c52a5b96ec6a13185caa1a7ccee7654e3e3aee
+
+**Nota importante**: das duas metas do laboratório, só "mais missões" foi entregue. A redução do
+tamanho das escolinhas foi tentada, **implantada em produção, causou um bug visual/funcional real
+relatado pelo próprio usuário ao vivo** ("todas as casa estão dentro da terra, até os NPC estão
+enterrado... as casinhas só aparecem o telhado") e foi **revertida** de volta ao tamanho original
+no mesmo laboratório, já redeployada. Ver `CONTEXT.md` pra detalhes e causa raiz (não confirmada).
 
 ## Objetivo do laboratório
 Pedido direto do usuário: "aumente o numero de desafio, hoje acho que tem 21, talvez as vasinhas
@@ -30,21 +36,25 @@ o planeta pequeno (`PLANET_RADIUS = 13`).
   encolher.
 
 ## Funcionalidades planejadas
-- [ ] **`data/quests.ts`**: +9 missões novas (`q22`-`q30`), mantendo o ciclo lógica/matemática/
-  leitura (3/3/3 novas, chegando a 10/10/10 no total) e temas que ainda não foram usados
-  (subtração, contar horas, estimativa, classificação com veículos, causa-efeito na leitura) —
-  nenhum tema repetido dos 21 já existentes. Recompensa continua a progressão em degraus a partir
-  de onde `q21` parou.
-- [ ] **`world3d/World3D.tsx`**: dimensões da escolinha reduzidas (~20% menor em cada eixo —
-  paredes/fundação/porta/telhado/professor/posições internas, tudo multiplicado pelo mesmo fator
-  pra continuar visualmente coerente) — aplicado direto nos números de cada `MeshBuilder`, não via
-  transform do nó pai (evita o colisor de física da parede ficar dessincronizado do visual, que
-  aconteceria se só escalasse `base` depois de criar o `PhysicsAggregate`).
-- [ ] **Testar ao vivo**: as 9 escolinhas novas aparecem no planeta com números 22-30, funcionam
-  (abrem a missão certa, dão a recompensa certa); escolinhas visualmente menores mas ainda com
-  colisão funcionando (não dá pra atravessar andando); medir alguns gaps entre escolinhas vizinhas
-  pra confirmar que ficou menos apertado, mesmo padrão de verificação já usado no lab-27.
-- [ ] **Deploy em produção** (só frontend).
+- [x] **`data/quests.ts`**: +9 missões novas (`q22`-`q30`), ciclo lógica/matemática/leitura
+  mantido (10/10/10 no total agora). Temas novos: sequência de dobrar (lógica), subtração/troca de
+  figurinhas, contar horas, estimativa (matemática), causa-efeito e sentimento em passagem de
+  leitura, classificação com veículos, silogismo (lógica). Recompensa continua a progressão em
+  degraus a partir de onde `q21` parou (40xp/20moedas → 50xp/25moedas no `q30`).
+- [x] **Testado ao vivo (conteúdo das missões novas)**: teleportado direto pra `school-q22` (via
+  `window.__debugTeleportExact`) — o modal abriu sozinho com o conteúdo certo ("Dobrando Sempre",
+  lógica), respondido corretamente, recompensa creditada bateu exatamente (40xp/20moedas base,
+  dobrado pra 80/40 pelo evento "Semana da Recompensa Dupla" ativo no momento do teste), e o badge
+  "Metade do Caminho" disparou corretamente usando o NOVO limiar (`Math.ceil(30/2) = 15`,
+  recalculado automaticamente a partir de `quests.length`, sem precisar tocar em
+  `badgesEarnedAt`). Cadeia de desbloqueio confirmada funcionando pras missões novas também:
+  `school-q30` corretamente NÃO abriu o modal sozinho porque `q29` ainda não tinha sido completada
+  no perfil de teste (comportamento esperado de `isQuestUnlocked`, não um bug).
+- [x] **Deploy em produção (missões novas)** via `npx vercel --prod --yes`.
+- [ ] **`world3d/World3D.tsx`**: redução de ~20% no tamanho da escolinha — **TENTADA, DEPLOYADA,
+  CAUSOU BUG EM PRODUÇÃO, REVERTIDA**. Ver `CONTEXT.md` pra timeline completa e causa raiz (não
+  confirmada). A meta original ("escolinhas menores pra não sobrecarregar o planetinha") continua
+  em aberto pra um laboratório futuro, com uma abordagem mais cuidadosa.
 
 ## Fora de escopo (explicitamente adiado)
 - **Mudar `TRIGGER_DISTANCE`/`RESET_DISTANCE`** (raio de proximidade que abre a missão) — não

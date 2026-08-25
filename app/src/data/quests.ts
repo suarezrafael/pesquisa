@@ -309,6 +309,144 @@ export const quests: Quest[] = [
     xpReward: 40,
     coinReward: 20,
   },
+  // lab-95, pedido do usuário: "aumente o numero de desafio" — 9 missões novas (q22-q30),
+  // acrescentadas no FIM do array de propósito (desbloqueio é por posição, não por id — inserir
+  // no meio quebraria o progresso de quem já jogou). Mesmo ciclo lógica/matemática/leitura dos 21
+  // originais, temas que ainda não tinham sido usados (subtração, horas, estimativa,
+  // classificação com veículos, causa-efeito na leitura). Recompensa continua a progressão em
+  // degraus de onde `q21` parou.
+  {
+    id: 'q22',
+    type: 'logica',
+    title: 'Dobrando Sempre',
+    prompt: 'Complete a sequência: 1, 2, 4, 8, ?',
+    choices: [
+      { id: 'a', label: '10' },
+      { id: 'b', label: '16' },
+      { id: 'c', label: '12' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 40,
+    coinReward: 20,
+  },
+  {
+    id: 'q23',
+    type: 'matematica',
+    title: 'Troca de Figurinhas',
+    prompt: 'Você tinha 15 figurinhas e trocou 6 com um amigo. Quantas figurinhas sobraram?',
+    choices: [
+      { id: 'a', label: '8' },
+      { id: 'b', label: '9' },
+      { id: 'c', label: '10' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 40,
+    coinReward: 20,
+  },
+  {
+    id: 'q24',
+    type: 'leitura',
+    title: 'Antes da Chuva',
+    passage:
+      'As nuvens escureceram e o vento começou a soprar forte. Marcos correu para guardar a bicicleta antes que a chuva chegasse.',
+    prompt: 'Por que Marcos guardou a bicicleta?',
+    choices: [
+      { id: 'a', label: 'Porque estava com fome' },
+      { id: 'b', label: 'Porque ia chover' },
+      { id: 'c', label: 'Porque era hora de dormir' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 40,
+    coinReward: 20,
+  },
+  {
+    id: 'q25',
+    type: 'logica',
+    title: 'Rodas ou Não',
+    prompt: 'Qual item não pertence ao grupo: carro, ônibus, bicicleta, sapato?',
+    choices: [
+      { id: 'a', label: 'Carro' },
+      { id: 'b', label: 'Bicicleta' },
+      { id: 'c', label: 'Sapato' },
+    ],
+    correctChoiceId: 'c',
+    xpReward: 44,
+    coinReward: 22,
+  },
+  {
+    id: 'q26',
+    type: 'matematica',
+    title: 'Daqui a Pouco',
+    prompt: 'Agora são 3 horas. Que horas serão daqui a 4 horas?',
+    choices: [
+      { id: 'a', label: '6 horas' },
+      { id: 'b', label: '7 horas' },
+      { id: 'c', label: '8 horas' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 44,
+    coinReward: 22,
+  },
+  {
+    id: 'q27',
+    type: 'leitura',
+    title: 'O Abrigo de Bia',
+    passage:
+      'Bia adora animais. Todo fim de semana, ela ajuda a cuidar dos bichinhos no abrigo perto de sua casa, dando comida e água pra eles.',
+    prompt: 'O que Bia faz no abrigo?',
+    choices: [
+      { id: 'a', label: 'Dá comida e água aos bichinhos' },
+      { id: 'b', label: 'Vende os animais' },
+      { id: 'c', label: 'Estuda sobre plantas' },
+    ],
+    correctChoiceId: 'a',
+    xpReward: 44,
+    coinReward: 22,
+  },
+  {
+    id: 'q28',
+    type: 'logica',
+    title: 'Todas as Blipas',
+    prompt: 'Todas as Blipas cantam só à noite. Fefe é uma Blipa. Quando Fefe canta?',
+    choices: [
+      { id: 'a', label: 'De manhã' },
+      { id: 'b', label: 'À noite' },
+      { id: 'c', label: 'Não dá pra saber' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 48,
+    coinReward: 24,
+  },
+  {
+    id: 'q29',
+    type: 'matematica',
+    title: 'Cabe ou Não Cabe',
+    prompt: 'Aproximadamente quantos livros cabem numa mochila pequena: 3, 30 ou 300?',
+    choices: [
+      { id: 'a', label: '3' },
+      { id: 'b', label: '30' },
+      { id: 'c', label: '300' },
+    ],
+    correctChoiceId: 'a',
+    xpReward: 48,
+    coinReward: 24,
+  },
+  {
+    id: 'q30',
+    type: 'leitura',
+    title: 'Novos Amigos',
+    passage:
+      'Depois de resolver o último desafio, Théo percebeu que tinha aprendido muito mais do que imaginava — e ainda fez novos amigos pelo caminho.',
+    prompt: 'O que Théo percebeu ao final?',
+    choices: [
+      { id: 'a', label: 'Que estava cansado demais' },
+      { id: 'b', label: 'Que aprendeu bastante e fez amigos' },
+      { id: 'c', label: 'Que queria desistir' },
+    ],
+    correctChoiceId: 'b',
+    xpReward: 50,
+    coinReward: 25,
+  },
 ]
 
 export const questTypeLabels: Record<Quest['type'], string> = {

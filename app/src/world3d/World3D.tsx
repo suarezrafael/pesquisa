@@ -4500,6 +4500,12 @@ export function World3D({
         base.position = surfacePos
         base.rotationQuaternion = alignmentQuaternion(localUp)
 
+        // lab-95: tentativa de encolher a escolinha ~20% foi REVERTIDA — causou um bug real em
+        // produção (reportado pelo usuário ao vivo: "todas as casa estão dentro da terra, até os
+        // NPC estão enterrado... as casinhas só aparecem o telhado"). `settleMeshOnTerrain`
+        // (abaixo) provavelmente reage mal a alguma combinação das dimensões/posições menores —
+        // causa raiz não confirmada ainda, revertido pra parar o bug ao vivo primeiro. Ver
+        // CONTEXT.md do lab-95 pra status da investigação.
         const walls = MeshBuilder.CreateBox(`walls-${quest.id}`, { width: 1.6, height: 1.1, depth: 1.4 }, scene)
         walls.position = new Vector3(0, 0.55, 0)
         walls.material = wallMatShared
@@ -4515,10 +4521,10 @@ export function World3D({
         // Fundação (pedido do usuário, com screenshots: "a casa flutuando numa superfície
         // invisível" mesmo depois de `terrainGroundRadial` confirmar folga ~0 no ANCORA da
         // escola). Causa raiz real: `surfacePos`/`alignmentQuaternion` amostram o terreno em UM
-        // ponto só, mas a caixa de paredes (1.6 x 1.4) é rígida — em terreno com relevo, o
-        // terreno varia até ~1,4 unidade de um canto ao outro da própria escola, deixando um
-        // canto flutuando (chão visível embaixo) enquanto o oposto afunda. Uma base mais funda e
-        // um pouco mais larga que as paredes garante que nenhum canto fique no ar, sem precisar
+        // ponto só, mas a caixa de paredes (reduzida no lab-95, ver comentário acima) é rígida —
+        // em terreno com relevo, o terreno varia de um canto ao outro da própria escola, deixando
+        // um canto flutuando (chão visível embaixo) enquanto o oposto afunda. Uma base mais funda
+        // e um pouco mais larga que as paredes garante que nenhum canto fique no ar, sem precisar
         // inclinar a caixa pra seguir o relevo local.
         const foundation = MeshBuilder.CreateBox(
           `foundation-${quest.id}`,
@@ -4562,7 +4568,7 @@ export function World3D({
 
         // lab-87, mesmo bug relatado de novo ("morros invisíveis, casas flutuando em algo
         // transparente") apesar da fundação maior do lab-28 — causa raiz real: a fundação fixa
-        // (1,72 x 1,52) cobre a variação de relevo TÍPICA sob a escola, mas não a PIOR, que
+        // cobre a variação de relevo TÍPICA sob a escola, mas não a PIOR, que
         // depende de onde a escola caiu (perto da borda íngreme de um platô alto, ver
         // `PLATEAU_CENTERS`, pode variar bem mais que isso na mesma pegada). Em vez de adivinhar
         // um tamanho de caixa maior de novo, usa a mesma correção multi-vértice que já resolve
