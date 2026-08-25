@@ -1,9 +1,6 @@
 # Laboratório atual
 
-Ativo: labs/lab-93-carteira-de-estudos-e-conquistas/ (item 3 do pedido maior do usuário — carteira
-de estudos fixa no mundo, mesmo padrão das escolinhas, boneco senta em pose congelada ao chegar
-perto, abre um painel novo de conquistas — NÃO é "Minha Casa"/mobília comprável, ver
-FEATURES.md do lab-93 pro porquê)
+Ativo: nenhum — pronto pra `lab start` a qualquer momento.
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios** (registrado aqui pra não
 se perder):
@@ -20,13 +17,19 @@ se perder):
    cena foi mais confiável que screenshot). Visibilidade multiplayer NÃO testada ao vivo com duas
    abas (só paridade de código com o chapéu, já comprovado desde o lab-73) — ver
    `labs/lab-92-oculos-novo-eixo-de-colecionaveis/CONTEXT.md`.
-3. "Centro de estudo"/carteira onde o boneco senta + acessa catálogo de conquistas → **lab-93
-   (este)**.
-4. Brinde ao vencer o chefe de Marte (ETs + robô) → vira um COLECIONÁVEL EXCLUSIVO in-game, não
-   físico (o jogo não coleta endereço/PII de criança pra enviar nada). Pesquisa rápida de mercado
-   nacional (2026-08-24): tendência forte de colecionáveis/trading-card-style (Pokémon 30 anos,
-   Squishmallows) — informa o design quando esse item for implementado.
-Último concluído: labs/lab-92-oculos-novo-eixo-de-colecionaveis/ — ver acima.
+3. "Centro de estudo"/carteira onde o boneco senta + acessa catálogo de conquistas → **lab-93,
+   concluído**: carteira fixa perto do spawn (mesmo padrão das escolinhas), gatilho de proximidade
+   abre um `AchievementsPanel` novo (reaproveita CSS de `.quest-list` sem nada novo), pose sentada
+   congelada nos pivôs do boneco. **Achado importante**: a primeira versão gateava o bloco inteiro
+   de física/input por `sittingAtDesk`, o que travava o jogador na carteira PRA SEMPRE (nem
+   `RESET_DISTANCE` conseguia disparar, já que a posição parava de atualizar) — corrigido gateando
+   só a recalculagem da pose, não física/input/posição. Ver
+   `labs/lab-93-carteira-de-estudos-e-conquistas/CONTEXT.md` pro relato completo.
+4. **Brinde ao vencer o chefe de Marte (ETs + robô) → próximo laboratório recomendado.** Vira um
+   COLECIONÁVEL EXCLUSIVO in-game, não físico (o jogo não coleta endereço/PII de criança pra
+   enviar nada). Pesquisa rápida de mercado nacional (2026-08-24): tendência forte de
+   colecionáveis/trading-card-style (Pokémon 30 anos, Squishmallows) — informa o design.
+Último concluído: labs/lab-93-carteira-de-estudos-e-conquistas/ — ver acima.
 
 Último antes desse: labs/lab-90-corrige-bypass-de-assinatura-local/ (G6, metade "bypass": um `401`
 do `/entitlement` — o servidor recusando explicitamente um token inválido/forjado — era tratado
@@ -42,7 +45,7 @@ Deploy em produção feito (`npx vercel --prod --yes`). A outra metade de G6 —
 backup/restauração — ficou explicitamente fora de escopo, precisa de conversa de produto/
 privacidade própria antes de qualquer implementação. Ver
 `labs/lab-90-corrige-bypass-de-assinatura-local/CONTEXT.md`.)
-Contexto do laboratório anterior: labs/lab-92-oculos-novo-eixo-de-colecionaveis/CONTEXT.md
+Contexto do laboratório anterior: labs/lab-93-carteira-de-estudos-e-conquistas/CONTEXT.md
 
 **Ticket de suporte aberto com a Cloudflare (2026-08-24)** sobre o binding nativo de Rate Limiting
 não bloquear nada em produção (achado do lab-88) — aguardando resposta. Não é bloqueador: as rotas
@@ -189,7 +192,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-92-oculos-novo-eixo-de-colecionaveis/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-93-carteira-de-estudos-e-conquistas/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).

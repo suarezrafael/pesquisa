@@ -1,8 +1,8 @@
 # Laboratório 93 — carteira de estudos (boneco senta) + catálogo de conquistas
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-25
-Fim: -
+Fim: 2026-08-25
 Commit inicial: 71ad5341d53b8a130f0cd38bc19a5ff319607a8b
 
 ## Objetivo do laboratório
@@ -42,25 +42,32 @@ acesso à função", não como uma transação de moeda.
   pra ver todas (ganhas e não ganhas) — esse é o gap real que a "carteira" resolve.
 
 ## Funcionalidades planejadas
-- [ ] **`state/progression.ts`**: exporta `BADGE_FIRST_QUEST`/`BADGE_HALFWAY`/`BADGE_ALL_DONE`
-  (já existem como `const` privadas) — fonte única de verdade pro catálogo de conquistas, não
-  duplicar as strings.
-- [ ] **`data/achievements.ts`** (novo): `ACHIEVEMENT_CATALOG` com os 3 badges existentes, cada um
-  com ícone + descrição de como ganhar.
-- [ ] **`world3d/AchievementsPanel.tsx`** (novo): mesma estrutura de `QuestListOverlay.tsx`,
-  mostra os 3 itens do catálogo com estado ganho/não ganho (`progress.badges.includes(id)`).
-- [ ] **`world3d/World3D.tsx`**: geometria simples da carteira (mesa + pernas + banquinho, mesmo
-  vocabulário de primitivas já usado nas escolinhas), posicionada perto do spawn (não sobre ele),
-  assentada no terreno com `settleMeshOnTerrain`. Gatilho de proximidade (raio apertado, estilo
-  quiz) chama `onOpenAchievements`. Pose sentada aplicada enquanto o painel está aberto, revertida
-  sozinha ao andar.
-- [ ] **`App.tsx`**: `showAchievements` state, prop `onOpenAchievements`, `AchievementsPanel`
+- [x] **`state/progression.ts`**: `BADGE_FIRST_QUEST`/`BADGE_HALFWAY`/`BADGE_ALL_DONE` exportadas.
+- [x] **`data/achievements.ts`** (novo): `ACHIEVEMENT_CATALOG` com os 3 badges existentes, ícone +
+  descrição (a de "Metade do Caminho" calcula `Math.ceil(quests.length/2)` dinamicamente).
+- [x] **`world3d/AchievementsPanel.tsx`** (novo): mesma estrutura de `QuestListOverlay.tsx`,
+  reaproveita `.quest-list`/`.quest-list-item` sem CSS novo — mostra os 3 itens com estado ganho/
+  não ganho.
+- [x] **`world3d/World3D.tsx`**: geometria da carteira (mesa+livro+2 pernas + banquinho+2 pernas),
+  posicionada perto do spawn (`deskUp = (0.35, 1, 0.12).normalize()`), assentada com
+  `settleMeshOnTerrain`. Gatilho de proximidade (`DESK_TRIGGER_DISTANCE = 1.2`) chama
+  `onOpenAchievements` e congela a pose sentada.
+- [x] **`App.tsx`**: `showAchievements` state, prop `onOpenAchievements`, `AchievementsPanel`
   renderizado condicionalmente, incluído em `suspendTriggers`.
-- [ ] **Testar ao vivo**: aproximar da carteira, confirmar que o painel abre sozinho (sem precisar
-  de E), que o boneco fica na pose sentada enquanto o painel está aberto, que a lista mostra os 3
-  badges com o estado correto (ganho/não ganho) pro progresso atual, e que andar embora reverte a
-  pose sozinho.
-- [ ] **Deploy em produção** (só frontend).
+- [x] **Bug real encontrado e corrigido durante o teste ao vivo**: a primeira versão gateava o
+  bloco INTEIRO de física/movimento (`if (!drivingCar && !drivingRocket && !sittingAtDesk)`), não
+  só a pose — isso também desligava a leitura de input (WASD) e a gravidade enquanto sentado,
+  deixando o jogador PRESO na carteira pra sempre (nem `RESET_DISTANCE` conseguia disparar, porque
+  a posição do avatar parava de atualizar). Corrigido: o gate `!sittingAtDesk` ficou só na
+  recalculagem da pose de caminhada (2 linhas), física/input/posição continuam sempre ativos — ver
+  CONTEXT.md pro relato completo de como isso foi descoberto.
+- [x] **Testado ao vivo**: confirmado via `window.__playerFigure`/`window.__scene` (inspeção direta
+  da cena, não só screenshot) que o painel abre sozinho ao aproximar, mostra os 3 badges com
+  estado correto (testado com 1 de 3 ganhos), aplica a pose sentada (`legPivotL.rotation.x =
+  -1.1`), e que `sittingAtDesk` volta a `false` corretamente ao se afastar (`RESET_DISTANCE`
+  funcionando) — depois do bug acima corrigido.
+- [x] **Deploy em produção** via `npx vercel --prod --yes` (7ª tentativa, mesmo padrão
+  intermitente de "fetch failed" já visto antes, mais persistente que o normal desta vez).
 
 ## Fora de escopo (explicitamente adiado)
 - **"Minha Casa"** completa (terreno próprio, compra/posicionamento de mobília, sets de
