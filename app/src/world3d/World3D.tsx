@@ -2723,7 +2723,12 @@ export function World3D({
         for (let attempt = 0; attempt < 12; attempt++) {
           terrainRaycastResult.reset()
           havokPlugin.raycast(from, to, terrainRaycastResult)
-          if (!terrainRaycastResult.hasHit) break
+          // lab-95: um raio que atravessa de fora pra dentro de uma esfera fechada (colisor
+          // `MESH` do planeta) deveria SEMPRE acertar algo — "nenhum acerto" aqui não é prova de
+          // que não há planeta, é mais provável ser o Havok ainda não pronto pra aceitar raycast
+          // (ver aquecimento logo após `new PhysicsAggregate(planet, ...)`). Tenta de novo dentro
+          // do mesmo orçamento de tentativas em vez de desistir na primeira falha.
+          if (!terrainRaycastResult.hasHit) continue
           if (terrainRaycastResult.body?.transformNode?.name === 'planet') {
             return terrainRaycastResult.hitPointWorld.length()
           }
@@ -2935,6 +2940,30 @@ export function World3D({
       planet.material = planetMat
       planet.receiveShadows = true
       new PhysicsAggregate(planet, PhysicsShapeType.MESH, { mass: 0, friction: 0.7 }, scene)
+
+      // lab-95 (causa raiz real do bug de escolinhas enterradas — confirmado com diagnóstico em
+      // produção, dado real do aparelho do usuário: "ENTERRADAS:q01(-0.35),q02(-0.47),q03(-0.32)",
+      // só nas primeiras escolas construídas depois desta linha, nenhuma nas de depois). Um raio
+      // que atravessa de fora pra dentro de uma esfera fechada com colisor `MESH` deveria SEMPRE
+      // acertar alguma coisa — mas logo após criar o `PhysicsAggregate` do planeta, o Havok pode
+      // ainda não estar pronto pra aceitar raycast contra essa malha recém-cozida na MESMA tick
+      // síncrona (mais provável num aparelho/carga mais lenta — daí só afetar o que é posicionado
+      // por raycast BEM no início, antes de qualquer coisa "acordar" o física). `terrainGroundRadial`
+      // (mais abaixo) trata "nenhum acerto" como "não achei o planeta" e cai pra fórmula (que pode
+      // discordar da malha real o bastante pra enterrar o prédio inteiro). Descartar um bloco de
+      // raycasts aqui, contra o próprio planeta, força qualquer inicialização preguiçosa do Havok a
+      // terminar ANTES de qualquer posicionamento de verdade (escolas, rochas, props) depender do
+      // resultado — não é um `scene.render()` (mudaria o timing de outras coisas ainda não prontas
+      // nesse ponto do `setup()`), só chama a mesma API de raycast que o resto do código já usa.
+      {
+        const warmupResult = new PhysicsRaycastResult()
+        const warmupDirs = [Vector3.Up(), Vector3.Down(), Vector3.Forward(), Vector3.Backward(), Vector3.Left(), Vector3.Right()]
+        for (let i = 0; i < 20; i++) {
+          const dir = warmupDirs[i % warmupDirs.length]
+          warmupResult.reset()
+          havokPlugin.raycast(dir.scale(PLANET_RADIUS + 6), dir.scale(PLANET_RADIUS - 2), warmupResult)
+        }
+      }
 
       // Props decorativos: modelos glTF reais (Kenney Nature Kit, CC0) — carregados uma vez
       // cada e clonados nos pontos de cena. Licença em public/assets/nature-kit/License.txt.
