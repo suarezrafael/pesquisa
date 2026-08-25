@@ -1,8 +1,8 @@
 # Laboratório 92 — óculos: novo eixo de colecionáveis (free + assinatura)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-25
-Fim: -
+Fim: 2026-08-25
 Commit inicial: 7ca02c5410b4c5a49d3925b8d3a3a2a72dd86798
 
 ## Objetivo do laboratório
@@ -20,39 +20,47 @@ inteiro numa iteração (um eixo de customização a mais, seguindo o MESMO padr
 chapéu/cor-de-roupa/cabelo — nenhuma abstração nova, só mais uma instância do padrão existente).
 
 ## Funcionalidades planejadas
-- [ ] **`app/src/data/glasses.ts`** (novo): `GlassesOption`/`GlassesShape` (`'sunglasses' | 'vr'`),
-  mesma estrutura de `HatOption`. Catálogo inicial: 2 itens compráveis com moeda (free) + 2
-  exclusivos de assinante — pelo menos um óculos de sol (free) e a versão de RV (assinatura),
-  como já estava no plano original.
-- [ ] **`types.ts`**: `Profile.equippedGlassesId: string | null`, `Progress.unlockedGlassesIds:
+- [x] **`app/src/data/glasses.ts`** (novo): `GlassesOption`/`GlassesShape` (`'sunglasses' | 'vr'`),
+  mesma estrutura de `HatOption`. Catálogo: Óculos de Sol 😎 e Óculos Colorido 🕶️ (10 moedas cada,
+  formato `sunglasses`), Óculos de Realidade Virtual 🥽 (formato `vr`) e Óculos Holográfico ✨
+  (formato `sunglasses`, cor roxa) como exclusivos de assinante.
+- [x] **`types.ts`**: `Profile.equippedGlassesId: string | null`, `Progress.unlockedGlassesIds:
   string[]`.
-- [ ] **`state/storage.ts`**: default `equippedGlassesId: null` no `loadProfile`, `emptyProgress.
-  unlockedGlassesIds: []`.
-- [ ] **`state/progression.ts`** / **`state/useProgress.ts`**: `unlockGlasses` reaproveitando
-  `unlockGeneric` (mesma regra dos outros eixos: nunca libera item `subscriptionOnly` de graça).
-- [ ] **`state/useProfile.ts`**: `equipGlasses(id: string | null)`.
-- [ ] **`world3d/studentFigure.ts`**: `applyGlasses(figure, glasses, scene, shadowGenerator)` —
-  duas peças novas de geometria simples (lentes de sol + ponte; visor de RV + tira), na altura dos
-  olhos (`HEAD_Y + 0.13`, mesma referência do acessório `eyes` já existente), reaproveitando o
-  padrão de `applyHat`/`applyHairShape` (descarta+remonta).
-- [ ] **`world3d/World3D.tsx`**: aplicar óculos no boneco local na montagem inicial, novo
-  `__setPlayerGlasses` + `useEffect` observando `profile.equippedGlassesId` (mesmo padrão do
-  chapéu), incluir `glassesId` no `appearanceKey`/`sendState` do jogador local, e no protocolo de
-  jogador remoto (`RemotePlayer.lastGlassesId`, `applyRemoteAppearance`).
-- [ ] **`world3d/multiplayer.ts`**: `RemoteState.glassesId`, `sendState(...)` ganha o campo no
-  objeto de aparência.
-- [ ] **`world3d/AvatarPreview3D.tsx`**: prop `glassesId`, aplicado no preview 3D da lojinha.
-- [ ] **`world3d/AvatarShop.tsx`**: nova aba "Óculos" (mesmo padrão visual da aba "Chapéus", com
+- [x] **`state/storage.ts`**: default `equippedGlassesId: null` no `loadProfile`, `emptyProgress.
+  unlockedGlassesIds: DEFAULT_UNLOCKED_GLASSES_IDS` (sempre `[]` — nenhum óculos vem pré-liberado,
+  "Nenhum" já é grátis por padrão).
+- [x] **`state/progression.ts`** / **`state/useProgress.ts`**: `unlockGlasses` reaproveitando
+  `unlockGeneric` (mesma regra dos outros eixos).
+- [x] **`state/useProfile.ts`**: `equipGlasses(id: string | null)`.
+- [x] **`world3d/studentFigure.ts`**: `applyGlasses(figure, glasses, scene, shadowGenerator)` —
+  duas lentes + ponte (sunglasses) ou visor + tira (vr), na altura dos olhos (`EYE_Y = 1.28`,
+  mesma referência do acessório `eyes` já existente).
+- [x] **`world3d/World3D.tsx`**: óculos aplicado no boneco local na montagem inicial,
+  `__setPlayerGlasses` + `useEffect` observando `profile.equippedGlassesId`, `glassesId` no
+  `appearanceKey`/`sendState` do jogador local, e no protocolo de jogador remoto
+  (`RemotePlayer.lastGlassesId`, `applyRemoteAppearance`) — confirmado por grep que os 7 pontos de
+  espelhamento do chapéu (`hatId`) têm todos o equivalente em óculos.
+- [x] **`world3d/multiplayer.ts`**: `RemoteState.glassesId`, `sendState(...)` ganhou o campo.
+- [x] **`world3d/AvatarPreview3D.tsx`**: prop `glassesId`, aplicado no preview 3D da lojinha.
+- [x] **`world3d/AvatarShop.tsx`**: nova aba "Óculos" (mesmo padrão visual da aba "Chapéus", com
   opção "Nenhum"), passa `glassesId` pro preview.
-- [ ] **`App.tsx`**: conecta `equipGlasses`/`unlockGlasses` do estado até `AvatarShop`.
-- [ ] **`state/progression.test.ts`**: teste de regressão espelhando o de `unlockHat` — recusa
-  óculos `subscriptionOnly` mesmo com moedas suficientes.
-- [ ] **Testar ao vivo**: equipar/desequipar os dois óculos free e confirmar visual no preview 3D
-  e no boneco em cena; confirmar que os itens de assinante aparecem bloqueados sem assinatura
-  ativa; confirmar que outro jogador conectado vê os óculos equipados (mesmo teste de
-  visibilidade multiplayer já usado pro chapéu no lab-73).
-- [ ] **Deploy em produção** (só frontend, sem mudança de backend/relay — o relay já repassa
-  qualquer campo extra em `state` sem precisar de mudança, confirmado lendo o handler do lab-89).
+- [x] **`App.tsx`**: conecta `equipGlasses`/`unlockGlasses` do estado até `AvatarShop`.
+- [x] **`state/progression.test.ts`**: 2 testes novos — recusa `oculos_rv` (subscriptionOnly)
+  mesmo com moedas, e compra normal de `oculos_sol` desconta o custo certo. Suíte total: 36 testes.
+- [x] **Testado ao vivo** contra o dev server: comprado "Óculos de Sol" (500→490 moedas),
+  equipado e confirmado — não só visualmente, mas inspecionando `window.__playerFigure.
+  glassesMeshes` direto no console — exatamente 3 malhas (2 lentes + ponte) na posição/cor
+  esperadas; desequipado ("Nenhum") e confirmado `glassesMeshes.length === 0`; confirmado que
+  "Óculos de Realidade Virtual"/"Óculos Holográfico" aparecem como `🔒 Assinantes`, sem botão
+  clicável, idêntico ao comportamento já existente pros outros eixos exclusivos. Visibilidade
+  multiplayer (outro jogador vendo os óculos equipados) **não foi testada ao vivo com duas abas**
+  — verificada só por leitura/paridade de código com o mecanismo do chapéu (já comprovado
+  funcionando desde o lab-73) e pelo tipo `RemoteState.glassesId` obrigatório barrando em tempo de
+  compilação qualquer chamada de `sendState` que esqueça o campo; registrado como pendência de
+  verificação, mesmo padrão já usado no projeto pra outros efeitos visuais (ver lab-73 CONTEXT.md).
+- [x] **Deploy em produção** via `npx vercel --prod --yes` (3ª tentativa, mesmo padrão
+  intermitente de "fetch failed"). Sem mudança no relay — confirmado que o handler de `state`
+  (lab-89) repassa qualquer campo extra automaticamente (`{...msg, ...}`).
 
 ## Fora de escopo (explicitamente adiado — resto do backlog de Fase E)
 - **Chapéus com formato novo** (Chapéu de Mago 🧙, Fone de Ouvido Gamer 🎧, Chifres de Dragão 🐉)
