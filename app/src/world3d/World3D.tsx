@@ -117,6 +117,7 @@ interface World3DProps {
   onOpenShop: () => void
   onOpenPairing: () => void
   onOpenAchievements: () => void
+  onUnlockMarsReward: () => void
   onCollectCoin: () => void
   suspendTriggers: boolean
 }
@@ -1634,6 +1635,7 @@ export function World3D({
   onOpenShop,
   onOpenPairing,
   onOpenAchievements,
+  onUnlockMarsReward,
   onCollectCoin,
   suspendTriggers,
 }: World3DProps) {
@@ -1661,6 +1663,7 @@ export function World3D({
   const onSelectQuestRef = useRef(onSelectQuest)
   const onSelectSurpriseQuizRef = useRef(onSelectSurpriseQuiz)
   const onOpenAchievementsRef = useRef(onOpenAchievements)
+  const onUnlockMarsRewardRef = useRef(onUnlockMarsReward)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
   const sceneRef = useRef<Scene | null>(null)
@@ -1723,6 +1726,7 @@ export function World3D({
   onSelectQuestRef.current = onSelectQuest
   onSelectSurpriseQuizRef.current = onSelectSurpriseQuiz
   onOpenAchievementsRef.current = onOpenAchievements
+  onUnlockMarsRewardRef.current = onUnlockMarsReward
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
 
@@ -1960,6 +1964,12 @@ export function World3D({
     // `RESET_DISTANCE` no loop de física). Ao contrário do carro, não precisa de tecla `E`/estado
     // de "qual carro" — só um boolean, porque só existe uma carteira no mundo.
     let sittingAtDesk = false
+    // Brinde de Marte (lab-94) — "já concedeu o brinde NESTA visita" (evita chamar
+    // `onUnlockMarsRewardRef` a cada quadro enquanto o jogador fica parado com os 6 inimigos já
+    // mortos). Resetado junto com os inimigos a cada nova chegada em Marte, mesmo ponto do
+    // lab-64 — `unlockMarsReward` (state/progression.ts) já é idempotente por conta própria, esta
+    // flag é só pra não gastar `saveProgress`/re-render à toa a cada quadro depois da primeira vez.
+    let marsClearedThisVisit = false
     // Reaproveitado a cada quadro pra checar "grounded" via raycast físico real (ver comentário
     // onde é usado) — evita alocar um objeto novo por quadro.
     const groundRayResult = new PhysicsRaycastResult()
@@ -2233,6 +2243,9 @@ export function World3D({
             enemy.root.rotationQuaternion = alignmentQuaternion(enemy.homeUp)
             enemy.root.setEnabled(true)
           }
+          // lab-94: nova visita, nova chance de o jogador limpar o planeta de novo — a flag local
+          // só evita chamadas repetidas dentro da MESMA visita, não deve sobreviver a esta.
+          marsClearedThisVisit = false
         } else {
           onSecondPlanet = false
           currentWorldCenter = Vector3.Zero()
@@ -2490,6 +2503,14 @@ export function World3D({
               enemy.root.setEnabled(false)
               playEnemyHit()
               onCollectCoinRef.current()
+              // Brinde de Marte (lab-94, pedido do usuário: "ao vencer os ETs e o robô você
+              // desbloqueia um brinde") — "vencer" = derrotar TODOS os inimigos da visita atual,
+              // não um chefe único (não existe nenhum na Fase E de Marte, ver FEATURES.md do
+              // lab-94). Checa só depois de nocautear (barato: 6 itens), uma vez por visita.
+              if (!marsClearedThisVisit && marsEnemies.every((e) => !e.alive)) {
+                marsClearedThisVisit = true
+                onUnlockMarsRewardRef.current()
+              }
             }
             return
           }

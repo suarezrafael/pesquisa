@@ -4,6 +4,7 @@ import { Onboarding } from './components/Onboarding'
 import { Tutorial } from './components/Tutorial'
 import { QuestModal } from './components/QuestModal'
 import { RewardToast } from './components/RewardToast'
+import { MarsRewardToast } from './components/MarsRewardToast'
 import { PairingScreen } from './components/PairingScreen'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
@@ -78,6 +79,7 @@ function GameApp() {
     unlockBackpackColor,
     unlockHairShape,
     unlockGlasses,
+    unlockMarsReward,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -91,6 +93,7 @@ function GameApp() {
   const [showShop, setShowShop] = useState(false)
   const [showPairing, setShowPairing] = useState(false)
   const [showAchievements, setShowAchievements] = useState(false)
+  const [showMarsReward, setShowMarsReward] = useState(false)
   const { entitlement, redeemCode, redeeming, redeemError } = useEntitlement()
 
   // lab-91: carimba "última vez jogado" pro painel de progresso do `/familia` — só quando já
@@ -145,6 +148,13 @@ function GameApp() {
     setActiveSurpriseQuiz(null)
   }
 
+  // Brinde de Marte (lab-94) — `unlockMarsReward()` já é idempotente (não faz nada se o jogador já
+  // tiver o item); o aviso só aparece quando realmente concedeu algo novo, não a cada visita em
+  // que o planeta é limpado de novo.
+  function handleUnlockMarsReward() {
+    if (unlockMarsReward()) setShowMarsReward(true)
+  }
+
   return (
     <>
       <Suspense fallback={<div className="world-loading">Carregando o mundo 3D…</div>}>
@@ -158,6 +168,7 @@ function GameApp() {
           onOpenShop={() => setShowShop(true)}
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
+          onUnlockMarsReward={handleUnlockMarsReward}
           onCollectCoin={collectCoin}
           suspendTriggers={
             activeQuest !== null ||
@@ -167,7 +178,8 @@ function GameApp() {
             showQuestList ||
             showShop ||
             showPairing ||
-            showAchievements
+            showAchievements ||
+            showMarsReward
           }
         />
       </Suspense>
@@ -206,6 +218,8 @@ function GameApp() {
       {showAchievements && (
         <AchievementsPanel progress={progress} onClose={() => setShowAchievements(false)} />
       )}
+
+      {showMarsReward && <MarsRewardToast onContinue={() => setShowMarsReward(false)} />}
 
       {showShop && (
         <AvatarShop

@@ -17,6 +17,11 @@ export interface HatOption {
    * existentes (nenhuma geometria nova no Babylon), só com uma cor nova — nunca reclassifica um
    * item que já era comprável com moeda antes desta fase. */
   subscriptionOnly?: boolean
+  /** lab-94, pedido do usuário: "ao vencer os ETs e o robô [todos os inimigos de Marte] você
+   * desbloqueia um brinde" — igual a `subscriptionOnly`, nunca liberável pelo botão de compra
+   * normal (mesmo com `cost: 0`); só `unlockMarsReward` (state/progression.ts) concede este item,
+   * uma única vez, ao limpar Marte pela primeira vez. */
+  marsRewardOnly?: boolean
 }
 
 export const HAT_CATALOG: HatOption[] = [
@@ -109,10 +114,22 @@ export const HAT_CATALOG: HatOption[] = [
     colorRgb: [0.92, 0.75, 0.25],
     subscriptionOnly: true,
   },
+  // lab-94, pedido do usuário: brinde exclusivo ao limpar Marte (derrotar todos os inimigos) —
+  // reaproveita o formato `crown` já existente, cor marciana (vermelho-alaranjado) pra ficar
+  // visualmente distinto dos outros dois chapéus de coroa.
+  {
+    id: 'capacete_heroi_marte',
+    name: 'Coroa de Herói de Marte',
+    emoji: '🪐',
+    cost: 0,
+    shape: 'crown',
+    colorRgb: [0.82, 0.32, 0.16],
+    marsRewardOnly: true,
+  },
 ]
 
 export const DEFAULT_UNLOCKED_HAT_IDS: string[] = HAT_CATALOG.filter(
-  (h) => h.cost === 0 && !h.subscriptionOnly,
+  (h) => h.cost === 0 && !h.subscriptionOnly && !h.marsRewardOnly,
 ).map((h) => h.id)
 
 export function findHatById(id: string): HatOption | undefined {

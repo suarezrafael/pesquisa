@@ -13,6 +13,7 @@ import {
   unlockBackpackColor as applyBackpackColorUnlock,
   unlockHairShape as applyHairShapeUnlock,
   unlockGlasses as applyGlassesUnlock,
+  unlockMarsReward as applyMarsRewardUnlock,
 } from './progression'
 
 export function useProgress() {
@@ -98,6 +99,17 @@ export function useProgress() {
     })
   }
 
+  // Brinde de Marte (lab-94) — diferente dos outros `unlockXxx`, devolve se realmente concedeu
+  // algo novo (o chamador em `App.tsx` usa isso pra decidir se mostra o aviso de novo item).
+  function unlockMarsReward(): boolean {
+    const result = applyMarsRewardUnlock(progress)
+    if (result.granted) {
+      setProgress(result.progress)
+      saveProgress(result.progress)
+    }
+    return result.granted
+  }
+
   return {
     progress,
     completeQuest,
@@ -110,5 +122,6 @@ export function useProgress() {
     unlockBackpackColor,
     unlockHairShape,
     unlockGlasses,
+    unlockMarsReward,
   }
 }

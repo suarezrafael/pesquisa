@@ -111,13 +111,34 @@ export function unlockAvatar(progress: Progress, avatarId: string): Progress {
 // customização independente (trocar de criatura não desbloqueia/perde chapéu nenhum).
 export function unlockHat(progress: Progress, hatId: string): Progress {
   const hat = findHatById(hatId)
-  if (!hat || hat.subscriptionOnly) return progress
+  if (!hat || hat.subscriptionOnly || hat.marsRewardOnly) return progress
   if (progress.unlockedHatIds.includes(hatId)) return progress
   if (progress.coins < hat.cost) return progress
   return {
     ...progress,
     coins: progress.coins - hat.cost,
     unlockedHatIds: [...progress.unlockedHatIds, hatId],
+  }
+}
+
+// Brinde exclusivo de Marte (lab-94, pedido do usuário: "ao vencer os ETs e o robô você
+// desbloqueia um brinde") — diferente de `unlockHat`, não gasta moeda nem checa custo, é concedido
+// direto pelo evento de limpar Marte (World3D.tsx, disparado uma vez por visita). Idempotente:
+// devolve `progress` inalterado se o jogador já tiver o item (visita seguinte, planeta limpo de
+// novo) — o `granted` no retorno é o que decide se a UI mostra o aviso de "novo item" ou fica
+// quieta.
+const MARS_REWARD_HAT_ID = 'capacete_heroi_marte'
+
+export interface MarsRewardResult {
+  progress: Progress
+  granted: boolean
+}
+
+export function unlockMarsReward(progress: Progress): MarsRewardResult {
+  if (progress.unlockedHatIds.includes(MARS_REWARD_HAT_ID)) return { progress, granted: false }
+  return {
+    progress: { ...progress, unlockedHatIds: [...progress.unlockedHatIds, MARS_REWARD_HAT_ID] },
+    granted: true,
   }
 }
 

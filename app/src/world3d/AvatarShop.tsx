@@ -338,7 +338,7 @@ export function AvatarShop({
                   <div key={hat.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
                     <span className="avatar-shop-emoji">{hat.emoji}</span>
                     <span className="avatar-shop-name">
-                      {hat.name} {hat.subscriptionOnly && '👑'}
+                      {hat.name} {hat.subscriptionOnly && '👑'} {hat.marsRewardOnly && '🪐'}
                     </span>
 
                     {equipped && <span className="avatar-shop-tag">Em uso</span>}
@@ -353,7 +353,13 @@ export function AvatarShop({
                       <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
                     )}
 
-                    {!usable && !hat.subscriptionOnly && (
+                    {/* lab-94: brinde exclusivo de Marte — nunca compra com moeda, mesma tag
+                        visual do bloqueio de assinatura (`subscription-lock`), texto diferente. */}
+                    {!equipped && !usable && hat.marsRewardOnly && (
+                      <span className="avatar-shop-tag subscription-lock">🪐 Vença Marte</span>
+                    )}
+
+                    {!usable && !hat.subscriptionOnly && !hat.marsRewardOnly && (
                       <button
                         type="button"
                         className="avatar-shop-action buy"

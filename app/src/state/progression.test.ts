@@ -15,6 +15,7 @@ import {
   unlockGlasses,
   unlockHat,
   unlockHairShape,
+  unlockMarsReward,
   unlockPantsColor,
   unlockShirtColor,
   unlockShoeColor,
@@ -187,6 +188,30 @@ describe('itens exclusivos de assinante nunca são obtidos via moeda (Fase E)', 
     const next = unlockGlasses({ ...emptyProgress, coins: 9999 }, 'oculos_rv')
     expect(next.unlockedGlassesIds).not.toContain('oculos_rv')
     expect(next.coins).toBe(9999)
+  })
+
+  // lab-94: mesmo teste de regressão, pro brinde exclusivo de Marte — nunca liberável pelo botão
+  // de compra normal, só por `unlockMarsReward` (testado à parte abaixo).
+  it('unlockHat recusa a Coroa de Herói de Marte mesmo com moedas suficientes', () => {
+    const next = unlockHat({ ...emptyProgress, coins: 9999 }, 'capacete_heroi_marte')
+    expect(next.unlockedHatIds).not.toContain('capacete_heroi_marte')
+    expect(next.coins).toBe(9999)
+  })
+})
+
+describe('unlockMarsReward (lab-94)', () => {
+  it('concede o brinde na primeira vez, sem mexer em moeda', () => {
+    const result = unlockMarsReward({ ...emptyProgress, coins: 7 })
+    expect(result.granted).toBe(true)
+    expect(result.progress.unlockedHatIds).toContain('capacete_heroi_marte')
+    expect(result.progress.coins).toBe(7)
+  })
+
+  it('é idempotente — não concede de novo se o jogador já tiver o item', () => {
+    const jaTem = { ...emptyProgress, unlockedHatIds: [...emptyProgress.unlockedHatIds, 'capacete_heroi_marte'] }
+    const result = unlockMarsReward(jaTem)
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(jaTem)
   })
 })
 
