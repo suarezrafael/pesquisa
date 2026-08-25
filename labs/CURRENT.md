@@ -1,22 +1,21 @@
 # Laboratório atual
 
-Ativo: labs/lab-90-corrige-bypass-de-assinatura-local/ (G6: `useEntitlement.refresh()` trata
-qualquer resposta não-200 do `/entitlement` como falha de rede e preserva o cache local — mas um
-`401` é uma rejeição AUTORITATIVA do servidor, não uma falha; editar `localStorage` manualmente
-pra `active: true` com um token qualquer libera todo cosmético de assinante permanentemente,
-porque a revalidação no próximo carregamento recebe o 401 correto e mesmo assim não corrige nada)
-Último concluído: labs/lab-89-apelido-restrito-e-whitelist-relay/ (G4: apelido continua texto
-livre editável, mas restrito a só letras/espaço + lista de bloqueio de ~40 termos — sem detecção
-de PII, direção confirmada com o usuário 2026-08-24 via `AskUserQuestion`. Auditoria achou que o
-apelido trafega em `state` E `chat`, não só `chat`; o relay ganhou validação própria que
-**sanitiza** (vira "Jogador") em vez de recusar a mensagem inteira, pra não quebrar sincronização
-de perfis criados antes desta correção. G5: `server-cf-relay` ganhou lista branca de tipos de
-mensagem — só `state`/`attack`/`chat` são aceitos do cliente, com validação mínima de formato de
-cada um. Tudo testado ao vivo contra produção com WebSocket cru: nome sujo virou "Jogador", nome
-limpo passou sem alteração, `state` malformado e tipo de mensagem desconhecido foram descartados
-sem quebrar a conexão; load-test do lab-85 confirma tráfego legítimo sem regressão. Ver
-`labs/lab-89-apelido-restrito-e-whitelist-relay/CONTEXT.md`.)
-Contexto do laboratório anterior: labs/lab-89-apelido-restrito-e-whitelist-relay/CONTEXT.md
+Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Último concluído: labs/lab-90-corrige-bypass-de-assinatura-local/ (G6, metade "bypass": um `401`
+do `/entitlement` — o servidor recusando explicitamente um token inválido/forjado — era tratado
+igual a uma falha de rede em `useEntitlement.refresh()` e descartado, então editar `localStorage`
+manualmente pra `active: true` liberava todo cosmético de assinante PERMANENTEMENTE, mesmo com a
+revalidação rodando certinho a cada sessão. Corrigido distinguindo 401 (rejeição autoritativa,
+sobrescreve o cache) de outras falhas (rede/5xx, continua preservando o cache — filosofia
+"funciona offline" preservada). Decisão pura extraída e testada
+(`shouldTrustCachedEntitlementOnFailure`, 34 testes no total). Verificado ao vivo contra o Worker
+de produção real (não mockado): token forjado injetado via `localStorage` foi corrigido sozinho
+pra `active: false` no reload, lojinha mostrou os itens de assinante corretamente bloqueados.
+Deploy em produção feito (`npx vercel --prod --yes`). A outra metade de G6 — progresso pago sem
+backup/restauração — ficou explicitamente fora de escopo, precisa de conversa de produto/
+privacidade própria antes de qualquer implementação. Ver
+`labs/lab-90-corrige-bypass-de-assinatura-local/CONTEXT.md`.)
+Contexto do laboratório anterior: labs/lab-90-corrige-bypass-de-assinatura-local/CONTEXT.md
 
 **Ticket de suporte aberto com a Cloudflare (2026-08-24)** sobre o binding nativo de Rate Limiting
 não bloquear nada em produção (achado do lab-88) — aguardando resposta. Não é bloqueador: as rotas
@@ -43,11 +42,15 @@ se perder):
    usuário (usa o provedor de e-mail compartilhado do próprio Neon, `auth@mail.myneon.app`, sem
    precisar configurar SMTP/Resend). Deployado em produção.
 
-**G3 (lab-88), G4 e G5 (lab-89) — endurecimento do relay + apelido restrito + lista branca de
-mensagens — estão todos resolvidos.** Da ordem de ataque de `docs/prompts/05-escala-e-viabilidade.md`
-seção 7, o próximo item de maior severidade ainda em aberto é **G6 (entitlement/progresso 100%
-client-side — editar uma chave de `localStorage` libera conteúdo de assinante pago)**, a menos que
-o usuário peça outra coisa.
+**G3 (lab-88), G4/G5 (lab-89) resolvidos. G6 parcialmente resolvido (lab-90)**: o bypass de
+assinatura via `localStorage` está corrigido; a falta de backup/restauração de progresso pago
+continua em aberto de propósito (precisa de conversa de produto/privacidade, ver
+`labs/lab-90-.../CONTEXT.md`). Da ordem de ataque de `docs/prompts/05-escala-e-viabilidade.md`
+seção 7, o que resta genuinamente sem solução: **o resto de G7** (token de pareamento sem `jti`/
+revogação/vínculo de aparelho — um código vazado ainda vira assinatura compartilhada), e **G8**
+(webhook do Stripe sem idempotência, `status` do schema não cobre todos os estados reais do
+Stripe/Pix). G9 já foi resolvido no lab-88 (só o `.md` de origem não foi atualizado pra refletir).
+Recomendação do lab-90: G8 tem risco de receita mais direto — mas vale confirmar com o usuário.
 
 **LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 tinha medido 38,2% da cota diária
 pra 30 jogadores/30min e deixado como pendência decidir se "salas com teto de 12 jogadores" era o
@@ -159,7 +162,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-89-apelido-restrito-e-whitelist-relay/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-90-corrige-bypass-de-assinatura-local/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).

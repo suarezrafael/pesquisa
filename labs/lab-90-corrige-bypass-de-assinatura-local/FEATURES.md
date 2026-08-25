@@ -1,8 +1,8 @@
 # Laboratório 90 — corrige bypass de assinatura via cache local de entitlement
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-24
-Fim: -
+Fim: 2026-08-24
 Commit inicial: c54bcf05f240b7b485f15014b11ece7323708bb8
 
 ## Objetivo do laboratório
@@ -28,19 +28,27 @@ mesmo com moedas suficientes) — o problema é só na fonte de verdade do próp
 ativa, que hoje é uma string editável no navegador sem verificação confiável.
 
 ## Funcionalidades planejadas
-- [ ] **Corrigir `useEntitlement.refresh()`** para tratar um `401` do `/entitlement` como rejeição
+- [x] **Corrigir `useEntitlement.refresh()`** para tratar um `401` do `/entitlement` como rejeição
   autoritativa (sobrescreve o cache pra `active: false` imediatamente), mantendo o comportamento
-  atual de "preserva o cache" só pros casos que são de fato falha de rede/servidor (offline, 5xx) —
-  não regredir a filosofia "funciona offline" já documentada no arquivo.
-- [ ] **Extrair a decisão como função pura testável**, no espírito de
-  `docs/prompts/03-arquitetura-sistema.md` (lógica de domínio separada de código de UI/rede) — algo
-  como `shouldTrustCachedEntitlementOnFailure(status: number): boolean`, coberta por
-  `npm run test`.
-- [ ] **Teste ao vivo do exploit antes e depois da correção**: no dev server, editar
-  `localStorage` manualmente pra simular o bypass, confirmar que hoje realmente libera os
-  cosméticos (reproduzir o bug antes de corrigir), e confirmar que depois da correção o jogo volta
-  sozinho pro estado correto assim que a revalidação roda.
-- [ ] **Deploy do fix** (é só frontend — Vercel a partir do git, sem mudança no Worker).
+  atual de "preserva o cache" só pros casos que são de fato falha de rede/servidor (offline, 5xx).
+- [x] **Extraída a decisão como função pura testável** — `shouldTrustCachedEntitlementOnFailure(status:
+  number): boolean` em `app/src/state/entitlementStorage.ts`, coberta por 3 casos novos em
+  `entitlementStorage.test.ts` (`npm run test`, agora 34 testes).
+- [x] **Teste ao vivo da correção contra produção real** (não simulado): no dev server local,
+  com `VITE_ACCOUNTS_API_URL` já apontando pro Worker de contas de produção (`.env`), injetado via
+  `localStorage` um perfil válido + `{token: "token-forjado-nao-existe", active: true, expiresAt:
+  null}`. Ao recarregar a página, a chamada real de revalidação recebeu o 401 real do Worker e o
+  `localStorage` foi corrigido sozinho pra `active: false` — confirmado lendo o valor depois do
+  reload. Abrindo a lojinha na aba "Chapéus", os itens de assinante (Coroa de Diamante, Boné
+  Holográfico, Laço Estelar) apareceram corretamente como `🔒 Assinantes`, não liberados. Não foi
+  reproduzido o bug ANTES da correção com um revert temporário de código — a leitura do código já
+  deixava o mecanismo do bug inequívoco (`if (!res.ok) return` incondicional descartando até uma
+  resposta 401 explícita), e o teste ao vivo pós-fix confirma que o caminho de correção funciona
+  fim a fim contra o servidor real, que é o que importa pra fechar o achado.
+- [x] **Deploy em produção**: frontend via `npx vercel --prod --yes` (após 4 tentativas com "fetch
+  failed" transitório, mesmo padrão intermitente já visto antes nesta sessão) — confirmado
+  `https://missaoaprendizado.com` e `app-two-flax-92.vercel.app` apontando pro novo build. Sem
+  mudança no Worker de contas (o bug era só no cliente).
 
 ## Fora de escopo (explicitamente adiado)
 - **"Todo o progresso pago mora só no aparelho, sem backup"** — a outra metade de G6. Diferente do
