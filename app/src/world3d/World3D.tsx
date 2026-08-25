@@ -480,6 +480,91 @@ function terrainHeight(dir: Vector3): number {
   return height
 }
 
+// lab-95 (bug real relatado pelo usuário ao vivo, DEPOIS do lab-95 já ter revertido o encolhimento
+// de escolinha: "TODAS AS CASA ESTÃO DENTRO DA TERRA, ATE OS NPC ESTÃO ENTERRADO... AS CASINHAS SO
+// APARECEM O TELHADO"). Causa raiz de verdade (não é o tamanho da escolinha, que já tinha voltado
+// ao normal quando o bug persistiu): `PLATEAU_CENTERS` tem rampas de até 3,2 unidades de altura
+// numa borda com `smoothstep` — a inclinação máxima da rampa passa de 0,8 unidade de altura por
+// METRO percorrido. Uma escolinha (~1,3m de "raio" contando o beiral do telhado e a posição do
+// professor) que caia bem na rampa de um platô vê cantos com quase 2 unidades de diferença de
+// altura entre si. `settleMeshOnTerrain` (mais abaixo) desce o prédico inteiro até o canto MENOS
+// alto encostar no chão — o que enterra todos os outros cantos na mesma proporção da inclinação
+// local. Nenhuma fundação "seguraria" isso sem virar uma caixa enorme. A correção de verdade é não
+// deixar uma escola cair numa rampa íngreme: mede a variação de altura do terreno ao REDOR de cada
+// posição candidata e, se for grande demais pra qualquer fundação absorver, procura um ponto
+// próximo mais plano antes de fixar a posição final.
+//
+// Raio angular aproximado do "pé" de uma escolinha (paredes 1,6×1,4 + beiral do telhado até ~1,05m
+// do centro + professor deslocado ~1,1m do centro) — maior que a metade da diagonal da própria
+// escola de propósito, pra pegar a variação que `settleMeshOnTerrain` realmente vai amostrar.
+const SCHOOL_FOOTPRINT_ANGULAR_RADIUS = 1.3 / PLANET_RADIUS
+// Variação de altura (metros) que a fundação (1,6 de altura, ~1,45 enterrada) ainda absorve sem
+// que as paredes ou o professor fiquem visíveis debaixo do nível do chão real.
+const SCHOOL_SAFE_TERRAIN_VARIANCE = 0.6
+
+function terrainVarianceNearby(dir: Vector3, angularRadius: number, sampleCount: number): number {
+  const seed = Math.abs(dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+  const tangentA = Vector3.Cross(dir, seed).normalize()
+  const tangentB = Vector3.Cross(dir, tangentA).normalize()
+  let min = terrainHeight(dir)
+  let max = min
+  for (let i = 0; i < sampleCount; i++) {
+    const angle = (i / sampleCount) * Math.PI * 2
+    const sampleDir = dir
+      .add(tangentA.scale(Math.sin(angle) * angularRadius))
+      .add(tangentB.scale(Math.cos(angle) * angularRadius))
+      .normalize()
+    const height = terrainHeight(sampleDir)
+    if (height < min) min = height
+    if (height > max) max = height
+  }
+  return max - min
+}
+
+// Busca em anéis crescentes ao redor de `baseUp` por um ponto com variação de relevo segura o
+// bastante pra escolinha não afundar — nunca se afasta mais que ~0.35 rad (~4,5m) do slot original
+// do ângulo áureo, pra não destemperar a distribuição espalhada das escolas pelo planeta. Sempre
+// devolve alguma direção (o melhor candidato achado, mesmo que nenhum fique 100% dentro do limite
+// seguro) — nunca trava esperando um ponto perfeito.
+function findFlatterSchoolUp(baseUp: Vector3): Vector3 {
+  let best = baseUp
+  let bestVariance = terrainVarianceNearby(baseUp, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, 6)
+  if (bestVariance <= SCHOOL_SAFE_TERRAIN_VARIANCE) return baseUp
+
+  const seed = Math.abs(baseUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+  const tangentA = Vector3.Cross(baseUp, seed).normalize()
+  const tangentB = Vector3.Cross(baseUp, tangentA).normalize()
+
+  for (let ring = 1; ring <= 5; ring++) {
+    const ringRadius = ring * 0.07
+    for (let a = 0; a < 8; a++) {
+      const angle = (a / 8) * Math.PI * 2
+      const candidate = baseUp
+        .add(tangentA.scale(Math.sin(angle) * ringRadius))
+        .add(tangentB.scale(Math.cos(angle) * ringRadius))
+        .normalize()
+      const variance = terrainVarianceNearby(candidate, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, 6)
+      if (variance < bestVariance) {
+        bestVariance = variance
+        best = candidate
+      }
+      if (bestVariance <= SCHOOL_SAFE_TERRAIN_VARIANCE) return best
+    }
+  }
+  return best
+}
+
+// Posição final (já afastada de rampa íngreme) de cada escola — computada UMA vez, em escopo de
+// módulo, e reaproveitada tanto por `nearAnySchool`/bacias acima quanto pelo laço que monta as
+// escolas de verdade em `World3D` (`quests.forEach`). Substitui o padrão antigo de "duas cópias
+// da mesma fórmula mantidas em sincronia por convenção" (arriscado — ver comentário histórico
+// perto de `SCHOOL_DIRS` acima) por uma única fonte de verdade de fato.
+const SCHOOL_UPS: Vector3[] = SCHOOL_DIRS.map((rawDir, index) => {
+  const fixed = QUEST_FIXED_UP[quests[index].id]
+  if (fixed) return fixed
+  return findFlatterSchoolUp(rawDir)
+})
+
 // Menor rotação que leva o "para cima" padrão (0,1,0) até `up` — usada pra apoiar
 // props/portais deitados sobre a curvatura da esfera, não flutuando na orientação do mundo.
 function alignmentQuaternion(up: Vector3): Quaternion {
@@ -4480,19 +4565,12 @@ export function World3D({
       foundationMatShared.roughness = 0.95
 
       quests.forEach((quest, index) => {
-        // `QUEST_FIXED_UP` (lab-26): só `q21` usa isso — as outras continuam pela fórmula de
-        // ângulo áureo de sempre, posição inalterada.
-        let localUp = QUEST_FIXED_UP[quest.id]
-        if (!localUp) {
-          const t = quests.length > 1 ? index / (quests.length - 1) : 0
-          const phi = Math.PI * 0.22 + t * Math.PI * 0.4
-          const theta = index * GOLDEN_ANGLE * 1.7
-          localUp = new Vector3(
-            Math.sin(phi) * Math.cos(theta),
-            Math.cos(phi),
-            Math.sin(phi) * Math.sin(theta),
-          )
-        }
+        // lab-95: posição final já vem de `SCHOOL_UPS` (escopo de módulo) — `QUEST_FIXED_UP`
+        // (lab-26, só `q21`) ou a fórmula de ângulo áureo já afastada de rampa de platô íngreme
+        // demais (ver comentário longo perto de `findFlatterSchoolUp`). Antes esta fórmula era
+        // recalculada aqui, copiada letra por letra do bloco em escopo de módulo (`SCHOOL_DIRS`)
+        // — `SCHOOL_UPS` elimina essa duplicação por completo.
+        const localUp = SCHOOL_UPS[index]
         const groundRadial = terrainGroundRadial(localUp, terrainHeight(localUp))
         const surfacePos = localUp.scale(groundRadial)
 

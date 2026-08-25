@@ -1,15 +1,19 @@
 # Laboratório 95 — mais missões + escolinhas menores
 
-Status: concluído (parcial — ver nota abaixo)
+Status: concluído
 Início: 2026-08-25
 Fim: 2026-08-25
 Commit inicial: a3c52a5b96ec6a13185caa1a7ccee7654e3e3aee
 
-**Nota importante**: das duas metas do laboratório, só "mais missões" foi entregue. A redução do
-tamanho das escolinhas foi tentada, **implantada em produção, causou um bug visual/funcional real
-relatado pelo próprio usuário ao vivo** ("todas as casa estão dentro da terra, até os NPC estão
-enterrado... as casinhas só aparecem o telhado") e foi **revertida** de volta ao tamanho original
-no mesmo laboratório, já redeployada. Ver `CONTEXT.md` pra detalhes e causa raiz (não confirmada).
+**Nota importante**: a redução de tamanho da escolinha foi tentada, implantada em produção, e
+causou um bug real relatado pelo usuário ao vivo ("todas as casa estão dentro da terra, até os NPC
+estão enterrado... as casinhas só aparecem o telhado"). Revertida de volta ao tamanho original —
+mas **o bug persistiu, idêntico, mesmo com o tamanho original** (o usuário reportou de novo depois
+do revert). Causa raiz de verdade encontrada por medição ao vivo (não tinha nada a ver com o
+tamanho): rampas de platô (`PLATEAU_CENTERS`) íngremes demais pra qualquer escola que caísse perto,
+enterrando o prédio inteiro. Corrigido de verdade afastando a posição de cada escola de terreno
+íngreme (`SCHOOL_UPS`/`findFlatterSchoolUp`), verificado ao vivo em 14/14 escolas testadas e
+redeployado. Ver `CONTEXT.md` pra timeline completa.
 
 ## Objetivo do laboratório
 Pedido direto do usuário: "aumente o numero de desafio, hoje acho que tem 21, talvez as vasinhas
@@ -51,15 +55,28 @@ o planeta pequeno (`PLANET_RADIUS = 13`).
   `school-q30` corretamente NÃO abriu o modal sozinho porque `q29` ainda não tinha sido completada
   no perfil de teste (comportamento esperado de `isQuestUnlocked`, não um bug).
 - [x] **Deploy em produção (missões novas)** via `npx vercel --prod --yes`.
-- [ ] **`world3d/World3D.tsx`**: redução de ~20% no tamanho da escolinha — **TENTADA, DEPLOYADA,
-  CAUSOU BUG EM PRODUÇÃO, REVERTIDA**. Ver `CONTEXT.md` pra timeline completa e causa raiz (não
-  confirmada). A meta original ("escolinhas menores pra não sobrecarregar o planetinha") continua
-  em aberto pra um laboratório futuro, com uma abordagem mais cuidadosa.
+- [x] **`world3d/World3D.tsx`**: redução de ~20% no tamanho da escolinha — tentada, deployada,
+  causou bug em produção, revertida (tamanho original restaurado). **O bug de afundamento
+  persistiu mesmo depois do revert** — não tinha relação com o tamanho. Causa raiz real:
+  `PLATEAU_CENTERS` tem rampas de até 3,2 unidades de altura com inclinação de até ~0,8
+  unidade/metro; uma escola cuja posição (fórmula de ângulo áureo) caísse numa rampa dessas via
+  cantos com quase 2 unidades de diferença de altura entre si, e `settleMeshOnTerrain` (que desce o
+  prédio até o canto MENOS alto encostar no chão) enterrava todos os outros cantos — inclusive o
+  professor (NPC), que fica ainda mais deslocado do centro. Corrigido de verdade: `SCHOOL_UPS`
+  (nova constante em escopo de módulo, substitui a duplicação antiga de `SCHOOL_DIRS`) mede a
+  variação de relevo ao redor de cada posição candidata (`terrainVarianceNearby`) e, se for grande
+  demais, procura um ponto próximo mais plano (`findFlatterSchoolUp`, busca em anéis, nunca se
+  afasta mais que ~4,5m do slot original do ângulo áureo). Verificado ao vivo lendo a cena Babylon
+  diretamente (posição real de paredes/telhado/pés do professor vs. altura real do terreno via
+  raycast físico, não só screenshot) em 14 escolas (incluindo `q01`, a pior antes da correção) — 0
+  enterradas, todas com as paredes flush no chão (folga = altura total da parede, exatamente como
+  esperado) e o professor a poucos centímetros do nível real do terreno. Deployado em produção.
 
 ## Fora de escopo (explicitamente adiado)
 - **Mudar `TRIGGER_DISTANCE`/`RESET_DISTANCE`** (raio de proximidade que abre a missão) — não
   pedido, e mexer nisso sem um problema relatado arriscaria destemperar um valor já ajustado ao
   longo de vários laboratórios anteriores.
-- **Redesenhar a distribuição geográfica** (faixa de `phi`, ângulo áureo) — encolher o prédio já
-  resolve o pedido de "não sobrecarregar"; mudar a distribuição em si é mais risco pro mesmo
-  resultado.
+- **Redesenhar a distribuição geográfica** (faixa de `phi`, ângulo áureo) por completo — a correção
+  de afundamento (`SCHOOL_UPS`) só faz um pequeno ajuste local (até ~4,5m) em posições que caem em
+  rampa íngreme; a distribuição geral pela faixa de latitude continua a mesma. O pedido original de
+  "não sobrecarregar" com escolinhas menores segue não implementado (ver nota no topo do arquivo).

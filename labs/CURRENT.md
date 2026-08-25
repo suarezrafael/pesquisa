@@ -2,15 +2,24 @@
 
 Último concluído: labs/lab-95-mais-missoes-e-escolinhas-menores/ (pedido do usuário 2026-08-25:
 aumentar o número de missões além das 21 atuais + encolher as escolinhas pra não sobrecarregar o
-planetinha). **Resultado misto**: +9 missões novas (`q22`-`q30`, ids nunca reordenados/renumerados
-pra não quebrar progresso salvo) — concluído e deployado com sucesso. Escolinhas ~20% menores —
-**tentado, deployado, causou um bug real em produção** relatado ao vivo pelo usuário ("todas as
-casa estão dentro da terra, até os NPC estão enterrado... as casinhas só aparecem o telhado") —
-**revertido** de volta ao tamanho original no mesmo laboratório, redeploy confirmado
-(`dpl_6sZxmUSCj6DqjPi8ovcrw85UwwFv`). Causa raiz da interação com `settleMeshOnTerrain` NÃO
-confirmada — meta de "escolinhas menores" continua em aberto pra um laboratório futuro, com
-abordagem mais cuidadosa (ver "O que o próximo laboratório deve desenvolver" em
-`labs/lab-95-mais-missoes-e-escolinhas-menores/CONTEXT.md`).
+planetinha). +9 missões novas (`q22`-`q30`, ids nunca reordenados/renumerados pra não quebrar
+progresso salvo) — concluído e deployado com sucesso. Escolinhas ~20% menores — tentado, deployado,
+causou um bug real em produção relatado ao vivo pelo usuário ("todas as casa estão dentro da
+terra, até os NPC estão enterrado... as casinhas só aparecem o telhado") — revertido de volta ao
+tamanho original. **O bug persistiu idêntico mesmo depois do revert** (usuário reportou de novo:
+"as escolas ainda continuam dentro da terra... ate o npc esta dentro da terra") — não tinha relação
+com o tamanho. **Causa raiz real encontrada e corrigida**: `PLATEAU_CENTERS` tem rampas de até 3,2
+unidades com inclinação de até ~0,8 unidade/metro; escolas cuja posição (ângulo áureo) caísse perto
+de uma rampa dessas ficavam com cantos a quase 2 unidades de diferença de altura entre si, e
+`settleMeshOnTerrain` (desce o prédio até o canto menos alto encostar no chão) enterrava todo o
+resto — paredes, fundação, o professor (NPC). Corrigido com uma nova constante `SCHOOL_UPS`
+(`World3D.tsx`) que mede a variação de relevo ao redor de cada posição candidata e afasta a escola
+pra um ponto próximo mais plano quando necessário (nunca mais que ~4,5m do slot original).
+Verificado ao vivo lendo a cena/física diretamente (não só screenshot) em 14 escolas — 0
+enterradas, contra a maioria enterrada antes. Deployado em produção
+(`dpl_BdLmFD4UKQp65Cs9e5V9u7TAmK2W`). Meta de "escolinhas menores" (tamanho, não a correção de
+posição) segue em aberto — ver "O que o próximo laboratório deve desenvolver" em
+`labs/lab-95-mais-missoes-e-escolinhas-menores/CONTEXT.md`.
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios — TODOS OS 4 ITENS
 CONCLUÍDOS** (registrado aqui como histórico):
