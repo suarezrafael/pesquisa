@@ -13,7 +13,13 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
-import { generatePairingCode, isEntitlementActive, toIsoOrNull } from './domain'
+import {
+  generatePairingCode,
+  isEntitlementActive,
+  isEventNewerThan,
+  isValidSubscriptionStatus,
+  toIsoOrNull,
+} from './domain'
 
 type Sql = NeonQueryFunction<false, false>
 
@@ -349,30 +355,55 @@ async function upsertSubscription(
     stripeSubscriptionId: string
     status: string
     currentPeriodEnd: string | null
+    // lab-96, G8: `created` do evento do Stripe (não de quando o Worker processou) — usado pra
+    // recusar um evento que chegue fora de ordem, ver `isEventNewerThan` (`domain.ts`).
+    eventCreatedAt: string
   },
 ) {
+  // lab-96, G8: falha fechada — um status que o Stripe emita e ainda não previmos vira "ignora e
+  // loga" aqui, não um 500 que bateria na *check constraint* do banco e geraria reentrega infinita.
+  if (!isValidSubscriptionStatus(params.status)) {
+    console.error(`status de assinatura desconhecido do Stripe, ignorando: "${params.status}"`)
+    return
+  }
+
   const existing = (await sql`
-    select id from subscriptions where stripe_subscription_id = ${params.stripeSubscriptionId}
-  `) as { id: string }[]
+    select id, last_event_created_at from subscriptions where stripe_subscription_id = ${params.stripeSubscriptionId}
+  `) as { id: string; last_event_created_at: string | null }[]
 
   if (existing.length > 0) {
+    // lab-96, G8: o Stripe não garante ordem de entrega — um evento mais antigo chegando depois de
+    // um mais novo já aplicado não deve reverter o estado (ex.: voltar "cancelado" pra "ativo").
+    if (!isEventNewerThan(params.eventCreatedAt, existing[0].last_event_created_at)) return
     await sql`
       update subscriptions
       set status = ${params.status},
           current_period_end = ${params.currentPeriodEnd},
           stripe_customer_id = ${params.stripeCustomerId},
+          last_event_created_at = ${params.eventCreatedAt},
           updated_at = now()
       where id = ${existing[0].id}
     `
   } else {
     await sql`
       insert into subscriptions
-        (family_account_id, stripe_customer_id, stripe_subscription_id, status, current_period_end)
+        (family_account_id, stripe_customer_id, stripe_subscription_id, status, current_period_end,
+         last_event_created_at)
       values
         (${params.familyAccountId}, ${params.stripeCustomerId}, ${params.stripeSubscriptionId},
-         ${params.status}, ${params.currentPeriodEnd})
+         ${params.status}, ${params.currentPeriodEnd}, ${params.eventCreatedAt})
     `
   }
+}
+
+// lab-96, G8: a partir da versão da API usada por este SDK (`stripe` 22.x), a fatura não tem mais
+// um campo `subscription` no nível raiz — a referência mudou pra
+// `parent.subscription_details.subscription` (confirmado em node_modules/stripe/.../Invoices.d.ts,
+// não suposição).
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const subscription = invoice.parent?.subscription_details?.subscription
+  if (!subscription) return null
+  return typeof subscription === 'string' ? subscription : subscription.id
 }
 
 async function handleStripeWebhook(request: Request, env: Env): Promise<Response> {
@@ -390,6 +421,20 @@ async function handleStripeWebhook(request: Request, env: Env): Promise<Response
 
   const sql = neon(env.DATABASE_URL)
 
+  // lab-96, G8: idempotência de verdade — o Stripe reenvia um evento sempre que não recebe 2xx a
+  // tempo, inclusive por instabilidade transitória sem relação nenhuma com o evento em si. Checado
+  // logo aqui, antes de qualquer efeito colateral (era o gap principal do G8: sem isso, reentrega
+  // podia reaplicar a mesma mudança, e duas entregas concorrentes do MESMO evento podiam processar
+  // em paralelo).
+  const alreadyProcessed = (await sql`
+    select 1 from stripe_webhook_events where event_id = ${event.id}
+  `) as unknown[]
+  if (alreadyProcessed.length > 0) {
+    return Response.json({ received: true, deduped: true })
+  }
+
+  const eventCreatedAt = toIsoOrNull(event.created) ?? new Date().toISOString()
+
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session
     const familyAccountId = session.client_reference_id
@@ -403,6 +448,7 @@ async function handleStripeWebhook(request: Request, env: Env): Promise<Response
         stripeSubscriptionId: subscription.id,
         status: subscription.status,
         currentPeriodEnd: toIsoOrNull(subscription.items.data[0]?.current_period_end),
+        eventCreatedAt,
       })
     }
   } else if (
@@ -421,9 +467,43 @@ async function handleStripeWebhook(request: Request, env: Env): Promise<Response
         stripeSubscriptionId: subscription.id,
         status: event.type === 'customer.subscription.deleted' ? 'canceled' : subscription.status,
         currentPeriodEnd: toIsoOrNull(subscription.items.data[0]?.current_period_end),
+        eventCreatedAt,
       })
     }
+  } else if (event.type === 'invoice.payment_failed') {
+    // lab-96, G8: nenhum handler existia pra este tipo de evento antes — sem reagir, nosso banco só
+    // ficava sabendo de uma falha de pagamento se/quando um `customer.subscription.updated`
+    // separado também chegasse (o Stripe costuma emitir os dois, mas não é garantido). Busca o
+    // estado VERDADEIRO direto do Stripe (mesmo padrão já usado em `checkout.session.completed`)
+    // em vez de tentar inferir o novo status a partir da fatura.
+    const invoice = event.data.object as Stripe.Invoice
+    const subscriptionId = invoiceSubscriptionId(invoice)
+    if (subscriptionId) {
+      const existing = (await sql`
+        select family_account_id from subscriptions where stripe_subscription_id = ${subscriptionId}
+      `) as { family_account_id: string }[]
+      if (existing.length > 0) {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+        await upsertSubscription(sql, {
+          familyAccountId: existing[0].family_account_id,
+          stripeCustomerId:
+            typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id,
+          stripeSubscriptionId: subscription.id,
+          status: subscription.status,
+          currentPeriodEnd: toIsoOrNull(subscription.items.data[0]?.current_period_end),
+          eventCreatedAt,
+        })
+      }
+    }
   }
+
+  // lab-96, G8: gravado por ÚLTIMO, só depois de processar com sucesso — se algo acima lançar, o
+  // evento fica de fora desta tabela e uma reentrega do Stripe tenta de novo, em vez de marcar
+  // "processado" um evento que na real falhou no meio do caminho.
+  await sql`
+    insert into stripe_webhook_events (event_id, event_type) values (${event.id}, ${event.type})
+    on conflict do nothing
+  `
 
   return Response.json({ received: true })
 }

@@ -22,6 +22,46 @@ create table if not exists subscriptions (
   updated_at timestamptz not null default now()
 );
 
+-- lab-96, G8 (docs/prompts/05-escala-e-viabilidade.md): o `check` acima só cobria 4 dos 8 status
+-- reais que o Stripe emite -- Pix/boleto no Brasil com frequência faz a assinatura nascer
+-- `incomplete` (pagamento ainda não confirmado), e isso batia direto nessa constraint, o `insert`
+-- falhava, o Worker devolvia 500, e o Stripe reenviava o mesmo evento indefinidamente. `alter
+-- table` em vez de mudar a definição acima porque este arquivo é reaplicado inteiro por
+-- `migrate.mjs` (`if not exists` em tudo) -- num banco onde a tabela já existe com a constraint
+-- antiga, só um `alter` de verdade a substitui; o nome do `drop constraint` é o padrão que o
+-- Postgres gera pra um `check` de coluna sem nome explícito (`<tabela>_<coluna>_check`).
+alter table subscriptions drop constraint if exists subscriptions_status_check;
+alter table subscriptions add constraint subscriptions_status_check
+  check (status in (
+    'trialing', 'active', 'past_due', 'canceled',
+    'incomplete', 'incomplete_expired', 'unpaid', 'paused'
+  ));
+
+-- lab-96, G8: defesa em profundidade contra duplicata além da lógica em `upsertSubscription`
+-- (`index.ts`) -- webhooks concorrentes pra MESMA assinatura (dois eventos quase simultâneos)
+-- podiam os dois ver "não existe" no `select` e os dois tentarem `insert`, gerando duas linhas pra
+-- uma assinatura só. Índice PARCIAL (`where ... is not null`) porque a coluna fica nula entre criar
+-- a sessão de checkout e o Stripe confirmar a assinatura de verdade.
+create unique index if not exists idx_subscriptions_stripe_subscription_id_unique
+  on subscriptions (stripe_subscription_id) where stripe_subscription_id is not null;
+
+-- lab-96, G8: guarda o `created` (timestamp do próprio evento do Stripe, não de quando o Worker
+-- processou) do último evento realmente aplicado a esta assinatura -- usado por
+-- `isEventNewerThan` (`domain.ts`) pra recusar um evento que chegue fora de ordem (o Stripe não
+-- garante ordem de entrega; um retry de rede pode fazer um evento mais antigo chegar depois de um
+-- mais novo já aplicado).
+alter table subscriptions add column if not exists last_event_created_at timestamptz;
+
+-- lab-96, G8: idempotência de verdade contra reentrega do Stripe (acontece sempre que o Worker não
+-- responde 2xx a tempo, inclusive por instabilidade transitória sem relação com o evento em si).
+-- Checado ANTES de aplicar qualquer mudança em `handleStripeWebhook`, gravado DEPOIS -- reentrega
+-- do mesmo `event.id` vira um no-op (200 sem reprocessar) em vez de aplicar a mesma mudança de novo.
+create table if not exists stripe_webhook_events (
+  event_id text primary key,
+  event_type text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Código curto (6 dígitos) que a criança digita UMA VEZ no jogo pra vincular o entitlement da
 -- família, sem nunca precisar de e-mail/senha no client dela (ver docs/prompts/01-seguranca.md).
 create table if not exists pairing_codes (

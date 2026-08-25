@@ -3,7 +3,14 @@
 // assinatura": a checagem mais custosa de errar silenciosamente aqui é ou liberar o cosmético
 // pago de graça, ou negar acesso a quem pagou. Primeiro teste automatizado deste Worker (lab-83).
 import { describe, expect, it } from 'vitest'
-import { generatePairingCode, isEntitlementActive, isPairingCodeUsable, toIsoOrNull } from './domain'
+import {
+  generatePairingCode,
+  isEntitlementActive,
+  isEventNewerThan,
+  isPairingCodeUsable,
+  isValidSubscriptionStatus,
+  toIsoOrNull,
+} from './domain'
 
 describe('isEntitlementActive — decide se o entitlement do jogo fica ligado', () => {
   it('conta "active" como entitlement ativo', () => {
@@ -78,5 +85,45 @@ describe('toIsoOrNull', () => {
   it('retorna null quando não há timestamp (assinatura sem período definido)', () => {
     expect(toIsoOrNull(null)).toBeNull()
     expect(toIsoOrNull(undefined)).toBeNull()
+  })
+})
+
+describe('isValidSubscriptionStatus — lab-96, G8', () => {
+  it('aceita os 4 status originais', () => {
+    expect(isValidSubscriptionStatus('trialing')).toBe(true)
+    expect(isValidSubscriptionStatus('active')).toBe(true)
+    expect(isValidSubscriptionStatus('past_due')).toBe(true)
+    expect(isValidSubscriptionStatus('canceled')).toBe(true)
+  })
+
+  it('aceita os 4 status que o Stripe emite e o schema antigo rejeitava (Pix/boleto nasce incomplete)', () => {
+    expect(isValidSubscriptionStatus('incomplete')).toBe(true)
+    expect(isValidSubscriptionStatus('incomplete_expired')).toBe(true)
+    expect(isValidSubscriptionStatus('unpaid')).toBe(true)
+    expect(isValidSubscriptionStatus('paused')).toBe(true)
+  })
+
+  it('rejeita um status desconhecido/malformado (falha fechada — vira "ignora e loga", não 500)', () => {
+    expect(isValidSubscriptionStatus('ativo')).toBe(false)
+    expect(isValidSubscriptionStatus('')).toBe(false)
+  })
+})
+
+describe('isEventNewerThan — lab-96, G8 (proteção contra webhook fora de ordem)', () => {
+  it('sem evento anterior registrado, qualquer evento conta como mais novo', () => {
+    expect(isEventNewerThan('2026-08-25T12:00:00.000Z', null)).toBe(true)
+    expect(isEventNewerThan('2026-08-25T12:00:00.000Z', undefined)).toBe(true)
+  })
+
+  it('evento mais recente que o último aplicado: conta como mais novo', () => {
+    expect(isEventNewerThan('2026-08-25T12:00:01.000Z', '2026-08-25T12:00:00.000Z')).toBe(true)
+  })
+
+  it('evento MAIS ANTIGO que o já aplicado (reentrega atrasada): NÃO conta como mais novo', () => {
+    expect(isEventNewerThan('2026-08-25T11:59:59.000Z', '2026-08-25T12:00:00.000Z')).toBe(false)
+  })
+
+  it('mesmo timestamp exato: conta como mais novo (limite inclusivo, reaplica sem risco)', () => {
+    expect(isEventNewerThan('2026-08-25T12:00:00.000Z', '2026-08-25T12:00:00.000Z')).toBe(true)
   })
 })

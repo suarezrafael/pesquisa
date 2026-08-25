@@ -41,3 +41,36 @@ export function generatePairingCode(): string {
 export function toIsoOrNull(unixSeconds: number | null | undefined): string | null {
   return typeof unixSeconds === 'number' ? new Date(unixSeconds * 1000).toISOString() : null
 }
+
+// lab-96, G8 (docs/prompts/05-escala-e-viabilidade.md): `schema.sql` antes só aceitava
+// ('trialing','active','past_due','canceled'), mas o Stripe emite também estes quatro — Pix/boleto
+// no Brasil com frequência nasce `incomplete` (o pagamento ainda não confirmou), e um evento nesse
+// estado batia direto na *check constraint* do banco, o Worker devolvia 500, e o Stripe reenviava
+// pra sempre. Mantido em JS (não só no banco) pra poder recusar um status desconhecido ANTES de
+// tentar escrever — se o Stripe um dia emitir um valor novo que ainda não previmos, isso vira um
+// "ignora e loga" em vez de um 500 que gera reentrega infinita.
+const VALID_SUBSCRIPTION_STATUSES = new Set([
+  'trialing',
+  'active',
+  'past_due',
+  'canceled',
+  'incomplete',
+  'incomplete_expired',
+  'unpaid',
+  'paused',
+])
+
+export function isValidSubscriptionStatus(status: string): boolean {
+  return VALID_SUBSCRIPTION_STATUSES.has(status)
+}
+
+// lab-96, G8: o Stripe não garante ordem de entrega dos webhooks (retries de rede podem fazer um
+// evento MAIS ANTIGO chegar DEPOIS de um mais novo já processado). Sem isso, um `updated` atrasado
+// podia sobrescrever o estado de um `updated`/`deleted` mais recente já aplicado — voltando uma
+// assinatura cancelada pra "ativa", por exemplo. Compara o `created` (Unix seconds, vem direto do
+// evento do Stripe) do evento novo contra o do último evento realmente aplicado àquela assinatura;
+// sem registro anterior, qualquer evento conta como mais novo.
+export function isEventNewerThan(eventCreatedAtIso: string, lastAppliedIso: string | null | undefined): boolean {
+  if (!lastAppliedIso) return true
+  return new Date(eventCreatedAtIso).getTime() >= new Date(lastAppliedIso).getTime()
+}
