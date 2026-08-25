@@ -4673,6 +4673,42 @@ export function World3D({
         portalMeshes.push({ quest, roof, base, surfacePos })
       })
 
+      // lab-95 (diagnóstico TEMPORÁRIO, produção): o usuário reportou escolinhas ainda enterradas
+      // mesmo depois da correção de `SCHOOL_UPS`, e o navegador de automação não reproduziu o
+      // problema em nenhuma das 30 escolas testadas — pra conseguir um dado real do APARELHO do
+      // usuário sem precisar de ferramentas de desenvolvedor (só um print do HUD, que já é sempre
+      // visível, lab-67), calcula aqui, uma vez, quais escolas (se alguma) ficam com a parede
+      // abaixo do nível real do terreno (mesmo método de `terrainGroundRadial`/`settleMeshOnTerrain`
+      // usado pra posicionar de verdade) e mostra o resultado no HUD de debug. REMOVER depois de
+      // confirmar a causa raiz real.
+      const buriedSchoolReport = (() => {
+        const bad: string[] = []
+        for (const { quest, base } of portalMeshes) {
+          const walls = scene.getMeshByName(`walls-${quest.id}`)
+          if (!walls) continue
+          const rootPos = base.getAbsolutePosition()
+          const dir = rootPos.clone().normalize()
+          const terrain = terrainGroundRadial(dir, terrainHeight(dir))
+          walls.computeWorldMatrix(true)
+          const positions = walls.getVerticesData(VertexBuffer.PositionKind)
+          const worldMatrix = walls.getWorldMatrix()
+          let wallsTop = -Infinity
+          if (positions) {
+            for (let i = 0; i < positions.length; i += 3) {
+              const p = Vector3.TransformCoordinates(
+                new Vector3(positions[i], positions[i + 1], positions[i + 2]),
+                worldMatrix,
+              )
+              const proj = Vector3.Dot(p, dir)
+              if (proj > wallsTop) wallsTop = proj
+            }
+          }
+          const gap = wallsTop - terrain
+          if (gap < 1.0) bad.push(`${quest.id}(${gap.toFixed(2)})`)
+        }
+        return bad.length > 0 ? `ENTERRADAS:${bad.join(',')}` : 'ENTERRADAS:nenhuma'
+      })()
+
       // Carteira de estudos (lab-93, pedido do usuário: "uma carteira de estudo em que o boneco
       // pode sentar, acessar seu catálogo de conquistas") — objeto FIXO e único no mundo, mesmo
       // padrão de posicionamento das escolinhas acima (`terrainGroundRadial` +
@@ -7161,7 +7197,7 @@ export function World3D({
         // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
         // de performance realmente ajudou ou não.
         if (debugRef.current) {
-          debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes`
+          debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
