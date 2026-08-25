@@ -1,6 +1,10 @@
 # Laboratório atual
 
-Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Ativo: labs/lab-90-corrige-bypass-de-assinatura-local/ (G6: `useEntitlement.refresh()` trata
+qualquer resposta não-200 do `/entitlement` como falha de rede e preserva o cache local — mas um
+`401` é uma rejeição AUTORITATIVA do servidor, não uma falha; editar `localStorage` manualmente
+pra `active: true` com um token qualquer libera todo cosmético de assinante permanentemente,
+porque a revalidação no próximo carregamento recebe o 401 correto e mesmo assim não corrige nada)
 Último concluído: labs/lab-89-apelido-restrito-e-whitelist-relay/ (G4: apelido continua texto
 livre editável, mas restrito a só letras/espaço + lista de bloqueio de ~40 termos — sem detecção
 de PII, direção confirmada com o usuário 2026-08-24 via `AskUserQuestion`. Auditoria achou que o
