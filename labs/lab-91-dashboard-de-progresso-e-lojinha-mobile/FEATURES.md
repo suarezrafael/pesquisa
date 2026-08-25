@@ -1,8 +1,8 @@
 # Laboratório 91 — dashboard de progresso pros responsáveis + lojinha mobile-first
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-24
-Fim: -
+Fim: 2026-08-24
 Commit inicial: 621ffc3630da026cb601b1e781814906ea47270a
 
 ## Objetivo do laboratório
@@ -45,21 +45,30 @@ reais:
    27px — os dois claramente abaixo do mínimo, mais sério que o corte visual da aba.
 
 ## Funcionalidades planejadas
-- [ ] **`lastPlayedAt` local**: nova função em `state/storage.ts` (`touchLastPlayed`/
-  `loadLastPlayedAt`), gravada uma vez por sessão em `GameApp` quando o perfil existe.
-- [ ] **Painel "Progresso" no `/familia`**: novo componente lido a partir de `loadProfile()`/
-  `loadProgress()`/`loadLastPlayedAt()` (mesmo `state/storage.ts` do jogo) — mostra avatar/apelido,
-  nível + barra de XP, moedas, missões concluídas (X de Y), badges conquistados, última vez
-  jogado. Estado vazio explícito quando não há perfil salvo neste aparelho, explicando que o
-  painel mostra o progresso DESTE aparelho/navegador, não de um outro.
-- [ ] **Corrigir alvo de toque da lojinha**: `.avatar-shop-tab` e `.avatar-shop-action` chegam a
-  44×44px lógicos mínimos, sem quebrar o layout em grade de 3 colunas dos itens.
-- [ ] **Corrigir overflow das abas**: pista visual limpa de "tem mais abas" (fade na borda) em vez
-  de cortar o texto da última aba no meio.
-- [ ] **Testar ao vivo** (dev server, viewport ~375-440px, que é a largura real do modal
-  independente do tamanho da janela): painel de progresso com perfil real e com `localStorage`
-  vazio; lojinha com todas as abas visíveis/alcançáveis e alvos de toque maiores.
-- [ ] **Deploy em produção** (só frontend).
+- [x] **`lastPlayedAt` local**: `touchLastPlayed()`/`loadLastPlayedAt()` em `state/storage.ts`,
+  chamada num `useEffect` em `GameApp` (`App.tsx`) sempre que já existe perfil — testado ao vivo:
+  jogou uma vez, `localStorage` gravou o timestamp ISO, o painel mostrou a data formatada
+  (`24/08/2026, 21:47`).
+- [x] **Painel "Progresso" no `/familia`** (`ChildProgressPanel`, novo, em `FamilyPortal.tsx`) —
+  lê `loadProfile()`/`loadProgress()`/`loadLastPlayedAt()` do mesmo `state/storage.ts` do jogo.
+  Mostra avatar+apelido, nível + XP dentro do nível, moedas, missões concluídas (X de Y contra
+  `quests.length`), badges conquistados (pills), última vez jogado. Estado vazio explícito
+  ("Nenhum progresso encontrado neste aparelho...") quando não há perfil salvo — testado ao vivo
+  nos dois estados (com progresso real incl. badges, e com `localStorage` limpo).
+- [x] **Corrigir alvo de toque da lojinha**: `.avatar-shop-tab` e `.avatar-shop-action` ganharam
+  `min-height: 44px` (e `min-width: 44px` na action) — medido ao vivo via
+  `getBoundingClientRect()` depois da correção: exatamente 44px nos dois, sem quebrar a grade de 3
+  colunas dos itens.
+- [x] **Corrigir overflow das abas**: novo wrapper `.avatar-shop-tabs-wrap` com fade nas duas
+  bordas (`::before`/`::after`, gradiente pra transparente) — testado ao vivo, a última aba
+  parcialmente visível agora esmaece suavemente em vez de cortar o texto no meio.
+- [x] **Testado ao vivo** contra o dev server (o modal da lojinha nunca passa de ~440px de largura
+  por design, `max-width` do `.modal` — já reflete a largura real de celular independente do
+  tamanho da janela do navegador usada pra testar): painel de progresso nos dois estados, lojinha
+  com abas com fade visível e alvos de toque medidos em 44px exatos.
+- [x] **Deploy em produção** via `npx vercel --prod --yes` (3ª tentativa, mesmo padrão
+  intermitente de "fetch failed" já visto antes) — `missaoaprendizado.com` e
+  `app-two-flax-92.vercel.app` atualizados.
 
 ## Fora de escopo (explicitamente adiado — ver labs seguintes)
 - **Mais itens colecionáveis (free + assinatura)** — próximo laboratório recomendado depois
