@@ -7306,7 +7306,7 @@ export function World3D({
         // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
         // de performance realmente ajudou ou não.
         if (debugRef.current) {
-          debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem

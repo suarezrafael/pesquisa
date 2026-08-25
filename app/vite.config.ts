@@ -5,6 +5,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // lab-95, pedido do usuário: "coloque no log visual o bundle que a UI está usando pra você ter
+  // certeza que o que estou testando é a última versão" — carimbo de horário do MOMENTO DO BUILD
+  // (não do deploy, mas como cada deploy roda `npm run build` de novo, os dois coincidem na
+  // prática), embutido como literal de string no bundle final. Aparece no HUD de debug (sempre
+  // visível, `World3D.tsx`) — dá pra comparar contra o horário do último `vercel --prod` sem
+  // precisar confiar em cache do navegador/service worker.
+  define: {
+    __BUILD_STAMP__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     VitePWA({
