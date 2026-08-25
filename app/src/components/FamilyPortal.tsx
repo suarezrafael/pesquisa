@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { isAuthApiError } from '@neondatabase/neon-js/auth'
 import { authClient } from '../auth/neonAuthClient'
+import { loadLastPlayedAt, loadProfile, loadProgress } from '../state/storage'
+import { getLevel, xpIntoLevel } from '../state/progression'
+import { quests } from '../data/quests'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 const NEON_AUTH_URL = import.meta.env.VITE_NEON_AUTH_URL as string
@@ -370,6 +373,75 @@ function PairingCodeGenerator() {
   )
 }
 
+// Painel de progresso (lab-91, pedido do usuário: "itens que ajudem o responsável a gerenciar o
+// que a criança está fazendo no jogo" — prompt.md §15 já previa isso como parte do dashboard do
+// responsável). O jogo não tem conta pra criança nem backend de gameplay (só `localStorage`, por
+// desenho — ver CLAUDE.md/README.md), então este painel lê o MESMO `localStorage` da origem
+// atual: só mostra algo quando `/familia` é aberto no mesmo navegador/aparelho que a criança usa
+// pra jogar (o fluxo mais comum, já que o link "Abrir área dos responsáveis" da tela de
+// pareamento abre nessa mesma aba/navegador). Sincronizar progresso entre aparelhos diferentes
+// exigiria mandar dado de criança pro servidor — decisão de arquitetura maior, fora de escopo
+// aqui (mesma categoria do que ficou de fora em G6 no lab-90).
+function ChildProgressPanel() {
+  const profile = loadProfile()
+
+  if (!profile) {
+    return (
+      <div className="pairing-code-box progress-panel">
+        <h3>Progresso da criança</h3>
+        <p className="field-hint">
+          Nenhum progresso encontrado neste aparelho. Este painel mostra o progresso salvo no
+          mesmo navegador/aparelho que a criança usa pra jogar — abra esta página nele pra ver.
+        </p>
+      </div>
+    )
+  }
+
+  const progress = loadProgress()
+  const lastPlayedAt = loadLastPlayedAt()
+  const level = getLevel(progress.xp)
+  const { current, needed } = xpIntoLevel(progress.xp)
+
+  return (
+    <div className="pairing-code-box progress-panel">
+      <h3>
+        Progresso de {profile.avatarEmoji} {profile.name}
+      </h3>
+      <p className="field-hint">Progresso salvo neste aparelho — se a criança jogar em outro, veja de lá.</p>
+      <div className="progress-panel-stats">
+        <div className="progress-panel-stat">
+          <strong>Nível {level}</strong>
+          <span>{current} / {needed} XP</span>
+        </div>
+        <div className="progress-panel-stat">
+          <strong>🪙 {progress.coins}</strong>
+          <span>moedas</span>
+        </div>
+        <div className="progress-panel-stat">
+          <strong>
+            {progress.completedQuestIds.length} / {quests.length}
+          </strong>
+          <span>missões concluídas</span>
+        </div>
+      </div>
+      {progress.badges.length > 0 && (
+        <p className="progress-panel-badges">
+          {progress.badges.map((badge) => (
+            <span key={badge} className="progress-panel-badge">
+              🏅 {badge}
+            </span>
+          ))}
+        </p>
+      )}
+      <p className="field-hint">
+        {lastPlayedAt
+          ? `Última vez jogado: ${new Date(lastPlayedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+          : 'Ainda não há registro de quando a criança jogou pela última vez.'}
+      </p>
+    </div>
+  )
+}
+
 function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   const [status, setStatus] = useState<SubscriptionStatus>('loading')
   const [busy, setBusy] = useState(false)
@@ -436,6 +508,7 @@ function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void 
     <div className="screen onboarding">
       <h1>Olá, responsável!</h1>
       <p className="subtitle">Conta: {email}</p>
+      <ChildProgressPanel />
       <p>
         <strong>Assinatura:</strong>{' '}
         {status === 'loading' ? 'Verificando…' : STATUS_LABEL[status]}

@@ -261,6 +261,60 @@ a.nickname-generate-btn {
   color: var(--primary-dark);
 }
 
+/* Painel de progresso (lab-91) — mesmo cartão de `.pairing-code-box`, mas alinhado à esquerda e
+   com uma grade de estatísticas em vez do código gigante centralizado. */
+.progress-panel {
+  text-align: left;
+}
+
+.progress-panel h3 {
+  text-align: center;
+}
+
+.progress-panel-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.progress-panel-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.6rem 0.3rem;
+  border-radius: 12px;
+  background: #f5f7fd;
+  text-align: center;
+}
+
+.progress-panel-stat strong {
+  color: var(--primary-dark);
+  font-size: 1.05rem;
+}
+
+.progress-panel-stat span {
+  font-size: 0.75rem;
+  color: #6b76a0;
+}
+
+.progress-panel-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+.progress-panel-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: #fff3d6;
+  color: #9a6b1a;
+}
+
 /* Hub */
 
 .hub-header {
@@ -925,21 +979,52 @@ a.nickname-generate-btn {
 }
 
 /* Abas (lab-87) — mesmo visual de "pill" já usado noutros seletores do jogo, sem introduzir um
-   componente novo de UI. */
+   componente novo de UI. Fade nas duas bordas (lab-91) — pista visual de "tem mais aba pra
+   scrollar" em vez de cortar o texto da última aba no meio, achado testando em largura de
+   celular (o modal da lojinha nunca passa de ~440px de largura, então mesmo testado numa janela
+   grande de desktop, o conteúdo do modal já reflete a largura real de um celular). */
+.avatar-shop-tabs-wrap {
+  position: relative;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.avatar-shop-tabs-wrap::before,
+.avatar-shop-tabs-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.25rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.avatar-shop-tabs-wrap::before {
+  left: 0;
+  background: linear-gradient(to right, var(--card), transparent);
+}
+
+.avatar-shop-tabs-wrap::after {
+  right: 0;
+  background: linear-gradient(to left, var(--card), transparent);
+}
+
 .avatar-shop-tabs {
   display: flex;
   gap: 0.4rem;
-  margin: 0.75rem 0 0.25rem;
   overflow-x: auto;
 }
 
+/* [MUST] docs/prompts/02-design-profissional.md: alvo de toque mínimo 44×44px lógicos — achado
+   real (lab-91): a aba media ~35px de altura antes desta correção. */
 .avatar-shop-tab {
   flex: 1 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.3rem;
-  padding: 0.55rem 0.7rem;
+  min-height: 44px;
+  padding: 0.55rem 0.9rem;
   border-radius: 999px;
   border: none;
   background: #eef1fa;
@@ -1014,10 +1099,16 @@ a.nickname-generate-btn {
   color: #9a6b1a;
 }
 
+/* [MUST] docs/prompts/02-design-profissional.md: alvo de toque mínimo 44×44px lógicos — achado
+   real (lab-91): o botão "Usar"/comprar media ~27px de altura antes desta correção. `min-height`
+   (não `height`) pra não forçar todo botão a ficar quadrado feio quando o texto já é mais alto
+   que 44px (não acontece hoje, mas evita regressão se um rótulo maior aparecer). */
 .avatar-shop-action {
   font-size: 0.8rem;
   font-weight: 700;
-  padding: 0.35rem 0.7rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.35rem 0.9rem;
   border-radius: 999px;
   border: none;
   background: var(--accent);

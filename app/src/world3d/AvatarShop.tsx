@@ -241,19 +241,21 @@ export function AvatarShop({
 
         <div className="hub-coins avatar-shop-balance">🪙 {progress.coins}</div>
 
-        <div className="avatar-shop-tabs" role="tablist">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              className={`avatar-shop-tab ${tab === t.id ? 'active' : ''}`}
-              onClick={() => setTab(t.id)}
-            >
-              <span aria-hidden="true">{t.emoji}</span> {t.label}
-            </button>
-          ))}
+        <div className="avatar-shop-tabs-wrap">
+          <div className="avatar-shop-tabs" role="tablist">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                className={`avatar-shop-tab ${tab === t.id ? 'active' : ''}`}
+                onClick={() => setTab(t.id)}
+              >
+                <span aria-hidden="true">{t.emoji}</span> {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {tab === 'avatares' && (

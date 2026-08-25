@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { TitleScreen } from './components/TitleScreen'
 import { Onboarding } from './components/Onboarding'
 import { Tutorial } from './components/Tutorial'
@@ -12,7 +12,7 @@ import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
-import { hasTutorialBeenSeen, markTutorialSeen } from './state/storage'
+import { hasTutorialBeenSeen, markTutorialSeen, touchLastPlayed } from './state/storage'
 import type { Quest } from './types'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
@@ -88,6 +88,13 @@ function GameApp() {
   const [showShop, setShowShop] = useState(false)
   const [showPairing, setShowPairing] = useState(false)
   const { entitlement, redeemCode, redeeming, redeemError } = useEntitlement()
+
+  // lab-91: carimba "última vez jogado" pro painel de progresso do `/familia` — só quando já
+  // existe perfil (senão a criança ainda nem chegou a jogar de verdade, só abriu a tela título).
+  useEffect(() => {
+    if (profile) touchLastPlayed()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!profile])
 
   if (!profile) {
     if (preProfileScreen === 'title') {

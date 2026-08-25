@@ -5,6 +5,7 @@ import { DEFAULT_UNLOCKED_HAT_IDS } from '../data/hats'
 const PROFILE_KEY = 'jogo-educativo:profile'
 const PROGRESS_KEY = 'jogo-educativo:progress'
 const TUTORIAL_SEEN_KEY = 'jogo-educativo:tutorialSeen'
+const LAST_PLAYED_KEY = 'jogo-educativo:lastPlayedAt'
 
 export const emptyProgress: Progress = {
   completedQuestIds: [],
@@ -72,4 +73,16 @@ export function hasTutorialBeenSeen(): boolean {
 
 export function markTutorialSeen(): void {
   localStorage.setItem(TUTORIAL_SEEN_KEY, 'true')
+}
+
+// lab-91 (pedido do usuário: itens que ajudem o responsável a acompanhar o que a criança está
+// fazendo no jogo) — só um carimbo de "quando foi a última vez que o jogo abriu com um perfil já
+// criado", pra alimentar o painel de progresso do `/familia`. Não é telemetria de sessão nem
+// rastreamento de tempo jogado — um valor só, sobrescrito a cada abertura.
+export function touchLastPlayed(): void {
+  localStorage.setItem(LAST_PLAYED_KEY, new Date().toISOString())
+}
+
+export function loadLastPlayedAt(): string | null {
+  return localStorage.getItem(LAST_PLAYED_KEY)
 }
