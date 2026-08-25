@@ -1,6 +1,20 @@
 # Laboratório atual
 
-Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Ativo: labs/lab-91-dashboard-de-progresso-e-lojinha-mobile/ (pedido do usuário 2026-08-24: itens
+que ajudem o responsável a acompanhar o que a criança faz no jogo + verificar responsividade da
+lojinha. Este lab cobre: painel de progresso em `/familia` lendo `localStorage` local — mesmo
+aparelho/navegador da criança, sem mudança de arquitetura — e correção de alvo de toque
+(`[MUST]` 44×44px, `docs/prompts/02-design-profissional.md`) + overflow de abas na lojinha.
+
+**Pedido maior do usuário, dividido em vários laboratórios** (registrado aqui pra não se perder):
+1. Dashboard de progresso + lojinha responsiva → **lab-91 (este)**.
+2. Mais itens colecionáveis (free + assinatura) → próximo laboratório recomendado.
+3. "Centro de estudo"/carteira onde o boneco senta + acessa catálogo de conquistas → laboratório
+   próprio (mobiliário novo no mundo 3D + UI de conquistas dedicada, não existe hoje).
+4. Brinde ao vencer o chefe de Marte (ETs + robô) → vira um COLECIONÁVEL EXCLUSIVO in-game, não
+   físico (o jogo não coleta endereço/PII de criança pra enviar nada). Pesquisa rápida de mercado
+   nacional (2026-08-24): tendência forte de colecionáveis/trading-card-style (Pokémon 30 anos,
+   Squishmallows) — informa o design quando esse item for implementado.)
 Último concluído: labs/lab-90-corrige-bypass-de-assinatura-local/ (G6, metade "bypass": um `401`
 do `/entitlement` — o servidor recusando explicitamente um token inválido/forjado — era tratado
 igual a uma falha de rede em `useEntitlement.refresh()` e descartado, então editar `localStorage`
