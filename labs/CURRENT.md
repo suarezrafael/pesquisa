@@ -2,24 +2,39 @@
 
 Último concluído: labs/lab-95-mais-missoes-e-escolinhas-menores/ (pedido do usuário 2026-08-25:
 aumentar o número de missões além das 21 atuais + encolher as escolinhas pra não sobrecarregar o
-planetinha). +9 missões novas (`q22`-`q30`, ids nunca reordenados/renumerados pra não quebrar
-progresso salvo) — concluído e deployado com sucesso. Escolinhas ~20% menores — tentado, deployado,
-causou um bug real em produção relatado ao vivo pelo usuário ("todas as casa estão dentro da
-terra, até os NPC estão enterrado... as casinhas só aparecem o telhado") — revertido de volta ao
-tamanho original. **O bug persistiu idêntico mesmo depois do revert** (usuário reportou de novo:
-"as escolas ainda continuam dentro da terra... ate o npc esta dentro da terra") — não tinha relação
-com o tamanho. **Causa raiz real encontrada e corrigida**: `PLATEAU_CENTERS` tem rampas de até 3,2
-unidades com inclinação de até ~0,8 unidade/metro; escolas cuja posição (ângulo áureo) caísse perto
-de uma rampa dessas ficavam com cantos a quase 2 unidades de diferença de altura entre si, e
-`settleMeshOnTerrain` (desce o prédio até o canto menos alto encostar no chão) enterrava todo o
-resto — paredes, fundação, o professor (NPC). Corrigido com uma nova constante `SCHOOL_UPS`
-(`World3D.tsx`) que mede a variação de relevo ao redor de cada posição candidata e afasta a escola
-pra um ponto próximo mais plano quando necessário (nunca mais que ~4,5m do slot original).
-Verificado ao vivo lendo a cena/física diretamente (não só screenshot) em 14 escolas — 0
-enterradas, contra a maioria enterrada antes. Deployado em produção
-(`dpl_BdLmFD4UKQp65Cs9e5V9u7TAmK2W`). Meta de "escolinhas menores" (tamanho, não a correção de
-posição) segue em aberto — ver "O que o próximo laboratório deve desenvolver" em
-`labs/lab-95-mais-missoes-e-escolinhas-menores/CONTEXT.md`.
+planetinha). +9 missões novas (`q22`-`q30`) — concluído e deployado. Escolinhas ~20% menores —
+tentado, causou um bug real em produção ("casas dentro da terra, só o telhado aparece"), revertido.
+**O bug persistiu idêntico mesmo depois do revert** — não tinha relação com o tamanho.
+
+Investigação passou por DUAS causas raiz erradas antes da certa: (1) achou que era timing de
+inicialização do Havok (raycast físico "não pronto" no boot) — três tentativas de correção
+diferentes não mudaram nada, byte a byte, provando que não era isso; (2) achou que reposicionar
+escolas longe de rampa de platô íngreme bastava, usando a FÓRMULA de relevo pra decidir — passou
+num teste de 30/30 escolas, foi deployado, e o usuário reportou o MESMO bug de novo (a fórmula não
+bate com a malha real do planeta perto de rampa íngreme, então o teste não pegava o próprio erro).
+**Causa raiz de verdade**: `settleMeshOnTerrain` incluía o TELHADO (beiral largo, não toca o chão)
+e o PROFESSOR (deslocado do centro, tem seu próprio chão) na decisão de quanto descer o prédio
+INTEIRO — os dois "vazavam" pra fora da pegada real das paredes e distorciam a conta. Corrigido
+excluindo os dois da amostragem (`excludeFromSampling` em `settleMeshOnTerrain`) e trocando a busca
+de posição mais plana pra usar raycast físico real em vez da fórmula. **Verificado exaustivamente
+em 30/30 escolas** (folga média subiu de negativa/enterrada pra 0,86 de um máximo de 1,10) e
+**confirmado pelo próprio usuário testando de novo**: "testei denovo agora ficou certo".
+
+Logo em seguida, o usuário reportou um bug RELACIONADO: morros/platôs aparecendo invisíveis
+("as casas que estão sobre o morro aparecem flutuando no espaço"). Causa: a malha do planeta (só
+48 segmentos) dobra alguns triângulos sobre si mesma nas rampas mais íngremes, invertendo a ordem
+de enrolamento — com culling de face traseira ligado (padrão do material, nunca desligado pro
+planeta, diferente de outros materiais deste arquivo), esses triângulos ficam invisíveis, um buraco
+de verdade na malha visual (a física/colisão sempre esteve correta). Corrigido com
+`planetMat.backFaceCulling = false`, confirmado por A/B ao vivo — **confirmação do usuário sobre
+esse bug específico ainda pendente** no momento em que este arquivo foi atualizado.
+
+Um diagnóstico temporário (`ENTERRADAS:...`) foi deixado no HUD, sempre visível inclusive em
+produção, pra conseguir dado real do aparelho do usuário sem ferramenta de desenvolvedor — precisa
+ser removido num próximo laboratório depois de confirmação continuada. Meta de "escolinhas
+menores" (tamanho) segue em aberto. Ver `labs/lab-95-mais-missoes-e-escolinhas-menores/CONTEXT.md`
+pra timeline completa (vale a leitura completa — tem a lição de por que um teste "passou" duas
+vezes antes de a correção estar realmente certa).
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios — TODOS OS 4 ITENS
 CONCLUÍDOS** (registrado aqui como histórico):
