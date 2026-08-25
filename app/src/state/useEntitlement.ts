@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { clearEntitlement, loadEntitlement, saveEntitlement, type StoredEntitlement } from './entitlementStorage'
+import {
+  clearEntitlement,
+  loadEntitlement,
+  saveEntitlement,
+  shouldTrustCachedEntitlementOnFailure,
+  type StoredEntitlement,
+} from './entitlementStorage'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 
@@ -19,9 +25,20 @@ export function useEntitlement() {
       const res = await fetch(`${ACCOUNTS_API_URL}/entitlement`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      // Erro de rede/servidor: mantém o cache local em vez de apagar — mesma filosofia "funciona
-      // offline" já aplicada ao PWA do jogo. Só uma resposta explícita do servidor muda o estado.
-      if (!res.ok) return
+      // Erro de rede/servidor real: mantém o cache local em vez de apagar — mesma filosofia
+      // "funciona offline" já aplicada ao PWA do jogo. Mas um 401 NÃO é uma falha de rede — é o
+      // servidor recusando o token de forma explícita (lab-90, docs/prompts/
+      // 05-escala-e-viabilidade.md G6): sem este `if`, um `active: true` editado direto no
+      // `localStorage` sobrevivia pra sempre, porque a resposta correta do servidor era descartada
+      // junto com as falhas de rede de verdade.
+      if (!res.ok) {
+        if (!shouldTrustCachedEntitlementOnFailure(res.status)) {
+          const next: StoredEntitlement = { token, active: false, expiresAt: null }
+          saveEntitlement(next)
+          setEntitlement(next)
+        }
+        return
+      }
       const body = (await res.json()) as { active: boolean; expiresAt: string | null }
       const next: StoredEntitlement = { token, active: body.active, expiresAt: body.expiresAt }
       saveEntitlement(next)
