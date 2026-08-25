@@ -12,6 +12,7 @@ import {
   unlockShoeColor as applyShoeColorUnlock,
   unlockBackpackColor as applyBackpackColorUnlock,
   unlockHairShape as applyHairShapeUnlock,
+  unlockGlasses as applyGlassesUnlock,
 } from './progression'
 
 export function useProgress() {
@@ -89,6 +90,14 @@ export function useProgress() {
     })
   }
 
+  function unlockGlasses(id: string): void {
+    setProgress((prev) => {
+      const next = applyGlassesUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
   return {
     progress,
     completeQuest,
@@ -100,5 +109,6 @@ export function useProgress() {
     unlockShoeColor,
     unlockBackpackColor,
     unlockHairShape,
+    unlockGlasses,
   }
 }

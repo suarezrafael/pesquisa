@@ -63,6 +63,7 @@ function GameApp() {
     equipShoeColor,
     equipBackpackColor,
     equipHairShape,
+    equipGlasses,
   } = useProfile()
   const {
     progress,
@@ -75,6 +76,7 @@ function GameApp() {
     unlockShoeColor,
     unlockBackpackColor,
     unlockHairShape,
+    unlockGlasses,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -215,6 +217,8 @@ function GameApp() {
           onUnlockBackpackColor={unlockBackpackColor}
           onEquipBackpackColor={equipBackpackColor}
           onUnlockHairShape={unlockHairShape}
+          onUnlockGlasses={unlockGlasses}
+          onEquipGlasses={equipGlasses}
           onEquipHairShape={equipHairShape}
           onClose={() => setShowShop(false)}
         />

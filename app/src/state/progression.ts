@@ -9,6 +9,7 @@ import {
   SHIRT_COLOR_CATALOG,
   SHOE_COLOR_CATALOG,
 } from '../data/customization'
+import { GLASSES_CATALOG } from '../data/glasses'
 import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -162,4 +163,12 @@ export function unlockHairShape(progress: Progress, id: string): Progress {
   const result = unlockGeneric(progress.coins, progress.unlockedHairShapeIds, HAIR_SHAPE_CATALOG, id)
   if (!result) return progress
   return { ...progress, coins: result.coins, unlockedHairShapeIds: result.unlockedIds }
+}
+
+// Óculos (lab-92) — mesma regra de compra do resto, via `unlockGeneric` (GLASSES_CATALOG já tem o
+// formato `{id, cost, subscriptionOnly?}` que a função espera).
+export function unlockGlasses(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(progress.coins, progress.unlockedGlassesIds, GLASSES_CATALOG, id)
+  if (!result) return progress
+  return { ...progress, coins: result.coins, unlockedGlassesIds: result.unlockedIds }
 }

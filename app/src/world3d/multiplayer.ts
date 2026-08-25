@@ -27,6 +27,8 @@ export interface RemoteState {
   shoeColorId: string | null
   backpackColorId: string | null
   hairShapeId: string | null
+  // Óculos (lab-92) — mesmo espírito do chapéu/cores acima.
+  glassesId: string | null
 }
 
 // Efeito de combate transmitido pra todo mundo (lab-73, pedido do usuário: "o efeito de espada e
@@ -202,6 +204,7 @@ export function sendState(
     shoeColorId: string | null
     backpackColorId: string | null
     hairShapeId: string | null
+    glassesId: string | null
   },
 ): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) return

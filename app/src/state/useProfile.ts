@@ -16,6 +16,7 @@ export function useProfile() {
       equippedShoeColorId: null,
       equippedBackpackColorId: null,
       equippedHairShapeId: null,
+      equippedGlassesId: null,
     }
     saveProfile(next)
     setProfile(next)
@@ -87,6 +88,15 @@ export function useProfile() {
     })
   }
 
+  function equipGlasses(id: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, equippedGlassesId: id }
+      saveProfile(next)
+      return next
+    })
+  }
+
   return {
     profile,
     createProfile,
@@ -97,5 +107,6 @@ export function useProfile() {
     equipShoeColor,
     equipBackpackColor,
     equipHairShape,
+    equipGlasses,
   }
 }

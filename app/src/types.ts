@@ -34,6 +34,9 @@ export interface Profile {
   equippedShoeColorId: string | null
   equippedBackpackColorId: string | null
   equippedHairShapeId: string | null
+  // Óculos (lab-92) — eixo de customização independente, mesmo espírito do chapéu. null = nenhum
+  // óculos equipado.
+  equippedGlassesId: string | null
 }
 
 export interface Progress {
@@ -48,4 +51,5 @@ export interface Progress {
   unlockedShoeColorIds: string[]
   unlockedBackpackColorIds: string[]
   unlockedHairShapeIds: string[]
+  unlockedGlassesIds: string[]
 }

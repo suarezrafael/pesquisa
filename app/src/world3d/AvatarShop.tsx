@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import { AVATAR_CATALOG } from '../data/avatars'
 import { HAT_CATALOG } from '../data/hats'
+import { GLASSES_CATALOG } from '../data/glasses'
 import {
   BACKPACK_COLOR_CATALOG,
   HAIR_SHAPE_CATALOG,
@@ -43,6 +44,8 @@ interface AvatarShopProps {
   onEquipBackpackColor: (id: string | null) => void
   onUnlockHairShape: (id: string) => void
   onEquipHairShape: (id: string | null) => void
+  onUnlockGlasses: (id: string) => void
+  onEquipGlasses: (id: string | null) => void
   onClose: () => void
 }
 
@@ -51,11 +54,12 @@ interface AvatarShopProps {
 // só, rolando infinitamente, deixou de caber numa experiência boa pra criança escolher. Camisa/
 // calça/sapato/mochila viram uma aba só ("Roupas") — são o mesmo tipo de escolha (cor de uma peça
 // de roupa), separar em 4 abas ficaria fragmentado demais pro benefício de organização que dá.
-type ShopTab = 'avatares' | 'chapeus' | 'roupas' | 'cabelo'
+type ShopTab = 'avatares' | 'chapeus' | 'oculos' | 'roupas' | 'cabelo'
 
 const TABS: { id: ShopTab; label: string; emoji: string }[] = [
   { id: 'avatares', label: 'Avatares', emoji: '🐾' },
   { id: 'chapeus', label: 'Chapéus', emoji: '🎩' },
+  { id: 'oculos', label: 'Óculos', emoji: '😎' },
   { id: 'roupas', label: 'Roupas', emoji: '👕' },
   { id: 'cabelo', label: 'Cabelo', emoji: '💇' },
 ]
@@ -206,6 +210,8 @@ export function AvatarShop({
   onEquipBackpackColor,
   onUnlockHairShape,
   onEquipHairShape,
+  onUnlockGlasses,
+  onEquipGlasses,
   onClose,
 }: AvatarShopProps) {
   const [tab, setTab] = useState<ShopTab>('avatares')
@@ -235,6 +241,7 @@ export function AvatarShop({
               shoeColorId={profile.equippedShoeColorId}
               backpackColorId={profile.equippedBackpackColorId}
               hairShapeId={profile.equippedHairShapeId}
+              glassesId={profile.equippedGlassesId}
             />
           </Suspense>
         </div>
@@ -354,6 +361,64 @@ export function AvatarShop({
                         onClick={() => onUnlockHat(hat.id)}
                       >
                         🪙 {hat.cost}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {tab === 'oculos' && (
+          <>
+            <p className="subtitle">Óculos são independentes do personagem e do chapéu.</p>
+
+            <div className="avatar-shop-grid">
+              <div className={`avatar-shop-item ${!profile.equippedGlassesId ? 'equipped' : ''}`}>
+                <span className="avatar-shop-emoji">🚫</span>
+                <span className="avatar-shop-name">Nenhum</span>
+                {!profile.equippedGlassesId ? (
+                  <span className="avatar-shop-tag">Em uso</span>
+                ) : (
+                  <button type="button" className="avatar-shop-action" onClick={() => onEquipGlasses(null)}>
+                    Usar
+                  </button>
+                )}
+              </div>
+
+              {GLASSES_CATALOG.map((glasses) => {
+                const usable = glasses.subscriptionOnly ? entitlementActive : progress.unlockedGlassesIds.includes(glasses.id)
+                const equipped = profile.equippedGlassesId === glasses.id
+                const affordable = progress.coins >= glasses.cost
+
+                return (
+                  <div key={glasses.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
+                    <span className="avatar-shop-emoji">{glasses.emoji}</span>
+                    <span className="avatar-shop-name">
+                      {glasses.name} {glasses.subscriptionOnly && '👑'}
+                    </span>
+
+                    {equipped && <span className="avatar-shop-tag">Em uso</span>}
+
+                    {!equipped && usable && (
+                      <button type="button" className="avatar-shop-action" onClick={() => onEquipGlasses(glasses.id)}>
+                        Usar
+                      </button>
+                    )}
+
+                    {!equipped && !usable && glasses.subscriptionOnly && (
+                      <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+                    )}
+
+                    {!usable && !glasses.subscriptionOnly && (
+                      <button
+                        type="button"
+                        className="avatar-shop-action buy"
+                        disabled={!affordable}
+                        onClick={() => onUnlockGlasses(glasses.id)}
+                      >
+                        🪙 {glasses.cost}
                       </button>
                     )}
                   </div>

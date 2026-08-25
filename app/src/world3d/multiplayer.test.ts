@@ -74,6 +74,7 @@ describe('envio de rede sem conexão (modo solo)', () => {
         shoeColorId: null,
         backpackColorId: null,
         hairShapeId: null,
+        glassesId: null,
       }),
     ).not.toThrow()
   })

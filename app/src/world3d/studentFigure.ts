@@ -12,6 +12,7 @@ import { Color3, Mesh, MeshBuilder, PBRMaterial, Scene, ShadowGenerator, Transfo
 import { findAvatarByEmoji, type BonecoFeatures } from '../data/avatars'
 import type { HatOption } from '../data/hats'
 import type { HairShape } from '../data/customization'
+import type { GlassesOption } from '../data/glasses'
 
 // Cor da camisa vem do catálogo de avatares (src/data/avatars.ts) — fonte única de verdade,
 // compartilhada entre o mundo 3D e a lojinha. O fallback cobre só o caso de um emoji não
@@ -56,6 +57,9 @@ export interface StudentFigure {
   elbowPivotR: TransformNode
   accessories: Mesh[]
   hatMeshes: Mesh[]
+  // Óculos (lab-92) — mesmo padrão do chapéu: eixo de customização independente, populado por
+  // `applyGlasses`.
+  glassesMeshes: Mesh[]
 }
 
 export interface StudentFigureColorOptions {
@@ -204,6 +208,7 @@ export function buildStudentFigure(
     elbowPivotR: arm2.lowerPivot,
     accessories: [],
     hatMeshes: [],
+    glassesMeshes: [],
   }
   // Cabelo padrão — trocável depois via `applyHairShape` (ver `__setHairShape`), mesmo padrão de
   // `applyHat` sendo chamado de novo quando o jogador troca de item na lojinha em cena.
@@ -435,6 +440,57 @@ export function applyHat(
       spike.position = new Vector3(Math.cos(angle) * 0.13, HAT_Y + 0.06, Math.sin(angle) * 0.13)
       add(spike)
     }
+  }
+}
+
+// Óculos equipados (lab-92) — mesmo padrão de `applyHat`: eixo de customização independente,
+// guardado em `figure.glassesMeshes`. `glasses` null = remove qualquer óculos, descarta as
+// malhas e sai. Posicionado na altura dos olhos (`EYE_Y`, mesma referência já usada pelo
+// acessório `special: 'eyes'` em `applyBonecoFeatures` acima) — na frente do rosto (+Z),
+// independente da criatura escolhida.
+export function applyGlasses(
+  figure: StudentFigure,
+  glasses: GlassesOption | null,
+  scene: Scene,
+  shadowGenerator: ShadowGenerator,
+): void {
+  for (const mesh of figure.glassesMeshes) mesh.dispose()
+  figure.glassesMeshes = []
+  if (!glasses) return
+
+  const glassesMat = new PBRMaterial(`glassesMat-${glasses.id}`, scene)
+  glassesMat.albedoColor = new Color3(...glasses.colorRgb)
+  glassesMat.roughness = 0.3
+  glassesMat.metallic = 0.2
+
+  function add(mesh: Mesh) {
+    mesh.material = glassesMat
+    mesh.parent = figure.root
+    shadowGenerator.addShadowCaster(mesh)
+    figure.glassesMeshes.push(mesh)
+    return mesh
+  }
+
+  const EYE_Y = 1.15 + 0.13
+
+  if (glasses.shape === 'sunglasses') {
+    for (const side of [-1, 1]) {
+      const lens = MeshBuilder.CreateSphere(`glassesLens${side}`, { diameter: 0.11 }, scene)
+      lens.scaling.z = 0.4
+      lens.position = new Vector3(side * 0.09, EYE_Y, 0.14)
+      add(lens)
+    }
+    const bridge = MeshBuilder.CreateBox('glassesBridge', { width: 0.06, height: 0.02, depth: 0.02 }, scene)
+    bridge.position = new Vector3(0, EYE_Y, 0.14)
+    add(bridge)
+  } else if (glasses.shape === 'vr') {
+    const visor = MeshBuilder.CreateBox('glassesVisor', { width: 0.24, height: 0.1, depth: 0.08 }, scene)
+    visor.position = new Vector3(0, EYE_Y, 0.13)
+    add(visor)
+    const strap = MeshBuilder.CreateCylinder('glassesStrap', { height: 0.05, diameter: 0.34, tessellation: 12 }, scene)
+    strap.rotation.x = Math.PI / 2
+    strap.position = new Vector3(0, EYE_Y, -0.02)
+    add(strap)
   }
 }
 

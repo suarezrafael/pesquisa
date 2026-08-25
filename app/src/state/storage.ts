@@ -1,6 +1,7 @@
 import type { Profile, Progress } from '../types'
 import { DEFAULT_UNLOCKED_AVATAR_IDS } from '../data/avatars'
 import { DEFAULT_UNLOCKED_HAT_IDS } from '../data/hats'
+import { DEFAULT_UNLOCKED_GLASSES_IDS } from '../data/glasses'
 
 const PROFILE_KEY = 'jogo-educativo:profile'
 const PROGRESS_KEY = 'jogo-educativo:progress'
@@ -23,6 +24,7 @@ export const emptyProgress: Progress = {
   unlockedShoeColorIds: ['sapato_preto'],
   unlockedBackpackColorIds: ['mochila_padrao'],
   unlockedHairShapeIds: ['cabelo_padrao'],
+  unlockedGlassesIds: DEFAULT_UNLOCKED_GLASSES_IDS,
 }
 
 export function loadProfile(): Profile | null {
@@ -42,6 +44,7 @@ export function loadProfile(): Profile | null {
       equippedShoeColorId: null,
       equippedBackpackColorId: null,
       equippedHairShapeId: null,
+      equippedGlassesId: null,
       ...(JSON.parse(raw) as Partial<Profile>),
     } as Profile
   } catch {

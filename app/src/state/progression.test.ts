@@ -12,6 +12,7 @@ import {
   isQuestUnlocked,
   unlockAvatar,
   unlockBackpackColor,
+  unlockGlasses,
   unlockHat,
   unlockHairShape,
   unlockPantsColor,
@@ -180,12 +181,25 @@ describe('itens exclusivos de assinante nunca são obtidos via moeda (Fase E)', 
     const next = unlockBackpackColor({ ...emptyProgress, coins: 9999 }, 'mochila_dourada')
     expect(next.unlockedBackpackColorIds).not.toContain('mochila_dourada')
   })
+
+  // lab-92: mesmo teste de regressão pro eixo de óculos, novo neste laboratório.
+  it('unlockGlasses recusa os Óculos de Realidade Virtual mesmo com moedas suficientes', () => {
+    const next = unlockGlasses({ ...emptyProgress, coins: 9999 }, 'oculos_rv')
+    expect(next.unlockedGlassesIds).not.toContain('oculos_rv')
+    expect(next.coins).toBe(9999)
+  })
 })
 
 describe('compra normal com moeda continua funcionando', () => {
   it('unlockHat desbloqueia e desconta o custo quando há moeda suficiente', () => {
     const next = unlockHat({ ...emptyProgress, coins: 20 }, 'coroa')
     expect(next.unlockedHatIds).toContain('coroa')
+    expect(next.coins).toBe(0)
+  })
+
+  it('unlockGlasses desbloqueia e desconta o custo quando há moeda suficiente', () => {
+    const next = unlockGlasses({ ...emptyProgress, coins: 10 }, 'oculos_sol')
+    expect(next.unlockedGlassesIds).toContain('oculos_sol')
     expect(next.coins).toBe(0)
   })
 

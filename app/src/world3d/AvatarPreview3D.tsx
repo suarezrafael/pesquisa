@@ -13,6 +13,7 @@ import {
   Vector3,
 } from '@babylonjs/core'
 import { findHatById } from '../data/hats'
+import { findGlassesById } from '../data/glasses'
 import {
   BACKPACK_COLOR_CATALOG,
   PANTS_COLOR_CATALOG,
@@ -23,6 +24,7 @@ import {
 } from '../data/customization'
 import {
   applyBonecoFeatures,
+  applyGlasses,
   applyHairShape,
   applyHat,
   avatarColorFromEmoji,
@@ -39,6 +41,7 @@ interface AvatarPreview3DProps {
   shoeColorId: string | null
   backpackColorId: string | null
   hairShapeId: string | null
+  glassesId: string | null
 }
 
 // Preview 3D de verdade (lab-87, pedido do usuário: "mostrar um menu com um preview 3D do avatar
@@ -56,6 +59,7 @@ export function AvatarPreview3D({
   shoeColorId,
   backpackColorId,
   hairShapeId,
+  glassesId,
 }: AvatarPreview3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<Scene | null>(null)
@@ -138,6 +142,7 @@ export function AvatarPreview3D({
     const figure = buildStudentFigure(scene, avatarColorFromEmoji(avatarEmoji), shadowGenerator)
     applyBonecoFeatures(figure, bonecoFeaturesFromEmoji(avatarEmoji), scene, shadowGenerator)
     applyHat(figure, hatId ? (findHatById(hatId) ?? null) : null, scene, shadowGenerator)
+    applyGlasses(figure, glassesId ? (findGlassesById(glassesId) ?? null) : null, scene, shadowGenerator)
     applyHairShape(figure, findHairShapeOption(hairShapeId)?.shape ?? 'padrao', scene, shadowGenerator)
 
     const shirtOpt = findColorOption(SHIRT_COLOR_CATALOG, shirtColorId)
@@ -152,7 +157,7 @@ export function AvatarPreview3D({
       : Color3.Lerp(avatarColorFromEmoji(avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5)
 
     figureRef.current = figure
-  }, [avatarEmoji, hatId, shirtColorId, pantsColorId, shoeColorId, backpackColorId, hairShapeId])
+  }, [avatarEmoji, hatId, shirtColorId, pantsColorId, shoeColorId, backpackColorId, hairShapeId, glassesId])
 
   return <canvas ref={canvasRef} className="avatar-preview-3d-canvas" />
 }

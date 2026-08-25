@@ -39,6 +39,7 @@ import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
+import { findGlassesById } from '../data/glasses'
 import {
   findColorOption,
   findHairShapeOption,
@@ -49,6 +50,7 @@ import {
 } from '../data/customization'
 import {
   applyBonecoFeatures,
+  applyGlasses,
   applyHairShape,
   applyHat,
   avatarColorFromEmoji,
@@ -565,6 +567,7 @@ interface RemotePlayer {
   lastShoeColorId: string | null
   lastBackpackColorId: string | null
   lastHairShapeId: string | null
+  lastGlassesId: string | null
   // Animação de golpe/tiro (lab-73, pedido do usuário: "o efeito de espada e arma deve ser visto
   // por todos") — mesmo mecanismo do jogador local (`attackAnimTimer`/`attackAnimKind`), só que
   // um estado por jogador remoto em vez de uma variável só, já que vários podem atacar ao mesmo
@@ -1730,6 +1733,10 @@ export function World3D({
   useEffect(() => {
     ;(sceneRef.current as any)?.__setPlayerHat?.(profile.equippedHatId)
   }, [profile.equippedHatId])
+
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setPlayerGlasses?.(profile.equippedGlassesId)
+  }, [profile.equippedGlassesId])
 
   // Espada/arma visível na mão conforme a seleção da mochila (lab-76) — mesmo padrão do chapéu
   // acima, só que a fonte não é `profile` (persistido), é o estado local `selectedWeapon`.
@@ -4227,6 +4234,12 @@ export function World3D({
       if (initialShirtOpt) studentFigure.shirtMat.albedoColor = new Color3(...initialShirtOpt.colorRgb)
       applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
       applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
+      applyGlasses(
+        studentFigure,
+        profile.equippedGlassesId ? findGlassesById(profile.equippedGlassesId) ?? null : null,
+        scene,
+        shadowGenerator,
+      )
       const initialHair = findHairShapeOption(profile.equippedHairShapeId)
       if (initialHair) applyHairShape(studentFigure, initialHair.shape, scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
@@ -4279,6 +4292,12 @@ export function World3D({
       // reconstrói `accessories`. Ver useEffect que observa `profile.equippedHatId`.
       ;(scene as any).__setPlayerHat = (hatId: string | null) => {
         applyHat(studentFigure, hatId ? findHatById(hatId) ?? null : null, scene, shadowGenerator)
+      }
+
+      // Trocar de óculos na lojinha (lab-92) — mesmo padrão de `__setPlayerHat` acima. Ver
+      // useEffect que observa `profile.equippedGlassesId`.
+      ;(scene as any).__setPlayerGlasses = (glassesId: string | null) => {
+        applyGlasses(studentFigure, glassesId ? findGlassesById(glassesId) ?? null : null, scene, shadowGenerator)
       }
 
       // Espada/arma na mão conforme a seleção da mochila (lab-76, pedido do usuário: "quando eu
@@ -5553,6 +5572,7 @@ export function World3D({
             lastShoeColorId: null,
             lastBackpackColorId: null,
             lastHairShapeId: null,
+            lastGlassesId: null,
             attackAnimTimer: 0,
             attackAnimKind: null,
           }
@@ -5606,6 +5626,10 @@ export function World3D({
           rp.lastHairShapeId = state.hairShapeId
           const opt = findHairShapeOption(state.hairShapeId)
           applyHairShape(rp.figure, opt?.shape ?? 'padrao', scene, shadowGenerator)
+        }
+        if (state.glassesId !== rp.lastGlassesId) {
+          rp.lastGlassesId = state.glassesId
+          applyGlasses(rp.figure, state.glassesId ? findGlassesById(state.glassesId) ?? null : null, scene, shadowGenerator)
         }
       }
 
@@ -6078,6 +6102,7 @@ export function World3D({
               profileRef.current.equippedShoeColorId,
               profileRef.current.equippedBackpackColorId,
               profileRef.current.equippedHairShapeId,
+              profileRef.current.equippedGlassesId,
             ].join('|')
             const appearanceChanged = appearanceKey !== lastSentAppearanceKey
             const nowMsNet = performance.now()
@@ -6099,6 +6124,7 @@ export function World3D({
                   shoeColorId: profileRef.current.equippedShoeColorId,
                   backpackColorId: profileRef.current.equippedBackpackColorId,
                   hairShapeId: profileRef.current.equippedHairShapeId,
+                  glassesId: profileRef.current.equippedGlassesId,
                 },
               )
               lastSentPos = currentPos.clone()
