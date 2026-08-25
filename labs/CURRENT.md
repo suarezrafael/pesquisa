@@ -1,6 +1,9 @@
 # Laboratório atual
 
-Ativo: nenhum — pronto pra `lab start` a qualquer momento.
+Ativo: labs/lab-95-mais-missoes-e-escolinhas-menores/ (pedido do usuário 2026-08-25: aumentar o
+número de missões além das 21 atuais + encolher as escolinhas pra não sobrecarregar o
+planetinha — +9 missões novas (`q22`-`q30`, ids nunca reordenados/renumerados pra não quebrar
+progresso salvo) e escolinhas ~20% menores)
 
 **Pedido maior do usuário (2026-08-24), dividido em vários laboratórios — TODOS OS 4 ITENS
 CONCLUÍDOS** (registrado aqui como histórico):
