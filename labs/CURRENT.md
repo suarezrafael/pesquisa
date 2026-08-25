@@ -1,12 +1,9 @@
 # Laboratório atual
 
-Ativo: labs/lab-94-brinde-de-marte/ (item 4, último do pedido maior do usuário — brinde ao limpar
-Marte. Achado: não existe "chefe" — só os 6 inimigos regulares já existentes (3 ET + 3 robô); o
-pedido é "derrotar todos", não uma luta de chefe nova; virou um chapéu exclusivo desbloqueado uma
-única vez, nunca comprável com moeda, ver FEATURES.md do lab-94)
+Ativo: nenhum — pronto pra `lab start` a qualquer momento.
 
-**Pedido maior do usuário (2026-08-24), dividido em vários laboratórios** (registrado aqui pra não
-se perder):
+**Pedido maior do usuário (2026-08-24), dividido em vários laboratórios — TODOS OS 4 ITENS
+CONCLUÍDOS** (registrado aqui como histórico):
 1. Dashboard de progresso + lojinha responsiva → **lab-91, concluído**: painel em `/familia` lê
    `localStorage` local (mesmo aparelho/navegador da criança, sem mudança de arquitetura, sem
    dado de criança saindo do aparelho); `.avatar-shop-tab`/`.avatar-shop-action` corrigidos pro
@@ -28,11 +25,15 @@ se perder):
    `RESET_DISTANCE` conseguia disparar, já que a posição parava de atualizar) — corrigido gateando
    só a recalculagem da pose, não física/input/posição. Ver
    `labs/lab-93-carteira-de-estudos-e-conquistas/CONTEXT.md` pro relato completo.
-4. Brinde ao vencer o chefe de Marte (ETs + robô) → **lab-94 (este)**. COLECIONÁVEL EXCLUSIVO
-   in-game, não físico (o jogo não coleta endereço/PII de criança pra enviar nada). Pesquisa
-   rápida de mercado nacional (2026-08-24): tendência forte de colecionáveis/trading-card-style
-   (Pokémon 30 anos, Squishmallows) — informa o design.
-Último concluído: labs/lab-93-carteira-de-estudos-e-conquistas/ — ver acima.
+4. Brinde ao vencer o chefe de Marte (ETs + robô) → **lab-94, concluído**. Achado: não existe
+   "chefe" de Marte — só os 6 inimigos regulares já existentes (3 ET + 3 robô); o pedido real é
+   "derrotar todos", não uma luta de chefe nova. Virou um chapéu exclusivo ("Coroa de Herói de
+   Marte" 🪐, `marsRewardOnly` em `hats.ts`) desbloqueado uma única vez ao limpar Marte pela
+   primeira vez, nunca comprável com moeda (mesma proteção que já existe pra itens de assinante).
+   Verificado ao vivo com um atalho de QA temporário (removido antes do commit) que mata os 6
+   inimigos de uma vez — toast "Marte limpo!" + lojinha atualizando na hora confirmados. Ver
+   `labs/lab-94-brinde-de-marte/CONTEXT.md`.
+Último concluído: labs/lab-94-brinde-de-marte/ — ver acima.
 
 Último antes desse: labs/lab-90-corrige-bypass-de-assinatura-local/ (G6, metade "bypass": um `401`
 do `/entitlement` — o servidor recusando explicitamente um token inválido/forjado — era tratado
@@ -48,7 +49,7 @@ Deploy em produção feito (`npx vercel --prod --yes`). A outra metade de G6 —
 backup/restauração — ficou explicitamente fora de escopo, precisa de conversa de produto/
 privacidade própria antes de qualquer implementação. Ver
 `labs/lab-90-corrige-bypass-de-assinatura-local/CONTEXT.md`.)
-Contexto do laboratório anterior: labs/lab-93-carteira-de-estudos-e-conquistas/CONTEXT.md
+Contexto do laboratório anterior: labs/lab-94-brinde-de-marte/CONTEXT.md
 
 **Ticket de suporte aberto com a Cloudflare (2026-08-24)** sobre o binding nativo de Rate Limiting
 não bloquear nada em produção (achado do lab-88) — aguardando resposta. Não é bloqueador: as rotas
@@ -195,7 +196,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-93-carteira-de-estudos-e-conquistas/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-94-brinde-de-marte/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).

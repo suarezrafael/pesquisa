@@ -1,8 +1,8 @@
 # Laboratório 94 — brinde exclusivo ao limpar Marte
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-25
-Fim: -
+Fim: 2026-08-25
 Commit inicial: a6ce02d35c7c8863aee0d7c6e60a37ceedc65fff
 
 ## Objetivo do laboratório
@@ -31,31 +31,38 @@ ele comprável de graça pelo botão normal — precisa da mesma proteção que 
 `subscriptionOnly`, um novo campo `marsRewardOnly` com a mesma exclusão em `unlockHat`).
 
 ## Funcionalidades planejadas
-- [ ] **`data/hats.ts`**: novo item `capacete_heroi_marte` (nome/emoji/cor tema-Marte), `cost: 0`,
-  `marsRewardOnly: true` (campo novo em `HatOption`).
-- [ ] **`state/progression.ts`**: `unlockHat` passa a recusar `marsRewardOnly` igual já recusa
-  `subscriptionOnly` (nunca liberável pelo botão de compra normal). Nova função
-  `unlockMarsReward(progress)` — idempotente (não faz nada se já tiver), adiciona o id direto em
-  `unlockedHatIds` sem checar moeda, retorna se realmente concedeu algo novo (pra UI só mostrar
-  aviso na primeira vez de verdade).
-- [ ] **`state/useProgress.ts`**: `unlockMarsReward()` wrapper.
-- [ ] **`world3d/World3D.tsx`**: detecta "todos os 6 inimigos de Marte mortos" logo depois de
-  nocautear o último (checagem local, sem novo estado em `progress`), com uma flag de "já limpou
-  NESTA visita" (reseta junto com os inimigos a cada nova chegada em Marte, mesmo ponto do
-  lab-64) pra não chamar o unlock a cada quadro. Chama `onUnlockMarsRewardRef.current()` uma vez.
-- [ ] **`App.tsx`**: `onUnlockMarsReward` conectado a `unlockMarsReward()`; se realmente concedeu
-  algo novo, mostra um aviso (novo componente pequeno, reaproveitando as classes CSS já existentes
-  de `RewardToast`/`.reward-modal` — sem CSS novo).
-- [ ] **`world3d/AvatarShop.tsx`**: aba "Chapéus" ganha um terceiro estado de bloqueio (além de
-  "trancado por moeda" e "trancado por assinatura") — reaproveita a tag visual já existente
-  (`.avatar-shop-tag.subscription-lock`) com um texto diferente ("🪐 Vença Marte" em vez de
-  "🔒 Assinantes"), nunca mostra botão de compra pra este item.
-- [ ] **Teste unitário**: `unlockHat` recusa `capacete_heroi_marte` mesmo com moedas suficientes
-  (mesmo padrão dos testes de `subscriptionOnly` já existentes).
-- [ ] **Testar ao vivo**: derrotar os 6 inimigos de Marte, confirmar que o brinde é concedido só
-  depois do último, que reaparece corretamente "usável" na lojinha, e que voltar a Marte e limpar
-  de novo não repete o aviso nem quebra nada (idempotência).
-- [ ] **Deploy em produção** (só frontend).
+- [x] **`data/hats.ts`**: novo item `capacete_heroi_marte` ("Coroa de Herói de Marte" 🪐,
+  formato `crown` já existente, cor marciana), `cost: 0`, `marsRewardOnly: true` (campo novo em
+  `HatOption`). `DEFAULT_UNLOCKED_HAT_IDS` corrigido pra também excluir `marsRewardOnly` — sem
+  isso, o filtro `cost === 0 && !subscriptionOnly` teria liberado o item de graça pra todo mundo
+  desde o início, achado revisando o próprio filtro antes de rodar qualquer teste.
+- [x] **`state/progression.ts`**: `unlockHat` recusa `marsRewardOnly` igual já recusa
+  `subscriptionOnly`. Nova função `unlockMarsReward(progress): MarsRewardResult` — idempotente,
+  adiciona o id direto em `unlockedHatIds` sem checar moeda, retorna `{progress, granted}`.
+- [x] **`state/useProgress.ts`**: `unlockMarsReward()` wrapper, devolve o `granted` pro chamador.
+- [x] **`world3d/World3D.tsx`**: flag local `marsClearedThisVisit`, resetada junto com os
+  inimigos a cada nova chegada em Marte (mesmo ponto do lab-64). Checagem
+  `marsEnemies.every((e) => !e.alive)` logo depois de `enemy.alive = false` no nocaute — chama
+  `onUnlockMarsRewardRef.current()` uma vez por visita.
+- [x] **`App.tsx`**: `onUnlockMarsReward` conectado a `unlockMarsReward()`; `MarsRewardToast`
+  (novo, `app/src/components/`) mostrado só quando `granted` é `true` — reaproveita
+  `.reward-modal`/`.reward-icon`/`.reward-line` de `RewardToast.tsx`, sem CSS novo.
+- [x] **`world3d/AvatarShop.tsx`**: aba "Chapéus" ganha o terceiro estado de bloqueio — tag
+  "🪐 Vença Marte" (reaproveita `.avatar-shop-tag.subscription-lock`), nunca mostra botão de
+  compra pro item `marsRewardOnly`.
+- [x] **3 testes novos** em `progression.test.ts`: `unlockHat` recusa `capacete_heroi_marte` com
+  moedas suficientes; `unlockMarsReward` concede na primeira vez sem mexer em moeda; é idempotente
+  (não concede de novo, devolve o MESMO objeto `progress`) se já tiver o item. Suíte total: 39.
+- [x] **Testado ao vivo** contra o dev server: confirmado na lojinha que o item aparece bloqueado
+  ("🪐 Vença Marte", sem botão de compra) antes de limpar Marte; um atalho de QA temporário
+  (`window.__debugClearMars()`, removido antes do commit) matou os 6 inimigos de uma vez —
+  confirmado que o toast "Marte limpo!" aparece, que a lojinha atualiza pra "Usar" na hora (sem
+  precisar reabrir), e que chamar de novo NA MESMA visita não reabre o toast (idempotência
+  dentro da visita — a idempotência ENTRE visitas, mais importante, já está coberta pelo teste
+  unitário de `unlockMarsReward`, que é puramente uma função de `progress`, independente de
+  quando/quantas vezes é chamada).
+- [x] **Deploy em produção** via `npx vercel --prod --yes` (3ª tentativa, mesmo padrão
+  intermitente de "fetch failed").
 
 ## Fora de escopo (explicitamente adiado)
 - **Chefe de Marte de verdade** (inimigo único/especial, maior, com sua própria luta) — o pedido
