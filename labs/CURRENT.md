@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Ativo: labs/lab-96-webhook-stripe-idempotencia/ — G8 (`docs/prompts/05-escala-e-viabilidade.md`,
+`[receita]`): webhook do Stripe sem idempotência e com `status` restrito demais no schema (Pix/
+boleto nasce `incomplete`, que hoje quebra o `insert`). Escolhido pelo usuário 2026-08-25 entre
+G8/G7/revisitar tamanho das escolinhas, logo após o lab-95. Ver
+`labs/lab-96-webhook-stripe-idempotencia/FEATURES.md` pro escopo detalhado.
+
 Último concluído: labs/lab-95-mais-missoes-e-escolinhas-menores/ (pedido do usuário 2026-08-25:
 aumentar o número de missões além das 21 atuais + encolher as escolinhas pra não sobrecarregar o
 planetinha). +9 missões novas (`q22`-`q30`) — concluído e deployado. Escolinhas ~20% menores —
