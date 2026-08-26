@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Ativo: labs/lab-97-revogacao-token-pareamento/ — resto de G7
+(`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`): token de entitlement sem `jti`,
+sem revogação, sem limite de aparelhos por família (rate limit e a corrida de resgate duplo já
+foram corrigidos no lab-88). Escolhido pelo usuário 2026-08-25 logo após o lab-96. Limite de
+aparelhos confirmado com o usuário: 3 por família, revoga o mais antigo automaticamente ao passar
+do limite. Ver `labs/lab-97-revogacao-token-pareamento/FEATURES.md` pro escopo detalhado.
+
 Último concluído: labs/lab-96-webhook-stripe-idempotencia/ — G8
 (`docs/prompts/05-escala-e-viabilidade.md`, `[receita]`), escolhido pelo usuário entre G8/G7/
 revisitar tamanho das escolinhas logo após o lab-95. `subscriptions.status` só aceitava 4 dos 8
