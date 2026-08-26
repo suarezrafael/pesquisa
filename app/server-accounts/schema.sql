@@ -104,3 +104,23 @@ create table if not exists entitlement_tokens (
 );
 
 create index if not exists idx_entitlement_tokens_family_account on entitlement_tokens (family_account_id);
+
+-- lab-99, resto de G11 (prompt.md §12): telemetria de produto anônima -- `device_id` é um
+-- `crypto.randomUUID()` gerado e guardado só no `localStorage` do aparelho da criança, sem NENHUM
+-- vínculo com nome/e-mail/apelido/família (docs/prompts/01-seguranca.md [MUST] permite
+-- identificador técnico anônimo, nunca dado pessoal). `meta` guarda detalhe específico do tipo de
+-- evento (ex.: `questId` em `quest_completed`, `durationMs` em `session_end`).
+create table if not exists product_events (
+  id bigint generated always as identity primary key,
+  device_id uuid not null,
+  event_type text not null,
+  occurred_at timestamptz not null,
+  meta jsonb,
+  received_at timestamptz not null default now()
+);
+
+-- Índices pensados pras duas consultas que `GET /admin/metrics` faz de verdade: "primeira e
+-- últimas datas em que ESTE dispositivo apareceu" (retenção D1/D7) e "todos os eventos de UM tipo
+-- num período" (duração de sessão, quests concluídas).
+create index if not exists idx_product_events_device_occurred on product_events (device_id, occurred_at);
+create index if not exists idx_product_events_type_occurred on product_events (event_type, occurred_at);

@@ -1,8 +1,8 @@
 # Laboratório 99 — analytics de produto (resto de G11): D1/D7, sessão, quests
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-26
-Fim: -
+Fim: 2026-08-26
 Commit inicial: ec9d017ca11af5238d702c60908442072089604b
 
 ## Objetivo do laboratório
@@ -40,32 +40,38 @@ merece seu próprio laboratório pequeno, em vez de inchar este aqui.
   `/client-error` já tem o dele.
 
 ## Funcionalidades planejadas
-- [ ] **`app/src/state/storage.ts`**: `getOrCreateDeviceId()` — UUID aleatório gerado uma vez,
+- [x] **`app/src/state/storage.ts`**: `getOrCreateDeviceId()` — UUID aleatório gerado uma vez,
   persistido em `localStorage` (`jogo-educativo:deviceId`), reaproveitado em toda sessão futura no
   mesmo aparelho/navegador.
-- [ ] **`app/src/productAnalytics.ts`** (novo, mesmo padrão de `errorReporting.ts`):
+- [x] **`app/src/productAnalytics.ts`** (novo, mesmo padrão de `errorReporting.ts`):
   `trackEvent(type, meta?)` — `POST /events` no Worker de contas, silencioso em caso de falha,
   `keepalive: true`. `installProductAnalytics()` — dispara `session_start` no carregamento e
   `session_end` (com `durationMs` calculado) no `pagehide`.
-- [ ] **`useProgress.ts`**: `completeQuest` dispara `trackEvent('quest_completed', { questId })`
-  depois de aplicar o resultado.
-- [ ] **`app/server-accounts/schema.sql`**: nova tabela `product_events` (`device_id`,
+- [x] **`useProgress.ts`**: `completeQuest` dispara `trackQuestCompleted(questId)` depois de
+  aplicar o resultado — só numa conclusão genuína (`!wasAlreadyCompleted`), já que
+  `applyQuestCompletion` é idempotente e reprisar uma missão não deve inflar a métrica.
+- [x] **`app/server-accounts/schema.sql`**: nova tabela `product_events` (`device_id`,
   `event_type`, `occurred_at`, `meta` jsonb nullable, `received_at`) + índices pra consulta de
-  retenção (`device_id, occurred_at` e `event_type, occurred_at`).
-- [ ] **`app/server-accounts/src/domain.ts`**: `PRODUCT_EVENT_TYPES` (allowlist:
-  `session_start`, `session_end`, `quest_completed`) + `isValidProductEventType`.
-- [ ] **`POST /events`** (`index.ts`): sem autenticação (anônimo por desenho), rate-limited
-  (`EVENTS_LIMITER` novo), valida `deviceId`/`type`/`occurredAt`, insere, devolve `204`.
-- [ ] **`GET /admin/metrics`**: protegido por segredo compartilhado (header, `wrangler secret put
-  ADMIN_METRICS_SECRET`) — não é dado de família nenhuma específica, mas ainda é métrica de
-  negócio, não fica público. Devolve D1/D7 retention, duração média de sessão, quests concluídas
-  por dispositivo (média), total de dispositivos únicos vistos.
-- [ ] Testes de domínio pra `isValidProductEventType` e qualquer outra lógica pura extraível.
-- [ ] Testado ao vivo contra produção real: inserir eventos sintéticos (`session_start`/
-  `session_end`/`quest_completed`) espalhados em vários dias diferentes direto no banco, conferir
-  que `/admin/metrics` calcula D1/D7/duração/quests batendo com o valor esperado à mão. Testar
-  `POST /events` de verdade (não só inserção direta) pra confirmar o caminho completo
-  client→endpoint→banco funciona.
+  retenção (`device_id, occurred_at` e `event_type, occurred_at`). Migrado em produção
+  (`npm run migrate`) e verificado via consulta a `information_schema.columns`/`pg_indexes`.
+- [x] **`app/server-accounts/src/domain.ts`**: `isValidProductEventType` +
+  `isPlausibleSessionDuration` (com `MAX_PLAUSIBLE_SESSION_DURATION_MS`). 7 testes novos, todos
+  passando (36/36 no total do Worker).
+- [x] **`POST /events`** (`index.ts`): sem autenticação (anônimo por desenho), rate-limited
+  (`EVENTS_LIMITER` novo, 20/60s), valida `deviceId`/`type`/`occurredAt`, insere, devolve `204`.
+  Testado ao vivo contra produção: `POST /events` real inseriu a linha esperada em
+  `product_events`.
+- [x] **`GET /admin/metrics`**: protegido por segredo compartilhado (header `x-admin-secret`,
+  `ADMIN_METRICS_SECRET` definido em produção via `wrangler secret put`). Devolve D1/D7 retention,
+  duração média de sessão, quests concluídas por dispositivo (média), total de dispositivos únicos
+  vistos. Verificado: sem header → 401; header errado → 401; header correto → 200 com JSON.
+- [x] Testes de domínio pra `isValidProductEventType`/`isPlausibleSessionDuration`.
+- [x] Testado ao vivo contra produção real: inseridos 11 eventos sintéticos (3 dispositivos, dados
+  espalhados entre 2026-08-01, +1 dia e +7 dias) direto no banco via script temporário, depois
+  apagados. `/admin/metrics` devolveu exatamente os valores calculados à mão: D1 2/3 = 66.67%,
+  D7 1/3 = 33.33%, duração média de sessão 90000ms (média de 60000/120000), 1.5 quests/dispositivo
+  (3 quests / 2 dispositivos com pelo menos uma). `POST /events` real também testado (não só
+  inserção direta), confirmando o caminho completo client→endpoint→banco.
 
 ## Fora de escopo (explicitamente adiado)
 - **NPS de responsáveis** — pesquisa qualitativa (formulário no portal, não evento), mecanismo

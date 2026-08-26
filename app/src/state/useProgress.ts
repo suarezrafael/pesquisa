@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Progress, Quest } from '../types'
+import { trackQuestCompleted } from '../productAnalytics'
 import { loadProgress, saveProgress } from './storage'
 import {
   applyCoinCollected,
@@ -20,9 +21,15 @@ export function useProgress() {
   const [progress, setProgress] = useState<Progress>(() => loadProgress())
 
   function completeQuest(quest: Quest): CompletionResult {
+    // lab-99: `applyQuestCompletion` é idempotente (responder uma missão já concluída de novo não
+    // premia XP/moeda de novo, ver `progression.ts`) — só dispara o evento de analytics numa
+    // conclusão GENUÍNA (o array de concluídas cresceu), senão "quests concluídas por
+    // dispositivo" ficaria inflado por reprises da mesma missão.
+    const wasAlreadyCompleted = progress.completedQuestIds.includes(quest.id)
     const result = applyQuestCompletion(progress, quest)
     setProgress(result.progress)
     saveProgress(result.progress)
+    if (!wasAlreadyCompleted) trackQuestCompleted(quest.id)
     return result
   }
 

@@ -99,3 +99,24 @@ export const MAX_ACTIVE_DEVICES_PER_FAMILY = 3
 export function isAtDeviceLimit(activeTokenCount: number): boolean {
   return activeTokenCount >= MAX_ACTIVE_DEVICES_PER_FAMILY
 }
+
+// lab-99, resto de G11 (prompt.md §12): allowlist fechada de eventos de produto aceitos por
+// `POST /events` — mesma filosofia de "nunca confiar em input do client sem checar" já usada em
+// `ALLOWED_CLIENT_MESSAGE_TYPES` do relay (server-cf-relay). Um tipo fora desta lista é
+// silenciosamente recusado, não vira uma linha nova e imprevista na tabela de eventos.
+const PRODUCT_EVENT_TYPES = new Set(['session_start', 'session_end', 'quest_completed'])
+
+export function isValidProductEventType(type: string): boolean {
+  return PRODUCT_EVENT_TYPES.has(type)
+}
+
+// lab-99: `session_end` carrega `durationMs` em `meta` — sanidade contra relógio de aparelho
+// errado ou um bug futuro que mande um valor absurdo (isso já aconteceria por acidente e
+// silenciosamente enviesaria a média de duração de sessão pra sempre, sem nenhum aviso). Teto de
+// 4 horas: bem mais que qualquer sessão real de jogo esperada, mas ainda generoso o bastante pra
+// não descartar sessão longa de verdade por engano.
+const MAX_PLAUSIBLE_SESSION_DURATION_MS = 4 * 60 * 60 * 1000
+
+export function isPlausibleSessionDuration(durationMs: unknown): durationMs is number {
+  return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0 && durationMs <= MAX_PLAUSIBLE_SESSION_DURATION_MS
+}

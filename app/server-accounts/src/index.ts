@@ -18,7 +18,9 @@ import {
   isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
+  isPlausibleSessionDuration,
   isTokenRevoked,
+  isValidProductEventType,
   isValidSubscriptionStatus,
   toIsoOrNull,
 } from './domain'
@@ -31,11 +33,16 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET: string
   STRIPE_PRICE_ID: string
   ENTITLEMENT_SECRET: string
+  // lab-99, resto de G11: segredo compartilhado pra proteger `GET /admin/metrics` — não é dado de
+  // nenhuma família específica, mas ainda é métrica de negócio agregada, não fica público.
+  // `wrangler secret put ADMIN_METRICS_SECRET` em produção, `.dev.vars` localmente.
+  ADMIN_METRICS_SECRET: string
   // Rate limiting nativo do Workers (lab-88, pedido do usuário: "o jogo precisa estar seguro com
   // sobrecarga de servidor") — um namespace por rota sensível, configurado em wrangler.toml.
   PAIRING_REDEEM_LIMITER: RateLimit
   HEALTH_LIMITER: RateLimit
   CLIENT_ERROR_LIMITER: RateLimit
+  EVENTS_LIMITER: RateLimit
   CHECKOUT_LIMITER: RateLimit
   PAIRING_GENERATE_LIMITER: RateLimit
 }
@@ -187,6 +194,62 @@ async function handleClientError(request: Request, env: Env): Promise<Response> 
       userAgent: typeof userAgent === 'string' ? userAgent.slice(0, 300) : undefined,
     }),
   )
+  return new Response(null, { status: 204 })
+}
+
+// lab-99, resto de G11 (prompt.md §12) — evento de produto ANÔNIMO (`deviceId` é um
+// `crypto.randomUUID()` sem vínculo nenhum com nome/e-mail/apelido/família, gerado e guardado só
+// no `localStorage` do aparelho da criança). Sem autenticação de propósito, mesmo padrão de
+// `handleClientError` acima — mas com allowlist de tipo (`isValidProductEventType`) porque, ao
+// contrário de um erro (que só é logado, nunca alimenta uma métrica agregada), um evento errado
+// aqui enviesaria D1/D7/duração de sessão pra sempre sem nenhum aviso.
+async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.EVENTS_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const body = await request.text()
+  if (body.length > 4000) return new Response(null, { status: 413 })
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(body)
+  } catch {
+    return new Response(null, { status: 400 })
+  }
+  if (!payload || typeof payload !== 'object') return new Response(null, { status: 400 })
+
+  const { deviceId, type, occurredAt, meta } = payload as Record<string, unknown>
+  if (typeof deviceId !== 'string' || typeof type !== 'string' || typeof occurredAt !== 'string') {
+    return new Response(null, { status: 400 })
+  }
+  if (!isValidProductEventType(type)) return new Response(null, { status: 400 })
+
+  // `session_end` é o único tipo com um campo de `meta` que a gente realmente confia pra cálculo
+  // (duração) — os outros podem mandar `meta` livre, mas ele só é gravado como está (nunca lido de
+  // volta em cálculo nenhum), então não precisa de validação própria.
+  let safeMeta: unknown = null
+  if (meta && typeof meta === 'object') {
+    const metaObj = meta as Record<string, unknown>
+    if (type === 'session_end' && !isPlausibleSessionDuration(metaObj.durationMs)) {
+      safeMeta = null // descarta um durationMs implausível em vez de recusar o evento inteiro
+    } else {
+      safeMeta = metaObj
+    }
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  try {
+    await sql`
+      insert into product_events (device_id, event_type, occurred_at, meta)
+      values (${deviceId}, ${type}, ${occurredAt}, ${safeMeta ? JSON.stringify(safeMeta) : null})
+    `
+  } catch (err) {
+    // `device_id` inválido (não é um UUID de verdade) bate na checagem de tipo da coluna e lança
+    // aqui — não é um erro de servidor de verdade, é input malformado; loga mas ainda devolve
+    // sucesso pro client (não há nada que ele possa fazer a respeito, e não vale a pena o client
+    // ficar tentando de novo).
+    console.error('[track-event-invalid]', String(err))
+  }
   return new Response(null, { status: 204 })
 }
 
@@ -400,6 +463,96 @@ async function handleRevokeAllDevices(request: Request, env: Env): Promise<Respo
   return Response.json({ revokedCount: revoked.length })
 }
 
+// lab-99, resto de G11 (prompt.md §12) — métricas de product-market fit, calculadas sob demanda a
+// partir de `product_events` (nenhuma tabela de agregado pré-computado ainda; volume baixo o
+// bastante hoje pra isso não importar). Protegido por segredo compartilhado no header (não é dado
+// de família nenhuma específica, mas ainda é métrica de negócio agregada — não fica público).
+async function handleAdminMetrics(request: Request, env: Env): Promise<Response> {
+  const secret = request.headers.get('x-admin-secret')
+  if (!secret || secret !== env.ADMIN_METRICS_SECRET) {
+    return Response.json({ error: 'não autorizado' }, { status: 401 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+
+  // D1/D7 retention: de todo dispositivo cujo PRIMEIRO evento foi há pelo menos 1 (ou 7) dias,
+  // qual fração teve QUALQUER evento novo exatamente 1 (ou 7) dias depois desse primeiro dia.
+  const [retention] = (await sql`
+    with first_seen as (
+      select device_id, min(occurred_at)::date as day0
+      from product_events
+      group by device_id
+    ),
+    d1_eligible as (
+      select device_id, day0 from first_seen where day0 <= current_date - 1
+    ),
+    d1_returned as (
+      select distinct fs.device_id
+      from d1_eligible fs
+      join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 1
+    ),
+    d7_eligible as (
+      select device_id, day0 from first_seen where day0 <= current_date - 7
+    ),
+    d7_returned as (
+      select distinct fs.device_id
+      from d7_eligible fs
+      join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 7
+    )
+    select
+      (select count(*) from d1_eligible) as d1_eligible,
+      (select count(*) from d1_returned) as d1_returned,
+      (select count(*) from d7_eligible) as d7_eligible,
+      (select count(*) from d7_returned) as d7_returned
+  `) as { d1_eligible: string; d1_returned: string; d7_eligible: string; d7_returned: string }[]
+
+  const [session] = (await sql`
+    select avg((meta->>'durationMs')::numeric) as avg_duration_ms, count(*) as sample_size
+    from product_events
+    where event_type = 'session_end' and meta ? 'durationMs'
+  `) as { avg_duration_ms: string | null; sample_size: string }[]
+
+  const [quests] = (await sql`
+    with per_device as (
+      select device_id, count(*) as quest_count
+      from product_events
+      where event_type = 'quest_completed'
+      group by device_id
+    )
+    select avg(quest_count) as avg_quests_per_device, count(*) as devices_with_quest
+    from per_device
+  `) as { avg_quests_per_device: string | null; devices_with_quest: string }[]
+
+  const [devices] = (await sql`
+    select count(distinct device_id) as total_devices from product_events
+  `) as { total_devices: string }[]
+
+  const d1Eligible = Number(retention.d1_eligible)
+  const d1Returned = Number(retention.d1_returned)
+  const d7Eligible = Number(retention.d7_eligible)
+  const d7Returned = Number(retention.d7_returned)
+
+  return Response.json({
+    totalDevices: Number(devices.total_devices),
+    d1Retention: {
+      eligibleDevices: d1Eligible,
+      returnedDevices: d1Returned,
+      percent: d1Eligible > 0 ? Math.round((d1Returned / d1Eligible) * 10000) / 100 : null,
+    },
+    d7Retention: {
+      eligibleDevices: d7Eligible,
+      returnedDevices: d7Returned,
+      percent: d7Eligible > 0 ? Math.round((d7Returned / d7Eligible) * 10000) / 100 : null,
+    },
+    avgSessionDurationMs: session.avg_duration_ms ? Math.round(Number(session.avg_duration_ms)) : null,
+    sessionSampleSize: Number(session.sample_size),
+    avgQuestsCompletedPerDevice: quests.avg_quests_per_device
+      ? Math.round(Number(quests.avg_quests_per_device) * 100) / 100
+      : null,
+    devicesWithAtLeastOneQuest: Number(quests.devices_with_quest),
+  })
+}
+
 // Upsert manual (sem constraint única em `family_account_id`, de propósito — uma família pode
 // trocar de assinatura Stripe ao longo do tempo) em vez de `insert ... on conflict`: atualiza a
 // linha mais recente se existir, senão insere.
@@ -604,6 +757,14 @@ export default {
 
     if (url.pathname === '/client-error' && request.method === 'POST') {
       return withCors(await handleClientError(request, env))
+    }
+
+    if (url.pathname === '/events' && request.method === 'POST') {
+      return withCors(await handleTrackEvent(request, env))
+    }
+
+    if (url.pathname === '/admin/metrics' && request.method === 'GET') {
+      return withCors(await handleAdminMetrics(request, env))
     }
 
     if (url.pathname === '/checkout' && request.method === 'POST') {

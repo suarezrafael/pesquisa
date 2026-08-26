@@ -7,6 +7,7 @@ const PROFILE_KEY = 'jogo-educativo:profile'
 const PROGRESS_KEY = 'jogo-educativo:progress'
 const TUTORIAL_SEEN_KEY = 'jogo-educativo:tutorialSeen'
 const LAST_PLAYED_KEY = 'jogo-educativo:lastPlayedAt'
+const DEVICE_ID_KEY = 'jogo-educativo:deviceId'
 
 export const emptyProgress: Progress = {
   completedQuestIds: [],
@@ -88,4 +89,18 @@ export function touchLastPlayed(): void {
 
 export function loadLastPlayedAt(): string | null {
   return localStorage.getItem(LAST_PLAYED_KEY)
+}
+
+// lab-99, resto de G11 (prompt.md §12: D1/D7 retention, tempo médio por sessão, quests
+// concluídas por usuário) — PRIMEIRA vez que algo sai deste aparelho pra alimentar uma métrica
+// agregada (tudo antes disso, incluindo `touchLastPlayed` acima, fica só local). ID 100% anônimo
+// (`crypto.randomUUID()`), sem NENHUM vínculo com nome/apelido/e-mail/família — o `[MUST]` de
+// `docs/prompts/01-seguranca.md` sobre "identificador técnico, não dado pessoal" permite
+// exatamente isto. Gerado uma única vez por aparelho/navegador, reaproveitado pra sempre depois.
+export function getOrCreateDeviceId(): string {
+  const existing = localStorage.getItem(DEVICE_ID_KEY)
+  if (existing) return existing
+  const created = crypto.randomUUID()
+  localStorage.setItem(DEVICE_ID_KEY, created)
+  return created
 }

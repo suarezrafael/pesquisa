@@ -57,3 +57,14 @@ namespace_id = "1005"
   [ratelimits.simple]
   limit = 10
   period = 60
+
+[[ratelimits]]
+name = "EVENTS_LIMITER"
+namespace_id = "1006"
+  # lab-99, resto de G11 — endpoint anônimo e público como `/client-error`, mesmo limite: alto o
+  # bastante pra uma sessão de jogo real nunca esbarrar nele (poucos eventos por sessão:
+  # session_start, quest_completed ocasional, session_end), baixo o bastante pra não virar um
+  # vetor barato de encher `product_events` de lixo.
+  [ratelimits.simple]
+  limit = 20
+  period = 60

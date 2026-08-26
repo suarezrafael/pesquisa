@@ -1,14 +1,28 @@
 # Laboratório atual
 
-Ativo: labs/lab-99-analytics-de-produto/ — resto de G11 (`prompt.md` §12: D1/D7 retention, tempo
-médio por sessão, quests concluídas por usuário, taxa de retorno semanal). Escolhido pelo usuário
-logo após o lab-98. Restrição central: privacidade infantil — identificador 100% anônimo
-(`crypto.randomUUID()`, sem vínculo com nome/e-mail/apelido), primeira vez que telemetria de
-gameplay sai do aparelho da criança (antes só `localStorage`). NPS de responsáveis fica fora de
-escopo de propósito (mecanismo diferente, pesquisa qualitativa não evento) — laboratório próprio
-futuro. Ver `labs/lab-99-analytics-de-produto/FEATURES.md` pro escopo detalhado.
+Último concluído: labs/lab-99-analytics-de-produto/ — resto de G11 (`prompt.md` §12: D1/D7
+retention, tempo médio por sessão, quests concluídas por usuário, taxa de retorno semanal).
+Escolhido pelo usuário logo após o lab-98. Restrição central: privacidade infantil — identificador
+100% anônimo (`crypto.randomUUID()`, `getOrCreateDeviceId()` em `storage.ts`, sem vínculo com
+nome/e-mail/apelido), primeira vez que telemetria de gameplay sai do aparelho da criança (antes só
+`localStorage`). Novo: `app/src/productAnalytics.ts` (mesmo padrão de `errorReporting.ts` — `fetch`
+com `keepalive`, falha silenciosa) dispara `session_start`/`session_end` (com duração) e
+`quest_completed` (só em conclusão GENUÍNA, não em replay de missão já concluída — bug pego e
+corrigido antes de qualquer teste). Nova tabela `product_events` no Neon; `POST /events` (anônimo,
+rate-limited) grava; `GET /admin/metrics` (protegido por header `x-admin-secret`) devolve D1/D7
+retention, duração média de sessão, quests médias por dispositivo, total de dispositivos únicos —
+tudo via CTEs SQL. **Testado ao vivo contra produção real**: `POST /events` real confirmado por
+leitura direta do banco; 11 eventos sintéticos inseridos cobrindo 3 dispositivos/múltiplos dias,
+`/admin/metrics` bateu exatamente com o cálculo manual (D1 66.67%, D7 33.33%, sessão média 90s,
+1.5 quests/dispositivo); `401` confirmado sem/com secret errado. Três ações de infraestrutura
+(migração do schema, `wrangler secret put`, deploy do Worker) precisaram de **autorização explícita
+do usuário** cada uma, bloqueadas individualmente pelo classificador de modo automático (mesmo
+padrão do lab-96 com a API do Stripe). NPS de responsáveis ficou fora de escopo de propósito
+(mecanismo diferente, pesquisa qualitativa não evento) — laboratório próprio futuro. **G11 agora
+está COMPLETO** (lab-98 + lab-99). Ver `labs/lab-99-analytics-de-produto/CONTEXT.md` pro detalhe
+completo.
 
-Último concluído: labs/lab-98-alarme-de-cota/ — parte de G11
+Antes desse: labs/lab-98-alarme-de-cota/ — parte de G11
 (`docs/prompts/05-escala-e-viabilidade.md`, item 4 da ordem de ataque §7), escolhido pelo usuário
 logo após o lab-97. Boa parte de G11 (observabilidade) já tinha sido resolvida no lab-84 (Web
 Analytics, `/client-error`, logs de erro do relay) — faltava ALARME DE COTA de verdade: nenhum
@@ -193,10 +207,11 @@ revogação/limite de aparelhos) foi resolvido no lab-97 — ver
 origem não foi atualizado pra refletir). Da ordem de ataque de
 `docs/prompts/05-escala-e-viabilidade.md` seção 7, o que resta genuinamente sem solução agora: o
 **job de reconciliação Stripe↔banco** (parte de G8 que ficou fora de escopo do lab-96 de propósito,
-por exigir Cloudflare Cron Triggers), **G10** (CI/CD, migração versionada de verdade) e a metade de
-**G11** que ainda falta — eventos de produto/retenção D1-D7/conversão (`prompt.md` §12). A parte de
-G11 sobre ALARME DE COTA foi resolvida no lab-98 (contador autocontado no relay) — ver
-`labs/lab-98-alarme-de-cota/CONTEXT.md`.
+por exigir Cloudflare Cron Triggers) e **G10** (CI/CD, migração versionada de verdade). **G11 está
+agora COMPLETO**: a parte de ALARME DE COTA foi resolvida no lab-98 (contador autocontado no relay)
+e a parte de eventos de produto/retenção D1-D7 (`prompt.md` §12) foi resolvida no lab-99 (tabela
+`product_events`, `POST /events`, `GET /admin/metrics`) — ver
+`labs/lab-98-alarme-de-cota/CONTEXT.md` e `labs/lab-99-analytics-de-produto/CONTEXT.md`.
 
 **LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 tinha medido 38,2% da cota diária
 pra 30 jogadores/30min e deixado como pendência decidir se "salas com teto de 12 jogadores" era o
@@ -308,7 +323,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-98-alarme-de-cota/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-99-analytics-de-produto/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).

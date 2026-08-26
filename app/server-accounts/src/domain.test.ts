@@ -9,7 +9,9 @@ import {
   isEntitlementActive,
   isEventNewerThan,
   isPairingCodeUsable,
+  isPlausibleSessionDuration,
   isTokenRevoked,
+  isValidProductEventType,
   isValidSubscriptionStatus,
   MAX_ACTIVE_DEVICES_PER_FAMILY,
   toIsoOrNull,
@@ -166,5 +168,43 @@ describe('isAtDeviceLimit — lab-97, resto de G7 (limite de 3 aparelhos por fam
 
   it('acima do limite (não deveria acontecer, mas por segurança): também conta como no limite', () => {
     expect(isAtDeviceLimit(4)).toBe(true)
+  })
+})
+
+describe('isValidProductEventType — lab-99, resto de G11', () => {
+  it('aceita os 3 tipos de evento conhecidos', () => {
+    expect(isValidProductEventType('session_start')).toBe(true)
+    expect(isValidProductEventType('session_end')).toBe(true)
+    expect(isValidProductEventType('quest_completed')).toBe(true)
+  })
+
+  it('rejeita um tipo desconhecido — nunca confia em input do client sem checar', () => {
+    expect(isValidProductEventType('qualquer_coisa')).toBe(false)
+    expect(isValidProductEventType('')).toBe(false)
+  })
+})
+
+describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {
+  it('aceita uma duração positiva razoável (ex.: 10 minutos)', () => {
+    expect(isPlausibleSessionDuration(10 * 60 * 1000)).toBe(true)
+  })
+
+  it('rejeita zero ou negativo (relógio de aparelho errado, ou bug)', () => {
+    expect(isPlausibleSessionDuration(0)).toBe(false)
+    expect(isPlausibleSessionDuration(-1000)).toBe(false)
+  })
+
+  it('rejeita acima de 4 horas (teto de sanidade)', () => {
+    expect(isPlausibleSessionDuration(5 * 60 * 60 * 1000)).toBe(false)
+  })
+
+  it('aceita bem no limite de 4 horas', () => {
+    expect(isPlausibleSessionDuration(4 * 60 * 60 * 1000)).toBe(true)
+  })
+
+  it('rejeita valores que não são número (NaN, string, undefined)', () => {
+    expect(isPlausibleSessionDuration(Number.NaN)).toBe(false)
+    expect(isPlausibleSessionDuration('1000')).toBe(false)
+    expect(isPlausibleSessionDuration(undefined)).toBe(false)
   })
 })
