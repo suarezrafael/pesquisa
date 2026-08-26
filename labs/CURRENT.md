@@ -1,13 +1,25 @@
 # Laboratório atual
 
-Ativo: labs/lab-97-revogacao-token-pareamento/ — resto de G7
-(`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`): token de entitlement sem `jti`,
-sem revogação, sem limite de aparelhos por família (rate limit e a corrida de resgate duplo já
-foram corrigidos no lab-88). Escolhido pelo usuário 2026-08-25 logo após o lab-96. Limite de
-aparelhos confirmado com o usuário: 3 por família, revoga o mais antigo automaticamente ao passar
-do limite. Ver `labs/lab-97-revogacao-token-pareamento/FEATURES.md` pro escopo detalhado.
+Último concluído: labs/lab-97-revogacao-token-pareamento/ — resto de G7
+(`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`), escolhido pelo usuário logo
+após o lab-96. Rate limit e a corrida de resgate duplo já tinham sido corrigidos no lab-88; faltava
+o token de entitlement em si — uma vez emitido, válido por 180 dias sem NENHUM jeito de invalidar
+antes da expiração (código vazado em grupo de WhatsApp virava assinatura compartilhada pelo tempo
+todo). Corrigido: nova tabela `entitlement_tokens` (`jti` = chave primária) registra cada token
+emitido; `handlePairingRedeem` gera um `jti` de verdade e, ao atingir o limite de **3 aparelhos por
+família** (confirmado com o usuário), revoga o mais antigo automaticamente antes de emitir um novo
+— zero fricção pra trocar de aparelho; `handleEntitlement` recusa um token revogado, mas mantém
+COMPATIBILIDADE RETROATIVA total pra tokens emitidos antes deste laboratório (sem `jti`, sempre
+tratados como válidos até a expiração natural — nenhuma família pagante perde acesso por causa
+desta mudança). Novo endpoint `POST /entitlement/revoke-all` (autenticado como o responsável) +
+botão "Desvincular todos os aparelhos" no portal, pra quando um código vazar. 8 testes novos
+(Worker: 21→29). Migração aplicada, Worker e frontend deployados. **Testado ao vivo contra
+produção real** com uma família já existente (sem mexer na assinatura dela): 4 pareamentos em
+sequência confirmaram a revogação automática do mais antigo no 4º, e `/entitlement` recusando
+(`401`) o token revogado enquanto aceita (`200`) o mais recente — assinatura real intacta. Ver
+`labs/lab-97-revogacao-token-pareamento/CONTEXT.md` pro detalhe completo.
 
-Último concluído: labs/lab-96-webhook-stripe-idempotencia/ — G8
+Antes desse: labs/lab-96-webhook-stripe-idempotencia/ — G8
 (`docs/prompts/05-escala-e-viabilidade.md`, `[receita]`), escolhido pelo usuário entre G8/G7/
 revisitar tamanho das escolinhas logo após o lab-95. `subscriptions.status` só aceitava 4 dos 8
 status reais do Stripe (Pix/boleto nasce `incomplete` com frequência, o que quebrava o `insert` e
@@ -144,17 +156,19 @@ se perder):
    usuário (usa o provedor de e-mail compartilhado do próprio Neon, `auth@mail.myneon.app`, sem
    precisar configurar SMTP/Resend). Deployado em produção.
 
-**G3 (lab-88), G4/G5 (lab-89) resolvidos. G6 parcialmente resolvido (lab-90). G8 resolvido
-(lab-96)**: o bypass de assinatura via `localStorage` está corrigido; a falta de backup/
-restauração de progresso pago continua em aberto de propósito (precisa de conversa de produto/
-privacidade, ver `labs/lab-90-.../CONTEXT.md`). G8 (webhook do Stripe sem idempotência, `status`
-do schema não cobria todos os estados reais do Stripe/Pix) foi resolvido no lab-96 — ver
-`labs/lab-96-webhook-stripe-idempotencia/CONTEXT.md`. Da ordem de ataque de
-`docs/prompts/05-escala-e-viabilidade.md` seção 7, o que resta genuinamente sem solução agora:
-**o resto de G7** (token de pareamento sem `jti`/revogação/vínculo de aparelho — um código vazado
-ainda vira assinatura compartilhada), e o **job de reconciliação Stripe↔banco** (parte de G8 que
-ficou fora de escopo do lab-96 de propósito, por exigir Cloudflare Cron Triggers). G9 já foi
-resolvido no lab-88 (só o `.md` de origem não foi atualizado pra refletir).
+**G3 (lab-88), G4/G5 (lab-89) resolvidos. G6 parcialmente resolvido (lab-90). G7 resolvido
+(lab-97). G8 resolvido (lab-96)**: o bypass de assinatura via `localStorage` está corrigido; a
+falta de backup/restauração de progresso pago continua em aberto de propósito (precisa de conversa
+de produto/privacidade, ver `labs/lab-90-.../CONTEXT.md`). G7 (token de pareamento sem `jti`/
+revogação/limite de aparelhos) foi resolvido no lab-97 — ver
+`labs/lab-97-revogacao-token-pareamento/CONTEXT.md`. G8 (webhook do Stripe sem idempotência,
+`status` do schema não cobria todos os estados reais do Stripe/Pix) foi resolvido no lab-96 — ver
+`labs/lab-96-webhook-stripe-idempotencia/CONTEXT.md`. G9 já foi resolvido no lab-88 (só o `.md` de
+origem não foi atualizado pra refletir). Da ordem de ataque de
+`docs/prompts/05-escala-e-viabilidade.md` seção 7, o que resta genuinamente sem solução agora: o
+**job de reconciliação Stripe↔banco** (parte de G8 que ficou fora de escopo do lab-96 de propósito,
+por exigir Cloudflare Cron Triggers), **G10** (CI/CD, migração versionada de verdade) e **G11**
+(observabilidade).
 
 **LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 tinha medido 38,2% da cota diária
 pra 30 jogadores/30min e deixado como pendência decidir se "salas com teto de 12 jogadores" era o
@@ -266,7 +280,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-96-webhook-stripe-idempotencia/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-97-revogacao-token-pareamento/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).
