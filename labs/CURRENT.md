@@ -1,5 +1,17 @@
 # Laboratório atual
 
+Ativo: labs/lab-98-alarme-de-cota/ — parte de G11
+(`docs/prompts/05-escala-e-viabilidade.md`, item 4 da ordem de ataque §7), escolhido pelo usuário
+logo após o lab-97. Boa parte de G11 (observabilidade) já foi resolvida no lab-84 (Web Analytics,
+`/client-error`, logs de erro do relay) — o que falta é ALARME DE COTA de verdade: nenhum mecanismo
+detecta hoje se o relay se aproxima da cota gratuita de 100k requests/dia dos Durable Objects,
+apesar de duas rodadas de recálculo manual de orçamento já terem acontecido (lab-85/86). Escopo:
+contador autocontado dentro do próprio Durable Object do relay (SQLite-backed, `state.storage`
+nunca usado até agora), usando a razão de cobrança 20:1 pra mensagens WebSocket já documentada no
+lab-86, com log `[quota-alarm]` ao cruzar limiares e um endpoint de leitura. Eventos de produto/
+retenção D1-D7 (`prompt.md` §12) ficam pra um laboratório futuro, fora de escopo aqui. Ver
+`labs/lab-98-alarme-de-cota/FEATURES.md` pro escopo detalhado.
+
 Último concluído: labs/lab-97-revogacao-token-pareamento/ — resto de G7
 (`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`), escolhido pelo usuário logo
 após o lab-96. Rate limit e a corrida de resgate duplo já tinham sido corrigidos no lab-88; faltava
