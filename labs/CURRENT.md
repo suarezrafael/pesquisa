@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Ativo: labs/lab-99-analytics-de-produto/ — resto de G11 (`prompt.md` §12: D1/D7 retention, tempo
+médio por sessão, quests concluídas por usuário, taxa de retorno semanal). Escolhido pelo usuário
+logo após o lab-98. Restrição central: privacidade infantil — identificador 100% anônimo
+(`crypto.randomUUID()`, sem vínculo com nome/e-mail/apelido), primeira vez que telemetria de
+gameplay sai do aparelho da criança (antes só `localStorage`). NPS de responsáveis fica fora de
+escopo de propósito (mecanismo diferente, pesquisa qualitativa não evento) — laboratório próprio
+futuro. Ver `labs/lab-99-analytics-de-produto/FEATURES.md` pro escopo detalhado.
+
 Último concluído: labs/lab-98-alarme-de-cota/ — parte de G11
 (`docs/prompts/05-escala-e-viabilidade.md`, item 4 da ordem de ataque §7), escolhido pelo usuário
 logo após o lab-97. Boa parte de G11 (observabilidade) já tinha sido resolvida no lab-84 (Web
