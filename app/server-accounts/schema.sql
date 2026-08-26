@@ -89,3 +89,18 @@ create table if not exists pairing_redeem_attempts (
   window_start timestamptz not null,
   count int not null default 1
 );
+
+-- lab-97, resto de G7 (docs/prompts/05-escala-e-viabilidade.md): o rate limit e a corrida de
+-- resgate duplo já foram corrigidos no lab-88, mas o token de entitlement em si continuava
+-- puramente stateless -- uma vez emitido, válido por 180 dias sem NENHUM jeito de invalidar antes
+-- da expiração (código vazado num grupo de WhatsApp virava assinatura compartilhada pelo tempo
+-- todo). Cada linha aqui é um token realmente emitido (`jti` do JWT = chave primária) -- permite
+-- revogar (`revoked_at`) e contar quantos aparelhos uma família tem ativos ao mesmo tempo.
+create table if not exists entitlement_tokens (
+  jti uuid primary key default gen_random_uuid(),
+  family_account_id uuid not null references family_accounts(id),
+  issued_at timestamptz not null default now(),
+  revoked_at timestamptz
+);
+
+create index if not exists idx_entitlement_tokens_family_account on entitlement_tokens (family_account_id);

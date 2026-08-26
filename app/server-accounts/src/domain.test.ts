@@ -5,10 +5,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   generatePairingCode,
+  isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
   isPairingCodeUsable,
+  isTokenRevoked,
   isValidSubscriptionStatus,
+  MAX_ACTIVE_DEVICES_PER_FAMILY,
   toIsoOrNull,
 } from './domain'
 
@@ -125,5 +128,43 @@ describe('isEventNewerThan — lab-96, G8 (proteção contra webhook fora de ord
 
   it('mesmo timestamp exato: conta como mais novo (limite inclusivo, reaplica sem risco)', () => {
     expect(isEventNewerThan('2026-08-25T12:00:00.000Z', '2026-08-25T12:00:00.000Z')).toBe(true)
+  })
+})
+
+describe('isTokenRevoked — lab-97, resto de G7', () => {
+  it('token SEM jti (emitido antes deste laboratório): nunca conta como revogado (compatibilidade retroativa)', () => {
+    expect(isTokenRevoked(undefined, undefined)).toBe(false)
+    expect(isTokenRevoked(undefined, { revoked_at: '2026-08-25T12:00:00.000Z' })).toBe(false)
+  })
+
+  it('token COM jti e linha correspondente não revogada: entitlement continua ativo', () => {
+    expect(isTokenRevoked('jti-123', { revoked_at: null })).toBe(false)
+  })
+
+  it('token COM jti e linha marcada como revogada: entitlement fica inativo', () => {
+    expect(isTokenRevoked('jti-123', { revoked_at: '2026-08-25T12:00:00.000Z' })).toBe(true)
+  })
+
+  it('token COM jti mas SEM linha correspondente no banco: falha fechada, trata como revogado', () => {
+    expect(isTokenRevoked('jti-123', undefined)).toBe(true)
+  })
+})
+
+describe('isAtDeviceLimit — lab-97, resto de G7 (limite de 3 aparelhos por família)', () => {
+  it(`o limite configurado é ${MAX_ACTIVE_DEVICES_PER_FAMILY}`, () => {
+    expect(MAX_ACTIVE_DEVICES_PER_FAMILY).toBe(3)
+  })
+
+  it('abaixo do limite: não está no limite, pode emitir um token novo sem revogar nada', () => {
+    expect(isAtDeviceLimit(0)).toBe(false)
+    expect(isAtDeviceLimit(2)).toBe(false)
+  })
+
+  it('exatamente no limite: já deve revogar o mais antigo antes de emitir um token novo', () => {
+    expect(isAtDeviceLimit(3)).toBe(true)
+  })
+
+  it('acima do limite (não deveria acontecer, mas por segurança): também conta como no limite', () => {
+    expect(isAtDeviceLimit(4)).toBe(true)
   })
 })

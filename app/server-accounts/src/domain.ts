@@ -74,3 +74,28 @@ export function isEventNewerThan(eventCreatedAtIso: string, lastAppliedIso: stri
   if (!lastAppliedIso) return true
   return new Date(eventCreatedAtIso).getTime() >= new Date(lastAppliedIso).getTime()
 }
+
+// lab-97, resto de G7 (docs/prompts/05-escala-e-viabilidade.md): decide se um token de entitlement
+// deve ser tratado como revogado. Compatibilidade retroativa é o ponto central aqui — tokens
+// emitidos ANTES deste laboratório (até 180 dias de famílias pagantes de verdade) não têm `jti` no
+// JWT nem linha nenhuma em `entitlement_tokens`; tratar a AUSÊNCIA de `jti` como revogado
+// invalidaria de uma vez só todo entitlement já emitido. Só um `jti` PRESENTE ativa a checagem de
+// verdade contra o banco — falha fechada nesse caso (sem linha correspondente = revogado, nunca
+// deveria acontecer na prática, mas não é motivo pra liberar acesso).
+export function isTokenRevoked(
+  jti: string | undefined,
+  tokenRow: { revoked_at: string | null } | undefined,
+): boolean {
+  if (!jti) return false
+  if (!tokenRow) return true
+  return tokenRow.revoked_at !== null
+}
+
+// lab-97, resto de G7: limite de aparelhos (tokens não revogados) simultâneos por família,
+// confirmado com o usuário — grande o bastante pra cobrir famílias com mais de um filho/aparelho
+// sem fricção, pequeno o bastante pra limitar o estrago de um código vazado.
+export const MAX_ACTIVE_DEVICES_PER_FAMILY = 3
+
+export function isAtDeviceLimit(activeTokenCount: number): boolean {
+  return activeTokenCount >= MAX_ACTIVE_DEVICES_PER_FAMILY
+}

@@ -1,8 +1,8 @@
 # Laboratório 97 — token de pareamento: jti, revogação e limite de aparelhos
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-25
-Fim: -
+Fim: 2026-08-25
 Commit inicial: fd2536536f8ae3e89f94a45fd23761ec47d38002
 
 ## Objetivo do laboratório
@@ -40,25 +40,38 @@ suspeitando de abuso, etc.).
   nunca invalidar de uma vez só tudo que já foi emitido antes deste laboratório.
 
 ## Funcionalidades planejadas
-- [ ] **`schema.sql`**: nova tabela `entitlement_tokens` (`jti` uuid chave primária,
-  `family_account_id`, `issued_at`, `revoked_at` nullable).
-- [ ] **`handlePairingRedeem`**: gera um `jti` (`crypto.randomUUID()`), registra em
+- [x] **`schema.sql`**: nova tabela `entitlement_tokens` (`jti` uuid chave primária,
+  `family_account_id`, `issued_at`, `revoked_at` nullable). Aplicado no banco Neon de produção via
+  `npm run migrate` e conferido direto (colunas + índices existem).
+- [x] **`handlePairingRedeem`**: gera um `jti` (`crypto.randomUUID()`), registra em
   `entitlement_tokens` e inclui no JWT (`.setJti(jti)`). Antes de emitir, checa quantos tokens não
   revogados a família já tem — se atingiu o limite de 3, revoga o mais antigo primeiro.
-- [ ] **`handleEntitlement`**: depois de verificar assinatura/expiração, se o JWT tiver `jti`,
+- [x] **`handleEntitlement`**: depois de verificar assinatura/expiração, se o JWT tiver `jti`,
   consulta `entitlement_tokens` — se `revoked_at` não for nulo (ou o `jti` não existir na tabela,
   caso raro), trata como inativo. Se o JWT NÃO tiver `jti` (token emitido antes deste laboratório),
-  mantém o comportamento de hoje (confia na assinatura/expiração).
-- [ ] **Novo endpoint `POST /entitlement/revoke-all`**: autenticado como o responsável
+  mantém o comportamento de hoje (confia na assinatura/expiração) — `isTokenRevoked` (`domain.ts`)
+  encapsula essa regra de compatibilidade.
+- [x] **Novo endpoint `POST /entitlement/revoke-all`**: autenticado como o responsável
   (`requireUserId`), revoga (`revoked_at = now()`) todos os tokens não revogados da família dele.
-- [ ] **`FamilyPortal.tsx`**: botão "Desvincular todos os aparelhos" (com confirmação — ação
-  destrutiva do ponto de vista da criança, que precisaria parear de novo) chamando o endpoint acima.
-- [ ] Testes de domínio pra qualquer lógica pura extraída (ex.: "este token está revogado dado o
-  jti do JWT e a linha do banco, se houver" — decide o comportamento de compatibilidade).
-- [ ] Testado ao vivo contra produção real: parear um código, confirmar que `/entitlement` funciona;
-  revogar via `/entitlement/revoke-all`; confirmar que o MESMO token agora falha; parear de novo e
-  confirmar que funciona de novo (novo `jti`); simular 4 pareamentos seguidos da mesma família e
-  confirmar que o mais antigo é revogado automaticamente no 4º.
+  Conferido que exige autenticação (`401` sem Bearer token).
+- [x] **`FamilyPortal.tsx`**: botão "Desvincular todos os aparelhos" (confirmação em duas etapas,
+  sem `window.confirm` nativo — consistente com o resto do portal) chamando o endpoint acima. CSS
+  novo (`.text-button`, `.secondary-button`, `.pairing-revoke-all`) em `index.css`, reaproveitando
+  a cor de erro já usada em `.field-hint-error`.
+- [x] Testes de domínio: `isTokenRevoked` (4 testes, cobrindo compatibilidade retroativa) e
+  `isAtDeviceLimit`/`MAX_ACTIVE_DEVICES_PER_FAMILY` (4 testes) — total do Worker: 21 → 29, todos
+  passando. `npx tsc --noEmit` (Worker) e `npx tsc -b` (app principal, por causa do
+  `FamilyPortal.tsx`) limpos.
+- [x] **Migração aplicada + Worker e frontend deployados em produção**
+  (`https://missao-aprender-accounts.rafaelvs.workers.dev`, `https://missaoaprendizado.com`).
+- [x] **Testado ao vivo contra produção real, de ponta a ponta** (não simulação): usando uma
+  família já existente no banco (sem mexer na assinatura/tokens reais dela), inseridos 4 códigos de
+  pareamento sintéticos e resgatados em sequência contra o Worker real. Resultado: os 3 primeiros
+  tokens saíram todos não revogados; ao resgatar o 4º, o `jti` do 1º apareceu com `revoked_at`
+  preenchido automaticamente — o limite de 3 aparelhos funcionando exatamente como desenhado.
+  `/entitlement` com o token revogado devolveu `401 {"active":false}`; com o token mais recente
+  devolveu `200 {"active":true,...}` (essa família tem assinatura de teste real ativa — nada foi
+  alterado nela). Códigos e tokens de teste removidos do banco depois.
 
 ## Fora de escopo (explicitamente adiado)
 - **UI de "gerenciar aparelhos"** (ver lista de dispositivos pareados, revogar um específico) — a

@@ -15,8 +15,10 @@ import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
 import {
   generatePairingCode,
+  isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
+  isTokenRevoked,
   isValidSubscriptionStatus,
   toIsoOrNull,
 } from './domain'
@@ -307,10 +309,27 @@ async function handlePairingRedeem(request: Request, env: Env): Promise<Response
   }
   const row = rows[0]
 
+  // lab-97, resto de G7: limite de aparelhos por família (não de aparelho de verdade — contagem
+  // de tokens emitidos e ainda não revogados, ver `docs/prompts/05-escala-e-viabilidade.md`).
+  // Revoga o mais antigo pra abrir espaço em vez de recusar o pareamento novo — zero fricção
+  // quando a criança troca de aparelho, sem precisar de uma tela de "gerenciar aparelhos".
+  const activeTokens = (await sql`
+    select jti from entitlement_tokens
+    where family_account_id = ${row.family_account_id} and revoked_at is null
+    order by issued_at asc
+  `) as { jti: string }[]
+  if (isAtDeviceLimit(activeTokens.length)) {
+    await sql`update entitlement_tokens set revoked_at = now() where jti = ${activeTokens[0].jti}`
+  }
+
+  const jti = crypto.randomUUID()
+  await sql`insert into entitlement_tokens (jti, family_account_id) values (${jti}, ${row.family_account_id})`
+
   const secret = new TextEncoder().encode(env.ENTITLEMENT_SECRET)
   const token = await new SignJWT({ familyAccountId: row.family_account_id })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(row.family_account_id)
+    .setJti(jti)
     .setIssuedAt()
     .setExpirationTime('180d')
     .sign(secret)
@@ -323,16 +342,31 @@ async function handleEntitlement(request: Request, env: Env): Promise<Response> 
   if (!auth?.startsWith('Bearer ')) return Response.json({ active: false }, { status: 401 })
 
   let familyAccountId: string
+  let jti: string | undefined
   try {
     const secret = new TextEncoder().encode(env.ENTITLEMENT_SECRET)
     const { payload } = await jwtVerify(auth.slice('Bearer '.length), secret)
     if (typeof payload.sub !== 'string') return Response.json({ active: false }, { status: 401 })
     familyAccountId = payload.sub
+    jti = payload.jti
   } catch {
     return Response.json({ active: false }, { status: 401 })
   }
 
   const sql = neon(env.DATABASE_URL)
+
+  // lab-97, resto de G7: token sem `jti` (emitido antes deste laboratório) mantém o comportamento
+  // de sempre (confia só na assinatura/expiração) — `isTokenRevoked` já cobre essa compatibilidade
+  // retroativa. Só consulta `entitlement_tokens` quando o JWT TEM `jti` de verdade.
+  if (jti) {
+    const tokenRows = (await sql`
+      select revoked_at from entitlement_tokens where jti = ${jti}
+    `) as { revoked_at: string | null }[]
+    if (isTokenRevoked(jti, tokenRows[0])) {
+      return Response.json({ active: false }, { status: 401 })
+    }
+  }
+
   const rows = (await sql`
     select status, current_period_end from subscriptions
     where family_account_id = ${familyAccountId}
@@ -342,6 +376,28 @@ async function handleEntitlement(request: Request, env: Env): Promise<Response> 
 
   const active = rows.length > 0 && isEntitlementActive(rows[0].status)
   return Response.json({ active, expiresAt: active ? rows[0].current_period_end : null })
+}
+
+// lab-97, resto de G7: válvula de segurança pro responsável — "vazei meu código de pareamento,
+// quero cortar o acesso de todo mundo que possa ter pego ele". Autenticado como o RESPONSÁVEL
+// (`requireUserId`, JWT do Neon Auth), nunca pelo token de entitlement da criança — o mesmo padrão
+// já usado em `/pairing/generate`/`/checkout`. Revoga TODOS os aparelhos de uma vez (v1 simples,
+// sem lista granular de aparelhos — ver "Fora de escopo" em FEATURES.md) — a criança perde acesso
+// e precisa parear de novo com um código novo.
+async function handleRevokeAllDevices(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const sql = neon(env.DATABASE_URL)
+  const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
+  const revoked = (await sql`
+    update entitlement_tokens
+    set revoked_at = now()
+    where family_account_id = ${familyAccountId} and revoked_at is null
+    returning jti
+  `) as { jti: string }[]
+
+  return Response.json({ revokedCount: revoked.length })
 }
 
 // Upsert manual (sem constraint única em `family_account_id`, de propósito — uma família pode
@@ -572,6 +628,10 @@ export default {
 
     if (url.pathname === '/entitlement' && request.method === 'GET') {
       return withCors(await handleEntitlement(request, env))
+    }
+
+    if (url.pathname === '/entitlement/revoke-all' && request.method === 'POST') {
+      return withCors(await handleRevokeAllDevices(request, env))
     }
 
     if (url.pathname === '/webhooks/stripe' && request.method === 'POST') {

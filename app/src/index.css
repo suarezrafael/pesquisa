@@ -261,6 +261,47 @@ a.nickname-generate-btn {
   color: var(--primary-dark);
 }
 
+/* Desvincular todos os aparelhos (lab-97, resto de G7) — ação pouco frequente e destrutiva, por
+   isso discreta (texto pequeno) até o clique de confirmação, quando vira um botão de verdade num
+   tom de alerta (não a cor de ação primária do resto do portal). */
+.pairing-revoke-all {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e3e8f7;
+}
+
+.text-button {
+  border: none;
+  background: none;
+  padding: 0.35rem 0;
+  color: #6b76a0;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.text-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.secondary-button {
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: 999px;
+  background: #d1435b;
+  color: white;
+  cursor: pointer;
+  margin: 0.5rem 0.4rem 0.5rem 0;
+}
+
+.secondary-button:disabled {
+  background: #e6b3bc;
+  cursor: not-allowed;
+}
+
 /* Painel de progresso (lab-91) — mesmo cartão de `.pairing-code-box`, mas alinhado à esquerda e
    com uma grade de estatísticas em vez do código gigante centralizado. */
 .progress-panel {

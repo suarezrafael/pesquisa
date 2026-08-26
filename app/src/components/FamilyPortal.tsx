@@ -322,6 +322,14 @@ function PairingCodeGenerator() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
+  // lab-97, resto de G7 (docs/prompts/05-escala-e-viabilidade.md): válvula de segurança se o
+  // código de pareamento vazar — corta o acesso de qualquer aparelho que tenha pego ele. Ação
+  // destrutiva do ponto de vista da criança (perde o pareamento, precisa digitar um código novo),
+  // por isso pede confirmação — dois cliques em vez de `window.confirm` nativo (mais consistente
+  // com o resto do design deste portal).
+  const [revokeConfirming, setRevokeConfirming] = useState(false)
+  const [revoking, setRevoking] = useState(false)
+  const [revokeMessage, setRevokeMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!pairing) return
@@ -352,6 +360,29 @@ function PairingCodeGenerator() {
     }
   }
 
+  async function handleRevokeAll() {
+    setRevoking(true)
+    setRevokeMessage(null)
+    try {
+      const res = await authorizedFetch('/entitlement/revoke-all', { method: 'POST' })
+      const body = (await res.json().catch(() => null)) as { revokedCount?: number } | null
+      if (!res.ok || body?.revokedCount === undefined) {
+        setRevokeMessage('Não foi possível desvincular os aparelhos. Tente novamente.')
+        return
+      }
+      setRevokeMessage(
+        body.revokedCount > 0
+          ? `${body.revokedCount} aparelho(s) desvinculado(s). A criança vai precisar de um código novo.`
+          : 'Nenhum aparelho vinculado no momento.',
+      )
+    } catch {
+      setRevokeMessage('Não foi possível desvincular os aparelhos. Tente novamente.')
+    } finally {
+      setRevoking(false)
+      setRevokeConfirming(false)
+    }
+  }
+
   const expired = pairing !== null && secondsLeft <= 0
 
   return (
@@ -369,6 +400,28 @@ function PairingCodeGenerator() {
         </button>
       )}
       {error && <p className="field-hint">{error}</p>}
+
+      <div className="pairing-revoke-all">
+        {revokeConfirming ? (
+          <>
+            <p className="field-hint">
+              Isso desvincula TODOS os aparelhos que já usaram um código desta família — a criança
+              vai precisar de um código novo pra jogar de novo. Tem certeza?
+            </p>
+            <button type="button" className="secondary-button" onClick={handleRevokeAll} disabled={revoking}>
+              {revoking ? 'Um momento…' : 'Sim, desvincular todos'}
+            </button>
+            <button type="button" className="text-button" onClick={() => setRevokeConfirming(false)} disabled={revoking}>
+              Cancelar
+            </button>
+          </>
+        ) : (
+          <button type="button" className="text-button" onClick={() => setRevokeConfirming(true)}>
+            Desvincular todos os aparelhos
+          </button>
+        )}
+        {revokeMessage && <p className="field-hint">{revokeMessage}</p>}
+      </div>
     </div>
   )
 }
