@@ -1,18 +1,24 @@
 # Laboratório atual
 
-Ativo: labs/lab-98-alarme-de-cota/ — parte de G11
+Último concluído: labs/lab-98-alarme-de-cota/ — parte de G11
 (`docs/prompts/05-escala-e-viabilidade.md`, item 4 da ordem de ataque §7), escolhido pelo usuário
-logo após o lab-97. Boa parte de G11 (observabilidade) já foi resolvida no lab-84 (Web Analytics,
-`/client-error`, logs de erro do relay) — o que falta é ALARME DE COTA de verdade: nenhum mecanismo
-detecta hoje se o relay se aproxima da cota gratuita de 100k requests/dia dos Durable Objects,
-apesar de duas rodadas de recálculo manual de orçamento já terem acontecido (lab-85/86). Escopo:
-contador autocontado dentro do próprio Durable Object do relay (SQLite-backed, `state.storage`
-nunca usado até agora), usando a razão de cobrança 20:1 pra mensagens WebSocket já documentada no
-lab-86, com log `[quota-alarm]` ao cruzar limiares e um endpoint de leitura. Eventos de produto/
-retenção D1-D7 (`prompt.md` §12) ficam pra um laboratório futuro, fora de escopo aqui. Ver
-`labs/lab-98-alarme-de-cota/FEATURES.md` pro escopo detalhado.
+logo após o lab-97. Boa parte de G11 (observabilidade) já tinha sido resolvida no lab-84 (Web
+Analytics, `/client-error`, logs de erro do relay) — faltava ALARME DE COTA de verdade: nenhum
+mecanismo detectava se o relay se aproximava da cota gratuita de 100k requests/dia dos Durable
+Objects, apesar de duas rodadas de recálculo manual de orçamento já terem acontecido (lab-85/86).
+Corrigido: contador autocontado dentro do próprio Durable Object do relay (`state.storage`,
+SQLite-backed, primeira vez usado de verdade neste Worker), usando a razão de cobrança 20:1 pra
+mensagens WebSocket já documentada no lab-86 (cada conexão = 1 unidade, cada mensagem recebida =
+1/20). Loga `[quota-alarm]` ao cruzar 50%/80%/100% da cota, uma vez por limiar por dia; novo
+endpoint `GET /quota-status` (sem autenticação, só números agregados) pra consultar sem precisar
+de `wrangler tail`. 13 testes novos (primeiro teste automatizado deste Worker). Deployado e
+**testado ao vivo contra produção real**: 5 conexões + 145 mensagens via `scripts/load-test.mjs`
+(script já existente do lab-85), `/quota-status` refletiu 12 unidades (esperado ~12,25) — contagem
+persistindo e acompanhando tráfego real de ponta a ponta. Eventos de produto/retenção D1-D7
+(`prompt.md` §12, a outra metade de G11) ficam fora de escopo, para um laboratório futuro. Ver
+`labs/lab-98-alarme-de-cota/CONTEXT.md` pro detalhe completo.
 
-Último concluído: labs/lab-97-revogacao-token-pareamento/ — resto de G7
+Antes desse: labs/lab-97-revogacao-token-pareamento/ — resto de G7
 (`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`), escolhido pelo usuário logo
 após o lab-96. Rate limit e a corrida de resgate duplo já tinham sido corrigidos no lab-88; faltava
 o token de entitlement em si — uma vez emitido, válido por 180 dias sem NENHUM jeito de invalidar
@@ -179,8 +185,10 @@ revogação/limite de aparelhos) foi resolvido no lab-97 — ver
 origem não foi atualizado pra refletir). Da ordem de ataque de
 `docs/prompts/05-escala-e-viabilidade.md` seção 7, o que resta genuinamente sem solução agora: o
 **job de reconciliação Stripe↔banco** (parte de G8 que ficou fora de escopo do lab-96 de propósito,
-por exigir Cloudflare Cron Triggers), **G10** (CI/CD, migração versionada de verdade) e **G11**
-(observabilidade).
+por exigir Cloudflare Cron Triggers), **G10** (CI/CD, migração versionada de verdade) e a metade de
+**G11** que ainda falta — eventos de produto/retenção D1-D7/conversão (`prompt.md` §12). A parte de
+G11 sobre ALARME DE COTA foi resolvida no lab-98 (contador autocontado no relay) — ver
+`labs/lab-98-alarme-de-cota/CONTEXT.md`.
 
 **LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 tinha medido 38,2% da cota diária
 pra 30 jogadores/30min e deixado como pendência decidir se "salas com teto de 12 jogadores" era o
@@ -292,7 +300,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-97-revogacao-token-pareamento/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-98-alarme-de-cota/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).
