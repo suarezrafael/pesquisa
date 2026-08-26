@@ -1,8 +1,8 @@
 # Laboratório 96 — webhook do Stripe: idempotência + esquema realista
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-25
-Fim: -
+Fim: 2026-08-25
 Commit inicial: f7f1b8ad7384d81e5d22d8549798c4cb69bacd26
 
 ## Objetivo do laboratório
@@ -59,18 +59,21 @@ pode aplicar o mesmo evento mais de uma vez.
   e faça o deploy") — `npm run migrate` (mudanças conferidas direto no banco) e `npm run deploy`
   (`https://missao-aprender-accounts.rafaelvs.workers.dev`, `/health` respondendo `{"ok":true}`
   depois do deploy).
-- [ ] **BLOQUEADO — fora do meu alcance sem autorização explícita**: o endpoint de webhook no
-  painel do Stripe (modo teste) só está inscrito em `checkout.session.completed`,
-  `customer.subscription.updated`, `customer.subscription.deleted` — **`invoice.payment_failed`
-  NÃO está na lista**, então o handler novo nunca vai ser chamado até isso ser adicionado.
-  Descoberto listando o endpoint via API do Stripe (leitura, sem problema); a TENTATIVA de
-  adicionar o evento via API (`stripe.webhookEndpoints.update`) foi bloqueada pelo classificador de
-  modo automático do Claude Code por mexer em configuração de um serviço de terceiro. Precisa ser
-  feito à mão no painel do Stripe (Developers → Webhooks → endpoint → "+ Select events" →
-  `invoice.payment_failed`) ou com autorização explícita do usuário pra eu tentar via API de novo.
-- [ ] Testado ao vivo contra o Stripe real em modo teste (CLI `stripe trigger` ou dashboard) —
-  simular reentrega do mesmo evento e confirmar que não duplica/reprocessa. Ainda não feito —
-  também faz sentido esperar o item acima ser resolvido pra testar `invoice.payment_failed` junto.
+- [x] **Endpoint de webhook do Stripe (modo teste) inscrito em `invoice.payment_failed`** — não
+  estava (só `checkout.session.completed`/`customer.subscription.updated`/`.deleted`), o que
+  deixaria o handler novo morto/nunca chamado. A primeira tentativa de corrigir via API foi
+  bloqueada pelo classificador de modo automático (mudança de configuração de serviço de terceiro);
+  **usuário autorizou explicitamente** ("autorizar explicitamente, ele poderá tentar novamente") —
+  adicionado via `stripe.webhookEndpoints.update`, conferido lendo o endpoint de volta.
+- [x] **Testado ao vivo contra o Worker real em produção** (não só simulação local): evento
+  `invoice.payment_failed` sintético, assinado de verdade com `Stripe.webhooks.
+  generateTestHeaderString` (mesmo mecanismo de assinatura que o Stripe usa), enviado direto pro
+  endpoint deployado. `stripe_subscription_id` inexistente de propósito, pra exercitar a lógica
+  inteira (verificação de assinatura, extração de `invoice.parent.subscription_details.
+  subscription`, checagem de idempotência) sem tocar em nenhuma assinatura real. Primeira entrega:
+  `200 {"received":true}`. Reentrega do MESMO `event.id`: `200 {"received":true,"deduped":true}` —
+  idempotência confirmada ponta a ponta contra o banco de produção de verdade. Linha de teste
+  removida de `stripe_webhook_events` depois (`delete ... where event_id like 'evt_lab96_test_%'`).
 
 ## Fora de escopo (explicitamente adiado)
 - **Job de reconciliação Stripe↔banco** (também mencionado em G8) — precisa de Cloudflare Cron

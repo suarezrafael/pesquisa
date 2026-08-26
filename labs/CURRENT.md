@@ -1,12 +1,26 @@
 # Laboratório atual
 
-Ativo: labs/lab-96-webhook-stripe-idempotencia/ — G8 (`docs/prompts/05-escala-e-viabilidade.md`,
-`[receita]`): webhook do Stripe sem idempotência e com `status` restrito demais no schema (Pix/
-boleto nasce `incomplete`, que hoje quebra o `insert`). Escolhido pelo usuário 2026-08-25 entre
-G8/G7/revisitar tamanho das escolinhas, logo após o lab-95. Ver
-`labs/lab-96-webhook-stripe-idempotencia/FEATURES.md` pro escopo detalhado.
+Último concluído: labs/lab-96-webhook-stripe-idempotencia/ — G8
+(`docs/prompts/05-escala-e-viabilidade.md`, `[receita]`), escolhido pelo usuário entre G8/G7/
+revisitar tamanho das escolinhas logo após o lab-95. `subscriptions.status` só aceitava 4 dos 8
+status reais do Stripe (Pix/boleto nasce `incomplete` com frequência, o que quebrava o `insert` e
+causava reenvio infinito); sem tabela de eventos processados (reentrega podia reaplicar a mesma
+mudança); sem índice único em `stripe_subscription_id` (corrida real sob entrega concorrente); sem
+proteção contra evento fora de ordem; `invoice.payment_failed` sem handler. Tudo corrigido:
+`schema.sql` ampliado + índice único + tabela `stripe_webhook_events` + coluna
+`last_event_created_at`; `domain.ts` ganhou `isValidSubscriptionStatus`/`isEventNewerThan` (7
+testes novos, total do Worker 14→21); `invoice.payment_failed` tratado (descoberta no caminho: SDK
+`stripe` 22.x não tem mais `invoice.subscription` no nível raiz, é
+`invoice.parent.subscription_details.subscription` — conferido no `.d.ts`, não suposição).
+Migração aplicada no banco Neon de produção e conferida direto; Worker deployado
+(`https://missao-aprender-accounts.rafaelvs.workers.dev`). Endpoint de webhook do Stripe (modo
+teste) não estava inscrito em `invoice.payment_failed` — corrigido via API com **autorização
+explícita do usuário** (a primeira tentativa foi bloqueada pelo classificador de modo automático
+por mexer em config de terceiro). **Testado ao vivo contra produção de verdade**: evento sintético
+assinado enviado ao Worker real, idempotência confirmada (reentrega do mesmo `event.id` devolveu
+`deduped:true`). Ver `labs/lab-96-webhook-stripe-idempotencia/CONTEXT.md` pro detalhe completo.
 
-Último concluído: labs/lab-95-mais-missoes-e-escolinhas-menores/ (pedido do usuário 2026-08-25:
+Antes desse: labs/lab-95-mais-missoes-e-escolinhas-menores/ (pedido do usuário 2026-08-25:
 aumentar o número de missões além das 21 atuais + encolher as escolinhas pra não sobrecarregar o
 planetinha). +9 missões novas (`q22`-`q30`) — concluído e deployado. Escolinhas ~20% menores —
 tentado, causou um bug real em produção ("casas dentro da terra, só o telhado aparece"), revertido.
@@ -123,15 +137,17 @@ se perder):
    usuário (usa o provedor de e-mail compartilhado do próprio Neon, `auth@mail.myneon.app`, sem
    precisar configurar SMTP/Resend). Deployado em produção.
 
-**G3 (lab-88), G4/G5 (lab-89) resolvidos. G6 parcialmente resolvido (lab-90)**: o bypass de
-assinatura via `localStorage` está corrigido; a falta de backup/restauração de progresso pago
-continua em aberto de propósito (precisa de conversa de produto/privacidade, ver
-`labs/lab-90-.../CONTEXT.md`). Da ordem de ataque de `docs/prompts/05-escala-e-viabilidade.md`
-seção 7, o que resta genuinamente sem solução: **o resto de G7** (token de pareamento sem `jti`/
-revogação/vínculo de aparelho — um código vazado ainda vira assinatura compartilhada), e **G8**
-(webhook do Stripe sem idempotência, `status` do schema não cobre todos os estados reais do
-Stripe/Pix). G9 já foi resolvido no lab-88 (só o `.md` de origem não foi atualizado pra refletir).
-Recomendação do lab-90: G8 tem risco de receita mais direto — mas vale confirmar com o usuário.
+**G3 (lab-88), G4/G5 (lab-89) resolvidos. G6 parcialmente resolvido (lab-90). G8 resolvido
+(lab-96)**: o bypass de assinatura via `localStorage` está corrigido; a falta de backup/
+restauração de progresso pago continua em aberto de propósito (precisa de conversa de produto/
+privacidade, ver `labs/lab-90-.../CONTEXT.md`). G8 (webhook do Stripe sem idempotência, `status`
+do schema não cobria todos os estados reais do Stripe/Pix) foi resolvido no lab-96 — ver
+`labs/lab-96-webhook-stripe-idempotencia/CONTEXT.md`. Da ordem de ataque de
+`docs/prompts/05-escala-e-viabilidade.md` seção 7, o que resta genuinamente sem solução agora:
+**o resto de G7** (token de pareamento sem `jti`/revogação/vínculo de aparelho — um código vazado
+ainda vira assinatura compartilhada), e o **job de reconciliação Stripe↔banco** (parte de G8 que
+ficou fora de escopo do lab-96 de propósito, por exigir Cloudflare Cron Triggers). G9 já foi
+resolvido no lab-88 (só o `.md` de origem não foi atualizado pra refletir).
 
 **LEIA ISTO ANTES DE COMEÇAR O PRÓXIMO LABORATÓRIO**: o lab-85 tinha medido 38,2% da cota diária
 pra 30 jogadores/30min e deixado como pendência decidir se "salas com teto de 12 jogadores" era o
@@ -243,7 +259,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-95-mais-missoes-e-escolinhas-menores/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-96-webhook-stripe-idempotencia/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).
