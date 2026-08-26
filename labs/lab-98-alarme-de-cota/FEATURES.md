@@ -1,8 +1,8 @@
 # Laboratório 98 — alarme de cota do relay (G11, parte 1)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-26
-Fim: -
+Fim: 2026-08-26
 Commit inicial: e09dbb8d6be5ff6fb1b8067b2d4bd0ddcb02e3d3
 
 ## Objetivo do laboratório
@@ -48,21 +48,32 @@ erro no relay). O que falta de G11, por partes:
   mesma cota de Durable Objects (não há nenhuma outra neste projeto hoje).
 
 ## Funcionalidades planejadas
-- [ ] **`Relay` (Durable Object)**: contador diário de "unidades de request" cobradas, persistido em
-  `state.storage` (sobrevive a hibernação) — cada nova conexão soma 1, cada mensagem recebida soma
-  1/20 (ou soma 1 a cada 20 mensagens, equivalente). Chave por data UTC, pra resetar naturalmente
-  a cada dia sem precisar de um job de limpeza.
-- [ ] Ao cruzar limiares configurados (ex.: 50%, 80%, 100% de 100.000/dia), loga
-  `console.error('[quota-alarm]', ...)` uma vez por limiar por dia (não a cada mensagem depois de
-  cruzar — evita virar spam de log).
-- [ ] Endpoint de leitura (ex.: `GET /quota-status`, sem autenticação — só números agregados, sem
-  dado de jogador nenhum) pra consultar o contador do dia atual sem precisar rodar `wrangler tail`
-  o dia inteiro esperando um log aparecer.
-- [ ] Testes de domínio pra qualquer lógica pura extraída (ex.: "quantas unidades esta mensagem/
-  conexão soma", "cruzou algum limiar novo desde a última leitura").
-- [ ] Testado ao vivo contra produção real: gerar tráfego sintético (conexões + mensagens) contra o
-  relay real, confirmar que `/quota-status` reflete o total esperado e que o log `[quota-alarm]`
-  aparece ao cruzar um limiar baixo de teste.
+- [x] **`Relay` (Durable Object)**: contador diário de "unidades de request" cobradas, persistido em
+  `state.storage` (sobrevive a hibernação) — cada nova conexão soma 1
+  (`CONNECTION_REQUEST_UNITS`), cada mensagem recebida soma 1/20 (`MESSAGE_REQUEST_UNITS`). Chave
+  por data UTC (`quota:YYYY-MM-DD`), reseta naturalmente a cada dia sem job de limpeza.
+- [x] Ao cruzar limiares configurados (50%, 80%, 100% de 100.000/dia — `QUOTA_ALARM_THRESHOLDS`),
+  loga `console.error('[quota-alarm]', ...)` uma vez por limiar por dia — `crossedThreshold`
+  (`domain.ts`) garante isso mesmo se o total pular direto de um limiar baixo pra um alto numa
+  única leitura (não dispara os intermediários retroativamente).
+- [x] Endpoint de leitura `GET /quota-status` (sem autenticação — só números agregados, sem dado
+  de jogador), roteado pelo Worker principal direto pro Durable Object global mesmo sem ser upgrade
+  de WebSocket. Não conta como uso (não infla o próprio contador que está sendo lido).
+- [x] Testes de domínio: `crossedThreshold` (7 testes, cobrindo primeiro cruzamento, cruzamento já
+  alarmado antes, pulo de múltiplos limiares numa leitura só, e limite máximo) + `utcDateKey` (2
+  testes) + verificação das constantes de cota batendo com a matemática do lab-86 (4 testes) — 13
+  testes no total, primeiro teste automatizado deste Worker (`package.json` ganhou `vitest`/`test`).
+  `npx tsc --noEmit` limpo.
+- [x] **Testado ao vivo contra produção real**: relay deployado
+  (`https://missao-aprender-relay-v2.rafaelvs.workers.dev`), `/quota-status` conferido zerado antes
+  do teste (`totalUnits:0`), depois rodado `node scripts/load-test.mjs --players 5 --duration-s 15
+  --move-fraction 1` contra o relay real (5 conexões, 145 mensagens `state` enviadas e recebidas
+  pelo relay). `/quota-status` depois do teste: `totalUnits:12` — bate com o esperado (5 conexões ×
+  1 + 145 mensagens × 1/20 = 12,25, arredondado) dentro da margem esperada de mensagens em trânsito
+  no fechamento da conexão. Confirma a contagem persistindo e refletindo tráfego real de ponta a
+  ponta. Cruzamento de limiar (50%/80%/100%) verificado só via teste unitário — não fazia sentido
+  gerar ~50.000 unidades de tráfego sintético real só pra ver o log, dado que a lógica pura já está
+  coberta exaustivamente.
 
 ## Fora de escopo (explicitamente adiado)
 - **Eventos de produto / retenção D1-D7 / conversão** (`prompt.md` §12) — frente própria, maior,

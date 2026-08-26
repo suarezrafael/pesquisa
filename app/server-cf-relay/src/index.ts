@@ -4,11 +4,14 @@
 // pro motivo da migração). Enquanto este v2 não estiver comprovadamente estável em produção, o
 // v1 continua rodando — `VITE_RELAY_URL` só aponta pra cá depois de validado.
 //
-// Sem estado persistido: usa a WebSocket Hibernation API (`state.acceptWebSocket`) só pra poder
-// hibernar o Durable Object entre mensagens sem perder as conexões — não porque precisamos
-// lembrar de nada entre reinícios. O binding do Durable Object é SQLite-backed
-// (`new_sqlite_classes` no wrangler.toml) porque é o único tipo disponível no plano Free; nunca
-// usamos `state.storage` de verdade.
+// Estado de CONEXÃO (quem está conectado agora) não é persistido: usa a WebSocket Hibernation API
+// (`state.acceptWebSocket`) só pra poder hibernar o Durable Object entre mensagens sem perder as
+// conexões — não porque precisamos lembrar de nada entre reinícios. O binding do Durable Object é
+// SQLite-backed (`new_sqlite_classes` no wrangler.toml) porque é o único tipo disponível no plano
+// Free. Desde o lab-98, `state.storage` passou a guardar UMA coisa de verdade: o contador diário
+// de cota (ver `recordUsageAndMaybeAlarm` abaixo) — não guarda nada sobre conexões/jogadores.
+
+import { CONNECTION_REQUEST_UNITS, crossedThreshold, DAILY_REQUEST_QUOTA, MESSAGE_REQUEST_UNITS, utcDateKey } from './domain'
 
 export interface Env {
   RELAY: DurableObjectNamespace
@@ -113,6 +116,18 @@ interface SocketAttachment {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    // lab-98 (alarme de cota, parte de G11): rota de leitura do contador do dia — não é upgrade de
+    // WebSocket, então precisa de um desvio explícito ANTES da checagem de `Upgrade` abaixo (que
+    // devolveria 200 genérico e nunca chegaria no Durable Object onde o contador de verdade mora).
+    // Sem autenticação de propósito — só números agregados do dia inteiro, nenhum dado de jogador.
+    if (url.pathname === '/quota-status') {
+      const id = env.RELAY.idFromName('global')
+      const stub = env.RELAY.get(id)
+      return stub.fetch(request)
+    }
+
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('missao-aprender relay v2 (cloudflare) ok', { status: 200 })
     }
@@ -141,6 +156,14 @@ export class Relay implements DurableObject {
   }
 
   async fetch(request: Request): Promise<Response> {
+    // lab-98 (alarme de cota, parte de G11) — leitura do contador do dia atual, sem autenticação
+    // (só números agregados). Tratado ANTES do 426 abaixo porque não é upgrade de WebSocket. Não
+    // conta como "uso" pra não inflar o próprio contador que está sendo lido.
+    const url = new URL(request.url)
+    if (url.pathname === '/quota-status') {
+      return this.handleQuotaStatus()
+    }
+
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('expected websocket', { status: 426 })
     }
@@ -157,6 +180,13 @@ export class Relay implements DurableObject {
       return new Response('muitas conexões deste endereço', { status: 429 })
     }
 
+    // lab-98: conta como 1 request cheio (ver `CONNECTION_REQUEST_UNITS`, `domain.ts`) — só as
+    // conexões que passam pelos limites acima; uma conexão rejeitada por IP também consome 1
+    // request de verdade na cobrança do Cloudflare, mas essa simplificação (não contar rejeições)
+    // é aceitável porque o volume de rejeição é pequeno frente ao de mensagens legítimas, que é o
+    // que realmente domina a cota no dia a dia.
+    await this.recordUsageAndMaybeAlarm(CONNECTION_REQUEST_UNITS)
+
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair)
 
@@ -169,6 +199,12 @@ export class Relay implements DurableObject {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    // lab-98: conta TODA mensagem recebida (1/20 de request, ver `MESSAGE_REQUEST_UNITS`), antes
+    // de qualquer checagem abaixo — o Cloudflare cobra pela mensagem RECEBIDA, não pela que a
+    // gente decide processar; uma mensagem descartada por tamanho/taxa/tipo inválido ainda
+    // consumiu a cota de verdade, então também precisa contar aqui.
+    await this.recordUsageAndMaybeAlarm(MESSAGE_REQUEST_UNITS)
+
     const attachment = ws.deserializeAttachment() as SocketAttachment | null
     if (!attachment) return
     const { id, ip } = attachment
@@ -258,5 +294,51 @@ export class Relay implements DurableObject {
         console.error('[relay-send-failed]', String(err))
       }
     }
+  }
+
+  // lab-98 (alarme de cota, parte de G11) — soma `units` ao contador do dia UTC atual em
+  // `state.storage` (SQLite-backed, sobrevive a hibernação/reinício do Durable Object) e loga um
+  // alarme visível (`wrangler tail`/painel de Logs, mesma filosofia do lab-84 — nenhum serviço de
+  // terceiro novo) na primeira leitura que cruzar cada limiar em `QUOTA_ALARM_THRESHOLDS`. Chave
+  // por dia (`utcDateKey`) reseta o contador sozinho a cada dia, sem job de limpeza.
+  private async recordUsageAndMaybeAlarm(units: number): Promise<void> {
+    const key = `quota:${utcDateKey()}`
+    const current =
+      (await this.state.storage.get<{ total: number; alarmedThreshold: number | null }>(key)) ?? {
+        total: 0,
+        alarmedThreshold: null,
+      }
+    const total = current.total + units
+    const newlyCrossed = crossedThreshold(total, current.alarmedThreshold)
+    await this.state.storage.put(key, {
+      total,
+      alarmedThreshold: newlyCrossed ?? current.alarmedThreshold,
+    })
+    if (newlyCrossed !== null) {
+      console.error(
+        '[quota-alarm]',
+        JSON.stringify({
+          threshold: `${Math.round(newlyCrossed * 100)}%`,
+          totalUnits: Math.round(total),
+          dailyQuota: DAILY_REQUEST_QUOTA,
+          date: utcDateKey(),
+        }),
+      )
+    }
+  }
+
+  private async handleQuotaStatus(): Promise<Response> {
+    const key = `quota:${utcDateKey()}`
+    const current = (await this.state.storage.get<{ total: number; alarmedThreshold: number | null }>(key)) ?? {
+      total: 0,
+      alarmedThreshold: null,
+    }
+    return Response.json({
+      date: utcDateKey(),
+      totalUnits: Math.round(current.total * 100) / 100,
+      dailyQuota: DAILY_REQUEST_QUOTA,
+      percentUsed: Math.round((current.total / DAILY_REQUEST_QUOTA) * 10000) / 100,
+      alarmedThreshold: current.alarmedThreshold,
+    })
   }
 }
