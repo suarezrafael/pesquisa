@@ -463,6 +463,55 @@ async function handleRevokeAllDevices(request: Request, env: Env): Promise<Respo
   return Response.json({ revokedCount: revoked.length })
 }
 
+// lab-100, resto de G7: lista os aparelhos pareados da família de quem chama, pra alimentar a UI
+// de revogação individual (até aqui só existia "revogar todos"). Sem fingerprint/user-agent (fora
+// de escopo desde o lab-97) — a única identificação de cada aparelho é a data de pareamento.
+async function handleListDevices(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const sql = neon(env.DATABASE_URL)
+  const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
+  const rows = (await sql`
+    select jti, issued_at, revoked_at
+    from entitlement_tokens
+    where family_account_id = ${familyAccountId}
+    order by issued_at desc
+  `) as { jti: string; issued_at: string; revoked_at: string | null }[]
+
+  return Response.json({
+    devices: rows.map((row) => ({
+      jti: row.jti,
+      issuedAt: row.issued_at,
+      revokedAt: row.revoked_at,
+    })),
+  })
+}
+
+// lab-100, resto de G7: revoga UM aparelho específico (em vez de todos, `handleRevokeAllDevices`
+// acima). A checagem `family_account_id = ...` na mesma query é o que impede um responsável de
+// revogar o `jti` de OUTRA família — 404 genérico tanto pra "não existe" quanto pra "não é seu",
+// pra não vazar se um `jti` alheio existe.
+async function handleRevokeDevice(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const body = (await request.json().catch(() => null)) as { jti?: string } | null
+  if (!body?.jti) return Response.json({ error: 'jti obrigatório' }, { status: 400 })
+
+  const sql = neon(env.DATABASE_URL)
+  const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
+  const revoked = (await sql`
+    update entitlement_tokens
+    set revoked_at = now()
+    where jti = ${body.jti} and family_account_id = ${familyAccountId} and revoked_at is null
+    returning jti
+  `) as { jti: string }[]
+
+  if (revoked.length === 0) return Response.json({ error: 'aparelho não encontrado' }, { status: 404 })
+  return Response.json({ revoked: true })
+}
+
 // lab-99, resto de G11 (prompt.md §12) — métricas de product-market fit, calculadas sob demanda a
 // partir de `product_events` (nenhuma tabela de agregado pré-computado ainda; volume baixo o
 // bastante hoje pra isso não importar). Protegido por segredo compartilhado no header (não é dado
@@ -793,6 +842,14 @@ export default {
 
     if (url.pathname === '/entitlement/revoke-all' && request.method === 'POST') {
       return withCors(await handleRevokeAllDevices(request, env))
+    }
+
+    if (url.pathname === '/entitlement/devices' && request.method === 'GET') {
+      return withCors(await handleListDevices(request, env))
+    }
+
+    if (url.pathname === '/entitlement/revoke' && request.method === 'POST') {
+      return withCors(await handleRevokeDevice(request, env))
     }
 
     if (url.pathname === '/webhooks/stripe' && request.method === 'POST') {

@@ -1,8 +1,8 @@
 # Laboratório 100 — UI de gerenciar aparelhos por família (resto de G7)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-26
-Fim: -
+Fim: 2026-08-26
 Commit inicial: e7dd48bfe406bc5303629e41e83736deca3f340a
 
 ## Objetivo do laboratório
@@ -34,26 +34,30 @@ G10/reconciliação Stripe/UI de aparelhos/NPS (`labs/lab-97-revogacao-token-par
   JSON, não na URL), consistente com o resto do arquivo.
 
 ## Funcionalidades planejadas
-- [ ] **`GET /entitlement/devices`** (`index.ts`, novo): autenticado como o responsável, devolve
+- [x] **`GET /entitlement/devices`** (`index.ts`, novo): autenticado como o responsável, devolve
   todos os tokens da família (`jti`, `issuedAt`, `revokedAt`) ordenados por `issued_at desc` — a UI
   decide o que mostrar (ativos com botão de revogar, revogados como histórico).
-- [ ] **`POST /entitlement/revoke`** (`index.ts`, novo): autenticado como o responsável, corpo
+- [x] **`POST /entitlement/revoke`** (`index.ts`, novo): autenticado como o responsável, corpo
   `{ jti }`. Revoga SÓ se o `jti` pertencer à família de quem chama e ainda não estiver revogado
   (`where jti = ... and family_account_id = ... and revoked_at is null`) — mesma resposta genérica
   (404) tanto pra "não existe" quanto pra "não é seu", pra não vazar se um `jti` de outra família
   existe.
-- [ ] **`app/src/components/FamilyPortal.tsx`**: novo bloco "Aparelhos pareados" dentro de
-  `PairingCodeGenerator` (ou logo abaixo), listando aparelhos ativos com data de pareamento e botão
-  de revogar individual (confirmação em duas etapas, mesmo padrão do "revogar todos"). Mantém o
-  botão "Desvincular todos" existente — cobre o caso de uso diferente ("vazou o código, corta
-  tudo") que a lista granular não substitui.
-- [ ] Testes de domínio se surgir lógica pura extraível (não esperado — é principalmente
-  consulta/autorização, sem cálculo novo).
-- [ ] Testado ao vivo contra produção real: usando uma família já existente (mesmo padrão do
-  lab-97 — sem tocar na assinatura real dela), parear 2+ códigos sintéticos, listar via
-  `GET /entitlement/devices`, revogar um específico via `POST /entitlement/revoke`, confirmar que
-  só aquele foi afetado (`GET /entitlement` com o token do outro continua `200`), e confirmar que
-  tentar revogar um `jti` de outra família (ou inexistente) devolve `404`.
+- [x] **`app/src/components/FamilyPortal.tsx`**: novo bloco "Aparelhos pareados" dentro de
+  `PairingCodeGenerator`, listando aparelhos ativos com data de pareamento e botão de revogar
+  individual (confirmação em duas etapas, mesmo padrão do "revogar todos"). Mantém o botão
+  "Desvincular todos" existente — cobre o caso de uso diferente ("vazou o código, corta tudo") que
+  a lista granular não substitui.
+- [x] Testes de domínio: nenhuma lógica pura nova surgiu (confirmado ao implementar — é
+  consulta/autorização SQL, sem cálculo). Os 36 testes existentes do Worker continuam passando.
+- [x] Testado ao vivo contra produção real, usando a família real do próprio usuário (sem tocar na
+  assinatura dela): pareados 2 códigos reais via a UI de `/familia` (sessão já autenticada no
+  navegador), redimidos via `POST /pairing/redeem` (script), confirmando 2 aparelhos na lista.
+  Revogado 1 aparelho pela UI (botão "Revogar" → "Confirmar revogação") — o item some da lista, o
+  outro continua intacto. Confirmado via `GET /entitlement` com os dois tokens: o revogado devolve
+  `401`, o outro `200`. Confirmado via JS na própria aba autenticada (token nunca sai do navegador):
+  `POST /entitlement/revoke` com um `jti` inexistente devolve `404`; `GET /entitlement/devices` e
+  `POST /entitlement/revoke` sem token devolvem `401`. Os dois aparelhos de teste foram revogados ao
+  final (nenhum artefato de teste ficou pareado na conta real).
 
 ## Fora de escopo (explicitamente adiado)
 - **Fingerprint/nome de aparelho** (ex.: "iPhone de Ana") — exigiria capturar user-agent ou pedir

@@ -270,6 +270,37 @@ a.nickname-generate-btn {
   border-top: 1px solid #e3e8f7;
 }
 
+/* Lista de aparelhos pareados (lab-100, resto de G7) — mesmo separador visual do bloco de
+   "desvincular todos" acima, mas alinhado à esquerda (é uma lista, não um botão centralizado). */
+.device-list {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e3e8f7;
+  text-align: left;
+}
+
+.device-list h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--primary-dark);
+}
+
+.device-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.device-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  font-size: 0.85rem;
+  color: #444d6b;
+}
+
 .text-button {
   border: none;
   background: none;

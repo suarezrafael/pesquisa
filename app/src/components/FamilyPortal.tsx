@@ -313,6 +313,15 @@ interface PairingCode {
   expiresAt: string
 }
 
+// lab-100, resto de G7: um aparelho pareado, como devolvido por `GET /entitlement/devices`. Sem
+// fingerprint/user-agent (fora de escopo desde o lab-97) — a única identificação é a data de
+// pareamento.
+interface PairedDevice {
+  jti: string
+  issuedAt: string
+  revokedAt: string | null
+}
+
 // Gera o código de pareamento (Fase D, ver docs/plano-comercial-backend.md) — a criança digita
 // esse código UMA VEZ no jogo pra vincular o entitlement da família, sem nunca precisar de
 // e-mail/senha. Componente à parte pra isolar o `setInterval` da contagem regressiva do resto do
@@ -330,6 +339,51 @@ function PairingCodeGenerator() {
   const [revokeConfirming, setRevokeConfirming] = useState(false)
   const [revoking, setRevoking] = useState(false)
   const [revokeMessage, setRevokeMessage] = useState<string | null>(null)
+
+  // lab-100, resto de G7: lista de aparelhos pareados, pra revogar um específico em vez de todos
+  // de uma vez. Mesmo padrão de confirmação em duas etapas do "revogar todos" acima, mas por item
+  // (`confirmingJti` guarda qual aparelho está com a confirmação aberta no momento).
+  const [devices, setDevices] = useState<PairedDevice[] | null>(null)
+  const [confirmingJti, setConfirmingJti] = useState<string | null>(null)
+  const [revokingJti, setRevokingJti] = useState<string | null>(null)
+  const [deviceMessage, setDeviceMessage] = useState<string | null>(null)
+
+  async function loadDevices() {
+    try {
+      const res = await authorizedFetch('/entitlement/devices')
+      const body = (await res.json().catch(() => null)) as { devices?: PairedDevice[] } | null
+      setDevices(res.ok && body?.devices ? body.devices : [])
+    } catch {
+      setDevices([])
+    }
+  }
+
+  useEffect(() => {
+    loadDevices()
+  }, [])
+
+  async function handleRevokeDevice(jti: string) {
+    setRevokingJti(jti)
+    setDeviceMessage(null)
+    try {
+      const res = await authorizedFetch('/entitlement/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jti }),
+      })
+      if (!res.ok) {
+        setDeviceMessage('Não foi possível revogar esse aparelho. Tente novamente.')
+        return
+      }
+      setDeviceMessage('Aparelho revogado.')
+      await loadDevices()
+    } catch {
+      setDeviceMessage('Não foi possível revogar esse aparelho. Tente novamente.')
+    } finally {
+      setRevokingJti(null)
+      setConfirmingJti(null)
+    }
+  }
 
   useEffect(() => {
     if (!pairing) return
@@ -375,6 +429,7 @@ function PairingCodeGenerator() {
           ? `${body.revokedCount} aparelho(s) desvinculado(s). A criança vai precisar de um código novo.`
           : 'Nenhum aparelho vinculado no momento.',
       )
+      await loadDevices()
     } catch {
       setRevokeMessage('Não foi possível desvincular os aparelhos. Tente novamente.')
     } finally {
@@ -400,6 +455,48 @@ function PairingCodeGenerator() {
         </button>
       )}
       {error && <p className="field-hint">{error}</p>}
+
+      {devices && devices.some((d) => !d.revokedAt) && (
+        <div className="device-list">
+          <h4>Aparelhos pareados</h4>
+          <ul>
+            {devices
+              .filter((d) => !d.revokedAt)
+              .map((device) => (
+                <li key={device.jti} className="device-list-item">
+                  <span>
+                    Pareado em {new Date(device.issuedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                  </span>
+                  {confirmingJti === device.jti ? (
+                    <>
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => handleRevokeDevice(device.jti)}
+                        disabled={revokingJti === device.jti}
+                      >
+                        {revokingJti === device.jti ? 'Um momento…' : 'Confirmar revogação'}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => setConfirmingJti(null)}
+                        disabled={revokingJti === device.jti}
+                      >
+                        Cancelar
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="text-button" onClick={() => setConfirmingJti(device.jti)}>
+                      Revogar
+                    </button>
+                  )}
+                </li>
+              ))}
+          </ul>
+          {deviceMessage && <p className="field-hint">{deviceMessage}</p>}
+        </div>
+      )}
 
       <div className="pairing-revoke-all">
         {revokeConfirming ? (

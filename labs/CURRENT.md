@@ -1,12 +1,24 @@
 # Laboratório atual
 
-Ativo: labs/lab-100-gerenciar-aparelhos-por-familia/ — resto de G7
+Último concluído: labs/lab-100-gerenciar-aparelhos-por-familia/ — resto de G7
 (`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`). Escolhido pelo usuário logo após
-o lab-99, entre G10/reconciliação Stripe/UI de aparelhos/NPS. Hoje só existe "desvincular todos os
-aparelhos" (lab-97); este laboratório adiciona listar aparelhos pareados + revogar um específico.
-Ver `labs/lab-100-gerenciar-aparelhos-por-familia/FEATURES.md` pro escopo detalhado.
+o lab-99, entre G10/reconciliação Stripe/UI de aparelhos/NPS. Até aqui só existia "desvincular todos
+os aparelhos" (lab-97) — sem jeito de ver quantos/quais aparelhos estão pareados nem revogar um
+específico. Corrigido: novos endpoints `GET /entitlement/devices` (lista os tokens da família,
+autenticado como responsável) e `POST /entitlement/revoke` (revoga um `jti` específico, só se
+pertencer à família de quem chama — `404` genérico tanto pra "não existe" quanto pra "não é seu",
+sem vazar informação). Reaproveita `entitlement_tokens` do lab-97 por completo, sem tabela/coluna
+nova. Novo bloco "Aparelhos pareados" em `FamilyPortal.tsx`, com confirmação em duas etapas por
+item, mesmo padrão do "revogar todos". **Testado ao vivo contra produção real usando a conta REAL
+do próprio usuário** (primeira vez neste projeto que a verificação usa uma sessão de navegador
+autenticada de verdade em vez de só scripts, já que os endpoints exigem um JWT de responsável que
+nenhum script consegue forjar): 2 aparelhos pareados e listados corretamente, 1 revogado pela UI
+(o outro continuou intacto, confirmado via `/entitlement`), `404` confirmado pra `jti` inexistente
+e `401` confirmado sem token — tudo executado dentro da própria aba autenticada, sem o JWT do
+responsável nunca sair do navegador. **G7 agora está COMPLETO** (lab-88 + lab-97 + lab-100). Ver
+`labs/lab-100-gerenciar-aparelhos-por-familia/CONTEXT.md` pro detalhe completo.
 
-Último concluído: labs/lab-99-analytics-de-produto/ — resto de G11 (`prompt.md` §12: D1/D7
+Antes desse: labs/lab-99-analytics-de-produto/ — resto de G11 (`prompt.md` §12: D1/D7
 retention, tempo médio por sessão, quests concluídas por usuário, taxa de retorno semanal).
 Escolhido pelo usuário logo após o lab-98. Restrição central: privacidade infantil — identificador
 100% anônimo (`crypto.randomUUID()`, `getOrCreateDeviceId()` em `storage.ts`, sem vínculo com
@@ -206,8 +218,10 @@ se perder):
 (lab-97). G8 resolvido (lab-96)**: o bypass de assinatura via `localStorage` está corrigido; a
 falta de backup/restauração de progresso pago continua em aberto de propósito (precisa de conversa
 de produto/privacidade, ver `labs/lab-90-.../CONTEXT.md`). G7 (token de pareamento sem `jti`/
-revogação/limite de aparelhos) foi resolvido no lab-97 — ver
-`labs/lab-97-revogacao-token-pareamento/CONTEXT.md`. G8 (webhook do Stripe sem idempotência,
+revogação/limite de aparelhos) foi resolvido no lab-97, e a UI de gerenciar aparelhos individuais
+(listar + revogar um específico) foi resolvida no lab-100 — **G7 está agora COMPLETO** — ver
+`labs/lab-97-revogacao-token-pareamento/CONTEXT.md` e
+`labs/lab-100-gerenciar-aparelhos-por-familia/CONTEXT.md`. G8 (webhook do Stripe sem idempotência,
 `status` do schema não cobria todos os estados reais do Stripe/Pix) foi resolvido no lab-96 — ver
 `labs/lab-96-webhook-stripe-idempotencia/CONTEXT.md`. G9 já foi resolvido no lab-88 (só o `.md` de
 origem não foi atualizado pra refletir). Da ordem de ataque de
@@ -329,7 +343,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-99-analytics-de-produto/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-100-gerenciar-aparelhos-por-familia/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).
