@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Ativo: labs/lab-102-reconciliacao-stripe-banco/ — resto de G8
+(`docs/prompts/05-escala-e-viabilidade.md`, `[receita]`). Escolhido pelo usuário logo após o
+lab-101, entre reconciliação Stripe/deploy automático/NPS/bug de morros invisíveis. Cloudflare Cron
+Trigger (primeira vez neste projeto) reconsulta periodicamente cada assinatura já conhecida direto
+no Stripe e corrige qualquer divergência de `status`/`current_period_end` no banco — cobre o caso
+de um webhook que falhe silenciosamente de um jeito que nem a reentrega do Stripe corrija. Não
+cobre uma assinatura cujo PRIMEIRO webhook nunca chegou (nenhuma linha criada) — limitação
+conhecida, ver `FEATURES.md`. Ver `labs/lab-102-reconciliacao-stripe-banco/FEATURES.md` pro escopo
+detalhado.
+
 Último concluído: labs/lab-101-ci-e-migracao-versionada/ — G10
 (`docs/prompts/05-escala-e-viabilidade.md`, `[operação]`). Escolhido pelo usuário logo após o
 lab-100, entre G10/reconciliação Stripe/NPS/bug de morros invisíveis. Atacou as duas partes mais
