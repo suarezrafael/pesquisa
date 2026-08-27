@@ -75,3 +75,13 @@ namespace_id = "1006"
   [ratelimits.simple]
   limit = 20
   period = 60
+
+[[ratelimits]]
+name = "NPS_LIMITER"
+namespace_id = "1007"
+  # lab-103: autenticado (exige JWT do responsável) e de baixa frequência por natureza (o widget
+  # só aparece a cada NPS_COOLDOWN_DAYS) — limite baixo o bastante pra não servir de vetor de
+  # spam em `nps_responses`, alto o bastante pra nunca incomodar um uso real.
+  [ratelimits.simple]
+  limit = 5
+  period = 60

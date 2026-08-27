@@ -1,8 +1,8 @@
 # Laboratório 103 — NPS de responsáveis (resto de G11 / prompt.md §12)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-27
-Fim: -
+Fim: 2026-08-27
 Commit inicial: 71eb65b104a963f5cb0bc0c7783fbfdf778c3cf1
 
 ## Objetivo do laboratório
@@ -35,33 +35,38 @@ após o lab-102, entre deploy automático/NPS/bug de morros invisíveis.
   não faz sentido perguntar "recomendaria?" pra quem nunca assinou.
 
 ## Funcionalidades planejadas
-- [ ] **`app/server-accounts/migrations/0002_nps_responses.sql`** (novo): tabela `nps_responses`
+- [x] **`app/server-accounts/migrations/0002_nps_responses.sql`** (novo): tabela `nps_responses`
   (`id` uuid, `family_account_id`, `score` int com `check (score between 0 and 10)`, `comment` text
   nullable, `submitted_at`) + índice em `(family_account_id, submitted_at)`.
-- [ ] **`app/server-accounts/src/domain.ts`**: `NPS_COOLDOWN_DAYS = 90`; `isValidNpsScore(score)`
+- [x] **`app/server-accounts/src/domain.ts`**: `NPS_COOLDOWN_DAYS = 90`; `isValidNpsScore(score)`
   (inteiro 0-10); `shouldPromptForNps(lastSubmittedAt, now?)` (nunca respondeu OU cooldown
   vencido); `calculateNpsScore(scores: number[])` (promotores/neutros/detratores + score final,
-  `null` se não há respostas — evita dividir por zero).
-- [ ] **`GET /nps/status`** (autenticado como responsável): `{ shouldPrompt, lastSubmittedAt }`.
-- [ ] **`POST /nps`** (autenticado, corpo `{ score, comment? }`, `NPS_LIMITER` novo em
-  `wrangler.toml`): valida `score`, limita `comment` a um tamanho razoável, insere.
-- [ ] **`GET /admin/metrics`** (lab-99) ganha um bloco `nps` (score, contagem de
+  `null` se não há respostas — evita dividir por zero). 10 testes novos (total do Worker: 50).
+- [x] **`GET /nps/status`** (autenticado como responsável): `{ shouldPrompt, lastSubmittedAt }`.
+- [x] **`POST /nps`** (autenticado, corpo `{ score, comment? }`, `NPS_LIMITER` novo em
+  `wrangler.toml`, 5/60s): valida `score`, limita `comment` a 1000 caracteres, insere.
+- [x] **`GET /admin/metrics`** (lab-99) ganhou um bloco `nps` (score, contagem de
   promotores/neutros/detratores, total de respostas) — usa `calculateNpsScore` sobre os scores dos
-  últimos 90 dias, mesmo protegido por `x-admin-secret` já existente.
-- [ ] **`app/src/components/FamilyPortal.tsx`**: `NpsWidget` (novo componente) — busca
+  últimos `NPS_COOLDOWN_DAYS` (90) dias, mesmo protegido por `x-admin-secret` já existente.
+- [x] **`app/src/components/FamilyPortal.tsx`**: `NpsWidget` (novo componente) — busca
   `/nps/status` ao montar; se `shouldPrompt`, mostra um `<select>` de 0 a 10 + campo de comentário
   opcional + botão enviar, e um "Agora não" (dispensa só nesta sessão, sem gravar resposta
-  nenhuma no servidor). Renderizado dentro de `Dashboard`, gateado pelo mesmo `canManageBilling`
-  (já assinou ou assina).
-- [ ] Testes de domínio pra `isValidNpsScore`/`shouldPromptForNps`/`calculateNpsScore`.
-- [ ] Migração aplicada em produção via `npm run migrate` (primeira migração de verdade depois do
-  baseline do lab-101) e confirmada.
-- [ ] Deploy em produção (Worker + frontend).
-- [ ] Testado ao vivo contra produção real: `GET /nps/status` antes de responder (`shouldPrompt:
-  true`), `POST /nps` com um score de teste, `GET /nps/status` de novo (`shouldPrompt: false`,
-  `lastSubmittedAt` preenchido), `GET /admin/metrics` refletindo a resposta no bloco `nps`. Testar
-  também `score` inválido (`-1`, `11`, não-inteiro) devolvendo erro de validação. Resposta de teste
-  removida do banco ao final.
+  nenhuma no servidor). Mostra "Obrigado pelo feedback! 💜" depois de enviar. Renderizado dentro
+  de `Dashboard`, gateado pelo mesmo `canManageBilling` (já assinou ou assina).
+- [x] Testes de domínio pra `isValidNpsScore`/`shouldPromptForNps`/`calculateNpsScore`.
+- [x] Migração aplicada em produção via `npm run migrate` (primeira migração de verdade depois do
+  baseline do lab-101) e confirmada — `schema_migrations` mostra `0001_baseline.sql` e
+  `0002_nps_responses.sql` aplicadas em ordem; colunas/índices conferidos direto.
+- [x] Deploy em produção (Worker + frontend).
+- [x] Testado ao vivo contra produção real, usando a conta REAL do próprio usuário (sessão de
+  navegador autenticada, mesmo padrão do lab-100 — os endpoints exigem JWT de responsável que
+  nenhum script consegue forjar): widget apareceu no portal (`shouldPrompt: true`, nunca
+  respondido antes); score 9 + comentário de teste enviados pela UI de verdade (React); tela de
+  "Obrigado" confirmada. Em seguida, dentro da própria aba autenticada: `GET /nps/status`
+  devolveu `shouldPrompt: false` com `lastSubmittedAt` preenchido; `POST /nps` com score inválido
+  (`-1`, `11`, `7.5`, `"seven"`) devolveu `400` nos 4 casos; `GET /nps/status`/`POST /nps` sem
+  token devolveram `401`. `GET /admin/metrics` (com secret) refletiu o bloco `nps` corretamente
+  (`totalResponses: 1, promoters: 1, score: 100`). Resposta de teste removida do banco ao final.
 
 ## Fora de escopo (explicitamente adiado)
 - **Enviar e-mail/lembrete pedindo NPS** — só um widget passivo no portal, sem nenhum canal de

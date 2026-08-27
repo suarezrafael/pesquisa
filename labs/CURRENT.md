@@ -1,14 +1,23 @@
 # Laboratório atual
 
-Ativo: labs/lab-103-nps-responsaveis/ — resto de G11/`prompt.md` §12 (NPS de pais/responsáveis).
-Escolhido pelo usuário logo após o lab-102, entre deploy automático/NPS/bug de morros invisíveis.
-Diferente de `product_events` (lab-99, 100% anônimo) — o responsável já autenticado no portal
-responde por conta própria, sem problema novo de privacidade infantil. Nova tabela
-`nps_responses` (primeira migração de verdade depois do baseline do lab-101), endpoints
-`GET /nps/status`/`POST /nps`, widget no portal com cooldown de 90 dias, bloco `nps` em
-`GET /admin/metrics`. Ver `labs/lab-103-nps-responsaveis/FEATURES.md` pro escopo detalhado.
+Último concluído: labs/lab-103-nps-responsaveis/ — resto de G11/`prompt.md` §12 (NPS de pais/
+responsáveis). Escolhido pelo usuário logo após o lab-102, entre deploy automático/NPS/bug de
+morros invisíveis. Diferente de `product_events` (lab-99, 100% anônimo) — o responsável já
+autenticado no portal responde por conta própria, sem problema novo de privacidade infantil. Nova
+tabela `nps_responses` (primeira migração de verdade depois do baseline do lab-101, validou o
+fluxo versionado na prática), endpoints `GET /nps/status`/`POST /nps` (autenticados,
+`NPS_LIMITER` novo), widget no portal (`<select>` nativo 0-10, não 11 botões customizados) com
+cooldown de 90 dias decidido pelo SERVIDOR (não `localStorage` — é sobre a família, não o
+navegador), bloco `nps` em `GET /admin/metrics`. **Testado ao vivo contra produção real usando a
+conta REAL do próprio usuário** (mesmo padrão do lab-100 — endpoints exigem JWT de responsável):
+score enviado pela UI React de verdade (setter nativo + `dispatchEvent` pra disparar `onChange`
+num componente controlado — React ignora `.value =` direto vindo de fora), `shouldPrompt` virou
+`false` depois, 4 scores inválidos rejeitados com `400`, sem token rejeitado com `401`,
+`/admin/metrics` refletiu a resposta (`score: 100`, 1 promotor). **`prompt.md` §12 (métricas de
+PMF) está agora COMPLETO** (lab-99 + lab-103). Ver `labs/lab-103-nps-responsaveis/CONTEXT.md` pro
+detalhe completo.
 
-Último concluído: labs/lab-102-reconciliacao-stripe-banco/ — resto de G8
+Antes desse: labs/lab-102-reconciliacao-stripe-banco/ — resto de G8
 (`docs/prompts/05-escala-e-viabilidade.md`, `[receita]`). Escolhido pelo usuário logo após o
 lab-101, entre reconciliação Stripe/deploy automático/NPS/bug de morros invisíveis. Cloudflare Cron
 Trigger (primeira vez neste projeto, `[triggers] crons = ["0 9 * * *"]`) reconsulta diariamente
@@ -391,7 +400,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-102-reconciliacao-stripe-banco/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-103-nps-responsaveis/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).

@@ -14,14 +14,18 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
 import {
+  calculateNpsScore,
   generatePairingCode,
   isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
   isPlausibleSessionDuration,
   isTokenRevoked,
+  isValidNpsScore,
   isValidProductEventType,
   isValidSubscriptionStatus,
+  NPS_COOLDOWN_DAYS,
+  shouldPromptForNps,
   toComparableIso,
   toIsoOrNull,
 } from './domain'
@@ -46,6 +50,7 @@ export interface Env {
   EVENTS_LIMITER: RateLimit
   CHECKOUT_LIMITER: RateLimit
   PAIRING_GENERATE_LIMITER: RateLimit
+  NPS_LIMITER: RateLimit
 }
 
 // IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
@@ -513,6 +518,55 @@ async function handleRevokeDevice(request: Request, env: Env): Promise<Response>
   return Response.json({ revoked: true })
 }
 
+// lab-103, resto de G11/`prompt.md` §12: decide se o portal deve mostrar o widget de NPS —
+// nunca respondeu, ou o cooldown (`NPS_COOLDOWN_DAYS`) já venceu desde a última resposta.
+async function handleNpsStatus(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const sql = neon(env.DATABASE_URL)
+  const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
+  const rows = (await sql`
+    select submitted_at from nps_responses
+    where family_account_id = ${familyAccountId}
+    order by submitted_at desc
+    limit 1
+  `) as { submitted_at: Date }[]
+
+  const lastSubmittedAt = rows.length > 0 ? rows[0].submitted_at : null
+  return Response.json({
+    shouldPrompt: shouldPromptForNps(lastSubmittedAt),
+    lastSubmittedAt: toComparableIso(lastSubmittedAt),
+  })
+}
+
+// lab-103, resto de G11/`prompt.md` §12: grava uma resposta de NPS. Sem limite de "uma por
+// família" — é um histórico (`nps_responses` é append-only), `shouldPromptForNps` já cobre não
+// perguntar de novo cedo demais pela UI; nada impede uma resposta manual fora do cooldown normal
+// se o responsável quiser (ex.: reabrir o formulário via suporte).
+async function handleSubmitNps(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const limited = await rateLimited(env.NPS_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const body = (await request.json().catch(() => null)) as { score?: unknown; comment?: unknown } | null
+  if (!body || !isValidNpsScore(body.score)) {
+    return Response.json({ error: 'score deve ser um inteiro de 0 a 10' }, { status: 400 })
+  }
+  const comment = typeof body.comment === 'string' ? body.comment.slice(0, 1000) : null
+
+  const sql = neon(env.DATABASE_URL)
+  const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
+  await sql`
+    insert into nps_responses (family_account_id, score, comment)
+    values (${familyAccountId}, ${body.score}, ${comment})
+  `
+
+  return Response.json({ ok: true })
+}
+
 // lab-99, resto de G11 (prompt.md §12) — métricas de product-market fit, calculadas sob demanda a
 // partir de `product_events` (nenhuma tabela de agregado pré-computado ainda; volume baixo o
 // bastante hoje pra isso não importar). Protegido por segredo compartilhado no header (não é dado
@@ -577,6 +631,14 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     select count(distinct device_id) as total_devices from product_events
   `) as { total_devices: string }[]
 
+  // lab-103, resto de G11/`prompt.md` §12: NPS dos últimos NPS_COOLDOWN_DAYS (mesma janela usada
+  // pra decidir se pergunta de novo — mede "sentimento recente", não a média de todo o histórico).
+  const npsRows = (await sql`
+    select score from nps_responses
+    where submitted_at >= now() - (${NPS_COOLDOWN_DAYS}::text || ' days')::interval
+  `) as { score: number }[]
+  const nps = calculateNpsScore(npsRows.map((row) => row.score))
+
   const d1Eligible = Number(retention.d1_eligible)
   const d1Returned = Number(retention.d1_returned)
   const d7Eligible = Number(retention.d7_eligible)
@@ -600,6 +662,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       ? Math.round(Number(quests.avg_quests_per_device) * 100) / 100
       : null,
     devicesWithAtLeastOneQuest: Number(quests.devices_with_quest),
+    nps,
   })
 }
 
@@ -882,6 +945,14 @@ export default {
 
     if (url.pathname === '/admin/metrics' && request.method === 'GET') {
       return withCors(await handleAdminMetrics(request, env))
+    }
+
+    if (url.pathname === '/nps/status' && request.method === 'GET') {
+      return withCors(await handleNpsStatus(request, env))
+    }
+
+    if (url.pathname === '/nps' && request.method === 'POST') {
+      return withCors(await handleSubmitNps(request, env))
     }
 
     if (url.pathname === '/checkout' && request.method === 'POST') {

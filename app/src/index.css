@@ -333,6 +333,36 @@ a.nickname-generate-btn {
   cursor: not-allowed;
 }
 
+/* Widget de NPS (lab-103) — mesmo cartão de `.pairing-code-box`. `<select>` nativo em vez de
+   botões 0-10 customizados: acessível/touch-friendly por padrão do navegador, sem precisar
+   desenhar 11 alvos de toque separados. */
+.nps-widget h3 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.nps-score-select {
+  width: 100%;
+  padding: 0.6rem;
+  border-radius: 10px;
+  border: 2px solid #d8dff5;
+  font-size: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.nps-comment {
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 0.6rem;
+  border-radius: 10px;
+  border: 2px solid #d8dff5;
+  font-family: inherit;
+  font-size: 0.95rem;
+  resize: vertical;
+  margin-bottom: 0.6rem;
+  box-sizing: border-box;
+}
+
 /* Painel de progresso (lab-91) — mesmo cartão de `.pairing-code-box`, mas alinhado à esquerda e
    com uma grade de estatísticas em vez do código gigante centralizado. */
 .progress-panel {

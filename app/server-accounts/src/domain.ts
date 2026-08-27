@@ -54,6 +54,49 @@ export function toComparableIso(value: string | Date | null): string | null {
   return (value instanceof Date ? value : new Date(value)).toISOString()
 }
 
+// lab-103, resto de G11/`prompt.md` §12: NPS de pais/responsáveis.
+export function isValidNpsScore(score: unknown): score is number {
+  return typeof score === 'number' && Number.isInteger(score) && score >= 0 && score <= 10
+}
+
+// Não pergunta de novo antes do cooldown vencer — perguntar toda vez que o responsável abre o
+// portal seria irritante. Decidido pelo servidor (não por `localStorage`) porque é sobre a
+// FAMÍLIA, uma fonte de verdade única, não por aparelho/navegador.
+export const NPS_COOLDOWN_DAYS = 90
+
+export function shouldPromptForNps(lastSubmittedAt: string | Date | null, now: number = Date.now()): boolean {
+  if (lastSubmittedAt === null) return true
+  const lastSubmittedMs = (lastSubmittedAt instanceof Date ? lastSubmittedAt : new Date(lastSubmittedAt)).getTime()
+  const cooldownMs = NPS_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+  return now - lastSubmittedMs >= cooldownMs
+}
+
+export interface NpsSummary {
+  totalResponses: number
+  promoters: number
+  passives: number
+  detractors: number
+  // `null` sem nenhuma resposta ainda — evita dividir por zero e distingue de um score real 0.
+  score: number | null
+}
+
+// Fórmula padrão de NPS: %promotores (score 9-10) − %detratores (score 0-6), em pontos
+// percentuais (-100 a 100). Score 7-8 conta como neutro, não entra na conta.
+export function calculateNpsScore(scores: number[]): NpsSummary {
+  const totalResponses = scores.length
+  const promoters = scores.filter((score) => score >= 9).length
+  const detractors = scores.filter((score) => score <= 6).length
+  const passives = totalResponses - promoters - detractors
+
+  return {
+    totalResponses,
+    promoters,
+    passives,
+    detractors,
+    score: totalResponses === 0 ? null : Math.round(((promoters - detractors) / totalResponses) * 100),
+  }
+}
+
 // lab-96, G8 (docs/prompts/05-escala-e-viabilidade.md): `schema.sql` antes só aceitava
 // ('trialing','active','past_due','canceled'), mas o Stripe emite também estes quatro — Pix/boleto
 // no Brasil com frequência nasce `incomplete` (o pagamento ainda não confirmou), e um evento nesse

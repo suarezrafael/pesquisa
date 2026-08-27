@@ -4,6 +4,7 @@
 // pago de graça, ou negar acesso a quem pagou. Primeiro teste automatizado deste Worker (lab-83).
 import { describe, expect, it } from 'vitest'
 import {
+  calculateNpsScore,
   generatePairingCode,
   isAtDeviceLimit,
   isEntitlementActive,
@@ -11,9 +12,12 @@ import {
   isPairingCodeUsable,
   isPlausibleSessionDuration,
   isTokenRevoked,
+  isValidNpsScore,
   isValidProductEventType,
   isValidSubscriptionStatus,
   MAX_ACTIVE_DEVICES_PER_FAMILY,
+  NPS_COOLDOWN_DAYS,
+  shouldPromptForNps,
   toComparableIso,
   toIsoOrNull,
 } from './domain'
@@ -227,5 +231,77 @@ describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {
     expect(isPlausibleSessionDuration(Number.NaN)).toBe(false)
     expect(isPlausibleSessionDuration('1000')).toBe(false)
     expect(isPlausibleSessionDuration(undefined)).toBe(false)
+  })
+})
+
+describe('isValidNpsScore — lab-103', () => {
+  it('aceita inteiros de 0 a 10', () => {
+    expect(isValidNpsScore(0)).toBe(true)
+    expect(isValidNpsScore(7)).toBe(true)
+    expect(isValidNpsScore(10)).toBe(true)
+  })
+
+  it('rejeita fora do intervalo', () => {
+    expect(isValidNpsScore(-1)).toBe(false)
+    expect(isValidNpsScore(11)).toBe(false)
+  })
+
+  it('rejeita não-inteiro e tipo errado', () => {
+    expect(isValidNpsScore(7.5)).toBe(false)
+    expect(isValidNpsScore('7')).toBe(false)
+    expect(isValidNpsScore(undefined)).toBe(false)
+    expect(isValidNpsScore(null)).toBe(false)
+  })
+})
+
+describe('shouldPromptForNps — lab-103', () => {
+  const now = new Date('2026-08-27T12:00:00.000Z').getTime()
+
+  it('pergunta se nunca respondeu antes', () => {
+    expect(shouldPromptForNps(null, now)).toBe(true)
+  })
+
+  it('não pergunta de novo dentro do cooldown', () => {
+    const tenDaysAgo = new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString()
+    expect(shouldPromptForNps(tenDaysAgo, now)).toBe(false)
+  })
+
+  it('pergunta de novo depois do cooldown vencer', () => {
+    const justPastCooldown = new Date(now - (NPS_COOLDOWN_DAYS * 24 * 60 * 60 * 1000 + 1000)).toISOString()
+    expect(shouldPromptForNps(justPastCooldown, now)).toBe(true)
+  })
+
+  it('aceita um Date além de string (mesmo achado do lab-102 sobre o driver do Neon)', () => {
+    const tenDaysAgo = new Date(now - 10 * 24 * 60 * 60 * 1000)
+    expect(shouldPromptForNps(tenDaysAgo, now)).toBe(false)
+  })
+})
+
+describe('calculateNpsScore — lab-103', () => {
+  it('retorna score null sem nenhuma resposta (evita dividir por zero)', () => {
+    expect(calculateNpsScore([])).toEqual({
+      totalResponses: 0,
+      promoters: 0,
+      passives: 0,
+      detractors: 0,
+      score: null,
+    })
+  })
+
+  it('classifica promotores (9-10), neutros (7-8) e detratores (0-6) corretamente', () => {
+    const summary = calculateNpsScore([10, 9, 8, 7, 6, 0])
+    expect(summary.promoters).toBe(2)
+    expect(summary.passives).toBe(2)
+    expect(summary.detractors).toBe(2)
+    expect(summary.totalResponses).toBe(6)
+  })
+
+  it('calcula o score como %promotores − %detratores, em pontos percentuais', () => {
+    // 2 promotores, 2 detratores, 6 total: (2-2)/6 = 0
+    expect(calculateNpsScore([10, 9, 8, 7, 6, 0]).score).toBe(0)
+    // 3 promotores, 0 detratores, 3 total: (3-0)/3 = 100
+    expect(calculateNpsScore([9, 10, 10]).score).toBe(100)
+    // 0 promotores, 3 detratores, 3 total: (0-3)/3 = -100
+    expect(calculateNpsScore([0, 1, 6]).score).toBe(-100)
   })
 })

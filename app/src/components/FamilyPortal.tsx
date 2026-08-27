@@ -523,6 +523,87 @@ function PairingCodeGenerator() {
   )
 }
 
+// lab-103, resto de G11/`prompt.md` §12: NPS de pais/responsáveis — diferente de
+// `productAnalytics.ts` (100% anônimo, por dispositivo da criança), este é o RESPONSÁVEL já
+// autenticado respondendo por conta própria, sem problema novo de privacidade infantil.
+// `GET /nps/status` decide se pergunta (nunca respondeu, ou o cooldown de 90 dias já venceu) —
+// decisão do servidor, não de `localStorage`, porque é sobre a FAMÍLIA, não o aparelho/navegador.
+function NpsWidget() {
+  const [shouldPrompt, setShouldPrompt] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const [score, setScore] = useState('')
+  const [comment, setComment] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    authorizedFetch('/nps/status')
+      .then((res) => res.json())
+      .then((body: { shouldPrompt?: boolean }) => setShouldPrompt(Boolean(body.shouldPrompt)))
+      .catch(() => setShouldPrompt(false))
+  }, [])
+
+  async function handleSubmit() {
+    setError(null)
+    setSubmitting(true)
+    try {
+      const res = await authorizedFetch('/nps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ score: Number(score), comment: comment.trim() || undefined }),
+      })
+      if (!res.ok) {
+        setError('Não foi possível enviar. Tente novamente.')
+        return
+      }
+      setSubmitted(true)
+    } catch {
+      setError('Não foi possível enviar. Tente novamente.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (!shouldPrompt || dismissed) return null
+
+  if (submitted) {
+    return (
+      <div className="pairing-code-box nps-widget">
+        <p>Obrigado pelo feedback! 💜</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pairing-code-box nps-widget">
+      <h3>De 0 a 10, o quanto você recomendaria o Missão Aprender pra outro responsável?</h3>
+      <select className="nps-score-select" value={score} onChange={(e) => setScore(e.target.value)}>
+        <option value="">Escolha uma nota</option>
+        {Array.from({ length: 11 }, (_, n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+      <textarea
+        className="nps-comment"
+        placeholder="Algum comentário? (opcional)"
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        maxLength={1000}
+      />
+      {error && <p className="field-hint">{error}</p>}
+      <button type="button" className="primary-button" onClick={handleSubmit} disabled={submitting || score === ''}>
+        {submitting ? 'Enviando…' : 'Enviar'}
+      </button>
+      <button type="button" className="text-button" onClick={() => setDismissed(true)} disabled={submitting}>
+        Agora não
+      </button>
+    </div>
+  )
+}
+
 // Painel de progresso (lab-91, pedido do usuário: "itens que ajudem o responsável a gerenciar o
 // que a criança está fazendo no jogo" — prompt.md §15 já previa isso como parte do dashboard do
 // responsável). O jogo não tem conta pra criança nem backend de gameplay (só `localStorage`, por
@@ -675,6 +756,7 @@ function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void 
       )}
       {error && <p className="field-hint">{error}</p>}
       {canPair && <PairingCodeGenerator />}
+      {canManageBilling && <NpsWidget />}
       <button type="button" className="nickname-generate-btn" onClick={onSignOut}>
         Sair
       </button>
