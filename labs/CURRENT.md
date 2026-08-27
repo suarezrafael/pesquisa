@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Ativo: labs/lab-104-deploy-automatico-ci/ — resto de G10 (deploy automático a partir do CI).
+Escolhido pelo usuário logo após o lab-103, entre deploy automático/bug de morros invisíveis/
+staging separado. **Decisão de fluxo confirmada com o usuário**: gatilho é push em `main` (padrão
+correto), não o branch de trabalho — achado ao investigar: `main` está 86 commits atrás deste
+branch, todo laboratório 78-103 fez deploy manual direto daqui, nunca via `main`. A partir de
+agora, publicar em produção exige um PR deste branch mesclado em `main`; push direto no branch de
+trabalho continua só rodando os testes (lab-101). Precisa de 2 secrets novos no GitHub
+(`VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN`) que só o usuário pode criar/configurar. Ver
+`labs/lab-104-deploy-automatico-ci/FEATURES.md` pro escopo detalhado.
+
 Último concluído: labs/lab-103-nps-responsaveis/ — resto de G11/`prompt.md` §12 (NPS de pais/
 responsáveis). Escolhido pelo usuário logo após o lab-102, entre deploy automático/NPS/bug de
 morros invisíveis. Diferente de `product_events` (lab-99, 100% anônimo) — o responsável já
