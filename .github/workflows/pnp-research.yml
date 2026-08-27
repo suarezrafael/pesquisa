@@ -40,6 +40,36 @@ jobs:
           committed = json.loads(Path('RESULTS.json').read_text())
           reproduced = json.loads(Path('RESULTS.ci.json').read_text())
           assert committed == reproduced, 'reproduced V100 results differ semantically from committed RESULTS.json'
-          print('Committed and reproduced RESULTS are semantically identical.')
+          print('Committed and reproduced V100 RESULTS are semantically identical.')
+          PY
+          python verify_independent.py RESULTS.ci.json
+
+  v101:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile
+        run: |
+          python -m py_compile research/p-vs-np/v101/p_vs_np_lab_v101.py
+          python -m py_compile research/p-vs-np/v101/verify_independent.py
+
+      - name: Reproduce V101 results
+        run: |
+          cd research/p-vs-np/v101
+          python p_vs_np_lab_v101.py --output RESULTS.ci.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          committed = json.loads(Path('RESULTS.json').read_text())
+          reproduced = json.loads(Path('RESULTS.ci.json').read_text())
+          assert committed == reproduced, 'reproduced V101 results differ semantically from committed RESULTS.json'
+          print('Committed and reproduced V101 RESULTS are semantically identical.')
           PY
           python verify_independent.py RESULTS.ci.json
