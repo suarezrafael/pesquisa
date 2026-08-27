@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Ativo: labs/lab-103-nps-responsaveis/ — resto de G11/`prompt.md` §12 (NPS de pais/responsáveis).
+Escolhido pelo usuário logo após o lab-102, entre deploy automático/NPS/bug de morros invisíveis.
+Diferente de `product_events` (lab-99, 100% anônimo) — o responsável já autenticado no portal
+responde por conta própria, sem problema novo de privacidade infantil. Nova tabela
+`nps_responses` (primeira migração de verdade depois do baseline do lab-101), endpoints
+`GET /nps/status`/`POST /nps`, widget no portal com cooldown de 90 dias, bloco `nps` em
+`GET /admin/metrics`. Ver `labs/lab-103-nps-responsaveis/FEATURES.md` pro escopo detalhado.
+
 Último concluído: labs/lab-102-reconciliacao-stripe-banco/ — resto de G8
 (`docs/prompts/05-escala-e-viabilidade.md`, `[receita]`). Escolhido pelo usuário logo após o
 lab-101, entre reconciliação Stripe/deploy automático/NPS/bug de morros invisíveis. Cloudflare Cron
