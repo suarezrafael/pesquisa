@@ -47,8 +47,13 @@ Não tem nenhuma relação com o Neon Auth: a criança nunca tem conta lá.
 - **Neon Auth** (Managed Better Auth) habilitado no projeto — schema `neon_auth` com as tabelas
   `user`/`session`/`account`/`organization`/etc., prontas pra guardar login do RESPONSÁVEL (nunca
   da criança — ver princípio de design no plano). Nenhuma UI de login existe ainda (Fase B).
-- **Schema próprio** (`schema.sql`, aplicado via `npm run migrate`): `family_accounts`,
-  `subscriptions`, `pairing_codes` — ver o arquivo pra estrutura exata e comentários.
+- **Schema próprio, migração versionada** (`migrations/*.sql`, aplicado via `npm run migrate`):
+  `family_accounts`, `subscriptions`, `pairing_codes`, `entitlement_tokens`, `product_events`, entre
+  outras — ver os arquivos em `migrations/` pra estrutura exata e comentários. `migrate.mjs` aplica
+  só os arquivos ainda não registrados em `schema_migrations` (uma linha por arquivo já aplicado),
+  cada um dentro de uma transação. Pra uma mudança de schema nova, crie
+  `migrations/000N_descricao.sql` (idempotente — `if not exists` sempre que possível) em vez de
+  editar um arquivo já aplicado em produção.
 - **Worker de health-check** (`src/index.ts`): `GET /health` devolve `{ ok: true }` sem tocar o
   Neon (lab-88 — ver tabela de rotas acima pro motivo). A conectividade Worker → Neon é validada
   organicamente pelas rotas de verdade (`/subscription`, `/entitlement`, etc.), que já rodam
@@ -76,7 +81,7 @@ Não tem nenhuma relação com o Neon Auth: a criança nunca tem conta lá.
 ```bash
 cd app/server-accounts
 npm install
-npm run migrate   # aplica schema.sql contra o Neon (lê DATABASE_URL de .dev.vars)
+npm run migrate   # aplica as migrações pendentes de migrations/ contra o Neon (lê DATABASE_URL de .dev.vars)
 npm run dev       # wrangler dev — simulador local
 ```
 

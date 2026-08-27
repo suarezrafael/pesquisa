@@ -1,3 +1,10 @@
+-- lab-101, G10: baseline de migração versionada -- este arquivo é o antigo `schema.sql` (Fase A
+-- até o lab-100), movido pra cá sem mudar uma linha de SQL. `migrate.mjs` aplica ele como a
+-- migração "0001" e registra em `schema_migrations`; como cada instrução aqui já é idempotente
+-- (`if not exists` em tudo), rodar contra o banco de produção existente é um no-op seguro que só
+-- "bootstrapa" o histórico de versão. Migrações NOVAS a partir de agora ganham arquivo próprio
+-- (`000N_descricao.sql`) em vez de crescer este arquivo -- ver server-accounts/README.md.
+--
 -- Fase A do plano de backend comercial (ver ../../docs/plano-comercial-backend.md).
 -- neon_auth.* já existe sozinho (gerenciado pelo Neon Auth/Better Auth, habilitado na criação do
 -- projeto) -- guarda a identidade/sessão do RESPONSÁVEL, nunca da criança. Não criamos nada nesse
