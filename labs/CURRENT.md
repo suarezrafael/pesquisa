@@ -1,14 +1,21 @@
 # Laboratório atual
 
-Ativo: labs/lab-104-deploy-automatico-ci/ — resto de G10 (deploy automático a partir do CI).
-Escolhido pelo usuário logo após o lab-103, entre deploy automático/bug de morros invisíveis/
-staging separado. **Decisão de fluxo confirmada com o usuário**: gatilho é push em `main` (padrão
-correto), não o branch de trabalho — achado ao investigar: `main` está 86 commits atrás deste
-branch, todo laboratório 78-103 fez deploy manual direto daqui, nunca via `main`. A partir de
-agora, publicar em produção exige um PR deste branch mesclado em `main`; push direto no branch de
-trabalho continua só rodando os testes (lab-101). Precisa de 2 secrets novos no GitHub
-(`VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN`) que só o usuário pode criar/configurar. Ver
-`labs/lab-104-deploy-automatico-ci/FEATURES.md` pro escopo detalhado.
+Último concluído (secrets pendentes — ação do usuário): labs/lab-104-deploy-automatico-ci/ — resto
+de G10 (deploy automático a partir do CI). Escolhido pelo usuário logo após o lab-103, entre
+deploy automático/bug de morros invisíveis/staging separado. **Decisão de fluxo confirmada com o
+usuário**: gatilho é push em `main` (padrão correto), não o branch de trabalho — achado ao
+investigar: `main` estava 86 commits atrás deste branch, todo laboratório 78-103 fez deploy manual
+direto daqui, nunca via `main`. A partir de agora, publicar em produção exige um PR deste branch
+mesclado em `main`; push direto no branch de trabalho continua só rodando os testes (lab-101,
+confirmado ao vivo: passo de deploy aparece "skipped", não falha sem token). **Tentativa de criar
+os 2 tokens necessários via CLI (autorizada pelo usuário) confirmada INVIÁVEL nos dois casos**:
+Cloudflare (sessão OAuth sem escopo "API Tokens: Edit") e Vercel (`vercel tokens add` → `403
+Cannot create tokens for this app`, sessão restrita por integração) — sem contorno seguro,
+reaproveitar tokens de sessão existentes foi descartado (expiração automática + escopo excessivo).
+**PR rascunho `#8`** aberto (`worktree-abstract-wobbling-owl` → `main`, 88 commits, labs 78-104) —
+usuário decidiu deixar a configuração dos secrets pra depois; PR seguro de existir sem eles (CI de
+PR só testa, nunca dispara deploy). Ver `labs/lab-104-deploy-automatico-ci/CONTEXT.md` pro detalhe
+completo.
 
 Último concluído: labs/lab-103-nps-responsaveis/ — resto de G11/`prompt.md` §12 (NPS de pais/
 responsáveis). Escolhido pelo usuário logo após o lab-102, entre deploy automático/NPS/bug de
@@ -410,7 +417,8 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-103-nps-responsaveis/
-CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-104-deploy-automatico-ci/
+CONTEXT.md` (último laboratório concluído — secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge
+do PR `#8` continuam pendentes, ação do usuário) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).
