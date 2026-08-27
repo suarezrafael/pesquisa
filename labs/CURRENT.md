@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Ativo: labs/lab-101-ci-e-migracao-versionada/ — G10
+(`docs/prompts/05-escala-e-viabilidade.md`, `[operação]`). Escolhido pelo usuário logo após o
+lab-100, entre G10/reconciliação Stripe/NPS/bug de morros invisíveis. Ataca as duas partes mais
+contidas de G10: CI (GitHub Actions rodando os 39+36+13 testes a cada push, hoje zero automação) e
+migração de schema versionada (`schema.sql` reaplicado inteiro sem histórico vira
+`migrations/0001_baseline.sql` + tabela `schema_migrations`). "Ambiente de staging" e "rollback
+documentado" ficam fora de propósito (infraestrutura maior, laboratório próprio futuro). Ver
+`labs/lab-101-ci-e-migracao-versionada/FEATURES.md` pro escopo detalhado.
+
 Último concluído: labs/lab-100-gerenciar-aparelhos-por-familia/ — resto de G7
 (`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`). Escolhido pelo usuário logo após
 o lab-99, entre G10/reconciliação Stripe/UI de aparelhos/NPS. Até aqui só existia "desvincular todos
