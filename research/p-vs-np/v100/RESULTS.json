@@ -1,0 +1,187 @@
+{
+  "all_internal_checks_passed": true,
+  "date": "2026-08-26",
+  "finite_census": {
+    "all_nonunate_distance_histogram": {
+      "1": 144,
+      "2": 8
+    },
+    "all_nonunate_functions": 152,
+    "all_ternary_functions": 256,
+    "all_unate_functions": 104,
+    "essential_nonunate_functions": 146,
+    "essential_npn_classes": 10,
+    "essential_ternary_functions": 218,
+    "essential_unate_functions": 72,
+    "nonunate_distance_histogram": {
+      "1": 144,
+      "2": 2
+    },
+    "npn_classes": [
+      {
+        "distance_to_unate": 0,
+        "orbit_size": 16,
+        "representative_decimal": 1,
+        "representative_hex": "0x01",
+        "unate": true
+      },
+      {
+        "distance_to_unate": 1,
+        "orbit_size": 24,
+        "representative_decimal": 6,
+        "representative_hex": "0x06",
+        "unate": false
+      },
+      {
+        "distance_to_unate": 0,
+        "orbit_size": 48,
+        "representative_decimal": 7,
+        "representative_hex": "0x07",
+        "unate": true
+      },
+      {
+        "distance_to_unate": 1,
+        "orbit_size": 16,
+        "representative_decimal": 22,
+        "representative_hex": "0x16",
+        "unate": false
+      },
+      {
+        "distance_to_unate": 0,
+        "orbit_size": 8,
+        "representative_decimal": 23,
+        "representative_hex": "0x17",
+        "unate": true
+      },
+      {
+        "distance_to_unate": 1,
+        "orbit_size": 8,
+        "representative_decimal": 24,
+        "representative_hex": "0x18",
+        "unate": false
+      },
+      {
+        "distance_to_unate": 1,
+        "orbit_size": 48,
+        "representative_decimal": 25,
+        "representative_hex": "0x19",
+        "unate": false
+      },
+      {
+        "distance_to_unate": 1,
+        "orbit_size": 24,
+        "representative_decimal": 27,
+        "representative_hex": "0x1b",
+        "unate": false
+      },
+      {
+        "distance_to_unate": 1,
+        "orbit_size": 24,
+        "representative_decimal": 30,
+        "representative_hex": "0x1e",
+        "unate": false
+      },
+      {
+        "distance_to_unate": 2,
+        "orbit_size": 2,
+        "representative_decimal": 105,
+        "representative_hex": "0x69",
+        "unate": false
+      }
+    ],
+    "parity_distance_to_unate": 2,
+    "parity_orbit_representative": "0x69",
+    "parity_orbit_size": 2
+  },
+  "lab": "V100",
+  "next_hypothesis": {
+    "name": "local-exception robustification",
+    "statement": "Every essential ternary predicate is at truth-table Hamming distance at most 2 from unate; exploit the 144 one-point defects (and two parity two-point defects) without deleting their outputs, by bounding simultaneous exception activation and constructing a remote point for the unate surrogate."
+  },
+  "p_vs_np_resolved": false,
+  "signed_balance_audit": {
+    "balance_vs_bipartite_mismatches": 0,
+    "protected_blowup_mismatches": 0,
+    "protected_oct_budget_checks": 842,
+    "random_signed_instances": 300,
+    "sample_instances": [
+      {
+        "gates": [
+          {"dirs": [1, 1], "support": [0, 1]},
+          {"dirs": [0], "support": [0]},
+          {"dirs": [1], "support": [0]}
+        ],
+        "m": 3,
+        "n": 2
+      },
+      {
+        "gates": [
+          {"dirs": [0], "support": [0]},
+          {"dirs": [0, 0], "support": [0, 1]},
+          {"dirs": [0, 0], "support": [0, 1]}
+        ],
+        "m": 3,
+        "n": 2
+      },
+      {
+        "gates": [{"dirs": [1, 1, 1], "support": [0, 1, 2]}],
+        "m": 1,
+        "n": 4
+      },
+      {
+        "gates": [
+          {"dirs": [1], "support": [2]},
+          {"dirs": [1], "support": [1]}
+        ],
+        "m": 2,
+        "n": 5
+      },
+      {
+        "gates": [
+          {"dirs": [0], "support": [1]},
+          {"dirs": [0, 1], "support": [0, 1]},
+          {"dirs": [1], "support": [0]}
+        ],
+        "m": 3,
+        "n": 2
+      }
+    ],
+    "seed": 1000100
+  },
+  "status": "internal theorem candidate; novelty not established",
+  "target_extension_audit": {
+    "direction_label_mismatches": 0,
+    "extended_target_failures": 0,
+    "note": "Missing core words are found by brute force only for verification; V100 theorem uses the published monotone NC0_3-Avoid algorithm.",
+    "random_constructed_circuits": 300,
+    "seed": 1000300,
+    "switching_equivalence_mismatches": 0
+  },
+  "tau_reduction_audit": {
+    "direct_vs_restricted_oct_mismatches": 0,
+    "random_instances": 500,
+    "seed": 1000200,
+    "tau_histogram": {
+      "0": 286,
+      "1": 144,
+      "2": 58,
+      "3": 11,
+      "4": 1
+    }
+  },
+  "theorem_candidate": {
+    "conclusion": "NC0_3-Avoid is deterministically FPT parameterized by tau(C)",
+    "condition": "tau(C) < m-n",
+    "nonclaim": "This does not solve general NC0_3-Avoid at m=n+1 unless tau=0, and does not imply P != NP.",
+    "parameter": "tau(C): minimum output deletions leaving an all-unate switching-balanced core",
+    "proof_kernel": [
+      "Non-unate outputs are mandatory deletions.",
+      "For unate outputs, d(e,v)=r_v XOR q_e is a signed-balance system.",
+      "Signed balance after deleting gates reduces to protected Odd Cycle Transversal.",
+      "Protected OCT(k) reduces to ordinary OCT(k) by replacing each protected vertex by k+1 false twins.",
+      "After deleting tau outputs, m-tau>n; input/output switches turn the core monotone.",
+      "A missing word for the monotone core remains missing after arbitrary extension on deleted outputs."
+    ],
+    "runtime": "3^tau * tau^O(1) * poly(|C|), using protected-OCT reduction plus a published OCT FPT algorithm and the published monotone NC0_3-Avoid algorithm"
+  }
+}
