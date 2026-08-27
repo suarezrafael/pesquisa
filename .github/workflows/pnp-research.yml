@@ -1,0 +1,38 @@
+name: P vs NP Research
+
+on:
+  push:
+    paths:
+      - 'research/p-vs-np/**'
+      - '.github/workflows/pnp-research.yml'
+  pull_request:
+    paths:
+      - 'research/p-vs-np/**'
+      - '.github/workflows/pnp-research.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  v100:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile
+        run: |
+          python -m py_compile research/p-vs-np/v100/p_vs_np_lab_v100.py
+          python -m py_compile research/p-vs-np/v100/verify_independent.py
+
+      - name: Reproduce V100 results
+        run: |
+          cd research/p-vs-np/v100
+          python p_vs_np_lab_v100.py --output RESULTS.ci.json
+          cmp RESULTS.json RESULTS.ci.json
+          python verify_independent.py RESULTS.ci.json
