@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Ativo: labs/lab-100-gerenciar-aparelhos-por-familia/ — resto de G7
+(`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`). Escolhido pelo usuário logo após
+o lab-99, entre G10/reconciliação Stripe/UI de aparelhos/NPS. Hoje só existe "desvincular todos os
+aparelhos" (lab-97); este laboratório adiciona listar aparelhos pareados + revogar um específico.
+Ver `labs/lab-100-gerenciar-aparelhos-por-familia/FEATURES.md` pro escopo detalhado.
+
 Último concluído: labs/lab-99-analytics-de-produto/ — resto de G11 (`prompt.md` §12: D1/D7
 retention, tempo médio por sessão, quests concluídas por usuário, taxa de retorno semanal).
 Escolhido pelo usuário logo após o lab-98. Restrição central: privacidade infantil — identificador
