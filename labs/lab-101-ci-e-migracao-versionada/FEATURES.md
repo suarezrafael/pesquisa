@@ -1,8 +1,8 @@
 # Laboratório 101 — CI e migração versionada (G10)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-26
-Fim: -
+Fim: 2026-08-26
 Commit inicial: dc7b2f42437e78be5f39e0c17883f9048eb7ec20
 
 ## Objetivo do laboratório
@@ -39,29 +39,29 @@ próprio se/quando o volume de uso justificar o custo extra.
   Object) — migração versionada não se aplica a esse Worker.
 
 ## Funcionalidades planejadas
-- [ ] **`.github/workflows/ci.yml`** (novo): dispara em `push` (qualquer branch) e `pull_request`.
+- [x] **`.github/workflows/ci.yml`** (novo): dispara em `push` (qualquer branch) e `pull_request`.
   Três jobs paralelos, um por package (`app`, `app/server-accounts`, `app/server-cf-relay`), cada
-  um: checkout, `actions/setup-node` (mesma versão do Node do ambiente de dev, `22.x`), `npm ci`
-  (`working-directory` do package), typecheck (`npx tsc -b` no `app/`, `npx tsc --noEmit` nos
-  Workers) + `npm run test`. `app/` também roda `npm run build` (mais próximo do que
-  `vercel --prod` realmente faz).
-- [ ] **`app/server-accounts/migrations/`** (novo diretório): `schema.sql` atual vira
-  `migrations/0001_baseline.sql` (`git mv`, preserva a idempotência que já tinha — segue seguro de
-  rodar contra o banco de produção já existente, onde vira só um no-op que fica registrado).
-- [ ] **`app/server-accounts/migrate.mjs`** reescrito: cria (`if not exists`) uma tabela própria
+  um: checkout, `actions/setup-node`, `npm ci` (`working-directory` do package), typecheck
+  (`npx tsc --noEmit`/via `npm run build` no `app/`) + `npm run test`. `app/` roda `npm run build`
+  (mais próximo do que `vercel --prod` realmente faz) em vez de só `tsc -b`.
+- [x] **`app/server-accounts/migrations/`** (novo diretório): `schema.sql` virou
+  `migrations/0001_baseline.sql` (`git mv`, preserva a idempotência que já tinha — rodar contra o
+  banco de produção já existente foi só um no-op que ficou registrado).
+- [x] **`app/server-accounts/migrate.mjs`** reescrito: cria (`if not exists`) uma tabela própria
   `schema_migrations` (`filename` chave primária, `applied_at`); lê todo `*.sql` de `migrations/`
   em ordem alfabética; aplica só os que ainda não estão em `schema_migrations`, cada um dentro de
-  uma transação (Postgres suporta DDL transacional — se um arquivo falhar no meio, reverte
-  inteiro); registra cada aplicação. Loga quantas migrações novas foram aplicadas (ou "nenhuma
+  uma transação; registra cada aplicação. Loga quantas migrações novas foram aplicadas (ou "nenhuma
   pendente").
-- [ ] **`app/server-accounts/README.md`**: atualizar a seção "O que existe agora"/"Rodando
-  localmente" pra descrever `migrations/` + `schema_migrations` em vez de `schema.sql` sozinho, e
-  documentar a convenção pra próximas mudanças de schema (`migrations/000N_descricao.sql`).
-- [ ] Rodar `npm run migrate` contra o Neon de produção pra confirmar que a migração 0001
-  (idempotente) é aplicada sem erro E fica registrada em `schema_migrations` — o banco já tem tudo
-  que ela cria, então isso só "bootstrapa" o histórico de versão sem mudar dado nenhum.
-- [ ] Confirmar que o workflow de CI roda de verdade ao dar `git push` (ver os 3 jobs passando no
-  GitHub Actions da branch).
+- [x] **`app/server-accounts/README.md`**: atualizado (seção "O que existe agora" e "Rodando
+  localmente") pra descrever `migrations/` + `schema_migrations` em vez de `schema.sql` sozinho, com
+  a convenção pra próximas mudanças de schema (`migrations/000N_descricao.sql`).
+- [x] Rodado `npm run migrate` contra o Neon de produção: a migração `0001_baseline.sql`
+  (idempotente) foi aplicada sem erro e ficou registrada em `schema_migrations` — confirmado por
+  consulta direta (contagem de tabelas em `public` foi de 7 pra 8, só a tabela de controle nova; uma
+  segunda execução confirmou "Nenhuma migração pendente.").
+- [x] Confirmado que o workflow de CI roda de verdade ao dar `git push` — encontrados e corrigidos
+  DOIS problemas reais só visíveis em isolamento verdadeiro de CI (ver "Decisões técnicas"); a run
+  final (`891e336`) passou com os 3 jobs verdes, sem avisos.
 
 ## Fora de escopo (explicitamente adiado)
 - **Ambiente de staging separado** (segunda branch/DB do Neon, segundo Worker/projeto Vercel) —

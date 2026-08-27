@@ -1,15 +1,22 @@
 # Laboratório atual
 
-Ativo: labs/lab-101-ci-e-migracao-versionada/ — G10
+Último concluído: labs/lab-101-ci-e-migracao-versionada/ — G10
 (`docs/prompts/05-escala-e-viabilidade.md`, `[operação]`). Escolhido pelo usuário logo após o
-lab-100, entre G10/reconciliação Stripe/NPS/bug de morros invisíveis. Ataca as duas partes mais
-contidas de G10: CI (GitHub Actions rodando os 39+36+13 testes a cada push, hoje zero automação) e
-migração de schema versionada (`schema.sql` reaplicado inteiro sem histórico vira
-`migrations/0001_baseline.sql` + tabela `schema_migrations`). "Ambiente de staging" e "rollback
-documentado" ficam fora de propósito (infraestrutura maior, laboratório próprio futuro). Ver
-`labs/lab-101-ci-e-migracao-versionada/FEATURES.md` pro escopo detalhado.
+lab-100, entre G10/reconciliação Stripe/NPS/bug de morros invisíveis. Atacou as duas partes mais
+contidas de G10: CI (GitHub Actions, `.github/workflows/ci.yml`, 3 jobs — `app`/`server-accounts`/
+`server-cf-relay` — rodando os 88 testes deste repositório a cada push, hoje zero automação antes
+disso) e migração de schema versionada (`schema.sql` reaplicado inteiro sem histórico virou
+`migrations/0001_baseline.sql` + tabela `schema_migrations`, `migrate.mjs` reescrito pra aplicar só
+o que é novo, cada migração numa transação). **CI de verdade pegou 2 bugs reais de "funciona na
+minha máquina"** que nenhuma verificação manual anterior tinha pego: `npx tsc` e o Vitest nos dois
+Workers estavam resolvendo TypeScript/config por busca ancestral acidental em `app/node_modules`
+(pastas aninhadas) — corrigido com `typescript` como devDependency direta + `vitest.config.ts`
+próprio em cada Worker. Migração aplicada em produção e confirmada (contagem de tabelas 7→8).
+Confirmado ao vivo no GitHub Actions: 3 jobs verdes, sem avisos. "Ambiente de staging" e "rollback
+documentado" ficaram fora de propósito (infraestrutura maior, laboratório próprio futuro). Ver
+`labs/lab-101-ci-e-migracao-versionada/CONTEXT.md` pro detalhe completo.
 
-Último concluído: labs/lab-100-gerenciar-aparelhos-por-familia/ — resto de G7
+Antes desse: labs/lab-100-gerenciar-aparelhos-por-familia/ — resto de G7
 (`docs/prompts/05-escala-e-viabilidade.md`, `[segurança/receita]`). Escolhido pelo usuário logo após
 o lab-99, entre G10/reconciliação Stripe/UI de aparelhos/NPS. Até aqui só existia "desvincular todos
 os aparelhos" (lab-97) — sem jeito de ver quantos/quais aparelhos estão pareados nem revogar um
@@ -236,8 +243,10 @@ revogação/limite de aparelhos) foi resolvido no lab-97, e a UI de gerenciar ap
 origem não foi atualizado pra refletir). Da ordem de ataque de
 `docs/prompts/05-escala-e-viabilidade.md` seção 7, o que resta genuinamente sem solução agora: o
 **job de reconciliação Stripe↔banco** (parte de G8 que ficou fora de escopo do lab-96 de propósito,
-por exigir Cloudflare Cron Triggers) e **G10** (CI/CD, migração versionada de verdade). **G11 está
-agora COMPLETO**: a parte de ALARME DE COTA foi resolvida no lab-98 (contador autocontado no relay)
+por exigir Cloudflare Cron Triggers). **G10 (CI + migração versionada) foi resolvido no lab-101** —
+"ambiente de staging" e "rollback documentado" (as outras duas partes de G10) continuam fora de
+escopo de propósito, ver `labs/lab-101-ci-e-migracao-versionada/CONTEXT.md`. **G11 está agora
+COMPLETO**: a parte de ALARME DE COTA foi resolvida no lab-98 (contador autocontado no relay)
 e a parte de eventos de produto/retenção D1-D7 (`prompt.md` §12) foi resolvida no lab-99 (tabela
 `product_events`, `POST /events`, `GET /admin/metrics`) — ver
 `labs/lab-98-alarme-de-cota/CONTEXT.md` e `labs/lab-99-analytics-de-produto/CONTEXT.md`.
@@ -352,7 +361,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-100-gerenciar-aparelhos-por-familia/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-101-ci-e-migracao-versionada/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).
