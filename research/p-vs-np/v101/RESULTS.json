@@ -1,0 +1,168 @@
+{
+  "all_internal_checks_passed": true,
+  "bounded_width_remote_theorem": {
+    "algorithm": "Compute A(p0),A(p1) by polynomial-valued variable elimination and choose the smaller child. Density stays <1; at length m the integer count is 0.",
+    "conclusion": "A word z outside range(C) is constructible deterministically by prefix pair counting.",
+    "hypotheses": [
+      "C,H:{0,1}^n->{0,1}^m share local output supports",
+      "beta is a certified upper bound on max_x dist(C(x),H(x))",
+      "H has a supplied variable-elimination order of induced width w",
+      "2^n * B(m,beta) < 2^m"
+    ],
+    "near_unate_corollary": "For NC0_3, V100 gives a per-output unate surrogate with <=2 local exceptions. If exception-variable count k and surrogate elimination width w are small, the theorem is FPT in k+w whenever B(m,beta)<2^(m-n).",
+    "prefix_pair_count": "A(p)=sum_x B(m-|p|, beta-dist(H_prefix(x),p)).",
+    "runtime": "m * 2^O(w) * poly(n,m,beta), plus the cost of certifying beta"
+  },
+  "conflict_graph_audit": {
+    "beta_vs_conflict_alpha_mismatches": 0,
+    "beta_vs_exception_variable_enumeration_mismatches": 0,
+    "event_count_histogram": {
+      "0": 32,
+      "1": 47,
+      "2": 54,
+      "3": 55,
+      "4": 42,
+      "5": 27,
+      "6": 21,
+      "7": 16,
+      "8": 4,
+      "9": 2
+    },
+    "random_instances": 300,
+    "seed": 1010100
+  },
+  "date": "2026-08-27",
+  "exception_conflict_theorem": {
+    "complexity_barrier": "Exact beta is NP-hard even with singleton local exceptions: Max-Cut reduces using two XOR outputs per graph edge and fixed nearest unate surrogates.",
+    "fpt_escape": "If k input variables occur in exception events, beta is computable exactly in O(2^k * |events|).",
+    "reason": "Every x activates a pairwise-compatible event set; conversely every pairwise-compatible set of Boolean partial assignments has a common global extension.",
+    "statement": "For local exception events represented as partial assignments, beta(C,H)=alpha(G_exc), where two events are adjacent iff their partial assignments conflict."
+  },
+  "lab": "V101",
+  "maxcut_hardness_audit": {
+    "beta_vs_maxcut_mismatches": 0,
+    "random_graphs": 200,
+    "reduction": "each graph edge becomes two XOR outputs, with nearest unate surrogates having singleton exception assignments 01 and 10",
+    "seed": 1010200,
+    "total_edges_checked": 659
+  },
+  "minimal_stretch_barrier": {
+    "all_outputs_monotone_and_essential_ternary": true,
+    "consequence": "a generic beta=1 robustification that asks for distance >1 from a monotone surrogate cannot solve minimal stretch",
+    "covering_radius": 1,
+    "gate_formulas": [
+      "x0 & x1 & x2",
+      "x0 | (x1 & x2)",
+      "x1 | (x0 & x2)",
+      "x2 | (x0 & x1)"
+    ],
+    "gate_masks": [
+      "0x80",
+      "0xea",
+      "0xec",
+      "0xf8"
+    ],
+    "image": [
+      "0000",
+      "0001",
+      "0010",
+      "0100",
+      "0111",
+      "1111"
+    ],
+    "image_matches_expected": true,
+    "image_size": 6,
+    "infinite_family_lift": "for n>=3 append identity outputs x3,...,x_{n-1}; m=n+1 and covering radius remains 1",
+    "m": 4,
+    "n": 3,
+    "number_of_farthest_words": 10
+  },
+  "p_vs_np_resolved": false,
+  "pair_count_audit": {
+    "bruteforce_vs_variable_elimination_mismatches": 0,
+    "observed_order_width_histogram": {
+      "0": 158,
+      "1": 70,
+      "2": 60,
+      "3": 10,
+      "4": 2
+    },
+    "random_prefix_instances": 300,
+    "seed": 1010300
+  },
+  "remote_construction_audit": {
+    "accepted_random_instances": 150,
+    "beta_histogram": {
+      "0": 11,
+      "1": 67,
+      "2": 62,
+      "3": 10
+    },
+    "observed_order_width_histogram": {
+      "1": 56,
+      "2": 60,
+      "3": 30,
+      "4": 4
+    },
+    "remote_or_avoidance_failures": 0,
+    "sampling_attempts": 290,
+    "seed": 1010400
+  },
+  "robustification_lemma": {
+    "proof": "For every x, dist(z,C(x)) >= dist(z,H(x))-dist(H(x),C(x)) > beta-beta = 0.",
+    "statement": "If beta=max_x dist(C(x),H(x)) and dist(z,range(H))>beta, then z is outside range(C)."
+  },
+  "status": "internal structural theorem plus barrier; novelty not established",
+  "strategic_conclusion": {
+    "negative": "At m=n+1, symmetric Hamming-envelope robustification cannot even guarantee beta=1, because monotone essential ternary surrogates can have covering radius 1.",
+    "next": "V102 should replace symmetric balls by oriented exception geometry: track which output bit flips are possible from each surrogate image point and avoid the directed union, preserving exception signs/patterns rather than only beta.",
+    "positive": "V101 tolerates nonzero local defects without deleting their output coordinates, at logarithmic-or-larger surplus when beta is constant and surrogate counting width is controlled."
+  },
+  "surplus_needed_by_volume_bound": [
+    {
+      "beta_1_ball": 33,
+      "beta_1_min_surplus": 6,
+      "beta_2_ball": 529,
+      "beta_2_min_surplus": 10,
+      "beta_3_ball": 5489,
+      "beta_3_min_surplus": 13,
+      "m": 32
+    },
+    {
+      "beta_1_ball": 65,
+      "beta_1_min_surplus": 7,
+      "beta_2_ball": 2081,
+      "beta_2_min_surplus": 12,
+      "beta_3_ball": 43745,
+      "beta_3_min_surplus": 16,
+      "m": 64
+    },
+    {
+      "beta_1_ball": 129,
+      "beta_1_min_surplus": 8,
+      "beta_2_ball": 8257,
+      "beta_2_min_surplus": 14,
+      "beta_3_ball": 349633,
+      "beta_3_min_surplus": 19,
+      "m": 128
+    },
+    {
+      "beta_1_ball": 257,
+      "beta_1_min_surplus": 9,
+      "beta_2_ball": 32897,
+      "beta_2_min_surplus": 16,
+      "beta_3_ball": 2796417,
+      "beta_3_min_surplus": 22,
+      "m": 256
+    },
+    {
+      "beta_1_ball": 1025,
+      "beta_1_min_surplus": 11,
+      "beta_2_ball": 524801,
+      "beta_2_min_surplus": 20,
+      "beta_3_ball": 178957825,
+      "beta_3_min_surplus": 28,
+      "m": 1024
+    }
+  ]
+}
