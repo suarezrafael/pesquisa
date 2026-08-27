@@ -1,16 +1,25 @@
 # Laboratório atual
 
-Ativo: labs/lab-102-reconciliacao-stripe-banco/ — resto de G8
+Último concluído: labs/lab-102-reconciliacao-stripe-banco/ — resto de G8
 (`docs/prompts/05-escala-e-viabilidade.md`, `[receita]`). Escolhido pelo usuário logo após o
 lab-101, entre reconciliação Stripe/deploy automático/NPS/bug de morros invisíveis. Cloudflare Cron
-Trigger (primeira vez neste projeto) reconsulta periodicamente cada assinatura já conhecida direto
-no Stripe e corrige qualquer divergência de `status`/`current_period_end` no banco — cobre o caso
-de um webhook que falhe silenciosamente de um jeito que nem a reentrega do Stripe corrija. Não
-cobre uma assinatura cujo PRIMEIRO webhook nunca chegou (nenhuma linha criada) — limitação
-conhecida, ver `FEATURES.md`. Ver `labs/lab-102-reconciliacao-stripe-banco/FEATURES.md` pro escopo
-detalhado.
+Trigger (primeira vez neste projeto, `[triggers] crons = ["0 9 * * *"]`) reconsulta diariamente
+cada assinatura já conhecida direto no Stripe e corrige qualquer divergência de `status`/
+`current_period_end` no banco (via `upsertSubscription`, reaproveitada dos webhooks) — cobre o
+caso de um webhook que falhe silenciosamente de um jeito que nem a reentrega do Stripe corrija.
+**Achado real durante a implementação**: a primeira execução do job acusou uma divergência FALSA
+numa assinatura genuína — o driver `@neondatabase/serverless` devolve `timestamptz` como objeto
+`Date` de verdade em runtime, não `string` (apesar do tipo declarado em todo `index.ts`), e
+comparar por igualdade de string direta sempre falhava mesmo pro mesmo instante. Corrigido com
+`toComparableIso` (`domain.ts`, 4 testes novos, total do Worker 40). **Testado ao vivo contra
+produção real com autorização explícita do usuário** (classificador bloqueou corromper dado real
+de produção mesmo temporariamente): `status` de uma assinatura REAL alterado direto no banco pra
+um valor errado, reconciliação detectou e corrigiu sozinha em segundos, confirmado por leitura
+direta do banco. Não cobre uma assinatura cujo PRIMEIRO webhook nunca chegou (nenhuma linha
+criada) — limitação conhecida. **G8 agora está COMPLETO** (lab-96 + lab-102). Ver
+`labs/lab-102-reconciliacao-stripe-banco/CONTEXT.md` pro detalhe completo.
 
-Último concluído: labs/lab-101-ci-e-migracao-versionada/ — G10
+Antes desse: labs/lab-101-ci-e-migracao-versionada/ — G10
 (`docs/prompts/05-escala-e-viabilidade.md`, `[operação]`). Escolhido pelo usuário logo após o
 lab-100, entre G10/reconciliação Stripe/NPS/bug de morros invisíveis. Atacou as duas partes mais
 contidas de G10: CI (GitHub Actions, `.github/workflows/ci.yml`, 3 jobs — `app`/`server-accounts`/
@@ -249,11 +258,14 @@ revogação/limite de aparelhos) foi resolvido no lab-97, e a UI de gerenciar ap
 `labs/lab-97-revogacao-token-pareamento/CONTEXT.md` e
 `labs/lab-100-gerenciar-aparelhos-por-familia/CONTEXT.md`. G8 (webhook do Stripe sem idempotência,
 `status` do schema não cobria todos os estados reais do Stripe/Pix) foi resolvido no lab-96 — ver
-`labs/lab-96-webhook-stripe-idempotencia/CONTEXT.md`. G9 já foi resolvido no lab-88 (só o `.md` de
+`labs/lab-96-webhook-stripe-idempotencia/CONTEXT.md`, e o **job de reconciliação Stripe↔banco**
+(parte de G8 que tinha ficado fora de escopo do lab-96 de propósito, por exigir Cloudflare Cron
+Triggers) foi resolvido no lab-102 — **G8 está agora COMPLETO**, ver
+`labs/lab-102-reconciliacao-stripe-banco/CONTEXT.md`. G9 já foi resolvido no lab-88 (só o `.md` de
 origem não foi atualizado pra refletir). Da ordem de ataque de
-`docs/prompts/05-escala-e-viabilidade.md` seção 7, o que resta genuinamente sem solução agora: o
-**job de reconciliação Stripe↔banco** (parte de G8 que ficou fora de escopo do lab-96 de propósito,
-por exigir Cloudflare Cron Triggers). **G10 (CI + migração versionada) foi resolvido no lab-101** —
+`docs/prompts/05-escala-e-viabilidade.md` seção 7, o que resta genuinamente sem solução agora é
+deploy automático a partir do CI (próximo passo natural do lab-101) e as partes de G10 deixadas de
+fora de propósito. **G10 (CI + migração versionada) foi resolvido no lab-101** —
 "ambiente de staging" e "rollback documentado" (as outras duas partes de G10) continuam fora de
 escopo de propósito, ver `labs/lab-101-ci-e-migracao-versionada/CONTEXT.md`. **G11 está agora
 COMPLETO**: a parte de ALARME DE COTA foi resolvida no lab-98 (contador autocontado no relay)
@@ -371,7 +383,7 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-101-ci-e-migracao-versionada/
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-102-reconciliacao-stripe-banco/
 CONTEXT.md` (último laboratório concluído) e, se for mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).

@@ -1,8 +1,8 @@
 # Laboratório 102 — job de reconciliação Stripe↔banco (resto de G8)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-27
-Fim: -
+Fim: 2026-08-27
 Commit inicial: be082bd6f7f9681320637f2fe30472471440327b
 
 ## Objetivo do laboratório
@@ -39,29 +39,34 @@ logo após o lab-101, entre reconciliação Stripe/deploy automático/NPS/bug de
   Stripe Search/List API otimizada para volume alto.
 
 ## Funcionalidades planejadas
-- [ ] **`app/server-accounts/wrangler.toml`**: `[triggers] crons = [...]` — cadência diária (a
-  reconciliação corrige, não previne em tempo real; diária é suficiente pra pegar drift antes que
-  vire uma reclamação de um responsável).
-- [ ] **`app/server-accounts/src/index.ts`**: `reconcileSubscriptions(env)` — busca toda linha de
+- [x] **`app/server-accounts/wrangler.toml`**: `[triggers] crons = ["0 9 * * *"]` — cadência
+  diária (a reconciliação corrige, não previne em tempo real; diária é suficiente pra pegar drift
+  antes que vire uma reclamação de um responsável).
+- [x] **`app/server-accounts/src/index.ts`**: `reconcileSubscriptions(env)` — busca toda linha de
   `subscriptions` com `stripe_subscription_id` preenchido, reconsulta cada uma no Stripe, compara
   `status`/`current_period_end` com o que está no banco; se divergir, loga (`[reconciliation]`,
   igual ao padrão `[quota-alarm]` do lab-98) e corrige via `upsertSubscription`. Loga um resumo no
   final (quantas verificadas, quantas divergentes/corrigidas).
-- [ ] **`export default` do Worker** ganha `scheduled(controller, env, ctx)`, chamando
+- [x] **`export default` do Worker** ganhou `scheduled(controller, env, ctx)`, chamando
   `ctx.waitUntil(reconcileSubscriptions(env))` — o Cron Trigger da Cloudflare chama isso
   automaticamente, sem rota HTTP nova.
-- [ ] Testar localmente disparando o cron manualmente (`wrangler dev --test-scheduled` +
-  `curl "http://localhost:8787/__scheduled?cron=..."`, mecanismo padrão do `wrangler` pra simular
-  Cron Triggers sem esperar o agendamento real).
-- [ ] Deploy em produção e confirmar que o Cron Trigger foi registrado (`wrangler deployments
-  list`/dashboard da Cloudflare) — não dá pra esperar 24h pra ver ele disparar sozinho num teste ao
-  vivo razoável, então a verificação real de comportamento acontece via `--test-scheduled` local
-  contra o banco de produção (mesmo padrão de outros laboratórios: script/mecanismo local
-  apontando pra credenciais reais).
-- [ ] Testado ao vivo contra produção real: criar uma divergência sintética controlada (mudar
-  `status` de uma assinatura de teste real diretamente no banco pra um valor diferente do que o
-  Stripe realmente tem) e confirmar que rodar a reconciliação detecta e corrige de volta pro valor
-  verdadeiro do Stripe.
+- [x] Testado localmente disparando o cron manualmente (`wrangler dev --test-scheduled` +
+  `curl "http://localhost:8788/__scheduled?cron=..."`). **Achado real no processo**: a primeira
+  execução acusou uma divergência falsa numa assinatura genuína (`current_period_end` do banco
+  formatado como `Date.toString()` vs. ISO do Stripe) — bug de verdade na comparação, não no
+  dado; corrigido com `toComparableIso` (`domain.ts`, com testes) antes de prosseguir. Ver
+  "Decisões técnicas".
+- [x] Deploy em produção — `wrangler deploy` confirmou `schedule: 0 9 * * *` registrado na saída
+  do próprio comando.
+- [x] Testado ao vivo contra produção real, com **autorização explícita do usuário** (o
+  classificador bloqueou a primeira tentativa por corromper dado de produção, mesmo que
+  temporário/reversível): status de uma assinatura REAL foi alterado direto no banco de
+  `active` pra `past_due` (Stripe continuava dizendo `active` de verdade); a reconciliação
+  detectou a divergência (`[reconciliation] divergência em sub_...: banco tinha status="past_due"
+  ... Stripe diz status="active"`) e corrigiu sozinha — confirmado por leitura direta do banco
+  depois (`active` restaurado, `current_period_end` intacto, assinatura real da família nunca
+  ficou de fato incorreta pro usuário final, já que o teste rodou local contra o banco real e a
+  correção aconteceu em segundos).
 
 ## Fora de escopo (explicitamente adiado)
 - **Detectar assinatura que existe no Stripe mas NUNCA teve nenhuma linha criada no banco**

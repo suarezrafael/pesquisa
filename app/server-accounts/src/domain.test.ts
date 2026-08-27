@@ -14,6 +14,7 @@ import {
   isValidProductEventType,
   isValidSubscriptionStatus,
   MAX_ACTIVE_DEVICES_PER_FAMILY,
+  toComparableIso,
   toIsoOrNull,
 } from './domain'
 
@@ -90,6 +91,26 @@ describe('toIsoOrNull', () => {
   it('retorna null quando não há timestamp (assinatura sem período definido)', () => {
     expect(toIsoOrNull(null)).toBeNull()
     expect(toIsoOrNull(undefined)).toBeNull()
+  })
+})
+
+describe('toComparableIso — lab-102, resto de G8', () => {
+  it('converte um objeto Date (formato real devolvido pelo driver do Neon) pra ISO 8601', () => {
+    const date = new Date('2026-09-24T00:33:15.000Z')
+    expect(toComparableIso(date)).toBe('2026-09-24T00:33:15.000Z')
+  })
+
+  it('converte uma string de data já existente pro mesmo formato ISO', () => {
+    expect(toComparableIso('2026-09-24T00:33:15.000Z')).toBe('2026-09-24T00:33:15.000Z')
+  })
+
+  it('trata um Date e uma string representando o mesmo instante como iguais', () => {
+    const date = new Date('2026-09-24T00:33:15.000Z')
+    expect(toComparableIso(date)).toBe(toComparableIso('2026-09-23T21:33:15.000-03:00'))
+  })
+
+  it('retorna null quando não há período definido', () => {
+    expect(toComparableIso(null)).toBeNull()
   })
 })
 

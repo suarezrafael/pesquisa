@@ -22,6 +22,7 @@ import {
   isTokenRevoked,
   isValidProductEventType,
   isValidSubscriptionStatus,
+  toComparableIso,
   toIsoOrNull,
 } from './domain'
 
@@ -654,6 +655,73 @@ async function upsertSubscription(
   }
 }
 
+// lab-102, resto de G8: rede de segurança contra um webhook que falhe silenciosamente de um jeito
+// que nem a reentrega do Stripe corrija (lab-96 já cobriu idempotência/ordem, mas nenhum dos dois
+// ajuda se a mudança simplesmente nunca chegou a ser aplicada). Chamado pelo Cron Trigger
+// (`scheduled`, abaixo) — reconsulta cada assinatura JÁ conhecida direto no Stripe (fonte da
+// verdade) e corrige qualquer divergência de `status`/`current_period_end`. Só cobre assinaturas
+// que já têm uma linha em `subscriptions`; uma assinatura cujo PRIMEIRO webhook (`checkout.
+// session.completed`) nunca chegou não é vista por este job (ver `FEATURES.md`, "Fora de escopo").
+async function reconcileSubscriptions(env: Env): Promise<void> {
+  const sql = neon(env.DATABASE_URL)
+  const stripe = stripeClient(env)
+
+  const rows = (await sql`
+    select id, family_account_id, stripe_subscription_id, status, current_period_end
+    from subscriptions
+    where stripe_subscription_id is not null
+  `) as {
+    id: string
+    family_account_id: string
+    stripe_subscription_id: string
+    status: string
+    // `timestamptz` volta do driver como `Date` de verdade, não `string` (achado real, ver
+    // `toComparableIso` em domain.ts) — tipado aqui como o driver realmente devolve, diferente do
+    // resto deste arquivo (que despeja direto num `Response.json` e nunca precisou notar a
+    // diferença).
+    current_period_end: Date | null
+  }[]
+
+  let mismatches = 0
+  for (const row of rows) {
+    let subscription: Stripe.Subscription
+    try {
+      subscription = await stripe.subscriptions.retrieve(row.stripe_subscription_id)
+    } catch (err) {
+      console.error(
+        `[reconciliation] falha ao buscar ${row.stripe_subscription_id} no Stripe: ${(err as Error).message}`,
+      )
+      continue
+    }
+
+    const trueStatus = subscription.status
+    const truePeriodEnd = toIsoOrNull(subscription.items.data[0]?.current_period_end)
+    const dbPeriodEnd = toComparableIso(row.current_period_end)
+
+    if (trueStatus !== row.status || truePeriodEnd !== dbPeriodEnd) {
+      mismatches++
+      console.error(
+        `[reconciliation] divergência em ${row.stripe_subscription_id}: banco tinha ` +
+          `status="${row.status}" current_period_end="${dbPeriodEnd}", Stripe diz ` +
+          `status="${trueStatus}" current_period_end="${truePeriodEnd}" — corrigindo.`,
+      )
+      // `eventCreatedAt` = agora sempre vence qualquer `last_event_created_at` já registrado
+      // (`isEventNewerThan`, domain.ts), então a correção sempre se aplica quando há divergência.
+      await upsertSubscription(sql, {
+        familyAccountId: row.family_account_id,
+        stripeCustomerId:
+          typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id,
+        stripeSubscriptionId: subscription.id,
+        status: trueStatus,
+        currentPeriodEnd: truePeriodEnd,
+        eventCreatedAt: new Date().toISOString(),
+      })
+    }
+  }
+
+  console.log(`[reconciliation] verificadas ${rows.length} assinatura(s), ${mismatches} divergência(s) corrigida(s).`)
+}
+
 // lab-96, G8: a partir da versão da API usada por este SDK (`stripe` 22.x), a fatura não tem mais
 // um campo `subscription` no nível raiz — a referência mudou pra
 // `parent.subscription_details.subscription` (confirmado em node_modules/stripe/.../Invoices.d.ts,
@@ -857,5 +925,13 @@ export default {
     }
 
     return new Response('missao-aprender-accounts ok — ver /health', { status: 200 })
+  },
+
+  // lab-102, resto de G8: chamado pelo Cron Trigger (`[triggers]` em wrangler.toml), não por HTTP.
+  // `ctx.waitUntil` garante que a reconciliação termina de rodar mesmo depois deste handler
+  // retornar — sem isso, o runtime do Worker poderia encerrar a invocação antes do trabalho
+  // assíncrono (múltiplas chamadas ao Stripe + banco) completar.
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(reconcileSubscriptions(env))
   },
 }

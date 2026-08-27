@@ -3,6 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2026-08-22"
 compatibility_flags = ["nodejs_compat"]
 
+# lab-102, resto de G8: reconciliação Stripe↔banco — primeiro Cron Trigger deste projeto. Diário é
+# suficiente (a reconciliação corrige drift, não previne em tempo real; os webhooks continuam
+# sendo o caminho principal, isto é uma rede de segurança). 09:00 UTC = 06:00 em São Paulo, fora do
+# horário de pico de uso do jogo.
+[triggers]
+crons = ["0 9 * * *"]
+
 [vars]
 # ID do Price recorrente (R$ 4,99/mês) no Stripe, modo teste — não é secreto, é só um
 # identificador público do catálogo de produtos.

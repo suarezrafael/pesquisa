@@ -42,6 +42,18 @@ export function toIsoOrNull(unixSeconds: number | null | undefined): string | nu
   return typeof unixSeconds === 'number' ? new Date(unixSeconds * 1000).toISOString() : null
 }
 
+// lab-102, resto de G8: achado real ao construir a reconciliação — colunas `timestamptz` voltam do
+// driver `@neondatabase/serverless` como objeto `Date` de verdade em tempo de execução, apesar do
+// tipo declarado em todo o resto deste Worker ser `string | null` (inofensivo em todo outro lugar
+// porque `Response.json`/`JSON.stringify` chama `.toJSON()` num `Date` automaticamente, produzindo
+// ISO igual — só vira bug de verdade quando algo compara o valor por igualdade de string direto,
+// como a reconciliação faz). Normaliza os dois lados (`Date` ou já-string) pro mesmo formato ISO
+// antes de comparar.
+export function toComparableIso(value: string | Date | null): string | null {
+  if (value === null) return null
+  return (value instanceof Date ? value : new Date(value)).toISOString()
+}
+
 // lab-96, G8 (docs/prompts/05-escala-e-viabilidade.md): `schema.sql` antes só aceitava
 // ('trialing','active','past_due','canceled'), mas o Stripe emite também estes quatro — Pix/boleto
 // no Brasil com frequência nasce `incomplete` (o pagamento ainda não confirmou), e um evento nesse
