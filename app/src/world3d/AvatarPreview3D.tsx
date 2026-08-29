@@ -84,6 +84,27 @@ export function AvatarPreview3D({
       scene,
     )
     camera.minZ = 0.1
+    // lab-118, pedido do usuário: "na lojinha de avatar tem que ter como girar o avatar pra ver o
+    // cabelo escolhido" — antes só existia o giro automático abaixo (sem `attachControl`, arrastar
+    // não fazia nada), então dava pra perder itens que só aparecem de um ângulo específico (ex.:
+    // o rabo do cabelo longo fica nas COSTAS, ver `studentFigure.ts`/`applyHairShape`). Arrastar
+    // agora gira/aproxima livremente; limites evitam ver por baixo do chão ou colar a câmera
+    // dentro da cabeça.
+    camera.attachControl(canvas, true)
+    camera.lowerRadiusLimit = 1.4
+    camera.upperRadiusLimit = 4.5
+    camera.lowerBetaLimit = 0.15
+    camera.upperBetaLimit = Math.PI / 2 + 0.3
+    // Giro automático "boneco numa vitrine" (mesmo espírito de antes) via comportamento nativo do
+    // Babylon — ao contrário do `camera.alpha += ...` manual de antes, este pausa sozinho assim
+    // que o jogador arrasta e retoma um tempo depois de soltar, em vez de brigar com o input do
+    // usuário (o incremento manual antigo continuaria somando por cima de qualquer arraste).
+    camera.useAutoRotationBehavior = true
+    if (camera.autoRotationBehavior) {
+      camera.autoRotationBehavior.idleRotationSpeed = 0.35
+      camera.autoRotationBehavior.idleRotationWaitTime = 2000
+      camera.autoRotationBehavior.idleRotationSpinupTime = 1000
+    }
 
     const hemi = new HemisphericLight('previewHemi', new Vector3(0, 1, 0), scene)
     hemi.intensity = 0.75
@@ -111,9 +132,11 @@ export function AvatarPreview3D({
 
     sceneRef.current = scene
     shadowGeneratorRef.current = shadowGenerator
+    // Mesmo padrão de debug hook do `World3D.tsx` (`window.__scene`) — só em dev, pra inspecionar
+    // a cena do preview via console sem precisar adivinhar ângulo de câmera em screenshot.
+    if (import.meta.env.DEV) (window as any).__avatarPreviewScene = scene
 
     engine.runRenderLoop(() => {
-      camera.alpha += 0.006 // giro lento — "boneco numa vitrine", sem precisar arrastar pra ver
       scene.render()
     })
 

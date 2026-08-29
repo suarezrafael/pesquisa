@@ -17,7 +17,24 @@ build/deploy.
 
 # Laboratório atual
 
-Último concluído: labs/lab-117-code-splitting-world3d/ — escolhido pelo usuário entre 3 opções de
+Último concluído: labs/lab-118-preview-avatar-girar-e-flor/ — pedido do usuário: "na lojinha de
+avatar tem que ter como girar o avatar pra ver o cabelo escolhido, ao escolher a flor ela esta
+deitada em ve de estar de pe na cabeca, e na deu pra ver o cabelo comprido." Três queixas, duas
+causas reais: (1) `AvatarPreview3D.tsx` nunca tinha `camera.attachControl` — só existia giro
+automático manual, sem jeito de arrastar; trocado por `attachControl` + `useAutoRotationBehavior`
+nativo do Babylon (pausa sozinho ao arrastar, retoma depois), com limites de raio/inclinação. (2)
+O chapéu "Flor" (`studentFigure.ts`, `applyHat`) tinha as 5 pétalas num anel horizontal achatado
+no eixo Y — uma flor literalmente deitada em cima da cabeça; corrigido virando o anel pro plano
+vertical (achatado no eixo Z) — a flor fica de pé, de frente, como o emoji 🌸. (3) Cabelo comprido
+investigado e confirmado SEM bug — o "rabo" de trás sempre existiu (lab-73), só não dava pra ver
+sem controle de câmera; resolvido de graça pelo item (1). Novo debug hook dev-only
+`window.__avatarPreviewScene` (mesmo padrão de `window.__scene`) usado pra medir as posições reais
+das pétalas em vez de adivinhar por screenshot. **Verificado ao vivo**: arrastar o preview gira
+livremente; flor aparece reconhecível de frente/lado; cabelo comprido visível ao girar pra trás.
+`npm run test`: 47/47. `npm run build` sem erros (chunk `World3D` inalterado). Ver
+`labs/lab-118-preview-avatar-girar-e-flor/CONTEXT.md`.
+
+Antes desse: labs/lab-117-code-splitting-world3d/ — escolhido pelo usuário entre 3 opções de
 débito técnico já identificadas (relatório semanal por e-mail / code-splitting do World3D.tsx /
 auditoria de acessibilidade). Medido com `vite-bundle-visualizer` (via `npx`, não virou dependência
 do projeto) ANTES de decidir o que cortar — achado: `World3D.tsx` importava só 2 símbolos de
@@ -686,11 +703,12 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-117-code-splitting-world3d/CONTEXT.md` (último laboratório concluído — reduz o chunk
-`World3D` em 32%/25% gzip trocando o import de `@babylonjs/gui` pro escopado, com 2 achados
-adicionais de bundle documentados e adiados por risco/esforço, ver esse CONTEXT.md se quiser
-continuar essa frente). Itens de backlog em aberto continuam os mesmos de antes (todos esperando
-ação do usuário, sem mudança neste laboratório). **Deploy real (Vercel) pendente**: usuário pediu publicar
+`labs/lab-118-preview-avatar-girar-e-flor/CONTEXT.md` (último laboratório concluído — preview da
+lojinha de avatares ganhou controle manual de câmera + a Flor foi corrigida de deitada pra em pé).
+Itens de backlog em aberto continuam os mesmos de antes (todos esperando ação do usuário, sem
+mudança neste laboratório). Lembrar também da correção de infraestrutura registrada acima
+("Correção de produção fora de um laboratório formal") — domínio do Cloudflare Pages adicionado
+aos domínios confiáveis do Neon Auth. **Deploy real (Vercel) pendente**: usuário pediu publicar
 em produção durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized"
 (mesma restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer
 deploy nele — provável limite de segurança da integração, não uma configuração errada). Cloudflare

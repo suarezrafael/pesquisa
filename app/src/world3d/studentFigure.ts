@@ -400,16 +400,23 @@ export function applyHat(
     pom.position.y = HAT_Y + 0.31
     add(pom)
   } else if (hat.shape === 'flower') {
+    // lab-118, bug real reportado pelo usuário: "ao escolher a flor ela esta deitada em vez de
+    // estar de pé na cabeça". Causa: as pétalas formavam um anel no plano XZ (horizontal)
+    // achatado no eixo Y — literalmente uma flor deitada de bruços em cima da cabeça, só visível
+    // de cima. Corrigido virando o anel pro plano XY (vertical) achatado no eixo Z — a flor agora
+    // fica de pé, de frente pra quem olha, como um broche preso no alto da testa/cabelo (mesma
+    // referência visual do emoji 🌸), sem precisar de geometria nova.
     const petalCount = 5
+    const FLOWER_CENTER_Z = 0.15
     for (let p = 0; p < petalCount; p++) {
       const angle = (p / petalCount) * Math.PI * 2
       const petal = MeshBuilder.CreateSphere(`hatFlowerPetal${p}`, { diameter: 0.09 }, scene)
-      petal.scaling.y = 0.5
-      petal.position = new Vector3(Math.cos(angle) * 0.08, HAT_Y - 0.02, Math.sin(angle) * 0.08 + 0.1)
+      petal.scaling.z = 0.5
+      petal.position = new Vector3(Math.cos(angle) * 0.07, HAT_Y + Math.sin(angle) * 0.07, FLOWER_CENTER_Z)
       add(petal)
     }
     const center = MeshBuilder.CreateSphere('hatFlowerCenter', { diameter: 0.06 }, scene)
-    center.position = new Vector3(0, HAT_Y - 0.02, 0.1)
+    center.position = new Vector3(0, HAT_Y, FLOWER_CENTER_Z)
     add(center)
   } else if (hat.shape === 'bow') {
     for (const side of [-1, 1]) {
