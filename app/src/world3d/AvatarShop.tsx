@@ -11,6 +11,7 @@ import {
   type ColorOption,
   type HairShapeOption,
 } from '../data/customization'
+import { useModalA11y } from '../state/useModalA11y'
 import type { Profile, Progress } from '../types'
 
 // Carregado sob demanda, não no bundle principal (mesmo raciocínio de `World3D`/`FamilyPortal`
@@ -215,9 +216,17 @@ export function AvatarShop({
   onClose,
 }: AvatarShopProps) {
   const [tab, setTab] = useState<ShopTab>('avatares')
+  const modalRef = useModalA11y(onClose)
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Loja de avatares">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Loja de avatares"
+      ref={modalRef}
+      tabIndex={-1}
+    >
       <div className="modal avatar-shop-modal">
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×

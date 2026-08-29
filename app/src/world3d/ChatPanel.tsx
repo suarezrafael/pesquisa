@@ -6,6 +6,7 @@ import {
   QUICK_CHAT_CATEGORY_LABELS,
   type QuickChatCategory,
 } from '../data/chatMessages'
+import { useModalA11y } from '../state/useModalA11y'
 
 interface ChatPanelProps {
   messages: ChatMessage[]
@@ -23,9 +24,10 @@ const CATEGORIES = Object.keys(QUICK_CHAT_CATEGORY_LABELS) as QuickChatCategory[
 // texto livre) — dividido em abas por categoria pra caber na tela sem virar uma lista gigante.
 export function ChatPanel({ messages, connected, onSend, onClose }: ChatPanelProps) {
   const [activeCategory, setActiveCategory] = useState<QuickChatCategory>('saudacao')
+  const panelRef = useModalA11y(onClose)
 
   return (
-    <div className="chat-panel">
+    <div className="chat-panel" role="region" aria-label="Chat" ref={panelRef} tabIndex={-1}>
       <div className="chat-panel-header">
         <span>Chat {connected ? '🟢 conectado' : '🔴 sem conexão'}</span>
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar chat">

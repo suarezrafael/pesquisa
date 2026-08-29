@@ -8577,9 +8577,19 @@ export function World3D({
     ;(sceneRef.current as any)?.__showLocalChatBubble?.(messageId)
   }
 
+  // lab-121: nenhum painel/modal (nem os de App.tsx via `suspendTriggers`, nem os internos deste
+  // componente) tirava os botões do HUD da ordem de tabulação enquanto ficavam abertos por cima
+  // dele — um usuário de teclado conseguia dar Tab por dentro de um modal visualmente aberto e
+  // cair nos botões escondidos atrás. `inert` no HUD inteiro resolve isso numa mudança central,
+  // sem precisar de um focus-trap manual em cada um dos 12 painéis.
+  const hudInert = suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen
+
   return (
     <div className="world3d-container">
-      <canvas ref={canvasRef} className="world3d-canvas" />
+      {/* lab-121: o Babylon.js torna o canvas focável (captura teclado do jogo), então ele também
+          precisa de `inert` junto com o HUD — senão dá pra Tab escapar de um modal aberto direto
+          pro canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). */}
+      <canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />
       <div ref={debugRef} className="world3d-debug" />
       <HudHeader
         profile={profile}
@@ -8595,6 +8605,7 @@ export function World3D({
         onOpenBag={() => setBagOpen(true)}
         onOpenPairing={onOpenPairing}
         onSwitchProfile={onSwitchProfile}
+        inert={hudInert}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}
       {onMarsCombatZone && (

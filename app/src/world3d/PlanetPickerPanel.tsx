@@ -5,6 +5,8 @@
 // grade `.avatar-shop-*` (mesmo padrão de `AvatarShop.tsx`) — zero CSS novo, incluindo a tag de
 // bloqueio (lab-115), que reaproveita a MESMA `.avatar-shop-tag.subscription-lock` já usada pros
 // itens exclusivos de assinante em `AvatarShop.tsx` (mesmo espaço visual do botão, sem clique).
+import { useModalA11y } from '../state/useModalA11y'
+
 interface PlanetOption {
   id: string
   name: string
@@ -20,8 +22,16 @@ interface PlanetPickerPanelProps {
 }
 
 export function PlanetPickerPanel({ planets, currentLevel, onChoose, onClose }: PlanetPickerPanelProps) {
+  const modalRef = useModalA11y(onClose)
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Escolher planeta">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Escolher planeta"
+      ref={modalRef}
+      tabIndex={-1}
+    >
       <div className="modal quest-list-modal">
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×

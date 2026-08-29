@@ -7,6 +7,7 @@
 // Espacial", "Jardim Encantado") — mesma regra `usable = subscriptionOnly ? entitlementActive :
 // owned` e tag "🔒 Assinantes" já usadas em `AvatarShop.tsx` pra chapéus/óculos exclusivos.
 import { FURNITURE_CATALOG } from '../data/furniture'
+import { useModalA11y } from '../state/useModalA11y'
 import type { Progress } from '../types'
 
 interface MyHousePanelProps {
@@ -17,8 +18,16 @@ interface MyHousePanelProps {
 }
 
 export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, onClose }: MyHousePanelProps) {
+  const modalRef = useModalA11y(onClose)
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Minha Casa">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Minha Casa"
+      ref={modalRef}
+      tabIndex={-1}
+    >
       <div className="modal quest-list-modal">
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×

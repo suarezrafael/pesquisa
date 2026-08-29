@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useModalA11y } from '../state/useModalA11y'
 
 interface PairingScreenProps {
   active: boolean
@@ -15,6 +16,7 @@ interface PairingScreenProps {
 export function PairingScreen({ active, redeeming, redeemError, onRedeem, onClose }: PairingScreenProps) {
   const [code, setCode] = useState('')
   const [done, setDone] = useState(false)
+  const modalRef = useModalA11y(onClose)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -23,7 +25,14 @@ export function PairingScreen({ active, redeeming, redeemError, onRedeem, onClos
   }
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Vincular assinatura da família">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Vincular assinatura da família"
+      ref={modalRef}
+      tabIndex={-1}
+    >
       <div className="modal">
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×

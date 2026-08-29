@@ -16,6 +16,10 @@ interface HudHeaderProps {
   onOpenBag: () => void
   onOpenPairing: () => void
   onSwitchProfile: () => void
+  // lab-121: true enquanto qualquer painel/modal (de App.tsx ou interno do World3D) está aberto
+  // por cima do HUD — tira os 9 botões da ordem de tabulação, senão um usuário de teclado consegue
+  // dar Tab por dentro de um modal visualmente aberto e cair nos botões escondidos atrás dele.
+  inert?: boolean
 }
 
 export function HudHeader({
@@ -32,6 +36,7 @@ export function HudHeader({
   onOpenBag,
   onOpenPairing,
   onSwitchProfile,
+  inert,
 }: HudHeaderProps) {
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
@@ -39,7 +44,7 @@ export function HudHeader({
   const weeklyEvent = getCurrentWeeklyEvent()
 
   return (
-    <div className="hud-overlay">
+    <div className="hud-overlay" inert={inert}>
       <div className="hud-top-row">
         <header className="hub-header">
           <div className="hub-avatar">{profile.avatarEmoji}</div>

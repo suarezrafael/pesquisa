@@ -1,3 +1,5 @@
+import { useModalA11y } from '../state/useModalA11y'
+
 interface WeaponBagPanelProps {
   hasSword: boolean
   hasGun: boolean
@@ -28,9 +30,16 @@ export function WeaponBagPanel({ hasSword, hasGun, selected, onSelect, onClose }
   const items: Array<'sword' | 'gun'> = []
   if (hasSword) items.push('sword')
   if (hasGun) items.push('gun')
+  const panelRef = useModalA11y(onClose)
 
   return (
-    <div className="chat-panel bag-panel">
+    <div
+      className="chat-panel bag-panel"
+      role="region"
+      aria-label="Mochila"
+      ref={panelRef}
+      tabIndex={-1}
+    >
       <div className="chat-panel-header">
         <span>🎒 Mochila</span>
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar mochila">

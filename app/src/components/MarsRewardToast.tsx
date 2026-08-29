@@ -3,13 +3,23 @@
 // (`.reward-modal`/`.reward-icon`/`.reward-line`), sem CSS novo. Componente à parte (não
 // generaliza `RewardToast`) porque a copiagem é bem diferente ("Marte limpo!" vs. "Missão
 // concluída!") e este não tem XP/moedas/lista de badges pra mostrar, só o item ganho.
+import { useModalA11y } from '../state/useModalA11y'
+
 interface MarsRewardToastProps {
   onContinue: () => void
 }
 
 export function MarsRewardToast({ onContinue }: MarsRewardToastProps) {
+  const modalRef = useModalA11y(onContinue)
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Brinde de Marte">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Brinde de Marte"
+      ref={modalRef}
+      tabIndex={-1}
+    >
       <div className="modal reward-modal">
         <div className="reward-icon">🪐</div>
         <h2>Marte limpo!</h2>

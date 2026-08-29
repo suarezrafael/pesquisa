@@ -3,6 +3,7 @@
 // reaproveita as classes CSS `.quest-list`/`.quest-list-item` já existentes (o formato ícone +
 // nome + descrição + status encaixa exatamente, sem precisar de CSS novo).
 import { ACHIEVEMENT_CATALOG } from '../data/achievements'
+import { useModalA11y } from '../state/useModalA11y'
 import type { Progress } from '../types'
 
 interface AchievementsPanelProps {
@@ -11,8 +12,16 @@ interface AchievementsPanelProps {
 }
 
 export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps) {
+  const modalRef = useModalA11y(onClose)
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Catálogo de conquistas">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Catálogo de conquistas"
+      ref={modalRef}
+      tabIndex={-1}
+    >
       <div className="modal quest-list-modal">
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×

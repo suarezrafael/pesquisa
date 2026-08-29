@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Quest } from '../types'
 import { questTypeLabels } from '../data/quests'
+import { useModalA11y } from '../state/useModalA11y'
 
 interface QuestModalProps {
   quest: Quest
@@ -11,6 +12,7 @@ interface QuestModalProps {
 export function QuestModal({ quest, onCorrect, onClose }: QuestModalProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null)
+  const modalRef = useModalA11y(onClose)
 
   function handleChoose(choiceId: string) {
     if (feedback === 'correct') return
@@ -23,7 +25,14 @@ export function QuestModal({ quest, onCorrect, onClose }: QuestModalProps) {
   }
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label={quest.title}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={quest.title}
+      ref={modalRef}
+      tabIndex={-1}
+    >
       <div className="modal quest-modal">
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×

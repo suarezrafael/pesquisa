@@ -1,6 +1,26 @@
 # Laboratório atual
 
-Último concluído: labs/lab-120-auditoria-acessibilidade-wcag/ — escolhido pelo usuário entre as
+Último concluído: labs/lab-121-acessibilidade-teclado-zoom/ — escolhido pelo usuário entre 3
+opções de backlog (as outras: reinvestigar o bug de morros invisíveis do lab-95 sem informação nova
+do usuário; code-splitting de `studentFigure.ts`, acoplamento interno do Babylon.js sem solução
+clara). Ataca os 2 itens `[SHOULD]` de acessibilidade deixados de fora do lab-120 (que cobriu só os
+`[MUST]`): navegação por teclado/leitor de tela nos painéis 2D, e zoom de fonte do sistema.
+**Zoom de fonte**: investigado e confirmado já conforme (CSS já 100% `rem`/`em`/`clamp()`, modais
+já usam `max-height: vh` + `overflow-y: auto`) — sem mudança de código. **Navegação por teclado
+— corrigido**: novo hook `app/src/state/useModalA11y.ts` (Esc fecha, foco entra no painel ao abrir,
+foco volta ao fechar) aplicado nos 12 painéis do jogo; `ChatPanel`/`RankingPanel`/`WeaponBagPanel`
+ganharam `role="region"`/`aria-label` (paridade com os outros 9, que já eram `role="dialog"`);
+`HudHeader` (9 botões) ganhou `inert` condicional (`World3D.tsx`, booleano `hudInert` combinando
+`suspendTriggers` de `App.tsx` + estados internos de painel) pra sair da ordem de tabulação
+enquanto qualquer painel está aberto. **Achado só na verificação ao vivo (não na investigação
+teórica)**: o `<canvas>` do jogo também é focável por padrão (Babylon.js captura teclado nele) —
+sem aplicar `inert` nele também, Tab escapava do modal aberto direto pro canvas; corrigido com o
+mesmo booleano. Verificado ao vivo via DOM direto (não só screenshot): Esc fechando 3 painéis
+diferentes, Tab preso dentro do modal com HUD/canvas confirmadamente `inert`, sem erro de console,
+sem regressão visual. `npm run test`: 47/47 (sem teste novo). `npm run build` sem erros. Ver
+`labs/lab-121-acessibilidade-teclado-zoom/CONTEXT.md`.
+
+Antes desse: labs/lab-120-auditoria-acessibilidade-wcag/ — escolhido pelo usuário entre as
 opções de backlog restantes. Primeira auditoria SISTEMÁTICA de todo `index.css` contra os 3
 `[MUST]` de acessibilidade de `docs/prompts/02-design-profissional.md` §3 (antes só havia ajustes
 pontuais: `READABILITY_SCALE` no lab-87, `.avatar-shop-tab`/`.avatar-shop-action` no lab-91).
@@ -758,13 +778,15 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-120-auditoria-acessibilidade-wcag/CONTEXT.md` (último laboratório concluído — auditoria
-sistemática de acessibilidade WCAG AA em `index.css`: contraste de cor e alvo de toque 44×44px,
-tudo corrigido e verificado; nenhuma pendência nova). Antes desse,
+`labs/lab-121-acessibilidade-teclado-zoom/CONTEXT.md` (último laboratório concluído — navegação por
+teclado/leitor de tela nos 12 painéis 2D do jogo, Esc/foco/`inert`; zoom de fonte investigado e já
+conforme, sem mudança de código; nenhuma pendência nova). Antes desse,
+`labs/lab-120-auditoria-acessibilidade-wcag/CONTEXT.md` (auditoria sistemática de acessibilidade
+WCAG AA em `index.css`: contraste de cor e alvo de toque 44×44px, tudo corrigido e verificado) e
 `labs/lab-119-relatorio-semanal-email/CONTEXT.md` (relatório semanal de progresso por e-mail, Fase
 F do plano comercial; tudo construído e deployado em produção, só falta o usuário configurar
 `RESEND_API_KEY` pro envio de verdade funcionar). Itens de backlog em aberto continuam os mesmos de
-antes (todos esperando ação do usuário, sem mudança nestes dois últimos laboratórios). Lembrar
+antes (todos esperando ação do usuário, sem mudança nestes três últimos laboratórios). Lembrar
 também da correção de infraestrutura registrada acima ("Correção de produção fora de um
 laboratório formal") — domínio do Cloudflare Pages adicionado aos domínios confiáveis do Neon
 Auth. **Deploy real (Vercel) pendente**: usuário pediu publicar
