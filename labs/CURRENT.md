@@ -1,8 +1,19 @@
 # Laboratório atual
 
-Em andamento: labs/lab-107-minha-casa-sets-assinante/ — os dois sets temáticos exclusivos de
-assinante ("Quarto Espacial" 🚀, "Jardim Encantado" 🌷), última peça de "Minha Casa" planejada em
-`docs/plano-comercial-backend.md`. Ver `labs/lab-107-minha-casa-sets-assinante/FEATURES.md`.
+Último concluído: labs/lab-107-minha-casa-sets-assinante/ — os dois sets temáticos exclusivos de
+assinante ("Quarto Espacial" 🚀: cama-nave/luminária-planeta/tapete de estrelas; "Jardim Encantado"
+🌷: grama florida/banco de madeira/borboletas animadas), última peça de "Minha Casa" planejada em
+`docs/plano-comercial-backend.md`. 6 itens novos em `furniture.ts` (`cost: 0, subscriptionOnly:
+true`) — zero mudança de domínio (`unlockGeneric` já rejeitava `subscriptionOnly` desde o lab-92).
+`MyHousePanel` ganhou `entitlementActive` e a mesma expressão `usable = subscriptionOnly ?
+entitlementActive : owned` já usada em `AvatarShop.tsx`. 2 testes de regressão novos (suite 44/44).
+**Verificado ao vivo** o estado SEM assinatura (6 itens com 👑 e "🔒 Assinantes", sem regressão nos
+5 itens grátis/compráveis) — o estado COM assinatura não foi simulado ao vivo de propósito (exigiria
+token real ou adulterar `localStorage`/rede do jeito que o lab-90 já identificou como bypass
+perigoso); confiança vem de paridade literal com `AvatarShop.tsx`, já em produção há vários labs.
+**Com isso, "Minha Casa" está completa** (casa base grátis + mobília comprável + 2 sets exclusivos)
+— só falta o "modo visita" (P2, precisa de revisão de segurança infantil própria). Ver
+`labs/lab-107-minha-casa-sets-assinante/CONTEXT.md`.
 
 Antes desse: labs/lab-106-minha-casa-mobilia-compravel/ — continuação direta do lab-105:
 trocou o placeholder de mobília do `MyHousePanel` por compra de verdade com moeda. Novo
@@ -454,10 +465,11 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-106-minha-casa-mobilia-compravel/
-CONTEXT.md` (último laboratório concluído — próximo passo natural são os 2 conjuntos exclusivos de
-assinante, "Quarto Espacial"/"Jardim Encantado", via `subscriptionOnly` já previsto em
-`FurnitureOption`). Lembrar também que `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
+Para retomar o trabalho numa nova sessão, leia primeiro
+`labs/lab-107-minha-casa-sets-assinante/CONTEXT.md` (último laboratório concluído — "Minha Casa"
+está completa; próximo passo é escolher outra frente do backlog de produto, ver os itens ainda não
+priorizados na seção "O que o próximo laboratório deve desenvolver" desse CONTEXT.md). Lembrar
+também que `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do

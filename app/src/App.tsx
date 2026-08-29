@@ -227,6 +227,7 @@ function GameApp() {
       {showMyHouse && (
         <MyHousePanel
           progress={progress}
+          entitlementActive={entitlement?.active ?? false}
           onUnlockFurniture={unlockFurniture}
           onClose={() => setShowMyHouse(false)}
         />

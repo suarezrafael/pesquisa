@@ -198,6 +198,19 @@ describe('itens exclusivos de assinante nunca são obtidos via moeda (Fase E)', 
     expect(next.unlockedHatIds).not.toContain('capacete_heroi_marte')
     expect(next.coins).toBe(9999)
   })
+
+  // lab-107: mesmo teste de regressão, pros dois sets de mobília exclusivos de assinante.
+  it('unlockFurniture recusa a Cama-Nave (set Quarto Espacial) mesmo com moedas suficientes', () => {
+    const next = unlockFurniture({ ...emptyProgress, coins: 9999 }, 'cama_nave')
+    expect(next.unlockedFurnitureIds).not.toContain('cama_nave')
+    expect(next.coins).toBe(9999)
+  })
+
+  it('unlockFurniture recusa as Borboletas Animadas (set Jardim Encantado) mesmo com moedas suficientes', () => {
+    const next = unlockFurniture({ ...emptyProgress, coins: 9999 }, 'borboletas_animadas')
+    expect(next.unlockedFurnitureIds).not.toContain('borboletas_animadas')
+    expect(next.coins).toBe(9999)
+  })
 })
 
 describe('unlockMarsReward (lab-94)', () => {

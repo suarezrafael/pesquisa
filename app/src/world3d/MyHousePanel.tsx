@@ -3,18 +3,20 @@
 // de mobília por compra de verdade com moeda — reaproveita a mesma grade/botões de
 // `AvatarShop.tsx` (`.avatar-shop-grid`/`.avatar-shop-item`/`.avatar-shop-emoji`/
 // `.avatar-shop-action`), sem eixo de "equipar" (a casa não é uma cena 3D navegável ainda — cada
-// item é só possuído ou não). Os 2 conjuntos exclusivos de assinante ("Quarto Espacial", "Jardim
-// Encantado") ficam pra um próximo laboratório.
+// item é só possuído ou não). lab-107 acrescentou os 2 sets exclusivos de assinante ("Quarto
+// Espacial", "Jardim Encantado") — mesma regra `usable = subscriptionOnly ? entitlementActive :
+// owned` e tag "🔒 Assinantes" já usadas em `AvatarShop.tsx` pra chapéus/óculos exclusivos.
 import { FURNITURE_CATALOG } from '../data/furniture'
 import type { Progress } from '../types'
 
 interface MyHousePanelProps {
   progress: Progress
+  entitlementActive: boolean
   onUnlockFurniture: (id: string) => void
   onClose: () => void
 }
 
-export function MyHousePanel({ progress, onUnlockFurniture, onClose }: MyHousePanelProps) {
+export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, onClose }: MyHousePanelProps) {
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Minha Casa">
       <div className="modal quest-list-modal">
@@ -29,16 +31,23 @@ export function MyHousePanel({ progress, onUnlockFurniture, onClose }: MyHousePa
 
         <div className="avatar-shop-grid">
           {FURNITURE_CATALOG.map((item) => {
-            const owned = progress.unlockedFurnitureIds.includes(item.id)
+            const usable = item.subscriptionOnly ? entitlementActive : progress.unlockedFurnitureIds.includes(item.id)
             const affordable = progress.coins >= item.cost
-            return (
-              <div key={item.id} className={`avatar-shop-item ${owned ? 'equipped' : ''}`}>
-                <span className="avatar-shop-emoji">{item.emoji}</span>
-                <span className="avatar-shop-name">{item.name}</span>
 
-                {owned ? (
-                  <span className="avatar-shop-tag">✓ Tem</span>
-                ) : (
+            return (
+              <div key={item.id} className={`avatar-shop-item ${usable ? 'equipped' : ''}`}>
+                <span className="avatar-shop-emoji">{item.emoji}</span>
+                <span className="avatar-shop-name">
+                  {item.name} {item.subscriptionOnly && '👑'}
+                </span>
+
+                {usable && <span className="avatar-shop-tag">✓ Tem</span>}
+
+                {!usable && item.subscriptionOnly && (
+                  <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+                )}
+
+                {!usable && !item.subscriptionOnly && (
                   <button
                     type="button"
                     className="avatar-shop-action buy"
