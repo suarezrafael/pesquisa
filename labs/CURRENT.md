@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Em andamento: labs/lab-105-minha-casa-plot-base/ — primeira fatia de "Minha Casa"
+(`docs/plano-comercial-backend.md`, catálogo Fase E, item que faltava construir). Escolhido pelo
+usuário entre 4 frentes de backlog de produto (Minha Casa / Fase F Stripe produção / e-mail semanal
+via Resend / múltiplos perfis por família). Este laboratório entrega só o plot/casa base GRATUITO
+(estrutura andável perto do spawn, reusando o padrão de construção das escolinhas — paredes/
+telhado/chão assentados no terreno) — mobília comprável e os 2 conjuntos exclusivos de assinante
+ficam para laboratórios seguintes. Ver `labs/lab-105-minha-casa-plot-base/FEATURES.md`.
+
 Último concluído (secrets pendentes — ação do usuário): labs/lab-104-deploy-automatico-ci/ — resto
 de G10 (deploy automático a partir do CI). Escolhido pelo usuário logo após o lab-103, entre
 deploy automático/bug de morros invisíveis/staging separado. **Decisão de fluxo confirmada com o
