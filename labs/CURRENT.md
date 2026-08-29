@@ -1,6 +1,12 @@
 # Laboratório atual
 
-Último concluído: labs/lab-111-sistema-solar-venus/ — segundo planeta novo da frente "Sistema
+Em andamento: labs/lab-112-sistema-solar-jupiter/ — terceiro planeta novo da frente "Sistema
+Solar", primeiro gigante gasoso. Faixas horizontais proceduralmente geradas (`DynamicTexture`,
+técnica nova, reaproveitável em Saturno/Urano/Netuno) + Grande Mancha Vermelha (decalque fixo).
+Sem rocha/cratera (Júpiter não tem superfície sólida), sem combate. Ver
+`labs/lab-112-sistema-solar-jupiter/FEATURES.md`.
+
+Antes desse: labs/lab-111-sistema-solar-venus/ — segundo planeta novo da frente "Sistema
 Solar" (continuação do lab-110). Superfície vulcânica alaranjada + atmosfera translúcida
 amarelo-esbranquiçada decorativa (característica visual mais reconhecível de Vênus, sem física,
 sem afetar luz/céu globais), sem cratera nenhuma (ao contrário de Mercúrio — decisão deliberada,
