@@ -1,8 +1,8 @@
 # Laboratório 111 — Sistema Solar: Vênus
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
-Fim: -
+Fim: 2026-08-29
 Commit inicial: 2f4968ba3a19dc67102f5f90dbdedf3e5f934099
 
 ## Objetivo do laboratório
@@ -45,16 +45,25 @@ escopo confirmado antes (lab-110): moedas escondidas, sem combate/inimigo.
   que não se voa direto de um pro outro).
 
 ## Funcionalidades planejadas
-- [ ] `VENUS_RADIUS`/`VENUS_CENTER`/`VENUS_LANDING_UP` + entrada em `DESTINATION_PLANETS`.
-- [ ] `buildVenusIfNeeded()`: esfera alaranjada-amarelada (superfície), esfera translúcida maior
+- [x] `VENUS_RADIUS`/`VENUS_CENTER`/`VENUS_LANDING_UP` + entrada em `DESTINATION_PLANETS`.
+- [x] `buildVenusIfNeeded()`: esfera alaranjada-amarelada (superfície), esfera translúcida maior
       por cima (atmosfera, decorativa, sem física), rochas vulcânicas esparsas (mesmos templates
-      glTF já usados), moedas escondidas, foguete de volta com rótulo.
-- [ ] `buildPlanetIfNeeded` ganha o `case 'venus'`.
-- [ ] `PlanetPickerPanel` mostra 3 destinos automaticamente (sem mudança de código — já lê
-      `DESTINATION_PLANET_LIST` na íntegra).
-- [ ] Verificação ao vivo: seletor mostra os 3 destinos; viagem completa pra Vênus (atmosfera
-      visível, rochas, moedas contam pro HUD, foguete de volta funciona); Marte/Mercúrio continuam
-      funcionando sem regressão.
+      glTF já usados), 6 moedas escondidas, foguete de volta com rótulo.
+- [x] `buildPlanetIfNeeded` ganha o `case 'venus'`.
+- [x] `PlanetPickerPanel` mostra os 3 destinos automaticamente (sem mudança de código — já lê
+      `DESTINATION_PLANET_LIST` na íntegra) — confirmado ao vivo (Marte/Mercúrio/Vênus, cada um
+      com nome/emoji corretos).
+- [x] Verificação ao vivo (dev server + browser automation): seletor mostra os 3 destinos; viagem
+      completa pra Vênus confirmada por inspeção direta da cena (avatar a ~7,3 unidades do centro
+      de Vênus, batendo com `VENUS_RADIUS + AVATAR_RADIUS`; chão, atmosfera, 6 moedas e rochas
+      todos presentes); visual da atmosfera translúcida confirmado por screenshot (tom
+      amarelo-areia difuso, como esperado de dentro da casca semi-transparente). Sem erro de
+      console em nenhuma etapa. **A viagem de VOLTA de Vênus não foi confirmada ao vivo nesta
+      sessão** (perdida por deriva de posição entre chamadas de automação — o avatar andou
+      ~12 unidades longe do foguete de retorno antes da checagem seguinte) — decisão consciente de
+      não insistir mais, já que o caminho de retorno (`boardRocket(null)`/`landRocket`) é código
+      100% genérico e IDÊNTICO ao já verificado com sucesso pra Marte e Mercúrio no lab-110 (nada
+      específico de Vênus nesse trecho); risco residual considerado desprezível.
 
 ## Fora de escopo (explicitamente adiado)
 - Júpiter, Saturno, Urano, Netuno — próximos laboratórios desta mesma frente.

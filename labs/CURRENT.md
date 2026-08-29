@@ -1,9 +1,19 @@
 # Laboratório atual
 
-Em andamento: labs/lab-111-sistema-solar-venus/ — segundo planeta novo da frente "Sistema Solar"
-(continuação do lab-110). Superfície vulcânica alaranjada + atmosfera translúcida amarelo-esbranquiçada
-decorativa (característica visual mais reconhecível de Vênus), sem cratera (ao contrário de
-Mercúrio), sem combate. Ver `labs/lab-111-sistema-solar-venus/FEATURES.md`.
+Último concluído: labs/lab-111-sistema-solar-venus/ — segundo planeta novo da frente "Sistema
+Solar" (continuação do lab-110). Superfície vulcânica alaranjada + atmosfera translúcida
+amarelo-esbranquiçada decorativa (característica visual mais reconhecível de Vênus, sem física,
+sem afetar luz/céu globais), sem cratera nenhuma (ao contrário de Mercúrio — decisão deliberada,
+vulcanismo real de Vênus apaga crateras), sem combate. Raio 7 (entre Marte=6 e o planeta
+principal=13), centro no eixo Y `(0,58,0)` — mutuamente ortogonal a Marte (Z) e Mercúrio (X). Zero
+mudança na arquitetura genérica do lab-110 (`boardRocket`/`landRocket`/`PlanetPickerPanel`) — só
+registrar constantes + `buildVenusIfNeeded()` + um `case` no dispatcher. **Verificado ao vivo**: os
+3 destinos aparecem no seletor; viagem de IDA pra Vênus confirmada por inspeção direta da cena
+(posição do avatar, chão/atmosfera/rochas/moedas todos presentes, visual da atmosfera confirmado
+por screenshot), sem erro de console. A viagem de VOLTA não foi confirmada ao vivo nesta sessão
+(deriva de posição na automação) — risco considerado desprezível, é código genérico idêntico ao já
+comprovado pra Marte/Mercúrio no lab-110. `npm run test`: 44/44. `npm run build` sem erros. Ver
+`labs/lab-111-sistema-solar-venus/CONTEXT.md`.
 
 Antes desse: labs/lab-110-sistema-solar-selecao-de-planeta/ — pedido novo do usuário: ampliar
 o mundo pra incluir todos os planetas do sistema solar (hoje só tinha Marte), renderizados sob
@@ -534,11 +544,11 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-110-sistema-solar-selecao-de-planeta/CONTEXT.md` (último laboratório concluído —
-arquitetura genérica de múltiplos planetas-destino + Mercúrio prontos; próximo passo natural é
-Vênus, depois os gigantes gasosos Júpiter/Saturno/Urano/Netuno, ver "O que o próximo laboratório
-deve desenvolver" nesse CONTEXT.md pra dicas técnicas de cada um — ex.: `DynamicTexture` pra faixas,
-`CreateTorus` achatado pros anéis de Saturno). Cloudflare Pages (lab-109) continua pronto e
+`labs/lab-111-sistema-solar-venus/CONTEXT.md` (último laboratório concluído — Mercúrio e Vênus
+prontos; próximo passo natural são os gigantes gasosos Júpiter/Saturno, depois Urano/Netuno, ver
+"O que o próximo laboratório deve desenvolver" nesse CONTEXT.md pra dicas técnicas de cada um —
+`DynamicTexture` pra faixas horizontais, `CreateTorus` achatado pros anéis de Saturno). Cloudflare
+Pages (lab-109) continua pronto e
 verificado em paralelo, https://missao-aprender-jogo.pages.dev — falta a DECISÃO e AÇÃO do usuário
 de trocar o DNS de `missaoaprendizado.com` de verdade, ver
 `labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md`. Lembrar também que

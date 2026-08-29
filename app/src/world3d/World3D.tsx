@@ -369,6 +369,16 @@ const MERCURY_RADIUS = 4
 const MERCURY_CENTER = new Vector3(58, 0, 0)
 const MERCURY_LANDING_UP = new Vector3(0, 1, 0)
 
+// Vênus (lab-111, continuação do lab-110) — segundo planeta novo, mesmo escopo (sem combate, só
+// moedas escondidas). Raio entre Marte e o planeta principal (Vênus é quase do tamanho da Terra
+// de verdade, mas bem menor que o planeta principal já é aqui — mantém só a ORDEM relativa real:
+// Mercúrio < Marte < Vênus). Centro num terceiro eixo (Y) — Marte usa Z, Mercúrio usa X, mantém os
+// três planetas-destino mutuamente ortogonais no espaço (só a distância até o planeta principal
+// importa, nunca a distância entre dois planetas-destino).
+const VENUS_RADIUS = 7
+const VENUS_CENTER = new Vector3(0, 58, 0)
+const VENUS_LANDING_UP = new Vector3(0, 1, 0)
+
 // Registro genérico de planetas-destino (lab-110) — substitui o antigo par de variáveis fixas
 // `onSecondPlanet`/`SECOND_PLANET_*` como única fonte de verdade sobre onde cada planeta fica;
 // `SECOND_PLANET_CENTER`/`RADIUS`/`LANDING_UP` continuam existindo tal e qual (usados só dentro do
@@ -398,6 +408,14 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: MERCURY_RADIUS,
     center: MERCURY_CENTER,
     landingUp: MERCURY_LANDING_UP,
+  },
+  venus: {
+    id: 'venus',
+    name: 'Vênus',
+    emoji: '♀️',
+    radius: VENUS_RADIUS,
+    center: VENUS_CENTER,
+    landingUp: VENUS_LANDING_UP,
   },
 }
 const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_PLANETS)
@@ -4503,6 +4521,117 @@ export function World3D({
         returnRockets.set('mercurio', { root: returnRocketRoot, hintLabel: returnHint })
       }
 
+      // Vênus (lab-111, continuação do lab-110) — sem combate/estrutura (mesmo escopo de
+      // Mercúrio). Superfície vulcânica alaranjada + atmosfera translúcida decorativa (a
+      // característica visual mais reconhecível de Vênus de verdade: nuvens de ácido sulfúrico
+      // tão espessas que escondem a superfície vista de fora) — SEM cratera nenhuma, ao contrário
+      // de Mercúrio (vulcanismo constante apaga crateras em Vênus de verdade), reforça o
+      // contraste visual entre os dois primeiros planetas da frente.
+      function buildVenusIfNeeded() {
+        const venusRoot = new TransformNode('venusRoot', scene)
+        venusRoot.position = VENUS_CENTER
+
+        const groundMat = new PBRMaterial('venusGroundMat', scene)
+        groundMat.albedoColor = new Color3(0.62, 0.42, 0.22)
+        groundMat.roughness = 0.85
+        const groundSphere = MeshBuilder.CreateSphere(
+          'venusGround',
+          { diameter: VENUS_RADIUS * 2, segments: 28 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = venusRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Atmosfera — só decorativa, sem física, não afeta luz/céu globais (compartilhados com o
+        // resto do jogo, mesma decisão já tomada pra Marte no lab-59). Esfera translúcida um
+        // pouco maior que o chão, `backFaceCulling = false` pra continuar visível de dentro
+        // (o jogador anda POR BAIXO dela, olhando pra cima veria o lado de dentro da esfera).
+        const atmosphereMat = new PBRMaterial('venusAtmosphereMat', scene)
+        atmosphereMat.albedoColor = new Color3(0.85, 0.72, 0.4)
+        atmosphereMat.emissiveColor = new Color3(0.45, 0.38, 0.18)
+        atmosphereMat.alpha = 0.35
+        atmosphereMat.backFaceCulling = false
+        const atmosphere = MeshBuilder.CreateSphere(
+          'venusAtmosphere',
+          { diameter: (VENUS_RADIUS + 0.7) * 2, segments: 24 },
+          scene,
+        )
+        atmosphere.material = atmosphereMat
+        atmosphere.parent = venusRoot
+        atmosphere.receiveShadows = false
+        atmosphere.freezeWorldMatrix()
+
+        // Rochas vulcânicas esparsas — mesmos modelos glTF de Marte/Mercúrio/deserto, contagem
+        // um pouco maior (planeta um pouco maior que Mercúrio).
+        const VENUS_ROCK_COUNT = 18
+        const venusRockIndices = [6, 7, 8, 9, 10]
+        for (let i = 0; i < VENUS_ROCK_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / VENUS_ROCK_COUNT))
+          const theta = i * GOLDEN_ANGLE * 4.1 + 1.1
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, VENUS_LANDING_UP) > Math.cos(0.35)) continue
+
+          const templateIndex = venusRockIndices[i % venusRockIndices.length]
+          const instance = propTemplates[templateIndex].clone(`venusProp-${i}`, null)
+          if (!instance) continue
+          instance.setEnabled(true)
+          instance.parent = venusRoot
+          const propPos = localUp.scale(VENUS_RADIUS)
+          const propScale = 0.9 + ((i * 7) % 5) * 0.15
+          instance.position = propPos
+          instance.rotationQuaternion = alignmentQuaternion(localUp)
+          instance.scaling.setAll(propScale)
+          instance.freezeWorldMatrix()
+          instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+
+          const collider = MeshBuilder.CreateSphere(`venusPropCollider-${i}`, { diameter: 0.7 * propScale }, scene)
+          collider.parent = venusRoot
+          collider.position = propPos
+          collider.isVisible = false
+          collider.computeWorldMatrix(true)
+          new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+        }
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const VENUS_COIN_COUNT = 6
+        for (let i = 0; i < VENUS_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / VENUS_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.6 + 2.9
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, VENUS_LANDING_UP) > Math.cos(0.35)) continue
+
+          const coinPos = VENUS_CENTER.add(localUp.scale(VENUS_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-venus${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-venus${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = venusRoot
+        returnRocketRoot.position = VENUS_LANDING_UP.scale(VENUS_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(VENUS_LANDING_UP)
+        const returnHint = new TextBlock('venusRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('venus', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
       // Despacha pro construtor certo (lab-110) — cada planeta só existe na cena depois da
       // primeira visita (`builtPlanetIds`), igual já funcionava só com Marte antes deste
       // laboratório generalizar pra qualquer quantidade de planetas-destino.
@@ -4511,6 +4640,7 @@ export function World3D({
         builtPlanetIds.add(id)
         if (id === 'marte') buildMarsIfNeeded()
         else if (id === 'mercurio') buildMercuryIfNeeded()
+        else if (id === 'venus') buildVenusIfNeeded()
       }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num
