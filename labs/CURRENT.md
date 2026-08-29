@@ -1,12 +1,30 @@
 # Laboratório atual
 
-**EM ANDAMENTO: labs/lab-120-auditoria-acessibilidade-wcag/** — escolhido pelo usuário entre as
-opções de backlog restantes. Medido com um script de contraste real (fórmula de luminância do
-WCAG) contra `index.css`: vários pares texto/fundo abaixo do mínimo AA (4.5:1), incluindo a
-mensagem de resposta certa/errada de TODA missão (`.quest-feedback`) e a etiqueta de tipo de
-missão (`.quest-type-tag`). Também achado: `.help-button` (ícones do HUD) e `.modal-close` (× de
-fechar, em todo modal) ficam abaixo do alvo de toque mínimo de 44×44px em telas estreitas. Ver
-`labs/lab-120-auditoria-acessibilidade-wcag/FEATURES.md` pro escopo completo.
+Último concluído: labs/lab-120-auditoria-acessibilidade-wcag/ — escolhido pelo usuário entre as
+opções de backlog restantes. Primeira auditoria SISTEMÁTICA de todo `index.css` contra os 3
+`[MUST]` de acessibilidade de `docs/prompts/02-design-profissional.md` §3 (antes só havia ajustes
+pontuais: `READABILITY_SCALE` no lab-87, `.avatar-shop-tab`/`.avatar-shop-action` no lab-91).
+Medido com scripts Node reais (fórmula de luminância relativa do WCAG), não estimativa visual: 9
+pares texto/fundo reprovados no contraste AA (4.5:1) foram identificados, incluindo a mensagem de
+resposta certa/errada de TODA missão (`.quest-feedback`) e a etiqueta de tipo de missão
+(`.quest-type-tag`). **Corrigido**: 4 tokens de design escurecidos no `:root`
+(`--success`/`--danger`/`--accent-dark`/`--primary-dark`, preservando matiz/saturação via HSL) +
+3 cores soltas substituídas por tom equivalente (`#6b76a0`/`#8a94b8`/`#9a6b1a`) + os 2 usos de
+`--primary` como TEXTO (`.reward-bonus-line`/`.ranking-row-self`) trocados pra `--primary-dark`.
+Também achado e corrigido: `.help-button` (ícones do HUD) e `.modal-close` (× de fechar, em todo
+modal) abaixo do alvo de toque mínimo de 44×44px em telas estreitas — `.modal-close` ganhou
+`min-width`/`min-height: 44px`; `.help-button` teve o piso do `clamp()` subido pra 44px, e
+`.hud-top-row` ganhou `flex-wrap: wrap` como rede de segurança pra não reintroduzir o bug de
+estouro de tela já resolvido nos labs 57-59 numa tela física estreita ("Poco C75"). **Achado de
+ferramenta (não do produto)**: `mcp__claude-in-chrome__resize_window` não afeta o viewport real
+neste ambiente (`window.innerWidth`/`outerWidth` inalterados e logicamente inconsistentes em 3
+tentativas) — contornado com o argumento matemático do piso do `clamp()` + simulação de contêiner
+estreito via `javascript_tool` direto no DOM. **Verificado ao vivo**: cores novas confirmadas
+tanto visualmente (recompensa de quest, etiqueta de tipo) quanto lendo
+`getComputedStyle(document.documentElement)` direto; `flex-wrap` confirmado sem estouro/corte de
+ícone num contêiner HUD forçado a 340px; sem erro de console. `npm run test`: 47/47 (sem teste
+novo — mudança só de CSS). `npm run build` sem erros. Ver
+`labs/lab-120-auditoria-acessibilidade-wcag/CONTEXT.md`.
 
 ## Correção de produção fora de um laboratório formal (2026-08-29)
 
@@ -740,13 +758,16 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-119-relatorio-semanal-email/CONTEXT.md` (último laboratório concluído — relatório
-semanal de progresso por e-mail, Fase F do plano comercial; tudo construído e deployado em
-produção, só falta o usuário configurar `RESEND_API_KEY` pro envio de verdade funcionar). Itens de
-backlog em aberto continuam os mesmos de antes (todos esperando ação do usuário, sem mudança neste
-laboratório). Lembrar também da correção de infraestrutura registrada acima ("Correção de
-produção fora de um laboratório formal") — domínio do Cloudflare Pages adicionado aos domínios
-confiáveis do Neon Auth. **Deploy real (Vercel) pendente**: usuário pediu publicar
+`labs/lab-120-auditoria-acessibilidade-wcag/CONTEXT.md` (último laboratório concluído — auditoria
+sistemática de acessibilidade WCAG AA em `index.css`: contraste de cor e alvo de toque 44×44px,
+tudo corrigido e verificado; nenhuma pendência nova). Antes desse,
+`labs/lab-119-relatorio-semanal-email/CONTEXT.md` (relatório semanal de progresso por e-mail, Fase
+F do plano comercial; tudo construído e deployado em produção, só falta o usuário configurar
+`RESEND_API_KEY` pro envio de verdade funcionar). Itens de backlog em aberto continuam os mesmos de
+antes (todos esperando ação do usuário, sem mudança nestes dois últimos laboratórios). Lembrar
+também da correção de infraestrutura registrada acima ("Correção de produção fora de um
+laboratório formal") — domínio do Cloudflare Pages adicionado aos domínios confiáveis do Neon
+Auth. **Deploy real (Vercel) pendente**: usuário pediu publicar
 em produção durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized"
 (mesma restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer
 deploy nele — provável limite de segurança da integração, não uma configuração errada). Cloudflare

@@ -1,7 +1,8 @@
 # Laboratório 120 — Auditoria de acessibilidade WCAG AA
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
+Fim: 2026-08-29
 Commit inicial: 4153c2f
 
 ## Objetivo do laboratório
@@ -79,15 +80,15 @@ varredura sistemática de todo `index.css`.
   botão em si é uma melhoria genuína mas não um requisito MUST não atendido, fica fora de escopo.
 
 ## Funcionalidades planejadas
-- [ ] `index.css`: escurecer `--success`/`--danger`/`--accent-dark`/`--primary-dark` no `:root`.
-- [ ] `index.css`: substituir `#6b76a0` → novo tom (4 usos), `#8a94b8` → novo tom (3 usos),
+- [x] `index.css`: escurecer `--success`/`--danger`/`--accent-dark`/`--primary-dark` no `:root`.
+- [x] `index.css`: substituir `#6b76a0` → novo tom (4 usos), `#8a94b8` → novo tom (3 usos),
       `#9a6b1a` → novo tom (2 usos).
-- [ ] `index.css`: `.reward-bonus-line`/`.ranking-row-self` trocam `var(--primary)` por
+- [x] `index.css`: `.reward-bonus-line`/`.ranking-row-self` trocam `var(--primary)` por
       `var(--primary-dark)`.
-- [ ] `index.css`: `.modal-close` ganha alvo de toque 44×44px.
-- [ ] `index.css`: `.help-button` ganha piso de 44px no `clamp()`; `.hud-top-row` ganha
+- [x] `index.css`: `.modal-close` ganha alvo de toque 44×44px.
+- [x] `index.css`: `.help-button` ganha piso de 44px no `clamp()`; `.hud-top-row` ganha
       `flex-wrap: wrap` como rede de segurança contra estouro de tela.
-- [ ] Verificação: `npm run build` sem erros; script de contraste confirma todos os pares ≥4.5:1
+- [x] Verificação: `npm run build` sem erros; script de contraste confirma todos os pares ≥4.5:1
       (texto normal) ou ≥3:1 (texto grande, quando aplicável); verificação ao vivo (dev server +
       browser automation) em pelo menos uma viewport estreita (~375px) confirmando que a fileira
       de ícones do HUD não estoura a tela, e comparação visual antes/depois das telas mais afetadas

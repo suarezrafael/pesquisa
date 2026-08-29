@@ -1,13 +1,22 @@
 :root {
   --bg: #fef6e4;
   --primary: #f582ae;
-  --primary-dark: #d9457f;
+  /* lab-120, auditoria WCAG AA: os 4 tons abaixo foram ESCURECIDOS (mesmo matiz/saturação, só
+     luminosidade reduzida) em relação ao valor original — medido com a fórmula oficial de
+     luminância relativa do WCAG, os tons antigos ficavam abaixo do mínimo AA (4.5:1) como cor de
+     TEXTO nos lugares reais onde são usados (`.quest-feedback`, `.quest-type-tag`,
+     `.pairing-code`, etc. — ver `labs/lab-120-.../FEATURES.md` pros números medidos). Nenhum dos
+     4 é usado como fundo de um jeito que a mudança prejudique (só `--accent-dark` tem um uso de
+     fundo, `.xp-bar-fill`, uma barra sem texto em cima).
+     --primary-dark original: #d9457f. --accent-dark original: #4a9fac.
+     --success original: #4caf50. --danger original: #e05454. */
+  --primary-dark: #d63473;
   --accent: #8bd3dd;
-  --accent-dark: #4a9fac;
+  --accent-dark: #35717a;
   --ink: #172c66;
   --card: #ffffff;
-  --success: #4caf50;
-  --danger: #e05454;
+  --success: #39843c;
+  --danger: #db3636;
   color-scheme: light;
 }
 
@@ -243,7 +252,10 @@ a.nickname-generate-btn {
 .field-hint {
   font-weight: 400;
   font-size: 0.78rem;
-  color: #6b76a0;
+  /* lab-120, auditoria WCAG AA: escurecido de #6b76a0 (4.45:1, abaixo do mínimo AA de 4.5:1 pra
+     texto normal) — mesmo tom (matiz preservado) usado nos outros 3 lugares que tinham essa cor
+     solta (`.text-button`, `.progress-panel-stat span`, `.legal-updated`). */
+  color: #68739e;
 }
 
 .field-hint-error {
@@ -341,7 +353,7 @@ a.nickname-generate-btn {
   border: none;
   background: none;
   padding: 0.35rem 0;
-  color: #6b76a0;
+  color: #68739e;
   font-size: 0.9rem;
   text-decoration: underline;
   cursor: pointer;
@@ -434,7 +446,7 @@ a.nickname-generate-btn {
 
 .progress-panel-stat span {
   font-size: 0.75rem;
-  color: #6b76a0;
+  color: #68739e;
 }
 
 .progress-panel-badges {
@@ -450,7 +462,9 @@ a.nickname-generate-btn {
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
   background: #fff3d6;
-  color: #9a6b1a;
+  /* lab-120, auditoria WCAG AA: escurecido de #9a6b1a (4.24:1 aqui, 3.69:1 no outro uso —
+     `.avatar-shop-tag.subscription-lock` — abaixo do mínimo AA de 4.5:1) */
+  color: #845c16;
 }
 
 /* Hub */
@@ -568,8 +582,14 @@ a.nickname-generate-btn {
   pointer-events: none;
 }
 
+/* lab-120, auditoria WCAG AA: `flex-wrap` como rede de segurança pro piso de 44px novo do
+   `.help-button` abaixo — em telas MUITO estreitas com vários ícones visíveis ao mesmo tempo
+   (mochila + pareamento + os 7 fixos), a fileira quebra pra uma segunda linha em vez de estourar
+   a largura da tela (o mesmo tipo de bug real já corrigido nos labs 57-59 pro cabeçalho
+   avatar+nome+XP, ver comentário logo abaixo). */
 .hud-top-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: clamp(0.2rem, 1.6vmin, 0.6rem);
 }
@@ -599,17 +619,27 @@ a.nickname-generate-btn {
   min-width: 0;
 }
 
+/* lab-120, auditoria WCAG AA: o piso do `clamp()` era 1.4rem (22.4px), teto 2.25rem (36px) — os
+   DOIS abaixo do alvo de toque mínimo de 44×44px (`02-design-profissional.md` §3), medido
+   chegando ao piso em telas estreitas reais. Piso subiu pra 2.75rem (44px, nunca encolhe além
+   disso) e teto pra 3.2rem (51px, só cresce em telas bem grandes — mesmo espírito de "cresce
+   proporcionalmente" de antes, só que sem nunca ficar pequeno demais pra tocar). `.hud-top-row`
+   ganhou `flex-wrap` (ver acima) como rede de segurança: numa tela estreita o bastante pra não
+   caber todos os botões nesse tamanho maior, a fileira quebra em vez de estourar a largura da
+   tela. */
 .help-button {
   pointer-events: auto;
   flex-shrink: 0;
-  width: clamp(1.4rem, 6.5vmin, 2.25rem);
-  height: clamp(1.4rem, 6.5vmin, 2.25rem);
+  width: clamp(2.75rem, 6.5vmin, 3.2rem);
+  height: clamp(2.75rem, 6.5vmin, 3.2rem);
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.82);
   color: var(--ink);
   font-weight: 800;
-  font-size: clamp(0.65rem, 3vmin, 1.1rem);
+  /* lab-120: proporcional ao novo tamanho maior do botão (mesma razão ~0,48× de antes) — senão o
+     emoji ficaria pequeno demais sobrando espaço dentro do círculo maior. */
+  font-size: clamp(1.3rem, 3vmin, 1.5rem);
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
   cursor: pointer;
 }
@@ -893,15 +923,28 @@ a.nickname-generate-btn {
   }
 }
 
+/* lab-120, auditoria WCAG AA: sem `width`/`height`/`padding` nenhum, a área clicável era só o
+   glifo "×" renderizado (bem abaixo do alvo de toque mínimo de 44×44px — `02-design-
+   profissional.md` §3 — e usado em TODO modal do jogo, o maior alcance possível de um só fix).
+   `min-width`/`min-height` (não `width`/`height`, mesmo raciocínio do `.avatar-shop-action` do
+   lab-91) + flex centraliza o "×" dentro da área maior sem esticar o glifo. `top`/`right`
+   reduzidos pra compensar o crescimento da caixa e manter o "×" visualmente perto de onde estava.
+   Cor escurecida de #8a94b8 (3.00:1, na borda do mínimo AA de texto grande) — mesmo tom usado em
+   `.ranking-place`/`.chat-empty`, que tinham a mesma cor solta. */
 .modal-close {
   position: absolute;
-  top: 0.75rem;
-  right: 0.9rem;
+  top: 0.1rem;
+  right: 0.2rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #8a94b8;
+  color: #6774a3;
 }
 
 .quest-type-tag {
@@ -995,7 +1038,10 @@ a.nickname-generate-btn {
 .reward-bonus-line {
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--primary);
+  /* lab-120, auditoria WCAG AA: `--primary` (rosa de fundo dos botões) como TEXTO dava 2.42:1,
+     bem abaixo do mínimo AA — `--primary-dark` já é o tom "rosa seguro pra texto" usado em vários
+     outros lugares deste arquivo (`.pairing-code`, `.avatar-shop-tag`, etc.). */
+  color: var(--primary-dark);
   margin: 0.35rem 0 0;
 }
 
@@ -1234,7 +1280,7 @@ a.nickname-generate-btn {
 /* Item exclusivo de assinante (Fase E) — mesmo espaço visual do botão de compra, sem ação de
    clique (a criança não tem como comprar nada; o pagamento só existe no portal do responsável). */
 .avatar-shop-tag.subscription-lock {
-  color: #9a6b1a;
+  color: #845c16;
 }
 
 /* [MUST] docs/prompts/02-design-profissional.md: alvo de toque mínimo 44×44px lógicos — achado
@@ -1303,7 +1349,7 @@ a.nickname-generate-btn {
 }
 
 .chat-empty {
-  color: #8a94b8;
+  color: #6774a3;
   font-size: 0.85rem;
 }
 
@@ -1391,13 +1437,15 @@ a.nickname-generate-btn {
 
 .ranking-row-self {
   font-weight: 700;
-  color: var(--primary);
+  /* lab-120, auditoria WCAG AA: mesma correção de `.reward-bonus-line` acima — `--primary` como
+     texto fica bem abaixo do mínimo AA (2.42:1), `--primary-dark` é o tom já usado pra isso. */
+  color: var(--primary-dark);
 }
 
 .ranking-place {
   display: inline-block;
   min-width: 1.6em;
-  color: #8a94b8;
+  color: #6774a3;
 }
 
 .remote-name-tag {
@@ -1500,7 +1548,7 @@ a.nickname-generate-btn {
 
 .legal-updated {
   font-size: 0.8rem;
-  color: #6b76a0;
+  color: #68739e;
   margin-bottom: 1.5rem;
 }
 
