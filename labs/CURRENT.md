@@ -1,6 +1,34 @@
 # Laboratório atual
 
-Último concluído: labs/lab-121-acessibilidade-teclado-zoom/ — escolhido pelo usuário entre 3
+Último concluído: labs/lab-122-lojinha-avatar-texturas-exclusivas/ — pedido direto do usuário no
+chat: itens exclusivos de assinante na lojinha de avatar (calça/sapato/mochila/camisa) precisavam
+parecer genuinamente mais premium (textura/padrão/brilho), não só uma cor sólida diferente dos
+itens grátis. **Confirmado o problema**: os 8 itens `subscriptionOnly` dos 4 catálogos
+(`app/src/data/customization.ts`) só diferiam dos itens grátis por `colorRgb` — mesmo tratamento
+visual, nomes chamativos ("Calça Estelar", "Camisa Holográfica"...) sem nada que os justificasse.
+**Corrigido**: novo campo `style?` em `ColorOption` (6 estilos: `starry`/`nebula`/`holographic`/
+`prism`/`neon-glow`/`metallic-gold`) + função central `applyClothingLook` (`studentFigure.ts`) que
+aplica `DynamicTexture` procedural (mesma técnica já usada nas faixas de Júpiter/Saturno/Urano/
+Netuno) ou PBR `metallic`/`roughness` puro (dourado), com textura cacheada por `Scene`. **Achado
+que ampliou o escopo**: a cor de calça/sapato/mochila/camisa é setada em **13 pontos** diferentes
+(9 em `World3D.tsx` — montagem inicial, 4 pontes de recolorir ao vivo, 4 sub-checagens de
+sincronização remota — e **4 em `AvatarPreview3D.tsx`**, o preview da própria lojinha, só
+descoberto numa segunda rodada de verificação ao vivo depois que a primeira implementação não
+mudava nada visível na lojinha). Todos os 13 substituídos por `applyClothingLook`. **Verificado ao
+vivo**: textura visível no avatar em jogo (estrelinhas nítidas na calça, listras coloridas na
+camisa), reset correto ao trocar de volta pra item sólido, cache de textura confirmado reutilizado
+entre calça/mochila com o mesmo estilo, sem erro de console. `npm run test`: 47/47 (sem teste
+novo). `npm run build` sem erros. **Segunda parte do mesmo pedido do usuário (casa com interior 3D
+andável, transição por porta E) fica para laboratório(s) futuro(s)** — mudança arquitetural bem
+maior, não coberta aqui. Uma investigação em paralelo (não formalizada como lab) confirmou com
+dados reais a causa do chunk `studentFigure` de 3,68MB (barril `@babylonjs/core` importado em 3
+arquivos simultaneamente, side-effects declarados no `package.json` do pacote forçam incluir
+XR/FrameGraph nunca usados) — corrigir de verdade exigiria converter os 3 arquivos de uma vez
+(~50 símbolos), risco/esforço bem maior que o fix de 2 símbolos do lab-117; fica como candidato a
+laboratório futuro, não decidido se vale a pena. Ver
+`labs/lab-122-lojinha-avatar-texturas-exclusivas/CONTEXT.md`.
+
+Antes desse: labs/lab-121-acessibilidade-teclado-zoom/ — escolhido pelo usuário entre 3
 opções de backlog (as outras: reinvestigar o bug de morros invisíveis do lab-95 sem informação nova
 do usuário; code-splitting de `studentFigure.ts`, acoplamento interno do Babylon.js sem solução
 clara). Ataca os 2 itens `[SHOULD]` de acessibilidade deixados de fora do lab-120 (que cobriu só os
@@ -778,15 +806,24 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-121-acessibilidade-teclado-zoom/CONTEXT.md` (último laboratório concluído — navegação por
-teclado/leitor de tela nos 12 painéis 2D do jogo, Esc/foco/`inert`; zoom de fonte investigado e já
-conforme, sem mudança de código; nenhuma pendência nova). Antes desse,
-`labs/lab-120-auditoria-acessibilidade-wcag/CONTEXT.md` (auditoria sistemática de acessibilidade
-WCAG AA em `index.css`: contraste de cor e alvo de toque 44×44px, tudo corrigido e verificado) e
+`labs/lab-122-lojinha-avatar-texturas-exclusivas/CONTEXT.md` (último laboratório concluído — itens
+exclusivos de assinante na lojinha de avatar ganharam textura/estilo real via `DynamicTexture`/PBR
+metálico, em vez de só uma cor sólida diferente; tudo corrigido e verificado ao vivo). **A segunda
+metade do mesmo pedido do usuário (casa "Minha Casa" virar um interior 3D andável, com transição
+por porta apertando E) ainda não foi atacada** — é uma mudança arquitetural bem maior (nenhum
+prédio deste jogo tem interior andável hoje, todos são fachada + painel 2D por proximidade) e
+precisa de investigação/planejamento próprios antes de começar. Também pendente: uma investigação
+(não formalizada como lab) que confirmou a causa raiz real do chunk `studentFigure` de 3,68MB
+(barril `@babylonjs/core` importado em 3 arquivos ao mesmo tempo) — corrigir exigiria converter os
+3 arquivos de uma vez, candidato a laboratório futuro, ainda sem decisão se vale o risco. Antes do
+lab-122, `labs/lab-121-acessibilidade-teclado-zoom/CONTEXT.md` (navegação por teclado/leitor de
+tela nos 12 painéis 2D do jogo, Esc/foco/`inert`; zoom de fonte já conforme, sem mudança de
+código), `labs/lab-120-auditoria-acessibilidade-wcag/CONTEXT.md` (auditoria sistemática de
+acessibilidade WCAG AA em `index.css`: contraste de cor e alvo de toque 44×44px, tudo corrigido) e
 `labs/lab-119-relatorio-semanal-email/CONTEXT.md` (relatório semanal de progresso por e-mail, Fase
 F do plano comercial; tudo construído e deployado em produção, só falta o usuário configurar
 `RESEND_API_KEY` pro envio de verdade funcionar). Itens de backlog em aberto continuam os mesmos de
-antes (todos esperando ação do usuário, sem mudança nestes três últimos laboratórios). Lembrar
+antes (todos esperando ação do usuário, sem mudança nestes quatro últimos laboratórios). Lembrar
 também da correção de infraestrutura registrada acima ("Correção de produção fora de um
 laboratório formal") — domínio do Cloudflare Pages adicionado aos domínios confiáveis do Neon
 Auth. **Deploy real (Vercel) pendente**: usuário pediu publicar

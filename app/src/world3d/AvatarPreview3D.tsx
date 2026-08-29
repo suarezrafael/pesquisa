@@ -24,6 +24,7 @@ import {
 } from '../data/customization'
 import {
   applyBonecoFeatures,
+  applyClothingLook,
   applyGlasses,
   applyHairShape,
   applyHat,
@@ -168,16 +169,23 @@ export function AvatarPreview3D({
     applyGlasses(figure, glassesId ? (findGlassesById(glassesId) ?? null) : null, scene, shadowGenerator)
     applyHairShape(figure, findHairShapeOption(hairShapeId)?.shape ?? 'padrao', scene, shadowGenerator)
 
+    // lab-122: `applyClothingLook` também aplica o `style` (textura/metálico) dos itens
+    // exclusivos — sem isso, a lojinha mostraria uma cor sólida diferente do que o boneco no
+    // mundo 3D realmente usa depois de equipado.
     const shirtOpt = findColorOption(SHIRT_COLOR_CATALOG, shirtColorId)
-    figure.shirtMat.albedoColor = shirtOpt ? new Color3(...shirtOpt.colorRgb) : avatarColorFromEmoji(avatarEmoji)
+    applyClothingLook(figure.shirtMat, shirtOpt, scene, avatarColorFromEmoji(avatarEmoji), 0.7)
     const pantsOpt = findColorOption(PANTS_COLOR_CATALOG, pantsColorId)
-    figure.pantsMat.albedoColor = pantsOpt ? new Color3(...pantsOpt.colorRgb) : new Color3(0.22, 0.28, 0.48)
+    applyClothingLook(figure.pantsMat, pantsOpt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
     const shoeOpt = findColorOption(SHOE_COLOR_CATALOG, shoeColorId)
-    figure.shoeMat.albedoColor = shoeOpt ? new Color3(...shoeOpt.colorRgb) : new Color3(0.12, 0.12, 0.14)
+    applyClothingLook(figure.shoeMat, shoeOpt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
     const backpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, backpackColorId)
-    figure.backpackMat.albedoColor = backpackOpt
-      ? new Color3(...backpackOpt.colorRgb)
-      : Color3.Lerp(avatarColorFromEmoji(avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5)
+    applyClothingLook(
+      figure.backpackMat,
+      backpackOpt,
+      scene,
+      Color3.Lerp(avatarColorFromEmoji(avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+      0.75,
+    )
 
     figureRef.current = figure
   }, [avatarEmoji, hatId, shirtColorId, pantsColorId, shoeColorId, backpackColorId, hairShapeId, glassesId])

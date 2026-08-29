@@ -11,6 +11,18 @@
 // opção do catálogo" — são a mesma cor visualmente, mas `null` cobre perfis salvos antes deste
 // laboratório sem precisar de migração nenhuma.
 
+// lab-122 (pedido do usuário: itens exclusivos precisam de "textura, estilos, mais cores... mais
+// moda" em vez de só uma cor sólida diferente) — cada valor mapeia pra um tratamento visual
+// diferente em `studentFigure.ts` (`applyClothingLook`). `undefined`/ausente = comportamento atual
+// (cor sólida), preservado pra TODO item grátis/comprável com moeda, sem exceção.
+export type ClothingStyle =
+  | 'starry'
+  | 'nebula'
+  | 'holographic'
+  | 'prism'
+  | 'neon-glow'
+  | 'metallic-gold'
+
 export interface ColorOption {
   id: string
   name: string
@@ -20,6 +32,8 @@ export interface ColorOption {
    * assinante em vez de comprável com moeda. Nunca reclassifica um item que já era comprável
    * com moeda antes desta fase — só entradas novas. */
   subscriptionOnly?: boolean
+  /** lab-122 — só itens `subscriptionOnly` recebem um valor aqui. */
+  style?: ClothingStyle
 }
 
 export const PANTS_COLOR_CATALOG: ColorOption[] = [
@@ -32,6 +46,7 @@ export const PANTS_COLOR_CATALOG: ColorOption[] = [
     cost: 0,
     colorRgb: [0.14, 0.12, 0.32],
     subscriptionOnly: true,
+    style: 'starry',
   },
   {
     id: 'calca_galactica',
@@ -39,6 +54,7 @@ export const PANTS_COLOR_CATALOG: ColorOption[] = [
     cost: 0,
     colorRgb: [0.32, 0.12, 0.42],
     subscriptionOnly: true,
+    style: 'nebula',
   },
 ]
 
@@ -52,6 +68,7 @@ export const SHOE_COLOR_CATALOG: ColorOption[] = [
     cost: 0,
     colorRgb: [0.3, 0.95, 0.55],
     subscriptionOnly: true,
+    style: 'neon-glow',
   },
   {
     id: 'sapato_dourado',
@@ -59,6 +76,7 @@ export const SHOE_COLOR_CATALOG: ColorOption[] = [
     cost: 0,
     colorRgb: [0.85, 0.68, 0.22],
     subscriptionOnly: true,
+    style: 'metallic-gold',
   },
 ]
 
@@ -72,6 +90,7 @@ export const BACKPACK_COLOR_CATALOG: ColorOption[] = [
     cost: 0,
     colorRgb: [0.85, 0.7, 0.25],
     subscriptionOnly: true,
+    style: 'metallic-gold',
   },
   {
     id: 'mochila_estelar',
@@ -79,6 +98,7 @@ export const BACKPACK_COLOR_CATALOG: ColorOption[] = [
     cost: 0,
     colorRgb: [0.16, 0.18, 0.38],
     subscriptionOnly: true,
+    style: 'starry',
   },
 ]
 
@@ -93,6 +113,7 @@ export const SHIRT_COLOR_CATALOG: ColorOption[] = [
     cost: 0,
     colorRgb: [0.78, 0.35, 0.9],
     subscriptionOnly: true,
+    style: 'holographic',
   },
   {
     id: 'camisa_prisma',
@@ -100,6 +121,7 @@ export const SHIRT_COLOR_CATALOG: ColorOption[] = [
     cost: 0,
     colorRgb: [0.4, 0.62, 0.92],
     subscriptionOnly: true,
+    style: 'prism',
   },
 ]
 

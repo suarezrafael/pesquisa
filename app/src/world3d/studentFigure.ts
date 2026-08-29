@@ -8,10 +8,20 @@
 // chunk principal do app de novo, quebrando o `lazy()` pra todo mundo — inclusive quem só abre
 // `/familia`, `/termos` ou `/privacidade` e nunca chega a ver o mundo 3D. Um módulo pequeno e
 // isolado, sem física/cena principal, evita esse acoplamento.
-import { Color3, Mesh, MeshBuilder, PBRMaterial, Scene, ShadowGenerator, TransformNode, Vector3 } from '@babylonjs/core'
+import {
+  Color3,
+  DynamicTexture,
+  Mesh,
+  MeshBuilder,
+  PBRMaterial,
+  Scene,
+  ShadowGenerator,
+  TransformNode,
+  Vector3,
+} from '@babylonjs/core'
 import { findAvatarByEmoji, type BonecoFeatures } from '../data/avatars'
 import type { HatOption } from '../data/hats'
-import type { HairShape } from '../data/customization'
+import type { ClothingStyle, ColorOption, HairShape } from '../data/customization'
 import type { GlassesOption } from '../data/glasses'
 
 // Cor da camisa vem do catálogo de avatares (src/data/avatars.ts) — fonte única de verdade,
@@ -66,6 +76,105 @@ export interface StudentFigureColorOptions {
   pantsColor?: Color3
   shoeColor?: Color3
   backpackColor?: Color3
+}
+
+// lab-122 (pedido do usuário: itens exclusivos de assinante precisam de "textura, estilos, mais
+// cores... mais moda" em vez de uma cor sólida igual à dos itens grátis) — paletas fixas por
+// estilo, não derivadas de `colorRgb`: o objetivo é um visual genuinamente desenhado pro item, não
+// uma variação automática da cor sólida de fallback.
+const STRIPE_PALETTES: Record<'nebula' | 'prism' | 'holographic' | 'neon-glow', string[]> = {
+  nebula: ['#3a1d5c', '#6b2d8a', '#a83fa0', '#5c2d7a', '#2d1d5c', '#8a3fb0'],
+  prism: ['#ff2d6b', '#ff9f2d', '#f5f52d', '#2dff8f', '#2dcaff', '#6b4dff', '#ff2dcf'],
+  'neon-glow': ['#2dffa0', '#2dffef', '#2dd0ff', '#8fff2d', '#2dffa0'],
+  holographic: ['#ff7ae0', '#7affea', '#7aa0ff', '#eaff7a', '#ff9ade'],
+}
+
+function drawStripePattern(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]) {
+  let y = 0
+  let i = 0
+  while (y < height) {
+    const bandHeight = 6 + Math.random() * 16
+    ctx.fillStyle = palette[i % palette.length]
+    ctx.fillRect(0, y, width, bandHeight)
+    y += bandHeight
+    i++
+  }
+}
+
+function drawStarryPattern(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  ctx.fillStyle = '#10102a'
+  ctx.fillRect(0, 0, width, height)
+  for (let i = 0; i < 60; i++) {
+    const x = Math.random() * width
+    const y = Math.random() * height
+    const r = 0.6 + Math.random() * 1.4
+    ctx.globalAlpha = 0.5 + Math.random() * 0.5
+    ctx.fillStyle = '#ffffff'
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.globalAlpha = 1
+}
+
+// Uma textura por `style` por `Scene`, reaproveitada por toda figura que equipa o mesmo item —
+// evita redesenhar o mesmo canvas pra cada NPC/jogador remoto que usa o mesmo item exclusivo
+// (mesmo padrão de pontes já penduradas em `scene as any`, ver `__setAvatarShirtColor` em
+// `World3D.tsx`).
+function getOrCreatePatternTexture(scene: Scene, style: ClothingStyle): DynamicTexture | null {
+  if (style === 'metallic-gold') return null
+  const cache: Map<string, DynamicTexture> =
+    (scene as any).__clothingPatternCache ?? ((scene as any).__clothingPatternCache = new Map())
+  const cached = cache.get(style)
+  if (cached) return cached
+
+  const size = style === 'starry' ? 64 : 16
+  const texture = new DynamicTexture(`clothing-${style}-tex`, { width: size, height: size * 4 }, scene, false)
+  const ctx = texture.getContext() as CanvasRenderingContext2D
+  if (style === 'starry') {
+    drawStarryPattern(ctx, size, size * 4)
+  } else {
+    drawStripePattern(ctx, size, size * 4, STRIPE_PALETTES[style])
+  }
+  texture.update()
+  cache.set(style, texture)
+  return texture
+}
+
+/** lab-122 — único ponto que decide o que um `style` de `ColorOption` faz com o material de uma
+ * peça de roupa (calça/sapato/mochila/camisa). Usado tanto na montagem inicial do boneco quanto
+ * nas pontes de recolorir ao vivo e na sincronização de jogador remoto — nenhum desses lugares
+ * decide sozinho o que um estilo "significa" visualmente. `baseRoughness` é o valor original da
+ * peça (cada eixo tem o seu, ver `buildStudentFigure`), restaurado sempre que o item equipado não
+ * é `metallic-gold` — sem isso, trocar de um item metálico de volta pra um item sólido deixaria a
+ * peça brilhando por engano. */
+export function applyClothingLook(
+  mat: PBRMaterial,
+  opt: ColorOption | null | undefined,
+  scene: Scene,
+  fallbackColor: Color3,
+  baseRoughness: number,
+): void {
+  const color = opt ? new Color3(...opt.colorRgb) : fallbackColor
+  mat.albedoColor = color
+  mat.albedoTexture = null
+  mat.metallic = 0
+  mat.roughness = baseRoughness
+  mat.emissiveColor = Color3.Black()
+
+  const style = opt?.style
+  if (!style) return
+
+  if (style === 'metallic-gold') {
+    mat.metallic = 0.85
+    mat.roughness = 0.25
+    return
+  }
+
+  mat.albedoTexture = getOrCreatePatternTexture(scene, style)
+  if (style === 'holographic' || style === 'neon-glow') {
+    mat.emissiveColor = color.scale(0.3)
+  }
 }
 
 export function buildStudentFigure(

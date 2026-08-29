@@ -60,6 +60,7 @@ import {
 } from '../data/customization'
 import {
   applyBonecoFeatures,
+  applyClothingLook,
   applyGlasses,
   applyHairShape,
   applyHat,
@@ -5375,8 +5376,20 @@ export function World3D({
         shoeColor: initialShoeOpt ? new Color3(...initialShoeOpt.colorRgb) : undefined,
         backpackColor: initialBackpackOpt ? new Color3(...initialBackpackOpt.colorRgb) : undefined,
       })
+      // lab-122: `buildStudentFigure` já deixa uma cor sólida padrão pronta acima — isso reaplica
+      // com `applyClothingLook`, que também trata o `style` de itens exclusivos (textura/metálico),
+      // não só a cor.
       const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, profile.equippedShirtColorId)
-      if (initialShirtOpt) studentFigure.shirtMat.albedoColor = new Color3(...initialShirtOpt.colorRgb)
+      applyClothingLook(studentFigure.shirtMat, initialShirtOpt, scene, avatarColorFromEmoji(profile.avatarEmoji), 0.7)
+      applyClothingLook(studentFigure.pantsMat, initialPantsOpt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
+      applyClothingLook(studentFigure.shoeMat, initialShoeOpt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
+      applyClothingLook(
+        studentFigure.backpackMat,
+        initialBackpackOpt,
+        scene,
+        Color3.Lerp(avatarColorFromEmoji(profile.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+        0.75,
+      )
       applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
       applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
       applyGlasses(
@@ -5458,21 +5471,25 @@ export function World3D({
       // `__setPlayerHat` acima: um por eixo, cada um observado por um `useEffect` próprio.
       ;(scene as any).__setPlayerShirtColor = (id: string | null) => {
         const opt = findColorOption(SHIRT_COLOR_CATALOG, id)
-        studentFigure.shirtMat.albedoColor = opt ? new Color3(...opt.colorRgb) : avatarColorFromEmoji(profileRef.current.avatarEmoji)
+        applyClothingLook(studentFigure.shirtMat, opt, scene, avatarColorFromEmoji(profileRef.current.avatarEmoji), 0.7)
       }
       ;(scene as any).__setPlayerPantsColor = (id: string | null) => {
         const opt = findColorOption(PANTS_COLOR_CATALOG, id)
-        studentFigure.pantsMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.22, 0.28, 0.48)
+        applyClothingLook(studentFigure.pantsMat, opt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
       }
       ;(scene as any).__setPlayerShoeColor = (id: string | null) => {
         const opt = findColorOption(SHOE_COLOR_CATALOG, id)
-        studentFigure.shoeMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.12, 0.12, 0.14)
+        applyClothingLook(studentFigure.shoeMat, opt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
       }
       ;(scene as any).__setPlayerBackpackColor = (id: string | null) => {
         const opt = findColorOption(BACKPACK_COLOR_CATALOG, id)
-        studentFigure.backpackMat.albedoColor = opt
-          ? new Color3(...opt.colorRgb)
-          : Color3.Lerp(avatarColorFromEmoji(profileRef.current.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5)
+        applyClothingLook(
+          studentFigure.backpackMat,
+          opt,
+          scene,
+          Color3.Lerp(avatarColorFromEmoji(profileRef.current.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+          0.75,
+        )
       }
       ;(scene as any).__setPlayerHairShape = (id: string | null) => {
         const opt = findHairShapeOption(id)
@@ -6949,24 +6966,28 @@ export function World3D({
         if (state.shirtColorId !== rp.lastShirtColorId) {
           rp.lastShirtColorId = state.shirtColorId
           const opt = findColorOption(SHIRT_COLOR_CATALOG, state.shirtColorId)
-          rp.figure.shirtMat.albedoColor = opt ? new Color3(...opt.colorRgb) : avatarColorFromEmoji(state.avatarEmoji)
+          applyClothingLook(rp.figure.shirtMat, opt, scene, avatarColorFromEmoji(state.avatarEmoji), 0.7)
         }
         if (state.pantsColorId !== rp.lastPantsColorId) {
           rp.lastPantsColorId = state.pantsColorId
           const opt = findColorOption(PANTS_COLOR_CATALOG, state.pantsColorId)
-          rp.figure.pantsMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.22, 0.28, 0.48)
+          applyClothingLook(rp.figure.pantsMat, opt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
         }
         if (state.shoeColorId !== rp.lastShoeColorId) {
           rp.lastShoeColorId = state.shoeColorId
           const opt = findColorOption(SHOE_COLOR_CATALOG, state.shoeColorId)
-          rp.figure.shoeMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.12, 0.12, 0.14)
+          applyClothingLook(rp.figure.shoeMat, opt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
         }
         if (state.backpackColorId !== rp.lastBackpackColorId) {
           rp.lastBackpackColorId = state.backpackColorId
           const opt = findColorOption(BACKPACK_COLOR_CATALOG, state.backpackColorId)
-          rp.figure.backpackMat.albedoColor = opt
-            ? new Color3(...opt.colorRgb)
-            : Color3.Lerp(avatarColorFromEmoji(state.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5)
+          applyClothingLook(
+            rp.figure.backpackMat,
+            opt,
+            scene,
+            Color3.Lerp(avatarColorFromEmoji(state.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+            0.75,
+          )
         }
         if (state.hairShapeId !== rp.lastHairShapeId) {
           rp.lastHairShapeId = state.hairShapeId
