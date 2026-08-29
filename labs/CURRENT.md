@@ -1,6 +1,11 @@
 # Laboratório atual
 
-Último concluído: labs/lab-110-sistema-solar-selecao-de-planeta/ — pedido novo do usuário: ampliar
+Em andamento: labs/lab-111-sistema-solar-venus/ — segundo planeta novo da frente "Sistema Solar"
+(continuação do lab-110). Superfície vulcânica alaranjada + atmosfera translúcida amarelo-esbranquiçada
+decorativa (característica visual mais reconhecível de Vênus), sem cratera (ao contrário de
+Mercúrio), sem combate. Ver `labs/lab-111-sistema-solar-venus/FEATURES.md`.
+
+Antes desse: labs/lab-110-sistema-solar-selecao-de-planeta/ — pedido novo do usuário: ampliar
 o mundo pra incluir todos os planetas do sistema solar (hoje só tinha Marte), renderizados sob
 demanda ao viajar de foguete, com um seletor de destino ao embarcar. Escopo de cada planeta novo
 confirmado com o usuário: moedas escondidas, sem combate (Marte continua sendo o único com
