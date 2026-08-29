@@ -1,10 +1,25 @@
 # Laboratório atual
 
-Em andamento: labs/lab-108-multiplos-perfis-por-familia/ — última das 4 frentes de backlog de
-produto do lab-104 (Minha Casa completa nos labs 105-107; esta é a única restante totalmente
+Último concluído: labs/lab-108-multiplos-perfis-por-familia/ — última das 4 frentes de backlog de
+produto do lab-104 (Minha Casa completa nos labs 105-107; esta era a única restante totalmente
 construível em código, sem credencial nova nem decisão que só o usuário pode tomar). Permite dois
-irmãos compartilhando o mesmo tablet terem cada um seu próprio perfil/progresso — hoje o jogo tem
-um único perfil fixo por aparelho. Ver `labs/lab-108-multiplos-perfis-por-familia/FEATURES.md`.
+irmãos compartilhando o mesmo tablet terem cada um seu próprio perfil/progresso — antes, o jogo
+tinha um único perfil fixo por aparelho (`localStorage` sem conceito de "qual criança"). Sistema de
+slots em `storage.ts` (roster + perfil ativo, chaves com id embutido), migração ADITIVA e NUNCA
+destrutiva do perfil legado (chaves antigas nunca apagadas), `ProfilePicker.tsx` novo ("Quem vai
+jogar?"), botão 🔁 no HUD. Assinatura/entitlement continuam por APARELHO, não por criança —
+`entitlementStorage.ts` intocado de propósito. **2 bugs reais pegos e corrigidos antes/durante a
+verificação, nenhum chegou a ir pro usuário**: (1) o botão de trocar perfil só aparecia com 2+
+perfis já criados — beco sem saída, já que ele é a ÚNICA porta pro "+ Novo perfil"; corrigido pra
+sempre visível. (2) a guarda de migração usava o id ativo (que "Trocar perfil" apaga de propósito)
+em vez do roster — cada troca de perfil disparava uma SEGUNDA migração do perfil legado (nunca
+apagado), duplicando dados a cada troca; corrigido pra guardar pelo roster (nunca esvaziado).
+**Verificado ao vivo** num dispositivo de dev real com um perfil pré-existente ("Duda", sessão
+anterior): migração não-destrutiva confirmada, segundo perfil criado e confirmado isolado (moeda/
+progresso não vazam entre perfis), troca sem perda de dado dos dois lados, sem erro de console —
+perfil de teste removido ao final, devolvendo o aparelho ao estado original. `npm run test`: 44/44
+(sem teste novo — `storage.ts` é I/O, não lógica de domínio pura). `npm run build` sem erros. Ver
+`labs/lab-108-multiplos-perfis-por-familia/CONTEXT.md`.
 
 Antes desse: labs/lab-107-minha-casa-sets-assinante/ — os dois sets temáticos exclusivos de
 assinante ("Quarto Espacial" 🚀: cama-nave/luminária-planeta/tapete de estrelas; "Jardim Encantado"
@@ -472,10 +487,11 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-107-minha-casa-sets-assinante/CONTEXT.md` (último laboratório concluído — "Minha Casa"
-está completa; próximo passo é escolher outra frente do backlog de produto, ver os itens ainda não
-priorizados na seção "O que o próximo laboratório deve desenvolver" desse CONTEXT.md). Lembrar
-também que `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
+`labs/lab-108-multiplos-perfis-por-familia/CONTEXT.md` (último laboratório concluído — as 4 frentes
+de backlog de produto do lab-104 estão todas atendidas; o que resta genuinamente em aberto é Fase F
+— Stripe produção/Cloudflare Pages/e-mail semanal via Resend —, que exige credencial/decisão de
+infraestrutura só o usuário pode prover). Lembrar também que
+`labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do

@@ -15,6 +15,7 @@ interface HudHeaderProps {
   showBag: boolean
   onOpenBag: () => void
   onOpenPairing: () => void
+  onSwitchProfile: () => void
 }
 
 export function HudHeader({
@@ -30,6 +31,7 @@ export function HudHeader({
   showBag,
   onOpenBag,
   onOpenPairing,
+  onSwitchProfile,
 }: HudHeaderProps) {
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
@@ -86,6 +88,9 @@ export function HudHeader({
           aria-label="Vincular assinatura da família"
         >
           🔗
+        </button>
+        <button type="button" className="help-button" onClick={onSwitchProfile} aria-label="Trocar perfil">
+          🔁
         </button>
       </div>
 

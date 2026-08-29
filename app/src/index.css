@@ -144,6 +144,42 @@ body {
   background: #fde2ee;
 }
 
+/* Múltiplos perfis (lab-108) — grade parecida com `.avatar-grid`, mas cada tile também mostra o
+   nome do explorador(a) embaixo do emoji, não só o emoji sozinho. */
+.profile-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+.profile-picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1rem 0.5rem;
+  border-radius: 16px;
+  border: 3px solid transparent;
+  background: var(--card);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.profile-picker-emoji {
+  font-size: 2rem;
+}
+
+.profile-picker-name {
+  font-size: 0.95rem;
+  color: #1f2a4d;
+}
+
+.profile-picker-add {
+  border-style: dashed;
+  border-color: #d8dff5;
+}
+
 .field {
   display: flex;
   flex-direction: column;

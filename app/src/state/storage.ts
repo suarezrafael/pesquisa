@@ -3,11 +3,128 @@ import { DEFAULT_UNLOCKED_AVATAR_IDS } from '../data/avatars'
 import { DEFAULT_UNLOCKED_HAT_IDS } from '../data/hats'
 import { DEFAULT_UNLOCKED_GLASSES_IDS } from '../data/glasses'
 
-const PROFILE_KEY = 'jogo-educativo:profile'
-const PROGRESS_KEY = 'jogo-educativo:progress'
-const TUTORIAL_SEEN_KEY = 'jogo-educativo:tutorialSeen'
-const LAST_PLAYED_KEY = 'jogo-educativo:lastPlayedAt'
+// Chaves LEGADAS (antes do lab-108) — perfil único por aparelho, sem id nenhum. Nunca apagadas:
+// `migrateLegacyProfileIfNeeded` só COPIA o que encontra aqui pro sistema de slots na primeira
+// leitura pós-atualização, deixando o original intocado (zero risco de perda de progresso real de
+// família já jogando, mesmo que a migração tenha algum bug não previsto).
+const LEGACY_PROFILE_KEY = 'jogo-educativo:profile'
+const LEGACY_PROGRESS_KEY = 'jogo-educativo:progress'
+const LEGACY_TUTORIAL_SEEN_KEY = 'jogo-educativo:tutorialSeen'
+const LEGACY_LAST_PLAYED_KEY = 'jogo-educativo:lastPlayedAt'
+
 const DEVICE_ID_KEY = 'jogo-educativo:deviceId'
+
+// Múltiplos perfis por aparelho (lab-108, pedido: dois irmãos no mesmo tablet, cada um com seu
+// próprio avatar/progresso). `PROFILE_LIST_KEY` guarda só um "roster" leve (id/nome/emoji) pra
+// desenhar a tela de escolha sem carregar o `Progress` inteiro de cada perfil; o perfil/progresso
+// completo de cada um vive em chaves com o id embutido (`profileKey`/`progressKey` etc.). A
+// assinatura da família (`entitlementStorage.ts`) e o id anônimo de analytics (`DEVICE_ID_KEY`
+// abaixo) ficam de fora de propósito — são por APARELHO, não por criança.
+const PROFILE_LIST_KEY = 'jogo-educativo:profiles'
+const ACTIVE_PROFILE_ID_KEY = 'jogo-educativo:activeProfileId'
+
+export const MAX_PROFILES = 4
+
+export interface ProfileRosterEntry {
+  id: string
+  name: string
+  avatarEmoji: string
+}
+
+function profileKey(id: string): string {
+  return `jogo-educativo:profile:${id}`
+}
+function progressKey(id: string): string {
+  return `jogo-educativo:progress:${id}`
+}
+function tutorialSeenKey(id: string): string {
+  return `jogo-educativo:tutorialSeen:${id}`
+}
+function lastPlayedKey(id: string): string {
+  return `jogo-educativo:lastPlayedAt:${id}`
+}
+
+function loadRoster(): ProfileRosterEntry[] {
+  const raw = localStorage.getItem(PROFILE_LIST_KEY)
+  if (!raw) return []
+  try {
+    return JSON.parse(raw) as ProfileRosterEntry[]
+  } catch {
+    return []
+  }
+}
+
+function saveRoster(roster: ProfileRosterEntry[]): void {
+  localStorage.setItem(PROFILE_LIST_KEY, JSON.stringify(roster))
+}
+
+function getActiveProfileId(): string | null {
+  return localStorage.getItem(ACTIVE_PROFILE_ID_KEY)
+}
+
+// Roda a cada leitura (barata — só checa duas chaves) até o perfil legado ser migrado uma vez.
+// Guarda pelo ROSTER (não por `ACTIVE_PROFILE_ID_KEY`) de propósito — bug real pego ANTES do
+// commit deste laboratório: usar o id ativo como guarda fazia o botão "Trocar perfil"
+// (`clearActiveProfile`, que só apaga o id ativo, nunca o roster) disparar uma SEGUNDA migração
+// a cada troca, duplicando o perfil legado num slot novo toda vez. O roster, uma vez preenchido,
+// nunca é limpo por nenhuma ação deste laboratório — guarda confiável de "já migrei". Instalação
+// NOVA (sem perfil legado nenhum) não migra nada — segue o fluxo normal de `createProfileSlot` na
+// primeira vez que alguém cria um perfil pelo onboarding.
+function migrateLegacyProfileIfNeeded(): void {
+  if (loadRoster().length > 0) return
+  const legacyRaw = localStorage.getItem(LEGACY_PROFILE_KEY)
+  if (!legacyRaw) return
+  let legacyProfile: Partial<Profile>
+  try {
+    legacyProfile = JSON.parse(legacyRaw) as Partial<Profile>
+  } catch {
+    return
+  }
+
+  const id = crypto.randomUUID()
+  localStorage.setItem(profileKey(id), legacyRaw)
+  const legacyProgress = localStorage.getItem(LEGACY_PROGRESS_KEY)
+  if (legacyProgress) localStorage.setItem(progressKey(id), legacyProgress)
+  const legacyTutorialSeen = localStorage.getItem(LEGACY_TUTORIAL_SEEN_KEY)
+  if (legacyTutorialSeen) localStorage.setItem(tutorialSeenKey(id), legacyTutorialSeen)
+  const legacyLastPlayed = localStorage.getItem(LEGACY_LAST_PLAYED_KEY)
+  if (legacyLastPlayed) localStorage.setItem(lastPlayedKey(id), legacyLastPlayed)
+
+  saveRoster([{ id, name: legacyProfile.name ?? '', avatarEmoji: legacyProfile.avatarEmoji ?? '🦊' }])
+  localStorage.setItem(ACTIVE_PROFILE_ID_KEY, id)
+}
+
+// Lista os perfis já criados neste aparelho (pra tela "Quem vai jogar?", `ProfilePicker.tsx`).
+// Perfil único (o caso comum, quase todo mundo) devolve um array de 1 item — `App.tsx` decide não
+// mostrar picker nenhum nesse caso, o jogo se comporta exatamente como antes deste laboratório.
+export function listProfiles(): ProfileRosterEntry[] {
+  migrateLegacyProfileIfNeeded()
+  return loadRoster()
+}
+
+// Cria um slot novo (roster + torna ativo) SEM ainda escrever o `Profile` completo — quem chama
+// (`useProfile.createProfile`) monta o objeto e chama `saveProfile` logo em seguida, que já grava
+// na chave do slot recém-ativado. Cobre tanto o primeiro perfil de um aparelho novo (roster vazio)
+// quanto um perfil adicional ("+ Novo perfil" no picker) com o mesmo código, sem caso especial.
+export function createProfileSlot(name: string, avatarEmoji: string): string {
+  const roster = loadRoster()
+  const id = crypto.randomUUID()
+  saveRoster([...roster, { id, name, avatarEmoji }])
+  localStorage.setItem(ACTIVE_PROFILE_ID_KEY, id)
+  return id
+}
+
+export function switchActiveProfile(id: string): void {
+  localStorage.setItem(ACTIVE_PROFILE_ID_KEY, id)
+}
+
+// Botão "Trocar perfil" do HUD (lab-108) — some com o ativo SEM apagar nenhum dado, só devolve o
+// aparelho pra tela de escolha no próximo carregamento (`App.tsx` recarrega a página logo depois
+// de chamar isto, pelo mesmo motivo do `switchActiveProfile`: mais simples e confiável que
+// sincronizar manualmente todo o estado do React).
+export function clearActiveProfile(): void {
+  localStorage.removeItem(ACTIVE_PROFILE_ID_KEY)
+}
 
 export const emptyProgress: Progress = {
   completedQuestIds: [],
@@ -31,8 +148,16 @@ export const emptyProgress: Progress = {
   unlockedFurnitureIds: [],
 }
 
+// A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/
+// `markTutorialSeen`/`touchLastPlayed`/`loadLastPlayedAt` operam sobre o PERFIL ATIVO no aparelho
+// (lab-108) — a assinatura externa não mudou, então `useProfile.ts`/`useProgress.ts`/
+// `FamilyPortal.tsx` continuam funcionando sem nenhuma alteração, só passam a refletir "o perfil
+// ativo agora" em vez de "o único perfil que existe".
 export function loadProfile(): Profile | null {
-  const raw = localStorage.getItem(PROFILE_KEY)
+  migrateLegacyProfileIfNeeded()
+  const id = getActiveProfileId()
+  if (!id) return null
+  const raw = localStorage.getItem(profileKey(id))
   if (!raw) return null
   try {
     // `equippedHatId: null` como default cobre perfis salvos antes do lab-24 (chapéus), que não
@@ -57,11 +182,24 @@ export function loadProfile(): Profile | null {
 }
 
 export function saveProfile(profile: Profile): void {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
+  const id = getActiveProfileId()
+  if (!id) return
+  localStorage.setItem(profileKey(id), JSON.stringify(profile))
+  // Mantém o roster em sincronia — nome/avatar podem mudar depois da criação (lojinha).
+  const roster = loadRoster()
+  const idx = roster.findIndex((r) => r.id === id)
+  if (idx >= 0) {
+    const next = [...roster]
+    next[idx] = { id, name: profile.name, avatarEmoji: profile.avatarEmoji }
+    saveRoster(next)
+  }
 }
 
 export function loadProgress(): Progress {
-  const raw = localStorage.getItem(PROGRESS_KEY)
+  migrateLegacyProfileIfNeeded()
+  const id = getActiveProfileId()
+  if (!id) return emptyProgress
+  const raw = localStorage.getItem(progressKey(id))
   if (!raw) return emptyProgress
   try {
     return { ...emptyProgress, ...(JSON.parse(raw) as Progress) }
@@ -71,15 +209,21 @@ export function loadProgress(): Progress {
 }
 
 export function saveProgress(progress: Progress): void {
-  localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress))
+  const id = getActiveProfileId()
+  if (!id) return
+  localStorage.setItem(progressKey(id), JSON.stringify(progress))
 }
 
 export function hasTutorialBeenSeen(): boolean {
-  return localStorage.getItem(TUTORIAL_SEEN_KEY) === 'true'
+  const id = getActiveProfileId()
+  if (!id) return false
+  return localStorage.getItem(tutorialSeenKey(id)) === 'true'
 }
 
 export function markTutorialSeen(): void {
-  localStorage.setItem(TUTORIAL_SEEN_KEY, 'true')
+  const id = getActiveProfileId()
+  if (!id) return
+  localStorage.setItem(tutorialSeenKey(id), 'true')
 }
 
 // lab-91 (pedido do usuário: itens que ajudem o responsável a acompanhar o que a criança está
@@ -87,11 +231,15 @@ export function markTutorialSeen(): void {
 // criado", pra alimentar o painel de progresso do `/familia`. Não é telemetria de sessão nem
 // rastreamento de tempo jogado — um valor só, sobrescrito a cada abertura.
 export function touchLastPlayed(): void {
-  localStorage.setItem(LAST_PLAYED_KEY, new Date().toISOString())
+  const id = getActiveProfileId()
+  if (!id) return
+  localStorage.setItem(lastPlayedKey(id), new Date().toISOString())
 }
 
 export function loadLastPlayedAt(): string | null {
-  return localStorage.getItem(LAST_PLAYED_KEY)
+  const id = getActiveProfileId()
+  if (!id) return null
+  return localStorage.getItem(lastPlayedKey(id))
 }
 
 // lab-99, resto de G11 (prompt.md §12: D1/D7 retention, tempo médio por sessão, quests
@@ -99,7 +247,9 @@ export function loadLastPlayedAt(): string | null {
 // agregada (tudo antes disso, incluindo `touchLastPlayed` acima, fica só local). ID 100% anônimo
 // (`crypto.randomUUID()`), sem NENHUM vínculo com nome/apelido/e-mail/família — o `[MUST]` de
 // `docs/prompts/01-seguranca.md` sobre "identificador técnico, não dado pessoal" permite
-// exatamente isto. Gerado uma única vez por aparelho/navegador, reaproveitado pra sempre depois.
+// exatamente isto. Gerado uma única vez por aparelho/navegador, reaproveitado pra sempre depois —
+// deliberadamente POR APARELHO, não por perfil de criança (lab-108): vários perfis no mesmo
+// tablet compartilham o mesmo id anônimo, o suficiente pro que as métricas agregadas medem hoje.
 export function getOrCreateDeviceId(): string {
   const existing = localStorage.getItem(DEVICE_ID_KEY)
   if (existing) return existing

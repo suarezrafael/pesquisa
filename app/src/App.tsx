@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { TitleScreen } from './components/TitleScreen'
 import { Onboarding } from './components/Onboarding'
+import { ProfilePicker } from './components/ProfilePicker'
 import { Tutorial } from './components/Tutorial'
 import { QuestModal } from './components/QuestModal'
 import { RewardToast } from './components/RewardToast'
@@ -15,7 +16,14 @@ import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
-import { hasTutorialBeenSeen, markTutorialSeen, touchLastPlayed } from './state/storage'
+import {
+  clearActiveProfile,
+  hasTutorialBeenSeen,
+  listProfiles,
+  markTutorialSeen,
+  switchActiveProfile,
+  touchLastPlayed,
+} from './state/storage'
 import type { Quest } from './types'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
@@ -98,6 +106,10 @@ function GameApp() {
   const [showMyHouse, setShowMyHouse] = useState(false)
   const [showMarsReward, setShowMarsReward] = useState(false)
   const { entitlement, redeemCode, redeeming, redeemError } = useEntitlement()
+  // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
+  // decidir se mostra o `ProfilePicker` (quando não há perfil ativo) quanto pra decidir se mostra
+  // o botão de trocar perfil no HUD (só faz sentido com 2+ perfis já criados neste aparelho).
+  const roster = listProfiles()
 
   // lab-91: carimba "última vez jogado" pro painel de progresso do `/familia` — só quando já
   // existe perfil (senão a criança ainda nem chegou a jogar de verdade, só abriu a tela título).
@@ -107,6 +119,21 @@ function GameApp() {
   }, [!!profile])
 
   if (!profile) {
+    // Perfil único (o caso comum) nunca cai aqui — a migração/leitura já deixa `profile` truthy
+    // direto. Só aparece quando o aparelho já tem 2+ perfis e nenhum está ativo no momento (o
+    // responsável trocou de perfil, ou o segundo filho está entrando pela primeira vez).
+    if (preProfileScreen !== 'onboarding' && roster.length > 0) {
+      return (
+        <ProfilePicker
+          roster={roster}
+          onSelect={(id) => {
+            switchActiveProfile(id)
+            window.location.reload()
+          }}
+          onCreateNew={() => setPreProfileScreen('onboarding')}
+        />
+      )
+    }
     if (preProfileScreen === 'title') {
       return <TitleScreen onPlay={() => setPreProfileScreen('onboarding')} />
     }
@@ -174,6 +201,10 @@ function GameApp() {
           onOpenMyHouse={() => setShowMyHouse(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
           onCollectCoin={collectCoin}
+          onSwitchProfile={() => {
+            clearActiveProfile()
+            window.location.reload()
+          }}
           suspendTriggers={
             activeQuest !== null ||
             activeSurpriseQuiz !== null ||

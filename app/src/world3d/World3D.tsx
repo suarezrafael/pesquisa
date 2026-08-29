@@ -122,6 +122,7 @@ interface World3DProps {
   onOpenMyHouse: () => void
   onUnlockMarsReward: () => void
   onCollectCoin: () => void
+  onSwitchProfile: () => void
   suspendTriggers: boolean
 }
 
@@ -1674,6 +1675,7 @@ export function World3D({
   onOpenMyHouse,
   onUnlockMarsReward,
   onCollectCoin,
+  onSwitchProfile,
   suspendTriggers,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -7629,6 +7631,7 @@ export function World3D({
         showBag={hasSword || hasGun}
         onOpenBag={() => setBagOpen(true)}
         onOpenPairing={onOpenPairing}
+        onSwitchProfile={onSwitchProfile}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}
       {onMarsCombatZone && (

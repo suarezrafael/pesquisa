@@ -1,8 +1,8 @@
 # Laboratório 108 — Múltiplos perfis de criança por aparelho
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
-Fim: -
+Fim: 2026-08-29
 Commit inicial: a730322a8764324b2dee1371ac09a4d09b778844
 
 ## Objetivo do laboratório
@@ -59,24 +59,38 @@ morros invisíveis, secrets do lab-104).
   laboratório. A tela só aparece quando há 2+ perfis OU o responsável pede pra trocar.
 
 ## Funcionalidades planejadas
-- [ ] `app/src/state/storage.ts`: sistema de slots por perfil (`jogo-educativo:profiles` roster +
+- [x] `app/src/state/storage.ts`: sistema de slots por perfil (`jogo-educativo:profiles` roster +
       `jogo-educativo:activeProfileId` + chaves `profile:<id>`/`progress:<id>`/
       `tutorialSeen:<id>`/`lastPlayedAt:<id>`), migração preguiçosa e aditiva do perfil legado,
       `listProfiles`/`createProfileSlot`/`switchActiveProfile`/`clearActiveProfile`, limite
       `MAX_PROFILES = 4`.
-- [ ] `app/src/state/useProfile.ts`: `createProfile` cria o slot (`createProfileSlot`) antes de
+- [x] `app/src/state/useProfile.ts`: `createProfile` cria o slot (`createProfileSlot`) antes de
       salvar o perfil — cobre tanto o primeiro perfil de um aparelho novo quanto um perfil
       adicional.
-- [ ] `app/src/components/ProfilePicker.tsx` (novo): tela "Quem vai jogar?" — reaproveita
+- [x] `app/src/components/ProfilePicker.tsx` (novo): tela "Quem vai jogar?" — reaproveita
       `.screen`/`.primary-button`, grade de perfis (emoji + nome), tile "+ Novo perfil" (escondida
       no limite).
-- [ ] `app/src/App.tsx`: mostra `ProfilePicker` quando `!profile && perfis.length > 0`; "+ Novo
+- [x] `app/src/App.tsx`: mostra `ProfilePicker` quando `!profile && perfis.length > 0`; "+ Novo
       perfil" reaproveita `Onboarding` sem passar pela `TitleScreen` de novo; botão de trocar
       perfil no HUD limpa o perfil ativo e recarrega, voltando pro picker.
-- [ ] `app/src/world3d/World3D.tsx`/`HudHeader.tsx`: novo botão de ícone "🔁 Trocar perfil".
-- [ ] Verificação ao vivo (dev server + browser automation): perfil único continua sem nenhuma
-      tela nova; criar um segundo perfil no mesmo aparelho preserva o primeiro intacto; trocar
-      entre os dois preserva moeda/progresso de cada um separadamente.
+- [x] `app/src/world3d/World3D.tsx`/`HudHeader.tsx`: novo botão de ícone "🔁 Trocar perfil" —
+      **decisão revisada durante a implementação**: o plano original escondia este botão quando só
+      havia 1 perfil (`roster.length > 1`), mas isso criava um beco sem saída — a ÚNICA porta de
+      entrada pro picker (e pro "+ Novo perfil" nele) era esse botão, então um aparelho com um
+      único filho nunca teria como criar o segundo. Corrigido ANTES de qualquer verificação ao
+      vivo: o botão fica sempre visível (mesmo peso visual dos outros ícones do HUD, não atrapalha
+      quem nunca precisa dele).
+- [x] Verificação ao vivo (dev server + browser automation, num dispositivo de dev real com um
+      perfil "Duda" pré-existente de sessão anterior): perfil único migra sem tela nova nenhuma
+      (dados legados confirmados intactos, cópia migrada bate byte a byte); criado um segundo
+      perfil "Leo" no mesmo aparelho — progresso de cada um confirmado isolado (Leo com 0 moedas
+      vs. Duda com 10 + badge), trocar entre os dois preserva o estado de cada lado sem perda.
+      **Um segundo bug real pego durante essa mesma verificação** (não só o do botão, ver acima):
+      a guarda de migração usava `ACTIVE_PROFILE_ID_KEY` (que "Trocar perfil" apaga de propósito)
+      em vez do roster — trocar de perfil disparava uma SEGUNDA migração do perfil legado (que
+      nunca é apagado), duplicando o perfil antigo num slot novo toda vez que alguém trocasse.
+      Corrigido trocando a guarda pra `loadRoster().length > 0` (nunca esvaziado por nenhuma ação
+      deste laboratório) — reproduzido e confirmado corrigido ao vivo antes de fechar o laboratório.
 
 ## Fora de escopo (explicitamente adiado)
 - Apagar/renomear um perfil existente — só criar e trocar nesta primeira fatia.
