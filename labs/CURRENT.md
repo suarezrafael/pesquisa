@@ -11,9 +11,11 @@ bounding box do anel (disco de ~55 unidades de diâmetro, batendo com o cálculo
 screenshot não mostrou o anel claramente por ângulo de câmera (perto do polo de pouso, anel no
 equador fica fora de vista ali, geometria real não bug). A correção de `keysDown['e']` travado
 (achado no lab-112) funcionou de primeira nesta verificação. `npm run test`: 44/44. `npm run
-build` sem erros. **Deploy pendente**: usuário pediu deploy manual em produção durante este
-laboratório — Vercel falhou ("Not authorized", mesma restrição de CLI do lab-104), Cloudflare
-Pages paralelo foi atualizado até Júpiter mas Saturno ainda não foi publicado em lugar nenhum. Ver
+build` sem erros. **Deploy real (Vercel) pendente**: usuário pediu deploy manual em produção
+durante este laboratório — Vercel falhou ("Not authorized", mesma restrição de CLI do lab-104,
+consegue LER o projeto mas não fazer deploy). Cloudflare Pages paralelo atualizado DUAS vezes
+nesta sessão (até Júpiter, depois até Saturno) —
+https://missao-aprender-jogo.pages.dev tem tudo até este laboratório. Ver
 `labs/lab-113-sistema-solar-saturno/CONTEXT.md`.
 
 Antes desse: labs/lab-112-sistema-solar-jupiter/ — terceiro planeta novo da frente "Sistema
@@ -517,7 +519,10 @@ produção ainda (Vercel continua sendo o site ao vivo, `missaoaprendizado.com` 
 existe pronto e verificado, esperando decisão do usuário de fazer o corte de DNS de verdade (ver
 `labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md`). Publicado manualmente
 (`wrangler pages deploy dist --project-name=missao-aprender-jogo --branch=main`, de dentro de
-`app/`) — sem automação de CI ainda, de propósito.
+`app/`) — sem automação de CI ainda, de propósito. **Reaproveitado como via alternativa de deploy**
+durante os labs 112-113 (2026-08-29), depois de o deploy direto no Vercel falhar com "Not
+authorized" — atualizado duas vezes nesta sessão (até Júpiter, depois até Saturno), então está
+sempre um passo à frente do site real enquanto o bloqueio do Vercel não for resolvido.
 
 **Domínio `missaoaprendizado.com`** (2026-08-24): registrado pelo usuário via Cloudflare Registrar
 (mesma conta Cloudflare dos Workers), US$10,46/ano, expira 23/08/2027, auto-renovação ativa por
@@ -577,15 +582,14 @@ Para retomar o trabalho numa nova sessão, leia primeiro
 `labs/lab-113-sistema-solar-saturno/CONTEXT.md` (último laboratório concluído — Mercúrio/Vênus/
 Júpiter/Saturno prontos; próximo e último passo da frente é Urano+Netuno juntos, ver "O que o
 próximo laboratório deve desenvolver" nesse CONTEXT.md — com isso os 8 planetas reais do sistema
-solar estariam completos no jogo). **Deploy pendente**: usuário pediu publicar em produção durante
-o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized" (mesma restrição de
-CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer deploy nele — provável
-limite de segurança da integração, não uma configuração errada). Cloudflare Pages paralelo
-(lab-109, https://missao-aprender-jogo.pages.dev) foi atualizado até Júpiter, mas Saturno (lab-113)
-ainda não foi publicado em lugar nenhum — considerar publicar de novo no Cloudflare Pages (rápido,
-`cd app && npx wrangler pages deploy dist --project-name=missao-aprender-jogo --branch=main`) ou
-esperar o usuário decidir sobre o deploy real (rodar `npx vercel --prod --yes` na própria máquina,
-ou configurar os secrets do lab-104 e mesclar o PR `#8`). Lembrar também que
+solar estariam completos no jogo). **Deploy real (Vercel) pendente**: usuário pediu publicar em produção durante o lab-113 — deploy
+direto no Vercel (domínio real) falhou com "Not authorized" (mesma restrição de CLI do lab-104:
+sessão consegue LER o projeto Vercel, não consegue fazer deploy nele — provável limite de
+segurança da integração, não uma configuração errada). Cloudflare Pages paralelo (lab-109,
+https://missao-aprender-jogo.pages.dev) foi atualizado DUAS vezes nesta sessão e está com tudo até
+Saturno — funciona como forma imediata do usuário testar. O deploy real continua exigindo o
+usuário rodar `npx vercel --prod --yes` na própria máquina, ou configurar os secrets do lab-104 e
+mesclar o PR `#8`. Lembrar também que
 `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,

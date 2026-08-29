@@ -52,15 +52,15 @@ gasoso, primeira vez com ANEL.
   jogo (Mercúrio, Vênus, Terra=planeta principal, Marte, Júpiter, Saturno, Urano, Netuno).
 - Bug de morros invisíveis (lab-95), secrets do lab-104 e corte de DNS do lab-109 continuam em
   aberto, esperando o usuário.
-- **Deploy pendente**: o usuário pediu deploy manual em produção durante este laboratório
-  (respondido "Publicar agora" numa pergunta feita entre labs) — o deploy pro domínio real
-  (Vercel/missaoaprendizado.com) falhou com "Not authorized" (mesma restrição da sessão CLI já
+- **Deploy real (Vercel/missaoaprendizado.com) continua pendente**: o usuário pediu deploy manual
+  em produção durante este laboratório (respondido "Publicar agora" numa pergunta feita entre
+  labs) — o deploy pro domínio real falhou com "Not authorized" (mesma restrição da sessão CLI já
   documentada no lab-104: consegue LER o projeto, não consegue fazer deploy nele). Como alternativa
-  imediata, o Cloudflare Pages paralelo (lab-109) foi atualizado com o build até Júpiter
-  (https://missao-aprender-jogo.pages.dev) — Saturno (este laboratório) ainda não foi publicado
-  em lugar nenhum, só existe neste branch. Publicar de novo (Cloudflare Pages, rápido) ou tentar o
-  deploy real (Vercel, precisa do usuário rodar `npx vercel --prod --yes` na própria máquina, ou
-  configurar os secrets do lab-104 e mesclar o PR `#8`) fica como próxima ação.
+  imediata, o Cloudflare Pages paralelo (lab-109) foi atualizado DUAS vezes nesta sessão — uma vez
+  até Júpiter, e de novo ao final deste laboratório já incluindo Saturno
+  (https://missao-aprender-jogo.pages.dev está com tudo até este laboratório). O deploy real
+  continua exigindo o usuário rodar `npx vercel --prod --yes` na própria máquina, ou configurar os
+  secrets do lab-104 e mesclar o PR `#8`.
 
 ## Estado do repositório ao final
 - Branch: `worktree-abstract-wobbling-owl`
