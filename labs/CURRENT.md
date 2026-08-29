@@ -599,11 +599,10 @@ esperando ação do usuário). **Deploy real (Vercel) pendente**: usuário pediu
 durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized" (mesma
 restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer deploy nele
 — provável limite de segurança da integração, não uma configuração errada). Cloudflare Pages
-paralelo (lab-109, https://missao-aprender-jogo.pages.dev) foi atualizado até Saturno (ainda NÃO
-inclui Urano/Netuno deste laboratório) — considerar publicar de novo lá
-(`cd app && npx wrangler pages deploy dist --project-name=missao-aprender-jogo --branch=main`) ou
-esperar o usuário decidir sobre o deploy real (`npx vercel --prod --yes` na própria máquina, ou
-secrets do lab-104 + merge do PR `#8`). Lembrar também que
+paralelo (lab-109, https://missao-aprender-jogo.pages.dev) foi atualizado uma TERCEIRA vez ao
+final deste laboratório — agora com os 8 planetas completos, incluindo Urano/Netuno. O deploy
+real continua exigindo o usuário rodar `npx vercel --prod --yes` na própria máquina, ou configurar
+os secrets do lab-104 e mesclar o PR `#8`. Lembrar também que
 `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,

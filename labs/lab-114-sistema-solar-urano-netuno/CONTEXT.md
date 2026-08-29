@@ -52,8 +52,9 @@ Marte, Júpiter, Saturno, Urano, Netuno) estão completos no jogo.
   - Secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` (lab-104).
   - Deploy real em produção (Vercel/`missaoaprendizado.com`) — bloqueado por restrição de CLI
     (`Not authorized`, mesma sessão que só consegue LER o projeto); alternativa em uso é o
-    Cloudflare Pages paralelo (lab-109, https://missao-aprender-jogo.pages.dev), já atualizado até
-    este laboratório.
+    Cloudflare Pages paralelo (lab-109, https://missao-aprender-jogo.pages.dev), atualizado uma
+    TERCEIRA vez ao final deste laboratório (agora com os 8 planetas completos) — funciona como
+    forma imediata do usuário testar tudo, mas não é o domínio real.
   - Corte de DNS pro Cloudflare Pages virar produção de verdade (lab-109) — decisão do usuário.
 - Possível próxima frente de produto (sem pedido ainda): agora que o sistema solar existe, dá pra
   imaginar missões/quizzes temáticos aproveitando os planetas novos (ex.: perguntas de ciências
