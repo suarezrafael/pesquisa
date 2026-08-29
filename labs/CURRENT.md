@@ -17,6 +17,13 @@ build/deploy.
 
 # Laboratório atual
 
+**EM ANDAMENTO: labs/lab-119-relatorio-semanal-email/** — Fase F do plano comercial, escolhido
+pelo usuário entre 3 opções de backlog. Achado central: `docs/plano-comercial-backend.md`
+documenta que o progresso da criança NUNCA sai do aparelho dela — um e-mail semanal automático
+precisa mudar isso conscientemente. Confirmado com o usuário (`AskUserQuestion`): sincroniza um
+resumo MÍNIMO (nível/XP/moedas/missões/emblemas, nunca conteúdo bruto) só enquanto o entitlement
+estiver ativo. Ver `labs/lab-119-relatorio-semanal-email/FEATURES.md` pro escopo completo.
+
 Último concluído: labs/lab-118-preview-avatar-girar-e-flor/ — pedido do usuário: "na lojinha de
 avatar tem que ter como girar o avatar pra ver o cabelo escolhido, ao escolher a flor ela esta
 deitada em ve de estar de pe na cabeca, e na deu pra ver o cabelo comprido." Três queixas, duas
