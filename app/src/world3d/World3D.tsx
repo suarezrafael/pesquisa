@@ -119,6 +119,7 @@ interface World3DProps {
   onOpenShop: () => void
   onOpenPairing: () => void
   onOpenAchievements: () => void
+  onOpenMyHouse: () => void
   onUnlockMarsReward: () => void
   onCollectCoin: () => void
   suspendTriggers: boolean
@@ -1670,6 +1671,7 @@ export function World3D({
   onOpenShop,
   onOpenPairing,
   onOpenAchievements,
+  onOpenMyHouse,
   onUnlockMarsReward,
   onCollectCoin,
   suspendTriggers,
@@ -1698,6 +1700,7 @@ export function World3D({
   const onSelectQuestRef = useRef(onSelectQuest)
   const onSelectSurpriseQuizRef = useRef(onSelectSurpriseQuiz)
   const onOpenAchievementsRef = useRef(onOpenAchievements)
+  const onOpenMyHouseRef = useRef(onOpenMyHouse)
   const onUnlockMarsRewardRef = useRef(onUnlockMarsReward)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
@@ -1761,6 +1764,7 @@ export function World3D({
   onSelectQuestRef.current = onSelectQuest
   onSelectSurpriseQuizRef.current = onSelectSurpriseQuiz
   onOpenAchievementsRef.current = onOpenAchievements
+  onOpenMyHouseRef.current = onOpenMyHouse
   onUnlockMarsRewardRef.current = onUnlockMarsReward
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
@@ -4890,6 +4894,83 @@ export function World3D({
       deskLabel.linkWithMesh(deskTop)
       deskLabel.linkOffsetY = -60
 
+      // Minha Casa (lab-105, primeira fatia de docs/plano-comercial-backend.md, Fase E) — espaço
+      // pessoal GRATUITO de todo jogador, nunca cosmético pago (mesmo princípio já aplicado em
+      // progressão/cooperação). Fachada SÓLIDA visível de fora, mesma técnica de construção das
+      // escolinhas (`walls` com `PhysicsAggregate`, fundação mais larga, `settleMeshOnTerrain` com
+      // o telhado excluído da amostragem) — investigação de código confirmou que NENHUM prédio
+      // deste jogo tem interior andável (porta é só decorativa por fora, física sempre sólida);
+      // manter esse padrão aqui evita inventar física de vão de porta que nenhum outro lugar do
+      // arquivo usa. Interação é por gatilho de proximidade (igual à carteira/balcão da loja),
+      // abrindo `MyHousePanel` (2D) — mobília comprável/posicionável fica pra um próximo
+      // laboratório.
+      const houseUp = new Vector3(-0.35, 1, 0.12).normalize()
+      const houseGroundRadial = terrainGroundRadial(houseUp, terrainHeight(houseUp))
+      const houseSurfacePos = houseUp.scale(houseGroundRadial)
+
+      const houseBase = new TransformNode('minha-casa', scene)
+      houseBase.position = houseSurfacePos
+      houseBase.rotationQuaternion = alignmentQuaternion(houseUp)
+
+      const houseWallMat = new PBRMaterial('houseWallMat', scene)
+      houseWallMat.albedoColor = new Color3(0.85, 0.65, 0.5)
+      houseWallMat.roughness = 0.8
+      const houseRoofMat = new PBRMaterial('houseRoofMat', scene)
+      houseRoofMat.albedoColor = new Color3(0.55, 0.3, 0.28)
+      houseRoofMat.roughness = 0.5
+      const houseDoorMat = new PBRMaterial('houseDoorMat', scene)
+      houseDoorMat.albedoColor = new Color3(0.4, 0.25, 0.15)
+      houseDoorMat.roughness = 0.7
+      const houseFoundationMat = new PBRMaterial('houseFoundationMat', scene)
+      houseFoundationMat.albedoColor = new Color3(0.5, 0.42, 0.32)
+      houseFoundationMat.roughness = 0.95
+
+      const houseWalls = MeshBuilder.CreateBox('houseWalls', { width: 1.6, height: 1.1, depth: 1.4 }, scene)
+      houseWalls.position = new Vector3(0, 0.55, 0)
+      houseWalls.material = houseWallMat
+      houseWalls.parent = houseBase
+      houseWalls.receiveShadows = true
+      new PhysicsAggregate(houseWalls, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+      shadowGenerator.addShadowCaster(houseWalls)
+
+      const houseFoundation = MeshBuilder.CreateBox(
+        'houseFoundation',
+        { width: 1.72, height: 1.6, depth: 1.52 },
+        scene,
+      )
+      houseFoundation.position = new Vector3(0, -0.65, 0)
+      houseFoundation.material = houseFoundationMat
+      houseFoundation.parent = houseBase
+      houseFoundation.receiveShadows = true
+
+      const houseDoor = MeshBuilder.CreateBox('houseDoor', { width: 0.42, height: 0.62, depth: 0.06 }, scene)
+      houseDoor.position = new Vector3(0, 0.31, 0.71)
+      houseDoor.material = houseDoorMat
+      houseDoor.parent = houseBase
+
+      const houseRoof = MeshBuilder.CreateCylinder(
+        'houseRoof',
+        { height: 0.8, diameterTop: 0.05, diameterBottom: 2.1, tessellation: 4 },
+        scene,
+      )
+      houseRoof.position = new Vector3(0, 1.5, 0)
+      houseRoof.rotation.y = Math.PI / 4
+      houseRoof.material = houseRoofMat
+      houseRoof.parent = houseBase
+      shadowGenerator.addShadowCaster(houseRoof)
+
+      settleMeshOnTerrain(houseBase, houseUp, [houseRoof])
+      houseSurfacePos.copyFrom(houseBase.position)
+
+      const houseLabel = new TextBlock('houseLabel', '🏠')
+      houseLabel.color = 'white'
+      houseLabel.fontSize = mobileFontSize(28)
+      houseLabel.outlineWidth = 4
+      houseLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(houseLabel)
+      houseLabel.linkWithMesh(houseRoof)
+      houseLabel.linkOffsetY = -70
+
       function applyPortalVisual(entry: (typeof portalMeshes)[number]) {
         const p = progressRef.current
         const idx = quests.findIndex((q) => q.id === entry.quest.id)
@@ -5573,6 +5654,10 @@ export function World3D({
       // termo entre os dois: menor que `TRIGGER_DISTANCE` das escolas, maior que
       // `QT_QUIZ_TRIGGER_DISTANCE`).
       const DESK_TRIGGER_DISTANCE = 1.2
+
+      // Distância de gatilho de Minha Casa (lab-105) — mesmo raciocínio/valor da carteira: a
+      // fachada da casa ocupa espaço parecido com a mesa/banco da carteira.
+      const HOUSE_TRIGGER_DISTANCE = 1.2
 
       // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
       // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
@@ -6661,6 +6746,18 @@ export function World3D({
               } else if (d > RESET_DISTANCE) {
                 triggered.delete('carteira-estudos')
                 sittingAtDesk = false
+              }
+            }
+
+            // Minha Casa (lab-105) — mesmo padrão de gatilho da carteira/balcão da loja, sem pose
+            // especial (não há razão pra travar o boneco aqui, ao contrário da carteira).
+            {
+              const d = Vector3.Distance(pos, houseSurfacePos)
+              if (d < HOUSE_TRIGGER_DISTANCE && !triggered.has('minha-casa')) {
+                triggered.add('minha-casa')
+                onOpenMyHouseRef.current()
+              } else if (d > RESET_DISTANCE) {
+                triggered.delete('minha-casa')
               }
             }
 

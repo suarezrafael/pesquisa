@@ -8,6 +8,7 @@ import { MarsRewardToast } from './components/MarsRewardToast'
 import { PairingScreen } from './components/PairingScreen'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
+import { MyHousePanel } from './world3d/MyHousePanel'
 import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
@@ -93,6 +94,7 @@ function GameApp() {
   const [showShop, setShowShop] = useState(false)
   const [showPairing, setShowPairing] = useState(false)
   const [showAchievements, setShowAchievements] = useState(false)
+  const [showMyHouse, setShowMyHouse] = useState(false)
   const [showMarsReward, setShowMarsReward] = useState(false)
   const { entitlement, redeemCode, redeeming, redeemError } = useEntitlement()
 
@@ -168,6 +170,7 @@ function GameApp() {
           onOpenShop={() => setShowShop(true)}
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
+          onOpenMyHouse={() => setShowMyHouse(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
           onCollectCoin={collectCoin}
           suspendTriggers={
@@ -179,6 +182,7 @@ function GameApp() {
             showShop ||
             showPairing ||
             showAchievements ||
+            showMyHouse ||
             showMarsReward
           }
         />
@@ -218,6 +222,8 @@ function GameApp() {
       {showAchievements && (
         <AchievementsPanel progress={progress} onClose={() => setShowAchievements(false)} />
       )}
+
+      {showMyHouse && <MyHousePanel onClose={() => setShowMyHouse(false)} />}
 
       {showMarsReward && <MarsRewardToast onContinue={() => setShowMarsReward(false)} />}
 

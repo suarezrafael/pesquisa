@@ -1,12 +1,22 @@
 # Laboratório atual
 
-Em andamento: labs/lab-105-minha-casa-plot-base/ — primeira fatia de "Minha Casa"
+Último concluído: labs/lab-105-minha-casa-plot-base/ — primeira fatia de "Minha Casa"
 (`docs/plano-comercial-backend.md`, catálogo Fase E, item que faltava construir). Escolhido pelo
 usuário entre 4 frentes de backlog de produto (Minha Casa / Fase F Stripe produção / e-mail semanal
-via Resend / múltiplos perfis por família). Este laboratório entrega só o plot/casa base GRATUITO
-(estrutura andável perto do spawn, reusando o padrão de construção das escolinhas — paredes/
-telhado/chão assentados no terreno) — mobília comprável e os 2 conjuntos exclusivos de assinante
-ficam para laboratórios seguintes. Ver `labs/lab-105-minha-casa-plot-base/FEATURES.md`.
+via Resend / múltiplos perfis por família). **Correção de arquitetura feita durante a investigação,
+antes de implementar**: a premissa inicial era espaço 3D andável de verdade, mas o código real
+mostrou que NENHUM prédio deste jogo tem interior andável — todo prédio/objeto interage por gatilho
+de proximidade abrindo um painel 2D (escolas → quiz, carteira → conquistas, loja → lojinha). Minha
+Casa seguiu o MESMO padrão: fachada sólida (`World3D.tsx`, mesma técnica de construção das
+escolinhas — paredes com `PhysicsAggregate`, fundação, telhado, `settleMeshOnTerrain`) perto do
+spawn (espelhada em relação à carteira de estudos), gatilho de proximidade abre `MyHousePanel.tsx`
+(painel novo, reaproveita CSS de `AchievementsPanel`) com 3 itens placeholder de mobília ("chega em
+um próximo laboratório"). Mobília comprável com moeda e os 2 conjuntos exclusivos de assinante
+("Quarto Espacial", "Jardim Encantado") ficam para laboratórios seguintes. **Verificado ao vivo**
+com `npm run dev` local + teleporte de QA (`window.__debugTeleport`, dev-only): casa visível com
+rótulo 🏠, painel abre/fecha/reabre corretamente (histerese confirmada), física da parede confirmada
+(`physicsBody` estático). `npm run build` (typecheck + produção) passou sem erros. Ver
+`labs/lab-105-minha-casa-plot-base/CONTEXT.md` pro detalhe completo.
 
 Último concluído (secrets pendentes — ação do usuário): labs/lab-104-deploy-automatico-ci/ — resto
 de G10 (deploy automático a partir do CI). Escolhido pelo usuário logo após o lab-103, entre
@@ -425,8 +435,10 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-104-deploy-automatico-ci/
-CONTEXT.md` (último laboratório concluído — secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge
-do PR `#8` continuam pendentes, ação do usuário) e, se for mexer em multiplayer/escala,
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-105-minha-casa-plot-base/
+CONTEXT.md` (último laboratório concluído — próximo passo natural é a mobília comprável com moeda).
+Lembrar também que `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
+usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
+mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do
 documento estão desatualizados em 20x, ver `labs/lab-86-correcao-orcamento-cota/CONTEXT.md`).

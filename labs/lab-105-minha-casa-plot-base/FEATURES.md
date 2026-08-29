@@ -1,8 +1,8 @@
 # Laboratório 105 — Minha Casa (primeira fatia: plot base gratuito)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
-Fim: -
+Fim: 2026-08-29
 Commit inicial: 0f258a85547bfe07c355d1fbb61bcb1377b699a3
 
 ## Objetivo do laboratório
@@ -12,9 +12,10 @@ de produto não implementadas: Minha Casa / Fase F Stripe produção / e-mail se
 múltiplos perfis de criança por família). O documento de origem já avisa que o sistema completo
 "viraria seu próprio laboratório dado o tamanho" — este laboratório entrega só a base: um plot/casa
 FIXO, GRATUITO pra todo jogador (mesmo princípio já aplicado em progressão/cooperação: nunca gatear
-conteúdo social/de exploração atrás de assinatura, só cosmético), que o boneco pode entrar e sair
-andando. Mobília comprável com moeda e os dois conjuntos exclusivos de assinante ("Quarto Espacial"
-🚀, "Jardim Encantado" 🌷) ficam para laboratórios seguintes.
+conteúdo social/de exploração atrás de assinatura, só cosmético) — fachada 3D sólida perto do spawn
+mais um painel 2D acessado por proximidade (ver correção de arquitetura abaixo). Mobília comprável
+com moeda e os dois conjuntos exclusivos de assinante ("Quarto Espacial" 🚀, "Jardim Encantado" 🌷)
+ficam para laboratórios seguintes.
 
 ## Investigado antes de planejar
 - `docs/plano-comercial-backend.md` (linhas 130-184): especifica plot gratuito + mobília avulsa
@@ -32,27 +33,43 @@ andando. Mobília comprável com moeda e os dois conjuntos exclusivos de assinan
   incluir peças que não tocam o chão distorce o assentamento do prédio inteiro). Minha Casa reusa
   esse padrão de construção (paredes+telhado+chão assentados no terreno), não o padrão mais simples
   da carteira (objeto decorativo sem interior).
-- Decisão de arquitetura tomada nesta sessão (sem pergunta ao usuário, por consistência com o resto
-  do jogo): casa é um espaço 3D ANDÁVEL de verdade (não uma tela de menu/painel 2D) — o jogo inteiro
-  já é uma exploração 3D contínua (Roblox/Brookhaven RP é a referência de produto já confirmada para
-  a Fase E), e um painel 2D quebraria essa linguagem só pra esta feature. Interior é uma casca
-  simples (paredes+telhado+chão, um cômodo só) — mobília deste laboratório é decorativa e fixa
-  (não comprável/posicionável ainda), só pra a casa não ficar vazia.
+- **Correção de arquitetura feita DURANTE a investigação de código, antes de implementar**: a
+  premissa inicial ("espaço 3D andável de verdade") foi checada contra o código real das escolinhas
+  e não se sustentou. NENHUM prédio deste jogo tem interior andável hoje — escolas são uma caixa
+  SÓLIDA (`PhysicsAggregate(walls, PhysicsShapeType.BOX, ...)`, sem vão de porta na física, só um
+  `door` decorativo colado por fora) e a interação é 100% por GATILHO DE PROXIMIDADE que abre um
+  painel 2D (escolas → `QuestModal`; carteira → `AchievementsPanel`; balcão da loja → `AvatarShop`
+  — todos no mesmo padrão de `Vector3.Distance` + histerese gatilho/reset em `World3D.tsx`). Inventar
+  física de porta/interior andável seria a única exceção a esse padrão em todo o arquivo — risco
+  maior (mesma classe de bug do lab-93: travar física/posição por engano) pra um ganho que o
+  documento de origem nem pede ainda. **Decisão revisada**: Minha Casa segue o MESMO padrão —
+  fachada 3D sólida e visível de fora (mesma técnica de construção das escolinhas: paredes+telhado+
+  fundação assentados via `terrainGroundRadial`/`settleMeshOnTerrain`/`excludeFromSampling`), gatilho
+  de proximidade abre um painel 2D novo (`MyHousePanel`) — a "decoração"/mobília deste primeiro
+  laboratório vive no PAINEL, não dentro de uma cena 3D navegável.
 
 ## Funcionalidades planejadas
-- [ ] Estrutura fixa "Minha Casa" perto do spawn (perto da carteira de estudos, mas sem competir
-      posicionalmente com ela nem com o ponto de chegada) — paredes, telhado, chão, uma porta
-      (abertura sem física de porta de verdade, só um vão) — reaproveita
-      `terrainGroundRadial`/`settleMeshOnTerrain`/`excludeFromSampling` (padrão das escolinhas).
-- [ ] Jogador consegue ANDAR pra dentro e pra fora livremente (colisão das paredes deixa passar só
-      pelo vão da porta; chão interno sólido) — sem gatilho de proximidade que trave nada, ao
-      contrário da carteira/quiz (aqui não há pose especial nem painel obrigatório).
-- [ ] Mobília decorativa fixa dentro (cama + mesa, reaproveitando os materiais PBR já usados na
-      carteira — `deskWoodMat`-like) — não comprável, não posicionável, só preenche o espaço.
-- [ ] Rótulo/indicador visual (mesmo padrão da carteira: `TextBlock` com emoji, `linkWithMesh`) —
+- [x] Estrutura fixa "Minha Casa" perto do spawn (perto da carteira de estudos, mas sem competir
+      posicionalmente com ela nem com o ponto de chegada) — paredes, telhado, fundação, porta
+      decorativa — reaproveita literalmente o padrão de construção das escolinhas (`walls`
+      sólida com `PhysicsAggregate`, `settleMeshOnTerrain` com telhado excluído da amostragem).
+- [x] Rótulo/indicador visual (mesmo padrão da carteira: `TextBlock` com emoji, `linkWithMesh`) —
       🏠 sobre a casa, visível de longe.
-- [ ] Verificação ao vivo (browser automation ou build local): jogador anda até a casa, entra pelo
-      vão da porta, anda dentro, sai — sem travar física/input, sem clipping visual óbvio.
+- [x] Gatilho de proximidade (mesmo padrão do balcão da loja/carteira — `Vector3.Distance` +
+      histerese gatilho/reset) abre um painel novo `MyHousePanel.tsx` — sem pose especial
+      congelada (não há razão pra travar o boneco aqui, ao contrário da carteira que simula
+      "sentado").
+- [x] `MyHousePanel.tsx`: painel simples (reaproveita CSS/estrutura de `AchievementsPanel.tsx`)
+      apresentando a casa como espaço pessoal gratuito do jogador, com aviso de que móveis
+      compráveis chegam em um próximo laboratório — sem lógica de compra/posicionamento ainda.
+- [x] Wiring em `App.tsx`: novo estado `showMyHouse`, prop `onOpenMyHouse` pro `World3D`, entra em
+      `suspendTriggers` (mesmo padrão de todo outro painel).
+- [x] Verificação ao vivo (dev server local + browser automation, teleporte de QA
+      `window.__debugTeleport`, dev-only): casa aparece na cena (`scene.getMeshByName('houseWalls')`
+      confirmado, `physicsBody` estático presente), painel abre exatamente ao chegar na posição da
+      casa, fecha ao clicar em ×, reabre só depois de teleportar pra longe e voltar (histerese
+      `triggered`/`RESET_DISTANCE` confirmada funcionando). `npm run build` (typecheck + produção)
+      passou sem erros.
 
 ## Fora de escopo (explicitamente adiado)
 - Mobília comprável com moeda (loja de móveis) — próximo laboratório desta frente.
