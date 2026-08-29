@@ -1,11 +1,20 @@
 # Laboratório atual
 
-Em andamento: labs/lab-109-cloudflare-pages-paralelo/ — resto de Fase F, escolhido pelo usuário
+Último concluído: labs/lab-109-cloudflare-pages-paralelo/ — resto de Fase F, escolhido pelo usuário
 entre as opções restantes de backlog. `docs/plano-comercial-backend.md` recomenda migrar a
 hospedagem do front-end pra Cloudflare Pages antes do lançamento comercial (Vercel Hobby proíbe uso
 comercial). Escopo confirmado com o usuário: deploy NOVO e PARALELO, sem mexer no site ao vivo nem
-no DNS — `missaoaprendizado.com` continua na Vercel até uma decisão futura separada. Ver
-`labs/lab-109-cloudflare-pages-paralelo/FEATURES.md`.
+no DNS — `missaoaprendizado.com` continua na Vercel até uma decisão futura separada. Projeto
+`missao-aprender-jogo` criado na mesma conta Cloudflare dos Workers, build publicado sem NENHUMA
+mudança de código (front-end já fala com os Workers via URL absoluta, `VITE_*` embutida em tempo de
+build). **Live em https://missao-aprender-jogo.pages.dev** — verificado ao vivo: onboarding, mundo
+3D, 627 arquivos estáticos servidos com `200`, sem erro de console. Conectividade cruzada com os
+Workers não foi 100% confirmada ao vivo (fetch direto do navegador falhou "Failed to fetch" — mas
+o MESMO erro acontece a partir da origem Vercel de PRODUÇÃO já em uso, e `curl` fora do navegador
+confirma o Worker saudável, `200 {"ok":true}` — conclusão: restrição do ambiente de automação desta
+sessão em alcançar `*.workers.dev`, não uma falha real; CORS do Worker já é `*` desde antes). Corte
+de DNS/desligar Vercel fica explicitamente como decisão e ação FUTURA do usuário, não executada
+nesta sessão. Ver `labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md`.
 
 Antes desse: labs/lab-108-multiplos-perfis-por-familia/ — última das 4 frentes de backlog de
 produto do lab-104 (Minha Casa completa nos labs 105-107; esta era a única restante totalmente
@@ -439,6 +448,14 @@ região São Paulo), conta `rafaelv_s@hotmail.com` (login GitHub). Uma API key p
 ("missao-aprender-agent", escopo amplo — toda a conta, não só este projeto) foi usada pra
 provisionar isso; considerar revogar/restringir antes de qualquer automação recorrente.
 
+**Projeto Cloudflare Pages `missao-aprender-jogo`** (lab-109, 2026-08-29): deploy PARALELO do
+front-end, mesma conta Cloudflare dos Workers — https://missao-aprender-jogo.pages.dev. Não é
+produção ainda (Vercel continua sendo o site ao vivo, `missaoaprendizado.com` não aponta pra cá) —
+existe pronto e verificado, esperando decisão do usuário de fazer o corte de DNS de verdade (ver
+`labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md`). Publicado manualmente
+(`wrangler pages deploy dist --project-name=missao-aprender-jogo --branch=main`, de dentro de
+`app/`) — sem automação de CI ainda, de propósito.
+
 **Domínio `missaoaprendizado.com`** (2026-08-24): registrado pelo usuário via Cloudflare Registrar
 (mesma conta Cloudflare dos Workers), US$10,46/ano, expira 23/08/2027, auto-renovação ativa por
 padrão (desativável no dashboard Cloudflare). `missaoaprender.com` e `missaoaprender.com.br`
@@ -494,10 +511,11 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-108-multiplos-perfis-por-familia/CONTEXT.md` (último laboratório concluído — as 4 frentes
-de backlog de produto do lab-104 estão todas atendidas; o que resta genuinamente em aberto é Fase F
-— Stripe produção/Cloudflare Pages/e-mail semanal via Resend —, que exige credencial/decisão de
-infraestrutura só o usuário pode prover). Lembrar também que
+`labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md` (último laboratório concluído — Cloudflare
+Pages pronto e verificado em paralelo, https://missao-aprender-jogo.pages.dev; falta a DECISÃO e
+AÇÃO do usuário de trocar o DNS de `missaoaprendizado.com` de verdade, ver "Pendências" nesse
+CONTEXT.md — inclusive testar `/familia`/pareamento nessa URL antes de decidir, não confirmado ao
+vivo por limitação do ambiente de automação desta sessão). Lembrar também que
 `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,

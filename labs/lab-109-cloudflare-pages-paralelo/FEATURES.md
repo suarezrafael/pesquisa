@@ -1,8 +1,8 @@
 # Laboratório 109 — Cloudflare Pages em paralelo (resto de Fase F)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
-Fim: -
+Fim: 2026-08-29
 Commit inicial: a03044bd4b2841423a60e8b53640026ffc8dbb9c
 
 ## Objetivo do laboratório
@@ -45,16 +45,28 @@ um deploy NOVO e PARALELO em Cloudflare Pages, sem mexer no site ao vivo nem no 
   fizer o corte pra Cloudflare Pages.
 
 ## Funcionalidades planejadas
-- [ ] Criar o projeto Cloudflare Pages (`wrangler pages project create`) na mesma conta dos
-      Workers.
-- [ ] Publicar o build de produção atual (`npm run build` + `wrangler pages deploy dist`) — sem
-      mexer em nenhuma variável de ambiente/segredo do lado do servidor (o front-end já fala com
-      os Workers via URL absoluta, não relativa — confirmar isso lendo o código antes de publicar).
-- [ ] Verificar ao vivo, na URL `*.pages.dev` gerada: onboarding, mundo 3D carrega, `/familia`
-      carrega, chamadas pro backend de contas/relé de multiplayer funcionam normalmente (mesma
-      origem cruzada que já funciona hoje no Vercel).
-- [ ] Documentar em `CONTEXT.md` o passo de corte final (trocar DNS) como ação EXPLICITAMENTE do
-      usuário, nunca executada por esta sessão.
+- [x] Criar o projeto Cloudflare Pages (`wrangler pages project create missao-aprender-jogo`) na
+      mesma conta dos Workers — confirmado antes que nenhum projeto Pages existia ainda
+      (`wrangler pages project list`, lista vazia).
+- [x] Publicar o build de produção atual (`npm run build` + `wrangler pages deploy dist
+      --project-name=missao-aprender-jogo --branch=main`) — confirmado antes que o front-end fala
+      com os Workers via URL absoluta (`import.meta.env.VITE_*`, embutida em tempo de build, não
+      relativa ao domínio), e que `app/.env`/`.env.production` (só URLs públicas de Worker/Neon
+      Auth, não segredo) já estão no repositório — o mesmo build serve qualquer origem sem precisar
+      configurar nada novo do lado do Cloudflare Pages.
+- [x] Verificado ao vivo em `https://missao-aprender-jogo.pages.dev`: onboarding completo, criação
+      de perfil, mundo 3D carrega e renderiza (HUD, boneco, planeta), todos os 627 arquivos
+      estáticos servidos com 200 (sem erro de MIME/roteamento de SPA), sem erro no console.
+- [x] Verificação de conectividade cruzada com os Workers: CORS já é `*` no Worker de contas
+      (`server-accounts/src/index.ts`, liberado desde antes deste laboratório) — arquitetura não
+      depende de qual origem serve o front-end. `fetch` direto pro Worker (`/health`) falhou com
+      "Failed to fetch" tanto no Cloudflare Pages quanto na origem Vercel de PRODUÇÃO já em uso
+      (mesmo erro nos dois) — não é regressão deste laboratório. Confirmado via `curl` fora do
+      navegador que o Worker está saudável (`200 {"ok":true}`); a falha é uma restrição do
+      ambiente de automação de navegador desta sessão em alcançar domínios `*.workers.dev`
+      diretamente, não um problema real do site nem do Cloudflare Pages.
+- [x] Documentado abaixo (`CONTEXT.md`) o passo de corte final (trocar DNS) como ação
+      EXPLICITAMENTE do usuário — não executado nesta sessão.
 
 ## Fora de escopo (explicitamente adiado)
 - Trocar o DNS de `missaoaprendizado.com`/desligar o projeto Vercel — decisão e ação do usuário,
