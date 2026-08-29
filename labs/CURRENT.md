@@ -1,5 +1,13 @@
 # Laboratório atual
 
+**EM ANDAMENTO: labs/lab-116-corrige-camera-decolagem-foguete/** — pedido do usuário: "a viagem
+do foguete pra ida pros outros planetas ta um pouco bugada a camera, fica uma visao dentro da
+terra. na volta pra terra ta ok." Causa raiz encontrada: a câmera do foguete fica "atrás da cauda"
+(pedido do lab-61), o que durante a decolagem (nariz travado apontando pra longe do planeta de
+partida) aponta a câmera DIRETO PRA DENTRO do planeta principal (raio 13) — só é visível nele
+porque é o único corpo com `backFaceCulling = false` (lab-95). Ver
+`labs/lab-116-corrige-camera-decolagem-foguete/FEATURES.md` pro escopo completo.
+
 Último concluído: labs/lab-115-escolinhas-sistema-solar/ — pedido do usuário: "crie escolinhas com
 perguntas tbm nos planetas novos para ampliar a elevação dos níveis, e quanto mais longe o planeta
 mais alto deve ser o nível do usuário." Cada um dos 6 planetas novos da frente Sistema Solar
