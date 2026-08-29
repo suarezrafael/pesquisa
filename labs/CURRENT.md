@@ -1,12 +1,22 @@
 # Laboratório atual
 
-Em andamento: labs/lab-110-sistema-solar-selecao-de-planeta/ — pedido novo do usuário: ampliar o
-mundo pra incluir todos os planetas do sistema solar (hoje só tem Marte), renderizados sob demanda
-ao viajar de foguete, com um seletor de destino ao embarcar. Escopo de cada planeta novo confirmado
-com o usuário: moedas escondidas, sem combate (Marte continua sendo o único com inimigos). Primeiro
-de vários laboratórios — este entrega a arquitetura de múltiplos destinos (generaliza o
-`onSecondPlanet: boolean` fixo de hoje) + o seletor de planeta + Mercúrio como primeiro planeta
-novo. Ver `labs/lab-110-sistema-solar-selecao-de-planeta/FEATURES.md`.
+Último concluído: labs/lab-110-sistema-solar-selecao-de-planeta/ — pedido novo do usuário: ampliar
+o mundo pra incluir todos os planetas do sistema solar (hoje só tinha Marte), renderizados sob
+demanda ao viajar de foguete, com um seletor de destino ao embarcar. Escopo de cada planeta novo
+confirmado com o usuário: moedas escondidas, sem combate (Marte continua sendo o único com
+inimigos). Primeiro de vários laboratórios — este entregou a arquitetura genérica de múltiplos
+destinos (`currentPlanetId: string | null` + registro `DESTINATION_PLANETS`, substitui o antigo
+`onSecondPlanet: boolean` fixo) + `PlanetPickerPanel.tsx` (seletor "Pra onde vamos?", aberto ao
+embarcar no foguete principal) + Mercúrio (esfera cinza-acastanhada, crateras via decalque de
+geometria, rochas, 6 moedas escondidas, sem combate). **Marte verificado ao vivo como IDÊNTICO**
+ao comportamento pré-refatoração (health bar, "5 marcianos restantes", anel sonoro, estação
+alienígena, tudo confirmado numa viagem de ida e volta completa) — a refatoração generalizou só o
+ESTADO/dispatch, sem tocar uma linha do conteúdo de `buildMarsIfNeeded` (ex-`buildSecondPlanetIfNeeded`).
+Achado de ferramenta (não do produto): a aba de automação ficava `hidden` durante os ~9s de voo,
+travando o `dt` do Babylon — contornado forçando `engine._deltaTime` manualmente, técnica salva na
+memória do projeto pra reuso futuro. `npm run test`: 44/44 (sem teste novo — nada aqui é lógica de
+domínio pura). `npm run build` sem erros. Ver
+`labs/lab-110-sistema-solar-selecao-de-planeta/CONTEXT.md`.
 
 Antes desse: labs/lab-109-cloudflare-pages-paralelo/ — resto de Fase F, escolhido pelo usuário
 entre as opções restantes de backlog. `docs/plano-comercial-backend.md` recomenda migrar a
@@ -519,11 +529,14 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md` (último laboratório concluído — Cloudflare
-Pages pronto e verificado em paralelo, https://missao-aprender-jogo.pages.dev; falta a DECISÃO e
-AÇÃO do usuário de trocar o DNS de `missaoaprendizado.com` de verdade, ver "Pendências" nesse
-CONTEXT.md — inclusive testar `/familia`/pareamento nessa URL antes de decidir, não confirmado ao
-vivo por limitação do ambiente de automação desta sessão). Lembrar também que
+`labs/lab-110-sistema-solar-selecao-de-planeta/CONTEXT.md` (último laboratório concluído —
+arquitetura genérica de múltiplos planetas-destino + Mercúrio prontos; próximo passo natural é
+Vênus, depois os gigantes gasosos Júpiter/Saturno/Urano/Netuno, ver "O que o próximo laboratório
+deve desenvolver" nesse CONTEXT.md pra dicas técnicas de cada um — ex.: `DynamicTexture` pra faixas,
+`CreateTorus` achatado pros anéis de Saturno). Cloudflare Pages (lab-109) continua pronto e
+verificado em paralelo, https://missao-aprender-jogo.pages.dev — falta a DECISÃO e AÇÃO do usuário
+de trocar o DNS de `missaoaprendizado.com` de verdade, ver
+`labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md`. Lembrar também que
 `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,

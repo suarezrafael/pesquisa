@@ -70,6 +70,7 @@ import { ChatPanel } from './ChatPanel'
 import { RankingPanel } from './RankingPanel'
 import { MarsHealthBar } from './MarsHealthBar'
 import { WeaponBagPanel } from './WeaponBagPanel'
+import { PlanetPickerPanel } from './PlanetPickerPanel'
 import {
   playBirdChirp,
   playCoinCollect,
@@ -357,6 +358,49 @@ const SECOND_PLANET_LANDING_UP = new Vector3(0, 1, 0)
 // parecendo um disco voador em que é possível entrar") — direção fixa, longe do ponto de pouso do
 // foguete de volta (evita as duas estruturas ficarem coladas uma na outra).
 const MARS_UFO_DIR = new Vector3(-0.5535, 0.3522, 0.7548).normalize()
+
+// Mercúrio (lab-110, pedido do usuário: "ampliar o mundo do jogo... ter os planetas do sistema
+// solar, como já tem Marte, pode fazer outros planetinhas, que só renderiza no momento que
+// viajamos pra lá de foguete") — primeiro planeta novo além de Marte, escolhido pela ordem real de
+// distância ao Sol. Sem combate/estrutura (confirmado com o usuário: só moedas escondidas) — raio
+// menor que Marte (é o menor planeta do sistema solar de verdade), centro num eixo diferente do de
+// Marte pra não competir visualmente, mesma distância "planeta e meio" de folga já usada lá.
+const MERCURY_RADIUS = 4
+const MERCURY_CENTER = new Vector3(58, 0, 0)
+const MERCURY_LANDING_UP = new Vector3(0, 1, 0)
+
+// Registro genérico de planetas-destino (lab-110) — substitui o antigo par de variáveis fixas
+// `onSecondPlanet`/`SECOND_PLANET_*` como única fonte de verdade sobre onde cada planeta fica;
+// `SECOND_PLANET_CENTER`/`RADIUS`/`LANDING_UP` continuam existindo tal e qual (usados só dentro do
+// código já específico de Marte, ver `buildMarsIfNeeded`/combate) — este registro só reaproveita
+// esses valores pra alimentar a parte GENÉRICA (embarque/pouso/seletor), sem duplicá-los.
+interface DestinationPlanet {
+  id: string
+  name: string
+  emoji: string
+  radius: number
+  center: Vector3
+  landingUp: Vector3
+}
+const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
+  marte: {
+    id: 'marte',
+    name: 'Marte',
+    emoji: '🔴',
+    radius: SECOND_PLANET_RADIUS,
+    center: SECOND_PLANET_CENTER,
+    landingUp: SECOND_PLANET_LANDING_UP,
+  },
+  mercurio: {
+    id: 'mercurio',
+    name: 'Mercúrio',
+    emoji: '☿️',
+    radius: MERCURY_RADIUS,
+    center: MERCURY_CENTER,
+    landingUp: MERCURY_LANDING_UP,
+  },
+}
+const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_PLANETS)
 
 // Combate em Marte (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
 // tenta matar o nosso boneco, nós temos que ter uma barra de vida se a barra esvaziar, você morre
@@ -1258,7 +1302,7 @@ function buildRocketVehicle(scene: Scene, shadowGenerator: ShadowGenerator): Tra
 // Entrada de caverna em Marte (lab-59, pedido do usuário: "o outro planeta é Marte... o que tem
 // lá são cavernas") — dois montes de rocha (silhueta irregular, não uma bola perfeita) com uma
 // "boca" escura encostada na face de um deles. Sem `shadowGenerator`/shadow caster de propósito,
-// igual ao resto da decoração de Marte (ver comentário em `buildSecondPlanetIfNeeded`) — só
+// igual ao resto da decoração de Marte (ver comentário em `buildMarsIfNeeded`) — só
 // primitivas, sem asset externo, mesmo padrão do resto do jogo.
 function buildCaveEntrance(scene: Scene): TransformNode {
   const root = new TransformNode('caveRoot', scene)
@@ -1752,6 +1796,13 @@ export function World3D({
   const [hasSword, setHasSword] = useState(false)
   const [hasGun, setHasGun] = useState(false)
   const [bagOpen, setBagOpen] = useState(false)
+  // Seletor de planeta-destino (lab-110) — aberto de dentro do closure de `setup()`
+  // (`handleInteractPress`, mesmo padrão de `setWeaponMessage` já chamado direto de lá), fechado
+  // ao escolher um planeta ou cancelar. `boardRocketToRef` é a ponte inversa (React → closure):
+  // `setup()` atribui a função de verdade depois de definir `boardRocket`, o painel só chama essa
+  // ref, sem precisar conhecer nada da cena 3D.
+  const [planetPickerOpen, setPlanetPickerOpen] = useState(false)
+  const boardRocketToRef = useRef<(planetId: string) => void>(() => {})
   const [selectedWeapon, setSelectedWeapon] = useState<'sword' | 'gun' | null>(null)
   // Mesmo padrão de `hasSwordRef`/`hasGunRef` acima — lido direto por `handleInteractPress`
   // (dentro do closure de `setup()`) sem esperar re-render.
@@ -2024,10 +2075,18 @@ export function World3D({
     // sistema de física continua igual, sem saber que existe um segundo planeta.
     let currentWorldCenter = Vector3.Zero()
     let currentGroundBaseFn: (localUp: Vector3) => number = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
-    let onSecondPlanet = false
-    let secondPlanetBuilt = false
+    // Qual planeta-destino o jogador está agora (lab-110) — `null` = planeta principal (Terra).
+    // Substitui o antigo `onSecondPlanet: boolean` (só sabia dizer "em Marte ou não"); qualquer
+    // checagem MARA-ESPECÍFICA (combate/inimigos/anel sonoro) agora compara
+    // `currentPlanetId === 'marte'` em vez de ler esse booleano — o resto do jogo (gravidade
+    // radial, física, embarque/pouso) só precisa saber "estou em algum planeta-destino ou não",
+    // ou seja, `currentPlanetId !== null`.
+    let currentPlanetId: string | null = null
+    const builtPlanetIds = new Set<string>()
     let mainRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
-    let secondPlanetReturnRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
+    // Um foguete de volta por planeta-destino já visitado (lab-110) — substitui a variável única
+    // `secondPlanetReturnRocket` de quando só existia Marte.
+    const returnRockets = new Map<string, { root: TransformNode; hintLabel: TextBlock }>()
     // Espada/arma (lab-61) — construídas uma vez em `setup()`, lidas pelo laço de física (giro de
     // exibição + detecção de "pegou o item") e por `handleInteractPress` (combate em Marte).
     let swordPickup: { root: TransformNode; label: TextBlock } | null = null
@@ -2052,7 +2111,7 @@ export function World3D({
     // Piloto do foguete (lab-59, pedido do usuário: "o lance da viagem do foguete é o boneco
     // entrar no foguete, deve ter como controlar como tem no carro... ir pra trás e pra frente
     // com as setas... e viajar pelo espaço entre os dois planetas") — os dois foguetes das
-    // plataformas (`mainRocket`/`secondPlanetReturnRocket`) ficam sempre parados, servindo só de
+    // plataformas (`mainRocket`/`returnRockets`) ficam sempre parados, servindo só de
     // ponto de embarque/desembarque; `flyingRocket` é o veículo visual usado durante o trecho
     // voando (construído uma vez em `setup()`, escondido até embarcar). `progress` vai de 0
     // (ponto de partida) a 1 (ponto de chegada) ao longo de uma curva fixa entre as duas
@@ -2064,7 +2123,8 @@ export function World3D({
       c1: Vector3
       c2: Vector3
       p1: Vector3
-      toSecondPlanet: boolean
+      // `null` = planeta principal (Terra); lab-110, substitui o antigo `toSecondPlanet: boolean`.
+      toPlanetId: string | null
       // Rotação de "repouso" da nave em cada ponta (a mesma que `alignmentQuaternion` dá ao
       // foguete parado numa plataforma — nariz apontando pra longe do planeta). Usada nas DUAS
       // pontas do voo: decolagem trava nela (`fromRestQuat`), pouso converge pra ela
@@ -2079,8 +2139,8 @@ export function World3D({
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
     let rocketFlameSystem: ParticleSystem | null = null
-    // Inimigos de Marte (lab-60) — populado dentro de `buildSecondPlanetIfNeeded`, lido/mutado
-    // pelo laço de IA/combate por quadro (só roda quando `onSecondPlanet` é verdadeiro).
+    // Inimigos de Marte (lab-60) — populado dentro de `buildMarsIfNeeded`, lido/mutado pelo laço
+    // de IA/combate por quadro (só roda quando `currentPlanetId === 'marte'`).
     const marsEnemies: MarsEnemy[] = []
     if (import.meta.env.DEV) {
       ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
@@ -2169,24 +2229,25 @@ export function World3D({
       // entrar no foguete, deve ter como controlar como tem no carro... e viajar pelo espaço
       // entre os dois planetas") — parenteia o boneco no foguete voador (igual ao carro), define
       // a curva fixa entre a plataforma de partida e a de chegada, e entra em modo de pilotagem.
-      // O planetinha secundário já é construído aqui (não só ao chegar) — precisa existir pro
-      // foguete de chegada (`toRocket`) ter uma posição real pra mirar.
-      function boardRocket() {
+      // O planeta de destino já é construído aqui (não só ao chegar) — precisa existir pro
+      // foguete de chegada (`toRocket`) ter uma posição real pra mirar. `toPlanetId: null` =
+      // voltando pro planeta principal (lab-110, generaliza o antigo par fixo Terra/Marte pra
+      // qualquer quantidade de planetas-destino).
+      function boardRocket(toPlanetId: string | null) {
         if (!avatarMesh || !avatarBody || !flyingRocket) return
-        if (!onSecondPlanet) buildSecondPlanetIfNeeded()
-        const toSecondPlanet = !onSecondPlanet
-        const fromRocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
-        const toRocket = onSecondPlanet ? mainRocket : secondPlanetReturnRocket
+        if (toPlanetId) buildPlanetIfNeeded(toPlanetId)
+        const fromRocket = currentPlanetId ? returnRockets.get(currentPlanetId) ?? null : mainRocket
+        const toRocket = toPlanetId ? returnRockets.get(toPlanetId) ?? null : mainRocket
         if (!fromRocket || !toRocket) return
 
         const p0 = fromRocket.root.getAbsolutePosition().clone()
         const p1 = toRocket.root.getAbsolutePosition().clone()
-        // "Pra cima" local de cada plataforma (a direção que o próprio foguete parado aponta,
-        // ver `alignmentQuaternion(ROCKET_LAUNCH_DIR)`/`alignmentQuaternion(SECOND_PLANET_LANDING_UP)`
-        // usados ao construir as plataformas) — os pontos de controle da cúbica saem exatamente
-        // nessa direção, garantindo decolagem/pouso na vertical em vez de um ângulo genérico.
-        const fromUp = onSecondPlanet ? SECOND_PLANET_LANDING_UP : ROCKET_LAUNCH_DIR
-        const toUp = toSecondPlanet ? SECOND_PLANET_LANDING_UP : ROCKET_LAUNCH_DIR
+        // "Pra cima" local de cada plataforma (a direção que o próprio foguete parado aponta, ver
+        // `alignmentQuaternion` usado ao construir cada plataforma) — os pontos de controle da
+        // cúbica saem exatamente nessa direção, garantindo decolagem/pouso na vertical em vez de
+        // um ângulo genérico.
+        const fromUp = currentPlanetId ? DESTINATION_PLANETS[currentPlanetId].landingUp : ROCKET_LAUNCH_DIR
+        const toUp = toPlanetId ? DESTINATION_PLANETS[toPlanetId].landingUp : ROCKET_LAUNCH_DIR
         const c1 = p0.add(fromUp.scale(ROCKET_ARC_HEIGHT))
         const c2 = p1.add(toUp.scale(ROCKET_ARC_HEIGHT))
 
@@ -2196,7 +2257,7 @@ export function World3D({
         // PRÓPRIO primeiro quadro do voo, desfazendo o embarque na hora, antes de qualquer input.
         const fromRestQuat = alignmentQuaternion(fromUp)
         const toRestQuat = alignmentQuaternion(toUp)
-        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet, fromRestQuat, toRestQuat, flipStartQuat: null }
+        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toPlanetId, fromRestQuat, toRestQuat, flipStartQuat: null }
         flyingRocket.setEnabled(true)
         flyingRocket.position.copyFrom(p0)
         // Começa com a MESMA rotação da plataforma parada (`alignmentQuaternion(fromUp)`, igual
@@ -2206,9 +2267,10 @@ export function World3D({
         startRocketEngine()
         if (rocketFlameSystem) rocketFlameSystem.emitRate = 80
         // Aviso ao decolar rumo a Marte sem os dois itens de combate (lab-61, pedido do usuário:
-        // "dê dicas de como encontrar a espada e a arma senão não tem como sobreviver") — só na
-        // ida (`toSecondPlanet`), não faz sentido avisar na volta pro planeta principal.
-        if (toSecondPlanet && (!hasSwordRef.current || !hasGunRef.current)) {
+        // "dê dicas de como encontrar a espada e a arma senão não tem como sobreviver") — só
+        // indo pra Marte especificamente (lab-110: os outros planetas-destino não têm combate
+        // nenhum, o aviso não faria sentido lá).
+        if (toPlanetId === 'marte' && (!hasSwordRef.current || !hasGunRef.current)) {
           setWeaponMessage(
             'Cuidado: você ainda não achou a Espada e/ou a Arma a Laser na Terra — sem elas, não dá pra nocautear o ET e o robô em Marte!',
           )
@@ -2234,61 +2296,69 @@ export function World3D({
         studentFigure.elbowPivotR.rotation.x = 0.6
         fromRocket.hintLabel.alpha = 0
       }
+      // Ponte React → closure (lab-110) — o `PlanetPickerPanel` (fora deste closure) chama isto
+      // pra decolar rumo ao planeta escolhido, sem precisar conhecer `boardRocket`/estado da cena.
+      boardRocketToRef.current = (planetId: string) => boardRocket(planetId)
 
       // Pousa ao alcançar qualquer uma das duas pontas do voo (lab-59) — mesma lógica de
       // teleporte/troca de planeta do lab-58, só que disparada pelo fim da viagem pilotada em vez
       // de instantaneamente ao apertar E.
       function landRocket() {
         if (!drivingRocket || !flyingRocket) return
-        // `progress` 1 = chegou no destino (`toSecondPlanet` diz qual é); `progress` 0 = voltou
-        // pro ponto de partida (desistiu no meio do caminho, empurrando o acelerador pra trás até
-        // o início de novo) — nesse caso o pouso é no planeta de ORIGEM, o oposto do destino.
+        // `progress` 1 = chegou no destino (`toPlanetId` diz qual é); `progress` 0 = voltou pro
+        // ponto de partida (desistiu no meio do caminho, empurrando o acelerador pra trás até o
+        // início de novo) — nesse caso o pouso é no planeta de ORIGEM, o oposto do destino.
+        // `currentPlanetId` ainda não mudou neste ponto (só muda mais abaixo), então já é a
+        // origem certa pro caso de desistência (lab-110, generaliza o antigo
+        // `!drivingRocket.toSecondPlanet`, que só sabia alternar entre dois planetas fixos).
         const arrivedAtDestination = drivingRocket.progress >= 1
-        const arrivedAtSecondPlanet = arrivedAtDestination ? drivingRocket.toSecondPlanet : !drivingRocket.toSecondPlanet
+        const arrivedPlanetId = arrivedAtDestination ? drivingRocket.toPlanetId : currentPlanetId
         flyingRocket.setEnabled(false)
         studentFigure.root.parent = null
         drivingRocket = null
         stopRocketEngine()
         if (rocketFlameSystem) rocketFlameSystem.emitRate = 0
 
-        if (arrivedAtSecondPlanet) {
-          onSecondPlanet = true
-          currentWorldCenter = SECOND_PLANET_CENTER
-          currentGroundBaseFn = () => SECOND_PLANET_RADIUS
-          teleportAvatarTo(
-            SECOND_PLANET_CENTER,
-            offsetLandingUp(SECOND_PLANET_LANDING_UP, SECOND_PLANET_RADIUS, 1.8),
-            currentGroundBaseFn,
-          )
-          // Vida cheia a cada nova ida a Marte (lab-60) — cada expedição começa do zero, não
-          // carrega dano de uma visita anterior.
-          marsHealthRef.current = MARS_MAX_HEALTH
-          setMarsHealthDisplay(MARS_MAX_HEALTH)
-          setOnMarsCombatZone(true)
-          // Novos marcianos a cada chegada em Marte (lab-64, pedido do usuário: "se voltar pra
-          // marte, tem que ter novos marcianos pra matar, senão o planeta fica vazio") — sem
-          // isso, inimigos já nocauteados numa visita anterior ficavam mortos pra sempre (o
-          // array é reaproveitado, nunca recriado), deixando o planeta esvaziado depois da
-          // primeira exploração. Reaparecem no próprio ponto de nascimento (`homeUp`), com o
-          // mesmo estado inicial de repouso — cobre tanto "voltar depois de nocauteado" quanto
-          // "voltar de novo por escolha própria depois de já ter limpado o planeta".
-          for (const enemy of marsEnemies) {
-            enemy.alive = true
-            enemy.up = enemy.homeUp.clone()
-            enemy.targetUp = enemy.homeUp.clone()
-            enemy.forward = Vector3.Cross(enemy.homeUp, Vector3.Right()).normalize()
-            enemy.restTimer = Math.random() * 2
-            enemy.attackCooldown = 0
-            enemy.lungeTimer = 0
-            enemy.root.position = enemy.homeUp.scale(SECOND_PLANET_RADIUS)
-            enemy.root.rotationQuaternion = alignmentQuaternion(enemy.homeUp)
-            enemy.root.setEnabled(true)
+        if (arrivedPlanetId) {
+          const planet = DESTINATION_PLANETS[arrivedPlanetId]
+          currentPlanetId = arrivedPlanetId
+          currentWorldCenter = planet.center
+          currentGroundBaseFn = () => planet.radius
+          teleportAvatarTo(planet.center, offsetLandingUp(planet.landingUp, planet.radius, 1.8), currentGroundBaseFn)
+
+          // Combate só existe em Marte (lab-110, confirmado com o usuário: os outros
+          // planetas-destino são só exploração + moedas escondidas, sem inimigo nenhum).
+          if (arrivedPlanetId === 'marte') {
+            // Vida cheia a cada nova ida a Marte (lab-60) — cada expedição começa do zero, não
+            // carrega dano de uma visita anterior.
+            marsHealthRef.current = MARS_MAX_HEALTH
+            setMarsHealthDisplay(MARS_MAX_HEALTH)
+            setOnMarsCombatZone(true)
+            // Novos marcianos a cada chegada em Marte (lab-64, pedido do usuário: "se voltar pra
+            // marte, tem que ter novos marcianos pra matar, senão o planeta fica vazio") — sem
+            // isso, inimigos já nocauteados numa visita anterior ficavam mortos pra sempre (o
+            // array é reaproveitado, nunca recriado), deixando o planeta esvaziado depois da
+            // primeira exploração. Reaparecem no próprio ponto de nascimento (`homeUp`), com o
+            // mesmo estado inicial de repouso — cobre tanto "voltar depois de nocauteado" quanto
+            // "voltar de novo por escolha própria depois de já ter limpado o planeta".
+            for (const enemy of marsEnemies) {
+              enemy.alive = true
+              enemy.up = enemy.homeUp.clone()
+              enemy.targetUp = enemy.homeUp.clone()
+              enemy.forward = Vector3.Cross(enemy.homeUp, Vector3.Right()).normalize()
+              enemy.restTimer = Math.random() * 2
+              enemy.attackCooldown = 0
+              enemy.lungeTimer = 0
+              enemy.root.position = enemy.homeUp.scale(SECOND_PLANET_RADIUS)
+              enemy.root.rotationQuaternion = alignmentQuaternion(enemy.homeUp)
+              enemy.root.setEnabled(true)
+            }
+            // lab-94: nova visita, nova chance de o jogador limpar o planeta de novo — a flag
+            // local só evita chamadas repetidas dentro da MESMA visita, não deve sobreviver a esta.
+            marsClearedThisVisit = false
           }
-          // lab-94: nova visita, nova chance de o jogador limpar o planeta de novo — a flag local
-          // só evita chamadas repetidas dentro da MESMA visita, não deve sobreviver a esta.
-          marsClearedThisVisit = false
         } else {
-          onSecondPlanet = false
+          currentPlanetId = null
           currentWorldCenter = Vector3.Zero()
           currentGroundBaseFn = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
           teleportAvatarTo(
@@ -2379,7 +2449,7 @@ export function World3D({
       // (`boardRocket`/`handleInteractPress`), "precisa voltar de foguete" já sai satisfeito de
       // graça — não precisa de nenhum bloqueio adicional.
       function respawnFromMarsDeath() {
-        onSecondPlanet = false
+        currentPlanetId = null
         currentWorldCenter = Vector3.Zero()
         currentGroundBaseFn = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
         teleportAvatarTo(Vector3.Zero(), offsetLandingUp(ROCKET_LAUNCH_DIR, PLANET_RADIUS, 2.2), currentGroundBaseFn)
@@ -2505,8 +2575,9 @@ export function World3D({
         // nocautear o ET/o robô") — checado ANTES do embarque no foguete: perto de um inimigo
         // vivo com a arma certa equipada, apertar E nocauteia em vez de embarcar. Sem a arma
         // certa, não faz nada (o jogador precisa achar o item primeiro — ver aviso ao embarcar
-        // sem os dois, em `boardRocket`).
-        if (onSecondPlanet) {
+        // sem os dois, em `boardRocket`). Só Marte tem inimigo (lab-110) — os outros
+        // planetas-destino não usam este bloco.
+        if (currentPlanetId === 'marte') {
           const avatarLocalPos = avatarMesh.position.subtract(SECOND_PLANET_CENTER)
           for (const enemy of marsEnemies) {
             if (!enemy.alive) continue
@@ -2556,18 +2627,26 @@ export function World3D({
             return
           }
         }
-        const rocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
+        const rocket = currentPlanetId ? returnRockets.get(currentPlanetId) ?? null : mainRocket
         let boardedRocket = false
         if (rocket) {
-          // `getAbsolutePosition()`, não `.position` — o foguete de volta é filho de
-          // `secondPlanetRoot` (posição local, não em coordenadas de mundo); `.position` sozinho
-          // aqui comparava contra a posição local (perto de 0,6,0) em vez da posição real no
-          // mundo (perto de SECOND_PLANET_CENTER), fazendo essa distância dar sempre um valor
-          // gigante e a checagem nunca passar — bug real encontrado testando a viagem de volta
-          // ao vivo (embarcar funcionava, voltar não fazia nada).
+          // `getAbsolutePosition()`, não `.position` — o foguete de volta é filho da raiz do
+          // planeta (posição local, não em coordenadas de mundo); `.position` sozinho aqui
+          // comparava contra a posição local (perto de 0,6,0) em vez da posição real no mundo,
+          // fazendo essa distância dar sempre um valor gigante e a checagem nunca passar — bug
+          // real encontrado testando a viagem de volta ao vivo (embarcar funcionava, voltar não
+          // fazia nada).
           const d = Vector3.Distance(avatarMesh.position, rocket.root.getAbsolutePosition())
           if (d < ROCKET_ENTER_DISTANCE) {
-            boardRocket()
+            // No planeta principal, com mais de um destino cadastrado, embarcar abre o seletor
+            // (lab-110, pedido do usuário: "ao entrar no foguete temos que escolher o
+            // planetinha") em vez de decolar direto — a volta de qualquer planeta-destino
+            // continua indo direto pra casa, único destino possível, sem seletor.
+            if (currentPlanetId === null) {
+              setPlanetPickerOpen(true)
+            } else {
+              boardRocket(null)
+            }
             rocket.hintLabel.alpha = 0
             boardedRocket = true
           }
@@ -4079,9 +4158,11 @@ export function World3D({
       // usuário: "por enquanto o planetinha pode ter só árvores e rochas, não precisa NPC") —
       // esfera lisa sem relevo/bacias/biomas, colisor físico esférico único (bem mais barato que
       // a malha deformada do planeta principal).
-      function buildSecondPlanetIfNeeded() {
-        if (secondPlanetBuilt) return
-        secondPlanetBuilt = true
+      // Renomeada de `buildSecondPlanetIfNeeded` (lab-110) — agora que existem mais planetas-destino,
+      // este nome deixa claro que é só o construtor DE MARTE especificamente; o "se já foi
+      // construído" é decidido pelo dispatcher genérico `buildPlanetIfNeeded` agora, não mais
+      // aqui dentro.
+      function buildMarsIfNeeded() {
 
         const secondPlanetRoot = new TransformNode('secondPlanetRoot', scene)
         secondPlanetRoot.position = SECOND_PLANET_CENTER
@@ -4246,7 +4327,7 @@ export function World3D({
         guiTexture.addControl(returnHint)
         returnHint.linkWithMesh(returnRocketRoot)
         returnHint.linkOffsetY = -230
-        secondPlanetReturnRocket = { root: returnRocketRoot, hintLabel: returnHint }
+        returnRockets.set('marte', { root: returnRocketRoot, hintLabel: returnHint })
 
         // Inimigos (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
         // tenta matar o nosso boneco") — distribuição própria (multiplicador de theta diferente
@@ -4279,6 +4360,157 @@ export function World3D({
             lungeTimer: 0,
           })
         }
+      }
+
+      // Mercúrio (lab-110, primeiro planeta novo além de Marte, pedido do usuário: "ampliar o
+      // mundo do jogo... ter os planetas do sistema solar... com características visuais reais
+      // deles") — sem combate/estrutura (confirmado com o usuário: só moedas escondidas). Esfera
+      // lisa como a de Marte (sem relevo próprio), colisor físico esférico único.
+      function buildMercuryIfNeeded() {
+        const mercuryRoot = new TransformNode('mercuryRoot', scene)
+        mercuryRoot.position = MERCURY_CENTER
+
+        const groundMat = new PBRMaterial('mercuryGroundMat', scene)
+        groundMat.albedoColor = new Color3(0.5, 0.47, 0.44)
+        groundMat.roughness = 0.95
+        const groundSphere = MeshBuilder.CreateSphere(
+          'mercuryGround',
+          { diameter: MERCURY_RADIUS * 2, segments: 28 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = mercuryRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Crateras — a característica visual mais reconhecível de Mercúrio de verdade: sem
+        // atmosfera/água/vento pra apagar crateras antigas, a superfície inteira é marcada por
+        // elas. Decalque simples (disco de aro mais claro por baixo de um disco de piso mais
+        // escuro, ambos rasos e colados na superfície) em vez de deformar a malha — suficiente
+        // pra ler como cratera na escala/distância de câmera do jogo, sem o custo de gerar uma
+        // esfera com relevo próprio só pra este planeta.
+        const craterFloorMat = new PBRMaterial('mercuryCraterFloorMat', scene)
+        craterFloorMat.albedoColor = new Color3(0.32, 0.3, 0.27)
+        craterFloorMat.roughness = 0.98
+        const craterRimMat = new PBRMaterial('mercuryCraterRimMat', scene)
+        craterRimMat.albedoColor = new Color3(0.64, 0.6, 0.55)
+        craterRimMat.roughness = 0.9
+        const MERCURY_CRATER_COUNT = 14
+        for (let i = 0; i < MERCURY_CRATER_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / MERCURY_CRATER_COUNT))
+          const theta = i * GOLDEN_ANGLE * 2.7
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, MERCURY_LANDING_UP) > Math.cos(0.4)) continue // longe do foguete de volta
+
+          const size = 0.5 + ((i * 5) % 4) * 0.25
+          const rim = MeshBuilder.CreateCylinder(
+            `mercuryCraterRim-${i}`,
+            { diameter: size * 1.6, height: 0.015, tessellation: 16 },
+            scene,
+          )
+          rim.material = craterRimMat
+          rim.parent = mercuryRoot
+          rim.position = localUp.scale(MERCURY_RADIUS + 0.005)
+          rim.rotationQuaternion = alignmentQuaternion(localUp)
+          rim.freezeWorldMatrix()
+
+          const floor = MeshBuilder.CreateCylinder(
+            `mercuryCraterFloor-${i}`,
+            { diameter: size, height: 0.02, tessellation: 16 },
+            scene,
+          )
+          floor.material = craterFloorMat
+          floor.parent = mercuryRoot
+          floor.position = localUp.scale(MERCURY_RADIUS + 0.01)
+          floor.rotationQuaternion = alignmentQuaternion(localUp)
+          floor.freezeWorldMatrix()
+        }
+
+        // Rochas esparsas — mesmos modelos glTF de Marte/deserto (índices 6-10 em `propTemplates`,
+        // já carregados), contagem menor (planeta menor que Marte).
+        const MERCURY_ROCK_COUNT = 14
+        const mercuryRockIndices = [6, 7, 8, 9, 10]
+        for (let i = 0; i < MERCURY_ROCK_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / MERCURY_ROCK_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.8 + 0.6
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, MERCURY_LANDING_UP) > Math.cos(0.4)) continue
+
+          const templateIndex = mercuryRockIndices[i % mercuryRockIndices.length]
+          const instance = propTemplates[templateIndex].clone(`mercuryProp-${i}`, null)
+          if (!instance) continue
+          instance.setEnabled(true)
+          instance.parent = mercuryRoot
+          const propPos = localUp.scale(MERCURY_RADIUS)
+          const propScale = 0.8 + ((i * 7) % 5) * 0.12
+          instance.position = propPos
+          instance.rotationQuaternion = alignmentQuaternion(localUp)
+          instance.scaling.setAll(propScale)
+          instance.freezeWorldMatrix()
+          instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+
+          // Mesmo colisor-esfera invisível das rochas de Marte — bloqueia esbarrão lateral sem
+          // virar plataforma nem precisar da física cara da malha glTF de verdade.
+          const collider = MeshBuilder.CreateSphere(
+            `mercuryPropCollider-${i}`,
+            { diameter: 0.7 * propScale },
+            scene,
+          )
+          collider.parent = mercuryRoot
+          collider.position = propPos
+          collider.isVisible = false
+          collider.computeWorldMatrix(true)
+          new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+        }
+
+        // Moedas escondidas (confirmado com o usuário: sem combate, só recompensa de exploração)
+        // — mesmo padrão das moedas no topo das montanhas do planeta principal (`coins.push`,
+        // coletadas pelo mesmo laço genérico de física, sem mudança nenhuma nele).
+        const MERCURY_COIN_COUNT = 6
+        for (let i = 0; i < MERCURY_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / MERCURY_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 4.4 + 2.3
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, MERCURY_LANDING_UP) > Math.cos(0.35)) continue
+
+          const coinPos = MERCURY_CENTER.add(localUp.scale(MERCURY_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-mercury${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-mercury${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = mercuryRoot
+        returnRocketRoot.position = MERCURY_LANDING_UP.scale(MERCURY_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(MERCURY_LANDING_UP)
+        const returnHint = new TextBlock('mercuryRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('mercurio', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
+      // Despacha pro construtor certo (lab-110) — cada planeta só existe na cena depois da
+      // primeira visita (`builtPlanetIds`), igual já funcionava só com Marte antes deste
+      // laboratório generalizar pra qualquer quantidade de planetas-destino.
+      function buildPlanetIfNeeded(id: string) {
+        if (builtPlanetIds.has(id)) return
+        builtPlanetIds.add(id)
+        if (id === 'marte') buildMarsIfNeeded()
+        else if (id === 'mercurio') buildMercuryIfNeeded()
       }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num
@@ -4498,7 +4730,7 @@ export function World3D({
       // (cujo eixo Y local já É o "pra cima" do planeta, ver a montagem da rotação do boneco no
       // laço de física), deitado no chão sem rotação extra: `CreateTorus` já nasce plano no
       // plano XZ, com o Y passando pelo "buraco da rosquinha" — exatamente o eixo que já
-      // corresponde a "reto pra cima" nesse nó. Só visível em Marte (`onSecondPlanet`).
+      // corresponde a "reto pra cima" nesse nó. Só visível em Marte (`currentPlanetId === 'marte'`).
       soundRing = MeshBuilder.CreateTorus('soundRing', { diameter: MARS_ENEMY_PERSONAL_SPACE * 2, thickness: 0.04, tessellation: 24 }, scene)
       soundRing.parent = studentFigure.root
       soundRing.position.y = 0.03
@@ -6907,8 +7139,8 @@ export function World3D({
         // ("sonar", cresce e desaparece, recomeça). `soundRingMat` foi dado o `alpha` inicial na
         // construção; aqui só o `alpha` muda por quadro, então o cast é seguro.
         if (soundRing) {
-          soundRing.setEnabled(onSecondPlanet)
-          if (onSecondPlanet) {
+          soundRing.setEnabled(currentPlanetId === 'marte')
+          if (currentPlanetId === 'marte') {
             const pingT = (time % 1.2) / 1.2
             soundRing.scaling.setAll(0.6 + pingT * 1.0)
             ;(soundRing.material as PBRMaterial).alpha = 0.5 * (1 - pingT)
@@ -6919,8 +7151,8 @@ export function World3D({
         // da "dica" de localização pedida pelo usuário, já que a legenda flutuante sozinha pode
         // passar despercebida) + detecção de "pegou o item" (anda por cima, mesmo raio de coleta
         // espiritualmente parecido com o das moedas). Só roda no planeta principal — os itens não
-        // existem em Marte.
-        if (!onSecondPlanet && avatarMesh) {
+        // existem em nenhum planeta-destino.
+        if (currentPlanetId === null && avatarMesh) {
           if (swordPickup && !hasSwordRef.current) {
             swordPickup.root.rotationQuaternion = alignmentQuaternion(SWORD_LOCATION_DIR).multiply(
               Quaternion.RotationAxis(Vector3.Up(), time * 1.2),
@@ -6964,8 +7196,9 @@ export function World3D({
         // dentro do raio de detecção, em vez de vagar aleatoriamente perto de onde nasceram.
         // `secondPlanetRoot` não tem rotação própria (só translação pra `SECOND_PLANET_CENTER`),
         // então posição local ↔ mundo é só somar/subtrair o centro — mesma conversão simples já
-        // usada pelo laço de física principal pra calcular `localUp` em qualquer planeta.
-        if (onSecondPlanet && avatarMesh) {
+        // usada pelo laço de física principal pra calcular `localUp` em qualquer planeta. Só
+        // Marte tem inimigo (lab-110) — os outros planetas-destino não usam este bloco.
+        if (currentPlanetId === 'marte' && avatarMesh) {
           const avatarLocalPos = avatarMesh.position.subtract(SECOND_PLANET_CENTER)
           // `.normalize()` do Babylon muta o vetor NO LUGAR (diferente de `.add()`/`.subtract()`,
           // que devolvem um vetor novo) — chamar direto em `avatarLocalPos` encolheria ele pra
@@ -7326,16 +7559,16 @@ export function World3D({
         // parado perto da plataforma de partida durante o voo inteiro (só `flyingRocket` se move
         // de verdade), então a distância até o foguete parado continuaria pequena o tempo todo.
         if (avatarMesh && !drivingRocket) {
-          const activeRocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
+          const activeRocket = currentPlanetId ? returnRockets.get(currentPlanetId) ?? null : mainRocket
           if (activeRocket) {
             // `getAbsolutePosition()` — mesmo motivo do outro ponto de checagem em
-            // `handleInteractPress` (o foguete de volta é filho de `secondPlanetRoot`).
+            // `handleInteractPress` (o foguete de volta é filho da raiz do planeta).
             const d = Vector3.Distance(avatarMesh.position, activeRocket.root.getAbsolutePosition())
             activeRocket.hintLabel.alpha = d < ROCKET_ENTER_DISTANCE ? 1 : 0
           }
         } else if (drivingRocket) {
           if (mainRocket) mainRocket.hintLabel.alpha = 0
-          if (secondPlanetReturnRocket) secondPlanetReturnRocket.hintLabel.alpha = 0
+          for (const r of returnRockets.values()) r.hintLabel.alpha = 0
         }
 
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
@@ -7649,6 +7882,16 @@ export function World3D({
           selected={selectedWeapon}
           onSelect={setSelectedWeapon}
           onClose={() => setBagOpen(false)}
+        />
+      )}
+      {planetPickerOpen && (
+        <PlanetPickerPanel
+          planets={DESTINATION_PLANET_LIST}
+          onChoose={(id) => {
+            setPlanetPickerOpen(false)
+            boardRocketToRef.current(id)
+          }}
+          onClose={() => setPlanetPickerOpen(false)}
         />
       )}
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>

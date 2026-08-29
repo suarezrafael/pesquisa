@@ -1,8 +1,8 @@
 # Laboratório 110 — Sistema Solar: seleção de planeta + Mercúrio
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
-Fim: -
+Fim: 2026-08-29
 Commit inicial: 4d87f325a1cf63337a013410e3fa16fc14556574
 
 ## Objetivo do laboratório
@@ -67,17 +67,29 @@ genérico com 2 destinos reais antes de escalar pros outros 5.
   longe o bastante do planeta principal pra não competir visualmente.
 
 ## Funcionalidades planejadas
-- [ ] Generalizar o estado de planeta atual (`currentPlanetId: string | null`, `builtPlanetIds`,
+- [x] Generalizar o estado de planeta atual (`currentPlanetId: string | null`, `builtPlanetIds`,
       `Map` de foguetes de retorno) — Marte migrado pro novo formato sem mudar comportamento.
-- [ ] `boardRocket(toPlanetId: string | null)`/`landRocket()` atualizados pro novo formato.
-- [ ] Registro de planetas de destino (`id`/`nome`/raio/posição/direção de pouso) — Marte + Mercúrio
-      cadastrados.
-- [ ] `PlanetPickerPanel.tsx` (novo): painel simples mostrando os destinos disponíveis (nome +
-      indicador visual); aparece ao apertar "E" perto do foguete principal.
-- [ ] Mercúrio: esfera cinza-acastanhada, crateras (decalques de disco recuado + aro), rochas
-      esparsas (mesmos templates de Marte), moedas escondidas, foguete de volta com rótulo.
-- [ ] Verificação ao vivo: Marte continua idêntico (combate/estação/moedas); seletor mostra os 2
-      destinos; viajar pra Mercúrio e voltar funciona, moedas de Mercúrio contam pro HUD.
+- [x] `boardRocket(toPlanetId: string | null)`/`landRocket()` atualizados pro novo formato.
+- [x] Registro de planetas de destino (`id`/`nome`/raio/posição/direção de pouso) — Marte + Mercúrio
+      cadastrados (`DESTINATION_PLANETS`).
+- [x] `PlanetPickerPanel.tsx` (novo): painel simples mostrando os destinos disponíveis (nome +
+      emoji + botão "Viajar"); aparece ao apertar "E" perto do foguete principal, reaproveita
+      `.modal-overlay`/`.avatar-shop-*` (zero CSS novo).
+- [x] Mercúrio: esfera cinza-acastanhada, 13-14 crateras (decalques de disco de aro + piso
+      recuados), rochas esparsas (mesmos templates de Marte), 6 moedas escondidas, foguete de
+      volta com rótulo — tudo sem combate/inimigo, confirmado com o usuário.
+- [x] Verificação ao vivo (dev server + browser automation, viagem completa de ida e volta pros
+      dois destinos): Marte continua IDÊNTICO — health bar cheia, "5 marcianos restantes", anel
+      sonoro pulsando, estação alienígena, foguete de volta, tudo confirmado presente depois da
+      viagem; seletor mostra corretamente "Marte 🔴"/"Mercúrio ☿️"; viagem completa pra Mercúrio
+      confirmada por inspeção direta da cena (13 crateras, 6 moedas, foguete de volta todos
+      presentes) E visualmente (screenshot); volta de Marte pra casa confirmada (anel sonoro
+      desativado, HUD de combate some, aterrissagem correta perto do foguete principal). Sem erro
+      de console em nenhuma etapa. **Achado da verificação, não um bug do jogo**: a aba de
+      automação ficou `document.hidden` durante os voos (rAF do Babylon trava nesse estado),
+      exigindo forçar `engine._deltaTime` manualmente pra completar os ~9s de voo simulado —
+      técnica registrada na memória do projeto (`browser_automation_frame_throttle`) pra reuso
+      futuro; não afeta jogadores reais (só ocorre em aba de automação sem foco real).
 
 ## Fora de escopo (explicitamente adiado)
 - Vênus, Júpiter, Saturno, Urano, Netuno — próximos laboratórios desta mesma frente.
