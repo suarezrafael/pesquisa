@@ -1,6 +1,10 @@
 # Laboratório atual
 
-Último concluído: labs/lab-106-minha-casa-mobilia-compravel/ — continuação direta do lab-105:
+Em andamento: labs/lab-107-minha-casa-sets-assinante/ — os dois sets temáticos exclusivos de
+assinante ("Quarto Espacial" 🚀, "Jardim Encantado" 🌷), última peça de "Minha Casa" planejada em
+`docs/plano-comercial-backend.md`. Ver `labs/lab-107-minha-casa-sets-assinante/FEATURES.md`.
+
+Antes desse: labs/lab-106-minha-casa-mobilia-compravel/ — continuação direta do lab-105:
 trocou o placeholder de mobília do `MyHousePanel` por compra de verdade com moeda. Novo
 `app/src/data/furniture.ts` (5 itens, 6-20 moedas, campo `subscriptionOnly?` já previsto pro
 próximo passo), `Progress.unlockedFurnitureIds`, `unlockFurniture` em `progression.ts`/
