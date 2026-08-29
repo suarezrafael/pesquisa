@@ -390,6 +390,15 @@ const JUPITER_RADIUS = 20
 const JUPITER_CENTER = new Vector3(58, 0, -58)
 const JUPITER_LANDING_UP = new Vector3(0, 1, 0)
 
+// Saturno (lab-113, continuação da frente Sistema Solar) — segundo gigante gasoso, mesma técnica
+// de faixas de Júpiter (paleta mais pálida/dourada) + ANEL novo (a característica visual mais
+// reconhecível de Saturno, e de qualquer planeta do sistema solar isoladamente). Raio um pouco
+// menor que Júpiter — Saturno é um pouco menor que Júpiter na vida real (~9,4 vs. ~11,2 raios
+// terrestres), mantém a ordem real dos dois maiores planetas.
+const SATURN_RADIUS = 17
+const SATURN_CENTER = new Vector3(-58, 0, 58)
+const SATURN_LANDING_UP = new Vector3(0, 1, 0)
+
 // Registro genérico de planetas-destino (lab-110) — substitui o antigo par de variáveis fixas
 // `onSecondPlanet`/`SECOND_PLANET_*` como única fonte de verdade sobre onde cada planeta fica;
 // `SECOND_PLANET_CENTER`/`RADIUS`/`LANDING_UP` continuam existindo tal e qual (usados só dentro do
@@ -435,6 +444,14 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: JUPITER_RADIUS,
     center: JUPITER_CENTER,
     landingUp: JUPITER_LANDING_UP,
+  },
+  saturno: {
+    id: 'saturno',
+    name: 'Saturno',
+    emoji: '🪐',
+    radius: SATURN_RADIUS,
+    center: SATURN_CENTER,
+    landingUp: SATURN_LANDING_UP,
   },
 }
 const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_PLANETS)
@@ -4749,6 +4766,99 @@ export function World3D({
         returnRockets.set('jupiter', { root: returnRocketRoot, hintLabel: returnHint })
       }
 
+      // Saturno (lab-113, continuação da frente Sistema Solar) — mesma técnica de faixas de
+      // Júpiter (paleta mais pálida/dourada, menos contraste) + o ANEL (a característica visual
+      // mais reconhecível de Saturno) — um único `CreateTorus` achatado no eixo Y, decorativo, sem
+      // física (não é pisável), centrado no equador do planeta.
+      function buildSaturnIfNeeded() {
+        const saturnRoot = new TransformNode('saturnRoot', scene)
+        saturnRoot.position = SATURN_CENTER
+
+        const bandTexture = new DynamicTexture('saturnBandsTex', { width: 8, height: 512 }, scene, false)
+        const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
+        const bandColors = ['#e8dcc0', '#d9c9a0', '#f0e6d0', '#c9b888', '#e0d4b0', '#d4c298']
+        let bandY = 0
+        let bandColorIndex = 0
+        while (bandY < 512) {
+          const bandHeight = 16 + Math.random() * 44
+          bandCtx.fillStyle = bandColors[bandColorIndex % bandColors.length]
+          bandCtx.fillRect(0, bandY, 8, bandHeight)
+          bandY += bandHeight
+          bandColorIndex++
+        }
+        bandTexture.update()
+
+        const groundMat = new PBRMaterial('saturnGroundMat', scene)
+        groundMat.albedoTexture = bandTexture
+        groundMat.roughness = 0.9
+        const groundSphere = MeshBuilder.CreateSphere(
+          'saturnGround',
+          { diameter: SATURN_RADIUS * 2, segments: 48 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = saturnRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Anel — decorativo, sem `PhysicsAggregate` (não é pisável). `CreateTorus` nasce plano no
+        // plano XZ com o "buraco" no eixo Y (mesma orientação já usada no anel sonoro de combate
+        // de Marte, lab-62) — já alinhado com `SATURN_LANDING_UP = (0,1,0)` sem rotação extra.
+        // `scaling.y` bem pequeno achata o tubo do torus numa fita fina, `alpha` um pouco abaixo
+        // de 1 sugere gelo/poeira em vez de um anel sólido opaco.
+        const ringMat = new PBRMaterial('saturnRingMat', scene)
+        ringMat.albedoColor = new Color3(0.82, 0.74, 0.58)
+        ringMat.roughness = 0.6
+        ringMat.alpha = 0.85
+        ringMat.backFaceCulling = false
+        const ring = MeshBuilder.CreateTorus(
+          'saturnRing',
+          { diameter: SATURN_RADIUS * 2.7, thickness: SATURN_RADIUS * 0.55, tessellation: 64 },
+          scene,
+        )
+        ring.material = ringMat
+        ring.parent = saturnRoot
+        ring.scaling.y = 0.02
+        ring.freezeWorldMatrix()
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const SATURN_COIN_COUNT = 8
+        for (let i = 0; i < SATURN_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / SATURN_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 4.7 + 0.8
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, SATURN_LANDING_UP) > Math.cos(0.3)) continue
+
+          const coinPos = SATURN_CENTER.add(localUp.scale(SATURN_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-saturno${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-saturno${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = saturnRoot
+        returnRocketRoot.position = SATURN_LANDING_UP.scale(SATURN_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(SATURN_LANDING_UP)
+        const returnHint = new TextBlock('saturnoRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('saturno', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
       // Despacha pro construtor certo (lab-110) — cada planeta só existe na cena depois da
       // primeira visita (`builtPlanetIds`), igual já funcionava só com Marte antes deste
       // laboratório generalizar pra qualquer quantidade de planetas-destino.
@@ -4759,6 +4869,7 @@ export function World3D({
         else if (id === 'mercurio') buildMercuryIfNeeded()
         else if (id === 'venus') buildVenusIfNeeded()
         else if (id === 'jupiter') buildJupiterIfNeeded()
+        else if (id === 'saturno') buildSaturnIfNeeded()
       }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num

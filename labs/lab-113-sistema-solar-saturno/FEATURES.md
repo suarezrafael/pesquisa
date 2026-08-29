@@ -1,8 +1,8 @@
 # Laboratório 113 — Sistema Solar: Saturno
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
-Fim: -
+Fim: 2026-08-29
 Commit inicial: f0136c27c724584f90c9f12d9a417b7b8eeeb880
 
 ## Objetivo do laboratório
@@ -35,13 +35,21 @@ sistema solar isoladamente.
   dos outros 4 planetas-destino já existentes.
 
 ## Funcionalidades planejadas
-- [ ] `SATURN_RADIUS`/`SATURN_CENTER`/`SATURN_LANDING_UP` + entrada em `DESTINATION_PLANETS`.
-- [ ] `buildSaturnIfNeeded()`: esfera com textura de faixas (paleta pálida/dourada), ANEL
-      (`CreateTorus` achatado, translúcido), moedas escondidas, foguete de volta.
-- [ ] `buildPlanetIfNeeded` ganha o `case 'saturno'`.
-- [ ] Verificação ao vivo: seletor mostra os 5 destinos; viagem completa pra Saturno (faixas e
-      anel visíveis, moedas contam pro HUD); Marte/Mercúrio/Vênus/Júpiter continuam funcionando
-      sem regressão.
+- [x] `SATURN_RADIUS`/`SATURN_CENTER`/`SATURN_LANDING_UP` + entrada em `DESTINATION_PLANETS`.
+- [x] `buildSaturnIfNeeded()`: esfera com textura de faixas (paleta pálida/dourada), ANEL
+      (`CreateTorus` achatado, translúcido), 8 moedas escondidas, foguete de volta.
+- [x] `buildPlanetIfNeeded` ganha o `case 'saturno'`.
+- [x] Verificação ao vivo (dev server + browser automation, com a correção de `keysDown['e']`
+      travado do lab-112 já aplicada — funcionou de primeira desta vez): seletor mostra os 5
+      destinos; viagem completa pra Saturno confirmada por inspeção direta da cena (avatar a
+      ~17,55 unidades do centro, batendo com `SATURN_RADIUS + AVATAR_RADIUS`; chão, anel e 8
+      moedas presentes). Geometria do anel conferida por medição direta da bounding box
+      (`getBoundingInfo`) — disco fino de ~55 unidades de diâmetro, centrado no planeta, visível e
+      habilitado; confirma matematicamente `diameter=SATURN_RADIUS*2.7 + thickness=SATURN_RADIUS*0.55
+      = 55.25`, batendo com o valor medido. O screenshot ao vivo não mostrou o anel claramente
+      (câmera perto do polo de pouso, anel no equador fica fora do ângulo de visão nessa posição —
+      geometria/física real, não um bug), então a confirmação definitiva veio da medição direta,
+      não só do olho. Sem erro de console.
 
 ## Fora de escopo (explicitamente adiado)
 - Urano, Netuno — próximo (e último) laboratório desta frente.

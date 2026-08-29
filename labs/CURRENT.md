@@ -1,9 +1,20 @@
 # Laboratório atual
 
-Em andamento: labs/lab-113-sistema-solar-saturno/ — quarto planeta novo da frente "Sistema Solar",
-segundo gigante gasoso. Reaproveita a técnica de faixas do lab-112 (Júpiter, paleta mais pálida/
-dourada) + ANEL novo (`CreateTorus` achatado, translúcido, decorativo). Sem rocha/cratera/combate.
-Ver `labs/lab-113-sistema-solar-saturno/FEATURES.md`.
+Último concluído: labs/lab-113-sistema-solar-saturno/ — quarto planeta novo da frente "Sistema
+Solar", segundo gigante gasoso. Reaproveita a técnica de faixas do lab-112 (Júpiter, paleta mais
+pálida/dourada) + ANEL novo (`CreateTorus` achatado no eixo Y, `scaling.y=0.02`, translúcido,
+decorativo, sem física) — mesma primitiva do anel sonoro de combate de Marte, escala bem maior.
+Sem rocha/cratera/combate. Raio 17 (um pouco menor que Júpiter=20), centro `(-58,0,58)`.
+**Verificado ao vivo**: seletor mostra os 5 destinos; viagem completa pra Saturno confirmada por
+inspeção da cena (posição do avatar, chão/anel/8 moedas presentes) e por medição direta da
+bounding box do anel (disco de ~55 unidades de diâmetro, batendo com o cálculo esperado) — o
+screenshot não mostrou o anel claramente por ângulo de câmera (perto do polo de pouso, anel no
+equador fica fora de vista ali, geometria real não bug). A correção de `keysDown['e']` travado
+(achado no lab-112) funcionou de primeira nesta verificação. `npm run test`: 44/44. `npm run
+build` sem erros. **Deploy pendente**: usuário pediu deploy manual em produção durante este
+laboratório — Vercel falhou ("Not authorized", mesma restrição de CLI do lab-104), Cloudflare
+Pages paralelo foi atualizado até Júpiter mas Saturno ainda não foi publicado em lugar nenhum. Ver
+`labs/lab-113-sistema-solar-saturno/CONTEXT.md`.
 
 Antes desse: labs/lab-112-sistema-solar-jupiter/ — terceiro planeta novo da frente "Sistema
 Solar", primeiro gigante gasoso. Faixas horizontais proceduralmente geradas (`DynamicTexture`,
@@ -563,13 +574,18 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-112-sistema-solar-jupiter/CONTEXT.md` (último laboratório concluído — Mercúrio/Vênus/
-Júpiter prontos; próximo passo natural é Saturno, reaproveitando a técnica de faixas de Júpiter +
-anéis novos (`CreateTorus` achatado), depois Urano/Netuno, ver "O que o próximo laboratório deve
-desenvolver" nesse CONTEXT.md). Cloudflare Pages (lab-109) continua pronto e
-verificado em paralelo, https://missao-aprender-jogo.pages.dev — falta a DECISÃO e AÇÃO do usuário
-de trocar o DNS de `missaoaprendizado.com` de verdade, ver
-`labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md`. Lembrar também que
+`labs/lab-113-sistema-solar-saturno/CONTEXT.md` (último laboratório concluído — Mercúrio/Vênus/
+Júpiter/Saturno prontos; próximo e último passo da frente é Urano+Netuno juntos, ver "O que o
+próximo laboratório deve desenvolver" nesse CONTEXT.md — com isso os 8 planetas reais do sistema
+solar estariam completos no jogo). **Deploy pendente**: usuário pediu publicar em produção durante
+o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized" (mesma restrição de
+CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer deploy nele — provável
+limite de segurança da integração, não uma configuração errada). Cloudflare Pages paralelo
+(lab-109, https://missao-aprender-jogo.pages.dev) foi atualizado até Júpiter, mas Saturno (lab-113)
+ainda não foi publicado em lugar nenhum — considerar publicar de novo no Cloudflare Pages (rápido,
+`cd app && npx wrangler pages deploy dist --project-name=missao-aprender-jogo --branch=main`) ou
+esperar o usuário decidir sobre o deploy real (rodar `npx vercel --prod --yes` na própria máquina,
+ou configurar os secrets do lab-104 e mesclar o PR `#8`). Lembrar também que
 `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,
