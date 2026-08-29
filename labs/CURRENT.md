@@ -1,3 +1,20 @@
+## Correção de produção fora de um laboratório formal (2026-08-29)
+
+**Domínio confiável do Neon Auth (de novo)**: o mesmo problema já corrigido no lab-104 pra
+`missaoaprendizado.com` (`403 Invalid Origin` bloqueando login/cadastro/recuperação de senha)
+também afetava `https://missao-aprender-jogo.pages.dev` (o deploy paralelo Cloudflare Pages do
+lab-109) — nunca tinha sido adicionado à lista de domínios confiáveis do Neon Auth, apesar de já
+estar em uso há vários laboratórios. Reportado pelo usuário ao vivo ("quando tento recuperar senha
+entrar na conta ou criar uma recebo invalid origin"). Corrigido adicionando o domínio na lista
+(`console.neon.tech` → projeto `missao-aprender` → Auth → Configuration → Domains, sessão já
+autenticada no navegador). **Verificado ao vivo**: tentativa de login em
+`https://missao-aprender-jogo.pages.dev/familia` com credencial errada agora retorna "Invalid
+email or password" (erro normal do Better Auth), não mais "Invalid Origin" — confirma que o
+bloqueio de origem foi removido. **Lembrete pro futuro**: se um domínio novo for apontado pro jogo
+(incluindo outro Pages/Vercel de teste), lembrar de adicionar ele aqui também — não é automático,
+e o sintoma (403 Invalid Origin) só aparece pro usuário final na hora de login/cadastro, não em
+build/deploy.
+
 # Laboratório atual
 
 Último concluído: labs/lab-117-code-splitting-world3d/ — escolhido pelo usuário entre 3 opções de
