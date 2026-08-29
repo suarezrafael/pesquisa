@@ -2233,6 +2233,12 @@ export function World3D({
       // (`toRestQuat`) — motores (cauda) na frente descendo, como um pouso de foguete de verdade.
       fromRestQuat: Quaternion
       toRestQuat: Quaternion
+      // "Pra cima" local de cada plataforma (lab-116) — mesmos vetores já usados em `boardRocket`
+      // pra construir `fromRestQuat`/`toRestQuat` e os pontos de controle da curva, guardados
+      // aqui pra a câmera não precisar redescobri-los a partir do quaternion durante as fases de
+      // repouso (decolagem/flip de pouso, ver laço de física/câmera mais abaixo).
+      fromUp: Vector3
+      toUp: Vector3
       // Capturada na hora que o voo entra na fase de pouso (ver `holdFlipHoldCurve`/laço de voo
       // mais abaixo) — de onde o "flip" pra orientação de pouso começa a interpolar. `null` até
       // lá; type real é `Quaternion`, mas começa vazia porque só existe a partir desse instante.
@@ -2359,7 +2365,19 @@ export function World3D({
         // PRÓPRIO primeiro quadro do voo, desfazendo o embarque na hora, antes de qualquer input.
         const fromRestQuat = alignmentQuaternion(fromUp)
         const toRestQuat = alignmentQuaternion(toUp)
-        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toPlanetId, fromRestQuat, toRestQuat, flipStartQuat: null }
+        drivingRocket = {
+          progress: 0.001,
+          p0,
+          c1,
+          c2,
+          p1,
+          toPlanetId,
+          fromRestQuat,
+          toRestQuat,
+          flipStartQuat: null,
+          fromUp,
+          toUp,
+        }
         flyingRocket.setEnabled(true)
         flyingRocket.position.copyFrom(p0)
         // Começa com a MESMA rotação da plataforma parada (`alignmentQuaternion(fromUp)`, igual
@@ -8203,16 +8221,41 @@ export function World3D({
           // ângulo não mostrava os motores. Usar o NARIZ DE VERDADE da nave (derivado da rotação
           // que ela já tem, suave por construção via `holdFlipHoldCurve`/`Slerp` acima) resolve
           // os dois problemas de uma vez: a câmera sempre fica do lado oposto ao nariz — vendo os
-          // motores — e nunca mais degenera perto do "pra cima" do mundo.
-          flyingRocket.computeWorldMatrix(true)
-          const shipNoseDir = Vector3.TransformNormal(Vector3.Up(), flyingRocket.getWorldMatrix()).normalize()
-          let upReference = Vector3.Up()
-          if (Math.abs(Vector3.Dot(shipNoseDir, upReference)) > 0.9) upReference = Vector3.Right()
-          const shipUp = upReference.subtract(shipNoseDir.scale(Vector3.Dot(upReference, shipNoseDir))).normalize()
-
-          const desiredShipCamPos = shipPos.subtract(shipNoseDir.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
+          // motores — e nunca mais degenera perto do "pra cima" do mundo. Válido só no CRUZEIRO
+          // (longe de qualquer planeta) — ver o `if` abaixo pras duas pontas de repouso.
+          const inLaunchHold = drivingRocket.progress <= ROCKET_LAUNCH_HOLD_END
+          const inLandingFlip = drivingRocket.progress >= ROCKET_LANDING_FLIP_START
+          let desiredShipCamPos: Vector3
+          let desiredShipCamUp: Vector3
+          if (inLaunchHold || inLandingFlip) {
+            // lab-116, bug real reportado pelo usuário ("a viagem do foguete pra ida pros outros
+            // planetas ta um pouco bugada a camera, fica uma visao dentro da terra"): nas duas
+            // pontas de repouso (decolando/terminando de pousar), o nariz trava apontando pra
+            // LONGE do planeta relevante (reto pra cima da plataforma) — "atrás da cauda" vira
+            // literalmente "pra DENTRO do planeta". Só ficava óbvio saindo do planeta principal
+            // (raio 13, único corpo com `backFaceCulling = false` desde o lab-95 — os outros
+            // planetas-destino são esferas lisas com culling padrão, então "câmera lá dentro" só
+            // mostra vazio, não o próprio interior). Câmera "de lado" aqui: tangente horizontal
+            // (baseada em `facing`, projetada perpendicular ao "pra cima" do planeta) + altura no
+            // PRÓPRIO "pra cima" do planeta relevante (garantido pra FORA da superfície, mesmo
+            // princípio já usado pela câmera do avatar andando) em vez de atrás do nariz/cauda.
+            const planetUp = inLaunchHold ? drivingRocket.fromUp : drivingRocket.toUp
+            let tangent = facing.subtract(planetUp.scale(Vector3.Dot(facing, planetUp)))
+            if (tangent.lengthSquared() < 0.0001) tangent = Vector3.Cross(planetUp, Vector3.Right())
+            tangent.normalize()
+            desiredShipCamPos = shipPos.subtract(tangent.scale(CAMERA_DISTANCE)).add(planetUp.scale(CAMERA_HEIGHT))
+            desiredShipCamUp = planetUp
+          } else {
+            flyingRocket.computeWorldMatrix(true)
+            const shipNoseDir = Vector3.TransformNormal(Vector3.Up(), flyingRocket.getWorldMatrix()).normalize()
+            let upReference = Vector3.Up()
+            if (Math.abs(Vector3.Dot(shipNoseDir, upReference)) > 0.9) upReference = Vector3.Right()
+            const shipUp = upReference.subtract(shipNoseDir.scale(Vector3.Dot(upReference, shipNoseDir))).normalize()
+            desiredShipCamPos = shipPos.subtract(shipNoseDir.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
+            desiredShipCamUp = shipUp
+          }
           camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
-          camera.upVector = Vector3.Lerp(camera.upVector, shipUp, 0.15).normalize()
+          camera.upVector = Vector3.Lerp(camera.upVector, desiredShipCamUp, 0.15).normalize()
           camera.setTarget(shipPos)
 
           if (drivingRocket.progress >= 1 || drivingRocket.progress <= 0) landRocket()

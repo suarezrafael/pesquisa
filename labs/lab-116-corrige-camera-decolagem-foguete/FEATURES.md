@@ -1,7 +1,8 @@
 # Laboratório 116 — Corrige câmera do foguete na decolagem (ida pros planetas)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
+Fim: 2026-08-29
 Commit inicial: 8a6dfa953de2d488e75c2b196026cd96934a6075
 
 ## Objetivo do laboratório
@@ -64,15 +65,16 @@ de IDA, saindo do planeta principal) sem regredir a volta (que já funciona) nem
   redescobri-los a partir do quaternion.
 
 ## Funcionalidades planejadas
-- [ ] `RocketFlight`: campos `fromUp`/`toUp: Vector3` (novo).
-- [ ] `boardRocket`: preenche os dois novos campos (já calculados localmente).
-- [ ] Laço de física/câmera do foguete: câmera "de lado" (tangente horizontal + altura no "pra
+- [x] `RocketFlight`: campos `fromUp`/`toUp: Vector3` (novo).
+- [x] `boardRocket`: preenche os dois novos campos (já calculados localmente).
+- [x] Laço de física/câmera do foguete: câmera "de lado" (tangente horizontal + altura no "pra
       cima" do planeta) durante `progress <= ROCKET_LAUNCH_HOLD_END` (decolagem) E durante
       `progress >= ROCKET_LANDING_FLIP_START` (flip de pouso); câmera "atrás da cauda" mantida sem
       mudança pro trecho do meio (cruzeiro).
-- [ ] Verificação ao vivo (dev server + browser automation): decolagem rumo a um planeta novo sem
-      ver o interior do planeta principal; volta pra Terra continua ok; pouso num planeta novo
-      também ok.
+- [x] Verificação ao vivo (dev server + browser automation): decolagem rumo a Marte E a Mercúrio
+      sem ver o interior do planeta principal; pouso em Mercúrio ok; decolagem de Mercúrio ok;
+      pouso de volta no planeta principal (a "volta pra Terra" que o usuário disse já estar ok)
+      continua ok depois da mudança simétrica.
 
 ## Fora de escopo (explicitamente adiado)
 - Mudar a câmera de cruzeiro (meio do voo) — sem relato de bug ali.

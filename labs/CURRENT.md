@@ -1,14 +1,29 @@
 # Laboratório atual
 
-**EM ANDAMENTO: labs/lab-116-corrige-camera-decolagem-foguete/** — pedido do usuário: "a viagem
-do foguete pra ida pros outros planetas ta um pouco bugada a camera, fica uma visao dentro da
-terra. na volta pra terra ta ok." Causa raiz encontrada: a câmera do foguete fica "atrás da cauda"
-(pedido do lab-61), o que durante a decolagem (nariz travado apontando pra longe do planeta de
-partida) aponta a câmera DIRETO PRA DENTRO do planeta principal (raio 13) — só é visível nele
-porque é o único corpo com `backFaceCulling = false` (lab-95). Ver
-`labs/lab-116-corrige-camera-decolagem-foguete/FEATURES.md` pro escopo completo.
+Último concluído: labs/lab-116-corrige-camera-decolagem-foguete/ — pedido do usuário: "a viagem do
+foguete pra ida pros outros planetas ta um pouco bugada a camera, fica uma visao dentro da terra.
+na volta pra terra ta ok." Causa raiz: a câmera do foguete fica "atrás da cauda" (pedido do
+lab-61) nas duas fases de repouso do voo (decolagem e flip final de pouso) — nessas fases o nariz
+trava apontando pra LONGE do planeta relevante, então "atrás da cauda" aponta a câmera DIRETO PRA
+DENTRO dele. Só ficava visivelmente quebrado saindo do planeta principal (raio 13, único corpo com
+`backFaceCulling = false` desde o lab-95 — os outros planetas são esferas lisas com culling padrão,
+então "câmera lá dentro" só mostra vazio). A decolagem é um HOLD real controlado pelo jogador (fica
+tempo suficiente pra notar); o pouso equivalente tem a MESMA geometria problemática, mas
+`landRocket()` corta o quadro ruim quase instantaneamente ao cruzar `progress >= 1` — por isso só
+a decolagem tinha sido reportada, mas a lógica errada existia nos dois lados. Corrigido nas DUAS
+pontas: `RocketFlight` ganhou `fromUp`/`toUp: Vector3` (mesmos vetores já calculados em
+`boardRocket`); a câmera "de lado" (tangente horizontal baseada em `facing` + altura no PRÓPRIO
+"pra cima" do planeta relevante, garantido pra fora da superfície) substitui a câmera "atrás da
+cauda" durante `progress <= ROCKET_LAUNCH_HOLD_END` e `progress >= ROCKET_LANDING_FLIP_START`; o
+cruzeiro (meio do voo) ficou intocado. **Verificado ao vivo nas 4 combinações**: decolagem do
+planeta principal rumo a Marte e a Mercúrio (câmera limpa, sem interior visível do planeta
+principal — bug reproduzido e corrigido); pouso em Mercúrio e decolagem de volta (câmera de fora,
+sem regressão); pouso de volta no planeta principal (aproximação externa limpa, "volta pra Terra"
+continua ok como o usuário confirmou). Sem erro de console. `npm run test`: 47/47 (sem teste novo —
+é bug de câmera/renderização, não lógica de domínio). `npm run build` sem erros. Ver
+`labs/lab-116-corrige-camera-decolagem-foguete/CONTEXT.md`.
 
-Último concluído: labs/lab-115-escolinhas-sistema-solar/ — pedido do usuário: "crie escolinhas com
+Antes desse: labs/lab-115-escolinhas-sistema-solar/ — pedido do usuário: "crie escolinhas com
 perguntas tbm nos planetas novos para ampliar a elevação dos níveis, e quanto mais longe o planeta
 mais alto deve ser o nível do usuário." Cada um dos 6 planetas novos da frente Sistema Solar
 (Mercúrio/Vênus/Júpiter/Saturno/Urano/Netuno) ganhou uma escolinha com pergunta de astronomia REAL
@@ -632,11 +647,11 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-115-escolinhas-sistema-solar/CONTEXT.md` (último laboratório concluído — os 6 planetas
-novos do Sistema Solar ganharam escolinha de astronomia + nível mínimo por distância; a frente
-"Sistema Solar" em si, incluindo essa camada de progressão, está completa conforme pedido pelo
-usuário). Itens de backlog em aberto continuam os mesmos de antes (todos esperando ação do
-usuário, sem mudança neste laboratório). **Deploy real (Vercel) pendente**: usuário pediu publicar
+`labs/lab-116-corrige-camera-decolagem-foguete/CONTEXT.md` (último laboratório concluído — corrige
+a câmera do foguete nas duas pontas de repouso do voo, decolagem e flip de pouso, que apontava pra
+dentro do planeta de origem/destino; a frente "Sistema Solar", incluindo a camada de escolinhas +
+nível mínimo do lab-115, continua completa). Itens de backlog em aberto continuam os mesmos de
+antes (todos esperando ação do usuário, sem mudança neste laboratório). **Deploy real (Vercel) pendente**: usuário pediu publicar
 em produção durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized"
 (mesma restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer
 deploy nele — provável limite de segurança da integração, não uma configuração errada). Cloudflare
