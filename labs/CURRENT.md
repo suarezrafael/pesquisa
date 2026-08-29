@@ -1,6 +1,11 @@
 # Laboratório atual
 
-Último concluído: labs/lab-112-sistema-solar-jupiter/ — terceiro planeta novo da frente "Sistema
+Em andamento: labs/lab-113-sistema-solar-saturno/ — quarto planeta novo da frente "Sistema Solar",
+segundo gigante gasoso. Reaproveita a técnica de faixas do lab-112 (Júpiter, paleta mais pálida/
+dourada) + ANEL novo (`CreateTorus` achatado, translúcido, decorativo). Sem rocha/cratera/combate.
+Ver `labs/lab-113-sistema-solar-saturno/FEATURES.md`.
+
+Antes desse: labs/lab-112-sistema-solar-jupiter/ — terceiro planeta novo da frente "Sistema
 Solar", primeiro gigante gasoso. Faixas horizontais proceduralmente geradas (`DynamicTexture`,
 técnica nova, reaproveitável em Saturno/Urano/Netuno) + Grande Mancha Vermelha (decalque fixo, não
 sorteado). Sem rocha/cratera (Júpiter não tem superfície sólida), sem combate. Raio 20 (maior que o
