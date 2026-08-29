@@ -1,6 +1,14 @@
 # Laboratório atual
 
-Último concluído: labs/lab-109-cloudflare-pages-paralelo/ — resto de Fase F, escolhido pelo usuário
+Em andamento: labs/lab-110-sistema-solar-selecao-de-planeta/ — pedido novo do usuário: ampliar o
+mundo pra incluir todos os planetas do sistema solar (hoje só tem Marte), renderizados sob demanda
+ao viajar de foguete, com um seletor de destino ao embarcar. Escopo de cada planeta novo confirmado
+com o usuário: moedas escondidas, sem combate (Marte continua sendo o único com inimigos). Primeiro
+de vários laboratórios — este entrega a arquitetura de múltiplos destinos (generaliza o
+`onSecondPlanet: boolean` fixo de hoje) + o seletor de planeta + Mercúrio como primeiro planeta
+novo. Ver `labs/lab-110-sistema-solar-selecao-de-planeta/FEATURES.md`.
+
+Antes desse: labs/lab-109-cloudflare-pages-paralelo/ — resto de Fase F, escolhido pelo usuário
 entre as opções restantes de backlog. `docs/plano-comercial-backend.md` recomenda migrar a
 hospedagem do front-end pra Cloudflare Pages antes do lançamento comercial (Vercel Hobby proíbe uso
 comercial). Escopo confirmado com o usuário: deploy NOVO e PARALELO, sem mexer no site ao vivo nem
