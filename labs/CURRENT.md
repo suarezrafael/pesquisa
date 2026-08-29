@@ -1,5 +1,14 @@
 # Laboratório atual
 
+**EM ANDAMENTO: labs/lab-115-escolinhas-sistema-solar/** — pedido do usuário: "crie escolinhas com
+perguntas tbm nos planetas novos para ampliar a elevação dos níveis, e quanto mais longe o planeta
+mais alto deve ser o nível do usuário." Cada um dos 6 planetas novos (Mercúrio/Vênus/Júpiter/
+Saturno/Urano/Netuno) ganha uma escolinha com pergunta de astronomia real, XP de verdade (isolada
+de `completedQuestIds`/badges do planeta principal, mesmo espírito de isolamento do Quiz Surpresa
+mas com XP), + nível mínimo pra viajar pra cada um, escalando com a distância real ao Sol (Marte
+fica de fora do nível mínimo — já é alcançável sem requisito desde o lab-60). Ver
+`labs/lab-115-escolinhas-sistema-solar/FEATURES.md` pro escopo completo.
+
 Último concluído: labs/lab-114-sistema-solar-urano-netuno/ — ÚLTIMO laboratório da frente "Sistema
 Solar": os dois gigantes de gelo, feitos juntos (incrementos pequenos sobre o padrão já
 estabelecido). Urano com faixas rotacionadas 90° na MALHA do chão (`Quaternion.RotationAxis`,
