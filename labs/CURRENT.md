@@ -1,5 +1,13 @@
 # Laboratório atual
 
+**EM ANDAMENTO: labs/lab-117-code-splitting-world3d/** — escolhido pelo usuário entre 3 opções de
+débito técnico já identificadas (relatório semanal por e-mail / code-splitting do World3D.tsx /
+auditoria de acessibilidade). Achado via `vite-bundle-visualizer` (medição real, não suposição):
+`World3D.tsx` importa só 2 símbolos de `@babylonjs/gui` mas puxa o pacote INTEIRO (695KB dos 918KB
+do chunk) por importar do barril em vez dos arquivos individuais. Ver
+`labs/lab-117-code-splitting-world3d/FEATURES.md` pro escopo completo (inclui 2 achados adicionais
+adiados por risco/esforço: glTF 1.0 morto, acoplamento interno Scene/XR do próprio Babylon.js).
+
 Último concluído: labs/lab-116-corrige-camera-decolagem-foguete/ — pedido do usuário: "a viagem do
 foguete pra ida pros outros planetas ta um pouco bugada a camera, fica uma visao dentro da terra.
 na volta pra terra ta ok." Causa raiz: a câmera do foguete fica "atrás da cauda" (pedido do
