@@ -1,10 +1,18 @@
 # Laboratório atual
 
-Em andamento: labs/lab-112-sistema-solar-jupiter/ — terceiro planeta novo da frente "Sistema
+Último concluído: labs/lab-112-sistema-solar-jupiter/ — terceiro planeta novo da frente "Sistema
 Solar", primeiro gigante gasoso. Faixas horizontais proceduralmente geradas (`DynamicTexture`,
-técnica nova, reaproveitável em Saturno/Urano/Netuno) + Grande Mancha Vermelha (decalque fixo).
-Sem rocha/cratera (Júpiter não tem superfície sólida), sem combate. Ver
-`labs/lab-112-sistema-solar-jupiter/FEATURES.md`.
+técnica nova, reaproveitável em Saturno/Urano/Netuno) + Grande Mancha Vermelha (decalque fixo, não
+sorteado). Sem rocha/cratera (Júpiter não tem superfície sólida), sem combate. Raio 20 (maior que o
+planeta principal=13 — é o maior planeta do sistema solar de verdade), centro diagonal
+`(58,0,-58)`. **Verificado ao vivo**: seletor mostra os 4 destinos (quebra pra 2ª linha de grade);
+viagem completa pra Júpiter confirmada por inspeção da cena (posição do avatar batendo com
+raio+avatar, textura de faixas presente, Mancha Vermelha e 8 moedas presentes) e visualmente
+(faixa de cor clara no screenshot). **Achado de ferramenta durante a verificação (não bug do
+produto)**: `keysDown['e']` pode ficar travado `true` por um par keydown/keyup incompleto de uma
+automação anterior, fazendo o interact nunca disparar silenciosamente — corrigido despachando
+`keyup` explícito antes do teste, registrado na memória do projeto. `npm run test`: 44/44.
+`npm run build` sem erros. Ver `labs/lab-112-sistema-solar-jupiter/CONTEXT.md`.
 
 Antes desse: labs/lab-111-sistema-solar-venus/ — segundo planeta novo da frente "Sistema
 Solar" (continuação do lab-110). Superfície vulcânica alaranjada + atmosfera translúcida
@@ -550,11 +558,10 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-111-sistema-solar-venus/CONTEXT.md` (último laboratório concluído — Mercúrio e Vênus
-prontos; próximo passo natural são os gigantes gasosos Júpiter/Saturno, depois Urano/Netuno, ver
-"O que o próximo laboratório deve desenvolver" nesse CONTEXT.md pra dicas técnicas de cada um —
-`DynamicTexture` pra faixas horizontais, `CreateTorus` achatado pros anéis de Saturno). Cloudflare
-Pages (lab-109) continua pronto e
+`labs/lab-112-sistema-solar-jupiter/CONTEXT.md` (último laboratório concluído — Mercúrio/Vênus/
+Júpiter prontos; próximo passo natural é Saturno, reaproveitando a técnica de faixas de Júpiter +
+anéis novos (`CreateTorus` achatado), depois Urano/Netuno, ver "O que o próximo laboratório deve
+desenvolver" nesse CONTEXT.md). Cloudflare Pages (lab-109) continua pronto e
 verificado em paralelo, https://missao-aprender-jogo.pages.dev — falta a DECISÃO e AÇÃO do usuário
 de trocar o DNS de `missaoaprendizado.com` de verdade, ver
 `labs/lab-109-cloudflare-pages-paralelo/CONTEXT.md`. Lembrar também que

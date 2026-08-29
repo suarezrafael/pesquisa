@@ -379,6 +379,17 @@ const VENUS_RADIUS = 7
 const VENUS_CENTER = new Vector3(0, 58, 0)
 const VENUS_LANDING_UP = new Vector3(0, 1, 0)
 
+// Júpiter (lab-112, continuação da frente Sistema Solar) — primeiro GIGANTE GASOSO: sem
+// superfície sólida de verdade (mesma simplificação já aceita pro resto do jogo — toda esfera de
+// planeta é "pisável", com física por baixo), raio bem maior que o planeta principal (é o maior
+// planeta do sistema solar de verdade — não dá pra ser proporcional de verdade, 11x o diâmetro da
+// Terra seria impraticável, mas precisa "sentir" maior que a Terra do jogo, não só que os outros
+// planetas-destino). Centro num quarto ponto do espaço (diagonal — não sobra mais eixo X/Y/Z puro
+// livre, e não precisa: só a distância até o planeta principal importa).
+const JUPITER_RADIUS = 20
+const JUPITER_CENTER = new Vector3(58, 0, -58)
+const JUPITER_LANDING_UP = new Vector3(0, 1, 0)
+
 // Registro genérico de planetas-destino (lab-110) — substitui o antigo par de variáveis fixas
 // `onSecondPlanet`/`SECOND_PLANET_*` como única fonte de verdade sobre onde cada planeta fica;
 // `SECOND_PLANET_CENTER`/`RADIUS`/`LANDING_UP` continuam existindo tal e qual (usados só dentro do
@@ -416,6 +427,14 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: VENUS_RADIUS,
     center: VENUS_CENTER,
     landingUp: VENUS_LANDING_UP,
+  },
+  jupiter: {
+    id: 'jupiter',
+    name: 'Júpiter',
+    emoji: '🟠',
+    radius: JUPITER_RADIUS,
+    center: JUPITER_CENTER,
+    landingUp: JUPITER_LANDING_UP,
   },
 }
 const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_PLANETS)
@@ -4632,6 +4651,104 @@ export function World3D({
         returnRockets.set('venus', { root: returnRocketRoot, hintLabel: returnHint })
       }
 
+      // Júpiter (lab-112, continuação da frente Sistema Solar) — primeiro gigante gasoso: sem
+      // rocha/cratera nenhuma (sem superfície sólida de verdade), textura de faixas horizontais
+      // gerada por `DynamicTexture` (técnica nova nesta frente, reaproveitável pros próximos
+      // gigantes gasosos/de gelo) + a Grande Mancha Vermelha (decalque oval fixo, não aleatório —
+      // é a feature mais reconhecível de Júpiter isoladamente).
+      function buildJupiterIfNeeded() {
+        const jupiterRoot = new TransformNode('jupiterRoot', scene)
+        jupiterRoot.position = JUPITER_CENTER
+
+        // Faixas: textura pequena (largura irrelevante — as faixas variam só em V/altura, não em
+        // U/longitude), altura maior pra faixas finas o bastante perto da câmera. UV padrão de
+        // `CreateSphere` (V = latitude, U = longitude) já dá o efeito de faixas ao redor da esfera
+        // inteira sem nenhum UV customizado.
+        const bandTexture = new DynamicTexture('jupiterBandsTex', { width: 8, height: 512 }, scene, false)
+        const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
+        const bandColors = ['#c9a06a', '#e0c090', '#a8794f', '#d9b98a', '#8a5f3d', '#e8d9b0', '#b8875a', '#f0e0c0']
+        let bandY = 0
+        let bandColorIndex = 0
+        while (bandY < 512) {
+          const bandHeight = 14 + Math.random() * 40
+          bandCtx.fillStyle = bandColors[bandColorIndex % bandColors.length]
+          bandCtx.fillRect(0, bandY, 8, bandHeight)
+          bandY += bandHeight
+          bandColorIndex++
+        }
+        bandTexture.update()
+
+        const groundMat = new PBRMaterial('jupiterGroundMat', scene)
+        groundMat.albedoTexture = bandTexture
+        groundMat.roughness = 0.9
+        const groundSphere = MeshBuilder.CreateSphere(
+          'jupiterGround',
+          { diameter: JUPITER_RADIUS * 2, segments: 48 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = jupiterRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Grande Mancha Vermelha — ponto FIXO (não sorteado), pra sempre aparecer no mesmo lugar
+        // em vez de depender do acaso de uma distribuição aleatória. Disco raso alinhado à
+        // superfície, esticado num eixo (`scaling.x`) pra virar uma oval em vez de um círculo
+        // perfeito.
+        const spotDir = new Vector3(0.6, -0.3, 0.74).normalize()
+        const spotMat = new PBRMaterial('jupiterSpotMat', scene)
+        spotMat.albedoColor = new Color3(0.72, 0.32, 0.22)
+        spotMat.roughness = 0.85
+        const spot = MeshBuilder.CreateCylinder(
+          'jupiterGreatRedSpot',
+          { diameter: 3.2, height: 0.06, tessellation: 24 },
+          scene,
+        )
+        spot.material = spotMat
+        spot.parent = jupiterRoot
+        spot.position = spotDir.scale(JUPITER_RADIUS + 0.03)
+        spot.rotationQuaternion = alignmentQuaternion(spotDir)
+        spot.scaling.x = 1.6
+        spot.freezeWorldMatrix()
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const JUPITER_COIN_COUNT = 8
+        for (let i = 0; i < JUPITER_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / JUPITER_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.3 + 1.9
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, JUPITER_LANDING_UP) > Math.cos(0.3)) continue
+
+          const coinPos = JUPITER_CENTER.add(localUp.scale(JUPITER_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-jupiter${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-jupiter${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = jupiterRoot
+        returnRocketRoot.position = JUPITER_LANDING_UP.scale(JUPITER_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(JUPITER_LANDING_UP)
+        const returnHint = new TextBlock('jupiterRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('jupiter', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
       // Despacha pro construtor certo (lab-110) — cada planeta só existe na cena depois da
       // primeira visita (`builtPlanetIds`), igual já funcionava só com Marte antes deste
       // laboratório generalizar pra qualquer quantidade de planetas-destino.
@@ -4641,6 +4758,7 @@ export function World3D({
         if (id === 'marte') buildMarsIfNeeded()
         else if (id === 'mercurio') buildMercuryIfNeeded()
         else if (id === 'venus') buildVenusIfNeeded()
+        else if (id === 'jupiter') buildJupiterIfNeeded()
       }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num
