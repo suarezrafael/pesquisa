@@ -108,7 +108,7 @@ function GameApp() {
   const [showAchievements, setShowAchievements] = useState(false)
   const [showMyHouse, setShowMyHouse] = useState(false)
   const [showMarsReward, setShowMarsReward] = useState(false)
-  const { entitlement, redeemCode, redeeming, redeemError } = useEntitlement()
+  const { entitlement, redeemCode, redeeming, redeemError, syncProgressSummary } = useEntitlement()
   // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
   // decidir se mostra o `ProfilePicker` (quando não há perfil ativo) quanto pra decidir se mostra
   // o botão de trocar perfil no HUD (só faz sentido com 2+ perfis já criados neste aparelho).
@@ -120,6 +120,16 @@ function GameApp() {
     if (profile) touchLastPlayed()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!profile])
+
+  // lab-119, Fase F: sincroniza o resumo de progresso uma vez por sessão, assim que o entitlement
+  // é confirmado como ATIVO (não a cada troca de progresso — o relatório é semanal, não precisa de
+  // atualização em tempo real, e isso evita chamar o endpoint a cada moeda coletada). Família sem
+  // entitlement ativo nunca dispara isto — ver `syncProgressSummary`/decisão registrada em
+  // labs/lab-119-.../FEATURES.md.
+  useEffect(() => {
+    if (entitlement?.active) syncProgressSummary(progress)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entitlement?.active])
 
   if (!profile) {
     // Perfil único (o caso comum) nunca cai aqui — a migração/leitura já deixa `profile` truthy

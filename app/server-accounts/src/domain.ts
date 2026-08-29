@@ -175,3 +175,61 @@ const MAX_PLAUSIBLE_SESSION_DURATION_MS = 4 * 60 * 60 * 1000
 export function isPlausibleSessionDuration(durationMs: unknown): durationMs is number {
   return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0 && durationMs <= MAX_PLAUSIBLE_SESSION_DURATION_MS
 }
+
+// lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de
+// atividade — ver decisão registrada em labs/lab-119-.../FEATURES.md) que o jogo sincroniza pra
+// viabilizar o relatório semanal por e-mail. Limites generosos mas finitos: nenhum jogador real
+// chega perto disso em anos de uso normal — o objetivo é só rejeitar um payload malformado/
+// malicioso antes de gravar, não modelar um teto de progressão de verdade.
+export interface ProgressSummary {
+  level: number
+  totalXp: number
+  coins: number
+  questsCompleted: number
+  badgesCount: number
+}
+
+function isPlausibleCount(value: unknown, max: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max
+}
+
+export function isValidProgressSummary(payload: unknown): payload is ProgressSummary {
+  if (!payload || typeof payload !== 'object') return false
+  const { level, totalXp, coins, questsCompleted, badgesCount } = payload as Record<string, unknown>
+  return (
+    isPlausibleCount(level, 999) &&
+    isPlausibleCount(totalXp, 1_000_000) &&
+    isPlausibleCount(coins, 1_000_000) &&
+    isPlausibleCount(questsCompleted, 10_000) &&
+    isPlausibleCount(badgesCount, 100)
+  )
+}
+
+// lab-119: monta o e-mail semanal a partir do resumo + nome do responsável (opcional — Neon Auth
+// permite cadastro sem nome). Função pura (sem Resend/fetch) pra poder testar o TEXTO sem precisar
+// de rede — o Worker só chama a API do Resend com o resultado disto.
+export interface WeeklyProgressEmail {
+  subject: string
+  html: string
+}
+
+export function buildWeeklyProgressEmail(summary: ProgressSummary, responsibleName: string | null): WeeklyProgressEmail {
+  const greeting = responsibleName ? `Oi, ${responsibleName}!` : 'Oi!'
+  const questWord = summary.questsCompleted === 1 ? 'missão concluída' : 'missões concluídas'
+  const badgeWord = summary.badgesCount === 1 ? 'emblema conquistado' : 'emblemas conquistados'
+  return {
+    subject: 'Resumo semanal do progresso — Missão Aprender',
+    html: `
+      <p>${greeting}</p>
+      <p>Aqui está o resumo desta semana do progresso no Missão Aprender:</p>
+      <ul>
+        <li><strong>Nível ${summary.level}</strong> (${summary.totalXp} XP no total)</li>
+        <li>${summary.questsCompleted} ${questWord}</li>
+        <li>${summary.coins} moedas guardadas</li>
+        <li>${summary.badgesCount} ${badgeWord}</li>
+      </ul>
+      <p>Continue incentivando a curiosidade dele(a)! Você recebe este e-mail porque tem uma
+      assinatura ativa vinculada a esta conta.</p>
+    `.trim(),
+  }
+}

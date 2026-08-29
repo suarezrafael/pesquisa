@@ -1,3 +1,5 @@
+# Laboratório atual
+
 ## Correção de produção fora de um laboratório formal (2026-08-29)
 
 **Domínio confiável do Neon Auth (de novo)**: o mesmo problema já corrigido no lab-104 pra
@@ -15,16 +17,36 @@ bloqueio de origem foi removido. **Lembrete pro futuro**: se um domínio novo fo
 e o sintoma (403 Invalid Origin) só aparece pro usuário final na hora de login/cadastro, não em
 build/deploy.
 
-# Laboratório atual
+Último concluído: labs/lab-119-relatorio-semanal-email/ — Fase F do plano comercial, escolhido
+pelo usuário entre 3 opções de backlog. **Achado central**: `docs/plano-comercial-backend.md`
+documentava que o progresso da criança NUNCA sai do aparelho dela — um e-mail semanal automático
+não tem como funcionar sem mudar isso conscientemente (o painel `/familia` só funciona lendo
+`localStorage` DIRETO no navegador, um e-mail é enviado pelo servidor, assíncrono). Confirmado com
+o usuário (`AskUserQuestion`, 3 opções): sincroniza um resumo MÍNIMO
+(nível/XP/moedas/missões/emblemas, nunca conteúdo bruto/apelido/avatar/horário) só enquanto o
+entitlement estiver ativo. Construído: `progress_snapshots` (nova tabela, uma linha por família,
+sempre sobrescrita), `POST /progress-summary` (mesma autenticação por token de entitlement de
+`/entitlement`, incluindo checagem de revogação por `jti`), `sendWeeklyProgressEmails` (Cron
+semanal novo, segunda-feira 09:00 São Paulo, decide via `controller.cron` qual das duas tarefas
+agendadas rodar) enviando via Resend (chamada HTTP direta, sem SDK), `syncProgressSummary` no jogo
+(dispara uma vez por sessão quando `entitlement.active` vira `true`, mesmo padrão de
+`productAnalytics.ts`). **Bug real pego ANTES de produção** (revisão de código, não teste ao vivo):
+a query que busca famílias elegíveis usava `order by ... limit 1` cru pra achar a assinatura mais
+recente — funciona pra UMA família filtrada por `where` (como em outras rotas), mas limitaria o
+resultado INTEIRO a uma linha só numa consulta que cobre várias famílias de uma vez; corrigido com
+`distinct on (family_account_id)`. **Verificado ao vivo**: `POST /progress-summary` testado contra
+o Worker local (`wrangler dev`) + banco de produção real, com token de entitlement assinado de
+verdade pra uma família real já existente — 401 sem auth, 401 token inválido, 400 payload inválido,
+204 + linha conferida no banco com payload válido (removida depois, era só teste). Migração
+aplicada de verdade e Worker deployado em produção
+(`https://missao-aprender-accounts.rafaelvs.workers.dev`, os dois Cron Triggers confirmados no
+output do deploy). **Pendência real**: `RESEND_API_KEY` não configurado (precisa de conta Resend
+do usuário) — o Cron semanal já está agendado e vai disparar certinho, mas falha ao tentar mandar
+o e-mail até essa chave existir (log, sem quebrar o resto do Worker). `npm run test`: app 47/47,
+`server-accounts` 47→59 (12 testes novos). `npm run build`/`tsc --noEmit` sem erros nos dois
+pacotes. Ver `labs/lab-119-relatorio-semanal-email/CONTEXT.md`.
 
-**EM ANDAMENTO: labs/lab-119-relatorio-semanal-email/** — Fase F do plano comercial, escolhido
-pelo usuário entre 3 opções de backlog. Achado central: `docs/plano-comercial-backend.md`
-documenta que o progresso da criança NUNCA sai do aparelho dela — um e-mail semanal automático
-precisa mudar isso conscientemente. Confirmado com o usuário (`AskUserQuestion`): sincroniza um
-resumo MÍNIMO (nível/XP/moedas/missões/emblemas, nunca conteúdo bruto) só enquanto o entitlement
-estiver ativo. Ver `labs/lab-119-relatorio-semanal-email/FEATURES.md` pro escopo completo.
-
-Último concluído: labs/lab-118-preview-avatar-girar-e-flor/ — pedido do usuário: "na lojinha de
+Antes desse: labs/lab-118-preview-avatar-girar-e-flor/ — pedido do usuário: "na lojinha de
 avatar tem que ter como girar o avatar pra ver o cabelo escolhido, ao escolher a flor ela esta
 deitada em ve de estar de pe na cabeca, e na deu pra ver o cabelo comprido." Três queixas, duas
 causas reais: (1) `AvatarPreview3D.tsx` nunca tinha `camera.attachControl` — só existia giro
@@ -710,12 +732,13 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-118-preview-avatar-girar-e-flor/CONTEXT.md` (último laboratório concluído — preview da
-lojinha de avatares ganhou controle manual de câmera + a Flor foi corrigida de deitada pra em pé).
-Itens de backlog em aberto continuam os mesmos de antes (todos esperando ação do usuário, sem
-mudança neste laboratório). Lembrar também da correção de infraestrutura registrada acima
-("Correção de produção fora de um laboratório formal") — domínio do Cloudflare Pages adicionado
-aos domínios confiáveis do Neon Auth. **Deploy real (Vercel) pendente**: usuário pediu publicar
+`labs/lab-119-relatorio-semanal-email/CONTEXT.md` (último laboratório concluído — relatório
+semanal de progresso por e-mail, Fase F do plano comercial; tudo construído e deployado em
+produção, só falta o usuário configurar `RESEND_API_KEY` pro envio de verdade funcionar). Itens de
+backlog em aberto continuam os mesmos de antes (todos esperando ação do usuário, sem mudança neste
+laboratório). Lembrar também da correção de infraestrutura registrada acima ("Correção de
+produção fora de um laboratório formal") — domínio do Cloudflare Pages adicionado aos domínios
+confiáveis do Neon Auth. **Deploy real (Vercel) pendente**: usuário pediu publicar
 em produção durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized"
 (mesma restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer
 deploy nele — provável limite de segurança da integração, não uma configuração errada). Cloudflare

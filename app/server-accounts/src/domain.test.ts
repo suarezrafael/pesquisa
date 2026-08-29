@@ -4,6 +4,7 @@
 // pago de graça, ou negar acesso a quem pagou. Primeiro teste automatizado deste Worker (lab-83).
 import { describe, expect, it } from 'vitest'
 import {
+  buildWeeklyProgressEmail,
   calculateNpsScore,
   generatePairingCode,
   isAtDeviceLimit,
@@ -14,6 +15,7 @@ import {
   isTokenRevoked,
   isValidNpsScore,
   isValidProductEventType,
+  isValidProgressSummary,
   isValidSubscriptionStatus,
   MAX_ACTIVE_DEVICES_PER_FAMILY,
   NPS_COOLDOWN_DAYS,
@@ -303,5 +305,63 @@ describe('calculateNpsScore — lab-103', () => {
     expect(calculateNpsScore([9, 10, 10]).score).toBe(100)
     // 0 promotores, 3 detratores, 3 total: (0-3)/3 = -100
     expect(calculateNpsScore([0, 1, 6]).score).toBe(-100)
+  })
+})
+
+describe('isValidProgressSummary — lab-119, Fase F', () => {
+  const validSummary = { level: 5, totalXp: 320, coins: 154, questsCompleted: 12, badgesCount: 2 }
+
+  it('aceita um resumo com os 5 números plausíveis', () => {
+    expect(isValidProgressSummary(validSummary)).toBe(true)
+  })
+
+  it('rejeita payload que não é objeto', () => {
+    expect(isValidProgressSummary(null)).toBe(false)
+    expect(isValidProgressSummary('nada')).toBe(false)
+    expect(isValidProgressSummary(42)).toBe(false)
+  })
+
+  it('rejeita quando falta algum campo', () => {
+    const { level: _level, ...rest } = validSummary
+    expect(isValidProgressSummary(rest)).toBe(false)
+  })
+
+  it('rejeita número negativo, fracionário ou acima do teto plausível', () => {
+    expect(isValidProgressSummary({ ...validSummary, level: -1 })).toBe(false)
+    expect(isValidProgressSummary({ ...validSummary, coins: 1.5 })).toBe(false)
+    expect(isValidProgressSummary({ ...validSummary, totalXp: 10_000_000 })).toBe(false)
+  })
+
+  it('rejeita campo com tipo errado (ex.: string em vez de número)', () => {
+    expect(isValidProgressSummary({ ...validSummary, badgesCount: '2' })).toBe(false)
+  })
+})
+
+describe('buildWeeklyProgressEmail — lab-119, Fase F', () => {
+  const summary = { level: 5, totalXp: 320, coins: 154, questsCompleted: 1, badgesCount: 1 }
+
+  it('nunca inclui resposta de quest/apelido/avatar — só os 5 números do resumo', () => {
+    const email = buildWeeklyProgressEmail(summary, 'Ana')
+    expect(email.html).toContain('Nível 5')
+    expect(email.html).toContain('320 XP')
+    expect(email.html).toContain('154 moedas')
+  })
+
+  it('usa singular/plural corretos pra 1 missão/emblema', () => {
+    const email = buildWeeklyProgressEmail(summary, null)
+    expect(email.html).toContain('1 missão concluída')
+    expect(email.html).toContain('1 emblema conquistado')
+    expect(email.html).not.toContain('missões concluídas')
+  })
+
+  it('usa plural corretos pra mais de 1 missão/emblema', () => {
+    const email = buildWeeklyProgressEmail({ ...summary, questsCompleted: 3, badgesCount: 4 }, null)
+    expect(email.html).toContain('3 missões concluídas')
+    expect(email.html).toContain('4 emblemas conquistados')
+  })
+
+  it('cumprimenta pelo nome quando disponível, genérico quando não', () => {
+    expect(buildWeeklyProgressEmail(summary, 'Ana').html).toContain('Oi, Ana!')
+    expect(buildWeeklyProgressEmail(summary, null).html).toContain('Oi!')
   })
 })

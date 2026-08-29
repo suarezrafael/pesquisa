@@ -106,8 +106,15 @@ create table pairing_codes (
 );
 ```
 
-Nenhuma tabela guarda nome/e-mail/progresso da criança — isso continua só no `localStorage` dela,
-como hoje.
+Nenhuma tabela guarda nome/e-mail da criança — isso continua só no `localStorage` dela, como hoje.
+
+**Atualização (lab-119, Fase F)**: esta regra foi conscientemente RELAXADA pra viabilizar o
+relatório semanal por e-mail — `progress_snapshots` guarda um RESUMO MÍNIMO de progresso (nível,
+XP total, moedas, contagem de missões concluídas, contagem de emblemas; nunca resposta de quest,
+apelido, avatar ou horário de atividade), uma linha por família, sempre sobrescrita. Só é
+sincronizado enquanto a família tiver entitlement ativo (ver `POST /progress-summary` em
+`app/server-accounts/README.md`) — sem assinatura, o jogo nunca chama esse endpoint. Decisão
+registrada em `labs/lab-119-.../FEATURES.md`.
 
 ## Endpoints (novo Worker `app/server-accounts/`)
 
@@ -228,9 +235,12 @@ gate pra maximizar o desejo de assinar, não se o modelo de assinatura funciona.
    `subscriptionOnly`, escondidos/bloqueados na lojinha sem entitlement ativo (ver
    `labs/lab-82-.../CONTEXT.md`). Falta "Minha Casa" (feature nova, maior, ainda não iniciada —
    ver a seção "Catálogo de cosméticos (Fase E)" acima pro desenho).
-6. **Fase F — Lançamento comercial**: migrar hospedagem do front-end pro Cloudflare Pages (ver
-   achado crítico acima) OU assinar Vercel Pro, sair do modo teste do Stripe, e (opcional, pode
-   vir depois) relatório semanal por e-mail via Resend.
+6. **Fase F — Lançamento comercial (em andamento)**: relatório semanal por e-mail via Resend
+   ✅ construído no lab-119 (`POST /progress-summary`, tabela `progress_snapshots`, Cron semanal em
+   `app/server-accounts/src/index.ts`) — falta só o usuário configurar `RESEND_API_KEY` (secret,
+   conta Resend própria) pro envio de verdade funcionar; o resto já está deployado em produção.
+   Ainda faltam: migrar hospedagem do front-end pro Cloudflare Pages (ver achado crítico acima) OU
+   assinar Vercel Pro, e sair do modo teste do Stripe.
 
 Cada fase é pequena o bastante pra ser 1-2 laboratórios, seguindo o mesmo convênio já usado no
 resto do projeto (`labs/README.md`).

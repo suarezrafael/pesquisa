@@ -6,6 +6,8 @@ import {
   shouldTrustCachedEntitlementOnFailure,
   type StoredEntitlement,
 } from './entitlementStorage'
+import { getLevel } from './progression'
+import type { Progress } from '../types'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 
@@ -85,5 +87,31 @@ export function useEntitlement() {
     setEntitlement(null)
   }
 
-  return { entitlement, redeemCode, redeeming, redeemError, refresh, unpair }
+  // lab-119, Fase F: sincroniza um resumo MÍNIMO de progresso (nunca resposta de quest/apelido/
+  // avatar/horário — ver decisão registrada em labs/lab-119-.../FEATURES.md) pra viabilizar o
+  // relatório semanal por e-mail do responsável. Mesmo padrão de `productAnalytics.ts` (`fetch`
+  // com `keepalive`, falha silenciosa, nunca trava o jogo da criança), mas autenticado com o
+  // MESMO token de entitlement já usado por `refresh` — só funciona com uma família pareada, e só
+  // deve ser chamado quando `entitlement.active` for `true` (quem chama decide isso, não esta
+  // função, pra não duplicar a leitura de `entitlement` aqui).
+  function syncProgressSummary(progress: Progress): void {
+    const token = entitlement?.token
+    if (!token) return
+    fetch(`${ACCOUNTS_API_URL}/progress-summary`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        level: getLevel(progress.xp),
+        totalXp: progress.xp,
+        coins: progress.coins,
+        questsCompleted: progress.completedQuestIds.length + progress.completedPlanetQuestIds.length,
+        badgesCount: progress.badges.length,
+      }),
+      keepalive: true,
+    }).catch(() => {
+      // offline/erro de rede — só tenta de novo na próxima sessão, sem incomodar a criança.
+    })
+  }
+
+  return { entitlement, redeemCode, redeeming, redeemError, refresh, unpair, syncProgressSummary }
 }

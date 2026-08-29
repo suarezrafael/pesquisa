@@ -7,8 +7,12 @@ compatibility_flags = ["nodejs_compat"]
 # suficiente (a reconciliação corrige drift, não previne em tempo real; os webhooks continuam
 # sendo o caminho principal, isto é uma rede de segurança). 09:00 UTC = 06:00 em São Paulo, fora do
 # horário de pico de uso do jogo.
+# lab-119, Fase F: segunda entrada — relatório semanal de progresso por e-mail, segunda-feira
+# 12:00 UTC (09:00 em São Paulo). `scheduled()` (`index.ts`) decide qual das duas tarefas rodar
+# comparando `controller.cron` contra `WEEKLY_EMAIL_CRON` — as duas strings têm que bater
+# exatamente se este valor mudar.
 [triggers]
-crons = ["0 9 * * *"]
+crons = ["0 9 * * *", "0 12 * * 1"]
 
 [vars]
 # ID do Price recorrente (R$ 4,99/mês) no Stripe, modo teste — não é secreto, é só um
@@ -84,4 +88,15 @@ namespace_id = "1007"
   # spam em `nps_responses`, alto o bastante pra nunca incomodar um uso real.
   [ratelimits.simple]
   limit = 5
+  period = 60
+
+[[ratelimits]]
+name = "PROGRESS_SUMMARY_LIMITER"
+namespace_id = "1008"
+  # lab-119, Fase F: autenticado (exige o token de entitlement) e disparado no máximo uma vez por
+  # sessão de jogo real (`syncProgressSummary`, `app/src/state/useEntitlement.ts`) — mesmo espírito
+  # do `EVENTS_LIMITER`, alto o bastante pra nunca esbarrar em uso real, baixo o bastante pra não
+  # virar vetor de encher `progress_snapshots` de escritas.
+  [ratelimits.simple]
+  limit = 10
   period = 60

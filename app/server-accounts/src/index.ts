@@ -14,6 +14,7 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
 import {
+  buildWeeklyProgressEmail,
   calculateNpsScore,
   generatePairingCode,
   isAtDeviceLimit,
@@ -23,11 +24,13 @@ import {
   isTokenRevoked,
   isValidNpsScore,
   isValidProductEventType,
+  isValidProgressSummary,
   isValidSubscriptionStatus,
   NPS_COOLDOWN_DAYS,
   shouldPromptForNps,
   toComparableIso,
   toIsoOrNull,
+  type ProgressSummary,
 } from './domain'
 
 type Sql = NeonQueryFunction<false, false>
@@ -42,6 +45,10 @@ export interface Env {
   // nenhuma família específica, mas ainda é métrica de negócio agregada, não fica público.
   // `wrangler secret put ADMIN_METRICS_SECRET` em produção, `.dev.vars` localmente.
   ADMIN_METRICS_SECRET: string
+  // lab-119, Fase F: chave da API do Resend (envio do relatório semanal por e-mail) —
+  // `wrangler secret put RESEND_API_KEY` em produção, `.dev.vars` localmente. Pendente de
+  // configuração pelo usuário (conta Resend própria) — ver labs/lab-119-.../CONTEXT.md.
+  RESEND_API_KEY: string
   // Rate limiting nativo do Workers (lab-88, pedido do usuário: "o jogo precisa estar seguro com
   // sobrecarga de servidor") — um namespace por rota sensível, configurado em wrangler.toml.
   PAIRING_REDEEM_LIMITER: RateLimit
@@ -51,6 +58,7 @@ export interface Env {
   CHECKOUT_LIMITER: RateLimit
   PAIRING_GENERATE_LIMITER: RateLimit
   NPS_LIMITER: RateLimit
+  PROGRESS_SUMMARY_LIMITER: RateLimit
 }
 
 // IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
@@ -78,6 +86,11 @@ const NEON_AUTH_JWKS_URL =
 // `createRemoteJWKSet` cacheia as chaves em memória do próprio processo do Worker — módulo
 // carregado uma vez por isolate, não por request.
 const jwks = createRemoteJWKSet(new URL(NEON_AUTH_JWKS_URL))
+
+// lab-119, Fase F: precisa bater EXATAMENTE com a segunda entrada de `[triggers] crons` em
+// wrangler.toml — é assim que `scheduled()` decide qual das duas tarefas (reconciliação diária ou
+// e-mail semanal) rodar. Segunda-feira 12:00 UTC = 09:00 em São Paulo, fora do horário de pico.
+const WEEKLY_EMAIL_CRON = '0 12 * * 1'
 
 async function requireUserId(request: Request): Promise<string | null> {
   const auth = request.headers.get('authorization')
@@ -447,6 +460,68 @@ async function handleEntitlement(request: Request, env: Env): Promise<Response> 
   return Response.json({ active, expiresAt: active ? rows[0].current_period_end : null })
 }
 
+// lab-119, Fase F: recebe o resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar —
+// ver `ProgressSummary`/decisão registrada em labs/lab-119-.../FEATURES.md) que o jogo sincroniza
+// pra viabilizar o relatório semanal por e-mail. Mesma autenticação de `handleEntitlement` (Bearer
+// = token de entitlement, não o JWT do Neon Auth) — a criança nunca autentica com e-mail/senha, e
+// este endpoint precisa ser chamável direto do client dela.
+async function handleProgressSummary(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.PROGRESS_SUMMARY_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const auth = request.headers.get('authorization')
+  if (!auth?.startsWith('Bearer ')) return new Response(null, { status: 401 })
+
+  let familyAccountId: string
+  let jti: string | undefined
+  try {
+    const secret = new TextEncoder().encode(env.ENTITLEMENT_SECRET)
+    const { payload } = await jwtVerify(auth.slice('Bearer '.length), secret)
+    if (typeof payload.sub !== 'string') return new Response(null, { status: 401 })
+    familyAccountId = payload.sub
+    jti = payload.jti
+  } catch {
+    return new Response(null, { status: 401 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+
+  // Mesma checagem de revogação de `handleEntitlement` — um token revogado (aparelho perdido/
+  // trocado, ver lab-97) não deve conseguir gravar nada aqui, mesmo o dado sendo de baixo risco.
+  if (jti) {
+    const tokenRows = (await sql`
+      select revoked_at from entitlement_tokens where jti = ${jti}
+    `) as { revoked_at: string | null }[]
+    if (isTokenRevoked(jti, tokenRows[0])) return new Response(null, { status: 401 })
+  }
+
+  const body = await request.text()
+  if (body.length > 1000) return new Response(null, { status: 413 })
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(body)
+  } catch {
+    return new Response(null, { status: 400 })
+  }
+  if (!isValidProgressSummary(payload)) return new Response(null, { status: 400 })
+  const summary: ProgressSummary = payload
+
+  await sql`
+    insert into progress_snapshots (family_account_id, level, total_xp, coins, quests_completed, badges_count, updated_at)
+    values (${familyAccountId}, ${summary.level}, ${summary.totalXp}, ${summary.coins}, ${summary.questsCompleted}, ${summary.badgesCount}, now())
+    on conflict (family_account_id) do update set
+      level = excluded.level,
+      total_xp = excluded.total_xp,
+      coins = excluded.coins,
+      quests_completed = excluded.quests_completed,
+      badges_count = excluded.badges_count,
+      updated_at = now()
+  `
+
+  return new Response(null, { status: 204 })
+}
+
 // lab-97, resto de G7: válvula de segurança pro responsável — "vazei meu código de pareamento,
 // quero cortar o acesso de todo mundo que possa ter pego ele". Autenticado como o RESPONSÁVEL
 // (`requireUserId`, JWT do Neon Auth), nunca pelo token de entitlement da criança — o mesmo padrão
@@ -785,6 +860,82 @@ async function reconcileSubscriptions(env: Env): Promise<void> {
   console.log(`[reconciliation] verificadas ${rows.length} assinatura(s), ${mismatches} divergência(s) corrigida(s).`)
 }
 
+// lab-119, Fase F: chamado pelo segundo Cron Trigger (semanal, ver `scheduled()` abaixo). Só
+// manda e-mail pra família que tem AS DUAS coisas: assinatura ativa/trialing agora (não manda
+// depois que a família cancela — a próxima revalidação de entitlement, que já roda a cada
+// carregamento do jogo, para a sincronização de progresso sozinha, mas esta consulta é a defesa
+// real) E pelo menos um resumo já sincronizado (`progress_snapshots` — sem isso, a criança nunca
+// abriu o jogo pareado depois da assinatura, não tem o que mandar).
+async function sendWeeklyProgressEmails(env: Env): Promise<void> {
+  const sql = neon(env.DATABASE_URL)
+
+  // `distinct on` pega a assinatura mais recente POR FAMÍLIA — um `order by ... limit 1` cru (o
+  // padrão já usado em `handleSubscriptionStatus`) só funciona lá porque a consulta já filtra por
+  // UMA família via `where`; aqui a consulta cobre várias famílias de uma vez, então precisa da
+  // versão que preserva uma linha por grupo.
+  const rows = (await sql`
+    with latest_subscription as (
+      select distinct on (family_account_id) family_account_id, status
+      from subscriptions
+      order by family_account_id, updated_at desc
+    )
+    select
+      p.level, p.total_xp, p.coins, p.quests_completed, p.badges_count,
+      u.email, u.name
+    from progress_snapshots p
+    join latest_subscription ls on ls.family_account_id = p.family_account_id
+    join family_accounts f on f.id = p.family_account_id
+    join neon_auth."user" u on u.id = f.owner_user_id
+    where ls.status in ('active', 'trialing')
+  `) as {
+    level: number
+    total_xp: number
+    coins: number
+    quests_completed: number
+    badges_count: number
+    email: string
+    name: string | null
+  }[]
+
+  let sent = 0
+  let failed = 0
+  for (const row of rows) {
+    const { subject, html } = buildWeeklyProgressEmail(
+      {
+        level: row.level,
+        totalXp: row.total_xp,
+        coins: row.coins,
+        questsCompleted: row.quests_completed,
+        badgesCount: row.badges_count,
+      },
+      row.name,
+    )
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        // lab-119: remetente do sandbox do Resend até o usuário verificar um domínio próprio
+        // (mesmo espírito do Stripe em modo teste — funciona de ponta a ponta, limitação de
+        // ambiente conhecida e documentada, não escondida — ver labs/lab-119-.../CONTEXT.md).
+        body: JSON.stringify({ from: 'Missão Aprender <onboarding@resend.dev>', to: row.email, subject, html }),
+      })
+      if (res.ok) sent++
+      else {
+        failed++
+        console.error(`[weekly-email] falha ao enviar (${res.status}): ${await res.text()}`)
+      }
+    } catch (err) {
+      failed++
+      console.error(`[weekly-email] erro de rede ao enviar: ${(err as Error).message}`)
+    }
+  }
+
+  console.log(`[weekly-email] ${sent} enviado(s), ${failed} falha(s), de ${rows.length} família(s) elegível(is).`)
+}
+
 // lab-96, G8: a partir da versão da API usada por este SDK (`stripe` 22.x), a fatura não tem mais
 // um campo `subscription` no nível raiz — a referência mudou pra
 // `parent.subscription_details.subscription` (confirmado em node_modules/stripe/.../Invoices.d.ts,
@@ -979,6 +1130,10 @@ export default {
       return withCors(await handleEntitlement(request, env))
     }
 
+    if (url.pathname === '/progress-summary' && request.method === 'POST') {
+      return withCors(await handleProgressSummary(request, env))
+    }
+
     if (url.pathname === '/entitlement/revoke-all' && request.method === 'POST') {
       return withCors(await handleRevokeAllDevices(request, env))
     }
@@ -998,11 +1153,16 @@ export default {
     return new Response('missao-aprender-accounts ok — ver /health', { status: 200 })
   },
 
-  // lab-102, resto de G8: chamado pelo Cron Trigger (`[triggers]` em wrangler.toml), não por HTTP.
-  // `ctx.waitUntil` garante que a reconciliação termina de rodar mesmo depois deste handler
-  // retornar — sem isso, o runtime do Worker poderia encerrar a invocação antes do trabalho
-  // assíncrono (múltiplas chamadas ao Stripe + banco) completar.
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(reconcileSubscriptions(env))
+  // lab-102 (diário)/lab-119 (semanal, Fase F): dois Cron Triggers (`[triggers]` em
+  // wrangler.toml) chamam o mesmo handler — `controller.cron` diz qual dos dois disparou.
+  // `ctx.waitUntil` garante que a tarefa termina de rodar mesmo depois deste handler retornar —
+  // sem isso, o runtime do Worker poderia encerrar a invocação antes do trabalho assíncrono
+  // (múltiplas chamadas ao Stripe/Resend + banco) completar.
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (controller.cron === WEEKLY_EMAIL_CRON) {
+      ctx.waitUntil(sendWeeklyProgressEmails(env))
+    } else {
+      ctx.waitUntil(reconcileSubscriptions(env))
+    }
   },
 }
