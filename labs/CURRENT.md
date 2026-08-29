@@ -1,5 +1,13 @@
 # Laboratório atual
 
+**EM ANDAMENTO: labs/lab-120-auditoria-acessibilidade-wcag/** — escolhido pelo usuário entre as
+opções de backlog restantes. Medido com um script de contraste real (fórmula de luminância do
+WCAG) contra `index.css`: vários pares texto/fundo abaixo do mínimo AA (4.5:1), incluindo a
+mensagem de resposta certa/errada de TODA missão (`.quest-feedback`) e a etiqueta de tipo de
+missão (`.quest-type-tag`). Também achado: `.help-button` (ícones do HUD) e `.modal-close` (× de
+fechar, em todo modal) ficam abaixo do alvo de toque mínimo de 44×44px em telas estreitas. Ver
+`labs/lab-120-auditoria-acessibilidade-wcag/FEATURES.md` pro escopo completo.
+
 ## Correção de produção fora de um laboratório formal (2026-08-29)
 
 **Domínio confiável do Neon Auth (de novo)**: o mesmo problema já corrigido no lab-104 pra
