@@ -1,6 +1,13 @@
 # Laboratório atual
 
-Último concluído: labs/lab-108-multiplos-perfis-por-familia/ — última das 4 frentes de backlog de
+Em andamento: labs/lab-109-cloudflare-pages-paralelo/ — resto de Fase F, escolhido pelo usuário
+entre as opções restantes de backlog. `docs/plano-comercial-backend.md` recomenda migrar a
+hospedagem do front-end pra Cloudflare Pages antes do lançamento comercial (Vercel Hobby proíbe uso
+comercial). Escopo confirmado com o usuário: deploy NOVO e PARALELO, sem mexer no site ao vivo nem
+no DNS — `missaoaprendizado.com` continua na Vercel até uma decisão futura separada. Ver
+`labs/lab-109-cloudflare-pages-paralelo/FEATURES.md`.
+
+Antes desse: labs/lab-108-multiplos-perfis-por-familia/ — última das 4 frentes de backlog de
 produto do lab-104 (Minha Casa completa nos labs 105-107; esta era a única restante totalmente
 construível em código, sem credencial nova nem decisão que só o usuário pode tomar). Permite dois
 irmãos compartilhando o mesmo tablet terem cada um seu próprio perfil/progresso — antes, o jogo
