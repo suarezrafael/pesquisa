@@ -14,6 +14,7 @@ import {
   unlockBackpackColor as applyBackpackColorUnlock,
   unlockHairShape as applyHairShapeUnlock,
   unlockGlasses as applyGlassesUnlock,
+  unlockFurniture as applyFurnitureUnlock,
   unlockMarsReward as applyMarsRewardUnlock,
 } from './progression'
 
@@ -106,6 +107,15 @@ export function useProgress() {
     })
   }
 
+  // Mobília de Minha Casa (lab-106) — mesmo formato do `unlockGlasses` acima.
+  function unlockFurniture(id: string): void {
+    setProgress((prev) => {
+      const next = applyFurnitureUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
   // Brinde de Marte (lab-94) — diferente dos outros `unlockXxx`, devolve se realmente concedeu
   // algo novo (o chamador em `App.tsx` usa isso pra decidir se mostra o aviso de novo item).
   function unlockMarsReward(): boolean {
@@ -129,6 +139,7 @@ export function useProgress() {
     unlockBackpackColor,
     unlockHairShape,
     unlockGlasses,
+    unlockFurniture,
     unlockMarsReward,
   }
 }

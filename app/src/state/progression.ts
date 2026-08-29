@@ -10,6 +10,7 @@ import {
   SHOE_COLOR_CATALOG,
 } from '../data/customization'
 import { GLASSES_CATALOG } from '../data/glasses'
+import { FURNITURE_CATALOG } from '../data/furniture'
 import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -194,4 +195,12 @@ export function unlockGlasses(progress: Progress, id: string): Progress {
   const result = unlockGeneric(progress.coins, progress.unlockedGlassesIds, GLASSES_CATALOG, id)
   if (!result) return progress
   return { ...progress, coins: result.coins, unlockedGlassesIds: result.unlockedIds }
+}
+
+// Mobília de Minha Casa (lab-106) — mesma regra de compra do resto, via `unlockGeneric`
+// (`FURNITURE_CATALOG` já tem o formato `{id, cost, subscriptionOnly?}` que a função espera).
+export function unlockFurniture(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(progress.coins, progress.unlockedFurnitureIds, FURNITURE_CATALOG, id)
+  if (!result) return progress
+  return { ...progress, coins: result.coins, unlockedFurnitureIds: result.unlockedIds }
 }

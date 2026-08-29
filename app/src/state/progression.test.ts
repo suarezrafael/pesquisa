@@ -12,6 +12,7 @@ import {
   isQuestUnlocked,
   unlockAvatar,
   unlockBackpackColor,
+  unlockFurniture,
   unlockGlasses,
   unlockHat,
   unlockHairShape,
@@ -226,6 +227,25 @@ describe('compra normal com moeda continua funcionando', () => {
     const next = unlockGlasses({ ...emptyProgress, coins: 10 }, 'oculos_sol')
     expect(next.unlockedGlassesIds).toContain('oculos_sol')
     expect(next.coins).toBe(0)
+  })
+
+  // lab-106: mesmo teste de regressão, pro eixo novo de mobília de Minha Casa.
+  it('unlockFurniture desbloqueia e desconta o custo quando há moeda suficiente', () => {
+    const next = unlockFurniture({ ...emptyProgress, coins: 20 }, 'cama')
+    expect(next.unlockedFurnitureIds).toContain('cama')
+    expect(next.coins).toBe(0)
+  })
+
+  it('unlockFurniture não faz nada sem moeda suficiente', () => {
+    const progress = { ...emptyProgress, coins: 2 }
+    const next = unlockFurniture(progress, 'cama')
+    expect(next).toBe(progress)
+  })
+
+  it('unlockFurniture não desbloqueia o mesmo item duas vezes nem desconta moeda de novo', () => {
+    const jaTem = { ...emptyProgress, coins: 100, unlockedFurnitureIds: ['cama'] }
+    const next = unlockFurniture(jaTem, 'cama')
+    expect(next).toBe(jaTem)
   })
 
   it('unlockHat não faz nada sem moeda suficiente', () => {

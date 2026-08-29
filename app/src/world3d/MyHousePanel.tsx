@@ -1,19 +1,20 @@
 // Painel de "Minha Casa" (lab-105, primeira fatia de docs/plano-comercial-backend.md, Fase E —
-// espaço pessoal GRATUITO pra todo jogador, nunca cosmético pago). Mesma estrutura de
-// `AchievementsPanel.tsx`/`QuestListOverlay.tsx`, reaproveita `.quest-list`/`.quest-list-item`.
-// Mobília comprável/posicionável e os 2 conjuntos exclusivos de assinante ("Quarto Espacial",
-// "Jardim Encantado") ficam pra um próximo laboratório — aqui é só o placeholder da casa base.
+// espaço pessoal GRATUITO pra todo jogador, nunca cosmético pago). lab-106 trocou o placeholder
+// de mobília por compra de verdade com moeda — reaproveita a mesma grade/botões de
+// `AvatarShop.tsx` (`.avatar-shop-grid`/`.avatar-shop-item`/`.avatar-shop-emoji`/
+// `.avatar-shop-action`), sem eixo de "equipar" (a casa não é uma cena 3D navegável ainda — cada
+// item é só possuído ou não). Os 2 conjuntos exclusivos de assinante ("Quarto Espacial", "Jardim
+// Encantado") ficam pra um próximo laboratório.
+import { FURNITURE_CATALOG } from '../data/furniture'
+import type { Progress } from '../types'
+
 interface MyHousePanelProps {
+  progress: Progress
+  onUnlockFurniture: (id: string) => void
   onClose: () => void
 }
 
-const PLACEHOLDER_FURNITURE = [
-  { emoji: '🛏️', name: 'Cama', description: 'Chega em um próximo laboratório.' },
-  { emoji: '🪑', name: 'Mesa e cadeira', description: 'Chega em um próximo laboratório.' },
-  { emoji: '🪴', name: 'Planta', description: 'Chega em um próximo laboratório.' },
-]
-
-export function MyHousePanel({ onClose }: MyHousePanelProps) {
+export function MyHousePanel({ progress, onUnlockFurniture, onClose }: MyHousePanelProps) {
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Minha Casa">
       <div className="modal quest-list-modal">
@@ -22,23 +23,34 @@ export function MyHousePanel({ onClose }: MyHousePanelProps) {
         </button>
         <h2>🏠 Minha Casa</h2>
         <p className="subtitle">
-          Seu espaço pessoal — grátis pra todo jogador, sempre. Em breve você vai poder comprar
-          móveis com moeda e decorar do seu jeito.
+          Seu espaço pessoal — grátis pra todo jogador, sempre. Compre móveis com as moedas que
+          você já ganhou nas missões.
         </p>
 
-        <div className="quest-list">
-          {PLACEHOLDER_FURNITURE.map((item) => (
-            <div key={item.name} className="quest-list-item locked">
-              <span className="quest-list-index" aria-hidden="true">
-                {item.emoji}
-              </span>
-              <div className="quest-list-info">
-                <span className="quest-list-title">{item.name}</span>
-                <span className="quest-list-type">{item.description}</span>
+        <div className="avatar-shop-grid">
+          {FURNITURE_CATALOG.map((item) => {
+            const owned = progress.unlockedFurnitureIds.includes(item.id)
+            const affordable = progress.coins >= item.cost
+            return (
+              <div key={item.id} className={`avatar-shop-item ${owned ? 'equipped' : ''}`}>
+                <span className="avatar-shop-emoji">{item.emoji}</span>
+                <span className="avatar-shop-name">{item.name}</span>
+
+                {owned ? (
+                  <span className="avatar-shop-tag">✓ Tem</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="avatar-shop-action buy"
+                    disabled={!affordable}
+                    onClick={() => onUnlockFurniture(item.id)}
+                  >
+                    🪙 {item.cost}
+                  </button>
+                )}
               </div>
-              <span className="quest-list-status">🔜</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

@@ -26,6 +26,9 @@ export const emptyProgress: Progress = {
   unlockedBackpackColorIds: ['mochila_padrao'],
   unlockedHairShapeIds: ['cabelo_padrao'],
   unlockedGlassesIds: DEFAULT_UNLOCKED_GLASSES_IDS,
+  // Mobília de Minha Casa (lab-106) — nada vem grátis (ao contrário dos outros eixos, que sempre
+  // têm uma opção padrão sem custo); a casa começa vazia, tudo se compra com moeda.
+  unlockedFurnitureIds: [],
 }
 
 export function loadProfile(): Profile | null {

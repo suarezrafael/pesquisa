@@ -52,4 +52,8 @@ export interface Progress {
   unlockedBackpackColorIds: string[]
   unlockedHairShapeIds: string[]
   unlockedGlassesIds: string[]
+  // Mobília de Minha Casa (lab-106) — sem eixo de "equipar" (não é uma peça de roupa do boneco):
+  // cada id presente aqui significa "o jogador possui este item", mostrado como lista no
+  // `MyHousePanel`.
+  unlockedFurnitureIds: string[]
 }

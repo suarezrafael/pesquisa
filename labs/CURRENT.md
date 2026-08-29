@@ -1,6 +1,21 @@
 # Laboratório atual
 
-Último concluído: labs/lab-105-minha-casa-plot-base/ — primeira fatia de "Minha Casa"
+Último concluído: labs/lab-106-minha-casa-mobilia-compravel/ — continuação direta do lab-105:
+trocou o placeholder de mobília do `MyHousePanel` por compra de verdade com moeda. Novo
+`app/src/data/furniture.ts` (5 itens, 6-20 moedas, campo `subscriptionOnly?` já previsto pro
+próximo passo), `Progress.unlockedFurnitureIds`, `unlockFurniture` em `progression.ts`/
+`useProgress.ts` (mesmo `unlockGeneric` de chapéus/óculos, zero regra nova). `MyHousePanel`
+reaproveita as classes `.avatar-shop-*` de `AvatarShop.tsx` (grade de compra, botão desabilitado
+sem moeda, tag "✓ Tem") — sem conceito de "equipar" (mobília não é peça do boneco, só possuída ou
+não). 3 testes novos em `progression.test.ts` (suite total 42/42). **Verificado ao vivo**
+(`npm run dev` + `window.__debugTeleport`): compra desconta moeda e persiste em
+`localStorage`. **Nota de transparência**: a verificação usou o perfil local real "DudaDuda"
+(porta 5174) — seus `coins` foram sobrescritos pra 100 pra testar sem grind, valor original não
+anotado antes da sobrescrita (perda mínima, é só save local de teste, nada em produção/banco). Os
+2 conjuntos exclusivos de assinante ("Quarto Espacial", "Jardim Encantado") ficam pro próximo
+laboratório desta frente. Ver `labs/lab-106-minha-casa-mobilia-compravel/CONTEXT.md`.
+
+Antes desse: labs/lab-105-minha-casa-plot-base/ — primeira fatia de "Minha Casa"
 (`docs/plano-comercial-backend.md`, catálogo Fase E, item que faltava construir). Escolhido pelo
 usuário entre 4 frentes de backlog de produto (Minha Casa / Fase F Stripe produção / e-mail semanal
 via Resend / múltiplos perfis por família). **Correção de arquitetura feita durante a investigação,
@@ -435,9 +450,10 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 `World3D.tsx` — senão quebra o `lazy()` da lojinha de novo (ver `labs/lab-87-.../CONTEXT.md`,
 seção "Decisões técnicas", pra entender por quê).
 
-Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-105-minha-casa-plot-base/
-CONTEXT.md` (último laboratório concluído — próximo passo natural é a mobília comprável com moeda).
-Lembrar também que `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
+Para retomar o trabalho numa nova sessão, leia primeiro `labs/lab-106-minha-casa-mobilia-compravel/
+CONTEXT.md` (último laboratório concluído — próximo passo natural são os 2 conjuntos exclusivos de
+assinante, "Quarto Espacial"/"Jardim Encantado", via `subscriptionOnly` já previsto em
+`FurnitureOption`). Lembrar também que `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,
 `docs/prompts/05-escala-e-viabilidade.md` (leia o adendo no topo primeiro — os números do corpo do

@@ -80,6 +80,7 @@ function GameApp() {
     unlockBackpackColor,
     unlockHairShape,
     unlockGlasses,
+    unlockFurniture,
     unlockMarsReward,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
@@ -223,7 +224,13 @@ function GameApp() {
         <AchievementsPanel progress={progress} onClose={() => setShowAchievements(false)} />
       )}
 
-      {showMyHouse && <MyHousePanel onClose={() => setShowMyHouse(false)} />}
+      {showMyHouse && (
+        <MyHousePanel
+          progress={progress}
+          onUnlockFurniture={unlockFurniture}
+          onClose={() => setShowMyHouse(false)}
+        />
+      )}
 
       {showMarsReward && <MarsRewardToast onContinue={() => setShowMarsReward(false)} />}
 
