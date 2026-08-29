@@ -1,6 +1,13 @@
 # Laboratório atual
 
-Último concluído: labs/lab-113-sistema-solar-saturno/ — quarto planeta novo da frente "Sistema
+Em andamento: labs/lab-114-sistema-solar-urano-netuno/ — ÚLTIMO laboratório da frente "Sistema
+Solar": os dois gigantes de gelo, feitos juntos (incrementos pequenos sobre o padrão já
+estabelecido). Urano com faixas rotacionadas 90° na malha (reflete o eixo de rotação real bem
+tombado, ~98°); Netuno com Grande Mancha Escura (decalque fixo, análogo à Mancha Vermelha de
+Júpiter). Com isso, os 8 planetas reais do sistema solar ficam completos no jogo. Ver
+`labs/lab-114-sistema-solar-urano-netuno/FEATURES.md`.
+
+Antes desse: labs/lab-113-sistema-solar-saturno/ — quarto planeta novo da frente "Sistema
 Solar", segundo gigante gasoso. Reaproveita a técnica de faixas do lab-112 (Júpiter, paleta mais
 pálida/dourada) + ANEL novo (`CreateTorus` achatado no eixo Y, `scaling.y=0.02`, translúcido,
 decorativo, sem física) — mesma primitiva do anel sonoro de combate de Marte, escala bem maior.
