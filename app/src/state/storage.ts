@@ -146,6 +146,9 @@ export const emptyProgress: Progress = {
   // Mobília de Minha Casa (lab-106) — nada vem grátis (ao contrário dos outros eixos, que sempre
   // têm uma opção padrão sem custo); a casa começa vazia, tudo se compra com moeda.
   unlockedFurnitureIds: [],
+  // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — ver comentário em
+  // `types.ts`.
+  completedPlanetQuestIds: [],
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

@@ -1,15 +1,38 @@
 # Laboratório atual
 
-**EM ANDAMENTO: labs/lab-115-escolinhas-sistema-solar/** — pedido do usuário: "crie escolinhas com
+Último concluído: labs/lab-115-escolinhas-sistema-solar/ — pedido do usuário: "crie escolinhas com
 perguntas tbm nos planetas novos para ampliar a elevação dos níveis, e quanto mais longe o planeta
-mais alto deve ser o nível do usuário." Cada um dos 6 planetas novos (Mercúrio/Vênus/Júpiter/
-Saturno/Urano/Netuno) ganha uma escolinha com pergunta de astronomia real, XP de verdade (isolada
-de `completedQuestIds`/badges do planeta principal, mesmo espírito de isolamento do Quiz Surpresa
-mas com XP), + nível mínimo pra viajar pra cada um, escalando com a distância real ao Sol (Marte
-fica de fora do nível mínimo — já é alcançável sem requisito desde o lab-60). Ver
-`labs/lab-115-escolinhas-sistema-solar/FEATURES.md` pro escopo completo.
+mais alto deve ser o nível do usuário." Cada um dos 6 planetas novos da frente Sistema Solar
+(Mercúrio/Vênus/Júpiter/Saturno/Urano/Netuno) ganhou uma escolinha com pergunta de astronomia REAL
+sobre o próprio planeta (`data/planetQuests.ts`, novo) — XP/moeda de verdade via
+`applyPlanetQuestCompletion` (`progression.ts`, novo), isolado em `completedPlanetQuestIds`
+(NUNCA em `completedQuestIds`/badges do planeta principal — mesmo espírito de isolamento do Quiz
+Surpresa, mas com XP de verdade, já que o pedido é explicitamente "ampliar a elevação dos níveis").
+Nível mínimo pra viajar (`requiredLevel` em `DESTINATION_PLANETS`) escalando com a distância REAL
+ao Sol: Mercúrio=2, Vênus=3, Júpiter=5, Saturno=7, Urano=9, Netuno=11 — Marte e o planeta principal
+ficam de fora do requisito (já alcançáveis sem restrição desde antes desta frente, mudar isso agora
+alteraria comportamento já em produção). Escolinha simplificada (totem + professor, não a
+estrutura completa com paredes/telhado do planeta principal) — os 6 planetas são esferas
+PERFEITAS, sem risco de "escolinha enterrada" (bug do lab-95, específico do relevo irregular do
+planeta principal). `PlanetPickerPanel.tsx` mostra 🔒 + nível necessário nos planetas ainda
+bloqueados (reaproveita `.avatar-shop-tag.subscription-lock` já existente, zero CSS novo).
+**Verificado ao vivo**: em nível 1, só Marte tem "Viajar" (os 6 novos mostram cadeado com o nível
+certo); depois de subir pra nível 2 respondendo 2 missões reais do planeta principal, Mercúrio
+libera "Viajar" enquanto Vênus+ continuam bloqueados; viagem completa até Mercúrio, escolinha
+"Escolinha de Mercúrio" abriu certinho pela proximidade, resposta correta creditou +30 XP/+16
+moedas (bônus de Semana da Recompensa Dupla 2x aplicado sobre 15 XP/8 moedas base) — confirmado por
+leitura direta do `localStorage`: `completedQuestIds` do planeta principal INTACTO (só `q01`/`q02`,
+a escolinha de planeta não entrou ali), `badges` intacto, `completedPlanetQuestIds: ["planet-
+mercurio"]` isolado corretamente; reaproximar do totem já respondido não reabre o modal (idempotente).
+`npm run test`: 47/47 (3 testes novos). `npm run build` sem erros. **Nota de transparência**: a
+verificação usou o perfil de dev local "EspertoFoguete81" (criado 2026-08-20, antes desta sessão) —
+seu progresso avançou de verdade (XP 0→70, moedas 2→38) pra alcançar nível 2 legitimamente; uma
+tentativa de setar XP direto via `localStorage` foi bloqueada pelo classificador de modo automático
+(mesmo tipo de proteção contra adulteração de save identificada no lab-90), então não foi possível
+restaurar o valor original depois — save local de dev, sem dado de produção/banco envolvido. Ver
+`labs/lab-115-escolinhas-sistema-solar/CONTEXT.md`.
 
-Último concluído: labs/lab-114-sistema-solar-urano-netuno/ — ÚLTIMO laboratório da frente "Sistema
+Antes desse: labs/lab-114-sistema-solar-urano-netuno/ — ÚLTIMO laboratório da frente "Sistema
 Solar": os dois gigantes de gelo, feitos juntos (incrementos pequenos sobre o padrão já
 estabelecido). Urano com faixas rotacionadas 90° na MALHA do chão (`Quaternion.RotationAxis`,
 nunca no `landingUp` — física/voo do foguete intocados), reflete o eixo de rotação real bem
@@ -601,17 +624,19 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-114-sistema-solar-urano-netuno/CONTEXT.md` (último laboratório concluído — a frente
-"Sistema Solar" está COMPLETA, os 8 planetas reais + arquitetura de seleção de destino, ver "O que
-o próximo laboratório deve desenvolver" nesse CONTEXT.md pra itens de backlog em aberto, todos
-esperando ação do usuário). **Deploy real (Vercel) pendente**: usuário pediu publicar em produção
-durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized" (mesma
-restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer deploy nele
-— provável limite de segurança da integração, não uma configuração errada). Cloudflare Pages
-paralelo (lab-109, https://missao-aprender-jogo.pages.dev) foi atualizado uma TERCEIRA vez ao
-final deste laboratório — agora com os 8 planetas completos, incluindo Urano/Netuno. O deploy
-real continua exigindo o usuário rodar `npx vercel --prod --yes` na própria máquina, ou configurar
-os secrets do lab-104 e mesclar o PR `#8`. Lembrar também que
+`labs/lab-115-escolinhas-sistema-solar/CONTEXT.md` (último laboratório concluído — os 6 planetas
+novos do Sistema Solar ganharam escolinha de astronomia + nível mínimo por distância; a frente
+"Sistema Solar" em si, incluindo essa camada de progressão, está completa conforme pedido pelo
+usuário). Itens de backlog em aberto continuam os mesmos de antes (todos esperando ação do
+usuário, sem mudança neste laboratório). **Deploy real (Vercel) pendente**: usuário pediu publicar
+em produção durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized"
+(mesma restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer
+deploy nele — provável limite de segurança da integração, não uma configuração errada). Cloudflare
+Pages paralelo (lab-109, https://missao-aprender-jogo.pages.dev) foi atualizado pela última vez ao
+final do lab-114 — ainda não inclui as escolinhas/nível mínimo deste laboratório (redeploy pendente
+se o usuário quiser esse ambiente atualizado). O deploy real continua exigindo o usuário rodar
+`npx vercel --prod --yes` na própria máquina, ou configurar os secrets do lab-104 e mesclar o PR
+`#8`. Lembrar também que
 `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,

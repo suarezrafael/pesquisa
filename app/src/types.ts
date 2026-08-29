@@ -56,4 +56,12 @@ export interface Progress {
   // cada id presente aqui significa "o jogador possui este item", mostrado como lista no
   // `MyHousePanel`.
   unlockedFurnitureIds: string[]
+  // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — chave = id do planeta
+  // (`data/planetQuests.ts`). Deliberadamente separado de `completedQuestIds`: aquele array conta
+  // contra `quests.length` (30, fixo) pra emblemas ("Metade do Caminho"/"Mestre das Missões") —
+  // misturar essas perguntas ali inflaria a contagem e concederia emblema cedo demais. Mesmo
+  // espírito de isolamento do Quiz Surpresa (`surpriseQuizzes.ts`), mas com XP de verdade (o
+  // pedido do usuário é "ampliar a elevação dos níveis", diferente do quiz surpresa que só dá
+  // moeda de propósito).
+  completedPlanetQuestIds: string[]
 }

@@ -1,7 +1,8 @@
 # Laboratório 115 — Escolinhas nos planetas do Sistema Solar + nível mínimo por distância
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
+Fim: 2026-08-29
 Commit inicial: 39144d83f8d16aec5aa568cf409ab6d188b84381
 
 ## Objetivo do laboratório
@@ -62,26 +63,26 @@ combinados:
   `settleMeshOnTerrain` (desnecessário aqui).
 
 ## Funcionalidades planejadas
-- [ ] `types.ts`: `Progress.completedPlanetQuestIds: string[]` (novo campo).
-- [ ] `storage.ts`: `emptyProgress.completedPlanetQuestIds: []`.
-- [ ] `data/planetQuests.ts` (novo): um `Quest` de astronomia por planeta novo
+- [x] `types.ts`: `Progress.completedPlanetQuestIds: string[]` (novo campo).
+- [x] `storage.ts`: `emptyProgress.completedPlanetQuestIds: []`.
+- [x] `data/planetQuests.ts` (novo): um `Quest` de astronomia por planeta novo
       (`Record<string, Quest>`, chave = id do planeta), com `xpReward`/`coinReward` de verdade.
-- [ ] `progression.ts`: `applyPlanetQuestCompletion(progress, quest, event?)` — idempotente via
+- [x] `progression.ts`: `applyPlanetQuestCompletion(progress, quest, event?)` — idempotente via
       `completedPlanetQuestIds`, aplica multiplicador do evento semanal, NÃO mexe em
       `completedQuestIds`/`badges`.
-- [ ] `useProgress.ts`: `completePlanetQuest(quest)` (mesmo formato de `completeQuest`).
-- [ ] `DESTINATION_PLANETS` (`World3D.tsx`): `requiredLevel` por planeta (Mercúrio/Vênus/Júpiter/
+- [x] `useProgress.ts`: `completePlanetQuest(quest)` (mesmo formato de `completeQuest`).
+- [x] `DESTINATION_PLANETS` (`World3D.tsx`): `requiredLevel` por planeta (Mercúrio/Vênus/Júpiter/
       Saturno/Urano/Netuno; Marte e planeta principal sem requisito).
-- [ ] `World3D.tsx`: escolinha simplificada (totem + professor) em cada `buildXIfNeeded()` dos 6
+- [x] `World3D.tsx`: escolinha simplificada (totem + professor) em cada `buildXIfNeeded()` dos 6
       planetas novos, gatilho de proximidade chamando `onSelectPlanetQuest(planetId)`.
-- [ ] `PlanetPickerPanel.tsx`: recebe nível atual do jogador, mostra 🔒 + "Nível X necessário" e
+- [x] `PlanetPickerPanel.tsx`: recebe nível atual do jogador, mostra 🔒 + "Nível X necessário" e
       desabilita "Viajar" pra planetas acima do nível atual.
-- [ ] `App.tsx`: estado/handler pra abrir/resolver a escolinha de planeta (reaproveita
+- [x] `App.tsx`: estado/handler pra abrir/resolver a escolinha de planeta (reaproveita
       `QuestModal`/`RewardToast` já existentes).
-- [ ] Testes (`progression.test.ts`): `applyPlanetQuestCompletion` — recompensa normal, idempotência
-      (repetir não duplica XP), isolamento de `completedQuestIds`/badges.
-- [ ] Verificação ao vivo (dev server + browser automation): nível bloqueando/liberando viagem,
-      pelo menos uma escolinha de planeta respondida com XP creditado.
+- [x] Testes (`progression.test.ts`): `applyPlanetQuestCompletion` — recompensa normal, idempotência
+      (repetir não duplica XP), isolamento de `completedQuestIds`/badges. Suite: 47/47.
+- [x] Verificação ao vivo (dev server + browser automation): nível bloqueando/liberando viagem,
+      escolinha de Mercúrio respondida com XP creditado.
 
 ## Fora de escopo (explicitamente adiado)
 - Nível mínimo em Marte ou no planeta principal — nenhum dos dois nunca teve requisito, fora do

@@ -77,6 +77,31 @@ export function applyQuestCompletion(
   return { progress: next, newBadges, awardedXp, awardedCoins }
 }
 
+// Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo formato de
+// `applyQuestCompletion` (idempotente, aplica o multiplicador do evento semanal), mas grava em
+// `completedPlanetQuestIds`, NUNCA em `completedQuestIds`/`badges`: essas duas contam contra
+// `quests.length` (fixo em 30) pra decidir "Metade do Caminho"/"Mestre das Missões" — misturar as
+// perguntas de planeta ali concederia esses emblemas cedo demais pra quem nunca terminou as 30
+// missões de verdade.
+export function applyPlanetQuestCompletion(
+  progress: Progress,
+  quest: Quest,
+  event: WeeklyEvent = getCurrentWeeklyEvent(),
+): CompletionResult {
+  if (progress.completedPlanetQuestIds.includes(quest.id)) {
+    return { progress, newBadges: [], awardedXp: 0, awardedCoins: 0 }
+  }
+  const awardedXp = Math.round(quest.xpReward * event.xpMultiplier)
+  const awardedCoins = Math.round(quest.coinReward * event.coinMultiplier)
+  const next: Progress = {
+    ...progress,
+    completedPlanetQuestIds: [...progress.completedPlanetQuestIds, quest.id],
+    xp: progress.xp + awardedXp,
+    coins: progress.coins + awardedCoins,
+  }
+  return { progress: next, newBadges: [], awardedXp, awardedCoins }
+}
+
 export function isQuestUnlocked(progress: Progress, questIndex: number): boolean {
   if (questIndex === 0) return true
   const previousQuest = quests[questIndex - 1]

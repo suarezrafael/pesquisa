@@ -5,6 +5,7 @@ import { loadProgress, saveProgress } from './storage'
 import {
   applyCoinCollected,
   applyQuestCompletion,
+  applyPlanetQuestCompletion,
   type CompletionResult,
   unlockAvatar as applyAvatarUnlock,
   unlockHat as applyHatUnlock,
@@ -31,6 +32,15 @@ export function useProgress() {
     setProgress(result.progress)
     saveProgress(result.progress)
     if (!wasAlreadyCompleted) trackQuestCompleted(quest.id)
+    return result
+  }
+
+  // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo formato de
+  // `completeQuest`, mas isolado (ver `applyPlanetQuestCompletion` em `progression.ts`).
+  function completePlanetQuest(quest: Quest): CompletionResult {
+    const result = applyPlanetQuestCompletion(progress, quest)
+    setProgress(result.progress)
+    saveProgress(result.progress)
     return result
   }
 
@@ -130,6 +140,7 @@ export function useProgress() {
   return {
     progress,
     completeQuest,
+    completePlanetQuest,
     collectCoin,
     unlockAvatar,
     unlockHat,

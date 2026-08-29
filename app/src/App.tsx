@@ -16,6 +16,7 @@ import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
+import { planetQuests } from './data/planetQuests'
 import {
   clearActiveProfile,
   hasTutorialBeenSeen,
@@ -79,6 +80,7 @@ function GameApp() {
   const {
     progress,
     completeQuest,
+    completePlanetQuest,
     collectCoin,
     unlockAvatar,
     unlockHat,
@@ -93,6 +95,7 @@ function GameApp() {
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
+  const [activePlanetQuest, setActivePlanetQuest] = useState<Quest | null>(null)
   const [reward, setReward] = useState<{ quest: Quest; newBadges: string[]; awardedXp: number; awardedCoins: number } | null>(
     null,
   )
@@ -178,6 +181,23 @@ function GameApp() {
     setActiveSurpriseQuiz(null)
   }
 
+  function handleSelectPlanetQuest(planetId: string) {
+    const quest = planetQuests[planetId] ?? null
+    setActivePlanetQuest(quest)
+  }
+
+  // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115, pedido do usuário: "crie
+  // escolinhas com perguntas tbm nos planetas novos para ampliar a elevação dos níveis") —
+  // DIFERENTE do quiz surpresa: `completePlanetQuest` credita XP de verdade (via
+  // `completedPlanetQuestIds`, isolado de `completedQuestIds`/badges do planeta principal, ver
+  // `progression.ts`), então mostra o mesmo `RewardToast` das missões normais.
+  function handleCompletePlanetQuest() {
+    if (!activePlanetQuest) return
+    const { newBadges, awardedXp, awardedCoins } = completePlanetQuest(activePlanetQuest)
+    setReward({ quest: activePlanetQuest, newBadges, awardedXp, awardedCoins })
+    setActivePlanetQuest(null)
+  }
+
   // Brinde de Marte (lab-94) — `unlockMarsReward()` já é idempotente (não faz nada se o jogador já
   // tiver o item); o aviso só aparece quando realmente concedeu algo novo, não a cada visita em
   // que o planeta é limpado de novo.
@@ -193,6 +213,7 @@ function GameApp() {
           progress={progress}
           onSelectQuest={handleSelectQuest}
           onSelectSurpriseQuiz={handleSelectSurpriseQuiz}
+          onSelectPlanetQuest={handleSelectPlanetQuest}
           onOpenHelp={() => setShowHelp(true)}
           onOpenQuestList={() => setShowQuestList(true)}
           onOpenShop={() => setShowShop(true)}
@@ -208,6 +229,7 @@ function GameApp() {
           suspendTriggers={
             activeQuest !== null ||
             activeSurpriseQuiz !== null ||
+            activePlanetQuest !== null ||
             reward !== null ||
             showHelp ||
             showQuestList ||
@@ -233,6 +255,14 @@ function GameApp() {
           quest={activeSurpriseQuiz}
           onCorrect={handleSurpriseQuizCorrect}
           onClose={() => setActiveSurpriseQuiz(null)}
+        />
+      )}
+
+      {activePlanetQuest && (
+        <QuestModal
+          quest={activePlanetQuest}
+          onCorrect={handleCompletePlanetQuest}
+          onClose={() => setActivePlanetQuest(null)}
         />
       )}
 

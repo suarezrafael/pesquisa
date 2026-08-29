@@ -39,6 +39,7 @@ import '@babylonjs/loaders/glTF'
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
+import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
@@ -61,7 +62,7 @@ import {
   type StudentFigure,
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
-import { isQuestUnlocked } from '../state/progression'
+import { getLevel, isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
@@ -115,6 +116,7 @@ interface World3DProps {
   progress: Progress
   onSelectQuest: (questId: string) => void
   onSelectSurpriseQuiz: (quizId: string) => void
+  onSelectPlanetQuest: (planetId: string) => void
   onOpenHelp: () => void
   onOpenQuestList: () => void
   onOpenShop: () => void
@@ -424,6 +426,14 @@ interface DestinationPlanet {
   radius: number
   center: Vector3
   landingUp: Vector3
+  // Nível mínimo pra viajar pra lá (lab-115, pedido do usuário: "quanto mais longe o planeta mais
+  // alto deve ser o nível do usuário") — escalona com a distância REAL ao Sol entre os 6 planetas
+  // desta frente (Mercúrio < Vênus < Júpiter < Saturno < Urano < Netuno). Marte e o planeta
+  // principal ficam de fora de propósito: nenhum dos dois nunca teve requisito de nível (Marte é
+  // alcançável sem restrição desde o lab-60) — adicionar um agora mudaria comportamento já em
+  // produção. `undefined`/ausente = sem requisito (compatível com quem só verifica
+  // `(planet.requiredLevel ?? 1)`).
+  requiredLevel?: number
 }
 const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
   marte: {
@@ -441,6 +451,7 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: MERCURY_RADIUS,
     center: MERCURY_CENTER,
     landingUp: MERCURY_LANDING_UP,
+    requiredLevel: 2,
   },
   venus: {
     id: 'venus',
@@ -449,6 +460,7 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: VENUS_RADIUS,
     center: VENUS_CENTER,
     landingUp: VENUS_LANDING_UP,
+    requiredLevel: 3,
   },
   jupiter: {
     id: 'jupiter',
@@ -457,6 +469,7 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: JUPITER_RADIUS,
     center: JUPITER_CENTER,
     landingUp: JUPITER_LANDING_UP,
+    requiredLevel: 5,
   },
   saturno: {
     id: 'saturno',
@@ -465,6 +478,7 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: SATURN_RADIUS,
     center: SATURN_CENTER,
     landingUp: SATURN_LANDING_UP,
+    requiredLevel: 7,
   },
   urano: {
     id: 'urano',
@@ -473,6 +487,7 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: URANUS_RADIUS,
     center: URANUS_CENTER,
     landingUp: URANUS_LANDING_UP,
+    requiredLevel: 9,
   },
   netuno: {
     id: 'netuno',
@@ -481,6 +496,7 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: NEPTUNE_RADIUS,
     center: NEPTUNE_CENTER,
     landingUp: NEPTUNE_LANDING_UP,
+    requiredLevel: 11,
   },
 }
 const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_PLANETS)
@@ -1794,6 +1810,7 @@ export function World3D({
   progress,
   onSelectQuest,
   onSelectSurpriseQuiz,
+  onSelectPlanetQuest,
   onOpenHelp,
   onOpenQuestList,
   onOpenShop,
@@ -1828,6 +1845,7 @@ export function World3D({
   const suspendRef = useRef(suspendTriggers)
   const onSelectQuestRef = useRef(onSelectQuest)
   const onSelectSurpriseQuizRef = useRef(onSelectSurpriseQuiz)
+  const onSelectPlanetQuestRef = useRef(onSelectPlanetQuest)
   const onOpenAchievementsRef = useRef(onOpenAchievements)
   const onOpenMyHouseRef = useRef(onOpenMyHouse)
   const onUnlockMarsRewardRef = useRef(onUnlockMarsReward)
@@ -1899,6 +1917,7 @@ export function World3D({
   suspendRef.current = suspendTriggers
   onSelectQuestRef.current = onSelectQuest
   onSelectSurpriseQuizRef.current = onSelectSurpriseQuiz
+  onSelectPlanetQuestRef.current = onSelectPlanetQuest
   onOpenAchievementsRef.current = onOpenAchievements
   onOpenMyHouseRef.current = onOpenMyHouse
   onUnlockMarsRewardRef.current = onUnlockMarsReward
@@ -3500,6 +3519,68 @@ export function World3D({
         coins.push({ pivot: coinPivot, mesh: coinMesh, worldPos: coinPos, collected: false })
       }
 
+      // Escolinhas de astronomia dos 6 planetas novos do Sistema Solar (lab-115) — cada
+      // `buildXIfNeeded()` empurra UMA entrada aqui (`buildPlanetEscolinha`, abaixo). Mesmo padrão
+      // de `quizMarkers` (proximidade dispara `onSelectPlanetQuestRef`, ver laço de gatilhos mais
+      // abaixo), mas planetId em vez de id de marcador avulso — cada planeta tem só uma escolinha.
+      const planetQuestMarkers: { planetId: string; worldPos: Vector3 }[] = []
+
+      // Constrói a escolinha simplificada de um planeta-destino (lab-115) — reaproveitada pelos 6
+      // `buildXIfNeeded()` dos planetas novos. Diferente das escolinhas do planeta principal
+      // (`quests.forEach` mais abaixo, que usam `terrainGroundRadial`/`settleMeshOnTerrain`, feito
+      // pra relevo IRREGULAR — ver lab-95), estes planetas são esferas PERFEITAS
+      // (`PhysicsShapeType.SPHERE`): `localUp.scale(radius)` já cai exatamente na superfície, sem
+      // risco de "escolinha enterrada/flutuando". Um totem com o símbolo "?" (cor do tipo de
+      // quest, mesma paleta de `questTypeColor`) + o professor parado ao lado é suficiente pra uma
+      // única pergunta por planeta — não precisa da estrutura completa (paredes/telhado/fundação).
+      function buildPlanetEscolinha(planetId: string, planetRoot: TransformNode, radius: number, localUp: Vector3) {
+        const quest = planetQuests[planetId]
+        if (!quest) return
+        const base = new TransformNode(`planetSchool-${planetId}`, scene)
+        base.position = localUp.scale(radius)
+        base.rotationQuaternion = alignmentQuaternion(localUp)
+        base.parent = planetRoot
+
+        const postMat = new PBRMaterial(`planetSchoolPostMat-${planetId}`, scene)
+        postMat.albedoColor = new Color3(0.5, 0.42, 0.32)
+        postMat.roughness = 0.9
+        const post = MeshBuilder.CreateCylinder(`planetSchoolPost-${planetId}`, { height: 1.1, diameter: 0.22 }, scene)
+        post.position = new Vector3(0, 0.55, 0)
+        post.material = postMat
+        post.parent = base
+        shadowGenerator.addShadowCaster(post)
+
+        const signMat = new PBRMaterial(`planetSchoolSignMat-${planetId}`, scene)
+        signMat.albedoColor = questTypeColor[quest.type]
+        signMat.roughness = 0.4
+        signMat.metallic = 0.1
+        const sign = MeshBuilder.CreateBox(`planetSchoolSign-${planetId}`, { width: 0.7, height: 0.7, depth: 0.12 }, scene)
+        sign.position = new Vector3(0, 1.25, 0)
+        sign.material = signMat
+        sign.parent = base
+        shadowGenerator.addShadowCaster(sign)
+
+        const label = new TextBlock(`planetSchoolLabel-${planetId}`, '?')
+        label.color = 'white'
+        label.fontSize = mobileFontSize(34)
+        label.fontWeight = 'bold'
+        label.outlineWidth = 4
+        label.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(label)
+        label.linkWithMesh(sign)
+
+        const teacher = buildStudentFigure(scene, new Color3(0.55, 0.25, 0.55), shadowGenerator)
+        teacher.root.scaling.setAll(0.92)
+        teacher.root.position = new Vector3(0.85, 0, 0.4)
+        teacher.root.parent = base
+
+        // `worldPos` calculado direto (não via `getAbsolutePosition()`) porque `planetRoot` acabou
+        // de ser criado neste mesmo quadro — a matriz de mundo só é recomputada depois, e o laço
+        // de gatilhos (mais abaixo) precisa da posição correta desde o primeiro frame. Válido
+        // porque `planetRoot.position` é sempre o `*_CENTER` fixo do planeta (nunca rotacionado).
+        planetQuestMarkers.push({ planetId, worldPos: planetRoot.position.add(localUp.scale(radius)) })
+      }
+
       // Parkour (lab-11) — sequência de plataformas subindo em ziguezague, só dá pra atravessar
       // pulando. Local escolhido por busca (varredura de candidatos medindo distância angular
       // contra platôs/lagoa/piscina/escolas, mesmo método usado no lab-09 pra achar o lugar da
@@ -4568,6 +4649,9 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
+        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Mercúrio.
+        buildPlanetEscolinha('mercurio', mercuryRoot, MERCURY_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = mercuryRoot
@@ -4679,6 +4763,9 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
+        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Vênus.
+        buildPlanetEscolinha('venus', venusRoot, VENUS_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = venusRoot
@@ -4777,6 +4864,9 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
+        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Júpiter.
+        buildPlanetEscolinha('jupiter', jupiterRoot, JUPITER_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = jupiterRoot
@@ -4870,6 +4960,9 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
+        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Saturno.
+        buildPlanetEscolinha('saturno', saturnRoot, SATURN_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = saturnRoot
@@ -4949,6 +5042,9 @@ export function World3D({
           shadowGenerator.addShadowCaster(mesh)
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
+
+        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Urano.
+        buildPlanetEscolinha('urano', uranusRoot, URANUS_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -5039,6 +5135,9 @@ export function World3D({
           shadowGenerator.addShadowCaster(mesh)
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
+
+        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Netuno.
+        buildPlanetEscolinha('netuno', neptuneRoot, NEPTUNE_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -6453,6 +6552,10 @@ export function World3D({
       // fachada da casa ocupa espaço parecido com a mesa/banco da carteira.
       const HOUSE_TRIGGER_DISTANCE = 1.2
 
+      // Distância de gatilho das escolinhas de astronomia dos planetas (lab-115) — mesmo
+      // raciocínio da carteira/Minha Casa: o totem+professor ocupam espaço parecido.
+      const PLANET_SCHOOL_TRIGGER_DISTANCE = 1.2
+
       // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
       // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
       // alto de cada uma (`plateau.height`, o mesmo valor usado por `terrainHeight` — o centro do
@@ -7518,6 +7621,23 @@ export function World3D({
               }
             }
 
+            // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo padrão de
+            // histerese gatilho/reset das escolinhas do planeta principal, mas pulando quest já
+            // concluída (mesmo espírito de `portalMeshes`/`completed` acima) via
+            // `completedPlanetQuestIds`, NUNCA `completedQuestIds`.
+            for (const marker of planetQuestMarkers) {
+              const quest = planetQuests[marker.planetId]
+              if (!quest || progressRef.current.completedPlanetQuestIds.includes(quest.id)) continue
+              const d = Vector3.Distance(pos, marker.worldPos)
+              const triggerId = `planet-school-${marker.planetId}`
+              if (d < PLANET_SCHOOL_TRIGGER_DISTANCE && !triggered.has(triggerId)) {
+                triggered.add(triggerId)
+                onSelectPlanetQuestRef.current(marker.planetId)
+              } else if (d > RESET_DISTANCE) {
+                triggered.delete(triggerId)
+              }
+            }
+
             // Carteira de estudos (lab-93) — mesmo padrão de gatilho do quiz acima, mas só um
             // objeto (sem laço). Congela a pose "sentado" nos pivôs do boneco (mesmos valores da
             // pose usada ao dirigir o carro, ver comentário lá) e abre o catálogo de conquistas.
@@ -8447,6 +8567,7 @@ export function World3D({
       {planetPickerOpen && (
         <PlanetPickerPanel
           planets={DESTINATION_PLANET_LIST}
+          currentLevel={getLevel(progress.xp)}
           onChoose={(id) => {
             setPlanetPickerOpen(false)
             boardRocketToRef.current(id)

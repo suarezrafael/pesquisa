@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyCoinCollected,
+  applyPlanetQuestCompletion,
   applyQuestCompletion,
   badgesEarnedAt,
   getLevel,
@@ -118,6 +119,35 @@ describe('applyQuestCompletion — recompensa e evento semanal', () => {
     const quest2 = makeQuest({ id: 'quest-teste-2' })
     const second = applyQuestCompletion(first.progress, quest2, NO_BONUS_EVENT)
     expect(second.newBadges).not.toContain('Primeira Missão')
+  })
+})
+
+describe('applyPlanetQuestCompletion — escolinhas de astronomia dos planetas (lab-115)', () => {
+  it('credita XP/moedas de verdade, com multiplicador do evento semanal', () => {
+    const quest = makeQuest({ id: 'planet-teste', xpReward: 20, coinReward: 8 })
+    const dobrado: WeeklyEvent = { ...NO_BONUS_EVENT, xpMultiplier: 2, coinMultiplier: 1 }
+    const result = applyPlanetQuestCompletion(emptyProgress, quest, dobrado)
+    expect(result.awardedXp).toBe(40)
+    expect(result.awardedCoins).toBe(8)
+    expect(result.progress.xp).toBe(40)
+    expect(result.progress.completedPlanetQuestIds).toEqual(['planet-teste'])
+  })
+
+  it('não credita recompensa de novo ao completar a mesma escolinha de planeta duas vezes', () => {
+    const quest = makeQuest({ id: 'planet-teste' })
+    const first = applyPlanetQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT)
+    const second = applyPlanetQuestCompletion(first.progress, quest, NO_BONUS_EVENT)
+    expect(second.awardedXp).toBe(0)
+    expect(second.awardedCoins).toBe(0)
+    expect(second.progress).toBe(first.progress)
+  })
+
+  it('nunca mexe em completedQuestIds/badges do planeta principal', () => {
+    const quest = makeQuest({ id: 'planet-teste' })
+    const result = applyPlanetQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT)
+    expect(result.progress.completedQuestIds).toEqual([])
+    expect(result.progress.badges).toEqual([])
+    expect(result.newBadges).toEqual([])
   })
 })
 
