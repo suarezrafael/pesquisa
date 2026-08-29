@@ -1,6 +1,12 @@
 # Laboratório atual
 
-Último concluído: labs/lab-107-minha-casa-sets-assinante/ — os dois sets temáticos exclusivos de
+Em andamento: labs/lab-108-multiplos-perfis-por-familia/ — última das 4 frentes de backlog de
+produto do lab-104 (Minha Casa completa nos labs 105-107; esta é a única restante totalmente
+construível em código, sem credencial nova nem decisão que só o usuário pode tomar). Permite dois
+irmãos compartilhando o mesmo tablet terem cada um seu próprio perfil/progresso — hoje o jogo tem
+um único perfil fixo por aparelho. Ver `labs/lab-108-multiplos-perfis-por-familia/FEATURES.md`.
+
+Antes desse: labs/lab-107-minha-casa-sets-assinante/ — os dois sets temáticos exclusivos de
 assinante ("Quarto Espacial" 🚀: cama-nave/luminária-planeta/tapete de estrelas; "Jardim Encantado"
 🌷: grama florida/banco de madeira/borboletas animadas), última peça de "Minha Casa" planejada em
 `docs/plano-comercial-backend.md`. 6 itens novos em `furniture.ts` (`cost: 0, subscriptionOnly:
