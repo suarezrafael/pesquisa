@@ -36,7 +36,14 @@ import {
   VertexData,
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
-import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
+// lab-117: imports diretos dos arquivos individuais, não do barril `@babylonjs/gui` — o pacote
+// inteiro (controles 2D como botão/slider/grid + materiais de GUI 3D como
+// handle/fluent, nunca usados aqui) inflava o chunk de `World3D` em ~695KB à toa, já que só
+// `TextBlock` (legendas flutuantes) e `AdvancedDynamicTexture` (a camada 2D que as hospeda) são
+// usados neste jogo. Confirmado lendo o pacote: os dois arquivos só dependem de
+// `Container`/`Control`/`Style`/`Measure`, uma fatia pequena da árvore completa.
+import { AdvancedDynamicTexture } from '@babylonjs/gui/2D/advancedDynamicTexture'
+import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
 import { planetQuests } from '../data/planetQuests'

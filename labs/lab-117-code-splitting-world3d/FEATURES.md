@@ -1,7 +1,8 @@
 # Laboratório 117 — Reduz o peso do bundle de World3D (imports escopados do Babylon.js)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
+Fim: 2026-08-29
 Commit inicial: 90dcaa7742bb6e355014c626b53fa266d901f796
 
 ## Objetivo do laboratório
@@ -60,15 +61,17 @@ chunk do mundo 3D está em ~918KB minificado (194KB gzip).
   do mesmo jeito quando precisar medir de novo).
 
 ## Funcionalidades planejadas
-- [ ] `World3D.tsx`: trocar `import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'`
+- [x] `World3D.tsx`: trocar `import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'`
       por imports diretos dos arquivos individuais (`@babylonjs/gui/2D/advancedDynamicTexture`,
       `@babylonjs/gui/2D/controls/textBlock`).
-- [ ] Medir o tamanho do chunk `World3D` antes/depois via `npm run build` (comparar o número
-      reportado pelo Vite, minificado + gzip).
-- [ ] Verificação ao vivo (dev server + browser automation): legendas flutuantes (números de
-      escola, "Pressione E pra voltar", labels de moeda/planeta) continuam aparecendo
-      normalmente — é a única funcionalidade que depende de `@babylonjs/gui` neste jogo.
-- [ ] `npm run test`/`npm run build` sem erros.
+- [x] Medir o tamanho do chunk `World3D` antes/depois via `npm run build`: **918,61 kB → 626,73 kB
+      minificado (-292 kB, -32%); 198,15 kB → 147,86 kB gzip (-50 kB, -25%)**. `studentFigure`
+      (achado adiado, ver acima) ficou inalterado como esperado, 3.678,67 kB.
+- [x] Verificação ao vivo (dev server + browser automation): legendas flutuantes (números de
+      escola, ex. "6"/"9"/"3"/"4"/"18") renderizando normalmente na mesma sessão em que a escolinha
+      abriu certinho ao se aproximar — única funcionalidade deste jogo que depende de
+      `@babylonjs/gui`. Sem erro de console.
+- [x] `npm run test` (47/47) e `npm run build` sem erros.
 
 ## Fora de escopo (explicitamente adiado)
 - Import escopado de `@babylonjs/loaders/glTF` (só 2.0) — risco de quebrar carregamento de modelo

@@ -1,14 +1,28 @@
 # Laboratório atual
 
-**EM ANDAMENTO: labs/lab-117-code-splitting-world3d/** — escolhido pelo usuário entre 3 opções de
+Último concluído: labs/lab-117-code-splitting-world3d/ — escolhido pelo usuário entre 3 opções de
 débito técnico já identificadas (relatório semanal por e-mail / code-splitting do World3D.tsx /
-auditoria de acessibilidade). Achado via `vite-bundle-visualizer` (medição real, não suposição):
-`World3D.tsx` importa só 2 símbolos de `@babylonjs/gui` mas puxa o pacote INTEIRO (695KB dos 918KB
-do chunk) por importar do barril em vez dos arquivos individuais. Ver
-`labs/lab-117-code-splitting-world3d/FEATURES.md` pro escopo completo (inclui 2 achados adicionais
-adiados por risco/esforço: glTF 1.0 morto, acoplamento interno Scene/XR do próprio Babylon.js).
+auditoria de acessibilidade). Medido com `vite-bundle-visualizer` (via `npx`, não virou dependência
+do projeto) ANTES de decidir o que cortar — achado: `World3D.tsx` importava só 2 símbolos de
+`@babylonjs/gui` (`AdvancedDynamicTexture`/`TextBlock`, usados só pras legendas flutuantes) mas
+puxava o pacote INTEIRO (695KB dos 918KB do chunk) por importar do barril em vez dos arquivos
+individuais — controles 2D nunca usados (botão/slider/grid) e materiais de GUI 3D nunca usados
+(handle/fluent). Trocado pros imports diretos dos 2 arquivos
+(`@babylonjs/gui/2D/advancedDynamicTexture`, `@babylonjs/gui/2D/controls/textBlock`), confirmados
+por leitura do código-fonte do pacote como dependendo só de `Container`/`Control`/`Style`/
+`Measure`. **Resultado medido**: chunk `World3D` 918,61 kB → 626,73 kB minificado (-32%), 198,15 kB
+→ 147,86 kB gzip (-25%). Dois achados adicionais investigados e CONSCIENTEMENTE ADIADOS (documentados
+em `labs/lab-117-code-splitting-world3d/FEATURES.md`/`CONTEXT.md`): glTF 1.0 morto dentro de
+`@babylonjs/loaders/glTF` (~65KB, sem confirmação de como reconstruir a cadeia de registro só com
+2.0 sem risco de quebrar carregamento de modelo) e o chunk `studentFigure-*.js` (3,68MB!, >99%
+`@babylonjs/core`, incluindo XR/FrameGraph nunca usados) — mas isso vem de acoplamento INTERNO das
+próprias classes `Scene`/`Engine` do Babylon.js, não corrigível só trocando imports deste projeto;
+escopo grande demais pra este laboratório. **Verificado ao vivo**: legendas flutuantes dos números
+de escola renderizando normalmente, escolinha abrindo por proximidade, sem erro de console.
+`npm run test`: 47/47 (sem teste novo — mudança de bundling, não lógica de domínio). `npm run
+build` sem erros. Ver `labs/lab-117-code-splitting-world3d/CONTEXT.md`.
 
-Último concluído: labs/lab-116-corrige-camera-decolagem-foguete/ — pedido do usuário: "a viagem do
+Antes desse: labs/lab-116-corrige-camera-decolagem-foguete/ — pedido do usuário: "a viagem do
 foguete pra ida pros outros planetas ta um pouco bugada a camera, fica uma visao dentro da terra.
 na volta pra terra ta ok." Causa raiz: a câmera do foguete fica "atrás da cauda" (pedido do
 lab-61) nas duas fases de repouso do voo (decolagem e flip final de pouso) — nessas fases o nariz
@@ -655,11 +669,11 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-116-corrige-camera-decolagem-foguete/CONTEXT.md` (último laboratório concluído — corrige
-a câmera do foguete nas duas pontas de repouso do voo, decolagem e flip de pouso, que apontava pra
-dentro do planeta de origem/destino; a frente "Sistema Solar", incluindo a camada de escolinhas +
-nível mínimo do lab-115, continua completa). Itens de backlog em aberto continuam os mesmos de
-antes (todos esperando ação do usuário, sem mudança neste laboratório). **Deploy real (Vercel) pendente**: usuário pediu publicar
+`labs/lab-117-code-splitting-world3d/CONTEXT.md` (último laboratório concluído — reduz o chunk
+`World3D` em 32%/25% gzip trocando o import de `@babylonjs/gui` pro escopado, com 2 achados
+adicionais de bundle documentados e adiados por risco/esforço, ver esse CONTEXT.md se quiser
+continuar essa frente). Itens de backlog em aberto continuam os mesmos de antes (todos esperando
+ação do usuário, sem mudança neste laboratório). **Deploy real (Vercel) pendente**: usuário pediu publicar
 em produção durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized"
 (mesma restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer
 deploy nele — provável limite de segurança da integração, não uma configuração errada). Cloudflare
