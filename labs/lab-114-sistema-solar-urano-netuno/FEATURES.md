@@ -1,8 +1,8 @@
 # Laboratório 114 — Sistema Solar: Urano + Netuno (fecha a frente)
 
-Status: em andamento
+Status: concluído
 Início: 2026-08-29
-Fim: -
+Fim: 2026-08-29
 Commit inicial: bec9fd20505a663a7b346fba01482fd3b8dfec76
 
 ## Objetivo do laboratório
@@ -39,15 +39,23 @@ Vênus, Terra=planeta principal, Marte, Júpiter, Saturno, Urano, Netuno) estar�
 - **Sexto e sétimo pontos no espaço**, diagonais, distantes de tudo que já existe.
 
 ## Funcionalidades planejadas
-- [ ] `URANUS_RADIUS`/`URANUS_CENTER`/`URANUS_LANDING_UP` + `NEPTUNE_RADIUS`/`NEPTUNE_CENTER`/
+- [x] `URANUS_RADIUS`/`URANUS_CENTER`/`URANUS_LANDING_UP` + `NEPTUNE_RADIUS`/`NEPTUNE_CENTER`/
       `NEPTUNE_LANDING_UP` + as duas entradas em `DESTINATION_PLANETS`.
-- [ ] `buildUranusIfNeeded()`: esfera com faixas azul-esverdeadas PÁLIDAS, malha rotacionada 90°
-      (faixas verticais no pouso), moedas escondidas, foguete de volta.
-- [ ] `buildNeptuneIfNeeded()`: esfera com faixas azul PROFUNDO, Grande Mancha Escura (decalque
-      fixo), moedas escondidas, foguete de volta.
-- [ ] `buildPlanetIfNeeded` ganha os `case 'urano'`/`case 'netuno'`.
-- [ ] Verificação ao vivo: seletor mostra os 7 destinos; viagem completa pros dois planetas novos;
-      todos os outros 5 planetas-destino continuam funcionando sem regressão.
+- [x] `buildUranusIfNeeded()`: esfera com faixas azul-esverdeadas PÁLIDAS, malha rotacionada 90°
+      (faixas verticais no pouso), 7 moedas escondidas, foguete de volta.
+- [x] `buildNeptuneIfNeeded()`: esfera com faixas azul PROFUNDO, Grande Mancha Escura (decalque
+      fixo), 7 moedas escondidas, foguete de volta.
+- [x] `buildPlanetIfNeeded` ganha os `case 'urano'`/`case 'netuno'`.
+- [x] Verificação ao vivo (dev server + browser automation): seletor mostra os 7 destinos
+      corretamente (quebra em 3 linhas de grade). Urano: viagem de IDA E VOLTA completa
+      confirmada (ida: avatar a ~15,55 unidades do centro, batendo com raio+avatar; rotação da
+      malha do chão confirmada via `rotationQuaternion` = exatamente
+      `RotationAxis(Vector3.Right(), π/2)`, provando a inclinação de 90° aplicada; volta:
+      avatar de volta a ~13,45 unidades da origem, no planeta principal). Netuno: viagem de ida
+      confirmada (chão, Grande Mancha Escura e 7 moedas presentes) e visualmente por screenshot
+      (azul profundo nítido, foguete de volta e dica funcionando). Sem erro de console em nenhuma
+      etapa. **Com isso, os 8 planetas reais do sistema solar estão completos no jogo** — frente
+      "Sistema Solar" (labs 110-114) encerrada.
 
 ## Fora de escopo (explicitamente adiado)
 - Qualquer planeta anão (Plutão etc.) — fora do escopo original do pedido ("todos os planetas do

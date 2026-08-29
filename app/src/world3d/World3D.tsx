@@ -399,6 +399,19 @@ const SATURN_RADIUS = 17
 const SATURN_CENTER = new Vector3(-58, 0, 58)
 const SATURN_LANDING_UP = new Vector3(0, 1, 0)
 
+// Urano e Netuno (lab-114, ÚLTIMO laboratório da frente Sistema Solar) — os dois gigantes de
+// gelo, feitos juntos por serem incrementos pequenos sobre o padrão já estabelecido. Raio um
+// pouco menor que Saturno (os gigantes de gelo são menores que os gasosos na vida real), os dois
+// próximos um do outro (Netuno um pouco menor que Urano de verdade). Com estes dois, os 8
+// planetas reais do sistema solar ficam completos no jogo (Mercúrio, Vênus, Terra=planeta
+// principal, Marte, Júpiter, Saturno, Urano, Netuno).
+const URANUS_RADIUS = 15
+const URANUS_CENTER = new Vector3(0, 58, -58)
+const URANUS_LANDING_UP = new Vector3(0, 1, 0)
+const NEPTUNE_RADIUS = 14
+const NEPTUNE_CENTER = new Vector3(-58, -58, 0)
+const NEPTUNE_LANDING_UP = new Vector3(0, 1, 0)
+
 // Registro genérico de planetas-destino (lab-110) — substitui o antigo par de variáveis fixas
 // `onSecondPlanet`/`SECOND_PLANET_*` como única fonte de verdade sobre onde cada planeta fica;
 // `SECOND_PLANET_CENTER`/`RADIUS`/`LANDING_UP` continuam existindo tal e qual (usados só dentro do
@@ -452,6 +465,22 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     radius: SATURN_RADIUS,
     center: SATURN_CENTER,
     landingUp: SATURN_LANDING_UP,
+  },
+  urano: {
+    id: 'urano',
+    name: 'Urano',
+    emoji: '🔵',
+    radius: URANUS_RADIUS,
+    center: URANUS_CENTER,
+    landingUp: URANUS_LANDING_UP,
+  },
+  netuno: {
+    id: 'netuno',
+    name: 'Netuno',
+    emoji: '🔷',
+    radius: NEPTUNE_RADIUS,
+    center: NEPTUNE_CENTER,
+    landingUp: NEPTUNE_LANDING_UP,
   },
 }
 const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_PLANETS)
@@ -4859,6 +4888,176 @@ export function World3D({
         returnRockets.set('saturno', { root: returnRocketRoot, hintLabel: returnHint })
       }
 
+      // Urano (lab-114, ÚLTIMO laboratório da frente Sistema Solar) — mesma técnica de faixas dos
+      // outros gigantes, paleta azul-esverdeada pálida. Toque diferenciador: a MALHA do chão é
+      // rotacionada 90° (`rotationQuaternion`, não o `landingUp` — a física continua uma esfera
+      // perfeita, o pouso do foguete não muda) — Urano de verdade gira "deitado" (eixo ~98° de
+      // inclinação, quase paralelo à órbita, ao contrário de todo o resto do sistema solar); com a
+      // malha girada, as faixas (que variam por latitude da textura) aparecem VERTICAIS no ponto
+      // de pouso em vez de horizontais, um jeito simples de sugerir essa característica real sem
+      // reescrever a técnica de textura.
+      function buildUranusIfNeeded() {
+        const uranusRoot = new TransformNode('uranusRoot', scene)
+        uranusRoot.position = URANUS_CENTER
+
+        const bandTexture = new DynamicTexture('uranusBandsTex', { width: 8, height: 512 }, scene, false)
+        const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
+        const bandColors = ['#a8dcd4', '#c0ece4', '#98ccc4', '#b4e0d8', '#8cc0b8']
+        let bandY = 0
+        let bandColorIndex = 0
+        while (bandY < 512) {
+          const bandHeight = 20 + Math.random() * 50
+          bandCtx.fillStyle = bandColors[bandColorIndex % bandColors.length]
+          bandCtx.fillRect(0, bandY, 8, bandHeight)
+          bandY += bandHeight
+          bandColorIndex++
+        }
+        bandTexture.update()
+
+        const groundMat = new PBRMaterial('uranusGroundMat', scene)
+        groundMat.albedoTexture = bandTexture
+        groundMat.roughness = 0.85
+        const groundSphere = MeshBuilder.CreateSphere(
+          'uranusGround',
+          { diameter: URANUS_RADIUS * 2, segments: 48 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = uranusRoot
+        // Eixo "deitado" (ver comentário acima) — só rotaciona a malha/textura, a física por
+        // baixo (`PhysicsAggregate` esférico) não se importa com rotação nenhuma.
+        groundSphere.rotationQuaternion = Quaternion.RotationAxis(Vector3.Right(), Math.PI / 2)
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const URANUS_COIN_COUNT = 7
+        for (let i = 0; i < URANUS_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / URANUS_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.9 + 1.3
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, URANUS_LANDING_UP) > Math.cos(0.3)) continue
+
+          const coinPos = URANUS_CENTER.add(localUp.scale(URANUS_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-urano${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-urano${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = uranusRoot
+        returnRocketRoot.position = URANUS_LANDING_UP.scale(URANUS_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(URANUS_LANDING_UP)
+        const returnHint = new TextBlock('uranoRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('urano', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
+      // Netuno (lab-114, ÚLTIMO laboratório da frente Sistema Solar) — mesma técnica de faixas
+      // dos outros gigantes, paleta azul profundo. Grande Mancha Escura (decalque fixo, análoga à
+      // Grande Mancha Vermelha de Júpiter — Netuno de verdade tem tempestades escuras parecidas).
+      function buildNeptuneIfNeeded() {
+        const neptuneRoot = new TransformNode('neptuneRoot', scene)
+        neptuneRoot.position = NEPTUNE_CENTER
+
+        const bandTexture = new DynamicTexture('neptuneBandsTex', { width: 8, height: 512 }, scene, false)
+        const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
+        const bandColors = ['#1e3a8a', '#2b4fa8', '#16296b', '#3358b0', '#1a3080']
+        let bandY = 0
+        let bandColorIndex = 0
+        while (bandY < 512) {
+          const bandHeight = 18 + Math.random() * 46
+          bandCtx.fillStyle = bandColors[bandColorIndex % bandColors.length]
+          bandCtx.fillRect(0, bandY, 8, bandHeight)
+          bandY += bandHeight
+          bandColorIndex++
+        }
+        bandTexture.update()
+
+        const groundMat = new PBRMaterial('neptuneGroundMat', scene)
+        groundMat.albedoTexture = bandTexture
+        groundMat.roughness = 0.85
+        const groundSphere = MeshBuilder.CreateSphere(
+          'neptuneGround',
+          { diameter: NEPTUNE_RADIUS * 2, segments: 48 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = neptuneRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Grande Mancha Escura — ponto FIXO (não sorteado), mesma técnica da Mancha Vermelha de
+        // Júpiter (lab-112).
+        const spotDir = new Vector3(-0.55, -0.35, 0.76).normalize()
+        const spotMat = new PBRMaterial('neptuneSpotMat', scene)
+        spotMat.albedoColor = new Color3(0.1, 0.14, 0.32)
+        spotMat.roughness = 0.8
+        const spot = MeshBuilder.CreateCylinder(
+          'neptuneGreatDarkSpot',
+          { diameter: 2.6, height: 0.06, tessellation: 24 },
+          scene,
+        )
+        spot.material = spotMat
+        spot.parent = neptuneRoot
+        spot.position = spotDir.scale(NEPTUNE_RADIUS + 0.03)
+        spot.rotationQuaternion = alignmentQuaternion(spotDir)
+        spot.scaling.x = 1.5
+        spot.freezeWorldMatrix()
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const NEPTUNE_COIN_COUNT = 7
+        for (let i = 0; i < NEPTUNE_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / NEPTUNE_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 4.2 + 3.4
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, NEPTUNE_LANDING_UP) > Math.cos(0.3)) continue
+
+          const coinPos = NEPTUNE_CENTER.add(localUp.scale(NEPTUNE_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-netuno${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-netuno${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = neptuneRoot
+        returnRocketRoot.position = NEPTUNE_LANDING_UP.scale(NEPTUNE_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(NEPTUNE_LANDING_UP)
+        const returnHint = new TextBlock('netunoRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('netuno', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
       // Despacha pro construtor certo (lab-110) — cada planeta só existe na cena depois da
       // primeira visita (`builtPlanetIds`), igual já funcionava só com Marte antes deste
       // laboratório generalizar pra qualquer quantidade de planetas-destino.
@@ -4870,6 +5069,8 @@ export function World3D({
         else if (id === 'venus') buildVenusIfNeeded()
         else if (id === 'jupiter') buildJupiterIfNeeded()
         else if (id === 'saturno') buildSaturnIfNeeded()
+        else if (id === 'urano') buildUranusIfNeeded()
+        else if (id === 'netuno') buildNeptuneIfNeeded()
       }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num

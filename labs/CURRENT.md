@@ -1,11 +1,17 @@
 # Laboratório atual
 
-Em andamento: labs/lab-114-sistema-solar-urano-netuno/ — ÚLTIMO laboratório da frente "Sistema
+Último concluído: labs/lab-114-sistema-solar-urano-netuno/ — ÚLTIMO laboratório da frente "Sistema
 Solar": os dois gigantes de gelo, feitos juntos (incrementos pequenos sobre o padrão já
-estabelecido). Urano com faixas rotacionadas 90° na malha (reflete o eixo de rotação real bem
-tombado, ~98°); Netuno com Grande Mancha Escura (decalque fixo, análogo à Mancha Vermelha de
-Júpiter). Com isso, os 8 planetas reais do sistema solar ficam completos no jogo. Ver
-`labs/lab-114-sistema-solar-urano-netuno/FEATURES.md`.
+estabelecido). Urano com faixas rotacionadas 90° na MALHA do chão (`Quaternion.RotationAxis`,
+nunca no `landingUp` — física/voo do foguete intocados), reflete o eixo de rotação real bem
+tombado (~98°); Netuno com Grande Mancha Escura (decalque fixo, análogo à Mancha Vermelha de
+Júpiter). **Com isso, os 8 planetas reais do sistema solar estão completos no jogo** — frente
+"Sistema Solar" (labs 110-114) encerrada. **Verificado ao vivo**: seletor mostra os 7 destinos
+(3 linhas de grade); Urano com viagem de IDA E VOLTA completa confirmada (posição + rotação da
+malha conferida via `rotationQuaternion`, batendo exatamente com a rotação de 90° esperada);
+Netuno com viagem de ida confirmada (chão/Mancha/moedas presentes, azul profundo nítido no
+screenshot). Sem erro de console. `npm run test`: 44/44. `npm run build` sem erros. Ver
+`labs/lab-114-sistema-solar-urano-netuno/CONTEXT.md`.
 
 Antes desse: labs/lab-113-sistema-solar-saturno/ — quarto planeta novo da frente "Sistema
 Solar", segundo gigante gasoso. Reaproveita a técnica de faixas do lab-112 (Júpiter, paleta mais
@@ -586,17 +592,18 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-113-sistema-solar-saturno/CONTEXT.md` (último laboratório concluído — Mercúrio/Vênus/
-Júpiter/Saturno prontos; próximo e último passo da frente é Urano+Netuno juntos, ver "O que o
-próximo laboratório deve desenvolver" nesse CONTEXT.md — com isso os 8 planetas reais do sistema
-solar estariam completos no jogo). **Deploy real (Vercel) pendente**: usuário pediu publicar em produção durante o lab-113 — deploy
-direto no Vercel (domínio real) falhou com "Not authorized" (mesma restrição de CLI do lab-104:
-sessão consegue LER o projeto Vercel, não consegue fazer deploy nele — provável limite de
-segurança da integração, não uma configuração errada). Cloudflare Pages paralelo (lab-109,
-https://missao-aprender-jogo.pages.dev) foi atualizado DUAS vezes nesta sessão e está com tudo até
-Saturno — funciona como forma imediata do usuário testar. O deploy real continua exigindo o
-usuário rodar `npx vercel --prod --yes` na própria máquina, ou configurar os secrets do lab-104 e
-mesclar o PR `#8`. Lembrar também que
+`labs/lab-114-sistema-solar-urano-netuno/CONTEXT.md` (último laboratório concluído — a frente
+"Sistema Solar" está COMPLETA, os 8 planetas reais + arquitetura de seleção de destino, ver "O que
+o próximo laboratório deve desenvolver" nesse CONTEXT.md pra itens de backlog em aberto, todos
+esperando ação do usuário). **Deploy real (Vercel) pendente**: usuário pediu publicar em produção
+durante o lab-113 — deploy direto no Vercel (domínio real) falhou com "Not authorized" (mesma
+restrição de CLI do lab-104: sessão consegue LER o projeto Vercel, não consegue fazer deploy nele
+— provável limite de segurança da integração, não uma configuração errada). Cloudflare Pages
+paralelo (lab-109, https://missao-aprender-jogo.pages.dev) foi atualizado até Saturno (ainda NÃO
+inclui Urano/Netuno deste laboratório) — considerar publicar de novo lá
+(`cd app && npx wrangler pages deploy dist --project-name=missao-aprender-jogo --branch=main`) ou
+esperar o usuário decidir sobre o deploy real (`npx vercel --prod --yes` na própria máquina, ou
+secrets do lab-104 + merge do PR `#8`). Lembrar também que
 `labs/lab-104-deploy-automatico-ci/CONTEXT.md` continua com pendências do
 usuário: secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` e merge do PR `#8` ainda não feitos. Se for
 mexer em multiplayer/escala,
