@@ -1,6 +1,24 @@
 # Laboratório atual
 
-Último concluído: labs/lab-127-escolinhas-planetas-expandidas/ — pedido do usuário (backlog
+Último concluído: labs/lab-128-pote-moedas-marte/ — item pequeno do backlog discutido em chat: ao
+vencer todos os inimigos de Marte, um pote de moedas aparece na Estação Alienígena (bônus de 10
+moedas de uma vez, além do chapéu já existente e da moeda por inimigo nocauteado). Pote sempre
+construído junto da estação (0,75 rad de distância da direção dela, fora da malha física, `UFO_
+RADIUS=3,2` ocupa só ~0,53 rad), mas invisível até Marte ser limpo — revelado no mesmo gatilho que
+já concedia o chapéu (lab-94, reaproveitado sem mudança). Gatilho de coleta PRÓPRIO (não reaproveita
+o array genérico `coins`, que só suporta "vale 1 moeda sempre"). **Achado real na verificação ao
+vivo**: a primeira tentativa de pousar em Marte pareceu funcionar pela câmera, mas o corpo físico
+do avatar (`avatarCollider`) e o visual (`studentFigure.root`) ficaram DESSINCRONIZADOS — segurar
+W por mais tempo resolveu (`landRocket()` não tinha disparado ainda). Lição registrada em
+`CONTEXT.md` pra futuras verificações com viagem de foguete: sempre conferir os dois contra a mesma
+posição antes de confiar que o pouso terminou. Verificado ao vivo: pote revelado e coletado por
+proximidade real (+10 moedas confirmado), sem crédito duplo, renderiza sem colidir com a estação,
+sem erro de console. Combate de verdade (matar os 6 inimigos) não testado ao vivo — roteiro longo
+demais (precisa buscar espada/arma no planeta principal antes); confiança vem do gatilho "todos
+mortos" já comprovado desde o lab-94, não modificado aqui. `npm run test`: 52/52. `npm run build`
+sem erros. Ver `labs/lab-128-pote-moedas-marte/CONTEXT.md`.
+
+Antes desse: labs/lab-127-escolinhas-planetas-expandidas/ — pedido do usuário (backlog
 discutido em chat): expandiu as escolinhas dos 6 planetas-destino (Mercúrio/Vênus/Júpiter/Saturno/
 Urano/Netuno) de 1 pergunta cada (lab-115) pra 6 cada (36 no total, 30 novas de astronomia real),
 igual ao padrão de várias escolinhas do planeta principal. `planetQuests.ts` virou
@@ -897,15 +915,18 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-127-escolinhas-planetas-expandidas/CONTEXT.md` (último laboratório concluído — os 6
-planetas-destino do Sistema Solar agora têm 6 escolinhas de astronomia cada, em vez de 1; leia
-também o "Achado só na verificação ao vivo" nesse CONTEXT.md — viagem de foguete precisa de input
-de teclado real pra progredir, não é automática, útil saber pra testar qualquer coisa em outro
-planeta no futuro). Vem de um backlog maior discutido em chat com o usuário, ainda não formalizado
-em labs: mobília desbloqueada por planeta conquistado, persistência de "Minha Casa" pra assinante
-(arquitetural, G6 do doc de escala), pote de moedas ao vencer os ETs em Marte, cronômetro de
-sobrevivência em Mercúrio/Netuno, e outras ideias de engajamento (login diário, baús, cartão-postal
-colecionável). Sem prioridade única — perguntar ao usuário antes de escolher. Antes desse,
+`labs/lab-128-pote-moedas-marte/CONTEXT.md` (último laboratório concluído — pote de 10 moedas
+aparece na Estação Alienígena de Marte ao vencer todos os inimigos; leia também o "Achado real na
+verificação ao vivo" nesse CONTEXT.md — o corpo físico do avatar e o visual podem ficar
+DESSINCRONIZADOS numa viagem de foguete se não segurar W tempo suficiente pro pouso terminar de
+verdade; sempre conferir `avatarCollider.position` contra `window.__playerFigure.root.
+getAbsolutePosition()` antes de confiar num pouso em testes futuros). Vem de um backlog maior
+discutido em chat com o usuário, ainda não formalizado em labs: mobília desbloqueada por planeta
+conquistado, persistência de "Minha Casa" pra assinante (arquitetural, G6 do doc de escala),
+cronômetro de sobrevivência em Mercúrio/Netuno, e outras ideias de engajamento (login diário,
+baús, cartão-postal colecionável). Sem prioridade única — perguntar ao usuário antes de escolher.
+Antes desse, `labs/lab-127-escolinhas-planetas-expandidas/CONTEXT.md` (os 6 planetas-destino do
+Sistema Solar agora têm 6 escolinhas de astronomia cada, em vez de 1). Antes desse,
 `labs/lab-126-moeda-bonus-assinante/CONTEXT.md` (assinantes ganham 1,5× nas moedas de missão,
 nunca XP; **com isso, o backlog original de `prompt.md` §6 é P0/P1/P2 completo**). Antes desse,
 `labs/lab-125-code-splitting-studentfigure/CONTEXT.md` (resultado

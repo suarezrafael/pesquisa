@@ -519,6 +519,11 @@ const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_P
 const MARS_ENEMY_COUNT_LOW_END = 3
 const MARS_ENEMY_COUNT = 6
 const MARS_MAX_HEALTH = 100
+// lab-128 (pedido do usuário: "em marte ao vencer os ets deve aparecer um pote de moedas na base
+// de ets") — bônus de uma vez só, além da moeda que cada inimigo já dá ao ser nocauteado
+// (`onCollectCoinRef.current()` por kill, ver `handleInteractPress`).
+const MARS_COIN_POT_REWARD = 10
+const MARS_COIN_POT_TRIGGER_DISTANCE = 1.4
 const MARS_ENEMY_AGGRO_RADIUS = 6
 const MARS_ENEMY_ATTACK_RADIUS = 1.3
 const MARS_ENEMY_ATTACK_INTERVAL = 1.3
@@ -2298,6 +2303,15 @@ export function World3D({
     // Inimigos de Marte (lab-60) — populado dentro de `buildMarsIfNeeded`, lido/mutado pelo laço
     // de IA/combate por quadro (só roda quando `currentPlanetId === 'marte'`).
     const marsEnemies: MarsEnemy[] = []
+    // Pote de moedas na base alienígena (lab-128, pedido do usuário: "em marte ao vencer os ets
+    // deve aparecer um pote de moedas na base de ets") — construído sempre (junto da estação),
+    // mas só fica visível/coletável depois de Marte limpo (mesmo espírito de "construir sempre,
+    // mostrar condicionalmente" já usado noutros lugares deste arquivo). `worldPos`/`pivot`
+    // preenchidos por `buildMarsIfNeeded`.
+    let marsCoinPotPivot: TransformNode | null = null
+    let marsCoinPotLabelRef: TextBlock | null = null
+    let marsCoinPotWorldPos = Vector3.Zero()
+    let marsCoinPotCollected = false
     if (import.meta.env.DEV) {
       ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
     }
@@ -2524,6 +2538,11 @@ export function World3D({
             // lab-94: nova visita, nova chance de o jogador limpar o planeta de novo — a flag
             // local só evita chamadas repetidas dentro da MESMA visita, não deve sobreviver a esta.
             marsClearedThisVisit = false
+            // lab-128: pote de moedas também reseta a cada nova visita — mesmo espírito de
+            // "voltar de novo por escolha própria depois de já ter limpado o planeta" acima.
+            marsCoinPotCollected = false
+            marsCoinPotPivot?.setEnabled(false)
+            if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = false
           }
         } else {
           currentPlanetId = null
@@ -2809,6 +2828,10 @@ export function World3D({
               if (!marsClearedThisVisit && marsEnemies.every((e) => !e.alive)) {
                 marsClearedThisVisit = true
                 onUnlockMarsRewardRef.current()
+                // lab-128: revela o pote de moedas na base alienígena — construído desde o
+                // início (ver `buildMarsIfNeeded`), só escondido até este momento.
+                marsCoinPotPivot?.setEnabled(true)
+                if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = true
               }
             }
             return
@@ -4602,6 +4625,71 @@ export function World3D({
         guiTexture.addControl(ufoLabel)
         ufoLabel.linkWithMesh(ufoRoot)
         ufoLabel.linkOffsetY = -130
+
+        // Pote de moedas da base alienígena (lab-128, pedido do usuário: "em marte ao vencer os
+        // ets deve aparecer um pote de moedas na base de ets") — perto da estação, mas deslocado
+        // 0,75 rad da direção exata dela (UFO_RADIUS=3,2 num planeta de raio 6 ocupa só ~0,53 rad,
+        // então 0,75 já fica fora da malha física da estação, mas ainda claramente "na base").
+        // Construído sempre (barato: 6 malhas pequenas), mas invisível até `marsClearedThisVisit`
+        // — mesmo espírito de "construir sempre, mostrar condicionalmente" já usado em outros
+        // lugares deste arquivo.
+        const potAxis = Vector3.Cross(MARS_UFO_DIR, Vector3.Up()).normalize()
+        const potDir = Vector3.TransformCoordinates(MARS_UFO_DIR, Matrix.RotationAxis(potAxis, 0.75)).normalize()
+        const potPos = potDir.scale(SECOND_PLANET_RADIUS)
+
+        const potPivot = new TransformNode('marsCoinPotPivot', scene)
+        potPivot.position = potPos
+        potPivot.rotationQuaternion = alignmentQuaternion(potDir)
+        potPivot.parent = secondPlanetRoot
+        potPivot.setEnabled(false)
+
+        const potMat = new PBRMaterial('marsCoinPotMat', scene)
+        potMat.albedoColor = new Color3(0.42, 0.26, 0.16)
+        potMat.roughness = 0.85
+        const potBowl = MeshBuilder.CreateCylinder(
+          'marsCoinPotBowl',
+          { height: 0.32, diameterTop: 0.5, diameterBottom: 0.32, tessellation: 16 },
+          scene,
+        )
+        potBowl.position.y = 0.16
+        potBowl.material = potMat
+        potBowl.parent = potPivot
+        shadowGenerator.addShadowCaster(potBowl)
+
+        const potCoinMat = new PBRMaterial('marsCoinPotCoinMat', scene)
+        potCoinMat.albedoColor = new Color3(0.95, 0.78, 0.15)
+        potCoinMat.emissiveColor = new Color3(0.5, 0.38, 0.05)
+        potCoinMat.roughness = 0.25
+        potCoinMat.metallic = 0.6
+        for (let i = 0; i < 5; i++) {
+          const coinAngle = (i / 5) * Math.PI * 2
+          const potCoin = MeshBuilder.CreateCylinder(`marsCoinPotCoin${i}`, { height: 0.05, diameter: 0.22 }, scene)
+          potCoin.position = new Vector3(Math.cos(coinAngle) * 0.12, 0.32 + i * 0.015, Math.sin(coinAngle) * 0.12)
+          potCoin.rotation.x = 0.5 + (i % 2) * 0.3
+          potCoin.rotation.z = coinAngle
+          potCoin.material = potCoinMat
+          potCoin.parent = potPivot
+          shadowGenerator.addShadowCaster(potCoin)
+        }
+
+        const potLabel = new TextBlock('marsCoinPotLabel', '🪙 Pote de moedas!')
+        potLabel.color = 'white'
+        potLabel.fontSize = mobileFontSize(20)
+        potLabel.fontWeight = 'bold'
+        potLabel.outlineWidth = 4
+        potLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        // `linkWithMesh` projeta pela posição do mesh independente de `setEnabled` — sem
+        // `isVisible = false` aqui, o texto ficaria flutuando sozinho no espaço antes de Marte
+        // ser limpo (achado ao revisar o código, não só suposição: `Control.linkWithMesh` só
+        // depende da matriz de mundo, nunca do estado de habilitado do mesh).
+        potLabel.isVisible = false
+        guiTexture.addControl(potLabel)
+        potLabel.linkWithMesh(potBowl)
+        potLabel.linkOffsetY = -60
+
+        marsCoinPotPivot = potPivot
+        marsCoinPotWorldPos = secondPlanetRoot.position.add(potPos)
+        marsCoinPotLabelRef = potLabel
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -8150,6 +8238,21 @@ export function World3D({
                 coin.collected = true
                 coin.pivot.setEnabled(false)
                 onCollectCoinRef.current()
+                playCoinCollect()
+              }
+            }
+
+            // Pote de moedas na base alienígena de Marte (lab-128) — `marsCoinPotPivot` existe
+            // desde a construção do planeta, mas só fica `isEnabled()` depois de Marte limpo
+            // nesta visita (ver o bloco que chama `setEnabled(true)`) — checar isso aqui evita
+            // coletar o pote ANTES de revelado, só por passar perto de onde ele vai aparecer.
+            // `marsCoinPotCollected` evita coletar de novo sem sair/voltar.
+            if (marsCoinPotPivot && marsCoinPotPivot.isEnabled() && !marsCoinPotCollected) {
+              if (Vector3.Distance(pos, marsCoinPotWorldPos) < MARS_COIN_POT_TRIGGER_DISTANCE) {
+                marsCoinPotCollected = true
+                marsCoinPotPivot.setEnabled(false)
+                if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = false
+                for (let i = 0; i < MARS_COIN_POT_REWARD; i++) onCollectCoinRef.current()
                 playCoinCollect()
               }
             }
