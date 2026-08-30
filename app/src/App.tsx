@@ -94,6 +94,7 @@ function GameApp() {
     unlockFurniture,
     unlockMarsReward,
     foundTreasureChest,
+    resetStreak,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -104,6 +105,8 @@ function GameApp() {
     awardedXp: number
     awardedCoins: number
     unlockedFurnitureItem?: FurnitureOption
+    currentStreak: number
+    streakBonusCoins: number
   } | null>(null)
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
   const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
@@ -179,8 +182,19 @@ function GameApp() {
     if (!activeQuest) return
     // lab-126: bônus de moeda de assinante (`progression.ts`) — `entitlement?.active` já existe
     // aqui via `useEntitlement()`, só precisa ser repassado.
-    const { newBadges, awardedXp, awardedCoins } = completeQuest(activeQuest, entitlement?.active)
-    setReward({ quest: activeQuest, newBadges, awardedXp, awardedCoins })
+    const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins } = completeQuest(
+      activeQuest,
+      entitlement?.active,
+    )
+    setReward({ quest: activeQuest, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins })
+    setActiveQuest(null)
+  }
+
+  // Combo de respostas certas seguidas (lab-132) — fechar (×) uma missão que AINDA NÃO foi
+  // respondida quebra a sequência; reabrir uma já completada (só revisão, sem recompensa nenhuma)
+  // e fechar de novo não deveria punir o jogador, por isso a checagem contra `completedQuestIds`.
+  function handleCloseQuest() {
+    if (activeQuest && !progress.completedQuestIds.includes(activeQuest.id)) resetStreak()
     setActiveQuest(null)
   }
 
@@ -213,11 +227,24 @@ function GameApp() {
   // `progression.ts`), então mostra o mesmo `RewardToast` das missões normais.
   function handleCompletePlanetQuest() {
     if (!activePlanetQuest) return
-    const { newBadges, awardedXp, awardedCoins, unlockedFurnitureItem } = completePlanetQuest(
-      activePlanetQuest,
-      entitlement?.active,
-    )
-    setReward({ quest: activePlanetQuest, newBadges, awardedXp, awardedCoins, unlockedFurnitureItem })
+    const { newBadges, awardedXp, awardedCoins, unlockedFurnitureItem, currentStreak, streakBonusCoins } =
+      completePlanetQuest(activePlanetQuest, entitlement?.active)
+    setReward({
+      quest: activePlanetQuest,
+      newBadges,
+      awardedXp,
+      awardedCoins,
+      unlockedFurnitureItem,
+      currentStreak,
+      streakBonusCoins,
+    })
+    setActivePlanetQuest(null)
+  }
+
+  // Combo de respostas certas seguidas (lab-132) — mesmo raciocínio de `handleCloseQuest` acima,
+  // só que contra `completedPlanetQuestIds`.
+  function handleClosePlanetQuest() {
+    if (activePlanetQuest && !progress.completedPlanetQuestIds.includes(activePlanetQuest.id)) resetStreak()
     setActivePlanetQuest(null)
   }
 
@@ -267,11 +294,7 @@ function GameApp() {
       </Suspense>
 
       {activeQuest && (
-        <QuestModal
-          quest={activeQuest}
-          onCorrect={handleQuestCorrect}
-          onClose={() => setActiveQuest(null)}
-        />
+        <QuestModal quest={activeQuest} onCorrect={handleQuestCorrect} onClose={handleCloseQuest} />
       )}
 
       {activeSurpriseQuiz && (
@@ -286,7 +309,7 @@ function GameApp() {
         <QuestModal
           quest={activePlanetQuest}
           onCorrect={handleCompletePlanetQuest}
-          onClose={() => setActivePlanetQuest(null)}
+          onClose={handleClosePlanetQuest}
         />
       )}
 
@@ -297,6 +320,8 @@ function GameApp() {
           newBadges={reward.newBadges}
           entitlementActive={entitlement?.active ?? false}
           unlockedFurnitureItem={reward.unlockedFurnitureItem}
+          currentStreak={reward.currentStreak}
+          streakBonusCoins={reward.streakBonusCoins}
           onContinue={() => setReward(null)}
         />
       )}

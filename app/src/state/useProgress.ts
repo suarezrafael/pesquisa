@@ -18,6 +18,7 @@ import {
   unlockFurniture as applyFurnitureUnlock,
   unlockMarsReward as applyMarsRewardUnlock,
   applyTreasureChestFound,
+  applyStreakReset,
 } from './progression'
 
 export function useProgress() {
@@ -152,6 +153,17 @@ export function useProgress() {
     return result.granted
   }
 
+  // Combo de respostas certas seguidas (lab-132) — chamado por `App.tsx` ao fechar (×) uma missão
+  // ainda não completada; `applyStreakReset` já é idempotente sozinho (não faz nada se o combo já
+  // estava zerado).
+  function resetStreak(): void {
+    setProgress((prev) => {
+      const next = applyStreakReset(prev)
+      saveProgress(next)
+      return next
+    })
+  }
+
   return {
     progress,
     completeQuest,
@@ -168,5 +180,6 @@ export function useProgress() {
     unlockFurniture,
     unlockMarsReward,
     foundTreasureChest,
+    resetStreak,
   }
 }

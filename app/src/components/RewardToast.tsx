@@ -13,6 +13,12 @@ interface RewardToastProps {
   // concedeu o item de mobília exclusivo daquele planeta — anunciado na mesma tela da recompensa
   // da pergunta, sem precisar de um segundo modal.
   unlockedFurnitureItem?: FurnitureOption
+  // Combo de respostas certas seguidas (lab-132) — `streakBonusCoins` só é maior que 0 quando esta
+  // resposta atingiu um marco novo (`streakBonusFor`, progression.ts); diferente do bônus de
+  // evento/assinante (já multiplicado dentro de `awardedCoins` acima), esta moeda é ADICIONAL e
+  // não aparece na linha principal — por isso o valor exato precisa estar aqui, não só um aviso.
+  currentStreak: number
+  streakBonusCoins: number
   onContinue: () => void
 }
 
@@ -26,6 +32,8 @@ export function RewardToast({
   newBadges,
   entitlementActive,
   unlockedFurnitureItem,
+  currentStreak,
+  streakBonusCoins,
   onContinue,
 }: RewardToastProps) {
   const event = getCurrentWeeklyEvent()
@@ -58,6 +66,11 @@ export function RewardToast({
           <p className="reward-bonus-line">
             🎉 Planeta conquistado! Novo item pra Minha Casa: {unlockedFurnitureItem.emoji}{' '}
             {unlockedFurnitureItem.name}!
+          </p>
+        )}
+        {streakBonusCoins > 0 && (
+          <p className="reward-bonus-line">
+            🔥 Combo de {currentStreak} acertos seguidos! +{streakBonusCoins} moedas bônus!
           </p>
         )}
         {newBadges.length > 0 && (

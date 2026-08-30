@@ -151,6 +151,8 @@ export const emptyProgress: Progress = {
   completedPlanetQuestIds: [],
   // Baús de tesouro escondidos (lab-131) — ver comentário em `types.ts`.
   foundTreasureChestIds: [],
+  // Combo de respostas certas seguidas (lab-132) — ver comentário em `types.ts`.
+  currentStreak: 0,
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

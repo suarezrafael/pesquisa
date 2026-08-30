@@ -59,6 +59,32 @@ export interface CompletionResult {
   // escolinhas de um planeta pela primeira vez — a UI (`RewardToast`) usa isto pra anunciar o
   // item novo junto da recompensa da própria pergunta, sem precisar de um segundo toast.
   unlockedFurnitureItem?: FurnitureOption
+  // Combo de respostas certas seguidas (lab-132) — `currentStreak` é sempre o valor ATUAL depois
+  // desta resposta (mesmo em completion repetida, onde fica igual ao `progress` recebido, sem
+  // incrementar); `streakBonusCoins` só é maior que 0 quando esta resposta atinge um marco de
+  // sequência novo (`streakBonusFor`).
+  currentStreak: number
+  streakBonusCoins: number
+}
+
+// Combo de respostas certas seguidas (lab-132, pedido do usuário: "combo de respostas certas
+// seguidas") — bônus de moeda crescente por marco de sequência. Só incrementado em completions
+// GENUÍNAS de missão real (`applyQuestCompletion`/`applyPlanetQuestCompletion`, nunca quiz
+// surpresa: `handleSurpriseQuizCorrect` não é idempotente por id, seria fácil de farmar marcos
+// respondendo o mesmo quiz em loop) — a própria checagem de idempotência de cada função (retorna
+// cedo sem creditar nada numa missão já completada) já impede farmar reabrindo uma missão
+// respondida. Zera em `applyStreakReset`, chamado por `App.tsx` ao fechar (×) uma missão AINDA NÃO
+// completada — "seguidas" é o que dá nome ao recurso, desistir no meio quebra a sequência.
+function streakBonusFor(streak: number): number {
+  if (streak === 3) return 5
+  if (streak === 5) return 10
+  if (streak >= 10 && streak % 10 === 0) return 20
+  return 0
+}
+
+export function applyStreakReset(progress: Progress): Progress {
+  if (progress.currentStreak === 0) return progress
+  return { ...progress, currentStreak: 0 }
 }
 
 // lab-126 (`prompt.md` §6, P2: "moeda bônus por assinatura") — só MOEDA, nunca XP: moeda aqui só
@@ -76,7 +102,14 @@ export function applyQuestCompletion(
   entitlementActive = false,
 ): CompletionResult {
   if (progress.completedQuestIds.includes(quest.id)) {
-    return { progress, newBadges: [], awardedXp: 0, awardedCoins: 0 }
+    return {
+      progress,
+      newBadges: [],
+      awardedXp: 0,
+      awardedCoins: 0,
+      currentStreak: progress.currentStreak,
+      streakBonusCoins: 0,
+    }
   }
   const awardedXp = Math.round(quest.xpReward * event.xpMultiplier)
   // Os dois multiplicadores se EMPILHAM (evento semanal × bônus de assinante), não se substituem —
@@ -88,14 +121,17 @@ export function applyQuestCompletion(
   const completedQuestIds = [...progress.completedQuestIds, quest.id]
   const badges = badgesEarnedAt(completedQuestIds.length)
   const newBadges = badges.filter((b) => !progress.badges.includes(b))
+  const currentStreak = progress.currentStreak + 1
+  const streakBonusCoins = streakBonusFor(currentStreak)
   const next: Progress = {
     ...progress,
     completedQuestIds,
     xp: progress.xp + awardedXp,
-    coins: progress.coins + awardedCoins,
+    coins: progress.coins + awardedCoins + streakBonusCoins,
     badges,
+    currentStreak,
   }
-  return { progress: next, newBadges, awardedXp, awardedCoins }
+  return { progress: next, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins }
 }
 
 // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo formato de
@@ -111,18 +147,28 @@ export function applyPlanetQuestCompletion(
   entitlementActive = false,
 ): CompletionResult {
   if (progress.completedPlanetQuestIds.includes(quest.id)) {
-    return { progress, newBadges: [], awardedXp: 0, awardedCoins: 0 }
+    return {
+      progress,
+      newBadges: [],
+      awardedXp: 0,
+      awardedCoins: 0,
+      currentStreak: progress.currentStreak,
+      streakBonusCoins: 0,
+    }
   }
   const awardedXp = Math.round(quest.xpReward * event.xpMultiplier)
   const awardedCoins = Math.round(
     quest.coinReward * event.coinMultiplier * (entitlementActive ? SUBSCRIBER_COIN_MULTIPLIER : 1),
   )
   const completedPlanetQuestIds = [...progress.completedPlanetQuestIds, quest.id]
+  const currentStreak = progress.currentStreak + 1
+  const streakBonusCoins = streakBonusFor(currentStreak)
   let next: Progress = {
     ...progress,
     completedPlanetQuestIds,
     xp: progress.xp + awardedXp,
-    coins: progress.coins + awardedCoins,
+    coins: progress.coins + awardedCoins + streakBonusCoins,
+    currentStreak,
   }
   // lab-130: só verifica/concede quando esta resposta ACABOU de completar o planeta (a checagem
   // teria dado o mesmo resultado antes de responder, se o planeta já estivesse completo) — evita
@@ -136,7 +182,7 @@ export function applyPlanetQuestCompletion(
       unlockedFurnitureItem = reward.item
     }
   }
-  return { progress: next, newBadges: [], awardedXp, awardedCoins, unlockedFurnitureItem }
+  return { progress: next, newBadges: [], awardedXp, awardedCoins, unlockedFurnitureItem, currentStreak, streakBonusCoins }
 }
 
 export function isQuestUnlocked(progress: Progress, questIndex: number): boolean {

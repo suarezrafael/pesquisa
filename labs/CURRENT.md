@@ -1,6 +1,25 @@
 # Laboratório atual
 
-Último concluído: labs/lab-131-baus-tesouro-escondidos/ — item do backlog de engajamento
+Último concluído: labs/lab-132-combo-respostas-seguidas/ — item do backlog de engajamento
+discutido em chat ("combo de respostas certas seguidas"), escolhido entre 4 opções via
+`AskUserQuestion`. Responder missões corretamente uma atrás da outra — sem fechar (desistir de)
+nenhuma no meio — rende moeda bônus crescente em marcos: 3º acerto seguido = +5, 5º = +10, 10º e a
+cada 10 depois = +20. **Achado de investigação**: o jogo nunca deixa uma pergunta ser respondida
+errada de forma definitiva (`QuestModal.tsx` só mostra "Quase!..." e deixa tentar de novo, sem
+avisar `App.tsx`) — "seguidas" teve que ser redefinido como "sem DESISTIR" (fechar o × antes de
+acertar quebra a sequência), o sinal real que o código já tinha disponível. `Progress.
+currentStreak` novo; `streakBonusFor`/`applyStreakReset` (progression.ts) mesmo formato idempotente
+de `unlockMarsReward`; combo COMPARTILHADO entre missão principal e escolinha de planeta (um só
+contador); Quiz Surpresa fica de fora de propósito (não é idempotente por id, farmar seria fácil).
+Bônus anunciado como mais uma linha condicional no `RewardToast` já existente. 6 testes novos
+(64→70). **Verificação ao vivo COMPLETA** (diferente dos 3 labs anteriores — tudo aconteceu no
+planeta principal, sem o risco de `__debugTeleport` fora dele): 3 escolinhas reais respondidas em
+sequência, toast mostrou "🔥 Combo de 3 acertos seguidos! +5 moedas bônus!" com a moeda batendo
+exatamente; escolinha aberta e fechada sem responder confirmada zerando `currentStreak` no
+`localStorage` de verdade. `npm run build` sem erros. Ver
+`labs/lab-132-combo-respostas-seguidas/CONTEXT.md`.
+
+Antes desse: labs/lab-131-baus-tesouro-escondidos/ — item do backlog de engajamento
 discutido em chat ("baús de tesouro escondidos"), escolhido entre 4 opções via `AskUserQuestion`.
 Um baú de tesouro escondido por planeta-destino sem combate (Mercúrio/Vênus/Júpiter/Saturno/Urano/
 Netuno — Marte fica de fora, já tem o pote de moedas do lab-128), achado por proximidade real

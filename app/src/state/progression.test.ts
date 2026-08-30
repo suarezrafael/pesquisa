@@ -8,6 +8,7 @@ import {
   applyCoinCollected,
   applyPlanetQuestCompletion,
   applyQuestCompletion,
+  applyStreakReset,
   applyTreasureChestFound,
   badgesEarnedAt,
   getLevel,
@@ -265,6 +266,65 @@ describe('unlockFurniture — itens de recompensa de planeta não são compráve
     expect(next).toBe(comMoedas)
     expect(next.unlockedFurnitureIds).not.toContain('meteorito_mercurio')
     expect(next.coins).toBe(9999)
+  })
+})
+
+describe('combo de respostas certas seguidas (lab-132)', () => {
+  it('não credita bônus antes do 3º acerto seguido', () => {
+    let progress = emptyProgress
+    for (let i = 0; i < 2; i++) {
+      const quest = makeQuest({ id: `combo-teste-${i}` })
+      const result = applyQuestCompletion(progress, quest, NO_BONUS_EVENT)
+      expect(result.streakBonusCoins).toBe(0)
+      progress = result.progress
+    }
+    expect(progress.currentStreak).toBe(2)
+  })
+
+  it('credita o bônus certo no 3º, 5º e 10º acerto seguido', () => {
+    let progress = emptyProgress
+    let lastResult: ReturnType<typeof applyQuestCompletion> | null = null
+    for (let i = 0; i < 10; i++) {
+      const quest = makeQuest({ id: `combo-teste-${i}` })
+      lastResult = applyQuestCompletion(progress, quest, NO_BONUS_EVENT)
+      progress = lastResult.progress
+      if (i === 2) expect(lastResult.streakBonusCoins).toBe(5) // 3º acerto (índice 2)
+      if (i === 4) expect(lastResult.streakBonusCoins).toBe(10) // 5º acerto
+      if (i === 9) expect(lastResult.streakBonusCoins).toBe(20) // 10º acerto
+    }
+    expect(progress.currentStreak).toBe(10)
+  })
+
+  it('não incrementa o combo nem credita bônus de novo ao completar a mesma missão duas vezes', () => {
+    const quest = makeQuest({ id: 'combo-repetido' })
+    const first = applyQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT)
+    const second = applyQuestCompletion(first.progress, quest, NO_BONUS_EVENT)
+    expect(second.currentStreak).toBe(first.currentStreak)
+    expect(second.streakBonusCoins).toBe(0)
+    expect(second.progress).toBe(first.progress)
+  })
+
+  it('o combo é COMPARTILHADO entre missão principal e escolinha de planeta', () => {
+    const quest1 = makeQuest({ id: 'combo-principal-1' })
+    const quest2 = makeQuest({ id: 'combo-principal-2' })
+    const planetQuest = makeQuest({ id: 'planet-combo-teste' })
+    let progress = applyQuestCompletion(emptyProgress, quest1, NO_BONUS_EVENT).progress
+    progress = applyQuestCompletion(progress, quest2, NO_BONUS_EVENT).progress
+    const third = applyPlanetQuestCompletion(progress, planetQuest, NO_BONUS_EVENT)
+    expect(third.currentStreak).toBe(3)
+    expect(third.streakBonusCoins).toBe(5)
+  })
+
+  it('applyStreakReset zera o combo', () => {
+    const quest = makeQuest({ id: 'combo-antes-do-reset' })
+    const withStreak = applyQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT).progress
+    expect(withStreak.currentStreak).toBe(1)
+    const reset = applyStreakReset(withStreak)
+    expect(reset.currentStreak).toBe(0)
+  })
+
+  it('applyStreakReset é idempotente — não muda a referência se já estava zerado', () => {
+    expect(applyStreakReset(emptyProgress)).toBe(emptyProgress)
   })
 })
 

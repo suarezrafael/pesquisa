@@ -69,4 +69,10 @@ export interface Progress {
   // que resetam a cada sessão, e do pote de moedas de Marte, que reseta a cada visita): é uma
   // descoberta rara e permanente, não um bônus repetível por visita.
   foundTreasureChestIds: string[]
+  // Combo de respostas certas seguidas (lab-132, pedido do usuário: "combo de respostas certas
+  // seguidas") — cresce a cada resposta certa GENUÍNA de missão real (principal ou de planeta;
+  // nunca quiz surpresa, que não é idempotente por id e seria fácil de farmar), zera ao fechar
+  // uma missão ainda não respondida (`applyStreakReset`, `state/progression.ts`). Concede moeda
+  // bônus em marcos (`streakBonusFor`).
+  currentStreak: number
 }
