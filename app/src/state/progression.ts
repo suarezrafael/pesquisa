@@ -65,6 +65,12 @@ export interface CompletionResult {
   // sequência novo (`streakBonusFor`).
   currentStreak: number
   streakBonusCoins: number
+  // Bônus por limpar um planeta inteiro (lab-133) — mesmo espírito de `unlockedFurnitureItem`:
+  // só populado por `applyPlanetQuestCompletion`, e só na resposta que completa as 6 escolinhas de
+  // um planeta pela primeira vez. `applyQuestCompletion` (missões do planeta principal) nunca seta
+  // estes campos.
+  planetClearBonusXp?: number
+  planetClearBonusCoins?: number
 }
 
 // Combo de respostas certas seguidas (lab-132, pedido do usuário: "combo de respostas certas
@@ -134,6 +140,17 @@ export function applyQuestCompletion(
   return { progress: next, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins }
 }
 
+// Bônus por limpar um planeta inteiro (lab-133, pedido do usuário: backlog de engajamento) —
+// creditado UMA VEZ, na resposta que completa as 6 escolinhas de um planeta, além da recompensa da
+// própria pergunta e do item de mobília (lab-130). Segue os MESMOS multiplicadores de evento
+// semanal/assinante da recompensa de pergunta (ao contrário do pote de Marte/baú de tesouro, que
+// são moeda flat de exploração) — este bônus está diretamente ligado a responder perguntas de
+// verdade, fica na mesma "economia" de recompensa de missão. Valores base ~2× a recompensa média
+// de uma única pergunta do planeta — grande o bastante pra parecer um marco de verdade, sem
+// desequilibrar a progressão geral.
+const PLANET_CLEAR_BONUS_XP = 50
+const PLANET_CLEAR_BONUS_COINS = 30
+
 // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo formato de
 // `applyQuestCompletion` (idempotente, aplica o multiplicador do evento semanal), mas grava em
 // `completedPlanetQuestIds`, NUNCA em `completedQuestIds`/`badges`: essas duas contam contra
@@ -174,6 +191,8 @@ export function applyPlanetQuestCompletion(
   // teria dado o mesmo resultado antes de responder, se o planeta já estivesse completo) — evita
   // reprocessar a concessão (ainda que idempotente) a cada resposta de escolinha já feita antes.
   let unlockedFurnitureItem: FurnitureOption | undefined
+  let planetClearBonusXp: number | undefined
+  let planetClearBonusCoins: number | undefined
   const planetId = findPlanetIdForQuest(quest.id)
   if (planetId && isPlanetFullyCompleted(planetId, completedPlanetQuestIds)) {
     const reward = unlockPlanetFurnitureReward(next, planetId)
@@ -181,8 +200,23 @@ export function applyPlanetQuestCompletion(
       next = reward.progress
       unlockedFurnitureItem = reward.item
     }
+    planetClearBonusXp = Math.round(PLANET_CLEAR_BONUS_XP * event.xpMultiplier)
+    planetClearBonusCoins = Math.round(
+      PLANET_CLEAR_BONUS_COINS * event.coinMultiplier * (entitlementActive ? SUBSCRIBER_COIN_MULTIPLIER : 1),
+    )
+    next = { ...next, xp: next.xp + planetClearBonusXp, coins: next.coins + planetClearBonusCoins }
   }
-  return { progress: next, newBadges: [], awardedXp, awardedCoins, unlockedFurnitureItem, currentStreak, streakBonusCoins }
+  return {
+    progress: next,
+    newBadges: [],
+    awardedXp,
+    awardedCoins,
+    unlockedFurnitureItem,
+    currentStreak,
+    streakBonusCoins,
+    planetClearBonusXp,
+    planetClearBonusCoins,
+  }
 }
 
 export function isQuestUnlocked(progress: Progress, questIndex: number): boolean {

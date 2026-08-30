@@ -1,6 +1,25 @@
 # Laboratório atual
 
-Último concluído: labs/lab-132-combo-respostas-seguidas/ — item do backlog de engajamento
+Último concluído: labs/lab-133-bonus-planeta-completo/ — item do backlog de engajamento
+discutido em chat, escolhido entre 4 opções via `AskUserQuestion`. Responder a 6ª (última)
+escolinha de um planeta-destino agora credita, na mesma resposta, um bônus imediato de +50 XP /
++30 moedas (com os mesmos multiplicadores de evento semanal/assinante da recompensa da própria
+pergunta) — distinto do item de mobília do lab-130 (cosmético) e do combo do lab-132 (sequência
+entre missões diferentes). Entra no MESMO bloco `isPlanetFullyCompleted` já usado pela mobília,
+sem gatilho novo. `CompletionResult` ganha `planetClearBonusXp?`/`planetClearBonusCoins?` (mesmo
+padrão opcional de `unlockedFurnitureItem`); linha de bônus própria no `RewardToast`. 5 testes
+novos (70→75). **Verificação ao vivo ficou PARCIAL**: a mesma limitação do `__debugTeleport` fora
+do planeta principal (lab-131) impediu alcançar a 6ª escolinha ao vivo — desta vez reconfirmada
+mesmo pra um deslocamento PEQUENO (~6 unidades) dentro do mesmo planeta já visitado, descartando a
+hipótese de que só saltos grandes seriam o problema. Confiança vem de reaproveitar o mesmo bloco já
+verificado ao vivo no lab-130 + 5 testes cobrindo a matemática exata. `npm run build` sem erros.
+**Backlog novo reportado pelo usuário nesta sessão** (ainda não formalizado em labs): câmera da
+lojinha de avatar precisa girar ao pressionar+arrastar (investigar se regrediu do lab-118) + mais
+luz no avatar (fica escuro); mais roupas texturizadas e mais opções na lojinha; painel `/familia`
+sem link de acesso de dentro do jogo quando o perfil já está vinculado. Ver
+`labs/lab-133-bonus-planeta-completo/CONTEXT.md`.
+
+Antes desse: labs/lab-132-combo-respostas-seguidas/ — item do backlog de engajamento
 discutido em chat ("combo de respostas certas seguidas"), escolhido entre 4 opções via
 `AskUserQuestion`. Responder missões corretamente uma atrás da outra — sem fechar (desistir de)
 nenhuma no meio — rende moeda bônus crescente em marcos: 3º acerto seguido = +5, 5º = +10, 10º e a

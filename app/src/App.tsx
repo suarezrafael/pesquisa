@@ -107,6 +107,8 @@ function GameApp() {
     unlockedFurnitureItem?: FurnitureOption
     currentStreak: number
     streakBonusCoins: number
+    planetClearBonusXp?: number
+    planetClearBonusCoins?: number
   } | null>(null)
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
   const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
@@ -227,8 +229,16 @@ function GameApp() {
   // `progression.ts`), então mostra o mesmo `RewardToast` das missões normais.
   function handleCompletePlanetQuest() {
     if (!activePlanetQuest) return
-    const { newBadges, awardedXp, awardedCoins, unlockedFurnitureItem, currentStreak, streakBonusCoins } =
-      completePlanetQuest(activePlanetQuest, entitlement?.active)
+    const {
+      newBadges,
+      awardedXp,
+      awardedCoins,
+      unlockedFurnitureItem,
+      currentStreak,
+      streakBonusCoins,
+      planetClearBonusXp,
+      planetClearBonusCoins,
+    } = completePlanetQuest(activePlanetQuest, entitlement?.active)
     setReward({
       quest: activePlanetQuest,
       newBadges,
@@ -237,6 +247,8 @@ function GameApp() {
       unlockedFurnitureItem,
       currentStreak,
       streakBonusCoins,
+      planetClearBonusXp,
+      planetClearBonusCoins,
     })
     setActivePlanetQuest(null)
   }
@@ -322,6 +334,8 @@ function GameApp() {
           unlockedFurnitureItem={reward.unlockedFurnitureItem}
           currentStreak={reward.currentStreak}
           streakBonusCoins={reward.streakBonusCoins}
+          planetClearBonusXp={reward.planetClearBonusXp}
+          planetClearBonusCoins={reward.planetClearBonusCoins}
           onContinue={() => setReward(null)}
         />
       )}

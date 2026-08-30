@@ -19,6 +19,12 @@ interface RewardToastProps {
   // não aparece na linha principal — por isso o valor exato precisa estar aqui, não só um aviso.
   currentStreak: number
   streakBonusCoins: number
+  // Bônus por limpar um planeta inteiro (lab-133) — só vem preenchido quando esta resposta
+  // completou as 6 escolinhas de um planeta (mesma condição de `unlockedFurnitureItem` acima),
+  // além da recompensa da própria pergunta — moeda/XP ADICIONAL, não incluída em
+  // `awardedXp`/`awardedCoins`.
+  planetClearBonusXp?: number
+  planetClearBonusCoins?: number
   onContinue: () => void
 }
 
@@ -34,6 +40,8 @@ export function RewardToast({
   unlockedFurnitureItem,
   currentStreak,
   streakBonusCoins,
+  planetClearBonusXp,
+  planetClearBonusCoins,
   onContinue,
 }: RewardToastProps) {
   const event = getCurrentWeeklyEvent()
@@ -66,6 +74,11 @@ export function RewardToast({
           <p className="reward-bonus-line">
             🎉 Planeta conquistado! Novo item pra Minha Casa: {unlockedFurnitureItem.emoji}{' '}
             {unlockedFurnitureItem.name}!
+          </p>
+        )}
+        {!!planetClearBonusCoins && (
+          <p className="reward-bonus-line">
+            🌟 Bônus por limpar o planeta! +{planetClearBonusXp} XP · +{planetClearBonusCoins} moedas!
           </p>
         )}
         {streakBonusCoins > 0 && (

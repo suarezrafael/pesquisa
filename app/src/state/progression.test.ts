@@ -194,6 +194,57 @@ describe('applyPlanetQuestCompletion — escolinhas de astronomia dos planetas (
   })
 })
 
+describe('applyPlanetQuestCompletion — bônus por limpar o planeta inteiro (lab-133)', () => {
+  it('não concede o bônus antes da 6ª (última) escolinha do planeta', () => {
+    let progress = emptyProgress
+    for (const quest of planetQuests.mercurio.slice(0, 5)) {
+      const result = applyPlanetQuestCompletion(progress, quest, NO_BONUS_EVENT)
+      expect(result.planetClearBonusXp).toBeUndefined()
+      expect(result.planetClearBonusCoins).toBeUndefined()
+      progress = result.progress
+    }
+  })
+
+  it('concede +50 XP / +30 moedas exatamente ao responder a 6ª escolinha, sem evento/assinatura', () => {
+    let progress = emptyProgress
+    for (const quest of planetQuests.mercurio.slice(0, 5)) {
+      progress = applyPlanetQuestCompletion(progress, quest, NO_BONUS_EVENT).progress
+    }
+    const last = applyPlanetQuestCompletion(progress, planetQuests.mercurio[5], NO_BONUS_EVENT)
+    expect(last.planetClearBonusXp).toBe(50)
+    expect(last.planetClearBonusCoins).toBe(30)
+  })
+
+  it('aplica o multiplicador de evento semanal e o bônus de assinante no bônus de limpar o planeta', () => {
+    let progress = emptyProgress
+    const dobrado: WeeklyEvent = { ...NO_BONUS_EVENT, xpMultiplier: 2, coinMultiplier: 2 }
+    for (const quest of planetQuests.venus.slice(0, 5)) {
+      progress = applyPlanetQuestCompletion(progress, quest, dobrado, true).progress
+    }
+    const last = applyPlanetQuestCompletion(progress, planetQuests.venus[5], dobrado, true)
+    expect(last.planetClearBonusXp).toBe(100) // 50 × 2 (evento)
+    expect(last.planetClearBonusCoins).toBe(Math.round(30 * 2 * SUBSCRIBER_COIN_MULTIPLIER)) // 30 × 2 (evento) × 1.5 (assinante)
+  })
+
+  it('não concede o bônus de novo ao reabrir uma escolinha já respondida do planeta já limpo', () => {
+    let progress = emptyProgress
+    for (const quest of planetQuests.mercurio) {
+      progress = applyPlanetQuestCompletion(progress, quest, NO_BONUS_EVENT).progress
+    }
+    const again = applyPlanetQuestCompletion(progress, planetQuests.mercurio[5], NO_BONUS_EVENT)
+    expect(again.planetClearBonusXp).toBeUndefined()
+    expect(again.planetClearBonusCoins).toBeUndefined()
+    expect(again.progress).toBe(progress)
+  })
+
+  it('applyQuestCompletion (missões do planeta principal) nunca popula os campos de bônus de planeta', () => {
+    const quest = makeQuest()
+    const result = applyQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT)
+    expect(result.planetClearBonusXp).toBeUndefined()
+    expect(result.planetClearBonusCoins).toBeUndefined()
+  })
+})
+
 describe('applyPlanetQuestCompletion — mobília de conquista de planeta (lab-130)', () => {
   it('não concede nada antes da 6ª (última) escolinha do planeta ser respondida', () => {
     let progress = emptyProgress
