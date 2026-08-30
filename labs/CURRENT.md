@@ -1,6 +1,23 @@
 # Laboratório atual
 
-Último concluído: labs/lab-126-moeda-bonus-assinante/ — item do backlog original (`prompt.md` §6,
+Último concluído: labs/lab-127-escolinhas-planetas-expandidas/ — pedido do usuário (backlog
+discutido em chat): expandiu as escolinhas dos 6 planetas-destino (Mercúrio/Vênus/Júpiter/Saturno/
+Urano/Netuno) de 1 pergunta cada (lab-115) pra 6 cada (36 no total, 30 novas de astronomia real),
+igual ao padrão de várias escolinhas do planeta principal. `planetQuests.ts` virou
+`Record<string, Quest[]>` + `findPlanetQuestById`. Distribuição das 6 escolinhas por planeta
+MEDIDA antes de escolher a fórmula (script à parte, mesma disciplina do lab-117/125): 78° de
+separação angular mínima, 5,46 unidades de arco mesmo no Mercúrio (o planeta menor, pior caso) —
+confirmado visualmente ao vivo, escolinhas bem espalhadas, nenhuma colada em outra nem na
+plataforma de pouso do foguete. **Achado só na verificação ao vivo**: a viagem de foguete deste
+jogo não é automática — precisa pilotar de verdade (segurar W, que vira "throttle"); a primeira
+tentativa de verificação forçou centenas de quadros sem input nenhum e o foguete não se moveu,
+corrigido despachando um `KeyboardEvent` de `keydown` sintético antes de forçar os quadros.
+Verificado ao vivo: viagem real até Mercúrio, 2 escolinhas diferentes respondidas corretamente
+(perguntas distintas confirmadas), XP/moeda creditados nas duas, `completedPlanetQuestIds`
+registrando os ids certos e independentes, sem erro de console. `npm run test`: 52/52. `npm run
+build` sem erros. Ver `labs/lab-127-escolinhas-planetas-expandidas/CONTEXT.md`.
+
+Antes desse: labs/lab-126-moeda-bonus-assinante/ — item do backlog original (`prompt.md` §6,
 P2) nunca construído: assinantes ativos agora ganham 1,5× nas moedas creditadas ao completar uma
 missão (nunca XP — moeda só compra cosmético, nunca desbloqueia missão/nível/conteúdo educacional,
 então não viola a regra inegociável do plano comercial; XP também abre viagem a planetas, então
@@ -880,12 +897,18 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-126-moeda-bonus-assinante/CONTEXT.md` (último laboratório concluído — assinantes ganham
-1,5× nas moedas de missão, nunca XP; **com isso, o backlog original de `prompt.md` §6 é P0/P1/P2
-completo** — não há mais item ali sem laboratório correspondente; o caminho COM assinatura ativa
-não foi simulado ao vivo, ver "Pendências" nesse CONTEXT.md, se o usuário reportar algo estranho
-com o bônus depois de assinar de verdade). Sem prioridade óbvia pro próximo laboratório — perguntar
-ao usuário. Antes desse, `labs/lab-125-code-splitting-studentfigure/CONTEXT.md` (resultado
+`labs/lab-127-escolinhas-planetas-expandidas/CONTEXT.md` (último laboratório concluído — os 6
+planetas-destino do Sistema Solar agora têm 6 escolinhas de astronomia cada, em vez de 1; leia
+também o "Achado só na verificação ao vivo" nesse CONTEXT.md — viagem de foguete precisa de input
+de teclado real pra progredir, não é automática, útil saber pra testar qualquer coisa em outro
+planeta no futuro). Vem de um backlog maior discutido em chat com o usuário, ainda não formalizado
+em labs: mobília desbloqueada por planeta conquistado, persistência de "Minha Casa" pra assinante
+(arquitetural, G6 do doc de escala), pote de moedas ao vencer os ETs em Marte, cronômetro de
+sobrevivência em Mercúrio/Netuno, e outras ideias de engajamento (login diário, baús, cartão-postal
+colecionável). Sem prioridade única — perguntar ao usuário antes de escolher. Antes desse,
+`labs/lab-126-moeda-bonus-assinante/CONTEXT.md` (assinantes ganham 1,5× nas moedas de missão,
+nunca XP; **com isso, o backlog original de `prompt.md` §6 é P0/P1/P2 completo**). Antes desse,
+`labs/lab-125-code-splitting-studentfigure/CONTEXT.md` (resultado
 NEGATIVO testado e revertido: converter `@babylonjs/core` pra imports individuais piorou o
 tamanho total do bundle em vez de melhorar, ~4,31MB → ~5,85MB; documentado pra ninguém tentar essa
 mesma técnica de novo sem saber que já foi medida e descartada). Antes desse,

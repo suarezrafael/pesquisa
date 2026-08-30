@@ -72,7 +72,7 @@ import {
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
 import { getLevel, isQuestUnlocked } from '../state/progression'
-import type { Profile, Progress } from '../types'
+import type { Profile, Progress, Quest } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { TouchActionButton } from './TouchActionButton'
@@ -586,6 +586,23 @@ const SCHOOL_DIRS: Vector3[] = quests.map((quest, index) => {
 // da diagonal ≈ 1,05 unidade ≈ 0,08 rad) com folga extra — suficiente pra manter a escola inteira
 // (não só o centro) fora de qualquer bacia que passe perto.
 const SCHOOL_PROTECTION_RADIUS = 0.12
+
+// lab-127 (pedido do usuário: "cada planeta deve ter umas 6 questous... igual a terra") — 6
+// direções reaproveitadas pelos 6 planetas-destino (cada um tem seu próprio `TransformNode` raiz
+// independente, então a mesma lista de direções relativas nunca colide entre planetas diferentes
+// — mesmo espírito da direção única já reaproveitada desde o lab-115). Fórmula golden-angle
+// medida ANTES de escolher (script à parte, não só estimativa): `phi` de 35° a 145°, `theta =
+// index * GOLDEN_ANGLE` dá separação angular mínima de 78° entre escolinhas — 5,46 unidades de
+// arco mesmo no menor planeta (`MERCURY_RADIUS = 4`), bem acima de `RESET_DISTANCE`/
+// `PLANET_SCHOOL_TRIGGER_DISTANCE`, e pelo menos 35° de distância da plataforma de pouso do
+// foguete (`(0,1,0)`, `MERCURY_LANDING_UP`/etc.) — sem escolinhas coladas nem perto do foguete em
+// nenhum dos 6 planetas (Mercúrio é o caso mais apertado; os outros 5 têm raio maior).
+const PLANET_SCHOOL_DIRS: Vector3[] = Array.from({ length: 6 }, (_, index) => {
+  const t = index / 5
+  const phi = ((35 + t * 110) * Math.PI) / 180
+  const theta = index * GOLDEN_ANGLE
+  return new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+})
 
 function nearAnySchool(dir: { x: number; y: number; z: number }): boolean {
   for (const schoolDir of SCHOOL_DIRS) {
@@ -3623,48 +3640,54 @@ export function World3D({
         coins.push({ pivot: coinPivot, mesh: coinMesh, worldPos: coinPos, collected: false })
       }
 
-      // Escolinhas de astronomia dos 6 planetas novos do Sistema Solar (lab-115) — cada
-      // `buildXIfNeeded()` empurra UMA entrada aqui (`buildPlanetEscolinha`, abaixo). Mesmo padrão
-      // de `quizMarkers` (proximidade dispara `onSelectPlanetQuestRef`, ver laço de gatilhos mais
-      // abaixo), mas planetId em vez de id de marcador avulso — cada planeta tem só uma escolinha.
-      const planetQuestMarkers: { planetId: string; worldPos: Vector3 }[] = []
+      // Escolinhas de astronomia dos 6 planetas novos do Sistema Solar (lab-115, expandido no
+      // lab-127 pra 6 perguntas por planeta) — cada `buildXIfNeeded()` chama
+      // `buildPlanetEscolinha` em loop, uma vez por pergunta de `planetQuests[planetId]`. Mesmo
+      // padrão de `quizMarkers` (proximidade dispara `onSelectPlanetQuestRef`, ver laço de
+      // gatilhos mais abaixo) — a `Quest` fica guardada direto no marcador (não só o id) pra não
+      // precisar de busca nenhuma no laço de gatilho, que roda a cada quadro.
+      const planetQuestMarkers: { quest: Quest; worldPos: Vector3 }[] = []
 
-      // Constrói a escolinha simplificada de um planeta-destino (lab-115) — reaproveitada pelos 6
-      // `buildXIfNeeded()` dos planetas novos. Diferente das escolinhas do planeta principal
-      // (`quests.forEach` mais abaixo, que usam `terrainGroundRadial`/`settleMeshOnTerrain`, feito
-      // pra relevo IRREGULAR — ver lab-95), estes planetas são esferas PERFEITAS
-      // (`PhysicsShapeType.SPHERE`): `localUp.scale(radius)` já cai exatamente na superfície, sem
-      // risco de "escolinha enterrada/flutuando". Um totem com o símbolo "?" (cor do tipo de
-      // quest, mesma paleta de `questTypeColor`) + o professor parado ao lado é suficiente pra uma
-      // única pergunta por planeta — não precisa da estrutura completa (paredes/telhado/fundação).
-      function buildPlanetEscolinha(planetId: string, planetRoot: TransformNode, radius: number, localUp: Vector3) {
-        const quest = planetQuests[planetId]
-        if (!quest) return
-        const base = new TransformNode(`planetSchool-${planetId}`, scene)
+      // Constrói UMA escolinha simplificada de um planeta-destino (lab-115; lab-127 generalizou
+      // pra receber a `Quest` direto, chamada em loop — antes só existia uma por planeta).
+      // Diferente das escolinhas do planeta principal (`quests.forEach` mais abaixo, que usam
+      // `terrainGroundRadial`/`settleMeshOnTerrain`, feito pra relevo IRREGULAR — ver lab-95),
+      // estes planetas são esferas PERFEITAS (`PhysicsShapeType.SPHERE`): `localUp.scale(radius)`
+      // já cai exatamente na superfície, sem risco de "escolinha enterrada/flutuando". Um totem
+      // com o símbolo "?" (cor do tipo de quest, mesma paleta de `questTypeColor`) + o professor
+      // parado ao lado é suficiente — não precisa da estrutura completa (paredes/telhado/fundação).
+      function buildPlanetEscolinha(
+        quest: Quest,
+        planetRoot: TransformNode,
+        radius: number,
+        localUp: Vector3,
+        nameSuffix: string,
+      ) {
+        const base = new TransformNode(`planetSchool-${nameSuffix}`, scene)
         base.position = localUp.scale(radius)
         base.rotationQuaternion = alignmentQuaternion(localUp)
         base.parent = planetRoot
 
-        const postMat = new PBRMaterial(`planetSchoolPostMat-${planetId}`, scene)
+        const postMat = new PBRMaterial(`planetSchoolPostMat-${nameSuffix}`, scene)
         postMat.albedoColor = new Color3(0.5, 0.42, 0.32)
         postMat.roughness = 0.9
-        const post = MeshBuilder.CreateCylinder(`planetSchoolPost-${planetId}`, { height: 1.1, diameter: 0.22 }, scene)
+        const post = MeshBuilder.CreateCylinder(`planetSchoolPost-${nameSuffix}`, { height: 1.1, diameter: 0.22 }, scene)
         post.position = new Vector3(0, 0.55, 0)
         post.material = postMat
         post.parent = base
         shadowGenerator.addShadowCaster(post)
 
-        const signMat = new PBRMaterial(`planetSchoolSignMat-${planetId}`, scene)
+        const signMat = new PBRMaterial(`planetSchoolSignMat-${nameSuffix}`, scene)
         signMat.albedoColor = questTypeColor[quest.type]
         signMat.roughness = 0.4
         signMat.metallic = 0.1
-        const sign = MeshBuilder.CreateBox(`planetSchoolSign-${planetId}`, { width: 0.7, height: 0.7, depth: 0.12 }, scene)
+        const sign = MeshBuilder.CreateBox(`planetSchoolSign-${nameSuffix}`, { width: 0.7, height: 0.7, depth: 0.12 }, scene)
         sign.position = new Vector3(0, 1.25, 0)
         sign.material = signMat
         sign.parent = base
         shadowGenerator.addShadowCaster(sign)
 
-        const label = new TextBlock(`planetSchoolLabel-${planetId}`, '?')
+        const label = new TextBlock(`planetSchoolLabel-${nameSuffix}`, '?')
         label.color = 'white'
         label.fontSize = mobileFontSize(34)
         label.fontWeight = 'bold'
@@ -3682,7 +3705,7 @@ export function World3D({
         // de ser criado neste mesmo quadro — a matriz de mundo só é recomputada depois, e o laço
         // de gatilhos (mais abaixo) precisa da posição correta desde o primeiro frame. Válido
         // porque `planetRoot.position` é sempre o `*_CENTER` fixo do planeta (nunca rotacionado).
-        planetQuestMarkers.push({ planetId, worldPos: planetRoot.position.add(localUp.scale(radius)) })
+        planetQuestMarkers.push({ quest, worldPos: planetRoot.position.add(localUp.scale(radius)) })
       }
 
       // Parkour (lab-11) — sequência de plataformas subindo em ziguezague, só dá pra atravessar
@@ -4753,8 +4776,11 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
-        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Mercúrio.
-        buildPlanetEscolinha('mercurio', mercuryRoot, MERCURY_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta) — 6 perguntas
+        // sobre o próprio Mercúrio, uma por direção de `PLANET_SCHOOL_DIRS`.
+        planetQuests.mercurio.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, mercuryRoot, MERCURY_RADIUS, PLANET_SCHOOL_DIRS[i], `mercurio-${i}`)
+        })
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -4867,8 +4893,10 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
-        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Vênus.
-        buildPlanetEscolinha('venus', venusRoot, VENUS_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.venus.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, venusRoot, VENUS_RADIUS, PLANET_SCHOOL_DIRS[i], `venus-${i}`)
+        })
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -4968,8 +4996,10 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
-        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Júpiter.
-        buildPlanetEscolinha('jupiter', jupiterRoot, JUPITER_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.jupiter.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, jupiterRoot, JUPITER_RADIUS, PLANET_SCHOOL_DIRS[i], `jupiter-${i}`)
+        })
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -5064,8 +5094,10 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
-        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Saturno.
-        buildPlanetEscolinha('saturno', saturnRoot, SATURN_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.saturno.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, saturnRoot, SATURN_RADIUS, PLANET_SCHOOL_DIRS[i], `saturno-${i}`)
+        })
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -5147,8 +5179,10 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
-        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Urano.
-        buildPlanetEscolinha('urano', uranusRoot, URANUS_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.urano.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, uranusRoot, URANUS_RADIUS, PLANET_SCHOOL_DIRS[i], `urano-${i}`)
+        })
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -5240,8 +5274,10 @@ export function World3D({
           coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
         }
 
-        // Escolinha de astronomia (lab-115) — pergunta sobre o próprio Netuno.
-        buildPlanetEscolinha('netuno', neptuneRoot, NEPTUNE_RADIUS, new Vector3(0.6, 0.35, -0.72).normalize())
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.netuno.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, neptuneRoot, NEPTUNE_RADIUS, PLANET_SCHOOL_DIRS[i], `netuno-${i}`)
+        })
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -8068,13 +8104,12 @@ export function World3D({
             // concluída (mesmo espírito de `portalMeshes`/`completed` acima) via
             // `completedPlanetQuestIds`, NUNCA `completedQuestIds`.
             for (const marker of planetQuestMarkers) {
-              const quest = planetQuests[marker.planetId]
-              if (!quest || progressRef.current.completedPlanetQuestIds.includes(quest.id)) continue
+              if (progressRef.current.completedPlanetQuestIds.includes(marker.quest.id)) continue
               const d = Vector3.Distance(pos, marker.worldPos)
-              const triggerId = `planet-school-${marker.planetId}`
+              const triggerId = `planet-school-${marker.quest.id}`
               if (d < PLANET_SCHOOL_TRIGGER_DISTANCE && !triggered.has(triggerId)) {
                 triggered.add(triggerId)
-                onSelectPlanetQuestRef.current(marker.planetId)
+                onSelectPlanetQuestRef.current(marker.quest.id)
               } else if (d > RESET_DISTANCE) {
                 triggered.delete(triggerId)
               }

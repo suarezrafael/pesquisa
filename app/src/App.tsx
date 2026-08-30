@@ -16,7 +16,7 @@ import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
-import { planetQuests } from './data/planetQuests'
+import { findPlanetQuestById } from './data/planetQuests'
 import {
   clearActiveProfile,
   hasTutorialBeenSeen,
@@ -193,8 +193,10 @@ function GameApp() {
     setActiveSurpriseQuiz(null)
   }
 
-  function handleSelectPlanetQuest(planetId: string) {
-    const quest = planetQuests[planetId] ?? null
+  // lab-127: cada planeta agora tem 6 perguntas (não mais 1), então o gatilho de proximidade
+  // manda o id de uma pergunta ESPECÍFICA, não mais o id do planeta.
+  function handleSelectPlanetQuest(questId: string) {
+    const quest = findPlanetQuestById(questId) ?? null
     setActivePlanetQuest(quest)
   }
 
