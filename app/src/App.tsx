@@ -171,7 +171,9 @@ function GameApp() {
 
   function handleQuestCorrect() {
     if (!activeQuest) return
-    const { newBadges, awardedXp, awardedCoins } = completeQuest(activeQuest)
+    // lab-126: bônus de moeda de assinante (`progression.ts`) — `entitlement?.active` já existe
+    // aqui via `useEntitlement()`, só precisa ser repassado.
+    const { newBadges, awardedXp, awardedCoins } = completeQuest(activeQuest, entitlement?.active)
     setReward({ quest: activeQuest, newBadges, awardedXp, awardedCoins })
     setActiveQuest(null)
   }
@@ -203,7 +205,7 @@ function GameApp() {
   // `progression.ts`), então mostra o mesmo `RewardToast` das missões normais.
   function handleCompletePlanetQuest() {
     if (!activePlanetQuest) return
-    const { newBadges, awardedXp, awardedCoins } = completePlanetQuest(activePlanetQuest)
+    const { newBadges, awardedXp, awardedCoins } = completePlanetQuest(activePlanetQuest, entitlement?.active)
     setReward({ quest: activePlanetQuest, newBadges, awardedXp, awardedCoins })
     setActivePlanetQuest(null)
   }
@@ -281,6 +283,7 @@ function GameApp() {
           awardedXp={reward.awardedXp}
           awardedCoins={reward.awardedCoins}
           newBadges={reward.newBadges}
+          entitlementActive={entitlement?.active ?? false}
           onContinue={() => setReward(null)}
         />
       )}

@@ -1,6 +1,23 @@
 # Laboratório atual
 
-Último concluído: labs/lab-125-code-splitting-studentfigure/ — **resultado negativo, testado e
+Último concluído: labs/lab-126-moeda-bonus-assinante/ — item do backlog original (`prompt.md` §6,
+P2) nunca construído: assinantes ativos agora ganham 1,5× nas moedas creditadas ao completar uma
+missão (nunca XP — moeda só compra cosmético, nunca desbloqueia missão/nível/conteúdo educacional,
+então não viola a regra inegociável do plano comercial; XP também abre viagem a planetas, então
+boostá-lo teria cheiro de pay-to-win). Reaproveitou 100% o padrão já existente do evento semanal
+(`event.coinMultiplier`) — `SUBSCRIBER_COIN_MULTIPLIER` novo em `progression.ts`, empilha com o
+evento em vez de substituir. `RewardToast` ganhou uma linha de bônus condicional nova ("👑 Bônus de
+moeda de assinante aplicado!"), independente da linha do evento semanal. 5 testes novos
+(47→52) cobrindo cálculo, empilhamento, XP intocado e idempotência. **Verificado ao vivo** o
+caminho SEM assinatura (quest real respondida, +40 moedas = 20 base × 2 do evento semanal, sem
+bônus de assinante, sem regressão, sem erro de console); **o caminho COM assinatura não foi
+simulado ao vivo** (simular localStorage de assinatura esbarra na proteção anti-bypass do lab-90) —
+confiança vem dos testes unitários + paridade de código com a linha do evento semanal já
+comprovada ao vivo. `npm run test`: 52/52. `npm run build` sem erros. **Com isso, o backlog original
+de `prompt.md` §6 (P0/P1/P2) está completo** — não há mais item ali sem laboratório correspondente.
+Ver `labs/lab-126-moeda-bonus-assinante/CONTEXT.md`.
+
+Antes desse: labs/lab-125-code-splitting-studentfigure/ — **resultado negativo, testado e
 revertido**: converter os imports em barril de `@babylonjs/core` (`World3D.tsx`,
 `AvatarPreview3D.tsx`, `studentFigure.ts`) pra imports individuais/`.pure` (mesma técnica do
 lab-117, aplicada aos 35 símbolos únicos usados, com cada caminho verificado contra o pacote real
@@ -863,11 +880,15 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-125-code-splitting-studentfigure/CONTEXT.md` (último laboratório concluído — resultado
+`labs/lab-126-moeda-bonus-assinante/CONTEXT.md` (último laboratório concluído — assinantes ganham
+1,5× nas moedas de missão, nunca XP; **com isso, o backlog original de `prompt.md` §6 é P0/P1/P2
+completo** — não há mais item ali sem laboratório correspondente; o caminho COM assinatura ativa
+não foi simulado ao vivo, ver "Pendências" nesse CONTEXT.md, se o usuário reportar algo estranho
+com o bônus depois de assinar de verdade). Sem prioridade óbvia pro próximo laboratório — perguntar
+ao usuário. Antes desse, `labs/lab-125-code-splitting-studentfigure/CONTEXT.md` (resultado
 NEGATIVO testado e revertido: converter `@babylonjs/core` pra imports individuais piorou o
 tamanho total do bundle em vez de melhorar, ~4,31MB → ~5,85MB; documentado pra ninguém tentar essa
-mesma técnica de novo sem saber que já foi medida e descartada). **Backlog vazio depois deste
-laboratório** — nenhum item pendente sem depender de novo pedido do usuário. Antes desse,
+mesma técnica de novo sem saber que já foi medida e descartada). Antes desse,
 `labs/lab-124-corrige-morros-invisiveis-de-vez/CONTEXT.md` (retomada do bug de morros invisíveis do
 lab-95: `twoSidedLighting` + normais degeneradas corrigidas, ambas com evidência concreta;
 **confirmação definitiva ainda depende do usuário testar de novo no aparelho Android/Chrome onde

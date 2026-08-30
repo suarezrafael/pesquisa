@@ -5,14 +5,17 @@ interface RewardToastProps {
   awardedXp: number
   awardedCoins: number
   newBadges: string[]
+  // lab-126: bônus de moeda de assinante — linha independente da do evento semanal (as duas podem
+  // aparecer juntas, cada uma clara sobre sua própria origem).
+  entitlementActive: boolean
   onContinue: () => void
 }
 
 // XP/moedas mostrados aqui são o valor já creditado em `progress` (`awardedXp`/`awardedCoins`,
 // calculado em `applyQuestCompletion`), não o valor base da missão — numa semana com evento
-// bônus (lab-22) os dois precisam bater, senão o jogador vê um número diferente do que realmente
-// recebeu.
-export function RewardToast({ awardedXp, awardedCoins, newBadges, onContinue }: RewardToastProps) {
+// bônus (lab-22) ou com assinatura ativa (lab-126) os dois precisam bater, senão o jogador vê um
+// número diferente do que realmente recebeu.
+export function RewardToast({ awardedXp, awardedCoins, newBadges, entitlementActive, onContinue }: RewardToastProps) {
   const event = getCurrentWeeklyEvent()
   const hasBonus = event.xpMultiplier > 1 || event.coinMultiplier > 1
   const modalRef = useModalA11y(onContinue)
@@ -35,6 +38,9 @@ export function RewardToast({ awardedXp, awardedCoins, newBadges, onContinue }: 
           <p className="reward-bonus-line">
             {event.emoji} Bônus de {event.name} aplicado!
           </p>
+        )}
+        {entitlementActive && (
+          <p className="reward-bonus-line">👑 Bônus de moeda de assinante aplicado!</p>
         )}
         {newBadges.length > 0 && (
           <div className="reward-badges">

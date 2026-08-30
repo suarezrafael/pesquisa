@@ -11,6 +11,7 @@ import {
   badgesEarnedAt,
   getLevel,
   isQuestUnlocked,
+  SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
   unlockFurniture,
@@ -122,6 +123,37 @@ describe('applyQuestCompletion — recompensa e evento semanal', () => {
   })
 })
 
+describe('applyQuestCompletion — bônus de moeda de assinante (lab-126)', () => {
+  it('sem assinatura ativa, comportamento idêntico a antes (nenhum bônus)', () => {
+    const quest = makeQuest({ xpReward: 20, coinReward: 8 })
+    const result = applyQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT, false)
+    expect(result.awardedXp).toBe(20)
+    expect(result.awardedCoins).toBe(8)
+  })
+
+  it('com assinatura ativa, multiplica só as moedas — XP fica intocado', () => {
+    const quest = makeQuest({ xpReward: 20, coinReward: 8 })
+    const result = applyQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT, true)
+    expect(result.awardedXp).toBe(20)
+    expect(result.awardedCoins).toBe(Math.round(8 * SUBSCRIBER_COIN_MULTIPLIER))
+  })
+
+  it('empilha o bônus de assinante com o multiplicador do evento semanal', () => {
+    const quest = makeQuest({ xpReward: 10, coinReward: 10 })
+    const dobrado: WeeklyEvent = { ...NO_BONUS_EVENT, xpMultiplier: 2, coinMultiplier: 2 }
+    const result = applyQuestCompletion(emptyProgress, quest, dobrado, true)
+    expect(result.awardedXp).toBe(20)
+    expect(result.awardedCoins).toBe(Math.round(10 * 2 * SUBSCRIBER_COIN_MULTIPLIER))
+  })
+
+  it('não credita bônus de assinante de novo ao completar a mesma quest duas vezes', () => {
+    const quest = makeQuest()
+    const first = applyQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT, true)
+    const second = applyQuestCompletion(first.progress, quest, NO_BONUS_EVENT, true)
+    expect(second.awardedCoins).toBe(0)
+  })
+})
+
 describe('applyPlanetQuestCompletion — escolinhas de astronomia dos planetas (lab-115)', () => {
   it('credita XP/moedas de verdade, com multiplicador do evento semanal', () => {
     const quest = makeQuest({ id: 'planet-teste', xpReward: 20, coinReward: 8 })
@@ -148,6 +180,13 @@ describe('applyPlanetQuestCompletion — escolinhas de astronomia dos planetas (
     expect(result.progress.completedQuestIds).toEqual([])
     expect(result.progress.badges).toEqual([])
     expect(result.newBadges).toEqual([])
+  })
+
+  it('aplica o bônus de moeda de assinante (lab-126) só nas moedas, igual às missões normais', () => {
+    const quest = makeQuest({ id: 'planet-teste', xpReward: 20, coinReward: 8 })
+    const result = applyPlanetQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT, true)
+    expect(result.awardedXp).toBe(20)
+    expect(result.awardedCoins).toBe(Math.round(8 * SUBSCRIBER_COIN_MULTIPLIER))
   })
 })
 

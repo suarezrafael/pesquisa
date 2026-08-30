@@ -47,23 +47,38 @@ export function badgesEarnedAt(completedCount: number): string[] {
 export interface CompletionResult {
   progress: Progress
   newBadges: string[]
-  // Recompensa realmente creditada, já com o multiplicador do evento semanal (lab-22) aplicado —
-  // a UI de recompensa deve mostrar isto, nunca `quest.xpReward`/`coinReward` direto, senão
-  // mostraria o valor errado numa semana com bônus.
+  // Recompensa realmente creditada, já com o multiplicador do evento semanal (lab-22) e o bônus
+  // de assinante (lab-126) aplicados — a UI de recompensa deve mostrar isto, nunca
+  // `quest.xpReward`/`coinReward` direto, senão mostraria o valor errado numa semana com bônus
+  // ou pra quem tem assinatura ativa.
   awardedXp: number
   awardedCoins: number
 }
+
+// lab-126 (`prompt.md` §6, P2: "moeda bônus por assinatura") — só MOEDA, nunca XP: moeda aqui só
+// compra cosmético (avatar/roupas/mobília), nunca desbloqueia missão/nível/conteúdo educacional,
+// então não viola a regra inegociável de nunca gatear educação atrás de assinatura
+// (`docs/plano-comercial-backend.md`). XP fica de fora de propósito — também abre viagem a
+// planetas (`requiredLevel`, lab-115), então boostar XP por pagamento teria um cheiro de
+// pay-to-win que este projeto evita mesmo fora de conteúdo estritamente educacional.
+export const SUBSCRIBER_COIN_MULTIPLIER = 1.5
 
 export function applyQuestCompletion(
   progress: Progress,
   quest: Quest,
   event: WeeklyEvent = getCurrentWeeklyEvent(),
+  entitlementActive = false,
 ): CompletionResult {
   if (progress.completedQuestIds.includes(quest.id)) {
     return { progress, newBadges: [], awardedXp: 0, awardedCoins: 0 }
   }
   const awardedXp = Math.round(quest.xpReward * event.xpMultiplier)
-  const awardedCoins = Math.round(quest.coinReward * event.coinMultiplier)
+  // Os dois multiplicadores se EMPILHAM (evento semanal × bônus de assinante), não se substituem —
+  // nenhum dos dois foi desenhado pensando em exclusão mútua, e um assinante numa semana de bônus
+  // simplesmente ganha os dois efeitos juntos.
+  const awardedCoins = Math.round(
+    quest.coinReward * event.coinMultiplier * (entitlementActive ? SUBSCRIBER_COIN_MULTIPLIER : 1),
+  )
   const completedQuestIds = [...progress.completedQuestIds, quest.id]
   const badges = badgesEarnedAt(completedQuestIds.length)
   const newBadges = badges.filter((b) => !progress.badges.includes(b))
@@ -87,12 +102,15 @@ export function applyPlanetQuestCompletion(
   progress: Progress,
   quest: Quest,
   event: WeeklyEvent = getCurrentWeeklyEvent(),
+  entitlementActive = false,
 ): CompletionResult {
   if (progress.completedPlanetQuestIds.includes(quest.id)) {
     return { progress, newBadges: [], awardedXp: 0, awardedCoins: 0 }
   }
   const awardedXp = Math.round(quest.xpReward * event.xpMultiplier)
-  const awardedCoins = Math.round(quest.coinReward * event.coinMultiplier)
+  const awardedCoins = Math.round(
+    quest.coinReward * event.coinMultiplier * (entitlementActive ? SUBSCRIBER_COIN_MULTIPLIER : 1),
+  )
   const next: Progress = {
     ...progress,
     completedPlanetQuestIds: [...progress.completedPlanetQuestIds, quest.id],

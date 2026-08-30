@@ -22,13 +22,15 @@ import {
 export function useProgress() {
   const [progress, setProgress] = useState<Progress>(() => loadProgress())
 
-  function completeQuest(quest: Quest): CompletionResult {
+  // lab-126: `entitlementActive` aplica o bônus de moeda de assinante (`progression.ts`) — default
+  // `false` preserva o comportamento de quem chama sem saber/se importar com entitlement.
+  function completeQuest(quest: Quest, entitlementActive = false): CompletionResult {
     // lab-99: `applyQuestCompletion` é idempotente (responder uma missão já concluída de novo não
     // premia XP/moeda de novo, ver `progression.ts`) — só dispara o evento de analytics numa
     // conclusão GENUÍNA (o array de concluídas cresceu), senão "quests concluídas por
     // dispositivo" ficaria inflado por reprises da mesma missão.
     const wasAlreadyCompleted = progress.completedQuestIds.includes(quest.id)
-    const result = applyQuestCompletion(progress, quest)
+    const result = applyQuestCompletion(progress, quest, undefined, entitlementActive)
     setProgress(result.progress)
     saveProgress(result.progress)
     if (!wasAlreadyCompleted) trackQuestCompleted(quest.id)
@@ -37,8 +39,8 @@ export function useProgress() {
 
   // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo formato de
   // `completeQuest`, mas isolado (ver `applyPlanetQuestCompletion` em `progression.ts`).
-  function completePlanetQuest(quest: Quest): CompletionResult {
-    const result = applyPlanetQuestCompletion(progress, quest)
+  function completePlanetQuest(quest: Quest, entitlementActive = false): CompletionResult {
+    const result = applyPlanetQuestCompletion(progress, quest, undefined, entitlementActive)
     setProgress(result.progress)
     saveProgress(result.progress)
     return result
