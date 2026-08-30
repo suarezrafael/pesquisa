@@ -3136,6 +3136,31 @@ export function World3D({
       planet.updateVerticesData(VertexBuffer.PositionKind, planetPositions)
       const planetNormals: number[] = []
       VertexData.ComputeNormals(planetPositions, planet.getIndices()!, planetNormals)
+      // lab-124 — reforço de robustez pro mesmo problema do lab-95 (triângulos dobrados nas rampas
+      // mais íngremes dos platôs): quando triângulos vizinhos de um vértice degeneram (ficam quase
+      // colineares/sobrepostos por causa da dobra), `ComputeNormals` pode devolver uma normal de
+      // comprimento ~0 pra esse vértice (a soma ponderada das normais das faces ao redor se
+      // cancela). Uma normal assim, ao ser normalizada por padrão pela GPU no shader, vira NaN —
+      // e diferentes GPUs/drivers tratam NaN de jeitos diferentes na hora de colorir o fragmento
+      // (mais uma explicação plausível pra "só nesse aparelho" além do backFaceCulling/
+      // twoSidedLighting acima). Corrigido usando a direção radial pra fora (`dir`, sempre unitária
+      // e sempre um fallback razoável nesse planeta aproximadamente esférico) sempre que a normal
+      // calculada não é um vetor unitário de verdade.
+      for (let i = 0; i < planetNormals.length; i += 3) {
+        const nx = planetNormals[i]
+        const ny = planetNormals[i + 1]
+        const nz = planetNormals[i + 2]
+        const lenSq = nx * nx + ny * ny + nz * nz
+        if (!(lenSq > 0.01)) {
+          const px = planetPositions[i]
+          const py = planetPositions[i + 1]
+          const pz = planetPositions[i + 2]
+          const dir = new Vector3(px, py, pz).normalize()
+          planetNormals[i] = dir.x
+          planetNormals[i + 1] = dir.y
+          planetNormals[i + 2] = dir.z
+        }
+      }
       planet.updateVerticesData(VertexBuffer.NormalKind, planetNormals)
 
       // Cor por vértice pra quebrar o verde liso ("morros sem textura") sem precisar de um
@@ -3251,6 +3276,17 @@ export function World3D({
       // morro visível embaixo). Mesma correção já usada em `cloudMat`/`grassMaterial` neste
       // arquivo pro mesmo tipo de problema (malha fina/dobrada vista de ângulo inesperado).
       planetMat.backFaceCulling = false
+      // lab-124 (usuário reportou de novo, mesmo depois do fix acima, num Android/Chrome — "os
+      // morros continuam invisíveis, mas o colisor físico continua sólido", confirmando que é só
+      // renderização, não um buraco real na malha): `backFaceCulling = false` sozinho só manda a
+      // GPU DESENHAR a face de trás — sem `twoSidedLighting`, a iluminação dessa face de trás
+      // continua calculada com a normal ORIGINAL (de frente), que aponta pro lado ERRADO da luz
+      // pra geometria virada ao contrário. Resultado: a face renderiza, mas quase preta —
+      // dependendo de driver/GPU (mais comum em GPUs móveis, que arredondam contraste escuro de
+      // jeitos diferentes de desktop), isso pode ficar indistinguível de "invisível" contra a
+      // grama ao redor. Gotcha bem documentado do Babylon.js pra `backFaceCulling = false` em
+      // material com luz — sem `twoSidedLighting`, a correção do lab-95 ficava só parcial.
+      planetMat.twoSidedLighting = true
       planet.material = planetMat
       planet.receiveShadows = true
       new PhysicsAggregate(planet, PhysicsShapeType.MESH, { mass: 0, friction: 0.7 }, scene)
