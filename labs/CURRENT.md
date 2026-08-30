@@ -1,6 +1,30 @@
 # Laboratório atual
 
-Último concluído: labs/lab-128-pote-moedas-marte/ — item pequeno do backlog discutido em chat: ao
+Último concluído: labs/lab-129-cronometro-sobrevivencia-planetas/ — pedido do backlog discutido
+em chat: "alguns planetas tem tempo de permanencias, um cronometro onde voce precisa responder a
+perguntas durante a exploracao, mas o cronometro fica regredindo se permanecer longe do foguete
+muito tempo voce morre e volta pra terra, pode ser planetas quentes como mercurio e os mais longes
+como netuno." `hasSurvivalTimer?: boolean` novo em `DestinationPlanet`, marcado em Mercúrio e
+Netuno; cronômetro de 60s dreia 1s/s real quando o avatar fica a mais de 5 unidades do foguete de
+volta daquele planeta, restaura +20s ao responder qualquer escolinha do próprio planeta (bridge
+`__onPlanetQuestCompleted`, mesmo padrão de `__refreshHouseFurniture` do lab-123), e zera o
+cronômetro a cada nova chegada (mesmo espírito de "vida cheia a cada nova ida a Marte" do lab-60).
+Ao chegar a zero, `respawnFromSurvivalTimeout` teleporta de volta pra Terra sem perder moeda/XP já
+ganho (mesma filosofia não-punitiva do respawn de Marte), mostrando "Você desmaiou de calor!" em
+Mercúrio ou "...de frio!" nos demais planetas com cronômetro. `SurvivalTimerBar.tsx` novo reaproveita
+o CSS da barra de vida de Marte, só troca o ícone (🥵/🥶). **Achado de verificação (lição nova)**:
+diferente de testar a viagem de foguete (progresso SIMULADO, acelerável forçando quadros), este é
+um cronômetro de TEMPO REAL — cada chamada de ferramenta de automação (screenshot, JS, clique)
+consome segundos reais que contam contra o próprio cronômetro sendo testado; em 3 pousos de teste em
+Mercúrio, o cronômetro expirou sozinho entre uma chamada e outra, o que na prática SERVIU como
+confirmação end-to-end genuína do pipeline completo (dreno → morte → mensagem certa "Você desmaiou
+de calor! Volte de foguete pra continuar explorando Mercúrio." → teleporte pra casa confirmado por
+posição → mensagem some sozinha) mas impediu capturar a barra num valor intermediário. Netuno não
+testado ao vivo (mesmo código compartilhado só muda a palavra da causa). `npm run test`: 52/52 (sem
+teste novo). `npm run build` sem erros. Ver
+`labs/lab-129-cronometro-sobrevivencia-planetas/CONTEXT.md`.
+
+Antes desse: labs/lab-128-pote-moedas-marte/ — item pequeno do backlog discutido em chat: ao
 vencer todos os inimigos de Marte, um pote de moedas aparece na Estação Alienígena (bônus de 10
 moedas de uma vez, além do chapéu já existente e da moeda por inimigo nocauteado). Pote sempre
 construído junto da estação (0,75 rad de distância da direção dela, fora da malha física, `UFO_

@@ -79,6 +79,7 @@ import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
 import { RankingPanel } from './RankingPanel'
 import { MarsHealthBar } from './MarsHealthBar'
+import { SurvivalTimerBar } from './SurvivalTimerBar'
 import { WeaponBagPanel } from './WeaponBagPanel'
 import { PlanetPickerPanel } from './PlanetPickerPanel'
 import {
@@ -443,6 +444,11 @@ interface DestinationPlanet {
   // produção. `undefined`/ausente = sem requisito (compatível com quem só verifica
   // `(planet.requiredLevel ?? 1)`).
   requiredLevel?: number
+  // lab-129 (pedido do usuário: "alguns planetas tem tempo de permanência... pode ser planetas
+  // quentes como mercurio e os mais longes como netuno") — só planetas de ambiente extremo, não
+  // todos. `undefined`/ausente = sem cronômetro (planeta principal e a maioria dos destinos
+  // continuam sem pressa nenhuma).
+  hasSurvivalTimer?: boolean
 }
 const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
   marte: {
@@ -461,6 +467,7 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     center: MERCURY_CENTER,
     landingUp: MERCURY_LANDING_UP,
     requiredLevel: 2,
+    hasSurvivalTimer: true,
   },
   venus: {
     id: 'venus',
@@ -506,6 +513,7 @@ const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
     center: NEPTUNE_CENTER,
     landingUp: NEPTUNE_LANDING_UP,
     requiredLevel: 11,
+    hasSurvivalTimer: true,
   },
 }
 const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_PLANETS)
@@ -519,6 +527,23 @@ const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_P
 const MARS_ENEMY_COUNT_LOW_END = 3
 const MARS_ENEMY_COUNT = 6
 const MARS_MAX_HEALTH = 100
+
+// Cronômetro de sobrevivência (lab-129, pedido do usuário: "alguns planetas tem tempo de
+// permanencia, um cronometro onde voce precisa responder a perguntas durante a exploracao, mas o
+// cronometro fica regredindo se permanecer longe do foguete muito tempo voce morre e volta pra
+// terra") — só planetas de ambiente extremo (`hasSurvivalTimer` em `DESTINATION_PLANETS`), mesmo
+// espírito não-punitivo do sistema de vida de Marte (lab-60): sem perda de moeda/XP já ganho, só
+// custa tempo de jogo (precisa voltar de foguete pra tentar de novo).
+const SURVIVAL_TIMER_MAX = 60
+// Perto do foguete de volta, o jogador fica "protegido" — sem pressa nenhuma; só afastado dele o
+// cronômetro drena de verdade (pedido do usuário: "fica regredindo se permanecer longe do
+// foguete").
+const SURVIVAL_TIMER_SAFE_RADIUS = 5
+const SURVIVAL_TIMER_DRAIN_RATE = 1 // segundos de cronômetro por segundo real, fora do raio seguro
+// Devolvido ao responder uma escolinha do PRÓPRIO planeta corretamente (pedido do usuário: "voce
+// precisa responder a perguntas durante a exploracao") — recompensa por focar no objetivo
+// educacional, não só sobreviver.
+const SURVIVAL_TIMER_RESTORE = 20
 // lab-128 (pedido do usuário: "em marte ao vencer os ets deve aparecer um pote de moedas na base
 // de ets") — bônus de uma vez só, além da moeda que cada inimigo já dá ao ser nocauteado
 // (`onCollectCoinRef.current()` por kill, ver `handleInteractPress`).
@@ -1904,6 +1929,16 @@ export function World3D({
   // (calculado no laço de física, que já percorre esse array todo quadro pra IA) só quando o
   // valor muda, evitando re-render a cada quadro por um número que só muda ao nocautear alguém.
   const [marsEnemyCount, setMarsEnemyCount] = useState(0)
+  // Cronômetro de sobrevivência (lab-129) — mesmo padrão de `marsHealthRef`/`marsHealthDisplay`:
+  // `survivalTimeRef` é a fonte de verdade (lida/escrita direto pelo laço de física),
+  // `survivalTimeDisplay` só espelha (arredondado, ver `lastSurvivalTimeDisplayRef`) pra não
+  // re-renderizar 60×/segundo enquanto o cronômetro dreia. `survivalPlanetId` (não só um booleano)
+  // guarda QUAL planeta, pro ícone certo (calor/frio) na UI.
+  const survivalTimeRef = useRef(SURVIVAL_TIMER_MAX)
+  const lastSurvivalTimeDisplayRef = useRef(SURVIVAL_TIMER_MAX)
+  const [survivalTimeDisplay, setSurvivalTimeDisplay] = useState(SURVIVAL_TIMER_MAX)
+  const [survivalPlanetId, setSurvivalPlanetId] = useState<string | null>(null)
+  const [survivalDeathMessage, setSurvivalDeathMessage] = useState<string | null>(null)
   // Alerta de perigo (lab-65, pedido do usuário: "estar dentro de um raio de distância deles um
   // alerta de perigo ser emitido, com algum efeito em vermelho na tela") — manipulado direto no
   // DOM pelo laço de física (mesmo padrão de `debugRef`), não por `useState`: a intensidade
@@ -2004,6 +2039,13 @@ export function World3D({
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshHouseFurniture?.()
   }, [progress.unlockedFurnitureIds])
+
+  // lab-129: responder uma escolinha de planeta devolve tempo ao cronômetro de sobrevivência (se
+  // o jogador estiver num planeta com cronômetro) — mesmo padrão de bridge de
+  // `__refreshHouseFurniture` acima, disparado sempre que `completedPlanetQuestIds` muda.
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__onPlanetQuestCompleted?.()
+  }, [progress.completedPlanetQuestIds])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -2543,6 +2585,18 @@ export function World3D({
             marsCoinPotCollected = false
             marsCoinPotPivot?.setEnabled(false)
             if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = false
+            setSurvivalPlanetId(null)
+          } else if (planet.hasSurvivalTimer) {
+            // lab-129: cronômetro cheio a cada nova chegada — mesmo espírito de "vida cheia a
+            // cada nova ida a Marte" acima, cada expedição começa do zero.
+            survivalTimeRef.current = SURVIVAL_TIMER_MAX
+            lastSurvivalTimeDisplayRef.current = SURVIVAL_TIMER_MAX
+            setSurvivalTimeDisplay(SURVIVAL_TIMER_MAX)
+            setSurvivalPlanetId(arrivedPlanetId)
+            setOnMarsCombatZone(false)
+          } else {
+            setOnMarsCombatZone(false)
+            setSurvivalPlanetId(null)
           }
         } else {
           currentPlanetId = null
@@ -2554,6 +2608,7 @@ export function World3D({
             currentGroundBaseFn,
           )
           setOnMarsCombatZone(false)
+          setSurvivalPlanetId(null)
         }
       }
 
@@ -2646,6 +2701,42 @@ export function World3D({
         playKnockedOut()
         setMarsDeathMessage('Nocauteado! Volte de foguete pra continuar explorando Marte.')
         window.setTimeout(() => setMarsDeathMessage(null), 4000)
+      }
+
+      // Cronômetro de sobrevivência zerado (lab-129) — mesmo teleporte de "pouso no planeta
+      // principal" já usado por `respawnFromMarsDeath`, sem precisar do foguete. Mensagem
+      // diferente por planeta (calor em Mercúrio, frio nos demais) — pedido do usuário:
+      // "planetas quentes como mercurio e os mais longes como netuno".
+      function respawnFromSurvivalTimeout(planetId: string) {
+        const planet = DESTINATION_PLANETS[planetId]
+        currentPlanetId = null
+        currentWorldCenter = Vector3.Zero()
+        currentGroundBaseFn = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
+        teleportAvatarTo(Vector3.Zero(), offsetLandingUp(ROCKET_LAUNCH_DIR, PLANET_RADIUS, 2.2), currentGroundBaseFn)
+        survivalTimeRef.current = SURVIVAL_TIMER_MAX
+        lastSurvivalTimeDisplayRef.current = SURVIVAL_TIMER_MAX
+        setSurvivalTimeDisplay(SURVIVAL_TIMER_MAX)
+        setSurvivalPlanetId(null)
+        playKnockedOut()
+        const cause = planetId === 'mercurio' ? 'calor' : 'frio'
+        setSurvivalDeathMessage(
+          `Você desmaiou de ${cause}! Volte de foguete pra continuar explorando ${planet?.name ?? 'o planeta'}.`,
+        )
+        window.setTimeout(() => setSurvivalDeathMessage(null), 4000)
+      }
+
+      // Ponte React → closure (lab-129, mesmo padrão de `__refreshHouseFurniture`) — chamada por
+      // um `useEffect` observando `progress.completedPlanetQuestIds` sempre que uma escolinha de
+      // planeta é respondida corretamente; só devolve tempo se o jogador estiver AGORA num
+      // planeta com cronômetro (responder uma escolinha de outro planeta, ou já ter saído, não
+      // devolve nada aqui de errado).
+      ;(scene as any).__onPlanetQuestCompleted = () => {
+        if (currentPlanetId && DESTINATION_PLANETS[currentPlanetId]?.hasSurvivalTimer) {
+          survivalTimeRef.current = Math.min(SURVIVAL_TIMER_MAX, survivalTimeRef.current + SURVIVAL_TIMER_RESTORE)
+          const rounded = Math.ceil(survivalTimeRef.current)
+          lastSurvivalTimeDisplayRef.current = rounded
+          setSurvivalTimeDisplay(rounded)
+        }
       }
 
       // Feixe de laser (lab-62, pedido do usuário: "ao apertar E... atira o laser?") — cilindro
@@ -8399,6 +8490,27 @@ export function World3D({
           }
         }
 
+        // Cronômetro de sobrevivência (lab-129, pedido do usuário: "o cronometro fica regredindo
+        // se permanecer longe do foguete muito tempo") — só dreia fora do raio seguro perto do
+        // foguete de volta; `Math.ceil` + só atualizar o display quando o inteiro muda evita
+        // re-renderizar 60×/segundo (o de Marte só atualiza em eventos discretos de dano, este
+        // dreia continuamente, então precisa desse cuidado extra).
+        if (avatarMesh && currentPlanetId && DESTINATION_PLANETS[currentPlanetId]?.hasSurvivalTimer) {
+          const returnRocket = returnRockets.get(currentPlanetId)
+          const distToRocket = returnRocket
+            ? Vector3.Distance(avatarMesh.position, returnRocket.root.getAbsolutePosition())
+            : Infinity
+          if (distToRocket > SURVIVAL_TIMER_SAFE_RADIUS) {
+            survivalTimeRef.current = Math.max(0, survivalTimeRef.current - dt * SURVIVAL_TIMER_DRAIN_RATE)
+            const rounded = Math.ceil(survivalTimeRef.current)
+            if (rounded !== lastSurvivalTimeDisplayRef.current) {
+              lastSurvivalTimeDisplayRef.current = rounded
+              setSurvivalTimeDisplay(rounded)
+            }
+            if (survivalTimeRef.current <= 0) respawnFromSurvivalTimeout(currentPlanetId)
+          }
+        }
+
         // Espada/arma (lab-61) — giro de exibição (ajuda a chamar atenção, funciona como parte
         // da "dica" de localização pedida pelo usuário, já que a legenda flutuante sozinha pode
         // passar despercebida) + detecção de "pegou o item" (anda por cima, mesmo raio de coleta
@@ -9179,6 +9291,10 @@ export function World3D({
       <div ref={dangerOverlayRef} className="mars-danger-overlay" style={{ opacity: 0 }} />
       {marsDeathMessage && <p className="mars-death-message">{marsDeathMessage}</p>}
       {weaponMessage && <p className="mars-death-message weapon-message">{weaponMessage}</p>}
+      {survivalPlanetId && (
+        <SurvivalTimerBar timeLeft={survivalTimeDisplay} maxTime={SURVIVAL_TIMER_MAX} planetId={survivalPlanetId} />
+      )}
+      {survivalDeathMessage && <p className="mars-death-message">{survivalDeathMessage}</p>}
       {bagOpen && (
         <WeaponBagPanel
           hasSword={hasSword}
