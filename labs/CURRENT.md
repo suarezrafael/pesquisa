@@ -1,6 +1,23 @@
 # Laboratório atual
 
-Último concluído: labs/lab-124-corrige-morros-invisiveis-de-vez/ — retomada do bug de "morros
+Último concluído: labs/lab-125-code-splitting-studentfigure/ — **resultado negativo, testado e
+revertido**: converter os imports em barril de `@babylonjs/core` (`World3D.tsx`,
+`AvatarPreview3D.tsx`, `studentFigure.ts`) pra imports individuais/`.pure` (mesma técnica do
+lab-117, aplicada aos 35 símbolos únicos usados, com cada caminho verificado contra o pacote real
+antes de editar) foi implementado e buildou sem erros, mas a MEDIÇÃO antes/depois mostrou que o
+tamanho TOTAL (`World3D` + `studentFigure`, que qualquer jogador que entra no mundo 3D baixa junto)
+**piorou** de ~4,31MB pra ~5,85MB (+35%) — `studentFigure` encolheu 81% sozinho, mas isso só
+empurrou a maior parte do peso pro chunk `World3D`, que inchou quase 8×. Hipótese: as variantes
+`.pure.js` do Babylon.js favorecem precisar de 1-2 classes isoladas (o caso do lab-117), não uma
+fatia grande e interligada da API (34 classes em `World3D.tsx`) — provavelmente perdendo
+deduplicação que o barril original já fazia bem. Descartada a hipótese alternativa de que
+`@babylonjs/loaders/glTF` forçasse o barril de volta (grep recursivo confirmou zero imports de
+barril nesse pacote). **Revertido por completo antes de qualquer commit** — `npm run build`
+confirmado voltando aos tamanhos exatos de antes (634kB/3.680kB), `npm run test` 47/47. Backlog
+fica vazio depois deste laboratório — nenhum item pendente sem depender de novo pedido do usuário.
+Ver `labs/lab-125-code-splitting-studentfigure/CONTEXT.md`.
+
+Antes desse: labs/lab-124-corrige-morros-invisiveis-de-vez/ — retomada do bug de "morros
 invisíveis" deixado explicitamente sem solução no lab-95. Duas perguntas feitas ao usuário deram a
 informação que faltava: aparelho **Android/Chrome**, e o morro invisível **continua sólido** (não
 dá pra atravessar) — confirma que é só renderização, não um buraco real. **Duas correções**, ambas
@@ -846,14 +863,15 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-124-corrige-morros-invisiveis-de-vez/CONTEXT.md` (último laboratório concluído —
-retomada do bug de morros invisíveis do lab-95: `twoSidedLighting` + normais degeneradas
-corrigidas, ambas com evidência concreta; **confirmação definitiva ainda depende do usuário testar
-de novo no aparelho Android/Chrome onde viu o problema** — perguntar se ainda acontece antes de
-investigar mais fundo). Também pendente: uma investigação (não formalizada como lab próprio) que
-confirmou a causa raiz real do chunk `studentFigure` de 3,68MB (barril `@babylonjs/core` importado
-em 3 arquivos ao mesmo tempo) — corrigir exigiria converter os 3 arquivos de uma vez, candidato a
-laboratório futuro, ainda sem decisão se vale o risco. Antes do lab-124,
+`labs/lab-125-code-splitting-studentfigure/CONTEXT.md` (último laboratório concluído — resultado
+NEGATIVO testado e revertido: converter `@babylonjs/core` pra imports individuais piorou o
+tamanho total do bundle em vez de melhorar, ~4,31MB → ~5,85MB; documentado pra ninguém tentar essa
+mesma técnica de novo sem saber que já foi medida e descartada). **Backlog vazio depois deste
+laboratório** — nenhum item pendente sem depender de novo pedido do usuário. Antes desse,
+`labs/lab-124-corrige-morros-invisiveis-de-vez/CONTEXT.md` (retomada do bug de morros invisíveis do
+lab-95: `twoSidedLighting` + normais degeneradas corrigidas, ambas com evidência concreta;
+**confirmação definitiva ainda depende do usuário testar de novo no aparelho Android/Chrome onde
+viu o problema** — perguntar se ainda acontece antes de investigar mais fundo). Antes do lab-124,
 `labs/lab-123-casa-interior-3d/CONTEXT.md` ("Minha Casa" virou interior 3D andável de verdade —
 leia também a "Nota de processo" nesse CONTEXT.md sobre um sub-agente que não respeitou uma
 instrução de só investigar, cujo código foi integralmente revisado antes de aceitar), antes desse
