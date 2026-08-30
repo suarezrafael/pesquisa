@@ -10,7 +10,8 @@ import {
   SHOE_COLOR_CATALOG,
 } from '../data/customization'
 import { GLASSES_CATALOG } from '../data/glasses'
-import { FURNITURE_CATALOG } from '../data/furniture'
+import { FURNITURE_CATALOG, findFurnitureRewardForPlanet, type FurnitureOption } from '../data/furniture'
+import { findPlanetIdForQuest, isPlanetFullyCompleted } from '../data/planetQuests'
 import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -53,6 +54,10 @@ export interface CompletionResult {
   // ou pra quem tem assinatura ativa.
   awardedXp: number
   awardedCoins: number
+  // lab-130: só populado por `applyPlanetQuestCompletion`, e só na resposta que completa as 6
+  // escolinhas de um planeta pela primeira vez — a UI (`RewardToast`) usa isto pra anunciar o
+  // item novo junto da recompensa da própria pergunta, sem precisar de um segundo toast.
+  unlockedFurnitureItem?: FurnitureOption
 }
 
 // lab-126 (`prompt.md` §6, P2: "moeda bônus por assinatura") — só MOEDA, nunca XP: moeda aqui só
@@ -111,13 +116,26 @@ export function applyPlanetQuestCompletion(
   const awardedCoins = Math.round(
     quest.coinReward * event.coinMultiplier * (entitlementActive ? SUBSCRIBER_COIN_MULTIPLIER : 1),
   )
-  const next: Progress = {
+  const completedPlanetQuestIds = [...progress.completedPlanetQuestIds, quest.id]
+  let next: Progress = {
     ...progress,
-    completedPlanetQuestIds: [...progress.completedPlanetQuestIds, quest.id],
+    completedPlanetQuestIds,
     xp: progress.xp + awardedXp,
     coins: progress.coins + awardedCoins,
   }
-  return { progress: next, newBadges: [], awardedXp, awardedCoins }
+  // lab-130: só verifica/concede quando esta resposta ACABOU de completar o planeta (a checagem
+  // teria dado o mesmo resultado antes de responder, se o planeta já estivesse completo) — evita
+  // reprocessar a concessão (ainda que idempotente) a cada resposta de escolinha já feita antes.
+  let unlockedFurnitureItem: FurnitureOption | undefined
+  const planetId = findPlanetIdForQuest(quest.id)
+  if (planetId && isPlanetFullyCompleted(planetId, completedPlanetQuestIds)) {
+    const reward = unlockPlanetFurnitureReward(next, planetId)
+    if (reward.granted) {
+      next = reward.progress
+      unlockedFurnitureItem = reward.item
+    }
+  }
+  return { progress: next, newBadges: [], awardedXp, awardedCoins, unlockedFurnitureItem }
 }
 
 export function isQuestUnlocked(progress: Progress, questIndex: number): boolean {
@@ -189,14 +207,17 @@ export function unlockMarsReward(progress: Progress): MarsRewardResult {
 // Personalização de cores/cabelo (lab-73) — mesma regra de compra de `unlockAvatar`/`unlockHat`,
 // só extraída num helper porque agora são CINCO catálogos iguais (camisa/calça/sapato/mochila/
 // cabelo) em vez de repetir a mesma checagem cinco vezes.
-function unlockGeneric<T extends { id: string; cost: number; subscriptionOnly?: boolean }>(
+function unlockGeneric<T extends { id: string; cost: number; subscriptionOnly?: boolean; planetReward?: string }>(
   coins: number,
   unlockedIds: string[],
   catalog: T[],
   id: string,
 ): { coins: number; unlockedIds: string[] } | null {
   const item = catalog.find((c) => c.id === id)
-  if (!item || item.subscriptionOnly) return null
+  // lab-130: itens de recompensa de planeta (`planetReward`) nunca são compráveis, mesmo com
+  // `cost: 0` — só `unlockPlanetFurnitureReward` pode concedê-los, ao completar as 6 escolinhas
+  // do planeta correspondente.
+  if (!item || item.subscriptionOnly || item.planetReward) return null
   if (unlockedIds.includes(id)) return null
   if (coins < item.cost) return null
   return { coins: coins - item.cost, unlockedIds: [...unlockedIds, id] }
@@ -246,4 +267,25 @@ export function unlockFurniture(progress: Progress, id: string): Progress {
   const result = unlockGeneric(progress.coins, progress.unlockedFurnitureIds, FURNITURE_CATALOG, id)
   if (!result) return progress
   return { ...progress, coins: result.coins, unlockedFurnitureIds: result.unlockedIds }
+}
+
+export interface PlanetFurnitureRewardResult {
+  progress: Progress
+  granted: boolean
+  item?: FurnitureOption
+}
+
+// lab-130 (pedido do usuário: "cada planeta deve... liberar mais itens na casinha de cada um") —
+// mesmo padrão de `unlockMarsReward` acima: concessão de graça, idempotente (devolve `granted:
+// false` se o jogador já tiver o item daquele planeta), disparada por um evento de gameplay
+// (chamada por `applyPlanetQuestCompletion` ao detectar que o planeta acabou de ficar 100%
+// completo), nunca pela compra normal (`unlockGeneric` rejeita itens `planetReward`).
+export function unlockPlanetFurnitureReward(progress: Progress, planetId: string): PlanetFurnitureRewardResult {
+  const item = findFurnitureRewardForPlanet(planetId)
+  if (!item || progress.unlockedFurnitureIds.includes(item.id)) return { progress, granted: false }
+  return {
+    progress: { ...progress, unlockedFurnitureIds: [...progress.unlockedFurnitureIds, item.id] },
+    granted: true,
+    item,
+  }
 }

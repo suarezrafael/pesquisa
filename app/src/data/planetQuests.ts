@@ -542,3 +542,22 @@ export function findPlanetQuestById(questId: string): Quest | undefined {
   }
   return undefined
 }
+
+// lab-130: descobre a qual planeta uma pergunta pertence — usado por `applyPlanetQuestCompletion`
+// (progression.ts) pra saber qual planeta checar quando decide se concede a recompensa de mobília
+// exclusiva (`FURNITURE_CATALOG`, campo `planetReward`).
+export function findPlanetIdForQuest(questId: string): string | undefined {
+  for (const [planetId, list] of Object.entries(planetQuests)) {
+    if (list.some((q) => q.id === questId)) return planetId
+  }
+  return undefined
+}
+
+// lab-130: um planeta está "conquistado" quando as 6 escolinhas dele já foram respondidas —
+// função pura (só ids), sem depender de `Progress`, reaproveitável em testes sem montar estado
+// completo.
+export function isPlanetFullyCompleted(planetId: string, completedPlanetQuestIds: string[]): boolean {
+  const list = planetQuests[planetId]
+  if (!list) return false
+  return list.every((q) => completedPlanetQuestIds.includes(q.id))
+}

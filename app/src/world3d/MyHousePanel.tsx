@@ -56,7 +56,11 @@ export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, o
                   <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
                 )}
 
-                {!usable && !item.subscriptionOnly && (
+                {!usable && item.planetReward && (
+                  <span className="avatar-shop-tag subscription-lock">🔒 Conquiste o planeta</span>
+                )}
+
+                {!usable && !item.subscriptionOnly && !item.planetReward && (
                   <button
                     type="button"
                     className="avatar-shop-action buy"

@@ -20,6 +20,7 @@ import {
   unlockHairShape,
   unlockMarsReward,
   unlockPantsColor,
+  unlockPlanetFurnitureReward,
   unlockShirtColor,
   unlockShoeColor,
   xpForLevel,
@@ -27,6 +28,7 @@ import {
 } from './progression'
 import { emptyProgress } from './storage'
 import { quests } from '../data/quests'
+import { planetQuests } from '../data/planetQuests'
 import type { Quest } from '../types'
 import type { WeeklyEvent } from '../data/weeklyEvents'
 
@@ -187,6 +189,81 @@ describe('applyPlanetQuestCompletion — escolinhas de astronomia dos planetas (
     const result = applyPlanetQuestCompletion(emptyProgress, quest, NO_BONUS_EVENT, true)
     expect(result.awardedXp).toBe(20)
     expect(result.awardedCoins).toBe(Math.round(8 * SUBSCRIBER_COIN_MULTIPLIER))
+  })
+})
+
+describe('applyPlanetQuestCompletion — mobília de conquista de planeta (lab-130)', () => {
+  it('não concede nada antes da 6ª (última) escolinha do planeta ser respondida', () => {
+    let progress = emptyProgress
+    const mercurio = planetQuests.mercurio
+    for (const quest of mercurio.slice(0, 5)) {
+      const result = applyPlanetQuestCompletion(progress, quest, NO_BONUS_EVENT)
+      expect(result.unlockedFurnitureItem).toBeUndefined()
+      progress = result.progress
+    }
+    expect(progress.unlockedFurnitureIds).not.toContain('meteorito_mercurio')
+  })
+
+  it('concede o item exclusivo do planeta exatamente ao responder a 6ª escolinha', () => {
+    let progress = emptyProgress
+    const mercurio = planetQuests.mercurio
+    for (const quest of mercurio.slice(0, 5)) {
+      progress = applyPlanetQuestCompletion(progress, quest, NO_BONUS_EVENT).progress
+    }
+    const last = applyPlanetQuestCompletion(progress, mercurio[5], NO_BONUS_EVENT)
+    expect(last.unlockedFurnitureItem?.id).toBe('meteorito_mercurio')
+    expect(last.progress.unlockedFurnitureIds).toContain('meteorito_mercurio')
+  })
+
+  it('não concede o item de novo ao reabrir uma escolinha já respondida do planeta já conquistado', () => {
+    let progress = emptyProgress
+    const mercurio = planetQuests.mercurio
+    for (const quest of mercurio) {
+      progress = applyPlanetQuestCompletion(progress, quest, NO_BONUS_EVENT).progress
+    }
+    const again = applyPlanetQuestCompletion(progress, mercurio[5], NO_BONUS_EVENT)
+    expect(again.unlockedFurnitureItem).toBeUndefined()
+    expect(again.progress).toBe(progress)
+  })
+
+  it('cada planeta concede o item certo, sem confundir um com o outro', () => {
+    let progress = emptyProgress
+    for (const quest of planetQuests.venus) {
+      progress = applyPlanetQuestCompletion(progress, quest, NO_BONUS_EVENT).progress
+    }
+    expect(progress.unlockedFurnitureIds).toContain('vulcao_venus')
+    expect(progress.unlockedFurnitureIds).not.toContain('meteorito_mercurio')
+  })
+})
+
+describe('unlockPlanetFurnitureReward (lab-130)', () => {
+  it('concede o item na primeira vez', () => {
+    const result = unlockPlanetFurnitureReward(emptyProgress, 'saturno')
+    expect(result.granted).toBe(true)
+    expect(result.item?.id).toBe('anel_saturno')
+    expect(result.progress.unlockedFurnitureIds).toContain('anel_saturno')
+  })
+
+  it('é idempotente — não concede de novo se o jogador já tiver o item', () => {
+    const jaTem = { ...emptyProgress, unlockedFurnitureIds: [...emptyProgress.unlockedFurnitureIds, 'anel_saturno'] }
+    const result = unlockPlanetFurnitureReward(jaTem, 'saturno')
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(jaTem)
+  })
+
+  it('não faz nada pra um planeta sem item de recompensa cadastrado', () => {
+    const result = unlockPlanetFurnitureReward(emptyProgress, 'planeta-inexistente')
+    expect(result.granted).toBe(false)
+  })
+})
+
+describe('unlockFurniture — itens de recompensa de planeta não são compráveis (lab-130)', () => {
+  it('não deixa comprar um item planetReward mesmo com moeda de sobra', () => {
+    const comMoedas = { ...emptyProgress, coins: 9999 }
+    const next = unlockFurniture(comMoedas, 'meteorito_mercurio')
+    expect(next).toBe(comMoedas)
+    expect(next.unlockedFurnitureIds).not.toContain('meteorito_mercurio')
+    expect(next.coins).toBe(9999)
   })
 })
 

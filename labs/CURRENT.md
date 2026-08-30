@@ -1,6 +1,31 @@
 # Laboratório atual
 
-Último concluído: labs/lab-129-cronometro-sobrevivencia-planetas/ — pedido do backlog discutido
+Último concluído: labs/lab-130-mobilia-por-planeta/ — pedido original do usuário (backlog
+discutido em chat): "cada planeta deve subir o nivel das perguntas para liberar mais itens na
+casinha de cada um" — escolhido entre 4 opções de backlog via `AskUserQuestion`. Completar as 6
+escolinhas de um planeta-destino (Mercúrio/Vênus/Júpiter/Saturno/Urano/Netuno) agora concede, de
+graça, um item de mobília exclusivo e temático daquele planeta pra "Minha Casa" (Meteorito de
+Mercúrio ☄️, Vulcão de Vênus 🌋, Mancha Vermelha de Júpiter 🟠, Anel de Saturno 💍, Cristal de
+Urano 🧊, Redemoinho de Netuno 🌊). `planetReward?: string` novo em `FurnitureOption`
+(`unlockGeneric` passa a rejeitar compra desses itens, mesma regra de `subscriptionOnly`);
+`unlockPlanetFurnitureReward` novo (mesmo padrão idempotente de `unlockMarsReward`, lab-94);
+`applyPlanetQuestCompletion` detecta planeta 100% completo e expõe `unlockedFurnitureItem` em
+`CompletionResult`, anunciado numa linha de bônus nova no `RewardToast` (mesmo padrão das linhas de
+evento semanal/assinante) em vez de um segundo modal; `MyHousePanel` ganha um terceiro estado
+visual ("🔒 Conquiste o planeta") pros itens ainda não concedidos. 8 testes novos em
+`progression.test.ts` (52→60) cobrindo a condição exata de concessão, idempotência e a
+impossibilidade de compra direta. **Verificação ao vivo ficou PARCIAL**: build/testes confirmados
+limpos, persistência de `localStorage` confirmada (item novo aceito sem quebrar o resto do save),
+mas o roteiro completo (responder as 6 perguntas reais → ver o toast → abrir Minha Casa → ver "✓
+Tem") não foi concluído — a navegação de teleporte de debug até o balcão dentro do interior 3D da
+casa (lab-123) esbarrou numa limitação da PRÓPRIA TÉCNICA de teste (o interior usa um sistema de
+coordenadas próprio com um raio de saída perto da entrada, e `__debugTeleport` não atualiza a flag
+de estado que o movimento real do jogador atualiza — teleportes às cegas acabaram disparando a
+saída da casa repetidamente), não um bug do produto; o fluxo porta→interior→balcão em si é código
+do lab-123, já verificado ao vivo naquela ocasião. `npm run build` sem erros. Ver
+`labs/lab-130-mobilia-por-planeta/CONTEXT.md`.
+
+Antes desse: labs/lab-129-cronometro-sobrevivencia-planetas/ — pedido do backlog discutido
 em chat: "alguns planetas tem tempo de permanencias, um cronometro onde voce precisa responder a
 perguntas durante a exploracao, mas o cronometro fica regredindo se permanecer longe do foguete
 muito tempo voce morre e volta pra terra, pode ser planetas quentes como mercurio e os mais longes

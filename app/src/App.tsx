@@ -26,6 +26,7 @@ import {
   touchLastPlayed,
 } from './state/storage'
 import type { Quest } from './types'
+import type { FurnitureOption } from './data/furniture'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
@@ -96,9 +97,13 @@ function GameApp() {
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [activePlanetQuest, setActivePlanetQuest] = useState<Quest | null>(null)
-  const [reward, setReward] = useState<{ quest: Quest; newBadges: string[]; awardedXp: number; awardedCoins: number } | null>(
-    null,
-  )
+  const [reward, setReward] = useState<{
+    quest: Quest
+    newBadges: string[]
+    awardedXp: number
+    awardedCoins: number
+    unlockedFurnitureItem?: FurnitureOption
+  } | null>(null)
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
   const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
   const [showHelp, setShowHelp] = useState(false)
@@ -207,8 +212,11 @@ function GameApp() {
   // `progression.ts`), então mostra o mesmo `RewardToast` das missões normais.
   function handleCompletePlanetQuest() {
     if (!activePlanetQuest) return
-    const { newBadges, awardedXp, awardedCoins } = completePlanetQuest(activePlanetQuest, entitlement?.active)
-    setReward({ quest: activePlanetQuest, newBadges, awardedXp, awardedCoins })
+    const { newBadges, awardedXp, awardedCoins, unlockedFurnitureItem } = completePlanetQuest(
+      activePlanetQuest,
+      entitlement?.active,
+    )
+    setReward({ quest: activePlanetQuest, newBadges, awardedXp, awardedCoins, unlockedFurnitureItem })
     setActivePlanetQuest(null)
   }
 
@@ -286,6 +294,7 @@ function GameApp() {
           awardedCoins={reward.awardedCoins}
           newBadges={reward.newBadges}
           entitlementActive={entitlement?.active ?? false}
+          unlockedFurnitureItem={reward.unlockedFurnitureItem}
           onContinue={() => setReward(null)}
         />
       )}
