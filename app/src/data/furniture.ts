@@ -29,6 +29,14 @@ export const FURNITURE_CATALOG: FurnitureOption[] = [
   { id: 'grama_florida', name: 'Grama Florida', emoji: '🌸', cost: 0, subscriptionOnly: true },
   { id: 'banco_madeira', name: 'Banco de Madeira', emoji: '🪵', cost: 0, subscriptionOnly: true },
   { id: 'borboletas_animadas', name: 'Borboletas Animadas', emoji: '🦋', cost: 0, subscriptionOnly: true },
+  // Itens de temática educacional (lab-123, pedido do usuário: "mais itens relacionados a
+  // educação também") — SEMPRE grátis/compráveis com moeda, nunca `subscriptionOnly`: conteúdo
+  // educacional nunca é gate de assinatura, regra inegociável do plano comercial (mesma regra que
+  // já vale pra missões/progressão).
+  { id: 'estante_livros', name: 'Estante de Livros', emoji: '📚', cost: 18 },
+  { id: 'globo_terrestre', name: 'Globo Terrestre', emoji: '🌍', cost: 14 },
+  { id: 'lousa', name: 'Lousa', emoji: '🖍️', cost: 12 },
+  { id: 'microscopio', name: 'Microscópio', emoji: '🔬', cost: 16 },
 ]
 
 export function findFurnitureById(id: string): FurnitureOption | undefined {

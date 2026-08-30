@@ -50,6 +50,7 @@ import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
+import { FURNITURE_CATALOG } from '../data/furniture'
 import {
   findColorOption,
   findHairShapeOption,
@@ -1976,6 +1977,12 @@ export function World3D({
     ;(sceneRef.current as any)?.__setPlayerHairShape?.(profile.equippedHairShapeId)
   }, [profile.equippedHairShapeId])
 
+  // lab-123: reaplica visibilidade da mobília dentro de casa assim que uma compra muda
+  // `unlockedFurnitureIds` — sem isso, o jogador só veria o móvel novo depois de sair e voltar.
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__refreshHouseFurniture?.()
+  }, [progress.unlockedFurnitureIds])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -2192,6 +2199,22 @@ export function World3D({
     // radial, física, embarque/pouso) só precisa saber "estou em algum planeta-destino ou não",
     // ou seja, `currentPlanetId !== null`.
     let currentPlanetId: string | null = null
+    // Interior da casa (lab-123) — deliberadamente NÃO usa `currentPlanetId`: entrar na própria
+    // casa não muda "em que planeta você está" (é um espaço pessoal dentro do mesmo planetinha),
+    // só sobrescreve `currentWorldCenter`/`currentGroundBaseFn` temporariamente (mesmo mecanismo
+    // de gravidade radial acima, tratando o interior como mais um "planetinha" de raio grande).
+    let insideHouseInterior = false
+    let houseInteriorBuilt = false
+    // Restaurados ao sair (ver `exitHouseInterior`) — a casa nunca muda `currentPlanetId` (ver
+    // comentário acima), então "fora" é sempre onde o jogador estava exatamente antes de entrar.
+    let savedOutsideCenter = Vector3.Zero()
+    let savedOutsideGroundFn: (localUp: Vector3) => number = currentGroundBaseFn
+    let houseDoorInsidePos = Vector3.Zero()
+    let houseInteriorSpawnPos = Vector3.Zero()
+    let houseCounterPos = Vector3.Zero()
+    let houseExitHintLabel: TextBlock | null = null
+    let houseEnterHintLabel: TextBlock | null = null
+    const houseFurnitureNodes: Record<string, TransformNode> = {}
     const builtPlanetIds = new Set<string>()
     let mainRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
     // Um foguete de volta por planeta-destino já visitado (lab-110) — substitui a variável única
@@ -2659,6 +2682,25 @@ export function World3D({
           return
         }
         if (suspendRef.current || chatOpenRef.current || !avatarMesh) return
+
+        // Casa (lab-123) — apertar E perto da porta entra/sai; perto do balcão de compras (só
+        // dentro de casa) abre o catálogo. Checado ANTES do carro/foguete: nenhum dos dois existe
+        // perto da casa ou dentro do interior (planetinha de raio grande bem longe de tudo o
+        // resto), então a ordem não importa na prática, mas casa primeiro deixa a intenção clara.
+        if (insideHouseInterior) {
+          if (Vector3.Distance(avatarMesh.position, houseDoorInsidePos) < HOUSE_TRIGGER_DISTANCE) {
+            exitHouseInterior()
+            return
+          }
+          if (Vector3.Distance(avatarMesh.position, houseCounterPos) < HOUSE_TRIGGER_DISTANCE) {
+            onOpenMyHouseRef.current()
+            return
+          }
+        } else if (Vector3.Distance(avatarMesh.position, houseSurfacePos) < HOUSE_TRIGGER_DISTANCE) {
+          enterHouseInterior()
+          return
+        }
+
         let nearestCar: Carro | null = null
         let nearestDist = CAR_ENTER_DISTANCE
         for (const car of carros) {
@@ -5883,6 +5925,19 @@ export function World3D({
       houseDoor.material = houseDoorMat
       houseDoor.parent = houseBase
 
+      // lab-123: "Pressione E pra entrar" — mesmo padrão de carro/foguete (dica linkada à malha
+      // da porta, alpha alternado por distância a cada quadro, ver bloco perto do fim do arquivo).
+      const houseEnterHint = new TextBlock('houseEnterHint', 'Pressione E pra entrar')
+      houseEnterHint.color = 'white'
+      houseEnterHint.fontSize = mobileFontSize(18)
+      houseEnterHint.fontWeight = 'bold'
+      houseEnterHint.outlineWidth = 3
+      houseEnterHint.outlineColor = 'rgba(0,0,0,0.6)'
+      houseEnterHint.alpha = 0
+      guiTexture.addControl(houseEnterHint)
+      houseEnterHint.linkWithMesh(houseDoor)
+      houseEnterHintLabel = houseEnterHint
+
       const houseRoof = MeshBuilder.CreateCylinder(
         'houseRoof',
         { height: 0.8, diameterTop: 0.05, diameterBottom: 2.1, tessellation: 4 },
@@ -5905,6 +5960,304 @@ export function World3D({
       guiTexture.addControl(houseLabel)
       houseLabel.linkWithMesh(houseRoof)
       houseLabel.linkOffsetY = -70
+
+      // Interior da casa (lab-123, pedido do usuário: "a casa não consigo entrar, ele deve ser
+      // uma mapa interno a parte do mundo virtual... ao chegar perto tenho aperta E e entrar na
+      // casa"). Modelado como mais um "planetinha" de raio grande (curvatura imperceptível numa
+      // sala de poucos metros), bem longe de qualquer outro conteúdo — reaproveita a MESMA
+      // gravidade radial de todo o resto do jogo (`currentWorldCenter`/`currentGroundBaseFn`, ver
+      // comentário na declaração de `insideHouseInterior`), sem Scene/Engine Babylon separada.
+      const HOUSE_INTERIOR_CENTER = new Vector3(150, 0, 150)
+      const HOUSE_INTERIOR_RADIUS = 10
+      const HOUSE_INTERIOR_LANDING_UP = Vector3.Up()
+      const HOUSE_ROOM_HALF_SIZE = 5.5
+      const HOUSE_ROOM_HEIGHT = 3
+      const HOUSE_WALL_THICK = 0.2
+      // A câmera em 3ª pessoa do resto do jogo usa `CAMERA_DISTANCE = 9` — maior que o quarto
+      // inteiro (achado ao verificar ao vivo: a câmera ficava do lado de FORA da parede, olhando
+      // pra face externa dela, exatamente o bug que motivou este comentário). Só dentro de casa,
+      // a câmera usa uma distância/altura bem menor, mantendo folga da parede mesmo com o jogador
+      // encostado nela olhando pro centro da sala.
+      const HOUSE_INTERIOR_CAMERA_DISTANCE = 3.2
+      const HOUSE_INTERIOR_CAMERA_HEIGHT = 2.2
+
+      // Visual de cada peça de `FURNITURE_CATALOG` (`data/furniture.ts`, dado de domínio puro) —
+      // mapeamento fica AQUI, não no arquivo de dados, pra não acoplar o catálogo a nenhuma classe
+      // de engine 3D (mesma separação já usada por `hats.ts`/`glasses.ts` vs. `studentFigure.ts`).
+      const FURNITURE_VISUAL_KIND: Record<string, { kind: string; color: Color3 }> = {
+        cama: { kind: 'bed', color: new Color3(0.75, 0.3, 0.35) },
+        mesa_cadeira: { kind: 'table', color: new Color3(0.55, 0.38, 0.22) },
+        tapete: { kind: 'rug', color: new Color3(0.5, 0.25, 0.55) },
+        planta: { kind: 'plant', color: new Color3(0.25, 0.55, 0.3) },
+        luminaria: { kind: 'lamp', color: new Color3(0.9, 0.85, 0.6) },
+        cama_nave: { kind: 'bed', color: new Color3(0.2, 0.3, 0.55) },
+        luminaria_planeta: { kind: 'lamp', color: new Color3(0.5, 0.7, 0.9) },
+        tapete_estrelas: { kind: 'rug', color: new Color3(0.14, 0.12, 0.32) },
+        grama_florida: { kind: 'rug', color: new Color3(0.35, 0.65, 0.35) },
+        banco_madeira: { kind: 'bench', color: new Color3(0.5, 0.35, 0.2) },
+        borboletas_animadas: { kind: 'butterflies', color: new Color3(0.85, 0.4, 0.6) },
+        estante_livros: { kind: 'shelf', color: new Color3(0.45, 0.3, 0.18) },
+        globo_terrestre: { kind: 'globe', color: new Color3(0.25, 0.5, 0.65) },
+        lousa: { kind: 'board', color: new Color3(0.12, 0.35, 0.25) },
+        microscopio: { kind: 'microscope', color: new Color3(0.6, 0.6, 0.65) },
+      }
+
+      // Malha procedural simples por `kind` — mesmo estilo de caixas/cilindros/esferas já usado em
+      // todo o resto do arquivo (mesa da carteira, foguete, etc.), não modelos importados.
+      function buildFurniturePiece(kind: string, color: Color3): TransformNode {
+        const root = new TransformNode(`furniture-${kind}-${Math.random().toString(36).slice(2)}`, scene)
+        const mat = new PBRMaterial(`furnMat-${root.name}`, scene)
+        mat.albedoColor = color
+        mat.roughness = 0.8
+        const add = (mesh: Mesh, y = 0) => {
+          mesh.material = mat
+          mesh.parent = root
+          mesh.position.y = y
+          shadowGenerator.addShadowCaster(mesh)
+          return mesh
+        }
+        if (kind === 'rug') {
+          add(MeshBuilder.CreateBox('rug', { width: 1.4, height: 0.04, depth: 1.0 }, scene), 0.02)
+        } else if (kind === 'bed') {
+          add(MeshBuilder.CreateBox('bedBase', { width: 1.0, height: 0.35, depth: 1.8 }, scene), 0.18)
+          const head = add(MeshBuilder.CreateBox('bedHead', { width: 1.0, height: 0.5, depth: 0.1 }, scene), 0.6)
+          head.position.z = -0.85
+        } else if (kind === 'table') {
+          add(MeshBuilder.CreateBox('tableTop', { width: 0.9, height: 0.06, depth: 0.6 }, scene), 0.62)
+          for (const [sx, sz] of [
+            [-0.4, -0.25],
+            [0.4, -0.25],
+            [-0.4, 0.25],
+            [0.4, 0.25],
+          ]) {
+            const leg = add(MeshBuilder.CreateCylinder('tableLeg', { height: 0.6, diameter: 0.05 }, scene), 0.3)
+            leg.position.x = sx
+            leg.position.z = sz
+          }
+        } else if (kind === 'bench') {
+          add(MeshBuilder.CreateBox('benchTop', { width: 1.1, height: 0.08, depth: 0.35 }, scene), 0.42)
+          for (const sx of [-0.45, 0.45]) {
+            const leg = add(MeshBuilder.CreateBox('benchLeg', { width: 0.06, height: 0.4, depth: 0.3 }, scene), 0.2)
+            leg.position.x = sx
+          }
+        } else if (kind === 'plant') {
+          add(
+            MeshBuilder.CreateCylinder('plantPot', { height: 0.3, diameterTop: 0.35, diameterBottom: 0.25 }, scene),
+            0.15,
+          )
+          add(MeshBuilder.CreateSphere('plantFoliage', { diameter: 0.55 }, scene), 0.55)
+        } else if (kind === 'lamp') {
+          add(MeshBuilder.CreateCylinder('lampPole', { height: 1.1, diameter: 0.05 }, scene), 0.55)
+          const bulb = add(MeshBuilder.CreateSphere('lampBulb', { diameter: 0.28 }, scene), 1.15)
+          ;(bulb.material as PBRMaterial).emissiveColor = color.scale(0.6)
+        } else if (kind === 'shelf') {
+          add(MeshBuilder.CreateBox('shelfBody', { width: 0.9, height: 1.4, depth: 0.3 }, scene), 0.7)
+          const bookMat = new PBRMaterial(`furnBookMat-${root.name}`, scene)
+          bookMat.albedoColor = new Color3(0.7, 0.2, 0.2)
+          for (const y of [0.35, 0.75, 1.15]) {
+            const books = MeshBuilder.CreateBox('shelfBooks', { width: 0.8, height: 0.15, depth: 0.22 }, scene)
+            books.material = bookMat
+            books.parent = root
+            books.position.y = y
+            books.position.z = 0.02
+            shadowGenerator.addShadowCaster(books)
+          }
+        } else if (kind === 'globe') {
+          add(MeshBuilder.CreateCylinder('globeStand', { height: 0.7, diameter: 0.08 }, scene), 0.35)
+          add(MeshBuilder.CreateSphere('globeBall', { diameter: 0.5 }, scene), 0.9)
+        } else if (kind === 'board') {
+          const leg1 = add(MeshBuilder.CreateCylinder('boardLeg1', { height: 1.2, diameter: 0.05 }, scene), 0.6)
+          leg1.position.x = -0.45
+          const leg2 = add(MeshBuilder.CreateCylinder('boardLeg2', { height: 1.2, diameter: 0.05 }, scene), 0.6)
+          leg2.position.x = 0.45
+          add(MeshBuilder.CreateBox('boardPanel', { width: 1.1, height: 0.7, depth: 0.05 }, scene), 1.1)
+        } else if (kind === 'microscope') {
+          add(MeshBuilder.CreateCylinder('microBase', { height: 0.08, diameter: 0.35 }, scene), 0.04)
+          add(MeshBuilder.CreateCylinder('microArm', { height: 0.5, diameter: 0.06 }, scene), 0.3)
+          add(MeshBuilder.CreateSphere('microLens', { diameter: 0.14 }, scene), 0.55)
+        } else if (kind === 'butterflies') {
+          for (let i = 0; i < 3; i++) {
+            const wing = MeshBuilder.CreatePlane(`butterflyWing${i}`, { size: 0.18 }, scene)
+            wing.material = mat
+            wing.parent = root
+            wing.position = new Vector3((i - 1) * 0.3, 0.5 + i * 0.15, (i - 1) * 0.2)
+            wing.billboardMode = Mesh.BILLBOARDMODE_Y
+          }
+        }
+        return root
+      }
+
+      // Reaplica visibilidade de cada peça conforme `progress.unlockedFurnitureIds` — chamada ao
+      // construir a sala, ao entrar de novo, e sempre que a lista muda de verdade (bridge
+      // `__refreshHouseFurniture`, mesmo padrão de `__setAvatarShirtColor` etc., observado por um
+      // `useEffect` em `progress.unlockedFurnitureIds`) — cobre comprar um item novo no balcão SEM
+      // precisar sair e voltar pra ver o móvel aparecer.
+      function refreshHouseFurnitureVisuals() {
+        for (const item of FURNITURE_CATALOG) {
+          houseFurnitureNodes[item.id]?.setEnabled(progressRef.current.unlockedFurnitureIds.includes(item.id))
+        }
+      }
+      ;(scene as any).__refreshHouseFurniture = refreshHouseFurnitureVisuals
+
+      // Construída sob demanda na primeira entrada (mesmo padrão de `buildMarsIfNeeded` etc.) —
+      // nenhum jogador que nunca entrar em casa paga o custo de criar esta sala.
+      function buildHouseInteriorIfNeeded() {
+        if (houseInteriorBuilt) return
+        houseInteriorBuilt = true
+
+        const interiorRoot = new TransformNode('houseInteriorRoot', scene)
+        interiorRoot.position = HOUSE_INTERIOR_CENTER.add(HOUSE_INTERIOR_LANDING_UP.scale(HOUSE_INTERIOR_RADIUS))
+        interiorRoot.rotationQuaternion = alignmentQuaternion(HOUSE_INTERIOR_LANDING_UP)
+
+        const S = HOUSE_ROOM_HALF_SIZE
+        const H = HOUSE_ROOM_HEIGHT
+        const T = HOUSE_WALL_THICK
+
+        const floorMat = new PBRMaterial('houseIntFloorMat', scene)
+        floorMat.albedoColor = new Color3(0.68, 0.5, 0.36)
+        floorMat.roughness = 0.85
+        const wallMat = new PBRMaterial('houseIntWallMat', scene)
+        wallMat.albedoColor = new Color3(0.92, 0.86, 0.74)
+        wallMat.roughness = 0.9
+        const ceilingMat = new PBRMaterial('houseIntCeilingMat', scene)
+        ceilingMat.albedoColor = new Color3(0.85, 0.8, 0.7)
+        ceilingMat.roughness = 0.9
+        const doorMat = new PBRMaterial('houseIntDoorMat', scene)
+        doorMat.albedoColor = new Color3(0.4, 0.25, 0.15)
+        doorMat.roughness = 0.7
+
+        const floor = MeshBuilder.CreateBox('houseIntFloor', { width: S * 2, height: T, depth: S * 2 }, scene)
+        floor.position.y = -T / 2
+        floor.material = floorMat
+        floor.parent = interiorRoot
+        floor.receiveShadows = true
+        new PhysicsAggregate(floor, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+
+        const ceiling = MeshBuilder.CreateBox('houseIntCeiling', { width: S * 2, height: T, depth: S * 2 }, scene)
+        ceiling.position.y = H + T / 2
+        ceiling.material = ceilingMat
+        ceiling.parent = interiorRoot
+
+        const wallHalf = H / 2
+        const northWall = MeshBuilder.CreateBox('houseIntWallNorth', { width: S * 2, height: H, depth: T }, scene)
+        northWall.position = new Vector3(0, wallHalf, -S)
+        const southWall = MeshBuilder.CreateBox('houseIntWallSouth', { width: S * 2, height: H, depth: T }, scene)
+        southWall.position = new Vector3(0, wallHalf, S)
+        const eastWall = MeshBuilder.CreateBox('houseIntWallEast', { width: T, height: H, depth: S * 2 }, scene)
+        eastWall.position = new Vector3(S, wallHalf, 0)
+        const westWall = MeshBuilder.CreateBox('houseIntWallWest', { width: T, height: H, depth: S * 2 }, scene)
+        westWall.position = new Vector3(-S, wallHalf, 0)
+        for (const wall of [northWall, southWall, eastWall, westWall]) {
+          wall.material = wallMat
+          wall.parent = interiorRoot
+          wall.receiveShadows = true
+          new PhysicsAggregate(wall, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+          shadowGenerator.addShadowCaster(wall)
+        }
+
+        // Porta única (pedido do usuário: a mesma porta serve pra entrar E sair) — decorativa, sem
+        // vão físico de verdade na parede (mesmo padrão da fachada externa: nenhum prédio deste
+        // jogo tem física de vão de porta, ver comentário na construção da fachada acima).
+        const interiorDoor = MeshBuilder.CreateBox('houseIntDoor', { width: 0.9, height: 1.8, depth: 0.08 }, scene)
+        interiorDoor.position = new Vector3(0, 0.9, S - T / 2 - 0.05)
+        interiorDoor.material = doorMat
+        interiorDoor.parent = interiorRoot
+        houseDoorInsidePos = interiorRoot.position.add(interiorDoor.position)
+
+        const exitHint = new TextBlock('houseExitHint', 'Pressione E pra sair')
+        exitHint.color = 'white'
+        exitHint.fontSize = mobileFontSize(18)
+        exitHint.fontWeight = 'bold'
+        exitHint.outlineWidth = 3
+        exitHint.outlineColor = 'rgba(0,0,0,0.6)'
+        exitHint.alpha = 0
+        guiTexture.addControl(exitHint)
+        exitHint.linkWithMesh(interiorDoor)
+        houseExitHintLabel = exitHint
+
+        // Ponto de nascimento: alguns metros pra dentro da sala, longe da porta (evita disparar a
+        // saída no mesmo instante em que se entra — mesmo espírito de histerese de todo gatilho
+        // deste arquivo). O jogador nasce de frente pra porta (facing +Z, ver `enterHouseInterior`),
+        // então a câmera fica atrás dele, do lado NORTE — precisa de folga daquela parede maior
+        // que `HOUSE_INTERIOR_CAMERA_DISTANCE`, senão a câmera fica do lado de FORA da parede
+        // (bug real pego na verificação ao vivo: com uma folga fixa de 1.8, a câmera de distância
+        // 3.2 furava a parede norte).
+        const spawnClearanceFromBackWall = HOUSE_INTERIOR_CAMERA_DISTANCE + 1
+        houseInteriorSpawnPos = interiorRoot.position.add(
+          new Vector3(0, AVATAR_RADIUS + 0.05, -(S - spawnClearanceFromBackWall)),
+        )
+
+        // Balcão de compras — gatilho de proximidade abre `MyHousePanel` (mesmo painel de sempre,
+        // só muda de onde é aberto: da fachada externa pra dentro da sala).
+        const counterMat = new PBRMaterial('houseCounterMat', scene)
+        counterMat.albedoColor = new Color3(0.6, 0.42, 0.3)
+        counterMat.roughness = 0.7
+        const counter = MeshBuilder.CreateBox('houseCounter', { width: 1.2, height: 0.9, depth: 0.5 }, scene)
+        counter.position = new Vector3(0, 0.45, 0)
+        counter.material = counterMat
+        counter.parent = interiorRoot
+        shadowGenerator.addShadowCaster(counter)
+        houseCounterPos = interiorRoot.position.add(counter.position)
+
+        const counterLabel = new TextBlock('houseCounterLabel', '🛍️ Catálogo')
+        counterLabel.color = 'white'
+        counterLabel.fontSize = mobileFontSize(20)
+        counterLabel.outlineWidth = 4
+        counterLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(counterLabel)
+        counterLabel.linkWithMesh(counter)
+        counterLabel.linkOffsetY = -40
+
+        // Mobília em anel ao redor do balcão, reservando um corredor livre na direção da porta
+        // (evita qualquer peça bloqueando a passagem) — layout genérico, escala sozinho conforme
+        // `FURNITURE_CATALOG` cresce, sem posição fixa por item escrita à mão.
+        const doorAngle = Math.PI / 2 // porta fica em +Z (sul)
+        const doorGap = (32 * Math.PI) / 180
+        const usableArc = Math.PI * 2 - doorGap * 2
+        const startAngle = doorAngle + doorGap
+        const ringRadius = 3.0
+        FURNITURE_CATALOG.forEach((item, i) => {
+          const visual = FURNITURE_VISUAL_KIND[item.id]
+          if (!visual) return
+          const angle = startAngle + (usableArc * (i + 0.5)) / FURNITURE_CATALOG.length
+          const piece = buildFurniturePiece(visual.kind, visual.color)
+          piece.parent = interiorRoot
+          piece.position = new Vector3(Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius)
+          piece.rotation.y = -angle
+          houseFurnitureNodes[item.id] = piece
+        })
+
+        refreshHouseFurnitureVisuals()
+      }
+
+      function enterHouseInterior() {
+        buildHouseInteriorIfNeeded()
+        if (!avatarMesh || !avatarBody) return
+        savedOutsideCenter = currentWorldCenter
+        savedOutsideGroundFn = currentGroundBaseFn
+        insideHouseInterior = true
+        currentWorldCenter = HOUSE_INTERIOR_CENTER
+        currentGroundBaseFn = () => HOUSE_INTERIOR_RADIUS
+        // Teleporte físico seguro (mesmo padrão de `teleportAvatarTo`/saída do carro) — posição
+        // exata (sem aproximação de curvatura: a sala é um chão PLANO de verdade, diferente da
+        // superfície esférica que `offsetLandingUp` foi pensado pra aproximar).
+        avatarBody.body.disablePreStep = false
+        avatarMesh.position.copyFrom(houseInteriorSpawnPos)
+        scene.render()
+        avatarBody.body.setLinearVelocity(Vector3.Zero())
+        avatarBody.body.setAngularVelocity(Vector3.Zero())
+        avatarBody.body.disablePreStep = true
+        facing = new Vector3(0, 0, 1)
+        refreshHouseFurnitureVisuals()
+      }
+
+      function exitHouseInterior() {
+        if (!insideHouseInterior) return
+        insideHouseInterior = false
+        currentWorldCenter = savedOutsideCenter
+        currentGroundBaseFn = savedOutsideGroundFn
+        teleportAvatarTo(savedOutsideCenter, offsetLandingUp(houseUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
+      }
 
       function applyPortalVisual(entry: (typeof portalMeshes)[number]) {
         const p = progressRef.current
@@ -7150,7 +7503,9 @@ export function World3D({
           else stopRain()
         }
         rainAmount += ((raining ? 1 : 0) - rainAmount) * Math.min(1, dt * 0.5)
-        rainSystem.emitRate = rainAmount * (isLowEndDevice ? 130 : 500)
+        // lab-123: sem chuva dentro de casa (o emissor segue o jogador via `localUp` — sem isso,
+        // continuaria chovendo dentro de um ambiente fechado).
+        rainSystem.emitRate = insideHouseInterior ? 0 : rainAmount * (isLowEndDevice ? 130 : 500)
 
         // Raio: só sorteia/dispara enquanto chove de verdade (rainAmount alto, não só
         // "raining=true" no instante em que a chuva ainda está começando a aparecer).
@@ -7450,7 +7805,12 @@ export function World3D({
           if (cameraRotateRightRef.current) cameraYawOffsetRef.current += dt * CAMERA_ROTATE_SPEED
           Matrix.FromQuaternionToRef(Quaternion.RotationAxis(localUp, cameraYawOffsetRef.current), tmpMatrix)
           const camFacing = Vector3.TransformNormal(facing, tmpMatrix).normalize()
-          const desiredCamPos = pos.subtract(camFacing.scale(CAMERA_DISTANCE)).add(localUp.scale(CAMERA_HEIGHT))
+          // lab-123: dentro de casa, a distância/altura padrão (pensada pro terreno aberto lá
+          // fora) colocaria a câmera do lado de FORA da parede — ver comentário na declaração de
+          // `HOUSE_INTERIOR_CAMERA_DISTANCE`.
+          const camDist = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
+          const camHeight = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_HEIGHT : CAMERA_HEIGHT
+          const desiredCamPos = pos.subtract(camFacing.scale(camDist)).add(localUp.scale(camHeight))
           camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
           camera.setTarget(pos)
@@ -7709,17 +8069,9 @@ export function World3D({
               }
             }
 
-            // Minha Casa (lab-105) — mesmo padrão de gatilho da carteira/balcão da loja, sem pose
-            // especial (não há razão pra travar o boneco aqui, ao contrário da carteira).
-            {
-              const d = Vector3.Distance(pos, houseSurfacePos)
-              if (d < HOUSE_TRIGGER_DISTANCE && !triggered.has('minha-casa')) {
-                triggered.add('minha-casa')
-                onOpenMyHouseRef.current()
-              } else if (d > RESET_DISTANCE) {
-                triggered.delete('minha-casa')
-              }
-            }
+            // Minha Casa (lab-105) — a partir do lab-123, entrar não é mais automático por
+            // proximidade: vira "Pressione E" (ver `handleInteractPress`), mesmo padrão de
+            // carro/foguete. O gatilho automático antigo foi removido daqui de propósito.
 
             for (const coin of coins) {
               if (coin.collected) continue
@@ -8287,6 +8639,22 @@ export function World3D({
           camera.setTarget(shipPos)
 
           if (drivingRocket.progress >= 1 || drivingRocket.progress <= 0) landRocket()
+        }
+
+        // Dica "pressione E" da casa (lab-123) — mesmo padrão do carro/foguete abaixo. Só uma das
+        // duas fica visível por vez: a de entrar (fora, perto da fachada) ou a de sair (dentro,
+        // perto da porta) — nunca as duas juntas.
+        if (avatarMesh && houseEnterHintLabel) {
+          houseEnterHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, houseSurfacePos) < HOUSE_TRIGGER_DISTANCE
+              ? 1
+              : 0
+        }
+        if (avatarMesh && houseExitHintLabel) {
+          houseExitHintLabel.alpha =
+            insideHouseInterior && Vector3.Distance(avatarMesh.position, houseDoorInsidePos) < HOUSE_TRIGGER_DISTANCE
+              ? 1
+              : 0
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o

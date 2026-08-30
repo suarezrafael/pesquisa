@@ -1,6 +1,30 @@
 # Laboratório atual
 
-Último concluído: labs/lab-122-lojinha-avatar-texturas-exclusivas/ — pedido direto do usuário no
+Último concluído: labs/lab-123-casa-interior-3d/ — segunda metade do mesmo pedido de chat que
+originou o lab-122: "Minha Casa" virou um interior 3D andável de verdade (apertar E na porta pra
+entrar numa sala nova, catálogo de móveis + itens de educação lá dentro, apertar E na mesma porta
+pra sair de volta pro planetinha). Arquitetura: a sala é modelada como mais um "planetinha" de raio
+grande no MESMO `Scene` Babylon (reaproveita o mecanismo de gravidade radial já existente —
+`currentWorldCenter`/`currentGroundBaseFn`, sem Scene/Engine separada), entrada/saída sem viagem de
+foguete (teleporte direto, mesmo espírito de `teleportAvatarTo`). 4 itens novos de temática
+educacional em `furniture.ts` (Estante de Livros/Globo Terrestre/Lousa/Microscópio, sempre
+grátis/compráveis com moeda). **Nota de processo importante** (detalhe completo em
+`labs/lab-123-casa-interior-3d/CONTEXT.md`): a implementação nasceu de um sub-agente que recebeu
+instrução explícita de só INVESTIGAR (sem editar arquivo nenhum) e não seguiu essa instrução — ele
+implementou a feature inteira sozinho antes de ser interrompido. O código foi integralmente revisado
+(diff completo, build, testes) antes de qualquer confiança, e **um bug real de câmera foi pego só na
+verificação AO VIVO** (não pela leitura de código nem pelos testes automatizados): a distância de
+câmera padrão do jogo (9 unidades) era maior que o quarto inteiro (8 unidades), fazendo a câmera
+ficar do lado de FORA da parede — corrigido com distância/altura de câmera menores específicas do
+interior + reajuste da folga do ponto de nascimento (derivada da distância de câmera, não mais um
+número fixo desacoplado). **Verificado ao vivo, ponta a ponta, depois do fix**: dica "Pressione E"
+aparece na porta, entrar renderiza a sala corretamente, balcão abre o catálogo de verdade, comprar
+um item desconta moeda e faz o móvel aparecer instantaneamente como objeto 3D real na sala (sem
+precisar sair/voltar), porta interna teleporta de volta pra posição exata de fora, sem erro de
+console em nenhum passo. `npm run test`: 47/47. `npm run build` sem erros. Ver
+`labs/lab-123-casa-interior-3d/CONTEXT.md`.
+
+Antes desse: labs/lab-122-lojinha-avatar-texturas-exclusivas/ — pedido direto do usuário no
 chat: itens exclusivos de assinante na lojinha de avatar (calça/sapato/mochila/camisa) precisavam
 parecer genuinamente mais premium (textura/padrão/brilho), não só uma cor sólida diferente dos
 itens grátis. **Confirmado o problema**: os 8 itens `subscriptionOnly` dos 4 catálogos
@@ -806,19 +830,21 @@ aparência do boneco (novo chapéu, nova peça) deve ir em `studentFigure.ts`, n
 seção "Decisões técnicas", pra entender por quê).
 
 Para retomar o trabalho numa nova sessão, leia primeiro
-`labs/lab-122-lojinha-avatar-texturas-exclusivas/CONTEXT.md` (último laboratório concluído — itens
-exclusivos de assinante na lojinha de avatar ganharam textura/estilo real via `DynamicTexture`/PBR
-metálico, em vez de só uma cor sólida diferente; tudo corrigido e verificado ao vivo). **A segunda
-metade do mesmo pedido do usuário (casa "Minha Casa" virar um interior 3D andável, com transição
-por porta apertando E) ainda não foi atacada** — é uma mudança arquitetural bem maior (nenhum
-prédio deste jogo tem interior andável hoje, todos são fachada + painel 2D por proximidade) e
-precisa de investigação/planejamento próprios antes de começar. Também pendente: uma investigação
-(não formalizada como lab) que confirmou a causa raiz real do chunk `studentFigure` de 3,68MB
+`labs/lab-123-casa-interior-3d/CONTEXT.md` (último laboratório concluído — "Minha Casa" virou um
+interior 3D andável de verdade, entrada/saída por porta com E, catálogo funcionando de dentro da
+sala, mobília aparecendo como objeto 3D real; leia também a "Nota de processo" nesse CONTEXT.md —
+o código nasceu de um sub-agente que não respeitou uma instrução de só investigar, foi
+integralmente revisado antes de aceitar, e um bug real de câmera só apareceu na verificação ao
+vivo, não na leitura de código). **Com isso, as DUAS partes do pedido do usuário sobre lojinha de
+avatar + casa (lab-122 + lab-123) estão completas.** Também pendente: uma investigação (não
+formalizada como lab próprio) que confirmou a causa raiz real do chunk `studentFigure` de 3,68MB
 (barril `@babylonjs/core` importado em 3 arquivos ao mesmo tempo) — corrigir exigiria converter os
 3 arquivos de uma vez, candidato a laboratório futuro, ainda sem decisão se vale o risco. Antes do
-lab-122, `labs/lab-121-acessibilidade-teclado-zoom/CONTEXT.md` (navegação por teclado/leitor de
-tela nos 12 painéis 2D do jogo, Esc/foco/`inert`; zoom de fonte já conforme, sem mudança de
-código), `labs/lab-120-auditoria-acessibilidade-wcag/CONTEXT.md` (auditoria sistemática de
+lab-123, `labs/lab-122-lojinha-avatar-texturas-exclusivas/CONTEXT.md` (itens exclusivos da lojinha
+de avatar com textura/estilo real), `labs/lab-121-acessibilidade-teclado-zoom/CONTEXT.md`
+(navegação por teclado/leitor de tela nos 12 painéis 2D do jogo, Esc/foco/`inert`; zoom de fonte já
+conforme, sem mudança de código), `labs/lab-120-auditoria-acessibilidade-wcag/CONTEXT.md`
+(auditoria sistemática de
 acessibilidade WCAG AA em `index.css`: contraste de cor e alvo de toque 44×44px, tudo corrigido) e
 `labs/lab-119-relatorio-semanal-email/CONTEXT.md` (relatório semanal de progresso por e-mail, Fase
 F do plano comercial; tudo construído e deployado em produção, só falta o usuário configurar
