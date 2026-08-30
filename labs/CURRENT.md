@@ -1,6 +1,27 @@
 # Laboratório atual
 
-Último concluído: labs/lab-130-mobilia-por-planeta/ — pedido original do usuário (backlog
+Último concluído: labs/lab-131-baus-tesouro-escondidos/ — item do backlog de engajamento
+discutido em chat ("baús de tesouro escondidos"), escolhido entre 4 opções via `AskUserQuestion`.
+Um baú de tesouro escondido por planeta-destino sem combate (Mercúrio/Vênus/Júpiter/Saturno/Urano/
+Netuno — Marte fica de fora, já tem o pote de moedas do lab-128), achado por proximidade real
+(sem pergunta), +15 moedas. Achado UMA VEZ SÓ por planeta, PRA SEMPRE (`Progress.
+foundTreasureChestIds`, novo) — diferente das moedas comuns (resetam por sessão) e do pote de
+Marte (reseta por visita). `TREASURE_CHEST_DIR` reaproveita a parametrização de ângulo de ouro de
+`PLANET_SCHOOL_DIRS` (lab-127), só com `phi=165°` (perto do polo sul, longe da plataforma de
+pouso e das escolinhas). `applyTreasureChestFound`/`foundTreasureChest`/`onFindTreasureChest` mesmo
+padrão idempotente de `unlockMarsReward` (lab-94). Baú de madeira com fivela dourada, visual
+distinto; mensagem transitória ("💰 Baú encontrado!") mesmo padrão de `marsDeathMessage`. 4 testes
+novos (60→64). **Achado real de ferramenta na verificação ao vivo**: `window.__debugTeleport` não
+respeita `currentWorldCenter` fora do planeta principal — teleportar pra uma posição válida em
+Vênus (depois de chegar lá por voo de foguete real) fazia o avatar "cair" de volta pra Terra
+assim que um quadro renderizava, reproduzido consistentemente; a construção/render do baú FOI
+confirmada visualmente (legenda "💰 Baú de tesouro!" visível na cena), mas a coleta por
+proximidade não foi confirmada ao vivo por causa dessa limitação da técnica de teste (não um bug
+do produto) — lição registrada pra próximas sessões: navegar DENTRO de um planeta-destino sempre
+por caminhada real (teclado sintético + quadros forçados), nunca `__debugTeleport` uma vez lá.
+`npm run build` sem erros. Ver `labs/lab-131-baus-tesouro-escondidos/CONTEXT.md`.
+
+Antes desse: labs/lab-130-mobilia-por-planeta/ — pedido original do usuário (backlog
 discutido em chat): "cada planeta deve subir o nivel das perguntas para liberar mais itens na
 casinha de cada um" — escolhido entre 4 opções de backlog via `AskUserQuestion`. Completar as 6
 escolinhas de um planeta-destino (Mercúrio/Vênus/Júpiter/Saturno/Urano/Netuno) agora concede, de

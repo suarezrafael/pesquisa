@@ -8,6 +8,7 @@ import {
   applyCoinCollected,
   applyPlanetQuestCompletion,
   applyQuestCompletion,
+  applyTreasureChestFound,
   badgesEarnedAt,
   getLevel,
   isQuestUnlocked,
@@ -264,6 +265,37 @@ describe('unlockFurniture — itens de recompensa de planeta não são compráve
     expect(next).toBe(comMoedas)
     expect(next.unlockedFurnitureIds).not.toContain('meteorito_mercurio')
     expect(next.coins).toBe(9999)
+  })
+})
+
+describe('applyTreasureChestFound — baús de tesouro escondidos (lab-131)', () => {
+  it('credita a moeda do baú e marca como achado na primeira vez', () => {
+    const result = applyTreasureChestFound(emptyProgress, 'bau-mercurio')
+    expect(result.granted).toBe(true)
+    expect(result.progress.coins).toBe(15)
+    expect(result.progress.foundTreasureChestIds).toEqual(['bau-mercurio'])
+  })
+
+  it('é idempotente — não credita de novo se o baú já tiver sido achado', () => {
+    const first = applyTreasureChestFound(emptyProgress, 'bau-mercurio')
+    const second = applyTreasureChestFound(first.progress, 'bau-mercurio')
+    expect(second.granted).toBe(false)
+    expect(second.progress).toBe(first.progress)
+    expect(second.progress.coins).toBe(15)
+  })
+
+  it('baús de planetas diferentes não se confundem', () => {
+    const first = applyTreasureChestFound(emptyProgress, 'bau-mercurio')
+    const second = applyTreasureChestFound(first.progress, 'bau-venus')
+    expect(second.granted).toBe(true)
+    expect(second.progress.coins).toBe(30)
+    expect(second.progress.foundTreasureChestIds).toEqual(['bau-mercurio', 'bau-venus'])
+  })
+
+  it('não faz nada (nem quebra) pra um chestId inexistente', () => {
+    const result = applyTreasureChestFound(emptyProgress, 'bau-inexistente')
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(emptyProgress)
   })
 })
 

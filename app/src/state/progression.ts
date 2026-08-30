@@ -12,6 +12,7 @@ import {
 import { GLASSES_CATALOG } from '../data/glasses'
 import { FURNITURE_CATALOG, findFurnitureRewardForPlanet, type FurnitureOption } from '../data/furniture'
 import { findPlanetIdForQuest, isPlanetFullyCompleted } from '../data/planetQuests'
+import { findTreasureChestById } from '../data/treasureChests'
 import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -200,6 +201,32 @@ export function unlockMarsReward(progress: Progress): MarsRewardResult {
   if (progress.unlockedHatIds.includes(MARS_REWARD_HAT_ID)) return { progress, granted: false }
   return {
     progress: { ...progress, unlockedHatIds: [...progress.unlockedHatIds, MARS_REWARD_HAT_ID] },
+    granted: true,
+  }
+}
+
+export interface TreasureChestResult {
+  progress: Progress
+  granted: boolean
+}
+
+// Baú de tesouro escondido (lab-131, pedido do usuário: "baús de tesouro escondidos") — mesmo
+// padrão de `unlockMarsReward` acima: concessão de graça (moeda, não item), idempotente (devolve
+// `granted: false` se o baú já tiver sido achado ANTES, mesmo em uma sessão anterior — permanente,
+// diferente do pote de Marte que reseta a cada visita), disparada por um evento de gameplay
+// (proximidade real em `World3D.tsx`), nunca por compra. Sem multiplicador de evento semanal/
+// assinante — é recompensa de exploração, não de responder pergunta (mesmo raciocínio do pote de
+// Marte, lab-128).
+export function applyTreasureChestFound(progress: Progress, chestId: string): TreasureChestResult {
+  if (progress.foundTreasureChestIds.includes(chestId)) return { progress, granted: false }
+  const chest = findTreasureChestById(chestId)
+  if (!chest) return { progress, granted: false }
+  return {
+    progress: {
+      ...progress,
+      foundTreasureChestIds: [...progress.foundTreasureChestIds, chestId],
+      coins: progress.coins + chest.coinReward,
+    },
     granted: true,
   }
 }

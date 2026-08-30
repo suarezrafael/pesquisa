@@ -51,6 +51,7 @@ import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
 import { FURNITURE_CATALOG } from '../data/furniture'
+import { findTreasureChestById } from '../data/treasureChests'
 import {
   findColorOption,
   findHairShapeOption,
@@ -134,6 +135,10 @@ interface World3DProps {
   onOpenAchievements: () => void
   onOpenMyHouse: () => void
   onUnlockMarsReward: () => void
+  // lab-131 (pedido do usuário: "baús de tesouro escondidos") — chamado ao achar um baú por
+  // proximidade real; `App.tsx` repassa direto pra `useProgress().foundTreasureChest`, que já é
+  // idempotente sozinho (não precisa de checagem extra aqui).
+  onFindTreasureChest: (chestId: string) => void
   onCollectCoin: () => void
   onSwitchProfile: () => void
   suspendTriggers: boolean
@@ -633,6 +638,22 @@ const PLANET_SCHOOL_DIRS: Vector3[] = Array.from({ length: 6 }, (_, index) => {
   const theta = index * GOLDEN_ANGLE
   return new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
 })
+
+// Baú de tesouro escondido (lab-131, pedido do usuário: "baús de tesouro escondidos") — reaproveita
+// a MESMA parametrização de ângulo de ouro de `PLANET_SCHOOL_DIRS` acima (medida no lab-127 pra
+// separação segura mesmo no menor planeta), só com `phi` perto do polo SUL (165°, fora da faixa
+// 35°-145° das escolinhas e bem longe da plataforma de pouso em `phi≈0`) — "escondido" combina com
+// um canto do planeta pouco visitado. `theta` continua a sequência (índice 6), o que por
+// construção do próprio ângulo de ouro já mantém boa separação das 6 direções anteriores sem
+// precisar remedir do zero. Todos os 6 `landingUp` de `DESTINATION_PLANETS` são `(0,1,0)`
+// idênticos, então esta é a MESMA direção relativa pros 6 planetas (mesmo espírito de
+// `PLANET_SCHOOL_DIRS` ser compartilhado entre eles).
+const TREASURE_CHEST_DIR: Vector3 = (() => {
+  const phi = (165 * Math.PI) / 180
+  const theta = 6 * GOLDEN_ANGLE
+  return new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+})()
+const TREASURE_CHEST_TRIGGER_DISTANCE = 1.4
 
 function nearAnySchool(dir: { x: number; y: number; z: number }): boolean {
   for (const schoolDir of SCHOOL_DIRS) {
@@ -1874,6 +1895,7 @@ export function World3D({
   onOpenAchievements,
   onOpenMyHouse,
   onUnlockMarsReward,
+  onFindTreasureChest,
   onCollectCoin,
   onSwitchProfile,
   suspendTriggers,
@@ -1905,6 +1927,7 @@ export function World3D({
   const onOpenAchievementsRef = useRef(onOpenAchievements)
   const onOpenMyHouseRef = useRef(onOpenMyHouse)
   const onUnlockMarsRewardRef = useRef(onUnlockMarsReward)
+  const onFindTreasureChestRef = useRef(onFindTreasureChest)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
   const sceneRef = useRef<Scene | null>(null)
@@ -1924,6 +1947,10 @@ export function World3D({
   const [marsHealthDisplay, setMarsHealthDisplay] = useState(MARS_MAX_HEALTH)
   const [onMarsCombatZone, setOnMarsCombatZone] = useState(false)
   const [marsDeathMessage, setMarsDeathMessage] = useState<string | null>(null)
+  // Baús de tesouro escondidos (lab-131) — mesmo padrão de aviso transitório de `marsDeathMessage`
+  // acima (some sozinho depois de alguns segundos), mas sem barra/estado de "zona" nenhum: é só um
+  // achado pontual de exploração.
+  const [treasureFoundMessage, setTreasureFoundMessage] = useState<string | null>(null)
   // Contagem de marcianos vivos (lab-65, pedido do usuário: "ao chegar em Marte teve ter uma
   // informação de quantos marcianos tem no planeta") — espelha `marsEnemies.filter(alive).length`
   // (calculado no laço de física, que já percorre esse array todo quadro pra IA) só quando o
@@ -1987,6 +2014,7 @@ export function World3D({
   onOpenAchievementsRef.current = onOpenAchievements
   onOpenMyHouseRef.current = onOpenMyHouse
   onUnlockMarsRewardRef.current = onUnlockMarsReward
+  onFindTreasureChestRef.current = onFindTreasureChest
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
 
@@ -3762,6 +3790,76 @@ export function World3D({
       // precisar de busca nenhuma no laço de gatilho, que roda a cada quadro.
       const planetQuestMarkers: { quest: Quest; worldPos: Vector3 }[] = []
 
+      // Baús de tesouro escondidos (lab-131) — `pivot`/`label` guardados direto no marcador (não
+      // só o id) porque o gatilho de proximidade precisa escondê-los na hora do achado, sem
+      // precisar buscar o mesh de novo.
+      const treasureChestMarkers: { chestId: string; worldPos: Vector3; pivot: TransformNode; label: TextBlock }[] = []
+
+      // Constrói UM baú de tesouro escondido (lab-131) — visual distinto das moedas comuns/pote de
+      // Marte (baú de madeira com fivela dourada), sempre construído mas `setEnabled(false)` de
+      // saída se `chestId` já estiver em `foundTreasureChestIds` (achado numa sessão anterior) —
+      // mesmo padrão "constrói sempre, revela condicionalmente" já usado pra mobília da casa/pote
+      // de Marte. `Control.linkWithMesh` ignora `isEnabled()` (achado real do lab-128) — por isso
+      // `label.isVisible` é setado explicitamente em conjunto, nunca só o `setEnabled` do mesh.
+      function buildTreasureChest(chestId: string, planetRoot: TransformNode, radius: number, localUp: Vector3, nameSuffix: string) {
+        const base = new TransformNode(`treasureChest-${nameSuffix}`, scene)
+        base.position = localUp.scale(radius)
+        base.rotationQuaternion = alignmentQuaternion(localUp)
+        base.parent = planetRoot
+
+        const woodMat = new PBRMaterial(`treasureChestWoodMat-${nameSuffix}`, scene)
+        woodMat.albedoColor = new Color3(0.42, 0.26, 0.14)
+        woodMat.roughness = 0.85
+
+        const chestBase = MeshBuilder.CreateBox(`treasureChestBase-${nameSuffix}`, { width: 0.7, height: 0.4, depth: 0.5 }, scene)
+        chestBase.position = new Vector3(0, 0.2, 0)
+        chestBase.material = woodMat
+        chestBase.parent = base
+        shadowGenerator.addShadowCaster(chestBase)
+
+        const lidMat = new PBRMaterial(`treasureChestLidMat-${nameSuffix}`, scene)
+        lidMat.albedoColor = new Color3(0.52, 0.34, 0.18)
+        lidMat.roughness = 0.85
+
+        const chestLid = MeshBuilder.CreateBox(`treasureChestLid-${nameSuffix}`, { width: 0.72, height: 0.22, depth: 0.52 }, scene)
+        chestLid.position = new Vector3(0, 0.51, 0)
+        chestLid.material = lidMat
+        chestLid.parent = base
+        shadowGenerator.addShadowCaster(chestLid)
+
+        const buckleMat = new PBRMaterial(`treasureChestBuckleMat-${nameSuffix}`, scene)
+        buckleMat.albedoColor = new Color3(0.85, 0.68, 0.2)
+        buckleMat.metallic = 0.8
+        buckleMat.roughness = 0.3
+        const buckle = MeshBuilder.CreateBox(`treasureChestBuckle-${nameSuffix}`, { width: 0.14, height: 0.2, depth: 0.06 }, scene)
+        buckle.position = new Vector3(0, 0.32, 0.26)
+        buckle.material = buckleMat
+        buckle.parent = base
+        shadowGenerator.addShadowCaster(buckle)
+
+        const label = new TextBlock(`treasureChestLabel-${nameSuffix}`, '💰 Baú de tesouro!')
+        label.color = 'white'
+        label.fontSize = mobileFontSize(20)
+        label.outlineWidth = 4
+        label.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(label)
+        label.linkWithMesh(chestLid)
+
+        const alreadyFound = progressRef.current.foundTreasureChestIds.includes(chestId)
+        base.setEnabled(!alreadyFound)
+        label.isVisible = !alreadyFound
+
+        // Mesmo raciocínio de `worldPos` de `buildPlanetEscolinha` acima: calculado direto do
+        // `*_CENTER` fixo, não via `getAbsolutePosition()` (a matriz de mundo só recomputa depois
+        // deste quadro).
+        treasureChestMarkers.push({
+          chestId,
+          worldPos: planetRoot.position.add(localUp.scale(radius)),
+          pivot: base,
+          label,
+        })
+      }
+
       // Constrói UMA escolinha simplificada de um planeta-destino (lab-115; lab-127 generalizou
       // pra receber a `Quest` direto, chamada em loop — antes só existia uma por planeta).
       // Diferente das escolinhas do planeta principal (`quests.forEach` mais abaixo, que usam
@@ -4961,6 +5059,9 @@ export function World3D({
           buildPlanetEscolinha(quest, mercuryRoot, MERCURY_RADIUS, PLANET_SCHOOL_DIRS[i], `mercurio-${i}`)
         })
 
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-mercurio', mercuryRoot, MERCURY_RADIUS, TREASURE_CHEST_DIR, 'mercurio')
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = mercuryRoot
@@ -5077,6 +5178,9 @@ export function World3D({
           buildPlanetEscolinha(quest, venusRoot, VENUS_RADIUS, PLANET_SCHOOL_DIRS[i], `venus-${i}`)
         })
 
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-venus', venusRoot, VENUS_RADIUS, TREASURE_CHEST_DIR, 'venus')
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = venusRoot
@@ -5180,6 +5284,9 @@ export function World3D({
           buildPlanetEscolinha(quest, jupiterRoot, JUPITER_RADIUS, PLANET_SCHOOL_DIRS[i], `jupiter-${i}`)
         })
 
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-jupiter', jupiterRoot, JUPITER_RADIUS, TREASURE_CHEST_DIR, 'jupiter')
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = jupiterRoot
@@ -5278,6 +5385,9 @@ export function World3D({
           buildPlanetEscolinha(quest, saturnRoot, SATURN_RADIUS, PLANET_SCHOOL_DIRS[i], `saturno-${i}`)
         })
 
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-saturno', saturnRoot, SATURN_RADIUS, TREASURE_CHEST_DIR, 'saturno')
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = saturnRoot
@@ -5362,6 +5472,9 @@ export function World3D({
         planetQuests.urano.forEach((quest, i) => {
           buildPlanetEscolinha(quest, uranusRoot, URANUS_RADIUS, PLANET_SCHOOL_DIRS[i], `urano-${i}`)
         })
+
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-urano', uranusRoot, URANUS_RADIUS, TREASURE_CHEST_DIR, 'urano')
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -5457,6 +5570,9 @@ export function World3D({
         planetQuests.netuno.forEach((quest, i) => {
           buildPlanetEscolinha(quest, neptuneRoot, NEPTUNE_RADIUS, PLANET_SCHOOL_DIRS[i], `netuno-${i}`)
         })
+
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-netuno', neptuneRoot, NEPTUNE_RADIUS, TREASURE_CHEST_DIR, 'netuno')
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -8294,6 +8410,25 @@ export function World3D({
               }
             }
 
+            // Baús de tesouro escondidos (lab-131) — achado único e PERMANENTE (nunca reseta, ao
+            // contrário do pote de moedas de Marte), então o próprio `pivot.isEnabled()` já basta
+            // como guarda de idempotência, sem precisar do `Set` de histerese `triggered`/
+            // `RESET_DISTANCE` usado acima (uma vez achado, o baú nunca mais reaparece nesta
+            // sessão, e a construção do próximo planeta já nasce escondida se `Progress` confirmar
+            // que foi achado numa sessão anterior).
+            for (const chest of treasureChestMarkers) {
+              if (!chest.pivot.isEnabled()) continue
+              if (Vector3.Distance(pos, chest.worldPos) < TREASURE_CHEST_TRIGGER_DISTANCE) {
+                chest.pivot.setEnabled(false)
+                chest.label.isVisible = false
+                onFindTreasureChestRef.current(chest.chestId)
+                playCoinCollect()
+                const reward = findTreasureChestById(chest.chestId)?.coinReward ?? 0
+                setTreasureFoundMessage(`💰 Baú encontrado! +${reward} moedas!`)
+                window.setTimeout(() => setTreasureFoundMessage(null), 4000)
+              }
+            }
+
             // Carteira de estudos (lab-93) — mesmo padrão de gatilho do quiz acima, mas só um
             // objeto (sem laço). Congela a pose "sentado" nos pivôs do boneco (mesmos valores da
             // pose usada ao dirigir o carro, ver comentário lá) e abre o catálogo de conquistas.
@@ -9295,6 +9430,7 @@ export function World3D({
         <SurvivalTimerBar timeLeft={survivalTimeDisplay} maxTime={SURVIVAL_TIMER_MAX} planetId={survivalPlanetId} />
       )}
       {survivalDeathMessage && <p className="mars-death-message">{survivalDeathMessage}</p>}
+      {treasureFoundMessage && <p className="mars-death-message">{treasureFoundMessage}</p>}
       {bagOpen && (
         <WeaponBagPanel
           hasSword={hasSword}

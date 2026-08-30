@@ -17,6 +17,7 @@ import {
   unlockGlasses as applyGlassesUnlock,
   unlockFurniture as applyFurnitureUnlock,
   unlockMarsReward as applyMarsRewardUnlock,
+  applyTreasureChestFound,
 } from './progression'
 
 export function useProgress() {
@@ -139,6 +140,18 @@ export function useProgress() {
     return result.granted
   }
 
+  // Baú de tesouro escondido (lab-131) — mesmo formato de `unlockMarsReward` acima: devolve se
+  // realmente concedeu moeda nova (o chamador em `App.tsx`/`World3D.tsx` usa isso pra decidir se
+  // mostra a mensagem transitória de "achado", não a cada vez que a checagem de proximidade roda).
+  function foundTreasureChest(chestId: string): boolean {
+    const result = applyTreasureChestFound(progress, chestId)
+    if (result.granted) {
+      setProgress(result.progress)
+      saveProgress(result.progress)
+    }
+    return result.granted
+  }
+
   return {
     progress,
     completeQuest,
@@ -154,5 +167,6 @@ export function useProgress() {
     unlockGlasses,
     unlockFurniture,
     unlockMarsReward,
+    foundTreasureChest,
   }
 }

@@ -149,6 +149,8 @@ export const emptyProgress: Progress = {
   // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — ver comentário em
   // `types.ts`.
   completedPlanetQuestIds: [],
+  // Baús de tesouro escondidos (lab-131) — ver comentário em `types.ts`.
+  foundTreasureChestIds: [],
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

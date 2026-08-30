@@ -93,6 +93,7 @@ function GameApp() {
     unlockGlasses,
     unlockFurniture,
     unlockMarsReward,
+    foundTreasureChest,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -243,6 +244,7 @@ function GameApp() {
           onOpenAchievements={() => setShowAchievements(true)}
           onOpenMyHouse={() => setShowMyHouse(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
+          onFindTreasureChest={foundTreasureChest}
           onCollectCoin={collectCoin}
           onSwitchProfile={() => {
             clearActiveProfile()

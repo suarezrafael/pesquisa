@@ -64,4 +64,9 @@ export interface Progress {
   // pedido do usuário é "ampliar a elevação dos níveis", diferente do quiz surpresa que só dá
   // moeda de propósito).
   completedPlanetQuestIds: string[]
+  // Baús de tesouro escondidos (lab-131, pedido do usuário: "baús de tesouro escondidos") — um id
+  // aqui significa "este baú já foi achado, pra sempre" (diferente das moedas comuns escondidas,
+  // que resetam a cada sessão, e do pote de moedas de Marte, que reseta a cada visita): é uma
+  // descoberta rara e permanente, não um bônus repetível por visita.
+  foundTreasureChestIds: string[]
 }
