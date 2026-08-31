@@ -8004,8 +8004,31 @@ export function World3D({
           // pulo, orientação visual) já era só relativo a `pos`/`localUp`, então generalizar só
           // este cálculo basta pra funcionar em qualquer um dos dois planetas sem duplicar lógica.
           const relPos = pos.subtract(currentWorldCenter)
-          const dist = relPos.length()
-          const localUp = dist > 0.0001 ? relPos.scale(1 / dist) : new Vector3(0, 1, 0)
+          // Dentro da casa (lab-134, achado real do usuário: "o boneco está enterrado na casa
+          // quase no joelho"): o comentário original que criou o interior (lab-123) assumia que a
+          // curvatura do "planetinha" de raio 10 seria "imperceptível numa sala de poucos metros"
+          // — na prática NÃO é: o chão da sala é REALMENTE PLANO (uma caixa, não uma esfera), mas
+          // `dist`/`localUp` (pensados pra uma esfera, onde a DIREÇÃO a partir do centro codifica
+          // a posição inteira na superfície) tratavam a distância euclidiana até o centro como
+          // "altura acima do chão" e a direção normalizada como "pra cima" — em qualquer ponto
+          // fora do exato centro da sala (o balcão fica lá, mas o jogador anda pela sala toda)
+          // isso afunda o personagem VISUAL cada vez mais fundo no chão de verdade (até ~0,4
+          // unidade nas bordas da sala de 11×11, exatamente o sintoma relatado) e inclina a
+          // gravidade/orientação/câmera pro centro. A física do colisor em si sempre esteve
+          // correta (repousa no chão PLANO de verdade via colisão real, não por esta fórmula).
+          // Corrigido pra sala plana: `dist` vira só a ALTURA acima do plano do centro
+          // (`relPos.y`, não a distância euclidiana 3D) e `localUp` trava na vertical pura
+          // (`HOUSE_INTERIOR_LANDING_UP`) — juntos, tornam gravidade/salto/câmera corretos. Isso
+          // sozinho ainda não bastava pro personagem VISUAL (posição x/z também precisa vir de
+          // `pos` diretamente aqui dentro, não de `localUp` — ver a correção na linha do "grudar
+          // na superfície" mais abaixo, já que uma direção constante não pode codificar posição
+          // horizontal como codifica numa esfera).
+          const dist = insideHouseInterior ? relPos.y : relPos.length()
+          const localUp = insideHouseInterior
+            ? HOUSE_INTERIOR_LANDING_UP
+            : dist > 0.0001
+              ? relPos.scale(1 / dist)
+              : new Vector3(0, 1, 0)
 
           // Chuva acompanha o jogador — reorienta o emissor pro "up" local atual, senão a chuva
           // continuaria caindo na direção de onde o jogador nasceu conforme ele anda pela esfera.
@@ -8163,9 +8186,21 @@ export function World3D({
           // Altura extra acima do "grudado no chão" quando o colisor físico sobe (pulo) —
           // sem isso o personagem visual ficava sempre preso na superfície e o pulo não aparecia.
           const airHeight = Math.max(0, dist - groundDist)
-          studentFigure.root.position.copyFrom(
-            currentWorldCenter.add(localUp.scale(currentGroundBaseFn(localUp) + 0.02 + airHeight))
-          )
+          if (insideHouseInterior) {
+            // Sala plana (ver comentário acima, na declaração de `dist`/`localUp`): uma direção
+            // "pra cima" constante não pode codificar posição horizontal como codifica numa
+            // esfera, então x/z vêm direto do colisor real (`pos`) em vez de `localUp` — só a
+            // altura usa a mesma fórmula de "grudar no chão" de sempre.
+            studentFigure.root.position.set(
+              pos.x,
+              currentWorldCenter.y + currentGroundBaseFn(localUp) + 0.02 + airHeight,
+              pos.z,
+            )
+          } else {
+            studentFigure.root.position.copyFrom(
+              currentWorldCenter.add(localUp.scale(currentGroundBaseFn(localUp) + 0.02 + airHeight))
+            )
+          }
 
           // Ciclo de caminhada — só avança enquanto o personagem realmente anda (e não está
           // caindo do laser — a cambalhota acima já cuida da pose nesse caso); som de passo

@@ -1,6 +1,29 @@
 # Laboratório atual
 
-Último concluído: labs/lab-134-corrige-casa-confundida-com-carro/ — bug reportado pelo usuário em
+Último concluído: labs/lab-135-corrige-boneco-enterrado-interior-casa/ — assim que o gatilho de
+entrada da casa foi corrigido (lab-134), o usuário conseguiu entrar de verdade pela primeira vez e
+reportou 3 problemas numa mensagem só: "as paredes precisam ficar transparentes... a câmera não via
+conseguir enxergar o cenário e o boneco", "tem que ser possível escolher onde colocar os objetos do
+catálogo comprados", e "o boneco está enterrado na casa quase no joelho". Este laboratório corrigiu
+só o terceiro (bug concreto e identificável); os outros dois são features novas, deixadas de fora —
+ver `FEATURES.md` ("Fora de escopo"). **Causa raiz**: o interior (lab-123) reaproveita a mesma
+gravidade radial esférica do resto do jogo (`localUp` = direção normalizada até o centro), mas o
+chão da sala é uma caixa PLANA de verdade — numa esfera essa direção codifica a posição inteira, num
+plano não codifica posição horizontal nenhuma, então o personagem visual ("gruda" na superfície ao
+longo de `localUp`) afundava cada vez mais fundo no chão real conforme se afastava do ponto
+exatamente acima do centro da sala (até ~0,4 unidade nas bordas de uma sala 11×11). Corrigido com um
+caminho próprio pra dentro de casa: altura via `relPos.y` (não distância euclidiana 3D) +
+`localUp` travado na vertical pura + posição visual x/z direto do colisor físico real (`pos`), não
+mais de `localUp`. **Achado de ferramenta durante a própria correção**: a primeira tentativa (só
+travar `localUp`) quebrou o rastreamento horizontal por completo — colapsava o personagem visual
+sempre no centro exato da sala, pior que o bug original; só detectado testando ao vivo em 3 posições
+diferentes dentro da sala. Verificado ao vivo: entrada real pelo gatilho corrigido, 3 posições
+dentro da sala (centro/meio-caminho/canto extremo) com a posição visual batendo exatamente com o
+colisor físico em x/z e altura fixa no chão real, sem afundamento algum. `npm run test`: 75/75 (sem
+teste novo). `npm run build` sem erros. Ver
+`labs/lab-135-corrige-boneco-enterrado-interior-casa/CONTEXT.md`.
+
+Antes desse: labs/lab-134-corrige-casa-confundida-com-carro/ — bug reportado pelo usuário em
 produção ("ao chegar perto da casa e aperto E não acontece nada", confirmado em aba anônima —
 descartando cache). TRÊS causas raiz reais, cada uma achada com uma pista certeira do próprio
 usuário, em três rodadas de correção:
