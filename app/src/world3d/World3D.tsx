@@ -142,6 +142,16 @@ interface World3DProps {
   onCollectCoin: () => void
   onSwitchProfile: () => void
   suspendTriggers: boolean
+  // lab-136 (pedido do usuário: "tem que ter opção... de escolher em que posição da casa deve
+  // ficar a peça... o ângulo e posição") — `App.tsx` seta `placingFurnitureRequestId` quando o
+  // jogador clica "Mover" no `MyHousePanel` (que vive fora deste componente); um `useEffect`
+  // aqui observa a prop e entra no modo de posicionamento dentro da cena 3D, mesmo padrão de
+  // bridge já usado por `__refreshHouseFurniture`/`unlockedFurnitureIds`. `onPlacingRequestHandled`
+  // limpa o pedido do lado de `App.tsx` depois de consumido (senão o mesmo id reabriria o modo de
+  // novo a cada re-render). `onFurniturePlaced` persiste a posição/ângulo finais ao confirmar.
+  placingFurnitureRequestId: string | null
+  onPlacingRequestHandled: () => void
+  onFurniturePlaced: (id: string, x: number, z: number, rotY: number) => void
 }
 
 const PLANET_RADIUS = 13
@@ -1899,6 +1909,9 @@ export function World3D({
   onCollectCoin,
   onSwitchProfile,
   suspendTriggers,
+  placingFurnitureRequestId,
+  onPlacingRequestHandled,
+  onFurniturePlaced,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
@@ -1930,6 +1943,15 @@ export function World3D({
   const onFindTreasureChestRef = useRef(onFindTreasureChest)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
+  const onFurniturePlacedRef = useRef(onFurniturePlaced)
+  // lab-136: espelha o item sendo posicionado pra fora do loop de física (Confirmar/Cancelar são
+  // botões React normais, não Babylon GUI — mesmo raciocínio de `survivalPlanetId`/
+  // `survivalTimeRef` acima: o closure do loop precisa de um valor ATUAL a cada quadro (por isso
+  // `placingFurnitureIdRef`, não o `useState` sozinho, que ficaria congelado no valor da montagem
+  // dentro de um `useEffect` de dependências `[]`), e a UI precisa de um valor que dispare
+  // re-render (por isso o `useState` também, só espelhado).
+  const placingFurnitureIdRef = useRef<string | null>(null)
+  const [placingFurnitureUi, setPlacingFurnitureUi] = useState<string | null>(null)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
   const [muted, setMuted] = useState(false)
@@ -2017,6 +2039,18 @@ export function World3D({
   onFindTreasureChestRef.current = onFindTreasureChest
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
+  onFurniturePlacedRef.current = onFurniturePlaced
+
+  // lab-136: entra no modo de posicionamento de mobília sempre que `App.tsx` pede um id novo
+  // (clique em "Mover" no `MyHousePanel`, que fica fora deste componente) — mesmo padrão de
+  // `__refreshHouseFurniture`/`unlockedFurnitureIds` acima. Confirma o consumo do pedido de volta
+  // pra `App.tsx` (`onPlacingRequestHandled`) senão o MESMO id reabriria o modo de novo a cada
+  // re-render deste componente (ex.: qualquer outra mudança de `progress`).
+  useEffect(() => {
+    if (!placingFurnitureRequestId) return
+    ;(sceneRef.current as any)?.__startFurniturePlacement?.(placingFurnitureRequestId)
+    onPlacingRequestHandled()
+  }, [placingFurnitureRequestId, onPlacingRequestHandled])
 
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()
@@ -2307,6 +2341,20 @@ export function World3D({
     let houseExitHintLabel: TextBlock | null = null
     let houseEnterHintLabel: TextBlock | null = null
     const houseFurnitureNodes: Record<string, TransformNode> = {}
+    // Posicionamento manual de mobília (lab-136) — `placingFurnitureId` é a fonte de verdade LIDA
+    // pelo loop de física a cada quadro (mesmo padrão de `sittingAtDesk`/`drivingCar` acima: um
+    // `let` do closure, não o `useState` React, que só re-renderiza — não muda o valor que o
+    // closure enxerga entre um `useEffect` e o próximo). `placingFurnitureStartSnapshot` guarda
+    // onde a peça estava ANTES de entrar no modo (posição salva OU posição padrão do anel),
+    // restaurado ao cancelar — evita ter que "lembrar" separadamente qual era o padrão de cada
+    // item.
+    let placingFurnitureId: string | null = null
+    let placingFurnitureStartSnapshot: { x: number; z: number; rotY: number } | null = null
+    // Referência hoisted da sala (lab-136) — construída dentro de `buildHouseInteriorIfNeeded()`,
+    // mas o desvanecimento de parede por oclusão de câmera (mais abaixo, no loop de física) e o
+    // clamp de posição do modo de posicionamento precisam dela fora daquela função.
+    let houseInteriorRootNode: TransformNode | null = null
+    const houseWallMats: Record<string, PBRMaterial> = {}
     const builtPlanetIds = new Set<string>()
     let mainRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
     // Um foguete de volta por planeta-destino já visitado (lab-110) — substitui a variável única
@@ -6411,6 +6459,20 @@ export function World3D({
       // encostado nela olhando pro centro da sala.
       const HOUSE_INTERIOR_CAMERA_DISTANCE = 3.2
       const HOUSE_INTERIOR_CAMERA_HEIGHT = 2.2
+      // Posicionamento manual de mobília (lab-136) — a peça fantasma nunca pode sair da sala nem
+      // grudar na parede (ficaria parcialmente dentro dela, visualmente errado, embora sem
+      // colisão física de verdade — mobília não tem `PhysicsAggregate`). Margem de 0,7 é uma folga
+      // genérica acima do maior meio-comprimento de qualquer peça do catálogo (a cama, ~0,9 de
+      // largura/2 + folga) — nenhuma tenta encostar de verdade na parede, dá pra ver o contorno
+      // inteiro. Velocidade de movimento igual a `WALK_SPEED` (familiar, mesmo "peso" de andar
+      // normal); rotação em ~90°/s, rápida o bastante pra não ser cansativo girar uma peça 180°.
+      const FURNITURE_PLACEMENT_MARGIN = 0.7
+      const FURNITURE_PLACEMENT_MOVE_SPEED = 3.5
+      const FURNITURE_PLACEMENT_ROTATE_SPEED = 1.6
+      // Opacidade da parede desvanecida por oclusão de câmera (lab-136) — baixa o bastante pra
+      // enxergar o cenário/boneco através dela sem sumir de vez (a sala continua reconhecível
+      // como uma sala, não um espaço aberto).
+      const HOUSE_WALL_FADE_ALPHA = 0.18
 
       // Visual de cada peça de `FURNITURE_CATALOG` (`data/furniture.ts`, dado de domínio puro) —
       // mapeamento fica AQUI, não no arquivo de dados, pra não acoplar o catálogo a nenhuma classe
@@ -6539,6 +6601,7 @@ export function World3D({
         const interiorRoot = new TransformNode('houseInteriorRoot', scene)
         interiorRoot.position = HOUSE_INTERIOR_CENTER.add(HOUSE_INTERIOR_LANDING_UP.scale(HOUSE_INTERIOR_RADIUS))
         interiorRoot.rotationQuaternion = alignmentQuaternion(HOUSE_INTERIOR_LANDING_UP)
+        houseInteriorRootNode = interiorRoot
 
         const S = HOUSE_ROOM_HALF_SIZE
         const H = HOUSE_ROOM_HEIGHT
@@ -6579,7 +6642,14 @@ export function World3D({
         const westWall = MeshBuilder.CreateBox('houseIntWallWest', { width: T, height: H, depth: S * 2 }, scene)
         westWall.position = new Vector3(-S, wallHalf, 0)
         for (const wall of [northWall, southWall, eastWall, westWall]) {
-          wall.material = wallMat
+          // Material CLONADO por parede (lab-136, pedido do usuário: "as paredes precisam ficar
+          // transparentes... a câmera não via conseguir enxergar o cenário e o boneco") — as 4
+          // paredes compartilhavam a MESMA instância de material antes; desvanecer só a parede
+          // entre a câmera e o jogador (ver o loop de física mais abaixo) precisa de alpha
+          // independente por parede, senão desvanecer uma desvaneceria as 4 juntas.
+          const mat = wallMat.clone(`${wallMat.name}-${wall.name}`) as PBRMaterial
+          wall.material = mat
+          houseWallMats[wall.name] = mat
           wall.parent = interiorRoot
           wall.receiveShadows = true
           new PhysicsAggregate(wall, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
@@ -6653,8 +6723,16 @@ export function World3D({
           const angle = startAngle + (usableArc * (i + 0.5)) / FURNITURE_CATALOG.length
           const piece = buildFurniturePiece(visual.kind, visual.color)
           piece.parent = interiorRoot
-          piece.position = new Vector3(Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius)
-          piece.rotation.y = -angle
+          // Posição salva pelo jogador (lab-136, "Mover" no `MyHousePanel`) tem prioridade sobre o
+          // layout padrão em anel — só cai no anel se o jogador nunca reposicionou este item.
+          const saved = progressRef.current.housePlacements[item.id]
+          if (saved) {
+            piece.position = new Vector3(saved.x, 0, saved.z)
+            piece.rotation.y = saved.rotY
+          } else {
+            piece.position = new Vector3(Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius)
+            piece.rotation.y = -angle
+          }
           houseFurnitureNodes[item.id] = piece
         })
 
@@ -6684,11 +6762,83 @@ export function World3D({
 
       function exitHouseInterior() {
         if (!insideHouseInterior) return
+        // Sair de casa com uma peça em modo de posicionamento não deveria deixar o modo "preso"
+        // (o jogador não teria mais como confirmar/cancelar de dentro do painel) — cancela e
+        // restaura a posição anterior, mesmo efeito de apertar "Cancelar".
+        cancelFurniturePlacement()
         insideHouseInterior = false
         currentWorldCenter = savedOutsideCenter
         currentGroundBaseFn = savedOutsideGroundFn
         teleportAvatarTo(savedOutsideCenter, offsetLandingUp(houseUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
       }
+
+      // Posicionamento manual de mobília (lab-136, pedido do usuário: "tem que ter opção... de
+      // escolher em que posição da casa deve ficar a peça... o ângulo e posição onde fica o
+      // objeto"). Três funções espelhando o padrão já estabelecido de "entrar/confirmar/cancelar
+      // um modo especial" deste arquivo (ex.: `boardRocket`/`landRocket`, `enterHouseInterior`/
+      // `exitHouseInterior`): `startFurniturePlacement` congela o jogador (mesmo mecanismo de
+      // `sittingAtDesk`/`drivingCar`, ver o loop de física mais abaixo) e deixa a peça "fantasma"
+      // (alpha reduzido) sob controle direto do jogador; `confirmFurniturePlacement` persiste via
+      // `onFurniturePlacedRef` (chega em `useProgress().setFurniturePlacement`, `App.tsx`);
+      // `cancelFurniturePlacement` restaura o snapshot tirado ao entrar, sem gravar nada.
+      function setFurniturePieceAlpha(piece: TransformNode, alpha: number) {
+        for (const mesh of piece.getChildMeshes()) {
+          if (mesh.material) (mesh.material as PBRMaterial).alpha = alpha
+        }
+      }
+
+      function startFurniturePlacement(id: string) {
+        if (!insideHouseInterior) return
+        const piece = houseFurnitureNodes[id]
+        if (!piece || !piece.isEnabled()) return
+        if (placingFurnitureId && placingFurnitureId !== id) cancelFurniturePlacement()
+        placingFurnitureId = id
+        placingFurnitureStartSnapshot = { x: piece.position.x, z: piece.position.z, rotY: piece.rotation.y }
+        placingFurnitureIdRef.current = id
+        setPlacingFurnitureUi(id)
+        setFurniturePieceAlpha(piece, 0.55)
+        // O jogador congela igual a `drivingCar`/`drivingRocket` (ver o loop de física mais
+        // abaixo) — sem zerar a velocidade aqui, qualquer impulso residual (ex.: acabou de andar)
+        // continuaria deslizando o corpo físico sozinho enquanto a gravidade normal já parou de
+        // ser aplicada, uma dessincronização visível entre avatar e câmera durante o modo.
+        if (avatarBody) {
+          avatarBody.body.setLinearVelocity(Vector3.Zero())
+          avatarBody.body.setAngularVelocity(Vector3.Zero())
+        }
+      }
+
+      function confirmFurniturePlacement() {
+        if (!placingFurnitureId) return
+        const piece = houseFurnitureNodes[placingFurnitureId]
+        if (piece) {
+          setFurniturePieceAlpha(piece, 1)
+          onFurniturePlacedRef.current(placingFurnitureId, piece.position.x, piece.position.z, piece.rotation.y)
+        }
+        placingFurnitureId = null
+        placingFurnitureStartSnapshot = null
+        placingFurnitureIdRef.current = null
+        setPlacingFurnitureUi(null)
+      }
+
+      function cancelFurniturePlacement() {
+        if (!placingFurnitureId) return
+        const piece = houseFurnitureNodes[placingFurnitureId]
+        if (piece) {
+          setFurniturePieceAlpha(piece, 1)
+          if (placingFurnitureStartSnapshot) {
+            piece.position.x = placingFurnitureStartSnapshot.x
+            piece.position.z = placingFurnitureStartSnapshot.z
+            piece.rotation.y = placingFurnitureStartSnapshot.rotY
+          }
+        }
+        placingFurnitureId = null
+        placingFurnitureStartSnapshot = null
+        placingFurnitureIdRef.current = null
+        setPlacingFurnitureUi(null)
+      }
+      ;(scene as any).__startFurniturePlacement = startFurniturePlacement
+      ;(scene as any).__confirmFurniturePlacement = confirmFurniturePlacement
+      ;(scene as any).__cancelFurniturePlacement = cancelFurniturePlacement
 
       function applyPortalVisual(entry: (typeof portalMeshes)[number]) {
         const p = progressRef.current
@@ -8038,11 +8188,13 @@ export function World3D({
           // Dirigindo um carro (lab-25): o corpo físico do avatar fica congelado (sem
           // gravidade/velocidade nova) e a figura visual escondida (ver handler de entrar/sair)
           // — o input de teclado vira controle do carro, não do personagem a pé, então nada
-          // aqui deve mexer no avatar enquanto isso. Mesma coisa pilotando o foguete (lab-59).
+          // aqui deve mexer no avatar enquanto isso. Mesma coisa pilotando o foguete (lab-59), e
+          // posicionando mobília (lab-136) — o input de movimento vira controle da peça fantasma
+          // em vez do avatar, ver o bloco de posicionamento logo depois do fim deste `if`.
           // `sittingAtDesk` (lab-93) NÃO entra aqui de propósito — ver comentário mais abaixo, no
           // ciclo de caminhada: travar o bloco inteiro impediria o jogador de andar embora da
           // carteira (a própria saída depende do gatilho de distância rodando com posição real).
-          if (!drivingCar && !drivingRocket) {
+          if (!drivingCar && !drivingRocket && !placingFurnitureId) {
           // Gravidade radial real — puxa sempre pro centro do planeta (origem),
           // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
           body.applyForce(localUp.scale(-GRAVITY), pos)
@@ -8267,17 +8419,42 @@ export function World3D({
             }
             if (attackAnimTimer <= 0) attackAnimKind = null
           }
-          } // fim do `if (!drivingCar && !drivingRocket)` — resto do bloco (câmera/multiplayer/
-            // ranking/portais) continua rodando normalmente em qualquer caso.
+          } // fim do `if (!drivingCar && !drivingRocket && !placingFurnitureId)` — resto do bloco
+            // (câmera/multiplayer/ranking/portais) continua rodando normalmente em qualquer caso.
+
+          // Modo de posicionamento de mobília (lab-136, pedido do usuário: "escolher em que
+          // posição da casa deve ficar a peça... o ângulo e posição"): reaproveita o MESMO eixo
+          // x/y de movimento (WASD/joystick, já combinado no topo deste bloco) e os MESMOS botões
+          // de rotação de câmera (◀ ▶) — em vez de mover o avatar/girar a câmera (que ficam
+          // congelados enquanto isso, ver o `if` que acabou de fechar acima), eles movem/giram a
+          // peça fantasma. Evita inventar controles novos só pra este modo — o jogador já sabe
+          // usá-los.
+          if (placingFurnitureId) {
+            const ghost = houseFurnitureNodes[placingFurnitureId]
+            if (ghost) {
+              const limit = HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN
+              ghost.position.x = Math.max(
+                -limit,
+                Math.min(limit, ghost.position.x + x * FURNITURE_PLACEMENT_MOVE_SPEED * dt),
+              )
+              ghost.position.z = Math.max(
+                -limit,
+                Math.min(limit, ghost.position.z + y * FURNITURE_PLACEMENT_MOVE_SPEED * dt),
+              )
+              if (cameraRotateLeftRef.current) ghost.rotation.y -= dt * FURNITURE_PLACEMENT_ROTATE_SPEED
+              if (cameraRotateRightRef.current) ghost.rotation.y += dt * FURNITURE_PLACEMENT_ROTATE_SPEED
+            }
+          }
 
           // câmera segue a bola acompanhando a orientação local do planeta (sobrescrita pela
           // câmera do carro logo abaixo, se `drivingCar` estiver setado neste quadro)
           // Botões de rotação de câmera (lab-55, pedido do usuário — tablet sem mouse pra olhar
           // em volta): giram só a posição da câmera ao redor do jogador (`cameraYawOffsetRef`),
           // sem tocar em `facing` — o boneco continua andando pra onde o direcional manda, só a
-          // vista gira, como olhar em volta sem mudar pra onde anda.
-          if (cameraRotateLeftRef.current) cameraYawOffsetRef.current -= dt * CAMERA_ROTATE_SPEED
-          if (cameraRotateRightRef.current) cameraYawOffsetRef.current += dt * CAMERA_ROTATE_SPEED
+          // vista gira, como olhar em volta sem mudar pra onde anda. Fora enquanto
+          // `placingFurnitureId` (bloco acima já consumiu os mesmos botões pra girar a peça).
+          if (!placingFurnitureId && cameraRotateLeftRef.current) cameraYawOffsetRef.current -= dt * CAMERA_ROTATE_SPEED
+          if (!placingFurnitureId && cameraRotateRightRef.current) cameraYawOffsetRef.current += dt * CAMERA_ROTATE_SPEED
           Matrix.FromQuaternionToRef(Quaternion.RotationAxis(localUp, cameraYawOffsetRef.current), tmpMatrix)
           const camFacing = Vector3.TransformNormal(facing, tmpMatrix).normalize()
           // lab-123: dentro de casa, a distância/altura padrão (pensada pro terreno aberto lá
@@ -8289,6 +8466,31 @@ export function World3D({
           camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
           camera.setTarget(pos)
+
+          // Desvanece a parede que estiver entre a câmera e o jogador (lab-136, pedido do
+          // usuário: "as paredes precisam ficar transparentes... a câmera não via conseguir
+          // enxergar o cenário e o boneco") — a sala é pequena (11×11) com a câmera relativamente
+          // perto (`HOUSE_INTERIOR_CAMERA_DISTANCE`), então em cantos apertados a posição
+          // DESEJADA da câmera pode acabar do lado de fora de alguma parede. Em vez de prender a
+          // câmera dentro da sala (mudaria a sensação de câmera do resto do jogo), a parede que a
+          // câmera atravessou fica translúcida — checagem simples de "a câmera passou do plano
+          // desta parede", não um raycast (a sala é uma caixa com paredes ortogonais alinhadas
+          // aos eixos locais de `interiorRoot`, então comparar a coordenada local da câmera contra
+          // ±`HOUSE_ROOM_HALF_SIZE` em cada eixo já identifica exatamente qual parede é). Suaviza
+          // com lerp (não troca de opacidade num só quadro) pra não "piscar".
+          if (insideHouseInterior && houseInteriorRootNode) {
+            const camLocal = camera.position.subtract(houseInteriorRootNode.position)
+            const wallOver: Record<string, boolean> = {
+              houseIntWallNorth: camLocal.z < -HOUSE_ROOM_HALF_SIZE,
+              houseIntWallSouth: camLocal.z > HOUSE_ROOM_HALF_SIZE,
+              houseIntWallEast: camLocal.x > HOUSE_ROOM_HALF_SIZE,
+              houseIntWallWest: camLocal.x < -HOUSE_ROOM_HALF_SIZE,
+            }
+            for (const [name, mat] of Object.entries(houseWallMats)) {
+              const targetAlpha = wallOver[name] ? HOUSE_WALL_FADE_ALPHA : 1
+              mat.alpha += (targetAlpha - mat.alpha) * 0.2
+            }
+          }
 
           // Multiplayer: manda o próprio estado só quando algo muda de verdade (posição/direção
           // além do limiar, ou aparência trocada) ou quando o keepalive vence parado — ver
@@ -9489,6 +9691,17 @@ export function World3D({
     ;(sceneRef.current as any)?.__handleInteractPress?.()
   }
 
+  // Confirmar/Cancelar do modo de posicionamento de mobília (lab-136) — botões React normais
+  // (não Babylon GUI, ver comentário na declaração de `placingFurnitureUi` acima), mesmo padrão
+  // de `handleTouchInteractPress` acima: só repassam pra ponte exposta pelo closure.
+  function handleConfirmFurniturePlacement() {
+    ;(sceneRef.current as any)?.__confirmFurniturePlacement?.()
+  }
+
+  function handleCancelFurniturePlacement() {
+    ;(sceneRef.current as any)?.__cancelFurniturePlacement?.()
+  }
+
   function handleToggleMute() {
     setMuted(toggleAmbienceMute())
   }
@@ -9585,6 +9798,23 @@ export function World3D({
         onRelease={handleCameraRotateRightRelease}
       />
       <TouchActionButton className="touch-action-interact" label="E" onPress={handleTouchInteractPress} />
+      {placingFurnitureUi && (
+        <div className="furniture-placement-bar">
+          <p className="furniture-placement-hint">
+            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi)?.emoji}{' '}
+            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi)?.name} — mova com as setas/WASD ou o
+            analógico, gire com ◀ ▶
+          </p>
+          <div className="furniture-placement-actions">
+            <button type="button" className="furniture-placement-confirm" onClick={handleConfirmFurniturePlacement}>
+              ✅ Confirmar posição
+            </button>
+            <button type="button" className="furniture-placement-cancel" onClick={handleCancelFurniturePlacement}>
+              ✖ Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       {chatOpen && (
         <ChatPanel
           messages={chatMessages}

@@ -153,6 +153,8 @@ export const emptyProgress: Progress = {
   foundTreasureChestIds: [],
   // Combo de respostas certas seguidas (lab-132) — ver comentário em `types.ts`.
   currentStreak: 0,
+  // Posicionamento manual de mobília dentro de casa (lab-136) — ver comentário em `types.ts`.
+  housePlacements: {},
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

@@ -376,6 +376,16 @@ export function unlockFurniture(progress: Progress, id: string): Progress {
   return { ...progress, coins: result.coins, unlockedFurnitureIds: result.unlockedIds }
 }
 
+// Posicionamento manual de mobília dentro de casa (lab-136, pedido do usuário: "tem que ter
+// opção... de escolher em que posição da casa deve ficar a peça... o ângulo e posição onde fica o
+// objeto"). Pura escrita de coordenadas já escolhidas pelo jogador na cena 3D — a geometria/
+// limites da sala (`HOUSE_ROOM_HALF_SIZE` etc.) são de `World3D.tsx`, que já clampa a posição
+// ANTES de confirmar; esta função não precisa (nem deve) conhecer nada de 3D, só guarda o
+// resultado, igual a todo outro `unlockXxx` deste arquivo.
+export function setFurniturePlacement(progress: Progress, id: string, x: number, z: number, rotY: number): Progress {
+  return { ...progress, housePlacements: { ...progress.housePlacements, [id]: { x, z, rotY } } }
+}
+
 export interface PlanetFurnitureRewardResult {
   progress: Progress
   granted: boolean

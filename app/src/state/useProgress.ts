@@ -16,6 +16,7 @@ import {
   unlockHairShape as applyHairShapeUnlock,
   unlockGlasses as applyGlassesUnlock,
   unlockFurniture as applyFurnitureUnlock,
+  setFurniturePlacement as applySetFurniturePlacement,
   unlockMarsReward as applyMarsRewardUnlock,
   applyTreasureChestFound,
   applyStreakReset,
@@ -130,6 +131,17 @@ export function useProgress() {
     })
   }
 
+  // Posicionamento manual de mobília dentro de casa (lab-136) — mesmo formato dos outros
+  // `unlockXxx`, chamado por `World3D.tsx` ao confirmar o modo de posicionamento (nunca durante o
+  // arrastar em si, só na confirmação — senão salvaria no localStorage a cada quadro).
+  function setFurniturePlacement(id: string, x: number, z: number, rotY: number): void {
+    setProgress((prev) => {
+      const next = applySetFurniturePlacement(prev, id, x, z, rotY)
+      saveProgress(next)
+      return next
+    })
+  }
+
   // Brinde de Marte (lab-94) — diferente dos outros `unlockXxx`, devolve se realmente concedeu
   // algo novo (o chamador em `App.tsx` usa isso pra decidir se mostra o aviso de novo item).
   function unlockMarsReward(): boolean {
@@ -178,6 +190,7 @@ export function useProgress() {
     unlockHairShape,
     unlockGlasses,
     unlockFurniture,
+    setFurniturePlacement,
     unlockMarsReward,
     foundTreasureChest,
     resetStreak,

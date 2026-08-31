@@ -92,6 +92,7 @@ function GameApp() {
     unlockHairShape,
     unlockGlasses,
     unlockFurniture,
+    setFurniturePlacement,
     unlockMarsReward,
     foundTreasureChest,
     resetStreak,
@@ -118,6 +119,11 @@ function GameApp() {
   const [showPairing, setShowPairing] = useState(false)
   const [showAchievements, setShowAchievements] = useState(false)
   const [showMyHouse, setShowMyHouse] = useState(false)
+  // lab-136 (pedido do usuário: "escolher em que posição da casa deve ficar a peça... o ângulo e
+  // posição") — id do item que o jogador clicou "Mover" no `MyHousePanel`; `World3D.tsx` observa
+  // essa prop e entra no modo de posicionamento dentro da cena 3D, depois chama
+  // `onPlacingRequestHandled` pra limpar (senão o mesmo id reabriria o modo a cada re-render).
+  const [pendingPlacementId, setPendingPlacementId] = useState<string | null>(null)
   const [showMarsReward, setShowMarsReward] = useState(false)
   const { entitlement, redeemCode, redeeming, redeemError, syncProgressSummary } = useEntitlement()
   // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
@@ -285,6 +291,9 @@ function GameApp() {
           onUnlockMarsReward={handleUnlockMarsReward}
           onFindTreasureChest={foundTreasureChest}
           onCollectCoin={collectCoin}
+          placingFurnitureRequestId={pendingPlacementId}
+          onPlacingRequestHandled={() => setPendingPlacementId(null)}
+          onFurniturePlaced={setFurniturePlacement}
           onSwitchProfile={() => {
             clearActiveProfile()
             window.location.reload()
@@ -355,6 +364,10 @@ function GameApp() {
           progress={progress}
           entitlementActive={entitlement?.active ?? false}
           onUnlockFurniture={unlockFurniture}
+          onStartPlacing={(id) => {
+            setShowMyHouse(false)
+            setPendingPlacementId(id)
+          }}
           onClose={() => setShowMyHouse(false)}
         />
       )}

@@ -75,4 +75,10 @@ export interface Progress {
   // uma missão ainda não respondida (`applyStreakReset`, `state/progression.ts`). Concede moeda
   // bônus em marcos (`streakBonusFor`).
   currentStreak: number
+  // Posição/ângulo escolhidos pelo jogador pra cada peça de mobília dentro de Minha Casa (lab-136,
+  // pedido do usuário: "tem que ter opção... de escolher em que posição da casa deve ficar a
+  // peça... o ângulo e posição onde fica o objeto"). Chave = id do item (`data/furniture.ts`);
+  // ausência de uma chave significa "ainda na posição padrão" (layout em anel ao redor do balcão,
+  // ver `World3D.tsx`).
+  housePlacements: Record<string, { x: number; z: number; rotY: number }>
 }

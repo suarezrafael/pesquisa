@@ -768,6 +768,62 @@ a.nickname-generate-btn {
   pointer-events: none;
 }
 
+/* Modo de posicionamento de mobília (lab-136, pedido do usuário: "escolher em que posição da
+   casa deve ficar a peça... o ângulo e posição"). Ao contrário de `.world3d-hint`
+   (`pointer-events: none`, é só texto informativo), esta barra tem botões de verdade — precisa
+   receber toque/clique, então cada botão reaproveita o alvo mínimo de 44px já estabelecido em
+   `.avatar-shop-action` (lab-91, `[MUST]` de acessibilidade). */
+.furniture-placement-bar {
+  position: absolute;
+  bottom: 6.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 30;
+  max-width: 92vw;
+}
+
+.furniture-placement-hint {
+  background: rgba(20, 20, 25, 0.8);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: clamp(0.72rem, 2.2vmin, 0.9rem);
+  text-align: center;
+  pointer-events: none;
+}
+
+.furniture-placement-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.furniture-placement-confirm,
+.furniture-placement-cancel {
+  font-size: 0.85rem;
+  font-weight: 700;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+}
+
+.furniture-placement-confirm {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.furniture-placement-cancel {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+}
+
 .joystick-base {
   position: absolute;
   left: 1.5rem;

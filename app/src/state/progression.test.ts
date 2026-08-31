@@ -17,6 +17,7 @@ import {
   unlockAvatar,
   unlockBackpackColor,
   unlockFurniture,
+  setFurniturePlacement,
   unlockGlasses,
   unlockHat,
   unlockHairShape,
@@ -548,6 +549,28 @@ describe('compra normal com moeda continua funcionando', () => {
     const jaTem = { ...emptyProgress, coins: 100, unlockedFurnitureIds: ['cama'] }
     const next = unlockFurniture(jaTem, 'cama')
     expect(next).toBe(jaTem)
+  })
+
+  // lab-136: posicionamento manual de mobília ("Mover" no MyHousePanel) — testes de regressão pro
+  // eixo novo, mesmo espírito dos testes de `unlockFurniture` acima.
+  it('setFurniturePlacement grava posição/ângulo novos pra um item ainda sem posição salva', () => {
+    const next = setFurniturePlacement(emptyProgress, 'cama', 1.5, -2.25, Math.PI / 2)
+    expect(next.housePlacements.cama).toEqual({ x: 1.5, z: -2.25, rotY: Math.PI / 2 })
+  })
+
+  it('setFurniturePlacement sobrescreve uma posição salva anteriormente pro MESMO item', () => {
+    const jaPosicionado = setFurniturePlacement(emptyProgress, 'cama', 1, 1, 0)
+    const reposicionado = setFurniturePlacement(jaPosicionado, 'cama', -3, 4, Math.PI)
+    expect(reposicionado.housePlacements.cama).toEqual({ x: -3, z: 4, rotY: Math.PI })
+  })
+
+  it('setFurniturePlacement não afeta a posição salva de OUTRO item nem outros campos do progresso', () => {
+    const comMesa = setFurniturePlacement(emptyProgress, 'mesa_cadeira', 2, 2, 0)
+    const comCamaTambem = setFurniturePlacement(comMesa, 'cama', -1, -1, Math.PI / 4)
+    expect(comCamaTambem.housePlacements.mesa_cadeira).toEqual({ x: 2, z: 2, rotY: 0 })
+    expect(comCamaTambem.housePlacements.cama).toEqual({ x: -1, z: -1, rotY: Math.PI / 4 })
+    expect(comCamaTambem.coins).toBe(emptyProgress.coins)
+    expect(comCamaTambem.unlockedFurnitureIds).toBe(emptyProgress.unlockedFurnitureIds)
   })
 
   it('unlockHat não faz nada sem moeda suficiente', () => {

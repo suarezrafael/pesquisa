@@ -14,10 +14,16 @@ interface MyHousePanelProps {
   progress: Progress
   entitlementActive: boolean
   onUnlockFurniture: (id: string) => void
+  // lab-136 (pedido do usuário: "tem que ter opção... de escolher em que posição da casa deve
+  // ficar a peça... o ângulo e posição") — fecha este painel e entra no modo de posicionamento
+  // dentro da cena 3D pra um item já possuído; só faz sentido enquanto dentro de casa (o botão só
+  // aparece pra itens `usable`, e o próprio `World3D.tsx` ignora o pedido se o jogador não estiver
+  // no interior no momento).
+  onStartPlacing: (id: string) => void
   onClose: () => void
 }
 
-export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, onClose }: MyHousePanelProps) {
+export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, onStartPlacing, onClose }: MyHousePanelProps) {
   const modalRef = useModalA11y(onClose)
   return (
     <div
@@ -51,6 +57,16 @@ export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, o
                 </span>
 
                 {usable && <span className="avatar-shop-tag">✓ Tem</span>}
+
+                {usable && (
+                  <button
+                    type="button"
+                    className="avatar-shop-action"
+                    onClick={() => onStartPlacing(item.id)}
+                  >
+                    🖐️ Mover
+                  </button>
+                )}
 
                 {!usable && item.subscriptionOnly && (
                   <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>

@@ -1,6 +1,34 @@
 # Laboratório atual
 
-Último concluído: labs/lab-135-corrige-boneco-enterrado-interior-casa/ — assim que o gatilho de
+Último concluído: labs/lab-136-paredes-transparentes-posicionar-mobilia/ — os dois itens que o
+lab-135 deixou "fora de escopo" (features novas, não bugs pontuais), confirmados pelo usuário na
+sequência da mesma conversa: *"as paredes estao solidas, precisam ficar transparentes pra camera...
+tem que ter opcao virtual de escolher em que posicao dacas deve ficar a peca... escolher o angulo e
+posicao"*.
+1. **Paredes transparentes por oclusão de câmera**: cada parede da sala ganhou material CLONADO
+   próprio (antes as 4 compartilhavam uma instância, desvanecer uma desvaneceria as 4 juntas). A
+   cada quadro, a posição da câmera é comparada contra os limites locais da sala em cada eixo
+   (checagem geométrica direta — a sala é uma caixa ortogonal, não precisa de raycast); a parede do
+   lado errado desvanece com lerp suave (`alpha → 0,18`), as outras voltam a `1`.
+2. **Posicionamento manual de mobília**: `Progress.housePlacements` novo (posição x/z + ângulo por
+   item); botão "🖐️ Mover" no `MyHousePanel` entra no modo dentro da cena 3D, que reaproveita o
+   MESMO eixo de movimento (WASD/joystick) e os MESMOS botões de rotação de câmera (◀ ▶) — em vez
+   de mover o avatar/girar a câmera (congelados durante o modo, mesmo mecanismo de
+   `drivingCar`/`drivingRocket`), eles movem/giram a peça "fantasma" (alpha reduzido). Barra
+   Confirmar/Cancelar em React DOM normal (não Babylon GUI, preserva a redução de bundle do
+   lab-117). Ao (re)construir a sala, posição salva tem prioridade sobre o layout padrão em anel.
+
+**Verificado ao vivo, ponta a ponta**: câmera empurrada de propósito pra fora da parede sul
+(`__debugSetFacing` + assentamento físico) — confirmado por screenshot (parede sul translúcida,
+avatar/balcão visíveis através dela; parede leste ao lado continua opaca) e por `material.alpha`
+convergindo pra `0,18`/`1` corretamente. Posicionamento testado com item real já possuído
+(`tapete`): tecla `D` sintética movendo só a peça fantasma (avatar comprovadamente parado), clique
+real em "Confirmar posição" gravando no `localStorage`, reload de página de verdade reconstruindo
+a sala já na posição salva, e Cancelar restaurando a posição anterior exatamente. `npm run test`:
+78/78 (3 novos). `npm run build` sem erros. Ver
+`labs/lab-136-paredes-transparentes-posicionar-mobilia/CONTEXT.md`.
+
+Antes desse: labs/lab-135-corrige-boneco-enterrado-interior-casa/ — assim que o gatilho de
 entrada da casa foi corrigido (lab-134), o usuário conseguiu entrar de verdade pela primeira vez e
 reportou 3 problemas numa mensagem só: "as paredes precisam ficar transparentes... a câmera não via
 conseguir enxergar o cenário e o boneco", "tem que ser possível escolher onde colocar os objetos do
