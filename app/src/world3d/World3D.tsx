@@ -6311,6 +6311,33 @@ export function World3D({
       new PhysicsAggregate(houseWalls, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
       shadowGenerator.addShadowCaster(houseWalls)
 
+      // Mesmo diagnóstico de "prédio enterrado" já usado nas escolinhas (`buriedSchoolReport`,
+      // lab-95) — pedido do usuário no lab-134 ("acho que a causa é a casa estar enterrada na
+      // terra"): checar num dado real do APARELHO dele (só um print do HUD, sem ferramenta de
+      // desenvolvedor) em vez de confiar só na verificação ao vivo em outro aparelho, que já não
+      // reproduziu o mesmo resultado antes. REMOVER depois de confirmar a causa raiz real.
+      const buriedHouseReport = (() => {
+        const rootPos = houseBase.getAbsolutePosition()
+        const dir = rootPos.clone().normalize()
+        const terrain = terrainGroundRadial(dir, terrainHeight(dir))
+        houseWalls.computeWorldMatrix(true)
+        const positions = houseWalls.getVerticesData(VertexBuffer.PositionKind)
+        const worldMatrix = houseWalls.getWorldMatrix()
+        let wallsTop = -Infinity
+        if (positions) {
+          for (let i = 0; i < positions.length; i += 3) {
+            const p = Vector3.TransformCoordinates(
+              new Vector3(positions[i], positions[i + 1], positions[i + 2]),
+              worldMatrix,
+            )
+            const proj = Vector3.Dot(p, dir)
+            if (proj > wallsTop) wallsTop = proj
+          }
+        }
+        const gap = wallsTop - terrain
+        return `CASA:${gap.toFixed(2)}`
+      })()
+
       const houseFoundation = MeshBuilder.CreateBox(
         'houseFoundation',
         { width: 1.72, height: 1.6, depth: 1.52 },
@@ -9215,7 +9242,11 @@ export function World3D({
         // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
         // de performance realmente ajudou ou não.
         if (debugRef.current) {
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
+          // `buriedHouseReport` logo depois do build stamp (não no fim, como `buriedSchoolReport`)
+          // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
+          // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
+          // resto.
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
