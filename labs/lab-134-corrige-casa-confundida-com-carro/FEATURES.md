@@ -1,14 +1,15 @@
-# Laboratório 134 — Correção: casa confundida com carro + casa enterrada no relevo
+# Laboratório 134 — Correção: casa confundida com carro + casa enterrada no relevo + raio de gatilho inalcançável
 
 Status: concluído
 Início: 2026-08-30
 Fim: 2026-08-30
 Commit inicial: 51760bfc59fc8b3265de2b51bcaf5a991e737205
 
-**Nota**: este laboratório teve DUAS rodadas de correção pro mesmo sintoma relatado ("casa não
+**Nota**: este laboratório teve TRÊS rodadas de correção pro mesmo sintoma relatado ("casa não
 aceita o comando E"), cada uma motivada por uma pista nova do usuário. A seção original abaixo
-cobre a 1ª causa (dica idêntica ao carro); a seção "Segunda causa" cobre a 2ª (casa enterrada no
-relevo), achada depois que o usuário reportou o bug de novo mesmo após a 1ª correção.
+cobre a 1ª causa (dica idêntica ao carro); "Segunda causa" cobre a 2ª (casa enterrada no relevo);
+"Terceira causa" cobre a 3ª e mais conclusiva (raio de gatilho menor que a distância física mínima
+de aproximação) — a causa real que fazia o bug persistir mesmo depois das duas primeiras correções.
 
 ## Objetivo do laboratório
 
@@ -102,6 +103,60 @@ causa é a casa estar enterrada na terra"*.
   Testado com tecla E REAL (não só a ponte de depuração): parado exatamente na porta, a legenda
   "Pressione E pra entrar em casa" aparece, apertar E entra no interior da casa corretamente.
 
+## Terceira causa: raio de gatilho menor que a distância física mínima de aproximação
+
+O usuário reportou o MESMO sintoma pela TERCEIRA vez, já depois da 2ª correção estar publicada nos
+dois servidores (Vercel + Cloudflare Pages), com uma pista nova e definitiva: um print do HUD de
+depuração mostrando `CASA:1.10` (diagnóstico `buriedHouseReport`, adicionado nesta sessão — mesma
+ideia do `buriedSchoolReport` do lab-95, exposto na tela porque o usuário só tem o celular, sem
+ferramenta de desenvolvedor) — um valor SAUDÁVEL, provando que a casa NÃO estava enterrada — seguido
+de um terceiro print mostrando o avatar parado bem em frente à casa (ícone 🏠 visível) com a tecla E
+sem efeito. Isso descartou terreno/posição de vez e forçou reconsiderar a própria geometria da
+interação.
+
+- **Causa raiz**: `HOUSE_TRIGGER_DISTANCE` valia `1,2` (copiado por analogia da carteira, nunca
+  medido contra a física real da casa). A parede da casa (`houseWalls`) tem colisão sólida real
+  (`PhysicsAggregate` tipo BOX, profundidade 1,4 → meia-profundidade 0,7), e a cápsula do avatar
+  (`AVATAR_RADIUS = 0,55`) fisicamente não consegue encostar mais perto do que
+  `0,7 + 0,55 = 1,25` do pivô `houseBase` ao colidir de frente com a porta — MAIOR que o próprio
+  raio de gatilho de `1,2`. Ou seja: nenhum jogador andando de verdade, em nenhuma posição, em
+  nenhum aparelho, jamais conseguiu chegar perto o bastante — o bug existia desde a implementação
+  original da casa (lab-105/123), não foi introduzido nesta sessão.
+- **Por que isso escapou de TODA verificação anterior desta investigação** (incluindo a "verificação
+  com tecla E real" que a seção "Segunda causa" acima registra como bem-sucedida): todo teste, do
+  início ao fim, usava `__debugTeleport`/`__debugTeleportExact` posicionando o CENTRO da cápsula do
+  avatar diretamente NO PIVÔ ou muito perto da porta — uma posição que a colisão real bloqueia um
+  jogador de verdade de alcançar. Teleporte de depuração ignora colisão (documentado desde os labs
+  129/131/133 pra gravidade entre planetas; aqui a mesma classe de ferramenta mascarou um problema
+  de colisão dentro do MESMO planeta). Isso invalida retroativamente a alegação de "testado com
+  tecla E real" da 2ª correção — o teste rodou de verdade, mas a partir de uma posição que um
+  jogador de carne-e-osso nunca alcançaria.
+- **Metodologia de verificação corrigida** (usada para confirmar esta 3ª correção): em vez de
+  teleportar direto ao pivô/porta, calculou-se um ponto de aproximação REAL — na direção de fora
+  da casa (`houseDoor - houseBase`, normalizada), a ~1,4 de distância do pivô — e usou-se
+  `__debugTeleport` (variante que assenta na altura real do chão, não a variante "exata" que ignora
+  colisão) seguido de dezenas de quadros de física forçada (`engine._deltaTime = 16` +
+  `scene.render()` em loop) para deixar o avatar assentar numa posição de repouso genuína, sem
+  sobreposição com a parede. Resultado: repousou de forma estável a `1,585` do pivô — DENTRO do
+  novo limiar de `1,6`, e FORA do limiar antigo de `1,2` (prova de que o limiar antigo realmente
+  bloqueava qualquer jogador real). A partir dessa posição de repouso genuína, a ponte de depuração
+  `__handleInteractPress()` confirmou a entrada correta no interior da casa
+  (`[150, 10,55, 148,7]`). Uma tentativa adicional com uma tecla `E` sintética de verdade (via
+  automação de navegador) não pôde ser confirmada nesta rodada porque a aba de teste estava em
+  segundo plano (`document.hidden = true`), o que suspende o loop de renderização real do jogo e
+  impede o processamento do evento — uma limitação conhecida da ferramenta de automação (ver nota
+  de memória sobre `rAF` em abas ocultas), não do jogo em si.
+- **Correção**: `HOUSE_TRIGGER_DISTANCE` alterado de `1,2` para `1,6` — folga real acima do mínimo
+  geométrico de `~1,25`, com margem suficiente para variação de terreno/assentamento de física.
+- **Lição pro projeto**: ao verificar QUALQUER interação de proximidade por teleporte de depuração,
+  sempre teleportar para um ponto FORA do volume de colisão sólido do objeto (nunca no pivô ou na
+  posição de um mesh decorativo embutido na parede, como a porta) e deixar a física assentar antes
+  de testar — do contrário, o teste pode "passar" numa posição geometricamente inalcançável por um
+  jogador real, mascarando exatamente este tipo de bug. Vale a pena, num laboratório futuro, auditar
+  as demais distâncias de gatilho copiadas por analogia (`DESK_TRIGGER_DISTANCE`,
+  `PLANET_SCHOOL_TRIGGER_DISTANCE`, etc.) contra a profundidade de colisão real de cada prédio, em
+  vez de assumir que o mesmo valor serve para todos.
+
 ## Pendências / dívidas conhecidas
 
 - **Cache do PWA obsoleto**: o service worker ficou servindo uma versão de build de 3 dias atrás
@@ -116,6 +171,14 @@ causa é a casa estar enterrada na terra"*.
 - **`findFlatterUpReal` só foi chamada pra casa e escolinhas** — outros prédios fixos do planeta
   principal (loja, carteira, Prédio dos Enigmas) não passam por essa proteção; se algum deles for
   reposicionado num laboratório futuro, vale considerar a mesma busca.
+- **Outras distâncias de gatilho copiadas por analogia não foram auditadas** contra a profundidade
+  de colisão real de cada prédio (só a da casa foi, nesta 3ª causa) — `DESK_TRIGGER_DISTANCE`,
+  `PLANET_SCHOOL_TRIGGER_DISTANCE` etc. podem ter o mesmo tipo de problema geométrico, ainda não
+  verificado.
+- **Verificação da 3ª correção com tecla `E` sintética real não foi concluída** (aba de teste em
+  segundo plano impediu o processamento do evento) — confirmado por outra via equivalente
+  (assentamento físico real + ponte de depuração de interação), mas vale reconfirmar com um teste
+  de teclado real numa aba em primeiro plano, ou diretamente no celular do usuário.
 
 ## O que o próximo laboratório deve desenvolver
 
@@ -136,9 +199,11 @@ prioridade única — perguntar ao usuário antes de escolher o próximo.
   cena 3D, não lógica de domínio pura).
 - `npm run build` (em `app/`): typecheck + build de produção sem erros.
 - Verificado ao vivo: nova posição da casa medida a 2,49 unidades de folga real da rua (contra
-  ~1,2-1,8 antes) E confirmada segura contra relevo íngreme pela busca real (`findFlatterUpReal`);
-  interação funciona com tecla E REAL (não só ponte de depuração) parado exatamente na porta,
-  legenda "Pressione E pra entrar em casa" aparece, entra no interior da casa (`(150, 10.6,
-  148.7)`) exatamente como esperado. Sem erro de console em nenhum momento.
-- **Deploy**: fix aplicado localmente (as duas rodadas); deploy manual pendente até o usuário
-  confirmar.
+  ~1,2-1,8 antes) E confirmada segura contra relevo íngreme pela busca real (`findFlatterUpReal`).
+  `HOUSE_TRIGGER_DISTANCE` corrigido de `1,2` pra `1,6` (raio antigo era menor que a distância
+  física mínima de aproximação, `~1,25`); verificado com o avatar assentado numa posição de
+  repouso genuína (fora da colisão sólida da parede, não no pivô) a `1,585` do pivô — dentro do
+  novo limiar — confirmando entrada correta no interior da casa (`(150, 10.6, 148.7)`) via a ponte
+  de interação. Sem erro de console em nenhum momento.
+- **Deploy**: fix das duas primeiras rodadas já publicado nos dois servidores (Vercel + Cloudflare
+  Pages); fix da 3ª rodada (`HOUSE_TRIGGER_DISTANCE`) aplicado no código, publicação pendente.

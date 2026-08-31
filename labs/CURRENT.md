@@ -2,8 +2,8 @@
 
 Último concluído: labs/lab-134-corrige-casa-confundida-com-carro/ — bug reportado pelo usuário em
 produção ("ao chegar perto da casa e aperto E não acontece nada", confirmado em aba anônima —
-descartando cache). DUAS causas raiz reais, cada uma achada com uma pista certeira do próprio
-usuário, em duas rodadas de correção:
+descartando cache). TRÊS causas raiz reais, cada uma achada com uma pista certeira do próprio
+usuário, em três rodadas de correção:
 1. **"Confira se não está confundido com os carros passando"**: a casa ficava a só ~1,2-1,8
    unidades do laço de rua dos carrinhos em certos momentos (dentro de `CAR_ENTER_DISTANCE=2.0`) e
    usava o MESMO texto de dica que os carros ("Pressione E pra entrar") — o jogador via a legenda
@@ -21,14 +21,21 @@ usuário, em duas rodadas de correção:
    lab-95: a malha real de 48 segmentos se afasta demais da fórmula suave perto de rampas) que as
    escolinhas já usam (`findFlatterSchoolUpReal` → `findFlatterUpReal`, agora parametrizada por
    footprint/variância segura) e aplicando-a também à casa.
+3. **`CASA:1.10` no HUD de depuração + print do avatar parado na porta sem efeito** (reportado pela
+   TERCEIRA vez, já com as duas correções acima publicadas): a causa real — `HOUSE_TRIGGER_DISTANCE`
+   (1,2) era MENOR que a distância física mínima que a colisão sólida da parede da casa
+   (meia-profundidade 0,7) mais o raio do avatar (0,55) permite alcançar (~1,25) — nenhum jogador
+   real jamais conseguiu chegar perto o bastante, em nenhuma posição, desde a implementação
+   original da casa (lab-105/123). Essa causa escapou de TODA verificação anterior (incluindo a
+   "tecla E real" citada abaixo) porque todo teste usava teleporte de depuração direto ao pivô/
+   porta, uma posição que a colisão real bloqueia um jogador de verdade de alcançar. Corrigido
+   subindo o limiar pra `1,6`; reverificado teleportando pra um ponto genuinamente FORA da colisão
+   (~1,4 do pivô) e deixando a física assentar — repousou estável a `1,585`, dentro do novo limiar.
 
-**Achado adicional real, separado das duas causas do bug**: o service worker do PWA estava servindo
+**Achado adicional real, separado das três causas do bug**: o service worker do PWA estava servindo
 uma versão em cache de 3 dias atrás em produção até ser limpo manualmente — vira item de backlog
-(configurar atualização automática do service worker). Verificado ao vivo com tecla E REAL (não só
-ponte de depuração): parado exatamente na porta da nova posição (já confirmada seguindo contra rua
-E relevo), a legenda "Pressione E pra entrar em casa" aparece e apertar E entra no interior da casa
-corretamente. `npm run test`: 75/75 (sem teste novo). `npm run build` sem erros. Ver
-`labs/lab-134-corrige-casa-confundida-com-carro/CONTEXT.md`.
+(configurar atualização automática do service worker). `npm run test`: 75/75 (sem teste novo).
+`npm run build` sem erros. Ver `labs/lab-134-corrige-casa-confundida-com-carro/CONTEXT.md`.
 
 Antes desse: labs/lab-133-bonus-planeta-completo/ — item do backlog de engajamento
 discutido em chat, escolhido entre 4 opções via `AskUserQuestion`. Responder a 6ª (última)

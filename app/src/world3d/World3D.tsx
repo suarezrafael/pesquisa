@@ -7374,9 +7374,18 @@ export function World3D({
       // `QT_QUIZ_TRIGGER_DISTANCE`).
       const DESK_TRIGGER_DISTANCE = 1.2
 
-      // Distância de gatilho de Minha Casa (lab-105) — mesmo raciocínio/valor da carteira: a
-      // fachada da casa ocupa espaço parecido com a mesa/banco da carteira.
-      const HOUSE_TRIGGER_DISTANCE = 1.2
+      // Distância de gatilho de Minha Casa — corrigido no lab-134 (achado real do usuário, "a casa
+      // não aceita o comando E", reproduzido só depois de andar de verdade até lá, nunca com
+      // teleporte de depuração direto ao pivô). O valor original (1,2) foi copiado por analogia da
+      // carteira ("fachada ocupa espaço parecido"), sem medir contra a física real da casa: a
+      // parede (`houseWalls`, profundidade 1,4 → meia-profundidade 0,7) tem colisão sólida de
+      // verdade, e a cápsula do avatar (`AVATAR_RADIUS = 0,55`) não consegue chegar mais perto do
+      // que ~0,7+0,55 = 1,25 do pivô `houseBase` encostando de frente na porta — MAIOR que o
+      // próprio raio de gatilho de 1,2! Um jogador andando de verdade fisicamente NUNCA conseguia
+      // chegar perto o bastante, em NENHUMA posição da casa, em nenhum aparelho — só teleporte de
+      // depuração (que ignora colisão) conseguia, mascarando o bug em toda verificação anterior
+      // desta investigação. Corrigido com folga real acima do mínimo geométrico (~1,25).
+      const HOUSE_TRIGGER_DISTANCE = 1.6
 
       // Distância de gatilho das escolinhas de astronomia dos planetas (lab-115) — mesmo
       // raciocínio da carteira/Minha Casa: o totem+professor ocupam espaço parecido.
