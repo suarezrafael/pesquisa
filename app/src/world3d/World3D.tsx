@@ -4498,7 +4498,10 @@ export function World3D({
       for (let i = 0; i < CARRO_COUNT; i++) {
         const carRoot = buildCarro(scene, shadowGenerator, CARRO_COLORS[i % CARRO_COLORS.length])
 
-        const hintLabel = new TextBlock(`carHint-${i}`, 'Pressione E pra entrar')
+        // Texto próprio ("...no carro", não só "Pressione E pra entrar" genérico) — mesmo achado
+        // do usuário que motivou o texto específico da casa (lab-133): carro e casa com o MESMO
+        // texto tornava impossível saber qual dos dois E ia acionar quando os dois ficavam perto.
+        const hintLabel = new TextBlock(`carHint-${i}`, 'Pressione E pra entrar no carro')
         hintLabel.color = 'white'
         hintLabel.fontSize = mobileFontSize(18)
         hintLabel.fontWeight = 'bold'
@@ -6248,7 +6251,18 @@ export function World3D({
       // arquivo usa. Interação é por gatilho de proximidade (igual à carteira/balcão da loja),
       // abrindo `MyHousePanel` (2D) — mobília comprável/posicionável fica pra um próximo
       // laboratório.
-      const houseUp = new Vector3(-0.35, 1, 0.12).normalize()
+      // Reposicionada (relatado pelo usuário: "fiquei do lado da casa e a legenda não aparece,
+      // pode ser os carros passando") — a direção original ficava a só ~1,2-1,8 unidades do laço
+      // de rua dos carrinhos (`streetCenter`, mais abaixo), bem dentro de `CAR_ENTER_DISTANCE`
+      // (2,0): o jogador via a legenda "Pressione E pra entrar" de um CARRO passando por perto
+      // (texto idêntico ao da casa, ver comentário de `houseEnterHint` abaixo) e, ao apertar E
+      // fora do raio de 1,2 da casa mas dentro do raio do carro, entrava no carro sem perceber —
+      // a "legenda que não funciona" era na verdade a legenda certa, só que de outra coisa. Nova
+      // direção medida (script à parte, mesmo método de lab-09/11/127): pelo menos 2,5 unidades de
+      // QUALQUER ponto do laço de rua (folga real acima de `CAR_ENTER_DISTANCE`), sem colidir com
+      // nenhuma escolinha/loja/carteira (>2,2 de cada), longe da decolagem do foguete (>5), e a só
+      // ~3,8 unidades da posição antiga — mesma vizinhança, não um teleporte pra longe.
+      const houseUp = new Vector3(-0.5362211119830486, 0.7986355100472928, 0.27321830311156536).normalize()
       const houseGroundRadial = terrainGroundRadial(houseUp, terrainHeight(houseUp))
       const houseSurfacePos = houseUp.scale(houseGroundRadial)
 
@@ -6292,9 +6306,12 @@ export function World3D({
       houseDoor.material = houseDoorMat
       houseDoor.parent = houseBase
 
-      // lab-123: "Pressione E pra entrar" — mesmo padrão de carro/foguete (dica linkada à malha
-      // da porta, alpha alternado por distância a cada quadro, ver bloco perto do fim do arquivo).
-      const houseEnterHint = new TextBlock('houseEnterHint', 'Pressione E pra entrar')
+      // lab-123: mesmo padrão de carro/foguete (dica linkada à malha da porta, alpha alternado
+      // por distância a cada quadro, ver bloco perto do fim do arquivo). Texto próprio ("...em
+      // casa", não só "Pressione E pra entrar" genérico) — achado real do usuário: com o texto
+      // genérico idêntico ao do carro, um carro passando perto da casa mostrava a MESMA legenda,
+      // e o jogador não tinha como saber qual das duas coisas E ia acionar.
+      const houseEnterHint = new TextBlock('houseEnterHint', 'Pressione E pra entrar em casa')
       houseEnterHint.color = 'white'
       houseEnterHint.fontSize = mobileFontSize(18)
       houseEnterHint.fontWeight = 'bold'

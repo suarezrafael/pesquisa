@@ -1,6 +1,26 @@
 # Laboratório atual
 
-Último concluído: labs/lab-133-bonus-planeta-completo/ — item do backlog de engajamento
+Último concluído: labs/lab-134-corrige-casa-confundida-com-carro/ — bug reportado pelo usuário em
+produção ("ao chegar perto da casa e aperto E não acontece nada", confirmado em aba anônima —
+descartando cache). Causa raiz real, achada com a pista certeira do próprio usuário ("confira se
+não está confundido com os carros passando"): a casa ficava a só ~1,2-1,8 unidades do laço de rua
+dos carrinhos em certos momentos (dentro de `CAR_ENTER_DISTANCE=2.0`) e usava o MESMO texto de dica
+que os carros ("Pressione E pra entrar") — o jogador via a legenda de um carro passando perto e
+achava que era da casa; apertar E ali entrava no carro, não na casa. Corrigido com DUAS mudanças:
+casa reposicionada (nova direção medida por script, 2,5+ unidades de folga real de qualquer ponto
+da rua, sem colidir com escolinha/loja/carteira, mesma vizinhança de antes) e textos de dica
+diferenciados ("...em casa" vs. "...no carro"), pra qualquer futura proximidade acidental não
+reproduzir a mesma confusão. **Achado adicional real, separado da causa do bug**: o service worker
+do PWA estava servindo uma versão em cache de 3 dias atrás em produção até ser limpo manualmente —
+vira item de backlog (configurar atualização automática do service worker). **Achado de ferramenta
+na verificação**: testar a nova posição via `__debugTeleport` + uma chamada SEPARADA de interação
+falhava (terreno mais inclinado faz o avatar escorregar um pouco pela gravidade entre uma chamada e
+outra); numa única chamada atômica funcionou perfeitamente — mesma família de limitação de
+ferramenta já documentada em labs 129/131/133, não um bug do produto. `npm run test`: 75/75 (sem
+teste novo). `npm run build` sem erros. Ver
+`labs/lab-134-corrige-casa-confundida-com-carro/CONTEXT.md`.
+
+Antes desse: labs/lab-133-bonus-planeta-completo/ — item do backlog de engajamento
 discutido em chat, escolhido entre 4 opções via `AskUserQuestion`. Responder a 6ª (última)
 escolinha de um planeta-destino agora credita, na mesma resposta, um bônus imediato de +50 XP /
 +30 moedas (com os mesmos multiplicadores de evento semanal/assinante da recompensa da própria
