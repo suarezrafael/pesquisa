@@ -1,9 +1,14 @@
-# Laboratório 134 — Correção: casa confundida com carro (dica idêntica + perto da rua)
+# Laboratório 134 — Correção: casa confundida com carro + casa enterrada no relevo
 
 Status: concluído
 Início: 2026-08-30
 Fim: 2026-08-30
 Commit inicial: 51760bfc59fc8b3265de2b51bcaf5a991e737205
+
+**Nota**: este laboratório teve DUAS rodadas de correção pro mesmo sintoma relatado ("casa não
+aceita o comando E"), cada uma motivada por uma pista nova do usuário. A seção original abaixo
+cobre a 1ª causa (dica idêntica ao carro); a seção "Segunda causa" cobre a 2ª (casa enterrada no
+relevo), achada depois que o usuário reportou o bug de novo mesmo após a 1ª correção.
 
 ## Objetivo do laboratório
 
@@ -44,6 +49,9 @@ entrar... mude a casa de lugar pra longe dos carros, pode ser esse o problema"*.
 - **Textos de dica diferenciados** (reforço, independente da posição): casa agora diz "Pressione E
   pra entrar em casa", carro agora diz "Pressione E pra entrar no carro" — mesmo que uma futura
   mudança de cenário aproxime os dois de novo, o jogador consegue distinguir qual é qual.
+- **Proteção contra relevo íngreme** (2ª causa, ver seção própria abaixo): `findFlatterUpReal`
+  generalizada a partir da função já usada pelas escolinhas (lab-95), agora reaproveitada também
+  pela casa.
 
 ## Achado de ferramenta na verificação (não bug do produto)
 
@@ -57,6 +65,43 @@ TÉCNICA de teste (mesma família dos achados de lab-129/131/133 sobre `__debugT
 produto — um jogador de verdade andando (não teleportando) fica parado no chão continuamente, sem
 esse "assentamento" pós-teleporte.
 
+## Segunda causa: casa enterrada no relevo (achada depois, mesma sessão)
+
+Depois da 1ª correção (reposicionar + diferenciar texto), o usuário testou de novo em condições
+que descartavam cache (limpou dados do site no celular, onboarding pediu apelido de novo — versão
+nova de verdade) e reportou o MESMO sintoma, com uma hipótese nova e certeira: *"eu acho que a
+causa é a casa estar enterrada na terra"*.
+
+- **Investigação**: a busca de posição da 1ª correção só checava distância até rua/escolinhas/loja/
+  carteira/foguete — nunca a inclinação REAL do terreno. Ler o código revelou que esta é a MESMA
+  classe de bug já documentada (e já corrigida pras escolinhas) no lab-95: *"TODAS AS CASA ESTÃO
+  DENTRO DA TERRA, ATE OS NPC ESTÃO ENTERRADO"* — causada por um prédio cair perto da rampa de um
+  `PLATEAU_CENTERS` (até 3,2 unidades de altura numa borda com `smoothstep`, inclinação de até 0,8
+  unidade por metro). Cálculo manual confirmou: a nova direção da casa (1ª correção) ficava a só
+  ~25° de distância angular de um platô de altura 2,6 com raio ~23,5° — bem na borda da rampa.
+- **Por que a fórmula sozinha não bastava** (lição já registrada no código desde o lab-95, reaplicada
+  aqui): medir variação de relevo com a fórmula analítica `terrainHeight` não é confiável perto de
+  rampas — a malha real do planeta (só 48 segmentos, ~1,7m cada) se afasta muito mais da curva suave
+  da fórmula do que uma checagem analítica prevê. A correção de verdade precisa medir com
+  `terrainGroundRadial` (raycast físico real, a mesma fonte que posiciona tudo de fato).
+- **Correção**: a função de busca já existente pras escolinhas (`findFlatterSchoolUpReal`, lab-95)
+  foi generalizada pra `findFlatterUpReal(baseUp, angularRadius, safeVariance)` — mesma lógica
+  (anéis crescentes ao redor do candidato, medindo variação real por raycast, nunca se afasta mais
+  que ~3,4m), só que parametrizada em vez de fixada nas constantes de escolinha. A casa agora chama
+  essa busca com constantes próprias (`HOUSE_FOOTPRINT_ANGULAR_RADIUS`/`HOUSE_SAFE_TERRAIN_VARIANCE`,
+  medidas a partir da fundação real da casa, 1,72×1,52), usando a direção da 1ª correção como ponto
+  de partida — se ela já estiver segura, a busca devolve ela mesma sem mudar nada (preservando a
+  folga de rua já verificada); se não, ajusta pra o candidato mais plano mais próximo dentro do
+  orçamento de busca.
+- **Verificado ao vivo**: a busca, na prática, devolveu a MESMA posição candidata da 1ª correção sem
+  ajuste (`bestVariance <= safeVariance` já na primeira checagem) — ou seja, o cálculo manual de
+  "~25° de um platô de 23,5°" estava perto o bastante do limite pra ser incerto no papel, mas a
+  medição REAL por raycast confirmou que está do lado seguro. Ainda assim, a busca agora RODA de
+  verdade (não é um cálculo manual único, arriscado de errar de novo numa próxima mudança de
+  posição) — qualquer reposicionamento futuro da casa passa automaticamente por essa proteção.
+  Testado com tecla E REAL (não só a ponte de depuração): parado exatamente na porta, a legenda
+  "Pressione E pra entrar em casa" aparece, apertar E entra no interior da casa corretamente.
+
 ## Pendências / dívidas conhecidas
 
 - **Cache do PWA obsoleto**: o service worker ficou servindo uma versão de build de 3 dias atrás
@@ -68,6 +113,9 @@ esse "assentamento" pós-teleporte.
   o par casa/carro (o par que causou o bug relatado). Se outro par de interações (ex. dois carros
   diferentes, ou carro/foguete) também usar texto genérico idêntico e ficar posicionado perto um do
   outro no futuro, o mesmo tipo de confusão pode se repetir.
+- **`findFlatterUpReal` só foi chamada pra casa e escolinhas** — outros prédios fixos do planeta
+  principal (loja, carteira, Prédio dos Enigmas) não passam por essa proteção; se algum deles for
+  reposicionado num laboratório futuro, vale considerar a mesma busca.
 
 ## O que o próximo laboratório deve desenvolver
 
@@ -88,8 +136,9 @@ prioridade única — perguntar ao usuário antes de escolher o próximo.
   cena 3D, não lógica de domínio pura).
 - `npm run build` (em `app/`): typecheck + build de produção sem erros.
 - Verificado ao vivo: nova posição da casa medida a 2,49 unidades de folga real da rua (contra
-  ~1,2-1,8 antes); interação funciona corretamente numa chamada atômica (teleporte + E juntos, sem
-  lacuna de tempo real) — entra no interior da casa (`(150, 10.6, 148.7)`) exatamente como esperado.
-  Sem erro de console em nenhum momento.
-- **Deploy**: fix aplicado localmente; deploy manual pendente até o usuário confirmar (ver próxima
-  mensagem da conversa).
+  ~1,2-1,8 antes) E confirmada segura contra relevo íngreme pela busca real (`findFlatterUpReal`);
+  interação funciona com tecla E REAL (não só ponte de depuração) parado exatamente na porta,
+  legenda "Pressione E pra entrar em casa" aparece, entra no interior da casa (`(150, 10.6,
+  148.7)`) exatamente como esperado. Sem erro de console em nenhum momento.
+- **Deploy**: fix aplicado localmente (as duas rodadas); deploy manual pendente até o usuário
+  confirmar.

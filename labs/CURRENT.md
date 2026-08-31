@@ -2,22 +2,32 @@
 
 Último concluído: labs/lab-134-corrige-casa-confundida-com-carro/ — bug reportado pelo usuário em
 produção ("ao chegar perto da casa e aperto E não acontece nada", confirmado em aba anônima —
-descartando cache). Causa raiz real, achada com a pista certeira do próprio usuário ("confira se
-não está confundido com os carros passando"): a casa ficava a só ~1,2-1,8 unidades do laço de rua
-dos carrinhos em certos momentos (dentro de `CAR_ENTER_DISTANCE=2.0`) e usava o MESMO texto de dica
-que os carros ("Pressione E pra entrar") — o jogador via a legenda de um carro passando perto e
-achava que era da casa; apertar E ali entrava no carro, não na casa. Corrigido com DUAS mudanças:
-casa reposicionada (nova direção medida por script, 2,5+ unidades de folga real de qualquer ponto
-da rua, sem colidir com escolinha/loja/carteira, mesma vizinhança de antes) e textos de dica
-diferenciados ("...em casa" vs. "...no carro"), pra qualquer futura proximidade acidental não
-reproduzir a mesma confusão. **Achado adicional real, separado da causa do bug**: o service worker
-do PWA estava servindo uma versão em cache de 3 dias atrás em produção até ser limpo manualmente —
-vira item de backlog (configurar atualização automática do service worker). **Achado de ferramenta
-na verificação**: testar a nova posição via `__debugTeleport` + uma chamada SEPARADA de interação
-falhava (terreno mais inclinado faz o avatar escorregar um pouco pela gravidade entre uma chamada e
-outra); numa única chamada atômica funcionou perfeitamente — mesma família de limitação de
-ferramenta já documentada em labs 129/131/133, não um bug do produto. `npm run test`: 75/75 (sem
-teste novo). `npm run build` sem erros. Ver
+descartando cache). DUAS causas raiz reais, cada uma achada com uma pista certeira do próprio
+usuário, em duas rodadas de correção:
+1. **"Confira se não está confundido com os carros passando"**: a casa ficava a só ~1,2-1,8
+   unidades do laço de rua dos carrinhos em certos momentos (dentro de `CAR_ENTER_DISTANCE=2.0`) e
+   usava o MESMO texto de dica que os carros ("Pressione E pra entrar") — o jogador via a legenda
+   de um carro passando perto e achava que era da casa; apertar E ali entrava no carro, não na
+   casa. Corrigido reposicionando a casa (nova direção medida por script, 2,5+ unidades de folga
+   real de qualquer ponto da rua) e diferenciando os textos de dica ("...em casa" vs. "...no
+   carro").
+2. **"Acho que a causa é a casa estar enterrada na terra"** (reportado de novo pelo usuário DEPOIS
+   da correção 1, em condições que já descartavam cache — dados do site limpos no celular,
+   onboarding pediu apelido de novo): a busca de posição da correção 1 media distância a outros
+   prédios/rua, mas nunca a inclinação REAL do terreno — mesma classe de bug já documentada e
+   corrigida pras escolinhas no lab-95 ("TODAS AS CASA ESTÃO DENTRO DA TERRA"), causada por cair
+   perto da rampa de um platô decorativo (`PLATEAU_CENTERS`). Corrigido generalizando a função de
+   busca por relevo REAL (raycast físico, não a fórmula analítica — lição já registrada desde o
+   lab-95: a malha real de 48 segmentos se afasta demais da fórmula suave perto de rampas) que as
+   escolinhas já usam (`findFlatterSchoolUpReal` → `findFlatterUpReal`, agora parametrizada por
+   footprint/variância segura) e aplicando-a também à casa.
+
+**Achado adicional real, separado das duas causas do bug**: o service worker do PWA estava servindo
+uma versão em cache de 3 dias atrás em produção até ser limpo manualmente — vira item de backlog
+(configurar atualização automática do service worker). Verificado ao vivo com tecla E REAL (não só
+ponte de depuração): parado exatamente na porta da nova posição (já confirmada seguindo contra rua
+E relevo), a legenda "Pressione E pra entrar em casa" aparece e apertar E entra no interior da casa
+corretamente. `npm run test`: 75/75 (sem teste novo). `npm run build` sem erros. Ver
 `labs/lab-134-corrige-casa-confundida-com-carro/CONTEXT.md`.
 
 Antes desse: labs/lab-133-bonus-planeta-completo/ — item do backlog de engajamento

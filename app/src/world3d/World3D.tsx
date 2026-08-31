@@ -3211,16 +3211,19 @@ export function World3D({
       }
 
       // Busca em anéis crescentes ao redor de `baseUp` por um ponto com variação de relevo REAL
-      // segura o bastante pra escolinha não afundar — nunca se afasta mais que ~0.26 rad (~3,4m) do
-      // slot original do ângulo áureo. Orçamento de busca reduzido em relação à primeira versão
-      // (que usava a fórmula, bem mais barata) porque cada amostra aqui é um raycast físico de
-      // verdade, não uma conta analítica — ainda assim, roda só uma vez por escola, no carregamento.
-      // Sempre devolve alguma direção (o melhor candidato achado, mesmo que nenhum fique 100%
-      // dentro do limite seguro) — nunca trava esperando um ponto perfeito.
-      function findFlatterSchoolUpReal(baseUp: Vector3): Vector3 {
+      // segura o bastante pra um prédio não afundar — nunca se afasta mais que ~0.26 rad (~3,4m)
+      // do ponto de partida. Orçamento de busca reduzido em relação à primeira versão (que usava a
+      // fórmula, bem mais barata) porque cada amostra aqui é um raycast físico de verdade, não uma
+      // conta analítica — ainda assim, roda só uma vez por prédio, no carregamento. Sempre devolve
+      // alguma direção (o melhor candidato achado, mesmo que nenhum fique 100% dentro do limite
+      // seguro) — nunca trava esperando um ponto perfeito. `angularRadius`/`safeVariance`
+      // parametrizados (lab-134, achado do usuário: "acho que a casa está enterrada na terra" —
+      // mesma classe de bug do lab-95, mas em "Minha Casa", não numa escolinha) pra reaproveitar a
+      // mesma busca pra qualquer prédio com footprint/fundação diferentes, não só escolinhas.
+      function findFlatterUpReal(baseUp: Vector3, angularRadius: number, safeVariance: number): Vector3 {
         let best = baseUp
-        let bestVariance = terrainVarianceNearbyReal(baseUp, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, 4)
-        if (bestVariance <= SCHOOL_SAFE_TERRAIN_VARIANCE) return baseUp
+        let bestVariance = terrainVarianceNearbyReal(baseUp, angularRadius, 4)
+        if (bestVariance <= safeVariance) return baseUp
 
         const seed = Math.abs(baseUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
         const tangentA = Vector3.Cross(baseUp, seed).normalize()
@@ -3234,12 +3237,12 @@ export function World3D({
               .add(tangentA.scale(Math.sin(angle) * ringRadius))
               .add(tangentB.scale(Math.cos(angle) * ringRadius))
               .normalize()
-            const variance = terrainVarianceNearbyReal(candidate, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, 4)
+            const variance = terrainVarianceNearbyReal(candidate, angularRadius, 4)
             if (variance < bestVariance) {
               bestVariance = variance
               best = candidate
             }
-            if (bestVariance <= SCHOOL_SAFE_TERRAIN_VARIANCE) return best
+            if (bestVariance <= safeVariance) return best
           }
         }
         return best
@@ -3254,7 +3257,7 @@ export function World3D({
       const schoolUps: Vector3[] = SCHOOL_DIRS.map((rawDir, index) => {
         const fixed = QUEST_FIXED_UP[quests[index].id]
         if (fixed) return fixed
-        return findFlatterSchoolUpReal(rawDir)
+        return findFlatterUpReal(rawDir, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, SCHOOL_SAFE_TERRAIN_VARIANCE)
       })
 
       // Camada de UI 2D sobreposta ao mundo 3D (rótulos flutuantes: nome das escolas, bolhas de
@@ -6258,11 +6261,28 @@ export function World3D({
       // (texto idêntico ao da casa, ver comentário de `houseEnterHint` abaixo) e, ao apertar E
       // fora do raio de 1,2 da casa mas dentro do raio do carro, entrava no carro sem perceber —
       // a "legenda que não funciona" era na verdade a legenda certa, só que de outra coisa. Nova
-      // direção medida (script à parte, mesmo método de lab-09/11/127): pelo menos 2,5 unidades de
-      // QUALQUER ponto do laço de rua (folga real acima de `CAR_ENTER_DISTANCE`), sem colidir com
-      // nenhuma escolinha/loja/carteira (>2,2 de cada), longe da decolagem do foguete (>5), e a só
-      // ~3,8 unidades da posição antiga — mesma vizinhança, não um teleporte pra longe.
-      const houseUp = new Vector3(-0.5362211119830486, 0.7986355100472928, 0.27321830311156536).normalize()
+      // direção candidata medida (script à parte, mesmo método de lab-09/11/127): pelo menos 2,5
+      // unidades de QUALQUER ponto do laço de rua (folga real acima de `CAR_ENTER_DISTANCE`), sem
+      // colidir com nenhuma escolinha/loja/carteira (>2,2 de cada), longe da decolagem do foguete
+      // (>5), e a só ~3,8 unidades da posição antiga — mesma vizinhança, não um teleporte pra longe.
+      //
+      // SEGUNDO achado real do usuário, na mesma sessão ("acho que a causa é a casa estar enterrada
+      // na terra"): a busca acima só considerava distância a outros prédios/rua, nunca a inclinação
+      // real do terreno — a mesma classe de bug já documentada no lab-95 pras escolinhas
+      // ("TODAS AS CASA ESTÃO DENTRO DA TERRA"), causada por cair perto da rampa de um
+      // `PLATEAU_CENTERS` (a candidata nova ficava bem na borda de um platô de 2,6 de altura,
+      // ~25° de distância angular contra um raio de platô de ~23,5°). Corrigido reaproveitando a
+      // MESMA busca por relevo real (raycast físico, `findFlatterUpReal`) já usada pelas
+      // escolinhas — nunca mais que ~0,26 rad (~3,4m) de desvio da candidata acima, então a folga
+      // de rua/prédios já verificada continua válida mesmo se a busca mover a casa um pouco.
+      const houseCandidateUp = new Vector3(-0.5362211119830486, 0.7986355100472928, 0.27321830311156536).normalize()
+      // Raio angular do "pé" da casa (fundação 1,72×1,52 → meia-diagonal ~1,15) e variância de
+      // relevo que a fundação (1,6 de altura, mesma da escolinha) ainda absorve sem enterrar
+      // paredes/porta — mesmos valores/raciocínio de `SCHOOL_FOOTPRINT_ANGULAR_RADIUS`/
+      // `SCHOOL_SAFE_TERRAIN_VARIANCE`, só que pro footprint da casa.
+      const HOUSE_FOOTPRINT_ANGULAR_RADIUS = 1.2 / PLANET_RADIUS
+      const HOUSE_SAFE_TERRAIN_VARIANCE = 0.6
+      const houseUp = findFlatterUpReal(houseCandidateUp, HOUSE_FOOTPRINT_ANGULAR_RADIUS, HOUSE_SAFE_TERRAIN_VARIANCE)
       const houseGroundRadial = terrainGroundRadial(houseUp, terrainHeight(houseUp))
       const houseSurfacePos = houseUp.scale(houseGroundRadial)
 
