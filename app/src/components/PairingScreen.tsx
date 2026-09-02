@@ -42,6 +42,12 @@ export function PairingScreen({ active, redeeming, redeemError, onRedeem, onClos
           <>
             <h2>Assinatura da família já vinculada! 🎉</h2>
             <p>Aproveite os itens exclusivos assim que eles chegarem na lojinha.</p>
+            {/* lab-137 (backlog reportado na sequência do lab-133): o link pra `/familia` só
+                existia na tela de ANTES de vincular — quem cuida da criança e já vinculou não
+                tinha como voltar pra ver relatório/gerenciar assinatura de dentro do jogo. */}
+            <a href="/familia" target="_blank" rel="noreferrer" className="nickname-generate-btn">
+              Abrir área dos responsáveis
+            </a>
           </>
         ) : done ? (
           <>

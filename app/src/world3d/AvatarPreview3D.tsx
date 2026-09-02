@@ -5,6 +5,7 @@ import {
   Color4,
   DirectionalLight,
   Engine,
+  HDRCubeTexture,
   HemisphericLight,
   MeshBuilder,
   PBRMaterial,
@@ -113,6 +114,17 @@ export function AvatarPreview3D({
 
     const sun = new DirectionalLight('previewSun', new Vector3(-0.5, -1, -0.3), scene)
     sun.intensity = 1.1
+
+    // Pedido do usuário ("o avatar fica escuro" na lojinha): faltava luz de ambiente (IBL) — os
+    // materiais PBR do boneco (`buildStudentFigure`) só recebiam as 2 luzes diretas acima, sem
+    // nenhum `environmentTexture`, o que deixa PBR sem reflexo/ambient specular nenhum e lê como
+    // "sem graça"/escuro mesmo com luzes direcionais razoáveis. Reaproveita o MESMO HDRI (mesma
+    // URL) já carregado pelo mundo principal (`World3D.tsx`) — como a lojinha só abre com o mundo
+    // 3D já montado (nunca antes dele), o browser já tem esse arquivo em cache, sem custo de rede
+    // adicional de verdade.
+    const hdrTexture = new HDRCubeTexture('/assets/hdri/kiara_4_mid-morning_1k.hdr', scene, 256)
+    scene.environmentTexture = hdrTexture
+    scene.environmentIntensity = 0.9
 
     const shadowGenerator = new ShadowGenerator(512, sun)
     shadowGenerator.useBlurExponentialShadowMap = true

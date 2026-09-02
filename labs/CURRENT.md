@@ -1,6 +1,38 @@
 # Laboratório atual
 
-Último concluído: labs/lab-136-paredes-transparentes-posicionar-mobilia/ — os dois itens que o
+Último concluído: labs/lab-137-polimento-lojinha-familia-pwa/ — os 4 itens de backlog reportados
+na sequência do lab-133 ("câmera da lojinha de avatar precisa girar ao pressionar+arrastar... +
+mais luz no avatar... mais roupas texturizadas e mais opções na lojinha; painel `/familia` sem
+link de acesso de dentro do jogo"), pedidos juntos numa mesma sessão.
+1. **Câmera/luz da lojinha de avatar** (`AvatarPreview3D.tsx`): investigado — o arrastar-pra-girar
+   do lab-118 estava correto, sem regressão (confirmado ao vivo, boneco girou ao arrastar). A causa
+   real do "escuro": a cena do preview nunca tinha `environmentTexture` (IBL) nenhum, só 2 luzes
+   diretas — corrigido carregando o MESMO HDRI que `World3D.tsx` já usa (a lojinha só abre com o
+   mundo principal já montado, então já está em cache do navegador).
+2. **Mais roupas/opções na lojinha** (`data/customization.ts`): cada catálogo (camisa/calça/
+   sapato/mochila) tinha só 2 das 6 texturas de assinante do lab-122 — completados pra 6 + 1 cor
+   sólida nova por catálogo (5→10 itens cada). Zero mudança de engine — `applyClothingLook` já era
+   genérico por `style`.
+3. **Link pro `/familia` de dentro do jogo** (`PairingScreen.tsx`): o link já existia, mas só na
+   tela de ANTES de vincular — quem já tinha assinatura vinculada não tinha como voltar à área dos
+   responsáveis. Adicionado o mesmo link também na tela de "já vinculado".
+4. **Cache do PWA desatualizado** (`main.tsx`): achado do lab-134 (SW servindo versão de 3 dias
+   atrás) investigado a fundo — a cadeia inteira já configurada desde o lab-51/65/69/71 (autoUpdate/
+   skipWaiting/clientsClaim/reload automático) nunca é DISPARADA numa aba que fica aberta dias a
+   fio, só numa navegação nova. `onRegisteredSW` com `registration.update()` a cada hora fecha essa
+   lacuna.
+
+**Verificado ao vivo** (via `npm run preview`, build de produção real): lojinha abrindo, preview 3D
+com luz visivelmente melhor e arrastar-pra-girar funcionando, aba "Roupas" com os 10 itens de
+camisa (5 novos) sem erro de console. **Não verificado ao vivo**: a branch "já vinculado" do link
+`/familia` novo — simular `active: true` via `localStorage` foi invalidado em ~2s pela revalidação
+real contra o backend (mesma proteção anti-adulteração do lab-90, funcionando como esperado);
+confiança vem de ser o mesmo JSX já comprovado na branch irmã do mesmo arquivo. `npm run test`:
+78/78 (sem teste novo — mudanças de dado/JSX/config, fora do escopo de domínio puro coberto pelos
+testes). `npm run build` sem erros. **Com isso, o backlog do lab-133 fica vazio.** Ver
+`labs/lab-137-polimento-lojinha-familia-pwa/CONTEXT.md`.
+
+Antes desse: labs/lab-136-paredes-transparentes-posicionar-mobilia/ — os dois itens que o
 lab-135 deixou "fora de escopo" (features novas, não bugs pontuais), confirmados pelo usuário na
 sequência da mesma conversa: *"as paredes estao solidas, precisam ficar transparentes pra camera...
 tem que ter opcao virtual de escolher em que posicao dacas deve ficar a peca... escolher o angulo e

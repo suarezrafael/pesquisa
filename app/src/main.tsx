@@ -33,8 +33,24 @@ installProductAnalytics()
 // protegendo contra o loop rápido do lab-69 (que precisaria de vários recarregamentos em
 // segundos pra travar a tela em branco) sem impedir pegar cada implantação nova de verdade ao
 // longo de uma sessão de teste mais longa.
+// lab-137 (achado colateral do lab-134): o service worker serviu uma versão de 3 dias atrás em
+// produção até ser limpo manualmente, mesmo com toda a cadeia acima (autoUpdate/skipWaiting/
+// clientsClaim/onNeedRefresh) já funcionando. Causa: nada aqui verificava atualização — o
+// navegador só faz esse check sozinho numa navegação NOVA (fechar/reabrir de verdade), e uma
+// aba/PWA que fica aberta dias a fio (o caso real) nunca dispara uma navegação nova, então
+// `onNeedRefresh` nunca tinha chance de acontecer. `onRegisteredSW` roda um `registration.update()`
+// periódico (a cada hora) — é o gatilho que faltava pra uma aba de longa duração eventualmente
+// descobrir a versão nova sozinha, sem depender do usuário fechar tudo.
 registerSW({
   immediate: true,
+  onRegisteredSW(_swUrl, registration) {
+    if (!registration) return
+    setInterval(() => {
+      registration.update().catch(() => {
+        // offline/erro de rede — tenta de novo na próxima verificação periódica.
+      })
+    }, 60 * 60 * 1000)
+  },
   onNeedRefresh() {
     const lastReload = Number(sessionStorage.getItem('sw-last-auto-reload') || '0')
     if (Date.now() - lastReload < 15000) return
