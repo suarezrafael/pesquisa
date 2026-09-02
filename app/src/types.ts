@@ -34,6 +34,9 @@ export interface Profile {
   equippedShoeColorId: string | null
   equippedBackpackColorId: string | null
   equippedHairShapeId: string | null
+  // Óculos (lab-92) — eixo de customização independente, mesmo espírito do chapéu. null = nenhum
+  // óculos equipado.
+  equippedGlassesId: string | null
 }
 
 export interface Progress {
@@ -48,4 +51,34 @@ export interface Progress {
   unlockedShoeColorIds: string[]
   unlockedBackpackColorIds: string[]
   unlockedHairShapeIds: string[]
+  unlockedGlassesIds: string[]
+  // Mobília de Minha Casa (lab-106) — sem eixo de "equipar" (não é uma peça de roupa do boneco):
+  // cada id presente aqui significa "o jogador possui este item", mostrado como lista no
+  // `MyHousePanel`.
+  unlockedFurnitureIds: string[]
+  // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — chave = id do planeta
+  // (`data/planetQuests.ts`). Deliberadamente separado de `completedQuestIds`: aquele array conta
+  // contra `quests.length` (30, fixo) pra emblemas ("Metade do Caminho"/"Mestre das Missões") —
+  // misturar essas perguntas ali inflaria a contagem e concederia emblema cedo demais. Mesmo
+  // espírito de isolamento do Quiz Surpresa (`surpriseQuizzes.ts`), mas com XP de verdade (o
+  // pedido do usuário é "ampliar a elevação dos níveis", diferente do quiz surpresa que só dá
+  // moeda de propósito).
+  completedPlanetQuestIds: string[]
+  // Baús de tesouro escondidos (lab-131, pedido do usuário: "baús de tesouro escondidos") — um id
+  // aqui significa "este baú já foi achado, pra sempre" (diferente das moedas comuns escondidas,
+  // que resetam a cada sessão, e do pote de moedas de Marte, que reseta a cada visita): é uma
+  // descoberta rara e permanente, não um bônus repetível por visita.
+  foundTreasureChestIds: string[]
+  // Combo de respostas certas seguidas (lab-132, pedido do usuário: "combo de respostas certas
+  // seguidas") — cresce a cada resposta certa GENUÍNA de missão real (principal ou de planeta;
+  // nunca quiz surpresa, que não é idempotente por id e seria fácil de farmar), zera ao fechar
+  // uma missão ainda não respondida (`applyStreakReset`, `state/progression.ts`). Concede moeda
+  // bônus em marcos (`streakBonusFor`).
+  currentStreak: number
+  // Posição/ângulo escolhidos pelo jogador pra cada peça de mobília dentro de Minha Casa (lab-136,
+  // pedido do usuário: "tem que ter opção... de escolher em que posição da casa deve ficar a
+  // peça... o ângulo e posição onde fica o objeto"). Chave = id do item (`data/furniture.ts`);
+  // ausência de uma chave significa "ainda na posição padrão" (layout em anel ao redor do balcão,
+  // ver `World3D.tsx`).
+  housePlacements: Record<string, { x: number; z: number; rotY: number }>
 }

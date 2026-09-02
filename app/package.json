@@ -8,13 +8,15 @@
     "server": "node server/relay.cjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@babylonjs/core": "^9.21.2",
     "@babylonjs/gui": "^9.21.2",
     "@babylonjs/havok": "^1.3.14",
     "@babylonjs/loaders": "^9.21.2",
+    "@neondatabase/neon-js": "^0.7.0-beta",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "ws": "^8.21.3"
@@ -28,6 +30,7 @@
     "oxlint": "^1.75.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.11"
   }
 }

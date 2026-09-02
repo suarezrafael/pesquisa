@@ -1,13 +1,22 @@
 :root {
   --bg: #fef6e4;
   --primary: #f582ae;
-  --primary-dark: #d9457f;
+  /* lab-120, auditoria WCAG AA: os 4 tons abaixo foram ESCURECIDOS (mesmo matiz/saturação, só
+     luminosidade reduzida) em relação ao valor original — medido com a fórmula oficial de
+     luminância relativa do WCAG, os tons antigos ficavam abaixo do mínimo AA (4.5:1) como cor de
+     TEXTO nos lugares reais onde são usados (`.quest-feedback`, `.quest-type-tag`,
+     `.pairing-code`, etc. — ver `labs/lab-120-.../FEATURES.md` pros números medidos). Nenhum dos
+     4 é usado como fundo de um jeito que a mudança prejudique (só `--accent-dark` tem um uso de
+     fundo, `.xp-bar-fill`, uma barra sem texto em cima).
+     --primary-dark original: #d9457f. --accent-dark original: #4a9fac.
+     --success original: #4caf50. --danger original: #e05454. */
+  --primary-dark: #d63473;
   --accent: #8bd3dd;
-  --accent-dark: #4a9fac;
+  --accent-dark: #35717a;
   --ink: #172c66;
   --card: #ffffff;
-  --success: #4caf50;
-  --danger: #e05454;
+  --success: #39843c;
+  --danger: #db3636;
   color-scheme: light;
 }
 
@@ -144,6 +153,42 @@ body {
   background: #fde2ee;
 }
 
+/* Múltiplos perfis (lab-108) — grade parecida com `.avatar-grid`, mas cada tile também mostra o
+   nome do explorador(a) embaixo do emoji, não só o emoji sozinho. */
+.profile-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+.profile-picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1rem 0.5rem;
+  border-radius: 16px;
+  border: 3px solid transparent;
+  background: var(--card);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.profile-picker-emoji {
+  font-size: 2rem;
+}
+
+.profile-picker-name {
+  font-size: 0.95rem;
+  color: #1f2a4d;
+}
+
+.profile-picker-add {
+  border-style: dashed;
+  border-color: #d8dff5;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -179,6 +224,25 @@ body {
   background: var(--card);
   cursor: pointer;
   white-space: nowrap;
+  /* Também usado em `<a>` (link pra `/familia`, PairingScreen.tsx) — sem isso, um link herdaria
+     sublinhado/cor azul padrão do navegador em vez de parecer o mesmo botão pill dos `<button>`.
+     Padding continua 0 aqui de propósito: dentro de `.nickname-row` (Onboarding.tsx) esse botão
+     fica ao lado de um `<input>` e usa o padding 0 + altura do próprio texto pra bater com a
+     altura do campo — mudar isso quebraria esse alinhamento. O link novo ganha padding próprio
+     logo abaixo, sem afetar os botões existentes. */
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+  color: inherit;
+}
+
+/* Só o uso como link solto (não dentro de `.nickname-row`) precisa de padding vertical próprio —
+   um `<a>` não tem a mesma caixa de formulário que um `<button>` teria pra dar altura sozinho.
+   Margem também: sem `.nickname-row` ao redor pra dar espaçamento, o link ficaria colado no
+   parágrafo/form vizinho (nem `<p>` nem `<form>` tem margem própria nesse contexto de `.modal`). */
+a.nickname-generate-btn {
+  padding: 0.6rem 0.9rem;
+  margin: 0.75rem 0;
 }
 
 .nickname-generate-btn:hover {
@@ -188,7 +252,14 @@ body {
 .field-hint {
   font-weight: 400;
   font-size: 0.78rem;
-  color: #6b76a0;
+  /* lab-120, auditoria WCAG AA: escurecido de #6b76a0 (4.45:1, abaixo do mínimo AA de 4.5:1 pra
+     texto normal) — mesmo tom (matiz preservado) usado nos outros 3 lugares que tinham essa cor
+     solta (`.text-button`, `.progress-panel-stat span`, `.legal-updated`). */
+  color: #68739e;
+}
+
+.field-hint-error {
+  color: #d1435b;
 }
 
 .primary-button {
@@ -213,6 +284,187 @@ body {
   background: #cbd2e8;
   box-shadow: none;
   cursor: not-allowed;
+}
+
+/* Portal dos responsáveis — código de pareamento (Fase D) */
+
+.pairing-code-box {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border-radius: 16px;
+  border: 2px solid #d8dff5;
+  background: var(--card);
+  text-align: center;
+}
+
+.pairing-code-box h3 {
+  margin: 0 0 0.35rem;
+}
+
+.pairing-code {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: 0.3rem;
+  margin: 0.75rem 0 0.25rem;
+  color: var(--primary-dark);
+}
+
+/* Desvincular todos os aparelhos (lab-97, resto de G7) — ação pouco frequente e destrutiva, por
+   isso discreta (texto pequeno) até o clique de confirmação, quando vira um botão de verdade num
+   tom de alerta (não a cor de ação primária do resto do portal). */
+.pairing-revoke-all {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e3e8f7;
+}
+
+/* Lista de aparelhos pareados (lab-100, resto de G7) — mesmo separador visual do bloco de
+   "desvincular todos" acima, mas alinhado à esquerda (é uma lista, não um botão centralizado). */
+.device-list {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e3e8f7;
+  text-align: left;
+}
+
+.device-list h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--primary-dark);
+}
+
+.device-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.device-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  font-size: 0.85rem;
+  color: #444d6b;
+}
+
+.text-button {
+  border: none;
+  background: none;
+  padding: 0.35rem 0;
+  color: #68739e;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.text-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.secondary-button {
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: 999px;
+  background: #d1435b;
+  color: white;
+  cursor: pointer;
+  margin: 0.5rem 0.4rem 0.5rem 0;
+}
+
+.secondary-button:disabled {
+  background: #e6b3bc;
+  cursor: not-allowed;
+}
+
+/* Widget de NPS (lab-103) — mesmo cartão de `.pairing-code-box`. `<select>` nativo em vez de
+   botões 0-10 customizados: acessível/touch-friendly por padrão do navegador, sem precisar
+   desenhar 11 alvos de toque separados. */
+.nps-widget h3 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.nps-score-select {
+  width: 100%;
+  padding: 0.6rem;
+  border-radius: 10px;
+  border: 2px solid #d8dff5;
+  font-size: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.nps-comment {
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 0.6rem;
+  border-radius: 10px;
+  border: 2px solid #d8dff5;
+  font-family: inherit;
+  font-size: 0.95rem;
+  resize: vertical;
+  margin-bottom: 0.6rem;
+  box-sizing: border-box;
+}
+
+/* Painel de progresso (lab-91) — mesmo cartão de `.pairing-code-box`, mas alinhado à esquerda e
+   com uma grade de estatísticas em vez do código gigante centralizado. */
+.progress-panel {
+  text-align: left;
+}
+
+.progress-panel h3 {
+  text-align: center;
+}
+
+.progress-panel-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.progress-panel-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.6rem 0.3rem;
+  border-radius: 12px;
+  background: #f5f7fd;
+  text-align: center;
+}
+
+.progress-panel-stat strong {
+  color: var(--primary-dark);
+  font-size: 1.05rem;
+}
+
+.progress-panel-stat span {
+  font-size: 0.75rem;
+  color: #68739e;
+}
+
+.progress-panel-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+.progress-panel-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: #fff3d6;
+  /* lab-120, auditoria WCAG AA: escurecido de #9a6b1a (4.24:1 aqui, 3.69:1 no outro uso —
+     `.avatar-shop-tag.subscription-lock` — abaixo do mínimo AA de 4.5:1) */
+  color: #845c16;
 }
 
 /* Hub */
@@ -330,8 +582,14 @@ body {
   pointer-events: none;
 }
 
+/* lab-120, auditoria WCAG AA: `flex-wrap` como rede de segurança pro piso de 44px novo do
+   `.help-button` abaixo — em telas MUITO estreitas com vários ícones visíveis ao mesmo tempo
+   (mochila + pareamento + os 7 fixos), a fileira quebra pra uma segunda linha em vez de estourar
+   a largura da tela (o mesmo tipo de bug real já corrigido nos labs 57-59 pro cabeçalho
+   avatar+nome+XP, ver comentário logo abaixo). */
 .hud-top-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: clamp(0.2rem, 1.6vmin, 0.6rem);
 }
@@ -361,17 +619,27 @@ body {
   min-width: 0;
 }
 
+/* lab-120, auditoria WCAG AA: o piso do `clamp()` era 1.4rem (22.4px), teto 2.25rem (36px) — os
+   DOIS abaixo do alvo de toque mínimo de 44×44px (`02-design-profissional.md` §3), medido
+   chegando ao piso em telas estreitas reais. Piso subiu pra 2.75rem (44px, nunca encolhe além
+   disso) e teto pra 3.2rem (51px, só cresce em telas bem grandes — mesmo espírito de "cresce
+   proporcionalmente" de antes, só que sem nunca ficar pequeno demais pra tocar). `.hud-top-row`
+   ganhou `flex-wrap` (ver acima) como rede de segurança: numa tela estreita o bastante pra não
+   caber todos os botões nesse tamanho maior, a fileira quebra em vez de estourar a largura da
+   tela. */
 .help-button {
   pointer-events: auto;
   flex-shrink: 0;
-  width: clamp(1.4rem, 6.5vmin, 2.25rem);
-  height: clamp(1.4rem, 6.5vmin, 2.25rem);
+  width: clamp(2.75rem, 6.5vmin, 3.2rem);
+  height: clamp(2.75rem, 6.5vmin, 3.2rem);
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.82);
   color: var(--ink);
   font-weight: 800;
-  font-size: clamp(0.65rem, 3vmin, 1.1rem);
+  /* lab-120: proporcional ao novo tamanho maior do botão (mesma razão ~0,48× de antes) — senão o
+     emoji ficaria pequeno demais sobrando espaço dentro do círculo maior. */
+  font-size: clamp(1.3rem, 3vmin, 1.5rem);
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
   cursor: pointer;
 }
@@ -498,6 +766,62 @@ body {
   font-size: 0.85rem;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   pointer-events: none;
+}
+
+/* Modo de posicionamento de mobília (lab-136, pedido do usuário: "escolher em que posição da
+   casa deve ficar a peça... o ângulo e posição"). Ao contrário de `.world3d-hint`
+   (`pointer-events: none`, é só texto informativo), esta barra tem botões de verdade — precisa
+   receber toque/clique, então cada botão reaproveita o alvo mínimo de 44px já estabelecido em
+   `.avatar-shop-action` (lab-91, `[MUST]` de acessibilidade). */
+.furniture-placement-bar {
+  position: absolute;
+  bottom: 6.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 30;
+  max-width: 92vw;
+}
+
+.furniture-placement-hint {
+  background: rgba(20, 20, 25, 0.8);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: clamp(0.72rem, 2.2vmin, 0.9rem);
+  text-align: center;
+  pointer-events: none;
+}
+
+.furniture-placement-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.furniture-placement-confirm,
+.furniture-placement-cancel {
+  font-size: 0.85rem;
+  font-weight: 700;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+}
+
+.furniture-placement-confirm {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.furniture-placement-cancel {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
 }
 
 .joystick-base {
@@ -655,15 +979,28 @@ body {
   }
 }
 
+/* lab-120, auditoria WCAG AA: sem `width`/`height`/`padding` nenhum, a área clicável era só o
+   glifo "×" renderizado (bem abaixo do alvo de toque mínimo de 44×44px — `02-design-
+   profissional.md` §3 — e usado em TODO modal do jogo, o maior alcance possível de um só fix).
+   `min-width`/`min-height` (não `width`/`height`, mesmo raciocínio do `.avatar-shop-action` do
+   lab-91) + flex centraliza o "×" dentro da área maior sem esticar o glifo. `top`/`right`
+   reduzidos pra compensar o crescimento da caixa e manter o "×" visualmente perto de onde estava.
+   Cor escurecida de #8a94b8 (3.00:1, na borda do mínimo AA de texto grande) — mesmo tom usado em
+   `.ranking-place`/`.chat-empty`, que tinham a mesma cor solta. */
 .modal-close {
   position: absolute;
-  top: 0.75rem;
-  right: 0.9rem;
+  top: 0.1rem;
+  right: 0.2rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #8a94b8;
+  color: #6774a3;
 }
 
 .quest-type-tag {
@@ -757,7 +1094,10 @@ body {
 .reward-bonus-line {
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--primary);
+  /* lab-120, auditoria WCAG AA: `--primary` (rosa de fundo dos botões) como TEXTO dava 2.42:1,
+     bem abaixo do mínimo AA — `--primary-dark` já é o tom "rosa seguro pra texto" usado em vários
+     outros lugares deste arquivo (`.pairing-code`, `.avatar-shop-tag`, etc.). */
+  color: var(--primary-dark);
   margin: 0.35rem 0 0;
 }
 
@@ -849,6 +1189,97 @@ body {
   margin-top: 0.25rem;
 }
 
+/* Preview 3D (lab-87) — canvas pequeno e fixo, centralizado, com um degradê sutil de fundo pra
+   o boneco (fundo transparente no Babylon) não flutuar sobre o branco liso do card do modal. */
+.avatar-preview-3d-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.avatar-preview-3d-canvas {
+  width: 180px;
+  height: 180px;
+  border-radius: 20px;
+  background: radial-gradient(circle at 50% 35%, #eef2fc 0%, #dbe3f5 100%);
+  touch-action: none;
+  outline: none;
+}
+
+.avatar-preview-3d-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: avatar-preview-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes avatar-preview-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Abas (lab-87) — mesmo visual de "pill" já usado noutros seletores do jogo, sem introduzir um
+   componente novo de UI. Fade nas duas bordas (lab-91) — pista visual de "tem mais aba pra
+   scrollar" em vez de cortar o texto da última aba no meio, achado testando em largura de
+   celular (o modal da lojinha nunca passa de ~440px de largura, então mesmo testado numa janela
+   grande de desktop, o conteúdo do modal já reflete a largura real de um celular). */
+.avatar-shop-tabs-wrap {
+  position: relative;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.avatar-shop-tabs-wrap::before,
+.avatar-shop-tabs-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.25rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.avatar-shop-tabs-wrap::before {
+  left: 0;
+  background: linear-gradient(to right, var(--card), transparent);
+}
+
+.avatar-shop-tabs-wrap::after {
+  right: 0;
+  background: linear-gradient(to left, var(--card), transparent);
+}
+
+.avatar-shop-tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+}
+
+/* [MUST] docs/prompts/02-design-profissional.md: alvo de toque mínimo 44×44px lógicos — achado
+   real (lab-91): a aba media ~35px de altura antes desta correção. */
+.avatar-shop-tab {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 44px;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  background: #eef1fa;
+  color: #4a5b8c;
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.avatar-shop-tab.active {
+  background: #4a5bc4;
+  color: #fff;
+}
+
 .avatar-shop-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -902,10 +1333,22 @@ body {
   color: var(--primary-dark);
 }
 
+/* Item exclusivo de assinante (Fase E) — mesmo espaço visual do botão de compra, sem ação de
+   clique (a criança não tem como comprar nada; o pagamento só existe no portal do responsável). */
+.avatar-shop-tag.subscription-lock {
+  color: #845c16;
+}
+
+/* [MUST] docs/prompts/02-design-profissional.md: alvo de toque mínimo 44×44px lógicos — achado
+   real (lab-91): o botão "Usar"/comprar media ~27px de altura antes desta correção. `min-height`
+   (não `height`) pra não forçar todo botão a ficar quadrado feio quando o texto já é mais alto
+   que 44px (não acontece hoje, mas evita regressão se um rótulo maior aparecer). */
 .avatar-shop-action {
   font-size: 0.8rem;
   font-weight: 700;
-  padding: 0.35rem 0.7rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.35rem 0.9rem;
   border-radius: 999px;
   border: none;
   background: var(--accent);
@@ -962,7 +1405,7 @@ body {
 }
 
 .chat-empty {
-  color: #8a94b8;
+  color: #6774a3;
   font-size: 0.85rem;
 }
 
@@ -972,13 +1415,38 @@ body {
   word-break: break-word;
 }
 
+.chat-panel-categories {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.5rem 0.8rem 0;
+  border-top: 1px solid #e2e8f8;
+  overflow-x: auto;
+}
+
+.chat-category-btn {
+  flex-shrink: 0;
+  border: none;
+  background: #eef1fb;
+  color: #4a5578;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chat-category-btn.active {
+  background: var(--primary);
+  color: white;
+}
+
 .chat-panel-quickbar {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.4rem;
   padding: 0.6rem 0.8rem;
-  border-top: 1px solid #e2e8f8;
-  max-height: 40vh;
+  max-height: 32vh;
   overflow-y: auto;
 }
 
@@ -1025,13 +1493,15 @@ body {
 
 .ranking-row-self {
   font-weight: 700;
-  color: var(--primary);
+  /* lab-120, auditoria WCAG AA: mesma correção de `.reward-bonus-line` acima — `--primary` como
+     texto fica bem abaixo do mínimo AA (2.42:1), `--primary-dark` é o tom já usado pra isso. */
+  color: var(--primary-dark);
 }
 
 .ranking-place {
   display: inline-block;
   min-width: 1.6em;
-  color: #8a94b8;
+  color: #6774a3;
 }
 
 .remote-name-tag {
@@ -1091,4 +1561,75 @@ body {
   padding: 0 0.8rem 0.8rem;
   font-size: 0.8rem;
   color: #4a5482;
+}
+
+/* Páginas legais (Termos de Uso / Política de Privacidade) */
+
+.legal-page {
+  max-width: 640px;
+  line-height: 1.6;
+}
+
+.legal-page h1 {
+  margin-bottom: 0.25rem;
+}
+
+.legal-page h2 {
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+  color: var(--primary-dark);
+}
+
+.legal-page p,
+.legal-page li {
+  color: #2a3358;
+}
+
+.legal-page ul {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.legal-page li {
+  margin-bottom: 0.4rem;
+}
+
+.legal-page code {
+  background: #eef1fb;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.legal-updated {
+  font-size: 0.8rem;
+  color: #68739e;
+  margin-bottom: 1.5rem;
+}
+
+.legal-back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: var(--primary-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.legal-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+}
+
+.legal-table th,
+.legal-table td {
+  border: 1px solid #e2e8f8;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+}
+
+.legal-table th {
+  background: #f5f7fd;
 }

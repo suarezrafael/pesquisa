@@ -1,0 +1,563 @@
+import type { Quest } from '../types'
+
+// Escolinhas de astronomia dos planetas do Sistema Solar (lab-115, pedido do usuário: "crie
+// escolinhas com perguntas tbm nos planetas novos"; lab-127, pedido do usuário: "cada planeta
+// deve ter umas 6 questous no minimo... igual a terra" — 1 pergunta por planeta virou 6, mesmo
+// padrão de várias escolinhas do planeta principal, não uma mega-pergunta). Tema astronomia real
+// (não lógica/matemática/leitura genérica, ao contrário de `quests.ts`) — combina com o contexto
+// de "você acabou de pousar lá". Deliberadamente separadas de `quests.ts`: não contam pra
+// `completedQuestIds`/badges do planeta principal (ver `applyPlanetQuestCompletion` em
+// `progression.ts`), mas DÃO XP de verdade (ao contrário de `surpriseQuizzes.ts`, que dá só
+// moeda) — é o próprio pedido do usuário: "ampliar a elevação dos níveis". Recompensa por
+// pergunta escalona com a distância real do planeta ao Sol (mesma lógica do `requiredLevel` em
+// `DESTINATION_PLANETS`, `world3d/World3D.tsx`) — igual ao valor original de cada planeta no
+// lab-115, mantido por pergunta (não dividido por 6): mais generoso, sem precisar rebalancear o
+// resto da progressão.
+export const planetQuests: Record<string, Quest[]> = {
+  mercurio: [
+    {
+      id: 'planet-mercurio-1',
+      type: 'logica',
+      title: 'Escolinha de Mercúrio',
+      prompt:
+        'Mercúrio não tem atmosfera pra guardar calor — por isso o dia é escaldante e a noite é geladíssima. Qual é o planeta mais próximo do Sol?',
+      choices: [
+        { id: 'a', label: 'Mercúrio' },
+        { id: 'b', label: 'Vênus' },
+        { id: 'c', label: 'Terra' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 15,
+      coinReward: 8,
+    },
+    {
+      id: 'planet-mercurio-2',
+      type: 'logica',
+      title: 'Escolinha de Mercúrio',
+      prompt: 'Comparando com a Lua da Terra, o tamanho de Mercúrio é...',
+      choices: [
+        { id: 'a', label: 'Um pouco maior que a Lua' },
+        { id: 'b', label: 'Do tamanho de Júpiter' },
+        { id: 'c', label: 'Bem menor que um asteroide' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 15,
+      coinReward: 8,
+    },
+    {
+      id: 'planet-mercurio-3',
+      type: 'logica',
+      title: 'Escolinha de Mercúrio',
+      prompt: 'Quanto tempo leva um "ano" em Mercúrio (uma volta completa ao redor do Sol)?',
+      choices: [
+        { id: 'a', label: 'Cerca de 88 dias terrestres' },
+        { id: 'b', label: 'Cerca de 365 dias terrestres' },
+        { id: 'c', label: 'Cerca de 10 anos terrestres' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 15,
+      coinReward: 8,
+    },
+    {
+      id: 'planet-mercurio-4',
+      type: 'logica',
+      title: 'Escolinha de Mercúrio',
+      prompt: 'Quantas luas Mercúrio tem?',
+      choices: [
+        { id: 'a', label: 'Nenhuma' },
+        { id: 'b', label: 'Uma, parecida com a nossa' },
+        { id: 'c', label: 'Duas pequenas' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 15,
+      coinReward: 8,
+    },
+    {
+      id: 'planet-mercurio-5',
+      type: 'logica',
+      title: 'Escolinha de Mercúrio',
+      prompt: 'A superfície de Mercúrio se parece muito com a de qual outro corpo do espaço?',
+      choices: [
+        { id: 'a', label: 'A Lua da Terra — cinza e cheia de crateras' },
+        { id: 'b', label: 'Júpiter — coberta de nuvens coloridas' },
+        { id: 'c', label: 'A Terra — azul com continentes' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 15,
+      coinReward: 8,
+    },
+    {
+      id: 'planet-mercurio-6',
+      type: 'logica',
+      title: 'Escolinha de Mercúrio',
+      prompt: 'Mercúrio é o planeta mais perto do Sol, mas por que é tão difícil pra uma nave pousar nele?',
+      choices: [
+        { id: 'a', label: 'A gravidade forte do Sol puxa a nave, dificultando desacelerar' },
+        { id: 'b', label: 'Ele fica escondido atrás da Lua o tempo todo' },
+        { id: 'c', label: 'Ele se move rápido demais pro olho humano ver' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 15,
+      coinReward: 8,
+    },
+  ],
+  venus: [
+    {
+      id: 'planet-venus-1',
+      type: 'logica',
+      title: 'Escolinha de Vênus',
+      prompt: 'Vênus é o planeta MAIS QUENTE do Sistema Solar, mesmo sem ser o mais perto do Sol. Por que isso acontece?',
+      choices: [
+        { id: 'a', label: 'Uma atmosfera espessa prende o calor (efeito estufa)' },
+        { id: 'b', label: 'Ele é feito de fogo por dentro' },
+        { id: 'c', label: 'Ele está mais perto das estrelas' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 18,
+      coinReward: 9,
+    },
+    {
+      id: 'planet-venus-2',
+      type: 'logica',
+      title: 'Escolinha de Vênus',
+      prompt: 'Vênus às vezes é chamado de "planeta gêmeo" da Terra. Por quê?',
+      choices: [
+        { id: 'a', label: 'Tem tamanho e massa bem parecidos com os da Terra' },
+        { id: 'b', label: 'Tem exatamente os mesmos continentes' },
+        { id: 'c', label: 'Também tem uma Lua igual à nossa' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 18,
+      coinReward: 9,
+    },
+    {
+      id: 'planet-venus-3',
+      type: 'logica',
+      title: 'Escolinha de Vênus',
+      prompt: 'A maioria dos planetas gira numa direção. Vênus tem uma curiosidade nisso — qual?',
+      choices: [
+        { id: 'a', label: 'Ele gira ao contrário da maioria dos planetas' },
+        { id: 'b', label: 'Ele não gira nunca' },
+        { id: 'c', label: 'Ele gira rápido demais pra medir' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 18,
+      coinReward: 9,
+    },
+    {
+      id: 'planet-venus-4',
+      type: 'logica',
+      title: 'Escolinha de Vênus',
+      prompt: 'De que é feita, principalmente, a atmosfera espessa de Vênus?',
+      choices: [
+        { id: 'a', label: 'Dióxido de carbono' },
+        { id: 'b', label: 'Oxigênio puro' },
+        { id: 'c', label: 'Vapor d’água' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 18,
+      coinReward: 9,
+    },
+    {
+      id: 'planet-venus-5',
+      type: 'logica',
+      title: 'Escolinha de Vênus',
+      prompt: 'Um "dia" em Vênus (uma volta completa em torno de si mesmo) é...',
+      choices: [
+        { id: 'a', label: 'Mais longo que o ano inteiro de Vênus' },
+        { id: 'b', label: 'Muito mais curto que um dia na Terra' },
+        { id: 'c', label: 'Exatamente igual a um dia na Terra' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 18,
+      coinReward: 9,
+    },
+    {
+      id: 'planet-venus-6',
+      type: 'logica',
+      title: 'Escolinha de Vênus',
+      prompt: 'Vênus é fácil ou difícil de ver da Terra, a olho nu?',
+      choices: [
+        { id: 'a', label: 'Fácil — é um dos objetos mais brilhantes do céu noturno' },
+        { id: 'b', label: 'Impossível sem um telescópio gigante' },
+        { id: 'c', label: 'Só aparece uma vez por século' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 18,
+      coinReward: 9,
+    },
+  ],
+  jupiter: [
+    {
+      id: 'planet-jupiter-1',
+      type: 'logica',
+      title: 'Escolinha de Júpiter',
+      prompt: 'Júpiter é o maior planeta do Sistema Solar. O que é a Grande Mancha Vermelha, na verdade?',
+      choices: [
+        { id: 'a', label: 'Uma tempestade gigante' },
+        { id: 'b', label: 'Um vulcão' },
+        { id: 'c', label: 'Um oceano de lava' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 25,
+      coinReward: 12,
+    },
+    {
+      id: 'planet-jupiter-2',
+      type: 'logica',
+      title: 'Escolinha de Júpiter',
+      prompt: 'Júpiter é um planeta rochoso, com chão firme pra pisar, ou feito principalmente de gás?',
+      choices: [
+        { id: 'a', label: 'Gigante gasoso — não tem uma superfície sólida real' },
+        { id: 'b', label: 'Totalmente rochoso, como a Terra' },
+        { id: 'c', label: 'Feito só de gelo' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 25,
+      coinReward: 12,
+    },
+    {
+      id: 'planet-jupiter-3',
+      type: 'logica',
+      title: 'Escolinha de Júpiter',
+      prompt: 'Aproximadamente quantas luas Júpiter tem?',
+      choices: [
+        { id: 'a', label: 'Mais de 90' },
+        { id: 'b', label: 'Nenhuma' },
+        { id: 'c', label: 'Só 2' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 25,
+      coinReward: 12,
+    },
+    {
+      id: 'planet-jupiter-4',
+      type: 'logica',
+      title: 'Escolinha de Júpiter',
+      prompt: 'Qual é o nome da maior lua de Júpiter (e a maior lua de todo o Sistema Solar)?',
+      choices: [
+        { id: 'a', label: 'Ganimedes' },
+        { id: 'b', label: 'Titã' },
+        { id: 'c', label: 'Tritão' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 25,
+      coinReward: 12,
+    },
+    {
+      id: 'planet-jupiter-5',
+      type: 'logica',
+      title: 'Escolinha de Júpiter',
+      prompt: 'Júpiter gira em torno de si mesmo rápido ou devagar?',
+      choices: [
+        { id: 'a', label: 'Muito rápido — tem o dia mais curto de todos os planetas' },
+        { id: 'b', label: 'Muito devagar — o dia dele dura anos' },
+        { id: 'c', label: 'Ele não gira' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 25,
+      coinReward: 12,
+    },
+    {
+      id: 'planet-jupiter-6',
+      type: 'logica',
+      title: 'Escolinha de Júpiter',
+      prompt: 'Cientistas dizem que Júpiter funciona como um tipo de "escudo" pro Sistema Solar. Como?',
+      choices: [
+        { id: 'a', label: 'A gravidade forte dele desvia/atrai muitos asteroides e cometas' },
+        { id: 'b', label: 'Ele bloqueia a luz do Sol que poderia nos queimar' },
+        { id: 'c', label: 'Ele empurra os outros planetas pra mais longe do Sol' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 25,
+      coinReward: 12,
+    },
+  ],
+  saturno: [
+    {
+      id: 'planet-saturno-1',
+      type: 'logica',
+      title: 'Escolinha de Saturno',
+      prompt: 'Saturno é famoso pelos seus anéis enormes. Os anéis são feitos principalmente de quê?',
+      choices: [
+        { id: 'a', label: 'Gás colorido' },
+        { id: 'b', label: 'Pedaços de gelo e rocha' },
+        { id: 'c', label: 'Nuvens congeladas' },
+      ],
+      correctChoiceId: 'b',
+      xpReward: 30,
+      coinReward: 15,
+    },
+    {
+      id: 'planet-saturno-2',
+      type: 'logica',
+      title: 'Escolinha de Saturno',
+      prompt: 'Saturno é o segundo maior planeta do Sistema Solar, mas ele é tão leve que...',
+      choices: [
+        { id: 'a', label: 'Flutuaria numa banheira gigante de água' },
+        { id: 'b', label: 'É mais leve que um asteroide pequeno' },
+        { id: 'c', label: 'Voa longe do Sol sozinho' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 30,
+      coinReward: 15,
+    },
+    {
+      id: 'planet-saturno-3',
+      type: 'logica',
+      title: 'Escolinha de Saturno',
+      prompt: 'Quantos grupos principais de anéis Saturno tem?',
+      choices: [
+        { id: 'a', label: '7 grupos principais' },
+        { id: 'b', label: 'Só 1 anel' },
+        { id: 'c', label: '100 anéis separados' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 30,
+      coinReward: 15,
+    },
+    {
+      id: 'planet-saturno-4',
+      type: 'logica',
+      title: 'Escolinha de Saturno',
+      prompt: 'Qual é o nome da maior lua de Saturno?',
+      choices: [
+        { id: 'a', label: 'Titã' },
+        { id: 'b', label: 'Ganimedes' },
+        { id: 'c', label: 'Fobos' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 30,
+      coinReward: 15,
+    },
+    {
+      id: 'planet-saturno-5',
+      type: 'logica',
+      title: 'Escolinha de Saturno',
+      prompt: 'Assim como Júpiter, Saturno é...',
+      choices: [
+        { id: 'a', label: 'Um gigante gasoso, sem superfície sólida' },
+        { id: 'b', label: 'Totalmente coberto de gelo sólido' },
+        { id: 'c', label: 'Feito de rocha por inteiro' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 30,
+      coinReward: 15,
+    },
+    {
+      id: 'planet-saturno-6',
+      type: 'logica',
+      title: 'Escolinha de Saturno',
+      prompt: 'Titã, a maior lua de Saturno, tem algo raro que a torna especial. O quê?',
+      choices: [
+        { id: 'a', label: 'Tem atmosfera espessa e lagos de metano líquido' },
+        { id: 'b', label: 'É toda feita de diamante' },
+        { id: 'c', label: 'É mais quente que o próprio Sol' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 30,
+      coinReward: 15,
+    },
+  ],
+  urano: [
+    {
+      id: 'planet-urano-1',
+      type: 'logica',
+      title: 'Escolinha de Urano',
+      prompt:
+        'Urano gira "deitado de lado", bem diferente dos outros planetas. O que dá a cor azul-esverdeada pálida dele?',
+      choices: [
+        { id: 'a', label: 'Gás metano na atmosfera' },
+        { id: 'b', label: 'Água do oceano' },
+        { id: 'c', label: 'Poeira espacial' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 35,
+      coinReward: 18,
+    },
+    {
+      id: 'planet-urano-2',
+      type: 'logica',
+      title: 'Escolinha de Urano',
+      prompt: 'O que há de mais estranho no jeito que Urano gira, comparado aos outros planetas?',
+      choices: [
+        { id: 'a', label: 'Ele gira quase "deitado", tombado de lado' },
+        { id: 'b', label: 'Ele gira de trás pra frente igual a Vênus' },
+        { id: 'c', label: 'Ele não gira nunca' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 35,
+      coinReward: 18,
+    },
+    {
+      id: 'planet-urano-3',
+      type: 'logica',
+      title: 'Escolinha de Urano',
+      prompt: 'Urano foi um marco na história da astronomia. Por quê?',
+      choices: [
+        { id: 'a', label: 'Foi o primeiro planeta descoberto usando um telescópio' },
+        { id: 'b', label: 'Foi o primeiro planeta visitado por uma nave' },
+        { id: 'c', label: 'Foi o primeiro planeta a ganhar um nome' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 35,
+      coinReward: 18,
+    },
+    {
+      id: 'planet-urano-4',
+      type: 'logica',
+      title: 'Escolinha de Urano',
+      prompt: 'Urano é classificado como um "gigante de gelo". Isso significa que ele é...',
+      choices: [
+        { id: 'a', label: 'Rico em água, metano e amônia congelados por baixo das nuvens' },
+        { id: 'b', label: 'Uma bola de rocha sólida e fria' },
+        { id: 'c', label: 'Feito só de gás, sem nada congelado' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 35,
+      coinReward: 18,
+    },
+    {
+      id: 'planet-urano-5',
+      type: 'logica',
+      title: 'Escolinha de Urano',
+      prompt: 'Urano tem anéis, como Saturno?',
+      choices: [
+        { id: 'a', label: 'Sim, mas bem mais escuros e fracos que os de Saturno' },
+        { id: 'b', label: 'Não, nenhum anel' },
+        { id: 'c', label: 'Sim, e são os maiores de todo o Sistema Solar' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 35,
+      coinReward: 18,
+    },
+    {
+      id: 'planet-urano-6',
+      type: 'logica',
+      title: 'Escolinha de Urano',
+      prompt: 'Como é a temperatura em Urano?',
+      choices: [
+        { id: 'a', label: 'Extremamente fria — um dos planetas mais gelados do Sistema Solar' },
+        { id: 'b', label: 'Quente como um forno' },
+        { id: 'c', label: 'Morna, parecida com a Terra' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 35,
+      coinReward: 18,
+    },
+  ],
+  netuno: [
+    {
+      id: 'planet-netuno-1',
+      type: 'logica',
+      title: 'Escolinha de Netuno',
+      prompt:
+        'Netuno é o planeta mais distante do Sol e tem os ventos mais fortes de todo o Sistema Solar. Qual é a cor de Netuno?',
+      choices: [
+        { id: 'a', label: 'Azul profundo' },
+        { id: 'b', label: 'Vermelho' },
+        { id: 'c', label: 'Amarelo' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 40,
+      coinReward: 20,
+    },
+    {
+      id: 'planet-netuno-2',
+      type: 'logica',
+      title: 'Escolinha de Netuno',
+      prompt: 'Netuno é o planeta mais distante do Sol. Quanto tempo ele leva pra dar uma volta completa (um "ano")?',
+      choices: [
+        { id: 'a', label: 'Cerca de 165 anos terrestres' },
+        { id: 'b', label: 'Cerca de 1 ano terrestre' },
+        { id: 'c', label: 'Cerca de 10 anos terrestres' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 40,
+      coinReward: 20,
+    },
+    {
+      id: 'planet-netuno-3',
+      type: 'logica',
+      title: 'Escolinha de Netuno',
+      prompt: 'Netuno tem uma história curiosa de descoberta. Como ele foi encontrado?',
+      choices: [
+        { id: 'a', label: 'Por cálculos matemáticos, antes de ser visto de verdade' },
+        { id: 'b', label: 'Por acidente, olhando pro céu sem telescópio' },
+        { id: 'c', label: 'Foi o primeiro planeta descoberto de todos' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 40,
+      coinReward: 20,
+    },
+    {
+      id: 'planet-netuno-4',
+      type: 'logica',
+      title: 'Escolinha de Netuno',
+      prompt: 'Qual é o nome da maior lua de Netuno?',
+      choices: [
+        { id: 'a', label: 'Tritão' },
+        { id: 'b', label: 'Titã' },
+        { id: 'c', label: 'Europa' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 40,
+      coinReward: 20,
+    },
+    {
+      id: 'planet-netuno-5',
+      type: 'logica',
+      title: 'Escolinha de Netuno',
+      prompt: 'Os ventos de Netuno são os mais fortes do Sistema Solar. Mais ou menos quão rápido eles sopram?',
+      choices: [
+        { id: 'a', label: 'Mais de 2000 km/h' },
+        { id: 'b', label: 'Uns 20 km/h, uma brisa fraca' },
+        { id: 'c', label: 'Netuno não tem vento nenhum' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 40,
+      coinReward: 20,
+    },
+    {
+      id: 'planet-netuno-6',
+      type: 'logica',
+      title: 'Escolinha de Netuno',
+      prompt: 'Assim como Urano, Netuno é classificado como um...',
+      choices: [
+        { id: 'a', label: 'Gigante de gelo' },
+        { id: 'b', label: 'Planeta rochoso pequeno' },
+        { id: 'c', label: 'Gigante gasoso quente' },
+      ],
+      correctChoiceId: 'a',
+      xpReward: 40,
+      coinReward: 20,
+    },
+  ],
+}
+
+export function findPlanetQuestById(questId: string): Quest | undefined {
+  for (const list of Object.values(planetQuests)) {
+    const found = list.find((q) => q.id === questId)
+    if (found) return found
+  }
+  return undefined
+}
+
+// lab-130: descobre a qual planeta uma pergunta pertence — usado por `applyPlanetQuestCompletion`
+// (progression.ts) pra saber qual planeta checar quando decide se concede a recompensa de mobília
+// exclusiva (`FURNITURE_CATALOG`, campo `planetReward`).
+export function findPlanetIdForQuest(questId: string): string | undefined {
+  for (const [planetId, list] of Object.entries(planetQuests)) {
+    if (list.some((q) => q.id === questId)) return planetId
+  }
+  return undefined
+}
+
+// lab-130: um planeta está "conquistado" quando as 6 escolinhas dele já foram respondidas —
+// função pura (só ids), sem depender de `Progress`, reaproveitável em testes sem montar estado
+// completo.
+export function isPlanetFullyCompleted(planetId: string, completedPlanetQuestIds: string[]): boolean {
+  const list = planetQuests[planetId]
+  if (!list) return false
+  return list.every((q) => completedPlanetQuestIds.includes(q.id))
+}

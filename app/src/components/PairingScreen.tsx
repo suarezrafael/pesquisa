@@ -1,0 +1,91 @@
+import { useState } from 'react'
+import { useModalA11y } from '../state/useModalA11y'
+
+interface PairingScreenProps {
+  active: boolean
+  redeeming: boolean
+  redeemError: string | null
+  onRedeem: (code: string) => Promise<boolean>
+  onClose: () => void
+}
+
+// Tela de pareamento (Fase D do plano comercial, ver docs/plano-comercial-backend.md) — a
+// criança digita aqui, UMA VEZ, o código gerado pelo responsável no portal `/familia`. Nunca
+// pede e-mail/senha/nome: só o código de 6 dígitos, o mínimo pra vincular o entitlement da
+// família sem a criança ter conta.
+export function PairingScreen({ active, redeeming, redeemError, onRedeem, onClose }: PairingScreenProps) {
+  const [code, setCode] = useState('')
+  const [done, setDone] = useState(false)
+  const modalRef = useModalA11y(onClose)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const ok = await onRedeem(code)
+    if (ok) setDone(true)
+  }
+
+  return (
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Vincular assinatura da família"
+      ref={modalRef}
+      tabIndex={-1}
+    >
+      <div className="modal">
+        <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
+          ×
+        </button>
+
+        {active ? (
+          <>
+            <h2>Assinatura da família já vinculada! 🎉</h2>
+            <p>Aproveite os itens exclusivos assim que eles chegarem na lojinha.</p>
+            {/* lab-137 (backlog reportado na sequência do lab-133): o link pra `/familia` só
+                existia na tela de ANTES de vincular — quem cuida da criança e já vinculou não
+                tinha como voltar pra ver relatório/gerenciar assinatura de dentro do jogo. */}
+            <a href="/familia" target="_blank" rel="noreferrer" className="nickname-generate-btn">
+              Abrir área dos responsáveis
+            </a>
+          </>
+        ) : done ? (
+          <>
+            <h2>Código aceito! ✅</h2>
+            <p>Sua família fica vinculada por aqui a partir de agora.</p>
+          </>
+        ) : (
+          <>
+            <h2>Digite o código da família</h2>
+            <p>
+              Peça pra quem cuida de você abrir a área dos responsáveis e gerar um código. Digite
+              esse código aqui, uma única vez.
+            </p>
+            {/* Pedido do usuário (2026-08-24): não tinha nenhum link de verdade pra `/familia` em
+                lugar nenhum do jogo, só esse texto — quem cuida da criança não tinha como achar a
+                área dos responsáveis sem já saber o endereço de cor. */}
+            <a href="/familia" target="_blank" rel="noreferrer" className="nickname-generate-btn">
+              Abrir área dos responsáveis
+            </a>
+            <form onSubmit={handleSubmit}>
+              <label className="field">
+                <span>Código de 6 dígitos</span>
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoFocus
+                />
+                {redeemError && <small className="field-hint">{redeemError}</small>}
+              </label>
+              <button type="submit" className="primary-button" disabled={redeeming || code.length !== 6}>
+                {redeeming ? 'Um momento…' : 'Confirmar'}
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

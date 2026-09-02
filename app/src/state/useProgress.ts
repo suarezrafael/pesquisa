@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import type { Progress, Quest } from '../types'
+import { trackQuestCompleted } from '../productAnalytics'
 import { loadProgress, saveProgress } from './storage'
 import {
   applyCoinCollected,
   applyQuestCompletion,
+  applyPlanetQuestCompletion,
   type CompletionResult,
   unlockAvatar as applyAvatarUnlock,
   unlockHat as applyHatUnlock,
@@ -12,13 +14,36 @@ import {
   unlockShoeColor as applyShoeColorUnlock,
   unlockBackpackColor as applyBackpackColorUnlock,
   unlockHairShape as applyHairShapeUnlock,
+  unlockGlasses as applyGlassesUnlock,
+  unlockFurniture as applyFurnitureUnlock,
+  setFurniturePlacement as applySetFurniturePlacement,
+  unlockMarsReward as applyMarsRewardUnlock,
+  applyTreasureChestFound,
+  applyStreakReset,
 } from './progression'
 
 export function useProgress() {
   const [progress, setProgress] = useState<Progress>(() => loadProgress())
 
-  function completeQuest(quest: Quest): CompletionResult {
-    const result = applyQuestCompletion(progress, quest)
+  // lab-126: `entitlementActive` aplica o bônus de moeda de assinante (`progression.ts`) — default
+  // `false` preserva o comportamento de quem chama sem saber/se importar com entitlement.
+  function completeQuest(quest: Quest, entitlementActive = false): CompletionResult {
+    // lab-99: `applyQuestCompletion` é idempotente (responder uma missão já concluída de novo não
+    // premia XP/moeda de novo, ver `progression.ts`) — só dispara o evento de analytics numa
+    // conclusão GENUÍNA (o array de concluídas cresceu), senão "quests concluídas por
+    // dispositivo" ficaria inflado por reprises da mesma missão.
+    const wasAlreadyCompleted = progress.completedQuestIds.includes(quest.id)
+    const result = applyQuestCompletion(progress, quest, undefined, entitlementActive)
+    setProgress(result.progress)
+    saveProgress(result.progress)
+    if (!wasAlreadyCompleted) trackQuestCompleted(quest.id)
+    return result
+  }
+
+  // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo formato de
+  // `completeQuest`, mas isolado (ver `applyPlanetQuestCompletion` em `progression.ts`).
+  function completePlanetQuest(quest: Quest, entitlementActive = false): CompletionResult {
+    const result = applyPlanetQuestCompletion(progress, quest, undefined, entitlementActive)
     setProgress(result.progress)
     saveProgress(result.progress)
     return result
@@ -89,9 +114,72 @@ export function useProgress() {
     })
   }
 
+  function unlockGlasses(id: string): void {
+    setProgress((prev) => {
+      const next = applyGlassesUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  // Mobília de Minha Casa (lab-106) — mesmo formato do `unlockGlasses` acima.
+  function unlockFurniture(id: string): void {
+    setProgress((prev) => {
+      const next = applyFurnitureUnlock(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  // Posicionamento manual de mobília dentro de casa (lab-136) — mesmo formato dos outros
+  // `unlockXxx`, chamado por `World3D.tsx` ao confirmar o modo de posicionamento (nunca durante o
+  // arrastar em si, só na confirmação — senão salvaria no localStorage a cada quadro).
+  function setFurniturePlacement(id: string, x: number, z: number, rotY: number): void {
+    setProgress((prev) => {
+      const next = applySetFurniturePlacement(prev, id, x, z, rotY)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  // Brinde de Marte (lab-94) — diferente dos outros `unlockXxx`, devolve se realmente concedeu
+  // algo novo (o chamador em `App.tsx` usa isso pra decidir se mostra o aviso de novo item).
+  function unlockMarsReward(): boolean {
+    const result = applyMarsRewardUnlock(progress)
+    if (result.granted) {
+      setProgress(result.progress)
+      saveProgress(result.progress)
+    }
+    return result.granted
+  }
+
+  // Baú de tesouro escondido (lab-131) — mesmo formato de `unlockMarsReward` acima: devolve se
+  // realmente concedeu moeda nova (o chamador em `App.tsx`/`World3D.tsx` usa isso pra decidir se
+  // mostra a mensagem transitória de "achado", não a cada vez que a checagem de proximidade roda).
+  function foundTreasureChest(chestId: string): boolean {
+    const result = applyTreasureChestFound(progress, chestId)
+    if (result.granted) {
+      setProgress(result.progress)
+      saveProgress(result.progress)
+    }
+    return result.granted
+  }
+
+  // Combo de respostas certas seguidas (lab-132) — chamado por `App.tsx` ao fechar (×) uma missão
+  // ainda não completada; `applyStreakReset` já é idempotente sozinho (não faz nada se o combo já
+  // estava zerado).
+  function resetStreak(): void {
+    setProgress((prev) => {
+      const next = applyStreakReset(prev)
+      saveProgress(next)
+      return next
+    })
+  }
+
   return {
     progress,
     completeQuest,
+    completePlanetQuest,
     collectCoin,
     unlockAvatar,
     unlockHat,
@@ -100,5 +188,11 @@ export function useProgress() {
     unlockShoeColor,
     unlockBackpackColor,
     unlockHairShape,
+    unlockGlasses,
+    unlockFurniture,
+    setFurniturePlacement,
+    unlockMarsReward,
+    foundTreasureChest,
+    resetStreak,
   }
 }

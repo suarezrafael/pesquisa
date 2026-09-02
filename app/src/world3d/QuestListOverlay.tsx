@@ -1,5 +1,6 @@
 import { quests, questTypeLabels } from '../data/quests'
 import { isQuestUnlocked } from '../state/progression'
+import { useModalA11y } from '../state/useModalA11y'
 import type { Progress } from '../types'
 
 interface QuestListOverlayProps {
@@ -8,8 +9,16 @@ interface QuestListOverlayProps {
 }
 
 export function QuestListOverlay({ progress, onClose }: QuestListOverlayProps) {
+  const modalRef = useModalA11y(onClose)
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Missões do planeta">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Missões do planeta"
+      ref={modalRef}
+      tabIndex={-1}
+    >
       <div className="modal quest-list-modal">
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×

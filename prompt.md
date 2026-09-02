@@ -158,7 +158,7 @@ Com base neste relatório, gere:
 ### 15.1 Modelo escolhido: Freemium com assinatura vendida aos responsáveis (nunca à criança)
 - O núcleo do jogo — quests educativas, progressão, cooperação, níveis — permanece 100% gratuito e completo. Não existe paywall sobre aprendizagem.
 - A monetização acontece via um **Plano Família** (assinatura recorrente) oferecido diretamente aos pais/responsáveis, fora do client infantil.
-- O que a assinatura desbloqueia: cosméticos exclusivos (skins de avatar, pets, decoração do espaço pessoal), moeda do jogo bônus (não afeta progressão pedagógica), relatórios de progresso detalhados para os pais, múltiplos perfis de filhos numa única conta família, remoção de limites de "energia"/tentativas diárias (se essa mecânica existir).
+- O que a assinatura desbloqueia: cosméticos exclusivos (skins de avatar, pets, decoração do espaço pessoal), moeda do jogo bônus (não afeta progressão pedagógica), relatórios de progresso detalhados para os pais, múltiplos perfis de filhos numa única conta família, remoção de limites de "energia"/tentativas diárias (se essa mecânica existir). Desenho concreto dos cosméticos (inspirado em jogos de roleplay/casa própria do Roblox como Brookhaven RP — decisão do usuário em 2026-08-24) está em `docs/plano-comercial-backend.md`, seção "Catálogo de cosméticos (Fase E)".
 - Regra inegociável: nunca gatear conteúdo pedagógico, quests, cooperação ou avanço de nível atrás de pagamento — isso preserva a proposta de valor educacional e evita a crítica de "pay-to-win" em produto infantil.
 
 ### 15.2 Case de mercado validado: Prodigy Math Game

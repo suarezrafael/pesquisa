@@ -1,5 +1,6 @@
 import type { RankingEntry } from './multiplayer'
 import { getLevel } from '../state/progression'
+import { useModalA11y } from '../state/useModalA11y'
 
 interface RankingPanelProps {
   entries: RankingEntry[]
@@ -12,8 +13,15 @@ interface RankingPanelProps {
 // local (lab-06). Nível é recalculado aqui a partir do XP (`getLevel`, determinístico) em vez de
 // viajar pela rede como campo separado, pra nunca poder ficar dessincronizado da regra real.
 export function RankingPanel({ entries, connected, onClose }: RankingPanelProps) {
+  const panelRef = useModalA11y(onClose)
   return (
-    <div className="chat-panel ranking-panel">
+    <div
+      className="chat-panel ranking-panel"
+      role="region"
+      aria-label="Ranking"
+      ref={panelRef}
+      tabIndex={-1}
+    >
       <div className="chat-panel-header">
         <span>Ranking {connected ? '🟢 conectado' : '🔴 sem conexão'}</span>
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar ranking">

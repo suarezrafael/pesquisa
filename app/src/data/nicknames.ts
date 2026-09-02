@@ -33,7 +33,8 @@ function pick<T>(list: T[]): T {
   return list[Math.floor(Math.random() * list.length)]
 }
 
+// Sem número no final (lab-89): o campo de apelido passou a aceitar só letras, então um sufixo
+// numérico deixaria o próprio botão "Gerar" produzir um apelido que o campo recusaria.
 export function generateNickname(): string {
-  const number = Math.floor(Math.random() * 90) + 10
-  return `${pick(ADJECTIVES)}${pick(CREATURES)}${number}`
+  return `${pick(ADJECTIVES)}${pick(CREATURES)}`
 }

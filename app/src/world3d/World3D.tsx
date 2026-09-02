@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  AbstractMesh,
   Color3,
   Color4,
   DefaultRenderingPipeline,
@@ -14,6 +15,7 @@ import {
   Matrix,
   Mesh,
   MeshBuilder,
+  Node,
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
@@ -34,12 +36,22 @@ import {
   VertexData,
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
-import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
+// lab-117: imports diretos dos arquivos individuais, não do barril `@babylonjs/gui` — o pacote
+// inteiro (controles 2D como botão/slider/grid + materiais de GUI 3D como
+// handle/fluent, nunca usados aqui) inflava o chunk de `World3D` em ~695KB à toa, já que só
+// `TextBlock` (legendas flutuantes) e `AdvancedDynamicTexture` (a camada 2D que as hospeda) são
+// usados neste jogo. Confirmado lendo o pacote: os dois arquivos só dependem de
+// `Container`/`Control`/`Style`/`Measure`, uma fatia pequena da árvore completa.
+import { AdvancedDynamicTexture } from '@babylonjs/gui/2D/advancedDynamicTexture'
+import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
+import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
-import { findAvatarByEmoji, type BonecoFeatures } from '../data/avatars'
-import { findHatById, type HatOption } from '../data/hats'
+import { findHatById } from '../data/hats'
+import { findGlassesById } from '../data/glasses'
+import { FURNITURE_CATALOG } from '../data/furniture'
+import { findTreasureChestById } from '../data/treasureChests'
 import {
   findColorOption,
   findHairShapeOption,
@@ -47,18 +59,30 @@ import {
   PANTS_COLOR_CATALOG,
   SHIRT_COLOR_CATALOG,
   SHOE_COLOR_CATALOG,
-  type HairShape,
 } from '../data/customization'
+import {
+  applyBonecoFeatures,
+  applyClothingLook,
+  applyGlasses,
+  applyHairShape,
+  applyHat,
+  avatarColorFromEmoji,
+  bonecoFeaturesFromEmoji,
+  buildStudentFigure,
+  type StudentFigure,
+} from './studentFigure'
 import { questTypeColor } from './questVisuals'
-import { isQuestUnlocked } from '../state/progression'
-import type { Profile, Progress } from '../types'
+import { getLevel, isQuestUnlocked } from '../state/progression'
+import type { Profile, Progress, Quest } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
 import { RankingPanel } from './RankingPanel'
 import { MarsHealthBar } from './MarsHealthBar'
+import { SurvivalTimerBar } from './SurvivalTimerBar'
 import { WeaponBagPanel } from './WeaponBagPanel'
+import { PlanetPickerPanel } from './PlanetPickerPanel'
 import {
   playBirdChirp,
   playCoinCollect,
@@ -103,11 +127,31 @@ interface World3DProps {
   progress: Progress
   onSelectQuest: (questId: string) => void
   onSelectSurpriseQuiz: (quizId: string) => void
+  onSelectPlanetQuest: (planetId: string) => void
   onOpenHelp: () => void
   onOpenQuestList: () => void
   onOpenShop: () => void
+  onOpenPairing: () => void
+  onOpenAchievements: () => void
+  onOpenMyHouse: () => void
+  onUnlockMarsReward: () => void
+  // lab-131 (pedido do usuário: "baús de tesouro escondidos") — chamado ao achar um baú por
+  // proximidade real; `App.tsx` repassa direto pra `useProgress().foundTreasureChest`, que já é
+  // idempotente sozinho (não precisa de checagem extra aqui).
+  onFindTreasureChest: (chestId: string) => void
   onCollectCoin: () => void
+  onSwitchProfile: () => void
   suspendTriggers: boolean
+  // lab-136 (pedido do usuário: "tem que ter opção... de escolher em que posição da casa deve
+  // ficar a peça... o ângulo e posição") — `App.tsx` seta `placingFurnitureRequestId` quando o
+  // jogador clica "Mover" no `MyHousePanel` (que vive fora deste componente); um `useEffect`
+  // aqui observa a prop e entra no modo de posicionamento dentro da cena 3D, mesmo padrão de
+  // bridge já usado por `__refreshHouseFurniture`/`unlockedFurnitureIds`. `onPlacingRequestHandled`
+  // limpa o pedido do lado de `App.tsx` depois de consumido (senão o mesmo id reabriria o modo de
+  // novo a cada re-render). `onFurniturePlaced` persiste a posição/ângulo finais ao confirmar.
+  placingFurnitureRequestId: string | null
+  onPlacingRequestHandled: () => void
+  onFurniturePlaced: (id: string, x: number, z: number, rotY: number) => void
 }
 
 const PLANET_RADIUS = 13
@@ -147,6 +191,19 @@ const BIRD_CHIRP_RADIUS = 3.5 // pedido do usuário: pássaros cantam baixinho q
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const CAMERA_ROTATE_SPEED = 1.6 // rad/s — velocidade de giro da câmera segurando os botões ◀/▶
+// Orçamento de rede do multiplayer (lab-85, docs/prompts/05-escala-e-viabilidade.md achado G1):
+// antes, `sendState` disparava incondicionalmente a cada 0,12s (8,33 msg/s por jogador) — a cota
+// gratuita de Durable Objects (100.000 requests/dia, cada mensagem WebSocket conta como uma)
+// esgotava com ~13 crianças jogando 15 min cada. Agora só manda quando a posição/direção mudou
+// mais que o limiar abaixo (checado a cada NET_SEND_CHECK_INTERVAL, que também vira o teto de
+// ~2 msg/s andando pedido pelo documento) ou quando o keepalive vence (parado, ~0,2 msg/s).
+const NET_SEND_CHECK_INTERVAL = 0.5 // s — também o teto de frequência andando (≤2 msg/s)
+const NET_POSITION_EPSILON = 0.05 // metros
+const NET_FACING_EPSILON = 0.02 // diferença de vetor normalizado (~poucos graus)
+const NET_KEEPALIVE_INTERVAL_MS = 5000 // parado: mantém `rp.lastSeen` vivo pros outros (ver
+// NET_PEER_TIMEOUT_MS abaixo, tem que ficar bem menor que o timeout de remoção do peer)
+const NET_PEER_TIMEOUT_MS = 16000 // ~3x o keepalive — margem pra jitter de rede sem remover
+// um jogador remoto que só está parado
 const TRIGGER_DISTANCE = 2.4
 const RESET_DISTANCE = 3.6
 // Carro dirigível (lab-25): distância pra mostrar a dica "pressione E" / poder entrar, e
@@ -329,6 +386,153 @@ const SECOND_PLANET_LANDING_UP = new Vector3(0, 1, 0)
 // foguete de volta (evita as duas estruturas ficarem coladas uma na outra).
 const MARS_UFO_DIR = new Vector3(-0.5535, 0.3522, 0.7548).normalize()
 
+// Mercúrio (lab-110, pedido do usuário: "ampliar o mundo do jogo... ter os planetas do sistema
+// solar, como já tem Marte, pode fazer outros planetinhas, que só renderiza no momento que
+// viajamos pra lá de foguete") — primeiro planeta novo além de Marte, escolhido pela ordem real de
+// distância ao Sol. Sem combate/estrutura (confirmado com o usuário: só moedas escondidas) — raio
+// menor que Marte (é o menor planeta do sistema solar de verdade), centro num eixo diferente do de
+// Marte pra não competir visualmente, mesma distância "planeta e meio" de folga já usada lá.
+const MERCURY_RADIUS = 4
+const MERCURY_CENTER = new Vector3(58, 0, 0)
+const MERCURY_LANDING_UP = new Vector3(0, 1, 0)
+
+// Vênus (lab-111, continuação do lab-110) — segundo planeta novo, mesmo escopo (sem combate, só
+// moedas escondidas). Raio entre Marte e o planeta principal (Vênus é quase do tamanho da Terra
+// de verdade, mas bem menor que o planeta principal já é aqui — mantém só a ORDEM relativa real:
+// Mercúrio < Marte < Vênus). Centro num terceiro eixo (Y) — Marte usa Z, Mercúrio usa X, mantém os
+// três planetas-destino mutuamente ortogonais no espaço (só a distância até o planeta principal
+// importa, nunca a distância entre dois planetas-destino).
+const VENUS_RADIUS = 7
+const VENUS_CENTER = new Vector3(0, 58, 0)
+const VENUS_LANDING_UP = new Vector3(0, 1, 0)
+
+// Júpiter (lab-112, continuação da frente Sistema Solar) — primeiro GIGANTE GASOSO: sem
+// superfície sólida de verdade (mesma simplificação já aceita pro resto do jogo — toda esfera de
+// planeta é "pisável", com física por baixo), raio bem maior que o planeta principal (é o maior
+// planeta do sistema solar de verdade — não dá pra ser proporcional de verdade, 11x o diâmetro da
+// Terra seria impraticável, mas precisa "sentir" maior que a Terra do jogo, não só que os outros
+// planetas-destino). Centro num quarto ponto do espaço (diagonal — não sobra mais eixo X/Y/Z puro
+// livre, e não precisa: só a distância até o planeta principal importa).
+const JUPITER_RADIUS = 20
+const JUPITER_CENTER = new Vector3(58, 0, -58)
+const JUPITER_LANDING_UP = new Vector3(0, 1, 0)
+
+// Saturno (lab-113, continuação da frente Sistema Solar) — segundo gigante gasoso, mesma técnica
+// de faixas de Júpiter (paleta mais pálida/dourada) + ANEL novo (a característica visual mais
+// reconhecível de Saturno, e de qualquer planeta do sistema solar isoladamente). Raio um pouco
+// menor que Júpiter — Saturno é um pouco menor que Júpiter na vida real (~9,4 vs. ~11,2 raios
+// terrestres), mantém a ordem real dos dois maiores planetas.
+const SATURN_RADIUS = 17
+const SATURN_CENTER = new Vector3(-58, 0, 58)
+const SATURN_LANDING_UP = new Vector3(0, 1, 0)
+
+// Urano e Netuno (lab-114, ÚLTIMO laboratório da frente Sistema Solar) — os dois gigantes de
+// gelo, feitos juntos por serem incrementos pequenos sobre o padrão já estabelecido. Raio um
+// pouco menor que Saturno (os gigantes de gelo são menores que os gasosos na vida real), os dois
+// próximos um do outro (Netuno um pouco menor que Urano de verdade). Com estes dois, os 8
+// planetas reais do sistema solar ficam completos no jogo (Mercúrio, Vênus, Terra=planeta
+// principal, Marte, Júpiter, Saturno, Urano, Netuno).
+const URANUS_RADIUS = 15
+const URANUS_CENTER = new Vector3(0, 58, -58)
+const URANUS_LANDING_UP = new Vector3(0, 1, 0)
+const NEPTUNE_RADIUS = 14
+const NEPTUNE_CENTER = new Vector3(-58, -58, 0)
+const NEPTUNE_LANDING_UP = new Vector3(0, 1, 0)
+
+// Registro genérico de planetas-destino (lab-110) — substitui o antigo par de variáveis fixas
+// `onSecondPlanet`/`SECOND_PLANET_*` como única fonte de verdade sobre onde cada planeta fica;
+// `SECOND_PLANET_CENTER`/`RADIUS`/`LANDING_UP` continuam existindo tal e qual (usados só dentro do
+// código já específico de Marte, ver `buildMarsIfNeeded`/combate) — este registro só reaproveita
+// esses valores pra alimentar a parte GENÉRICA (embarque/pouso/seletor), sem duplicá-los.
+interface DestinationPlanet {
+  id: string
+  name: string
+  emoji: string
+  radius: number
+  center: Vector3
+  landingUp: Vector3
+  // Nível mínimo pra viajar pra lá (lab-115, pedido do usuário: "quanto mais longe o planeta mais
+  // alto deve ser o nível do usuário") — escalona com a distância REAL ao Sol entre os 6 planetas
+  // desta frente (Mercúrio < Vênus < Júpiter < Saturno < Urano < Netuno). Marte e o planeta
+  // principal ficam de fora de propósito: nenhum dos dois nunca teve requisito de nível (Marte é
+  // alcançável sem restrição desde o lab-60) — adicionar um agora mudaria comportamento já em
+  // produção. `undefined`/ausente = sem requisito (compatível com quem só verifica
+  // `(planet.requiredLevel ?? 1)`).
+  requiredLevel?: number
+  // lab-129 (pedido do usuário: "alguns planetas tem tempo de permanência... pode ser planetas
+  // quentes como mercurio e os mais longes como netuno") — só planetas de ambiente extremo, não
+  // todos. `undefined`/ausente = sem cronômetro (planeta principal e a maioria dos destinos
+  // continuam sem pressa nenhuma).
+  hasSurvivalTimer?: boolean
+}
+const DESTINATION_PLANETS: Record<string, DestinationPlanet> = {
+  marte: {
+    id: 'marte',
+    name: 'Marte',
+    emoji: '🔴',
+    radius: SECOND_PLANET_RADIUS,
+    center: SECOND_PLANET_CENTER,
+    landingUp: SECOND_PLANET_LANDING_UP,
+  },
+  mercurio: {
+    id: 'mercurio',
+    name: 'Mercúrio',
+    emoji: '☿️',
+    radius: MERCURY_RADIUS,
+    center: MERCURY_CENTER,
+    landingUp: MERCURY_LANDING_UP,
+    requiredLevel: 2,
+    hasSurvivalTimer: true,
+  },
+  venus: {
+    id: 'venus',
+    name: 'Vênus',
+    emoji: '♀️',
+    radius: VENUS_RADIUS,
+    center: VENUS_CENTER,
+    landingUp: VENUS_LANDING_UP,
+    requiredLevel: 3,
+  },
+  jupiter: {
+    id: 'jupiter',
+    name: 'Júpiter',
+    emoji: '🟠',
+    radius: JUPITER_RADIUS,
+    center: JUPITER_CENTER,
+    landingUp: JUPITER_LANDING_UP,
+    requiredLevel: 5,
+  },
+  saturno: {
+    id: 'saturno',
+    name: 'Saturno',
+    emoji: '🪐',
+    radius: SATURN_RADIUS,
+    center: SATURN_CENTER,
+    landingUp: SATURN_LANDING_UP,
+    requiredLevel: 7,
+  },
+  urano: {
+    id: 'urano',
+    name: 'Urano',
+    emoji: '🔵',
+    radius: URANUS_RADIUS,
+    center: URANUS_CENTER,
+    landingUp: URANUS_LANDING_UP,
+    requiredLevel: 9,
+  },
+  netuno: {
+    id: 'netuno',
+    name: 'Netuno',
+    emoji: '🔷',
+    radius: NEPTUNE_RADIUS,
+    center: NEPTUNE_CENTER,
+    landingUp: NEPTUNE_LANDING_UP,
+    requiredLevel: 11,
+    hasSurvivalTimer: true,
+  },
+}
+const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_PLANETS)
+
 // Combate em Marte (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
 // tenta matar o nosso boneco, nós temos que ter uma barra de vida se a barra esvaziar, você morre
 // e volta pro planetinha e tem que voltar de foguete pra poder seguir em Marte"). Contagem baixa
@@ -338,6 +542,28 @@ const MARS_UFO_DIR = new Vector3(-0.5535, 0.3522, 0.7548).normalize()
 const MARS_ENEMY_COUNT_LOW_END = 3
 const MARS_ENEMY_COUNT = 6
 const MARS_MAX_HEALTH = 100
+
+// Cronômetro de sobrevivência (lab-129, pedido do usuário: "alguns planetas tem tempo de
+// permanencia, um cronometro onde voce precisa responder a perguntas durante a exploracao, mas o
+// cronometro fica regredindo se permanecer longe do foguete muito tempo voce morre e volta pra
+// terra") — só planetas de ambiente extremo (`hasSurvivalTimer` em `DESTINATION_PLANETS`), mesmo
+// espírito não-punitivo do sistema de vida de Marte (lab-60): sem perda de moeda/XP já ganho, só
+// custa tempo de jogo (precisa voltar de foguete pra tentar de novo).
+const SURVIVAL_TIMER_MAX = 60
+// Perto do foguete de volta, o jogador fica "protegido" — sem pressa nenhuma; só afastado dele o
+// cronômetro drena de verdade (pedido do usuário: "fica regredindo se permanecer longe do
+// foguete").
+const SURVIVAL_TIMER_SAFE_RADIUS = 5
+const SURVIVAL_TIMER_DRAIN_RATE = 1 // segundos de cronômetro por segundo real, fora do raio seguro
+// Devolvido ao responder uma escolinha do PRÓPRIO planeta corretamente (pedido do usuário: "voce
+// precisa responder a perguntas durante a exploracao") — recompensa por focar no objetivo
+// educacional, não só sobreviver.
+const SURVIVAL_TIMER_RESTORE = 20
+// lab-128 (pedido do usuário: "em marte ao vencer os ets deve aparecer um pote de moedas na base
+// de ets") — bônus de uma vez só, além da moeda que cada inimigo já dá ao ser nocauteado
+// (`onCollectCoinRef.current()` por kill, ver `handleInteractPress`).
+const MARS_COIN_POT_REWARD = 10
+const MARS_COIN_POT_TRIGGER_DISTANCE = 1.4
 const MARS_ENEMY_AGGRO_RADIUS = 6
 const MARS_ENEMY_ATTACK_RADIUS = 1.3
 const MARS_ENEMY_ATTACK_INTERVAL = 1.3
@@ -406,6 +632,39 @@ const SCHOOL_DIRS: Vector3[] = quests.map((quest, index) => {
 // (não só o centro) fora de qualquer bacia que passe perto.
 const SCHOOL_PROTECTION_RADIUS = 0.12
 
+// lab-127 (pedido do usuário: "cada planeta deve ter umas 6 questous... igual a terra") — 6
+// direções reaproveitadas pelos 6 planetas-destino (cada um tem seu próprio `TransformNode` raiz
+// independente, então a mesma lista de direções relativas nunca colide entre planetas diferentes
+// — mesmo espírito da direção única já reaproveitada desde o lab-115). Fórmula golden-angle
+// medida ANTES de escolher (script à parte, não só estimativa): `phi` de 35° a 145°, `theta =
+// index * GOLDEN_ANGLE` dá separação angular mínima de 78° entre escolinhas — 5,46 unidades de
+// arco mesmo no menor planeta (`MERCURY_RADIUS = 4`), bem acima de `RESET_DISTANCE`/
+// `PLANET_SCHOOL_TRIGGER_DISTANCE`, e pelo menos 35° de distância da plataforma de pouso do
+// foguete (`(0,1,0)`, `MERCURY_LANDING_UP`/etc.) — sem escolinhas coladas nem perto do foguete em
+// nenhum dos 6 planetas (Mercúrio é o caso mais apertado; os outros 5 têm raio maior).
+const PLANET_SCHOOL_DIRS: Vector3[] = Array.from({ length: 6 }, (_, index) => {
+  const t = index / 5
+  const phi = ((35 + t * 110) * Math.PI) / 180
+  const theta = index * GOLDEN_ANGLE
+  return new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+})
+
+// Baú de tesouro escondido (lab-131, pedido do usuário: "baús de tesouro escondidos") — reaproveita
+// a MESMA parametrização de ângulo de ouro de `PLANET_SCHOOL_DIRS` acima (medida no lab-127 pra
+// separação segura mesmo no menor planeta), só com `phi` perto do polo SUL (165°, fora da faixa
+// 35°-145° das escolinhas e bem longe da plataforma de pouso em `phi≈0`) — "escondido" combina com
+// um canto do planeta pouco visitado. `theta` continua a sequência (índice 6), o que por
+// construção do próprio ângulo de ouro já mantém boa separação das 6 direções anteriores sem
+// precisar remedir do zero. Todos os 6 `landingUp` de `DESTINATION_PLANETS` são `(0,1,0)`
+// idênticos, então esta é a MESMA direção relativa pros 6 planetas (mesmo espírito de
+// `PLANET_SCHOOL_DIRS` ser compartilhado entre eles).
+const TREASURE_CHEST_DIR: Vector3 = (() => {
+  const phi = (165 * Math.PI) / 180
+  const theta = 6 * GOLDEN_ANGLE
+  return new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+})()
+const TREASURE_CHEST_TRIGGER_DISTANCE = 1.4
+
 function nearAnySchool(dir: { x: number; y: number; z: number }): boolean {
   for (const schoolDir of SCHOOL_DIRS) {
     const dot = dir.x * schoolDir.x + dir.y * schoolDir.y + dir.z * schoolDir.z
@@ -455,25 +714,38 @@ function terrainHeight(dir: Vector3): number {
   return height
 }
 
-// Cor da camisa vem do catálogo de avatares (src/data/avatars.ts) — fonte única de verdade,
-// compartilhada com a lojinha (AvatarShop.tsx). O fallback cobre só o caso de um emoji não
-// catalogado chegar aqui (não deveria acontecer, mas evita crash).
-function avatarColorFromEmoji(emoji: string): Color3 {
-  const avatar = findAvatarByEmoji(emoji)
-  if (!avatar) return new Color3(0.96, 0.51, 0.68)
-  return new Color3(...avatar.colorRgb)
-}
-
-const FALLBACK_BONECO_FEATURES: BonecoFeatures = {
-  earStyle: 'none',
-  tailStyle: 'none',
-  special: 'none',
-  accentColorRgb: [0.96, 0.51, 0.68],
-}
-
-function bonecoFeaturesFromEmoji(emoji: string): BonecoFeatures {
-  return findAvatarByEmoji(emoji)?.features ?? FALLBACK_BONECO_FEATURES
-}
+// lab-95 (bug real relatado pelo usuário ao vivo, DEPOIS do lab-95 já ter revertido o encolhimento
+// de escolinha: "TODAS AS CASA ESTÃO DENTRO DA TERRA, ATE OS NPC ESTÃO ENTERRADO... AS CASINHAS SO
+// APARECEM O TELHADO"). Causa raiz de verdade (não é o tamanho da escolinha, que já tinha voltado
+// ao normal quando o bug persistiu): `PLATEAU_CENTERS` tem rampas de até 3,2 unidades de altura
+// numa borda com `smoothstep` — a inclinação máxima da rampa passa de 0,8 unidade de altura por
+// METRO percorrido. Uma escolinha (~1,3m de "raio" contando o beiral do telhado e a posição do
+// professor) que caia bem na rampa de um platô vê cantos com quase 2 unidades de diferença de
+// altura entre si. `settleMeshOnTerrain` (mais abaixo) desce o prédico inteiro até o canto MENOS
+// alto encostar no chão — o que enterra todos os outros cantos na mesma proporção da inclinação
+// local. Nenhuma fundação "seguraria" isso sem virar uma caixa enorme. A correção de verdade é não
+// deixar uma escola cair numa rampa íngreme: mede a variação de altura do terreno ao REDOR de cada
+// posição candidata e, se for grande demais pra qualquer fundação absorver, procura um ponto
+// próximo mais plano antes de fixar a posição final.
+//
+// Raio angular aproximado do "pé" de uma escolinha (paredes 1,6×1,4 + beiral do telhado até ~1,05m
+// do centro + professor deslocado ~1,1m do centro) — maior que a metade da diagonal da própria
+// escola de propósito, pra pegar a variação que `settleMeshOnTerrain` realmente vai amostrar.
+const SCHOOL_FOOTPRINT_ANGULAR_RADIUS = 1.3 / PLANET_RADIUS
+// Variação de altura (metros) que a fundação (1,6 de altura, ~1,45 enterrada) ainda absorve sem
+// que as paredes ou o professor fiquem visíveis debaixo do nível do chão real.
+const SCHOOL_SAFE_TERRAIN_VARIANCE = 0.6
+// lab-95: a primeira versão deste reposicionamento media a variação de relevo com `terrainHeight`
+// (a FÓRMULA analítica, disponível em escopo de módulo, antes de existir física). Bug real
+// confirmado com diagnóstico ao vivo em produção: a malha de verdade do planeta (esfera de só 48
+// segmentos, ~1,7m por segmento) se afasta MUITO mais da fórmula suave perto das rampas de
+// `PLATEAU_CENTERS` do que uma checagem de variação puramente analítica consegue prever — a busca
+// achava um ponto "plano" pela fórmula que, na malha renderizada de verdade, ainda tinha quase 1,5
+// unidade de degrau real. `settleMeshOnTerrain` então descia o prédio inteiro por esse tanto,
+// enterrando paredes e professor. A correção de verdade (função + array abaixo, dentro de
+// `World3D`) mede a variação usando `terrainGroundRadial` (raycast físico real, a MESMA fonte de
+// verdade que posiciona tudo de fato) em vez da fórmula — só pode rodar depois de `havokPlugin`
+// existir, por isso não é mais escopo de módulo.
 
 // Menor rotação que leva o "para cima" padrão (0,1,0) até `up` — usada pra apoiar
 // props/portais deitados sobre a curvatura da esfera, não flutuando na orientação do mundo.
@@ -505,36 +777,6 @@ function quaternionBetweenVectors(from: Vector3, to: Vector3): Quaternion {
   const axis = Vector3.Cross(from, to).normalize()
   const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
   return Quaternion.RotationAxis(axis, angle)
-}
-
-interface StudentFigure {
-  root: TransformNode
-  shirtMat: PBRMaterial
-  // Cores de calça/sapato/mochila (lab-73) — expostas junto de `shirtMat` pro mesmo padrão de
-  // recolorir ao vivo (ver `__setAvatarShirtColor`) funcionar pros outros eixos também.
-  pantsMat: PBRMaterial
-  shoeMat: PBRMaterial
-  backpackMat: PBRMaterial
-  hairMat: PBRMaterial
-  // Cabelo (lab-73) — separado de `accessories`/`hatMeshes` porque tem seu próprio eixo de troca
-  // de FORMATO (não só cor), populado por `applyHairShape` (mesmo padrão de `applyHat`).
-  hairMeshes: Mesh[]
-  head: Mesh
-  legPivotL: TransformNode
-  legPivotR: TransformNode
-  kneePivotL: TransformNode
-  kneePivotR: TransformNode
-  armPivotL: TransformNode
-  armPivotR: TransformNode
-  elbowPivotL: TransformNode
-  elbowPivotR: TransformNode
-  // Peças do "boneco 3D" trocável na lojinha (lab-13: orelhas/rabo/chifre/etc., não só cor da
-  // camisa) — populado por `applyBonecoFeatures`, guardado aqui pra poder descartar e remontar
-  // quando o jogador troca de avatar em cena (sem reconstruir a figura inteira).
-  accessories: Mesh[]
-  // Chapéu equipado (lab-24) — eixo de customização INDEPENDENTE de `accessories`: populado por
-  // `applyHat`, sobrevive a troca de criatura (não é descartado por `applyBonecoFeatures`).
-  hatMeshes: Mesh[]
 }
 
 // Carro (lab-15/lab-25) — em escopo de módulo (não dentro de `setup()`) porque o handler de
@@ -594,442 +836,13 @@ interface RemotePlayer {
   lastShoeColorId: string | null
   lastBackpackColorId: string | null
   lastHairShapeId: string | null
+  lastGlassesId: string | null
   // Animação de golpe/tiro (lab-73, pedido do usuário: "o efeito de espada e arma deve ser visto
   // por todos") — mesmo mecanismo do jogador local (`attackAnimTimer`/`attackAnimKind`), só que
   // um estado por jogador remoto em vez de uma variável só, já que vários podem atacar ao mesmo
   // tempo.
   attackAnimTimer: number
   attackAnimKind: 'sword' | 'gun' | null
-}
-
-// Personagem estudante estilo "avatar de app" (torso, cabeça, cabelo, mochila, 2 pernas,
-// 2 braços) construído só com primitivas — sem asset externo. As pernas/braços são
-// TransformNodes-pivô (quadril/ombro) pra poder girar em ciclo de caminhada.
-// Cores opcionais (lab-73, pedido do usuário: "escolher na lojinha a cor da camiseta e da
-// mochila... a cor da calça, a cor do sapato") — sem valor, mantém exatamente o visual de sempre
-// (todo NPC/professor/lojista/civil continua chamando `buildStudentFigure` com só 3 argumentos,
-// sem precisar saber que esses eixos existem). Só o jogador local e os jogadores remotos passam
-// isto — o formato do cabelo é aplicado à parte, depois, via `applyHairShape` (mesmo padrão de
-// `applyHat`: dá pra trocar de novo mais tarde sem reconstruir a figura inteira).
-interface StudentFigureColorOptions {
-  pantsColor?: Color3
-  shoeColor?: Color3
-  backpackColor?: Color3
-}
-
-function buildStudentFigure(
-  scene: Scene,
-  shirtColor: Color3,
-  shadowGenerator: ShadowGenerator,
-  colorOptions?: StudentFigureColorOptions,
-): StudentFigure {
-  const root = new TransformNode('studentRoot', scene)
-
-  const skinMat = new PBRMaterial('skinMat', scene)
-  skinMat.albedoColor = new Color3(0.94, 0.76, 0.6)
-  skinMat.roughness = 0.6
-
-  const shirtMat = new PBRMaterial('shirtMat', scene)
-  shirtMat.albedoColor = shirtColor
-  shirtMat.roughness = 0.7
-
-  const pantsMat = new PBRMaterial('pantsMat', scene)
-  pantsMat.albedoColor = colorOptions?.pantsColor ?? new Color3(0.22, 0.28, 0.48)
-  pantsMat.roughness = 0.8
-
-  const shoeMat = new PBRMaterial('shoeMat', scene)
-  shoeMat.albedoColor = colorOptions?.shoeColor ?? new Color3(0.12, 0.12, 0.14)
-  shoeMat.roughness = 0.7
-
-  const backpackMat = new PBRMaterial('backpackMat', scene)
-  backpackMat.albedoColor = colorOptions?.backpackColor ?? Color3.Lerp(shirtColor, new Color3(0.5, 0.15, 0.1), 0.5)
-  backpackMat.roughness = 0.75
-
-  const hairMat = new PBRMaterial('hairMat', scene)
-  hairMat.albedoColor = new Color3(0.24, 0.15, 0.09)
-  hairMat.roughness = 0.9
-
-  function addMesh(mesh: Mesh, material: PBRMaterial, parent: TransformNode) {
-    mesh.material = material
-    mesh.parent = parent
-    shadowGenerator.addShadowCaster(mesh)
-    return mesh
-  }
-
-  const torso = MeshBuilder.CreateCapsule('torso', { height: 0.5, radius: 0.19 }, scene)
-  torso.position.y = 0.78
-  addMesh(torso, shirtMat, root)
-
-  const head = MeshBuilder.CreateSphere('head', { diameter: 0.32 }, scene)
-  head.position.y = 1.15
-  addMesh(head, skinMat, root)
-
-  // Mochila com detalhes que dão pra reconhecer de costas (única vista que a câmera em 3ª
-  // pessoa mostra durante o jogo): corpo alto/estreito (proporção de mochila, não cubo), aba no
-  // topo, duas bolsas laterais e as pontas das alças aparecendo por cima dos ombros.
-  const backpackFlapMat = new PBRMaterial('backpackFlapMat', scene)
-  backpackFlapMat.albedoColor = backpackMat.albedoColor.scale(0.75)
-  backpackFlapMat.roughness = 0.8
-  const strapMat = new PBRMaterial('backpackStrapMat', scene)
-  strapMat.albedoColor = new Color3(0.15, 0.13, 0.12)
-  strapMat.roughness = 0.85
-
-  const backpack = MeshBuilder.CreateBox('backpack', { width: 0.28, height: 0.38, depth: 0.15 }, scene)
-  backpack.position = new Vector3(0, 0.79, -0.21)
-  addMesh(backpack, backpackMat, root)
-
-  const backpackFlap = MeshBuilder.CreateBox('backpackFlap', { width: 0.3, height: 0.09, depth: 0.16 }, scene)
-  backpackFlap.position = new Vector3(0, 0.79 + 0.19 + 0.03, -0.21)
-  addMesh(backpackFlap, backpackFlapMat, root)
-
-  for (const side of [-1, 1]) {
-    const pouch = MeshBuilder.CreateCapsule(`backpackPouch${side}`, { height: 0.22, radius: 0.045 }, scene)
-    pouch.rotation.x = Math.PI / 2
-    pouch.position = new Vector3(side * 0.16, 0.72, -0.21)
-    addMesh(pouch, backpackFlapMat, root)
-
-    const strap = MeshBuilder.CreateCapsule(`backpackStrap${side}`, { height: 0.16, radius: 0.028 }, scene)
-    strap.rotation.x = 0.55
-    strap.position = new Vector3(side * 0.1, 0.98, -0.06)
-    addMesh(strap, strapMat, root)
-  }
-
-  // Cada membro tem 2 segmentos (coxa+canela, ou braço+antebraço) com uma junta no meio
-  // (joelho/cotovelo) — evita o visual "robotizado" de uma perna/braço só, rígida.
-  function buildTwoSegmentLimb(
-    name: string,
-    side: number,
-    isLeg: boolean,
-  ): { upperPivot: TransformNode; lowerPivot: TransformNode } {
-    const hipY = isLeg ? 0.53 : 0.92
-    const upperLen = isLeg ? 0.27 : 0.22
-    const lowerLen = isLeg ? 0.26 : 0.2
-    const upperRadius = isLeg ? 0.085 : 0.06
-    const lowerRadius = upperRadius * 0.85
-    const mat = isLeg ? pantsMat : skinMat
-
-    const upperPivot = new TransformNode(`${name}UpperPivot`, scene)
-    upperPivot.position = new Vector3(side * (isLeg ? 0.1 : 0.24), hipY, 0)
-    upperPivot.parent = root
-    const upperMesh = MeshBuilder.CreateCapsule(`${name}Upper`, { height: upperLen, radius: upperRadius }, scene)
-    upperMesh.position.y = -upperLen / 2
-    addMesh(upperMesh, mat, upperPivot)
-
-    const lowerPivot = new TransformNode(`${name}LowerPivot`, scene)
-    lowerPivot.position = new Vector3(0, -upperLen, 0)
-    lowerPivot.parent = upperPivot
-    const lowerMesh = MeshBuilder.CreateCapsule(`${name}Lower`, { height: lowerLen, radius: lowerRadius }, scene)
-    lowerMesh.position.y = -lowerLen / 2
-    addMesh(lowerMesh, mat, lowerPivot)
-
-    // Tênis (lab-73, pedido do usuário: "a cor do sapato") — só nas pernas, na ponta da canela,
-    // um pouco pra frente (eixo Z) pra ficar visível saindo da calça em vez de escondido atrás.
-    if (isLeg) {
-      const shoe = MeshBuilder.CreateBox(`${name}Shoe`, { width: 0.1, height: 0.06, depth: 0.16 }, scene)
-      shoe.position = new Vector3(0, -lowerLen - 0.01, 0.04)
-      addMesh(shoe, shoeMat, lowerPivot)
-    }
-
-    return { upperPivot, lowerPivot }
-  }
-
-  const leg1 = buildTwoSegmentLimb('legL', -1, true)
-  const leg2 = buildTwoSegmentLimb('legR', 1, true)
-  const arm1 = buildTwoSegmentLimb('armL', -1, false)
-  const arm2 = buildTwoSegmentLimb('armR', 1, false)
-
-  const figure: StudentFigure = {
-    root,
-    shirtMat,
-    pantsMat,
-    shoeMat,
-    backpackMat,
-    hairMat,
-    hairMeshes: [],
-    head,
-    legPivotL: leg1.upperPivot,
-    legPivotR: leg2.upperPivot,
-    kneePivotL: leg1.lowerPivot,
-    kneePivotR: leg2.lowerPivot,
-    armPivotL: arm1.upperPivot,
-    armPivotR: arm2.upperPivot,
-    elbowPivotL: arm1.lowerPivot,
-    elbowPivotR: arm2.lowerPivot,
-    accessories: [],
-    hatMeshes: [],
-  }
-  // Cabelo padrão — trocável depois via `applyHairShape` (ver `__setHairShape`), mesmo padrão de
-  // `applyHat` sendo chamado de novo quando o jogador troca de item na lojinha em cena.
-  applyHairShape(figure, 'padrao', scene, shadowGenerator)
-  return figure
-}
-
-// Peças 3D que dão a cada avatar do catálogo (src/data/avatars.ts) uma forma de verdade — não só
-// uma cor de camisa (pedido do usuário: "bonecos 3d pra trocar não só de avatar", lab-13).
-// Descarta as peças antigas (se houver — troca de avatar em cena já com a cena montada) e monta
-// as novas a partir de `features`, tudo parentado em `figure.root` (mesmo padrão da mochila/
-// cabelo: offset absoluto, não aninhado na cabeça) reaproveitando primitivas simples, sem asset
-// externo, igual ao resto do jogo.
-function applyBonecoFeatures(
-  figure: StudentFigure,
-  features: BonecoFeatures,
-  scene: Scene,
-  shadowGenerator: ShadowGenerator,
-): void {
-  for (const mesh of figure.accessories) mesh.dispose()
-  figure.accessories = []
-
-  const accentMat = new PBRMaterial('bonecoAccentMat', scene)
-  accentMat.albedoColor = new Color3(...features.accentColorRgb)
-  accentMat.roughness = 0.75
-
-  function add(mesh: Mesh) {
-    mesh.material = accentMat
-    mesh.parent = figure.root
-    shadowGenerator.addShadowCaster(mesh)
-    figure.accessories.push(mesh)
-    return mesh
-  }
-
-  const HEAD_Y = 1.15
-
-  if (features.earStyle === 'triangle') {
-    for (const side of [-1, 1]) {
-      const ear = MeshBuilder.CreateCylinder(
-        `earTriangle${side}`,
-        { height: 0.14, diameterTop: 0, diameterBottom: 0.09, tessellation: 3 },
-        scene,
-      )
-      ear.position = new Vector3(side * 0.13, HEAD_Y + 0.16, 0.03)
-      ear.rotation.z = side * 0.35
-      add(ear)
-    }
-  } else if (features.earStyle === 'round') {
-    for (const side of [-1, 1]) {
-      const ear = MeshBuilder.CreateSphere(`earRound${side}`, { diameter: 0.14 }, scene)
-      ear.scaling.z = 0.6
-      ear.position = new Vector3(side * 0.15, HEAD_Y + 0.14, 0.02)
-      add(ear)
-    }
-  } else if (features.earStyle === 'tufted') {
-    for (const side of [-1, 1]) {
-      const ear = MeshBuilder.CreateCylinder(
-        `earTufted${side}`,
-        { height: 0.1, diameterTop: 0, diameterBottom: 0.05, tessellation: 3 },
-        scene,
-      )
-      ear.position = new Vector3(side * 0.07, HEAD_Y + 0.18, 0.05)
-      ear.rotation.z = side * 0.2
-      add(ear)
-    }
-  }
-
-  if (features.tailStyle === 'fluffy') {
-    const tail = MeshBuilder.CreateCapsule('tailFluffy', { height: 0.4, radius: 0.075 }, scene)
-    tail.position = new Vector3(0, 0.62, -0.24)
-    tail.rotation.x = -0.9
-    add(tail)
-    const tip = MeshBuilder.CreateSphere('tailFluffyTip', { diameter: 0.14 }, scene)
-    tip.position = new Vector3(0, 0.82, -0.42)
-    add(tip)
-  } else if (features.tailStyle === 'thin') {
-    const tail = MeshBuilder.CreateCapsule('tailThin', { height: 0.32, radius: 0.032 }, scene)
-    tail.position = new Vector3(0, 0.58, -0.22)
-    tail.rotation.x = -0.6
-    add(tail)
-  } else if (features.tailStyle === 'tufted') {
-    const tail = MeshBuilder.CreateCapsule('tailTufted', { height: 0.36, radius: 0.035 }, scene)
-    tail.position = new Vector3(0, 0.6, -0.24)
-    tail.rotation.x = -0.75
-    add(tail)
-    const tip = MeshBuilder.CreateSphere('tailTuftedTip', { diameter: 0.1 }, scene)
-    tip.position = new Vector3(0, 0.78, -0.4)
-    add(tip)
-  }
-
-  if (features.special === 'horn') {
-    const horn = MeshBuilder.CreateCylinder('horn', { height: 0.24, diameterTop: 0, diameterBottom: 0.06, tessellation: 6 }, scene)
-    horn.position = new Vector3(0, HEAD_Y + 0.22, 0.08)
-    horn.rotation.x = -0.3
-    add(horn)
-  } else if (features.special === 'horns') {
-    for (const side of [-1, 1]) {
-      const horn = MeshBuilder.CreateCylinder(
-        `horns${side}`,
-        { height: 0.14, diameterTop: 0, diameterBottom: 0.04, tessellation: 5 },
-        scene,
-      )
-      horn.position = new Vector3(side * 0.09, HEAD_Y + 0.18, 0.06)
-      horn.rotation.z = side * 0.3
-      horn.rotation.x = -0.2
-      add(horn)
-    }
-  } else if (features.special === 'beak') {
-    const beak = MeshBuilder.CreateCylinder('beak', { height: 0.09, diameterTop: 0, diameterBottom: 0.055 }, scene)
-    beak.rotation.x = Math.PI / 2
-    beak.position = new Vector3(0, HEAD_Y - 0.01, 0.16)
-    add(beak)
-  } else if (features.special === 'mane') {
-    const spikeCount = 10
-    for (let s = 0; s < spikeCount; s++) {
-      const angle = (s / spikeCount) * Math.PI * 2
-      const spike = MeshBuilder.CreateCylinder(
-        `mane${s}`,
-        { height: 0.13, diameterTop: 0, diameterBottom: 0.06, tessellation: 3 },
-        scene,
-      )
-      spike.position = new Vector3(Math.cos(angle) * 0.16, HEAD_Y + Math.sin(angle) * 0.1, Math.sin(angle) * 0.05 + 0.02)
-      spike.rotation.z = angle + Math.PI / 2
-      add(spike)
-    }
-  } else if (features.special === 'eyes') {
-    for (const side of [-1, 1]) {
-      const eye = MeshBuilder.CreateSphere(`eyes${side}`, { diameter: 0.1 }, scene)
-      eye.position = new Vector3(side * 0.08, HEAD_Y + 0.13, 0.1)
-      add(eye)
-    }
-  } else if (features.special === 'tentacles') {
-    const tentacleCount = 3
-    for (let t = 0; t < tentacleCount; t++) {
-      const angle = (t / tentacleCount) * Math.PI * 2
-      const tentacle = MeshBuilder.CreateCapsule(`tentacles${t}`, { height: 0.22, radius: 0.028 }, scene)
-      tentacle.position = new Vector3(Math.cos(angle) * 0.14, HEAD_Y - 0.05, Math.sin(angle) * 0.14)
-      tentacle.rotation.x = 0.6
-      add(tentacle)
-    }
-  }
-}
-
-// Chapéu equipado (lab-24) — eixo de customização independente de `applyBonecoFeatures`: guardado
-// em `figure.hatMeshes` (não em `figure.accessories`), pra trocar de criatura não descartar o
-// chapéu e vice-versa. `hat` null = remove qualquer chapéu (descarta as malhas e sai).
-function applyHat(
-  figure: StudentFigure,
-  hat: HatOption | null,
-  scene: Scene,
-  shadowGenerator: ShadowGenerator,
-): void {
-  for (const mesh of figure.hatMeshes) mesh.dispose()
-  figure.hatMeshes = []
-  if (!hat) return
-
-  const hatMat = new PBRMaterial(`hatMat-${hat.id}`, scene)
-  hatMat.albedoColor = new Color3(...hat.colorRgb)
-  hatMat.roughness = 0.6
-
-  function add(mesh: Mesh) {
-    mesh.material = hatMat
-    mesh.parent = figure.root
-    shadowGenerator.addShadowCaster(mesh)
-    figure.hatMeshes.push(mesh)
-    return mesh
-  }
-
-  // Acima do cabelo (hair vai até HEAD_Y+0.24ish, diâmetro 0.35 slice 0.55) — HAT_Y evita
-  // z-fighting com a touca de cabelo por baixo.
-  const HAT_Y = 1.34
-
-  if (hat.shape === 'cap') {
-    const brim = MeshBuilder.CreateCylinder('hatCapBrim', { height: 0.03, diameter: 0.34, tessellation: 16 }, scene)
-    brim.position = new Vector3(0, HAT_Y - 0.06, 0.08)
-    add(brim)
-    const dome = MeshBuilder.CreateSphere('hatCapDome', { diameter: 0.34, slice: 0.55 }, scene)
-    dome.position.y = HAT_Y
-    add(dome)
-  } else if (hat.shape === 'party') {
-    const cone = MeshBuilder.CreateCylinder(
-      'hatPartyCone',
-      { height: 0.32, diameterTop: 0.02, diameterBottom: 0.26, tessellation: 12 },
-      scene,
-    )
-    cone.position.y = HAT_Y + 0.14
-    add(cone)
-    const pom = MeshBuilder.CreateSphere('hatPartyPom', { diameter: 0.07 }, scene)
-    pom.position.y = HAT_Y + 0.31
-    add(pom)
-  } else if (hat.shape === 'flower') {
-    const petalCount = 5
-    for (let p = 0; p < petalCount; p++) {
-      const angle = (p / petalCount) * Math.PI * 2
-      const petal = MeshBuilder.CreateSphere(`hatFlowerPetal${p}`, { diameter: 0.09 }, scene)
-      petal.scaling.y = 0.5
-      petal.position = new Vector3(Math.cos(angle) * 0.08, HAT_Y - 0.02, Math.sin(angle) * 0.08 + 0.1)
-      add(petal)
-    }
-    const center = MeshBuilder.CreateSphere('hatFlowerCenter', { diameter: 0.06 }, scene)
-    center.position = new Vector3(0, HAT_Y - 0.02, 0.1)
-    add(center)
-  } else if (hat.shape === 'bow') {
-    for (const side of [-1, 1]) {
-      const loop = MeshBuilder.CreateBox(`hatBowLoop${side}`, { width: 0.12, height: 0.08, depth: 0.03 }, scene)
-      loop.position = new Vector3(side * 0.07, HAT_Y - 0.04, 0.1)
-      loop.rotation.z = side * 0.5
-      add(loop)
-    }
-    const knot = MeshBuilder.CreateSphere('hatBowKnot', { diameter: 0.05 }, scene)
-    knot.position = new Vector3(0, HAT_Y - 0.04, 0.1)
-    add(knot)
-  } else if (hat.shape === 'crown') {
-    const band = MeshBuilder.CreateCylinder(
-      'hatCrownBand',
-      { height: 0.09, diameterTop: 0.32, diameterBottom: 0.3, tessellation: 16 },
-      scene,
-    )
-    band.position.y = HAT_Y - 0.03
-    add(band)
-    const spikeCount = 5
-    for (let s = 0; s < spikeCount; s++) {
-      const angle = (s / spikeCount) * Math.PI * 2
-      const spike = MeshBuilder.CreateCylinder(
-        `hatCrownSpike${s}`,
-        { height: 0.1, diameterTop: 0, diameterBottom: 0.06, tessellation: 4 },
-        scene,
-      )
-      spike.position = new Vector3(Math.cos(angle) * 0.13, HAT_Y + 0.06, Math.sin(angle) * 0.13)
-      add(spike)
-    }
-  }
-}
-
-// Formato do cabelo (lab-73, pedido do usuário: "o formato do cabelo, pode ser 3 opções") — mesmo
-// padrão de `applyHat` (descarta as peças antigas, monta as novas), mas continua usando
-// `figure.hairMat` (não um material novo por chamada) já que cor de cabelo não é um eixo de
-// customização pedido — só o formato muda.
-function applyHairShape(figure: StudentFigure, shape: HairShape, scene: Scene, shadowGenerator: ShadowGenerator): void {
-  for (const mesh of figure.hairMeshes) mesh.dispose()
-  figure.hairMeshes = []
-
-  function add(mesh: Mesh) {
-    mesh.material = figure.hairMat
-    mesh.parent = figure.root
-    shadowGenerator.addShadowCaster(mesh)
-    figure.hairMeshes.push(mesh)
-    return mesh
-  }
-
-  if (shape === 'moicano') {
-    const fin = MeshBuilder.CreateBox('hairMoicanoFin', { width: 0.05, height: 0.18, depth: 0.3 }, scene)
-    fin.position.y = 1.32
-    add(fin)
-    const sides = MeshBuilder.CreateSphere('hairMoicanoSides', { diameter: 0.33, slice: 0.4 }, scene)
-    sides.position.y = 1.22
-    add(sides)
-  } else if (shape === 'longo') {
-    const top = MeshBuilder.CreateSphere('hairLongoTop', { diameter: 0.35, slice: 0.55 }, scene)
-    top.position.y = 1.24
-    add(top)
-    // Rabo/franja caindo pelas costas — cápsula inclinada, mais estreita embaixo (escala não
-    // uniforme) pra não parecer um cilindro reto.
-    const back = MeshBuilder.CreateCapsule('hairLongoBack', { height: 0.34, radius: 0.1 }, scene)
-    back.scaling = new Vector3(0.75, 1, 0.5)
-    back.rotation.x = 0.2
-    back.position = new Vector3(0, 1.03, -0.14)
-    add(back)
-  } else {
-    const hair = MeshBuilder.CreateSphere('hair', { diameter: 0.35, slice: 0.55 }, scene)
-    hair.position.y = 1.24
-    add(hair)
-  }
 }
 
 // Bichinhos que vagam pelo planeta (pedido do usuário: "animais no mundo, animais aleatorios")
@@ -1675,7 +1488,7 @@ function buildRocketVehicle(scene: Scene, shadowGenerator: ShadowGenerator): Tra
 // Entrada de caverna em Marte (lab-59, pedido do usuário: "o outro planeta é Marte... o que tem
 // lá são cavernas") — dois montes de rocha (silhueta irregular, não uma bola perfeita) com uma
 // "boca" escura encostada na face de um deles. Sem `shadowGenerator`/shadow caster de propósito,
-// igual ao resto da decoração de Marte (ver comentário em `buildSecondPlanetIfNeeded`) — só
+// igual ao resto da decoração de Marte (ver comentário em `buildMarsIfNeeded`) — só
 // primitivas, sem asset externo, mesmo padrão do resto do jogo.
 function buildCaveEntrance(scene: Scene): TransformNode {
   const root = new TransformNode('caveRoot', scene)
@@ -2084,11 +1897,21 @@ export function World3D({
   progress,
   onSelectQuest,
   onSelectSurpriseQuiz,
+  onSelectPlanetQuest,
   onOpenHelp,
   onOpenQuestList,
   onOpenShop,
+  onOpenPairing,
+  onOpenAchievements,
+  onOpenMyHouse,
+  onUnlockMarsReward,
+  onFindTreasureChest,
   onCollectCoin,
+  onSwitchProfile,
   suspendTriggers,
+  placingFurnitureRequestId,
+  onPlacingRequestHandled,
+  onFurniturePlaced,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
@@ -2113,8 +1936,22 @@ export function World3D({
   const suspendRef = useRef(suspendTriggers)
   const onSelectQuestRef = useRef(onSelectQuest)
   const onSelectSurpriseQuizRef = useRef(onSelectSurpriseQuiz)
+  const onSelectPlanetQuestRef = useRef(onSelectPlanetQuest)
+  const onOpenAchievementsRef = useRef(onOpenAchievements)
+  const onOpenMyHouseRef = useRef(onOpenMyHouse)
+  const onUnlockMarsRewardRef = useRef(onUnlockMarsReward)
+  const onFindTreasureChestRef = useRef(onFindTreasureChest)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
+  const onFurniturePlacedRef = useRef(onFurniturePlaced)
+  // lab-136: espelha o item sendo posicionado pra fora do loop de física (Confirmar/Cancelar são
+  // botões React normais, não Babylon GUI — mesmo raciocínio de `survivalPlanetId`/
+  // `survivalTimeRef` acima: o closure do loop precisa de um valor ATUAL a cada quadro (por isso
+  // `placingFurnitureIdRef`, não o `useState` sozinho, que ficaria congelado no valor da montagem
+  // dentro de um `useEffect` de dependências `[]`), e a UI precisa de um valor que dispare
+  // re-render (por isso o `useState` também, só espelhado).
+  const placingFurnitureIdRef = useRef<string | null>(null)
+  const [placingFurnitureUi, setPlacingFurnitureUi] = useState<string | null>(null)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
   const [muted, setMuted] = useState(false)
@@ -2132,11 +1969,25 @@ export function World3D({
   const [marsHealthDisplay, setMarsHealthDisplay] = useState(MARS_MAX_HEALTH)
   const [onMarsCombatZone, setOnMarsCombatZone] = useState(false)
   const [marsDeathMessage, setMarsDeathMessage] = useState<string | null>(null)
+  // Baús de tesouro escondidos (lab-131) — mesmo padrão de aviso transitório de `marsDeathMessage`
+  // acima (some sozinho depois de alguns segundos), mas sem barra/estado de "zona" nenhum: é só um
+  // achado pontual de exploração.
+  const [treasureFoundMessage, setTreasureFoundMessage] = useState<string | null>(null)
   // Contagem de marcianos vivos (lab-65, pedido do usuário: "ao chegar em Marte teve ter uma
   // informação de quantos marcianos tem no planeta") — espelha `marsEnemies.filter(alive).length`
   // (calculado no laço de física, que já percorre esse array todo quadro pra IA) só quando o
   // valor muda, evitando re-render a cada quadro por um número que só muda ao nocautear alguém.
   const [marsEnemyCount, setMarsEnemyCount] = useState(0)
+  // Cronômetro de sobrevivência (lab-129) — mesmo padrão de `marsHealthRef`/`marsHealthDisplay`:
+  // `survivalTimeRef` é a fonte de verdade (lida/escrita direto pelo laço de física),
+  // `survivalTimeDisplay` só espelha (arredondado, ver `lastSurvivalTimeDisplayRef`) pra não
+  // re-renderizar 60×/segundo enquanto o cronômetro dreia. `survivalPlanetId` (não só um booleano)
+  // guarda QUAL planeta, pro ícone certo (calor/frio) na UI.
+  const survivalTimeRef = useRef(SURVIVAL_TIMER_MAX)
+  const lastSurvivalTimeDisplayRef = useRef(SURVIVAL_TIMER_MAX)
+  const [survivalTimeDisplay, setSurvivalTimeDisplay] = useState(SURVIVAL_TIMER_MAX)
+  const [survivalPlanetId, setSurvivalPlanetId] = useState<string | null>(null)
+  const [survivalDeathMessage, setSurvivalDeathMessage] = useState<string | null>(null)
   // Alerta de perigo (lab-65, pedido do usuário: "estar dentro de um raio de distância deles um
   // alerta de perigo ser emitido, com algum efeito em vermelho na tela") — manipulado direto no
   // DOM pelo laço de física (mesmo padrão de `debugRef`), não por `useState`: a intensidade
@@ -2161,6 +2012,13 @@ export function World3D({
   const [hasSword, setHasSword] = useState(false)
   const [hasGun, setHasGun] = useState(false)
   const [bagOpen, setBagOpen] = useState(false)
+  // Seletor de planeta-destino (lab-110) — aberto de dentro do closure de `setup()`
+  // (`handleInteractPress`, mesmo padrão de `setWeaponMessage` já chamado direto de lá), fechado
+  // ao escolher um planeta ou cancelar. `boardRocketToRef` é a ponte inversa (React → closure):
+  // `setup()` atribui a função de verdade depois de definir `boardRocket`, o painel só chama essa
+  // ref, sem precisar conhecer nada da cena 3D.
+  const [planetPickerOpen, setPlanetPickerOpen] = useState(false)
+  const boardRocketToRef = useRef<(planetId: string) => void>(() => {})
   const [selectedWeapon, setSelectedWeapon] = useState<'sword' | 'gun' | null>(null)
   // Mesmo padrão de `hasSwordRef`/`hasGunRef` acima — lido direto por `handleInteractPress`
   // (dentro do closure de `setup()`) sem esperar re-render.
@@ -2174,8 +2032,25 @@ export function World3D({
   suspendRef.current = suspendTriggers
   onSelectQuestRef.current = onSelectQuest
   onSelectSurpriseQuizRef.current = onSelectSurpriseQuiz
+  onSelectPlanetQuestRef.current = onSelectPlanetQuest
+  onOpenAchievementsRef.current = onOpenAchievements
+  onOpenMyHouseRef.current = onOpenMyHouse
+  onUnlockMarsRewardRef.current = onUnlockMarsReward
+  onFindTreasureChestRef.current = onFindTreasureChest
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
+  onFurniturePlacedRef.current = onFurniturePlaced
+
+  // lab-136: entra no modo de posicionamento de mobília sempre que `App.tsx` pede um id novo
+  // (clique em "Mover" no `MyHousePanel`, que fica fora deste componente) — mesmo padrão de
+  // `__refreshHouseFurniture`/`unlockedFurnitureIds` acima. Confirma o consumo do pedido de volta
+  // pra `App.tsx` (`onPlacingRequestHandled`) senão o MESMO id reabriria o modo de novo a cada
+  // re-render deste componente (ex.: qualquer outra mudança de `progress`).
+  useEffect(() => {
+    if (!placingFurnitureRequestId) return
+    ;(sceneRef.current as any)?.__startFurniturePlacement?.(placingFurnitureRequestId)
+    onPlacingRequestHandled()
+  }, [placingFurnitureRequestId, onPlacingRequestHandled])
 
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()
@@ -2188,6 +2063,10 @@ export function World3D({
   useEffect(() => {
     ;(sceneRef.current as any)?.__setPlayerHat?.(profile.equippedHatId)
   }, [profile.equippedHatId])
+
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__setPlayerGlasses?.(profile.equippedGlassesId)
+  }, [profile.equippedGlassesId])
 
   // Espada/arma visível na mão conforme a seleção da mochila (lab-76) — mesmo padrão do chapéu
   // acima, só que a fonte não é `profile` (persistido), é o estado local `selectedWeapon`.
@@ -2216,6 +2095,19 @@ export function World3D({
   useEffect(() => {
     ;(sceneRef.current as any)?.__setPlayerHairShape?.(profile.equippedHairShapeId)
   }, [profile.equippedHairShapeId])
+
+  // lab-123: reaplica visibilidade da mobília dentro de casa assim que uma compra muda
+  // `unlockedFurnitureIds` — sem isso, o jogador só veria o móvel novo depois de sair e voltar.
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__refreshHouseFurniture?.()
+  }, [progress.unlockedFurnitureIds])
+
+  // lab-129: responder uma escolinha de planeta devolve tempo ao cronômetro de sobrevivência (se
+  // o jogador estiver num planeta com cronômetro) — mesmo padrão de bridge de
+  // `__refreshHouseFurniture` acima, disparado sempre que `completedPlanetQuestIds` muda.
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__onPlanetQuestCompleted?.()
+  }, [progress.completedPlanetQuestIds])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -2269,8 +2161,16 @@ export function World3D({
     // lab-72 — 1.2x (lab-70) não bastou: usuário mandou um screenshot real do Poco C75 mostrando
     // nomes/legendas dos personagens ainda ilegíveis, com FPS já bom (25) e sobra pra gastar mais
     // com texto maior. Subiu pra 1.6x.
+    // lab-87 — pedido do usuário voltou, mas agora sem citar um aparelho específico ("legenda dos
+    // objetos e NPC está com baixa qualidade... aumentar a fonte, na escala 1.40"): até aqui só
+    // celular (`isSmallScreen`) recebia qualquer aumento — tablet/desktop sempre saíam no tamanho
+    // base (18-32px), pequeno pra um rótulo 3D visto de longe. `READABILITY_SCALE` aplica o 1.4x
+    // pedido em CIMA do que já existe, pra todo aparelho, sem mexer no ajuste de celular já
+    // validado nos labs 67-72.
+    const READABILITY_SCALE = 1.4
     function mobileFontSize(px: number): number {
-      return isSmallScreen ? Math.round(px * 1.6) : px
+      const deviceScale = isSmallScreen ? 1.6 : 1
+      return Math.round(px * deviceScale * READABILITY_SCALE)
     }
 
     const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
@@ -2337,6 +2237,17 @@ export function World3D({
     const shadowGenerator = new ShadowGenerator(isLowEndDevice ? 512 : 1024, sunLight)
     shadowGenerator.useBlurExponentialShadowMap = !isLowEndDevice
     shadowGenerator.blurKernel = 32
+    // lab-87, pedido do usuário: "manchas pretas ao caminhar" no chão do planeta. Suspeita: shadow
+    // acne — o planeta é uma esfera deformada com relevo real (curvatura contínua, normais mudando
+    // o tempo todo), e sem bias o mapa de sombra compara profundidade contra a própria superfície
+    // que a gerou, autossombreando pixels que deveriam estar totalmente iluminados; o artefato muda
+    // de posição/aparece e some conforme o ângulo câmera-luz muda — bate com "ao caminhar". Mais
+    // visível em dispositivo fraco (`isLowEndDevice`), que cai pro shadow map padrão sem blur (mais
+    // sujeito a esse artefato que o `useBlurExponentialShadowMap` do resto). `normalBias` importa
+    // mais que `bias` aqui — desloca a amostra na direção da normal, o que compensa a curvatura
+    // contínua do terreno melhor que só afastar ao longo da direção da luz.
+    shadowGenerator.bias = 0.001
+    shadowGenerator.normalBias = 0.035
     // Sombra dinâmica é barata por caster individual, mas o jogo tem ~1900 meshes e quase todo
     // builder (props, pedras, bichos, moedas, degraus) chama addShadowCaster — em GPU fraca isso
     // some ainda mais rápido que o próprio SSAO. Em vez de caçar e editar cada um dos ~40 pontos
@@ -2364,6 +2275,10 @@ export function World3D({
     const portalMeshes: { quest: (typeof quests)[number]; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
     const remotePlayers = new Map<string, RemotePlayer>()
     let netSendTimer = 0
+    let lastSentPos: Vector3 | null = null
+    let lastSentFacing: Vector3 | null = null
+    let lastSentAppearanceKey = ''
+    let lastNetSendMs = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
     // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
@@ -2378,6 +2293,18 @@ export function World3D({
     // de teclado da tecla `e` (ver `onKeyDown`), lido pelo loop de física/câmera do avatar (pra
     // se congelar) e pelo loop dos carros (pra saber qual pular da IA e mover por input).
     let drivingCar: Carro | null = null
+    // Sentado na carteira de estudos (lab-93) — mesmo espírito de `drivingCar`: congela o corpo
+    // físico e a pose do boneco (sem recalcular o ciclo de caminhada), setado ao disparar o
+    // gatilho de proximidade da carteira, limpo quando o jogador se afasta o suficiente (ver
+    // `RESET_DISTANCE` no loop de física). Ao contrário do carro, não precisa de tecla `E`/estado
+    // de "qual carro" — só um boolean, porque só existe uma carteira no mundo.
+    let sittingAtDesk = false
+    // Brinde de Marte (lab-94) — "já concedeu o brinde NESTA visita" (evita chamar
+    // `onUnlockMarsRewardRef` a cada quadro enquanto o jogador fica parado com os 6 inimigos já
+    // mortos). Resetado junto com os inimigos a cada nova chegada em Marte, mesmo ponto do
+    // lab-64 — `unlockMarsReward` (state/progression.ts) já é idempotente por conta própria, esta
+    // flag é só pra não gastar `saveProgress`/re-render à toa a cada quadro depois da primeira vez.
+    let marsClearedThisVisit = false
     // Reaproveitado a cada quadro pra checar "grounded" via raycast físico real (ver comentário
     // onde é usado) — evita alocar um objeto novo por quadro.
     const groundRayResult = new PhysicsRaycastResult()
@@ -2391,10 +2318,48 @@ export function World3D({
     // sistema de física continua igual, sem saber que existe um segundo planeta.
     let currentWorldCenter = Vector3.Zero()
     let currentGroundBaseFn: (localUp: Vector3) => number = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
-    let onSecondPlanet = false
-    let secondPlanetBuilt = false
+    // Qual planeta-destino o jogador está agora (lab-110) — `null` = planeta principal (Terra).
+    // Substitui o antigo `onSecondPlanet: boolean` (só sabia dizer "em Marte ou não"); qualquer
+    // checagem MARA-ESPECÍFICA (combate/inimigos/anel sonoro) agora compara
+    // `currentPlanetId === 'marte'` em vez de ler esse booleano — o resto do jogo (gravidade
+    // radial, física, embarque/pouso) só precisa saber "estou em algum planeta-destino ou não",
+    // ou seja, `currentPlanetId !== null`.
+    let currentPlanetId: string | null = null
+    // Interior da casa (lab-123) — deliberadamente NÃO usa `currentPlanetId`: entrar na própria
+    // casa não muda "em que planeta você está" (é um espaço pessoal dentro do mesmo planetinha),
+    // só sobrescreve `currentWorldCenter`/`currentGroundBaseFn` temporariamente (mesmo mecanismo
+    // de gravidade radial acima, tratando o interior como mais um "planetinha" de raio grande).
+    let insideHouseInterior = false
+    let houseInteriorBuilt = false
+    // Restaurados ao sair (ver `exitHouseInterior`) — a casa nunca muda `currentPlanetId` (ver
+    // comentário acima), então "fora" é sempre onde o jogador estava exatamente antes de entrar.
+    let savedOutsideCenter = Vector3.Zero()
+    let savedOutsideGroundFn: (localUp: Vector3) => number = currentGroundBaseFn
+    let houseDoorInsidePos = Vector3.Zero()
+    let houseInteriorSpawnPos = Vector3.Zero()
+    let houseCounterPos = Vector3.Zero()
+    let houseExitHintLabel: TextBlock | null = null
+    let houseEnterHintLabel: TextBlock | null = null
+    const houseFurnitureNodes: Record<string, TransformNode> = {}
+    // Posicionamento manual de mobília (lab-136) — `placingFurnitureId` é a fonte de verdade LIDA
+    // pelo loop de física a cada quadro (mesmo padrão de `sittingAtDesk`/`drivingCar` acima: um
+    // `let` do closure, não o `useState` React, que só re-renderiza — não muda o valor que o
+    // closure enxerga entre um `useEffect` e o próximo). `placingFurnitureStartSnapshot` guarda
+    // onde a peça estava ANTES de entrar no modo (posição salva OU posição padrão do anel),
+    // restaurado ao cancelar — evita ter que "lembrar" separadamente qual era o padrão de cada
+    // item.
+    let placingFurnitureId: string | null = null
+    let placingFurnitureStartSnapshot: { x: number; z: number; rotY: number } | null = null
+    // Referência hoisted da sala (lab-136) — construída dentro de `buildHouseInteriorIfNeeded()`,
+    // mas o desvanecimento de parede por oclusão de câmera (mais abaixo, no loop de física) e o
+    // clamp de posição do modo de posicionamento precisam dela fora daquela função.
+    let houseInteriorRootNode: TransformNode | null = null
+    const houseWallMats: Record<string, PBRMaterial> = {}
+    const builtPlanetIds = new Set<string>()
     let mainRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
-    let secondPlanetReturnRocket: { root: TransformNode; hintLabel: TextBlock } | null = null
+    // Um foguete de volta por planeta-destino já visitado (lab-110) — substitui a variável única
+    // `secondPlanetReturnRocket` de quando só existia Marte.
+    const returnRockets = new Map<string, { root: TransformNode; hintLabel: TextBlock }>()
     // Espada/arma (lab-61) — construídas uma vez em `setup()`, lidas pelo laço de física (giro de
     // exibição + detecção de "pegou o item") e por `handleInteractPress` (combate em Marte).
     let swordPickup: { root: TransformNode; label: TextBlock } | null = null
@@ -2419,7 +2384,7 @@ export function World3D({
     // Piloto do foguete (lab-59, pedido do usuário: "o lance da viagem do foguete é o boneco
     // entrar no foguete, deve ter como controlar como tem no carro... ir pra trás e pra frente
     // com as setas... e viajar pelo espaço entre os dois planetas") — os dois foguetes das
-    // plataformas (`mainRocket`/`secondPlanetReturnRocket`) ficam sempre parados, servindo só de
+    // plataformas (`mainRocket`/`returnRockets`) ficam sempre parados, servindo só de
     // ponto de embarque/desembarque; `flyingRocket` é o veículo visual usado durante o trecho
     // voando (construído uma vez em `setup()`, escondido até embarcar). `progress` vai de 0
     // (ponto de partida) a 1 (ponto de chegada) ao longo de uma curva fixa entre as duas
@@ -2431,13 +2396,20 @@ export function World3D({
       c1: Vector3
       c2: Vector3
       p1: Vector3
-      toSecondPlanet: boolean
+      // `null` = planeta principal (Terra); lab-110, substitui o antigo `toSecondPlanet: boolean`.
+      toPlanetId: string | null
       // Rotação de "repouso" da nave em cada ponta (a mesma que `alignmentQuaternion` dá ao
       // foguete parado numa plataforma — nariz apontando pra longe do planeta). Usada nas DUAS
       // pontas do voo: decolagem trava nela (`fromRestQuat`), pouso converge pra ela
       // (`toRestQuat`) — motores (cauda) na frente descendo, como um pouso de foguete de verdade.
       fromRestQuat: Quaternion
       toRestQuat: Quaternion
+      // "Pra cima" local de cada plataforma (lab-116) — mesmos vetores já usados em `boardRocket`
+      // pra construir `fromRestQuat`/`toRestQuat` e os pontos de controle da curva, guardados
+      // aqui pra a câmera não precisar redescobri-los a partir do quaternion durante as fases de
+      // repouso (decolagem/flip de pouso, ver laço de física/câmera mais abaixo).
+      fromUp: Vector3
+      toUp: Vector3
       // Capturada na hora que o voo entra na fase de pouso (ver `holdFlipHoldCurve`/laço de voo
       // mais abaixo) — de onde o "flip" pra orientação de pouso começa a interpolar. `null` até
       // lá; type real é `Quaternion`, mas começa vazia porque só existe a partir desse instante.
@@ -2446,9 +2418,18 @@ export function World3D({
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
     let rocketFlameSystem: ParticleSystem | null = null
-    // Inimigos de Marte (lab-60) — populado dentro de `buildSecondPlanetIfNeeded`, lido/mutado
-    // pelo laço de IA/combate por quadro (só roda quando `onSecondPlanet` é verdadeiro).
+    // Inimigos de Marte (lab-60) — populado dentro de `buildMarsIfNeeded`, lido/mutado pelo laço
+    // de IA/combate por quadro (só roda quando `currentPlanetId === 'marte'`).
     const marsEnemies: MarsEnemy[] = []
+    // Pote de moedas na base alienígena (lab-128, pedido do usuário: "em marte ao vencer os ets
+    // deve aparecer um pote de moedas na base de ets") — construído sempre (junto da estação),
+    // mas só fica visível/coletável depois de Marte limpo (mesmo espírito de "construir sempre,
+    // mostrar condicionalmente" já usado noutros lugares deste arquivo). `worldPos`/`pivot`
+    // preenchidos por `buildMarsIfNeeded`.
+    let marsCoinPotPivot: TransformNode | null = null
+    let marsCoinPotLabelRef: TextBlock | null = null
+    let marsCoinPotWorldPos = Vector3.Zero()
+    let marsCoinPotCollected = false
     if (import.meta.env.DEV) {
       ;(window as any).__jumpDebug = () => ({ jumpRequested, spaceDown: !!keysDown[' '], keysDown: { ...keysDown } })
     }
@@ -2536,24 +2517,25 @@ export function World3D({
       // entrar no foguete, deve ter como controlar como tem no carro... e viajar pelo espaço
       // entre os dois planetas") — parenteia o boneco no foguete voador (igual ao carro), define
       // a curva fixa entre a plataforma de partida e a de chegada, e entra em modo de pilotagem.
-      // O planetinha secundário já é construído aqui (não só ao chegar) — precisa existir pro
-      // foguete de chegada (`toRocket`) ter uma posição real pra mirar.
-      function boardRocket() {
+      // O planeta de destino já é construído aqui (não só ao chegar) — precisa existir pro
+      // foguete de chegada (`toRocket`) ter uma posição real pra mirar. `toPlanetId: null` =
+      // voltando pro planeta principal (lab-110, generaliza o antigo par fixo Terra/Marte pra
+      // qualquer quantidade de planetas-destino).
+      function boardRocket(toPlanetId: string | null) {
         if (!avatarMesh || !avatarBody || !flyingRocket) return
-        if (!onSecondPlanet) buildSecondPlanetIfNeeded()
-        const toSecondPlanet = !onSecondPlanet
-        const fromRocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
-        const toRocket = onSecondPlanet ? mainRocket : secondPlanetReturnRocket
+        if (toPlanetId) buildPlanetIfNeeded(toPlanetId)
+        const fromRocket = currentPlanetId ? returnRockets.get(currentPlanetId) ?? null : mainRocket
+        const toRocket = toPlanetId ? returnRockets.get(toPlanetId) ?? null : mainRocket
         if (!fromRocket || !toRocket) return
 
         const p0 = fromRocket.root.getAbsolutePosition().clone()
         const p1 = toRocket.root.getAbsolutePosition().clone()
-        // "Pra cima" local de cada plataforma (a direção que o próprio foguete parado aponta,
-        // ver `alignmentQuaternion(ROCKET_LAUNCH_DIR)`/`alignmentQuaternion(SECOND_PLANET_LANDING_UP)`
-        // usados ao construir as plataformas) — os pontos de controle da cúbica saem exatamente
-        // nessa direção, garantindo decolagem/pouso na vertical em vez de um ângulo genérico.
-        const fromUp = onSecondPlanet ? SECOND_PLANET_LANDING_UP : ROCKET_LAUNCH_DIR
-        const toUp = toSecondPlanet ? SECOND_PLANET_LANDING_UP : ROCKET_LAUNCH_DIR
+        // "Pra cima" local de cada plataforma (a direção que o próprio foguete parado aponta, ver
+        // `alignmentQuaternion` usado ao construir cada plataforma) — os pontos de controle da
+        // cúbica saem exatamente nessa direção, garantindo decolagem/pouso na vertical em vez de
+        // um ângulo genérico.
+        const fromUp = currentPlanetId ? DESTINATION_PLANETS[currentPlanetId].landingUp : ROCKET_LAUNCH_DIR
+        const toUp = toPlanetId ? DESTINATION_PLANETS[toPlanetId].landingUp : ROCKET_LAUNCH_DIR
         const c1 = p0.add(fromUp.scale(ROCKET_ARC_HEIGHT))
         const c2 = p1.add(toUp.scale(ROCKET_ARC_HEIGHT))
 
@@ -2563,7 +2545,19 @@ export function World3D({
         // PRÓPRIO primeiro quadro do voo, desfazendo o embarque na hora, antes de qualquer input.
         const fromRestQuat = alignmentQuaternion(fromUp)
         const toRestQuat = alignmentQuaternion(toUp)
-        drivingRocket = { progress: 0.001, p0, c1, c2, p1, toSecondPlanet, fromRestQuat, toRestQuat, flipStartQuat: null }
+        drivingRocket = {
+          progress: 0.001,
+          p0,
+          c1,
+          c2,
+          p1,
+          toPlanetId,
+          fromRestQuat,
+          toRestQuat,
+          flipStartQuat: null,
+          fromUp,
+          toUp,
+        }
         flyingRocket.setEnabled(true)
         flyingRocket.position.copyFrom(p0)
         // Começa com a MESMA rotação da plataforma parada (`alignmentQuaternion(fromUp)`, igual
@@ -2573,9 +2567,10 @@ export function World3D({
         startRocketEngine()
         if (rocketFlameSystem) rocketFlameSystem.emitRate = 80
         // Aviso ao decolar rumo a Marte sem os dois itens de combate (lab-61, pedido do usuário:
-        // "dê dicas de como encontrar a espada e a arma senão não tem como sobreviver") — só na
-        // ida (`toSecondPlanet`), não faz sentido avisar na volta pro planeta principal.
-        if (toSecondPlanet && (!hasSwordRef.current || !hasGunRef.current)) {
+        // "dê dicas de como encontrar a espada e a arma senão não tem como sobreviver") — só
+        // indo pra Marte especificamente (lab-110: os outros planetas-destino não têm combate
+        // nenhum, o aviso não faria sentido lá).
+        if (toPlanetId === 'marte' && (!hasSwordRef.current || !hasGunRef.current)) {
           setWeaponMessage(
             'Cuidado: você ainda não achou a Espada e/ou a Arma a Laser na Terra — sem elas, não dá pra nocautear o ET e o robô em Marte!',
           )
@@ -2601,58 +2596,86 @@ export function World3D({
         studentFigure.elbowPivotR.rotation.x = 0.6
         fromRocket.hintLabel.alpha = 0
       }
+      // Ponte React → closure (lab-110) — o `PlanetPickerPanel` (fora deste closure) chama isto
+      // pra decolar rumo ao planeta escolhido, sem precisar conhecer `boardRocket`/estado da cena.
+      boardRocketToRef.current = (planetId: string) => boardRocket(planetId)
 
       // Pousa ao alcançar qualquer uma das duas pontas do voo (lab-59) — mesma lógica de
       // teleporte/troca de planeta do lab-58, só que disparada pelo fim da viagem pilotada em vez
       // de instantaneamente ao apertar E.
       function landRocket() {
         if (!drivingRocket || !flyingRocket) return
-        // `progress` 1 = chegou no destino (`toSecondPlanet` diz qual é); `progress` 0 = voltou
-        // pro ponto de partida (desistiu no meio do caminho, empurrando o acelerador pra trás até
-        // o início de novo) — nesse caso o pouso é no planeta de ORIGEM, o oposto do destino.
+        // `progress` 1 = chegou no destino (`toPlanetId` diz qual é); `progress` 0 = voltou pro
+        // ponto de partida (desistiu no meio do caminho, empurrando o acelerador pra trás até o
+        // início de novo) — nesse caso o pouso é no planeta de ORIGEM, o oposto do destino.
+        // `currentPlanetId` ainda não mudou neste ponto (só muda mais abaixo), então já é a
+        // origem certa pro caso de desistência (lab-110, generaliza o antigo
+        // `!drivingRocket.toSecondPlanet`, que só sabia alternar entre dois planetas fixos).
         const arrivedAtDestination = drivingRocket.progress >= 1
-        const arrivedAtSecondPlanet = arrivedAtDestination ? drivingRocket.toSecondPlanet : !drivingRocket.toSecondPlanet
+        const arrivedPlanetId = arrivedAtDestination ? drivingRocket.toPlanetId : currentPlanetId
         flyingRocket.setEnabled(false)
         studentFigure.root.parent = null
         drivingRocket = null
         stopRocketEngine()
         if (rocketFlameSystem) rocketFlameSystem.emitRate = 0
 
-        if (arrivedAtSecondPlanet) {
-          onSecondPlanet = true
-          currentWorldCenter = SECOND_PLANET_CENTER
-          currentGroundBaseFn = () => SECOND_PLANET_RADIUS
-          teleportAvatarTo(
-            SECOND_PLANET_CENTER,
-            offsetLandingUp(SECOND_PLANET_LANDING_UP, SECOND_PLANET_RADIUS, 1.8),
-            currentGroundBaseFn,
-          )
-          // Vida cheia a cada nova ida a Marte (lab-60) — cada expedição começa do zero, não
-          // carrega dano de uma visita anterior.
-          marsHealthRef.current = MARS_MAX_HEALTH
-          setMarsHealthDisplay(MARS_MAX_HEALTH)
-          setOnMarsCombatZone(true)
-          // Novos marcianos a cada chegada em Marte (lab-64, pedido do usuário: "se voltar pra
-          // marte, tem que ter novos marcianos pra matar, senão o planeta fica vazio") — sem
-          // isso, inimigos já nocauteados numa visita anterior ficavam mortos pra sempre (o
-          // array é reaproveitado, nunca recriado), deixando o planeta esvaziado depois da
-          // primeira exploração. Reaparecem no próprio ponto de nascimento (`homeUp`), com o
-          // mesmo estado inicial de repouso — cobre tanto "voltar depois de nocauteado" quanto
-          // "voltar de novo por escolha própria depois de já ter limpado o planeta".
-          for (const enemy of marsEnemies) {
-            enemy.alive = true
-            enemy.up = enemy.homeUp.clone()
-            enemy.targetUp = enemy.homeUp.clone()
-            enemy.forward = Vector3.Cross(enemy.homeUp, Vector3.Right()).normalize()
-            enemy.restTimer = Math.random() * 2
-            enemy.attackCooldown = 0
-            enemy.lungeTimer = 0
-            enemy.root.position = enemy.homeUp.scale(SECOND_PLANET_RADIUS)
-            enemy.root.rotationQuaternion = alignmentQuaternion(enemy.homeUp)
-            enemy.root.setEnabled(true)
+        if (arrivedPlanetId) {
+          const planet = DESTINATION_PLANETS[arrivedPlanetId]
+          currentPlanetId = arrivedPlanetId
+          currentWorldCenter = planet.center
+          currentGroundBaseFn = () => planet.radius
+          teleportAvatarTo(planet.center, offsetLandingUp(planet.landingUp, planet.radius, 1.8), currentGroundBaseFn)
+
+          // Combate só existe em Marte (lab-110, confirmado com o usuário: os outros
+          // planetas-destino são só exploração + moedas escondidas, sem inimigo nenhum).
+          if (arrivedPlanetId === 'marte') {
+            // Vida cheia a cada nova ida a Marte (lab-60) — cada expedição começa do zero, não
+            // carrega dano de uma visita anterior.
+            marsHealthRef.current = MARS_MAX_HEALTH
+            setMarsHealthDisplay(MARS_MAX_HEALTH)
+            setOnMarsCombatZone(true)
+            // Novos marcianos a cada chegada em Marte (lab-64, pedido do usuário: "se voltar pra
+            // marte, tem que ter novos marcianos pra matar, senão o planeta fica vazio") — sem
+            // isso, inimigos já nocauteados numa visita anterior ficavam mortos pra sempre (o
+            // array é reaproveitado, nunca recriado), deixando o planeta esvaziado depois da
+            // primeira exploração. Reaparecem no próprio ponto de nascimento (`homeUp`), com o
+            // mesmo estado inicial de repouso — cobre tanto "voltar depois de nocauteado" quanto
+            // "voltar de novo por escolha própria depois de já ter limpado o planeta".
+            for (const enemy of marsEnemies) {
+              enemy.alive = true
+              enemy.up = enemy.homeUp.clone()
+              enemy.targetUp = enemy.homeUp.clone()
+              enemy.forward = Vector3.Cross(enemy.homeUp, Vector3.Right()).normalize()
+              enemy.restTimer = Math.random() * 2
+              enemy.attackCooldown = 0
+              enemy.lungeTimer = 0
+              enemy.root.position = enemy.homeUp.scale(SECOND_PLANET_RADIUS)
+              enemy.root.rotationQuaternion = alignmentQuaternion(enemy.homeUp)
+              enemy.root.setEnabled(true)
+            }
+            // lab-94: nova visita, nova chance de o jogador limpar o planeta de novo — a flag
+            // local só evita chamadas repetidas dentro da MESMA visita, não deve sobreviver a esta.
+            marsClearedThisVisit = false
+            // lab-128: pote de moedas também reseta a cada nova visita — mesmo espírito de
+            // "voltar de novo por escolha própria depois de já ter limpado o planeta" acima.
+            marsCoinPotCollected = false
+            marsCoinPotPivot?.setEnabled(false)
+            if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = false
+            setSurvivalPlanetId(null)
+          } else if (planet.hasSurvivalTimer) {
+            // lab-129: cronômetro cheio a cada nova chegada — mesmo espírito de "vida cheia a
+            // cada nova ida a Marte" acima, cada expedição começa do zero.
+            survivalTimeRef.current = SURVIVAL_TIMER_MAX
+            lastSurvivalTimeDisplayRef.current = SURVIVAL_TIMER_MAX
+            setSurvivalTimeDisplay(SURVIVAL_TIMER_MAX)
+            setSurvivalPlanetId(arrivedPlanetId)
+            setOnMarsCombatZone(false)
+          } else {
+            setOnMarsCombatZone(false)
+            setSurvivalPlanetId(null)
           }
         } else {
-          onSecondPlanet = false
+          currentPlanetId = null
           currentWorldCenter = Vector3.Zero()
           currentGroundBaseFn = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
           teleportAvatarTo(
@@ -2661,6 +2684,7 @@ export function World3D({
             currentGroundBaseFn,
           )
           setOnMarsCombatZone(false)
+          setSurvivalPlanetId(null)
         }
       }
 
@@ -2743,7 +2767,7 @@ export function World3D({
       // (`boardRocket`/`handleInteractPress`), "precisa voltar de foguete" já sai satisfeito de
       // graça — não precisa de nenhum bloqueio adicional.
       function respawnFromMarsDeath() {
-        onSecondPlanet = false
+        currentPlanetId = null
         currentWorldCenter = Vector3.Zero()
         currentGroundBaseFn = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
         teleportAvatarTo(Vector3.Zero(), offsetLandingUp(ROCKET_LAUNCH_DIR, PLANET_RADIUS, 2.2), currentGroundBaseFn)
@@ -2753,6 +2777,42 @@ export function World3D({
         playKnockedOut()
         setMarsDeathMessage('Nocauteado! Volte de foguete pra continuar explorando Marte.')
         window.setTimeout(() => setMarsDeathMessage(null), 4000)
+      }
+
+      // Cronômetro de sobrevivência zerado (lab-129) — mesmo teleporte de "pouso no planeta
+      // principal" já usado por `respawnFromMarsDeath`, sem precisar do foguete. Mensagem
+      // diferente por planeta (calor em Mercúrio, frio nos demais) — pedido do usuário:
+      // "planetas quentes como mercurio e os mais longes como netuno".
+      function respawnFromSurvivalTimeout(planetId: string) {
+        const planet = DESTINATION_PLANETS[planetId]
+        currentPlanetId = null
+        currentWorldCenter = Vector3.Zero()
+        currentGroundBaseFn = (localUp) => PLANET_RADIUS + terrainHeight(localUp)
+        teleportAvatarTo(Vector3.Zero(), offsetLandingUp(ROCKET_LAUNCH_DIR, PLANET_RADIUS, 2.2), currentGroundBaseFn)
+        survivalTimeRef.current = SURVIVAL_TIMER_MAX
+        lastSurvivalTimeDisplayRef.current = SURVIVAL_TIMER_MAX
+        setSurvivalTimeDisplay(SURVIVAL_TIMER_MAX)
+        setSurvivalPlanetId(null)
+        playKnockedOut()
+        const cause = planetId === 'mercurio' ? 'calor' : 'frio'
+        setSurvivalDeathMessage(
+          `Você desmaiou de ${cause}! Volte de foguete pra continuar explorando ${planet?.name ?? 'o planeta'}.`,
+        )
+        window.setTimeout(() => setSurvivalDeathMessage(null), 4000)
+      }
+
+      // Ponte React → closure (lab-129, mesmo padrão de `__refreshHouseFurniture`) — chamada por
+      // um `useEffect` observando `progress.completedPlanetQuestIds` sempre que uma escolinha de
+      // planeta é respondida corretamente; só devolve tempo se o jogador estiver AGORA num
+      // planeta com cronômetro (responder uma escolinha de outro planeta, ou já ter saído, não
+      // devolve nada aqui de errado).
+      ;(scene as any).__onPlanetQuestCompleted = () => {
+        if (currentPlanetId && DESTINATION_PLANETS[currentPlanetId]?.hasSurvivalTimer) {
+          survivalTimeRef.current = Math.min(SURVIVAL_TIMER_MAX, survivalTimeRef.current + SURVIVAL_TIMER_RESTORE)
+          const rounded = Math.ceil(survivalTimeRef.current)
+          lastSurvivalTimeDisplayRef.current = rounded
+          setSurvivalTimeDisplay(rounded)
+        }
       }
 
       // Feixe de laser (lab-62, pedido do usuário: "ao apertar E... atira o laser?") — cilindro
@@ -2825,6 +2885,25 @@ export function World3D({
           return
         }
         if (suspendRef.current || chatOpenRef.current || !avatarMesh) return
+
+        // Casa (lab-123) — apertar E perto da porta entra/sai; perto do balcão de compras (só
+        // dentro de casa) abre o catálogo. Checado ANTES do carro/foguete: nenhum dos dois existe
+        // perto da casa ou dentro do interior (planetinha de raio grande bem longe de tudo o
+        // resto), então a ordem não importa na prática, mas casa primeiro deixa a intenção clara.
+        if (insideHouseInterior) {
+          if (Vector3.Distance(avatarMesh.position, houseDoorInsidePos) < HOUSE_TRIGGER_DISTANCE) {
+            exitHouseInterior()
+            return
+          }
+          if (Vector3.Distance(avatarMesh.position, houseCounterPos) < HOUSE_TRIGGER_DISTANCE) {
+            onOpenMyHouseRef.current()
+            return
+          }
+        } else if (Vector3.Distance(avatarMesh.position, houseSurfacePos) < HOUSE_TRIGGER_DISTANCE) {
+          enterHouseInterior()
+          return
+        }
+
         let nearestCar: Carro | null = null
         let nearestDist = CAR_ENTER_DISTANCE
         for (const car of carros) {
@@ -2869,8 +2948,9 @@ export function World3D({
         // nocautear o ET/o robô") — checado ANTES do embarque no foguete: perto de um inimigo
         // vivo com a arma certa equipada, apertar E nocauteia em vez de embarcar. Sem a arma
         // certa, não faz nada (o jogador precisa achar o item primeiro — ver aviso ao embarcar
-        // sem os dois, em `boardRocket`).
-        if (onSecondPlanet) {
+        // sem os dois, em `boardRocket`). Só Marte tem inimigo (lab-110) — os outros
+        // planetas-destino não usam este bloco.
+        if (currentPlanetId === 'marte') {
           const avatarLocalPos = avatarMesh.position.subtract(SECOND_PLANET_CENTER)
           for (const enemy of marsEnemies) {
             if (!enemy.alive) continue
@@ -2908,22 +2988,42 @@ export function World3D({
               enemy.root.setEnabled(false)
               playEnemyHit()
               onCollectCoinRef.current()
+              // Brinde de Marte (lab-94, pedido do usuário: "ao vencer os ETs e o robô você
+              // desbloqueia um brinde") — "vencer" = derrotar TODOS os inimigos da visita atual,
+              // não um chefe único (não existe nenhum na Fase E de Marte, ver FEATURES.md do
+              // lab-94). Checa só depois de nocautear (barato: 6 itens), uma vez por visita.
+              if (!marsClearedThisVisit && marsEnemies.every((e) => !e.alive)) {
+                marsClearedThisVisit = true
+                onUnlockMarsRewardRef.current()
+                // lab-128: revela o pote de moedas na base alienígena — construído desde o
+                // início (ver `buildMarsIfNeeded`), só escondido até este momento.
+                marsCoinPotPivot?.setEnabled(true)
+                if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = true
+              }
             }
             return
           }
         }
-        const rocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
+        const rocket = currentPlanetId ? returnRockets.get(currentPlanetId) ?? null : mainRocket
         let boardedRocket = false
         if (rocket) {
-          // `getAbsolutePosition()`, não `.position` — o foguete de volta é filho de
-          // `secondPlanetRoot` (posição local, não em coordenadas de mundo); `.position` sozinho
-          // aqui comparava contra a posição local (perto de 0,6,0) em vez da posição real no
-          // mundo (perto de SECOND_PLANET_CENTER), fazendo essa distância dar sempre um valor
-          // gigante e a checagem nunca passar — bug real encontrado testando a viagem de volta
-          // ao vivo (embarcar funcionava, voltar não fazia nada).
+          // `getAbsolutePosition()`, não `.position` — o foguete de volta é filho da raiz do
+          // planeta (posição local, não em coordenadas de mundo); `.position` sozinho aqui
+          // comparava contra a posição local (perto de 0,6,0) em vez da posição real no mundo,
+          // fazendo essa distância dar sempre um valor gigante e a checagem nunca passar — bug
+          // real encontrado testando a viagem de volta ao vivo (embarcar funcionava, voltar não
+          // fazia nada).
           const d = Vector3.Distance(avatarMesh.position, rocket.root.getAbsolutePosition())
           if (d < ROCKET_ENTER_DISTANCE) {
-            boardRocket()
+            // No planeta principal, com mais de um destino cadastrado, embarcar abre o seletor
+            // (lab-110, pedido do usuário: "ao entrar no foguete temos que escolher o
+            // planetinha") em vez de decolar direto — a volta de qualquer planeta-destino
+            // continua indo direto pra casa, único destino possível, sem seletor.
+            if (currentPlanetId === null) {
+              setPlanetPickerOpen(true)
+            } else {
+              boardRocket(null)
+            }
             rocket.hintLabel.alpha = 0
             boardedRocket = true
           }
@@ -3035,7 +3135,12 @@ export function World3D({
         for (let attempt = 0; attempt < 12; attempt++) {
           terrainRaycastResult.reset()
           havokPlugin.raycast(from, to, terrainRaycastResult)
-          if (!terrainRaycastResult.hasHit) break
+          // lab-95: um raio que atravessa de fora pra dentro de uma esfera fechada (colisor
+          // `MESH` do planeta) deveria SEMPRE acertar algo — "nenhum acerto" aqui não é prova de
+          // que não há planeta, é mais provável ser o Havok ainda não pronto pra aceitar raycast
+          // (ver aquecimento logo após `new PhysicsAggregate(planet, ...)`). Tenta de novo dentro
+          // do mesmo orçamento de tentativas em vez de desistir na primeira falha.
+          if (!terrainRaycastResult.hasHit) continue
           if (terrainRaycastResult.body?.transformNode?.name === 'planet') {
             return terrainRaycastResult.hitPointWorld.length()
           }
@@ -3044,14 +3149,42 @@ export function World3D({
         return PLANET_RADIUS + formulaHeight
       }
 
-      function settleMeshOnTerrain(root: TransformNode, up: Vector3): void {
+      // lab-95 (causa raiz real do bug de escolinhas enterradas — confirmado com medição direta
+      // ao vivo): `settleMeshOnTerrain` some as ALL child meshes, incluindo o telhado (beiral
+      // largo, `diameterBottom: 2.1`, chega a ~1,05m do centro — bem além da pegada das paredes)
+      // e o professor (deslocado ~1,1m do centro). Nenhum dos dois TOCA o chão de verdade — o
+      // telhado fica apoiado em cima das paredes, o professor fica de pé sobre seu próprio pedaço
+      // de terreno, não sobre uma extensão rígida do prédio. Medido ao vivo repetidas vezes: o
+      // telhado aparecia como a amostra "mais alta" (a que decide quanto descer o prédio INTEIRO)
+      // com folga de até +0,45 mesmo depois de reposicionar a escola pra longe de relevo íngreme
+      // (`findFlatterSchoolUpReal`) — ou seja, mesmo numa área "plana o bastante" pro CENTRO da
+      // escola, o beiral do telhado (mais de 1m de raio) e o professor (deslocado) ainda alcançam
+      // relevo diferente o bastante pra distorcer a decisão de descida de TODO o prédio, enterrando
+      // paredes/fundação/professor pra compensar um canto do telhado que nunca ia tocar o chão
+      // mesmo. `excludeFromSampling` deixa o chamador tirar essas peças da AMOSTRAGEM (ainda se
+      // movem junto quando o resto do prédio desce — só não participam da decisão de quanto descer).
+      function settleMeshOnTerrain(
+        root: TransformNode,
+        up: Vector3,
+        excludeFromSampling: (TransformNode | AbstractMesh)[] = [],
+      ): void {
         root.computeWorldMatrix(true)
         const samples: Vector3[] = []
         const seed = Math.abs(up.y) < 0.9 ? Vector3.Up() : Vector3.Right()
         const tangentA = Vector3.Cross(up, seed).normalize()
         const tangentB = Vector3.Cross(up, tangentA).normalize()
 
+        const isExcluded = (mesh: AbstractMesh): boolean => {
+          let current: Node | null = mesh
+          while (current) {
+            if (excludeFromSampling.includes(current as TransformNode | AbstractMesh)) return true
+            current = current.parent
+          }
+          return false
+        }
+
         for (const mesh of root.getChildMeshes()) {
+          if (isExcluded(mesh)) continue
           const positions = mesh.getVerticesData(VertexBuffer.PositionKind)
           if (!positions) continue
           mesh.computeWorldMatrix(true)
@@ -3102,6 +3235,79 @@ export function World3D({
         }
       }
 
+      // lab-95: variação de relevo REAL (raycast físico, não a fórmula `terrainHeight`) ao redor
+      // de uma direção candidata — ver comentário longo perto de `SCHOOL_FOOTPRINT_ANGULAR_RADIUS`
+      // (escopo de módulo) pra por que a versão baseada em fórmula não bastava (a malha de 48
+      // segmentos se afasta demais da fórmula suave perto das rampas de `PLATEAU_CENTERS`).
+      function terrainVarianceNearbyReal(dir: Vector3, angularRadius: number, sampleCount: number): number {
+        const seed = Math.abs(dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+        const tangentA = Vector3.Cross(dir, seed).normalize()
+        const tangentB = Vector3.Cross(dir, tangentA).normalize()
+        let min = terrainGroundRadial(dir, terrainHeight(dir))
+        let max = min
+        for (let i = 0; i < sampleCount; i++) {
+          const angle = (i / sampleCount) * Math.PI * 2
+          const sampleDir = dir
+            .add(tangentA.scale(Math.sin(angle) * angularRadius))
+            .add(tangentB.scale(Math.cos(angle) * angularRadius))
+            .normalize()
+          const height = terrainGroundRadial(sampleDir, terrainHeight(sampleDir))
+          if (height < min) min = height
+          if (height > max) max = height
+        }
+        return max - min
+      }
+
+      // Busca em anéis crescentes ao redor de `baseUp` por um ponto com variação de relevo REAL
+      // segura o bastante pra um prédio não afundar — nunca se afasta mais que ~0.26 rad (~3,4m)
+      // do ponto de partida. Orçamento de busca reduzido em relação à primeira versão (que usava a
+      // fórmula, bem mais barata) porque cada amostra aqui é um raycast físico de verdade, não uma
+      // conta analítica — ainda assim, roda só uma vez por prédio, no carregamento. Sempre devolve
+      // alguma direção (o melhor candidato achado, mesmo que nenhum fique 100% dentro do limite
+      // seguro) — nunca trava esperando um ponto perfeito. `angularRadius`/`safeVariance`
+      // parametrizados (lab-134, achado do usuário: "acho que a casa está enterrada na terra" —
+      // mesma classe de bug do lab-95, mas em "Minha Casa", não numa escolinha) pra reaproveitar a
+      // mesma busca pra qualquer prédio com footprint/fundação diferentes, não só escolinhas.
+      function findFlatterUpReal(baseUp: Vector3, angularRadius: number, safeVariance: number): Vector3 {
+        let best = baseUp
+        let bestVariance = terrainVarianceNearbyReal(baseUp, angularRadius, 4)
+        if (bestVariance <= safeVariance) return baseUp
+
+        const seed = Math.abs(baseUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+        const tangentA = Vector3.Cross(baseUp, seed).normalize()
+        const tangentB = Vector3.Cross(baseUp, tangentA).normalize()
+
+        for (let ring = 1; ring <= 3; ring++) {
+          const ringRadius = ring * 0.065
+          for (let a = 0; a < 6; a++) {
+            const angle = (a / 6) * Math.PI * 2
+            const candidate = baseUp
+              .add(tangentA.scale(Math.sin(angle) * ringRadius))
+              .add(tangentB.scale(Math.cos(angle) * ringRadius))
+              .normalize()
+            const variance = terrainVarianceNearbyReal(candidate, angularRadius, 4)
+            if (variance < bestVariance) {
+              bestVariance = variance
+              best = candidate
+            }
+            if (bestVariance <= safeVariance) return best
+          }
+        }
+        return best
+      }
+
+      // Posição final (já afastada de rampa íngreme, com relevo REAL medido por raycast) de cada
+      // escola — computada UMA vez aqui (não em escopo de módulo, já que depende de `havokPlugin`
+      // existir) e reaproveitada pelo laço que monta as escolas de verdade (`quests.forEach`,
+      // mais abaixo). `SCHOOL_DIRS` (escopo de módulo, baseado só na fórmula de ângulo áureo)
+      // continua servindo de ponto de partida e de proteção de bacia (`nearAnySchool`) — não
+      // precisa ser raycast-precisa pra isso.
+      const schoolUps: Vector3[] = SCHOOL_DIRS.map((rawDir, index) => {
+        const fixed = QUEST_FIXED_UP[quests[index].id]
+        if (fixed) return fixed
+        return findFlatterUpReal(rawDir, SCHOOL_FOOTPRINT_ANGULAR_RADIUS, SCHOOL_SAFE_TERRAIN_VARIANCE)
+      })
+
       // Camada de UI 2D sobreposta ao mundo 3D (rótulos flutuantes: nome das escolas, bolhas de
       // fala dos NPCs, "pressione E" dos carros lab-25, etc.) — criada cedo (antes de qualquer
       // malha que precise de rótulo) porque vários trechos abaixo (rua/carros, escolas, lagoa,
@@ -3140,6 +3346,31 @@ export function World3D({
       planet.updateVerticesData(VertexBuffer.PositionKind, planetPositions)
       const planetNormals: number[] = []
       VertexData.ComputeNormals(planetPositions, planet.getIndices()!, planetNormals)
+      // lab-124 — reforço de robustez pro mesmo problema do lab-95 (triângulos dobrados nas rampas
+      // mais íngremes dos platôs): quando triângulos vizinhos de um vértice degeneram (ficam quase
+      // colineares/sobrepostos por causa da dobra), `ComputeNormals` pode devolver uma normal de
+      // comprimento ~0 pra esse vértice (a soma ponderada das normais das faces ao redor se
+      // cancela). Uma normal assim, ao ser normalizada por padrão pela GPU no shader, vira NaN —
+      // e diferentes GPUs/drivers tratam NaN de jeitos diferentes na hora de colorir o fragmento
+      // (mais uma explicação plausível pra "só nesse aparelho" além do backFaceCulling/
+      // twoSidedLighting acima). Corrigido usando a direção radial pra fora (`dir`, sempre unitária
+      // e sempre um fallback razoável nesse planeta aproximadamente esférico) sempre que a normal
+      // calculada não é um vetor unitário de verdade.
+      for (let i = 0; i < planetNormals.length; i += 3) {
+        const nx = planetNormals[i]
+        const ny = planetNormals[i + 1]
+        const nz = planetNormals[i + 2]
+        const lenSq = nx * nx + ny * ny + nz * nz
+        if (!(lenSq > 0.01)) {
+          const px = planetPositions[i]
+          const py = planetPositions[i + 1]
+          const pz = planetPositions[i + 2]
+          const dir = new Vector3(px, py, pz).normalize()
+          planetNormals[i] = dir.x
+          planetNormals[i + 1] = dir.y
+          planetNormals[i + 2] = dir.z
+        }
+      }
       planet.updateVerticesData(VertexBuffer.NormalKind, planetNormals)
 
       // Cor por vértice pra quebrar o verde liso ("morros sem textura") sem precisar de um
@@ -3244,9 +3475,74 @@ export function World3D({
       planetMat.albedoColor = Color3.White()
       planetMat.roughness = 0.97
       planetMat.metallic = 0
+      // lab-95 (pedido do usuário: "os morros estão invisíveis... as casas que estão sobre o
+      // morro aparecem flutuando no espaço") — causa raiz: as rampas de `PLATEAU_CENTERS` erguem
+      // o relevo até 3,2 unidades numa malha de só 48 segmentos (~1,7m por segmento); nas rampas
+      // mais íngremes, o deslocamento radial por vértice dobra alguns triângulos sobre si mesmos
+      // o bastante pra inverter a ordem de enrolamento (winding) deles em relação ao restante da
+      // esfera — com culling de face traseira ligado (padrão do `PBRMaterial`), esses triângulos
+      // ficam invisíveis de fora, mesmo com a colisão física continuando correta (por isso a casa,
+      // posicionada por raycast contra o corpo físico de verdade, fica na altura certa, mas sem
+      // morro visível embaixo). Mesma correção já usada em `cloudMat`/`grassMaterial` neste
+      // arquivo pro mesmo tipo de problema (malha fina/dobrada vista de ângulo inesperado).
+      planetMat.backFaceCulling = false
+      // lab-124 (usuário reportou de novo, mesmo depois do fix acima, num Android/Chrome — "os
+      // morros continuam invisíveis, mas o colisor físico continua sólido", confirmando que é só
+      // renderização, não um buraco real na malha): `backFaceCulling = false` sozinho só manda a
+      // GPU DESENHAR a face de trás — sem `twoSidedLighting`, a iluminação dessa face de trás
+      // continua calculada com a normal ORIGINAL (de frente), que aponta pro lado ERRADO da luz
+      // pra geometria virada ao contrário. Resultado: a face renderiza, mas quase preta —
+      // dependendo de driver/GPU (mais comum em GPUs móveis, que arredondam contraste escuro de
+      // jeitos diferentes de desktop), isso pode ficar indistinguível de "invisível" contra a
+      // grama ao redor. Gotcha bem documentado do Babylon.js pra `backFaceCulling = false` em
+      // material com luz — sem `twoSidedLighting`, a correção do lab-95 ficava só parcial.
+      planetMat.twoSidedLighting = true
       planet.material = planetMat
       planet.receiveShadows = true
       new PhysicsAggregate(planet, PhysicsShapeType.MESH, { mass: 0, friction: 0.7 }, scene)
+
+      // lab-95 (causa raiz real do bug de escolinhas enterradas — confirmado com diagnóstico em
+      // produção, dado real do aparelho do usuário: "ENTERRADAS:q01(-0.35),q02(-0.47),q03(-0.32)",
+      // e depois, testando de novo com mais concorrência de CPU na máquina de teste, TODAS as 30
+      // escolas mostraram o mesmo padrão — a gravidade do problema varia com o quanto a CPU está
+      // ocupada no momento exato do carregamento, não é fixo). Duas tentativas anteriores de
+      // "aquecer" o Havok falharam: raycasts síncronos em sequência não mudaram nada (a malha
+      // `MESH` do planeta, 48 segmentos, não fica pronta só de tentar de novo na mesma tick), e
+      // uma única checagem com `await` (ceder o event loop uma vez, repetir até acertar 'planet'
+      // numa ÚNICA direção) também não foi suficiente — sugere que o Havok não fica pronto de uma
+      // vez só (binário), e sim aos poucos (o quanto da malha já foi "cozida" no WASM varia por
+      // região, então uma direção só acertar não prova que TODAS as direções já funcionam).
+      // Correção mais robusta: exige que um conjunto de 12 direções bem espalhadas pela esfera
+      // acertem 'planet' TODAS JUNTAS na mesma rodada antes de seguir em frente — cada rodada cede
+      // o event loop de verdade (`setTimeout`), dando tempo real pro WASM avançar. Limite de ~3s
+      // (180 rodadas × 16ms) pra nunca travar o carregamento pra sempre num aparelho onde isso não
+      // aconteça por outro motivo — nesse caso raro, segue em frente mesmo sem confirmar (mesmo
+      // risco de antes, não pior).
+      {
+        const warmupResult = new PhysicsRaycastResult()
+        const warmupDirs = [
+          new Vector3(1, 0, 0), new Vector3(-1, 0, 0),
+          new Vector3(0, 1, 0), new Vector3(0, -1, 0),
+          new Vector3(0, 0, 1), new Vector3(0, 0, -1),
+          new Vector3(1, 1, 1).normalize(), new Vector3(-1, 1, 1).normalize(),
+          new Vector3(1, -1, 1).normalize(), new Vector3(-1, -1, 1).normalize(),
+          new Vector3(1, 1, -1).normalize(), new Vector3(-1, -1, -1).normalize(),
+        ]
+        for (let round = 0; round < 180; round++) {
+          let allHit = true
+          for (const dir of warmupDirs) {
+            warmupResult.reset()
+            havokPlugin.raycast(dir.scale(PLANET_RADIUS + 6), dir.scale(PLANET_RADIUS - 2), warmupResult)
+            if (!warmupResult.hasHit || warmupResult.body?.transformNode?.name !== 'planet') {
+              allHit = false
+              break
+            }
+          }
+          if (allHit) break
+          await new Promise<void>((resolve) => setTimeout(resolve, 16))
+          if (disposed) return
+        }
+      }
 
       // Props decorativos: modelos glTF reais (Kenney Nature Kit, CC0) — carregados uma vez
       // cada e clonados nos pontos de cena. Licença em public/assets/nature-kit/License.txt.
@@ -3535,6 +3831,144 @@ export function World3D({
         coinMesh.material = coinMat
         shadowGenerator.addShadowCaster(coinMesh)
         coins.push({ pivot: coinPivot, mesh: coinMesh, worldPos: coinPos, collected: false })
+      }
+
+      // Escolinhas de astronomia dos 6 planetas novos do Sistema Solar (lab-115, expandido no
+      // lab-127 pra 6 perguntas por planeta) — cada `buildXIfNeeded()` chama
+      // `buildPlanetEscolinha` em loop, uma vez por pergunta de `planetQuests[planetId]`. Mesmo
+      // padrão de `quizMarkers` (proximidade dispara `onSelectPlanetQuestRef`, ver laço de
+      // gatilhos mais abaixo) — a `Quest` fica guardada direto no marcador (não só o id) pra não
+      // precisar de busca nenhuma no laço de gatilho, que roda a cada quadro.
+      const planetQuestMarkers: { quest: Quest; worldPos: Vector3 }[] = []
+
+      // Baús de tesouro escondidos (lab-131) — `pivot`/`label` guardados direto no marcador (não
+      // só o id) porque o gatilho de proximidade precisa escondê-los na hora do achado, sem
+      // precisar buscar o mesh de novo.
+      const treasureChestMarkers: { chestId: string; worldPos: Vector3; pivot: TransformNode; label: TextBlock }[] = []
+
+      // Constrói UM baú de tesouro escondido (lab-131) — visual distinto das moedas comuns/pote de
+      // Marte (baú de madeira com fivela dourada), sempre construído mas `setEnabled(false)` de
+      // saída se `chestId` já estiver em `foundTreasureChestIds` (achado numa sessão anterior) —
+      // mesmo padrão "constrói sempre, revela condicionalmente" já usado pra mobília da casa/pote
+      // de Marte. `Control.linkWithMesh` ignora `isEnabled()` (achado real do lab-128) — por isso
+      // `label.isVisible` é setado explicitamente em conjunto, nunca só o `setEnabled` do mesh.
+      function buildTreasureChest(chestId: string, planetRoot: TransformNode, radius: number, localUp: Vector3, nameSuffix: string) {
+        const base = new TransformNode(`treasureChest-${nameSuffix}`, scene)
+        base.position = localUp.scale(radius)
+        base.rotationQuaternion = alignmentQuaternion(localUp)
+        base.parent = planetRoot
+
+        const woodMat = new PBRMaterial(`treasureChestWoodMat-${nameSuffix}`, scene)
+        woodMat.albedoColor = new Color3(0.42, 0.26, 0.14)
+        woodMat.roughness = 0.85
+
+        const chestBase = MeshBuilder.CreateBox(`treasureChestBase-${nameSuffix}`, { width: 0.7, height: 0.4, depth: 0.5 }, scene)
+        chestBase.position = new Vector3(0, 0.2, 0)
+        chestBase.material = woodMat
+        chestBase.parent = base
+        shadowGenerator.addShadowCaster(chestBase)
+
+        const lidMat = new PBRMaterial(`treasureChestLidMat-${nameSuffix}`, scene)
+        lidMat.albedoColor = new Color3(0.52, 0.34, 0.18)
+        lidMat.roughness = 0.85
+
+        const chestLid = MeshBuilder.CreateBox(`treasureChestLid-${nameSuffix}`, { width: 0.72, height: 0.22, depth: 0.52 }, scene)
+        chestLid.position = new Vector3(0, 0.51, 0)
+        chestLid.material = lidMat
+        chestLid.parent = base
+        shadowGenerator.addShadowCaster(chestLid)
+
+        const buckleMat = new PBRMaterial(`treasureChestBuckleMat-${nameSuffix}`, scene)
+        buckleMat.albedoColor = new Color3(0.85, 0.68, 0.2)
+        buckleMat.metallic = 0.8
+        buckleMat.roughness = 0.3
+        const buckle = MeshBuilder.CreateBox(`treasureChestBuckle-${nameSuffix}`, { width: 0.14, height: 0.2, depth: 0.06 }, scene)
+        buckle.position = new Vector3(0, 0.32, 0.26)
+        buckle.material = buckleMat
+        buckle.parent = base
+        shadowGenerator.addShadowCaster(buckle)
+
+        const label = new TextBlock(`treasureChestLabel-${nameSuffix}`, '💰 Baú de tesouro!')
+        label.color = 'white'
+        label.fontSize = mobileFontSize(20)
+        label.outlineWidth = 4
+        label.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(label)
+        label.linkWithMesh(chestLid)
+
+        const alreadyFound = progressRef.current.foundTreasureChestIds.includes(chestId)
+        base.setEnabled(!alreadyFound)
+        label.isVisible = !alreadyFound
+
+        // Mesmo raciocínio de `worldPos` de `buildPlanetEscolinha` acima: calculado direto do
+        // `*_CENTER` fixo, não via `getAbsolutePosition()` (a matriz de mundo só recomputa depois
+        // deste quadro).
+        treasureChestMarkers.push({
+          chestId,
+          worldPos: planetRoot.position.add(localUp.scale(radius)),
+          pivot: base,
+          label,
+        })
+      }
+
+      // Constrói UMA escolinha simplificada de um planeta-destino (lab-115; lab-127 generalizou
+      // pra receber a `Quest` direto, chamada em loop — antes só existia uma por planeta).
+      // Diferente das escolinhas do planeta principal (`quests.forEach` mais abaixo, que usam
+      // `terrainGroundRadial`/`settleMeshOnTerrain`, feito pra relevo IRREGULAR — ver lab-95),
+      // estes planetas são esferas PERFEITAS (`PhysicsShapeType.SPHERE`): `localUp.scale(radius)`
+      // já cai exatamente na superfície, sem risco de "escolinha enterrada/flutuando". Um totem
+      // com o símbolo "?" (cor do tipo de quest, mesma paleta de `questTypeColor`) + o professor
+      // parado ao lado é suficiente — não precisa da estrutura completa (paredes/telhado/fundação).
+      function buildPlanetEscolinha(
+        quest: Quest,
+        planetRoot: TransformNode,
+        radius: number,
+        localUp: Vector3,
+        nameSuffix: string,
+      ) {
+        const base = new TransformNode(`planetSchool-${nameSuffix}`, scene)
+        base.position = localUp.scale(radius)
+        base.rotationQuaternion = alignmentQuaternion(localUp)
+        base.parent = planetRoot
+
+        const postMat = new PBRMaterial(`planetSchoolPostMat-${nameSuffix}`, scene)
+        postMat.albedoColor = new Color3(0.5, 0.42, 0.32)
+        postMat.roughness = 0.9
+        const post = MeshBuilder.CreateCylinder(`planetSchoolPost-${nameSuffix}`, { height: 1.1, diameter: 0.22 }, scene)
+        post.position = new Vector3(0, 0.55, 0)
+        post.material = postMat
+        post.parent = base
+        shadowGenerator.addShadowCaster(post)
+
+        const signMat = new PBRMaterial(`planetSchoolSignMat-${nameSuffix}`, scene)
+        signMat.albedoColor = questTypeColor[quest.type]
+        signMat.roughness = 0.4
+        signMat.metallic = 0.1
+        const sign = MeshBuilder.CreateBox(`planetSchoolSign-${nameSuffix}`, { width: 0.7, height: 0.7, depth: 0.12 }, scene)
+        sign.position = new Vector3(0, 1.25, 0)
+        sign.material = signMat
+        sign.parent = base
+        shadowGenerator.addShadowCaster(sign)
+
+        const label = new TextBlock(`planetSchoolLabel-${nameSuffix}`, '?')
+        label.color = 'white'
+        label.fontSize = mobileFontSize(34)
+        label.fontWeight = 'bold'
+        label.outlineWidth = 4
+        label.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(label)
+        label.linkWithMesh(sign)
+
+        const teacher = buildStudentFigure(scene, new Color3(0.55, 0.25, 0.55), shadowGenerator)
+        teacher.root.scaling.setAll(0.92)
+        teacher.root.position = new Vector3(0.85, 0, 0.4)
+        teacher.root.parent = base
+
+        // `worldPos` calculado direto (não via `getAbsolutePosition()`) porque `planetRoot` acabou
+        // de ser criado neste mesmo quadro — a matriz de mundo só é recomputada depois, e o laço
+        // de gatilhos (mais abaixo) precisa da posição correta desde o primeiro frame. Válido
+        // porque `planetRoot.position` é sempre o `*_CENTER` fixo do planeta (nunca rotacionado).
+        planetQuestMarkers.push({ quest, worldPos: planetRoot.position.add(localUp.scale(radius)) })
       }
 
       // Parkour (lab-11) — sequência de plataformas subindo em ziguezague, só dá pra atravessar
@@ -4115,7 +4549,10 @@ export function World3D({
       for (let i = 0; i < CARRO_COUNT; i++) {
         const carRoot = buildCarro(scene, shadowGenerator, CARRO_COLORS[i % CARRO_COLORS.length])
 
-        const hintLabel = new TextBlock(`carHint-${i}`, 'Pressione E pra entrar')
+        // Texto próprio ("...no carro", não só "Pressione E pra entrar" genérico) — mesmo achado
+        // do usuário que motivou o texto específico da casa (lab-133): carro e casa com o MESMO
+        // texto tornava impossível saber qual dos dois E ia acionar quando os dois ficavam perto.
+        const hintLabel = new TextBlock(`carHint-${i}`, 'Pressione E pra entrar no carro')
         hintLabel.color = 'white'
         hintLabel.fontSize = mobileFontSize(18)
         hintLabel.fontWeight = 'bold'
@@ -4278,9 +4715,11 @@ export function World3D({
       // usuário: "por enquanto o planetinha pode ter só árvores e rochas, não precisa NPC") —
       // esfera lisa sem relevo/bacias/biomas, colisor físico esférico único (bem mais barato que
       // a malha deformada do planeta principal).
-      function buildSecondPlanetIfNeeded() {
-        if (secondPlanetBuilt) return
-        secondPlanetBuilt = true
+      // Renomeada de `buildSecondPlanetIfNeeded` (lab-110) — agora que existem mais planetas-destino,
+      // este nome deixa claro que é só o construtor DE MARTE especificamente; o "se já foi
+      // construído" é decidido pelo dispatcher genérico `buildPlanetIfNeeded` agora, não mais
+      // aqui dentro.
+      function buildMarsIfNeeded() {
 
         const secondPlanetRoot = new TransformNode('secondPlanetRoot', scene)
         secondPlanetRoot.position = SECOND_PLANET_CENTER
@@ -4430,6 +4869,71 @@ export function World3D({
         ufoLabel.linkWithMesh(ufoRoot)
         ufoLabel.linkOffsetY = -130
 
+        // Pote de moedas da base alienígena (lab-128, pedido do usuário: "em marte ao vencer os
+        // ets deve aparecer um pote de moedas na base de ets") — perto da estação, mas deslocado
+        // 0,75 rad da direção exata dela (UFO_RADIUS=3,2 num planeta de raio 6 ocupa só ~0,53 rad,
+        // então 0,75 já fica fora da malha física da estação, mas ainda claramente "na base").
+        // Construído sempre (barato: 6 malhas pequenas), mas invisível até `marsClearedThisVisit`
+        // — mesmo espírito de "construir sempre, mostrar condicionalmente" já usado em outros
+        // lugares deste arquivo.
+        const potAxis = Vector3.Cross(MARS_UFO_DIR, Vector3.Up()).normalize()
+        const potDir = Vector3.TransformCoordinates(MARS_UFO_DIR, Matrix.RotationAxis(potAxis, 0.75)).normalize()
+        const potPos = potDir.scale(SECOND_PLANET_RADIUS)
+
+        const potPivot = new TransformNode('marsCoinPotPivot', scene)
+        potPivot.position = potPos
+        potPivot.rotationQuaternion = alignmentQuaternion(potDir)
+        potPivot.parent = secondPlanetRoot
+        potPivot.setEnabled(false)
+
+        const potMat = new PBRMaterial('marsCoinPotMat', scene)
+        potMat.albedoColor = new Color3(0.42, 0.26, 0.16)
+        potMat.roughness = 0.85
+        const potBowl = MeshBuilder.CreateCylinder(
+          'marsCoinPotBowl',
+          { height: 0.32, diameterTop: 0.5, diameterBottom: 0.32, tessellation: 16 },
+          scene,
+        )
+        potBowl.position.y = 0.16
+        potBowl.material = potMat
+        potBowl.parent = potPivot
+        shadowGenerator.addShadowCaster(potBowl)
+
+        const potCoinMat = new PBRMaterial('marsCoinPotCoinMat', scene)
+        potCoinMat.albedoColor = new Color3(0.95, 0.78, 0.15)
+        potCoinMat.emissiveColor = new Color3(0.5, 0.38, 0.05)
+        potCoinMat.roughness = 0.25
+        potCoinMat.metallic = 0.6
+        for (let i = 0; i < 5; i++) {
+          const coinAngle = (i / 5) * Math.PI * 2
+          const potCoin = MeshBuilder.CreateCylinder(`marsCoinPotCoin${i}`, { height: 0.05, diameter: 0.22 }, scene)
+          potCoin.position = new Vector3(Math.cos(coinAngle) * 0.12, 0.32 + i * 0.015, Math.sin(coinAngle) * 0.12)
+          potCoin.rotation.x = 0.5 + (i % 2) * 0.3
+          potCoin.rotation.z = coinAngle
+          potCoin.material = potCoinMat
+          potCoin.parent = potPivot
+          shadowGenerator.addShadowCaster(potCoin)
+        }
+
+        const potLabel = new TextBlock('marsCoinPotLabel', '🪙 Pote de moedas!')
+        potLabel.color = 'white'
+        potLabel.fontSize = mobileFontSize(20)
+        potLabel.fontWeight = 'bold'
+        potLabel.outlineWidth = 4
+        potLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        // `linkWithMesh` projeta pela posição do mesh independente de `setEnabled` — sem
+        // `isVisible = false` aqui, o texto ficaria flutuando sozinho no espaço antes de Marte
+        // ser limpo (achado ao revisar o código, não só suposição: `Control.linkWithMesh` só
+        // depende da matriz de mundo, nunca do estado de habilitado do mesh).
+        potLabel.isVisible = false
+        guiTexture.addControl(potLabel)
+        potLabel.linkWithMesh(potBowl)
+        potLabel.linkOffsetY = -60
+
+        marsCoinPotPivot = potPivot
+        marsCoinPotWorldPos = secondPlanetRoot.position.add(potPos)
+        marsCoinPotLabelRef = potLabel
+
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
         returnRocketRoot.parent = secondPlanetRoot
@@ -4445,7 +4949,7 @@ export function World3D({
         guiTexture.addControl(returnHint)
         returnHint.linkWithMesh(returnRocketRoot)
         returnHint.linkOffsetY = -230
-        secondPlanetReturnRocket = { root: returnRocketRoot, hintLabel: returnHint }
+        returnRockets.set('marte', { root: returnRocketRoot, hintLabel: returnHint })
 
         // Inimigos (lab-60, pedido do usuário: "no planeta marciano tem que ter ETs e robôs que
         // tenta matar o nosso boneco") — distribuição própria (multiplicador de theta diferente
@@ -4478,6 +4982,683 @@ export function World3D({
             lungeTimer: 0,
           })
         }
+      }
+
+      // Mercúrio (lab-110, primeiro planeta novo além de Marte, pedido do usuário: "ampliar o
+      // mundo do jogo... ter os planetas do sistema solar... com características visuais reais
+      // deles") — sem combate/estrutura (confirmado com o usuário: só moedas escondidas). Esfera
+      // lisa como a de Marte (sem relevo próprio), colisor físico esférico único.
+      function buildMercuryIfNeeded() {
+        const mercuryRoot = new TransformNode('mercuryRoot', scene)
+        mercuryRoot.position = MERCURY_CENTER
+
+        const groundMat = new PBRMaterial('mercuryGroundMat', scene)
+        groundMat.albedoColor = new Color3(0.5, 0.47, 0.44)
+        groundMat.roughness = 0.95
+        const groundSphere = MeshBuilder.CreateSphere(
+          'mercuryGround',
+          { diameter: MERCURY_RADIUS * 2, segments: 28 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = mercuryRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Crateras — a característica visual mais reconhecível de Mercúrio de verdade: sem
+        // atmosfera/água/vento pra apagar crateras antigas, a superfície inteira é marcada por
+        // elas. Decalque simples (disco de aro mais claro por baixo de um disco de piso mais
+        // escuro, ambos rasos e colados na superfície) em vez de deformar a malha — suficiente
+        // pra ler como cratera na escala/distância de câmera do jogo, sem o custo de gerar uma
+        // esfera com relevo próprio só pra este planeta.
+        const craterFloorMat = new PBRMaterial('mercuryCraterFloorMat', scene)
+        craterFloorMat.albedoColor = new Color3(0.32, 0.3, 0.27)
+        craterFloorMat.roughness = 0.98
+        const craterRimMat = new PBRMaterial('mercuryCraterRimMat', scene)
+        craterRimMat.albedoColor = new Color3(0.64, 0.6, 0.55)
+        craterRimMat.roughness = 0.9
+        const MERCURY_CRATER_COUNT = 14
+        for (let i = 0; i < MERCURY_CRATER_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / MERCURY_CRATER_COUNT))
+          const theta = i * GOLDEN_ANGLE * 2.7
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, MERCURY_LANDING_UP) > Math.cos(0.4)) continue // longe do foguete de volta
+
+          const size = 0.5 + ((i * 5) % 4) * 0.25
+          const rim = MeshBuilder.CreateCylinder(
+            `mercuryCraterRim-${i}`,
+            { diameter: size * 1.6, height: 0.015, tessellation: 16 },
+            scene,
+          )
+          rim.material = craterRimMat
+          rim.parent = mercuryRoot
+          rim.position = localUp.scale(MERCURY_RADIUS + 0.005)
+          rim.rotationQuaternion = alignmentQuaternion(localUp)
+          rim.freezeWorldMatrix()
+
+          const floor = MeshBuilder.CreateCylinder(
+            `mercuryCraterFloor-${i}`,
+            { diameter: size, height: 0.02, tessellation: 16 },
+            scene,
+          )
+          floor.material = craterFloorMat
+          floor.parent = mercuryRoot
+          floor.position = localUp.scale(MERCURY_RADIUS + 0.01)
+          floor.rotationQuaternion = alignmentQuaternion(localUp)
+          floor.freezeWorldMatrix()
+        }
+
+        // Rochas esparsas — mesmos modelos glTF de Marte/deserto (índices 6-10 em `propTemplates`,
+        // já carregados), contagem menor (planeta menor que Marte).
+        const MERCURY_ROCK_COUNT = 14
+        const mercuryRockIndices = [6, 7, 8, 9, 10]
+        for (let i = 0; i < MERCURY_ROCK_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / MERCURY_ROCK_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.8 + 0.6
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, MERCURY_LANDING_UP) > Math.cos(0.4)) continue
+
+          const templateIndex = mercuryRockIndices[i % mercuryRockIndices.length]
+          const instance = propTemplates[templateIndex].clone(`mercuryProp-${i}`, null)
+          if (!instance) continue
+          instance.setEnabled(true)
+          instance.parent = mercuryRoot
+          const propPos = localUp.scale(MERCURY_RADIUS)
+          const propScale = 0.8 + ((i * 7) % 5) * 0.12
+          instance.position = propPos
+          instance.rotationQuaternion = alignmentQuaternion(localUp)
+          instance.scaling.setAll(propScale)
+          instance.freezeWorldMatrix()
+          instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+
+          // Mesmo colisor-esfera invisível das rochas de Marte — bloqueia esbarrão lateral sem
+          // virar plataforma nem precisar da física cara da malha glTF de verdade.
+          const collider = MeshBuilder.CreateSphere(
+            `mercuryPropCollider-${i}`,
+            { diameter: 0.7 * propScale },
+            scene,
+          )
+          collider.parent = mercuryRoot
+          collider.position = propPos
+          collider.isVisible = false
+          collider.computeWorldMatrix(true)
+          new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+        }
+
+        // Moedas escondidas (confirmado com o usuário: sem combate, só recompensa de exploração)
+        // — mesmo padrão das moedas no topo das montanhas do planeta principal (`coins.push`,
+        // coletadas pelo mesmo laço genérico de física, sem mudança nenhuma nele).
+        const MERCURY_COIN_COUNT = 6
+        for (let i = 0; i < MERCURY_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / MERCURY_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 4.4 + 2.3
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, MERCURY_LANDING_UP) > Math.cos(0.35)) continue
+
+          const coinPos = MERCURY_CENTER.add(localUp.scale(MERCURY_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-mercury${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-mercury${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta) — 6 perguntas
+        // sobre o próprio Mercúrio, uma por direção de `PLANET_SCHOOL_DIRS`.
+        planetQuests.mercurio.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, mercuryRoot, MERCURY_RADIUS, PLANET_SCHOOL_DIRS[i], `mercurio-${i}`)
+        })
+
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-mercurio', mercuryRoot, MERCURY_RADIUS, TREASURE_CHEST_DIR, 'mercurio')
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = mercuryRoot
+        returnRocketRoot.position = MERCURY_LANDING_UP.scale(MERCURY_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(MERCURY_LANDING_UP)
+        const returnHint = new TextBlock('mercuryRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('mercurio', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
+      // Vênus (lab-111, continuação do lab-110) — sem combate/estrutura (mesmo escopo de
+      // Mercúrio). Superfície vulcânica alaranjada + atmosfera translúcida decorativa (a
+      // característica visual mais reconhecível de Vênus de verdade: nuvens de ácido sulfúrico
+      // tão espessas que escondem a superfície vista de fora) — SEM cratera nenhuma, ao contrário
+      // de Mercúrio (vulcanismo constante apaga crateras em Vênus de verdade), reforça o
+      // contraste visual entre os dois primeiros planetas da frente.
+      function buildVenusIfNeeded() {
+        const venusRoot = new TransformNode('venusRoot', scene)
+        venusRoot.position = VENUS_CENTER
+
+        const groundMat = new PBRMaterial('venusGroundMat', scene)
+        groundMat.albedoColor = new Color3(0.62, 0.42, 0.22)
+        groundMat.roughness = 0.85
+        const groundSphere = MeshBuilder.CreateSphere(
+          'venusGround',
+          { diameter: VENUS_RADIUS * 2, segments: 28 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = venusRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Atmosfera — só decorativa, sem física, não afeta luz/céu globais (compartilhados com o
+        // resto do jogo, mesma decisão já tomada pra Marte no lab-59). Esfera translúcida um
+        // pouco maior que o chão, `backFaceCulling = false` pra continuar visível de dentro
+        // (o jogador anda POR BAIXO dela, olhando pra cima veria o lado de dentro da esfera).
+        const atmosphereMat = new PBRMaterial('venusAtmosphereMat', scene)
+        atmosphereMat.albedoColor = new Color3(0.85, 0.72, 0.4)
+        atmosphereMat.emissiveColor = new Color3(0.45, 0.38, 0.18)
+        atmosphereMat.alpha = 0.35
+        atmosphereMat.backFaceCulling = false
+        const atmosphere = MeshBuilder.CreateSphere(
+          'venusAtmosphere',
+          { diameter: (VENUS_RADIUS + 0.7) * 2, segments: 24 },
+          scene,
+        )
+        atmosphere.material = atmosphereMat
+        atmosphere.parent = venusRoot
+        atmosphere.receiveShadows = false
+        atmosphere.freezeWorldMatrix()
+
+        // Rochas vulcânicas esparsas — mesmos modelos glTF de Marte/Mercúrio/deserto, contagem
+        // um pouco maior (planeta um pouco maior que Mercúrio).
+        const VENUS_ROCK_COUNT = 18
+        const venusRockIndices = [6, 7, 8, 9, 10]
+        for (let i = 0; i < VENUS_ROCK_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / VENUS_ROCK_COUNT))
+          const theta = i * GOLDEN_ANGLE * 4.1 + 1.1
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, VENUS_LANDING_UP) > Math.cos(0.35)) continue
+
+          const templateIndex = venusRockIndices[i % venusRockIndices.length]
+          const instance = propTemplates[templateIndex].clone(`venusProp-${i}`, null)
+          if (!instance) continue
+          instance.setEnabled(true)
+          instance.parent = venusRoot
+          const propPos = localUp.scale(VENUS_RADIUS)
+          const propScale = 0.9 + ((i * 7) % 5) * 0.15
+          instance.position = propPos
+          instance.rotationQuaternion = alignmentQuaternion(localUp)
+          instance.scaling.setAll(propScale)
+          instance.freezeWorldMatrix()
+          instance.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+
+          const collider = MeshBuilder.CreateSphere(`venusPropCollider-${i}`, { diameter: 0.7 * propScale }, scene)
+          collider.parent = venusRoot
+          collider.position = propPos
+          collider.isVisible = false
+          collider.computeWorldMatrix(true)
+          new PhysicsAggregate(collider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+        }
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const VENUS_COIN_COUNT = 6
+        for (let i = 0; i < VENUS_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / VENUS_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.6 + 2.9
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, VENUS_LANDING_UP) > Math.cos(0.35)) continue
+
+          const coinPos = VENUS_CENTER.add(localUp.scale(VENUS_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-venus${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-venus${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.venus.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, venusRoot, VENUS_RADIUS, PLANET_SCHOOL_DIRS[i], `venus-${i}`)
+        })
+
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-venus', venusRoot, VENUS_RADIUS, TREASURE_CHEST_DIR, 'venus')
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = venusRoot
+        returnRocketRoot.position = VENUS_LANDING_UP.scale(VENUS_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(VENUS_LANDING_UP)
+        const returnHint = new TextBlock('venusRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('venus', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
+      // Júpiter (lab-112, continuação da frente Sistema Solar) — primeiro gigante gasoso: sem
+      // rocha/cratera nenhuma (sem superfície sólida de verdade), textura de faixas horizontais
+      // gerada por `DynamicTexture` (técnica nova nesta frente, reaproveitável pros próximos
+      // gigantes gasosos/de gelo) + a Grande Mancha Vermelha (decalque oval fixo, não aleatório —
+      // é a feature mais reconhecível de Júpiter isoladamente).
+      function buildJupiterIfNeeded() {
+        const jupiterRoot = new TransformNode('jupiterRoot', scene)
+        jupiterRoot.position = JUPITER_CENTER
+
+        // Faixas: textura pequena (largura irrelevante — as faixas variam só em V/altura, não em
+        // U/longitude), altura maior pra faixas finas o bastante perto da câmera. UV padrão de
+        // `CreateSphere` (V = latitude, U = longitude) já dá o efeito de faixas ao redor da esfera
+        // inteira sem nenhum UV customizado.
+        const bandTexture = new DynamicTexture('jupiterBandsTex', { width: 8, height: 512 }, scene, false)
+        const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
+        const bandColors = ['#c9a06a', '#e0c090', '#a8794f', '#d9b98a', '#8a5f3d', '#e8d9b0', '#b8875a', '#f0e0c0']
+        let bandY = 0
+        let bandColorIndex = 0
+        while (bandY < 512) {
+          const bandHeight = 14 + Math.random() * 40
+          bandCtx.fillStyle = bandColors[bandColorIndex % bandColors.length]
+          bandCtx.fillRect(0, bandY, 8, bandHeight)
+          bandY += bandHeight
+          bandColorIndex++
+        }
+        bandTexture.update()
+
+        const groundMat = new PBRMaterial('jupiterGroundMat', scene)
+        groundMat.albedoTexture = bandTexture
+        groundMat.roughness = 0.9
+        const groundSphere = MeshBuilder.CreateSphere(
+          'jupiterGround',
+          { diameter: JUPITER_RADIUS * 2, segments: 48 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = jupiterRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Grande Mancha Vermelha — ponto FIXO (não sorteado), pra sempre aparecer no mesmo lugar
+        // em vez de depender do acaso de uma distribuição aleatória. Disco raso alinhado à
+        // superfície, esticado num eixo (`scaling.x`) pra virar uma oval em vez de um círculo
+        // perfeito.
+        const spotDir = new Vector3(0.6, -0.3, 0.74).normalize()
+        const spotMat = new PBRMaterial('jupiterSpotMat', scene)
+        spotMat.albedoColor = new Color3(0.72, 0.32, 0.22)
+        spotMat.roughness = 0.85
+        const spot = MeshBuilder.CreateCylinder(
+          'jupiterGreatRedSpot',
+          { diameter: 3.2, height: 0.06, tessellation: 24 },
+          scene,
+        )
+        spot.material = spotMat
+        spot.parent = jupiterRoot
+        spot.position = spotDir.scale(JUPITER_RADIUS + 0.03)
+        spot.rotationQuaternion = alignmentQuaternion(spotDir)
+        spot.scaling.x = 1.6
+        spot.freezeWorldMatrix()
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const JUPITER_COIN_COUNT = 8
+        for (let i = 0; i < JUPITER_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / JUPITER_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.3 + 1.9
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, JUPITER_LANDING_UP) > Math.cos(0.3)) continue
+
+          const coinPos = JUPITER_CENTER.add(localUp.scale(JUPITER_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-jupiter${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-jupiter${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.jupiter.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, jupiterRoot, JUPITER_RADIUS, PLANET_SCHOOL_DIRS[i], `jupiter-${i}`)
+        })
+
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-jupiter', jupiterRoot, JUPITER_RADIUS, TREASURE_CHEST_DIR, 'jupiter')
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = jupiterRoot
+        returnRocketRoot.position = JUPITER_LANDING_UP.scale(JUPITER_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(JUPITER_LANDING_UP)
+        const returnHint = new TextBlock('jupiterRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('jupiter', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
+      // Saturno (lab-113, continuação da frente Sistema Solar) — mesma técnica de faixas de
+      // Júpiter (paleta mais pálida/dourada, menos contraste) + o ANEL (a característica visual
+      // mais reconhecível de Saturno) — um único `CreateTorus` achatado no eixo Y, decorativo, sem
+      // física (não é pisável), centrado no equador do planeta.
+      function buildSaturnIfNeeded() {
+        const saturnRoot = new TransformNode('saturnRoot', scene)
+        saturnRoot.position = SATURN_CENTER
+
+        const bandTexture = new DynamicTexture('saturnBandsTex', { width: 8, height: 512 }, scene, false)
+        const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
+        const bandColors = ['#e8dcc0', '#d9c9a0', '#f0e6d0', '#c9b888', '#e0d4b0', '#d4c298']
+        let bandY = 0
+        let bandColorIndex = 0
+        while (bandY < 512) {
+          const bandHeight = 16 + Math.random() * 44
+          bandCtx.fillStyle = bandColors[bandColorIndex % bandColors.length]
+          bandCtx.fillRect(0, bandY, 8, bandHeight)
+          bandY += bandHeight
+          bandColorIndex++
+        }
+        bandTexture.update()
+
+        const groundMat = new PBRMaterial('saturnGroundMat', scene)
+        groundMat.albedoTexture = bandTexture
+        groundMat.roughness = 0.9
+        const groundSphere = MeshBuilder.CreateSphere(
+          'saturnGround',
+          { diameter: SATURN_RADIUS * 2, segments: 48 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = saturnRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Anel — decorativo, sem `PhysicsAggregate` (não é pisável). `CreateTorus` nasce plano no
+        // plano XZ com o "buraco" no eixo Y (mesma orientação já usada no anel sonoro de combate
+        // de Marte, lab-62) — já alinhado com `SATURN_LANDING_UP = (0,1,0)` sem rotação extra.
+        // `scaling.y` bem pequeno achata o tubo do torus numa fita fina, `alpha` um pouco abaixo
+        // de 1 sugere gelo/poeira em vez de um anel sólido opaco.
+        const ringMat = new PBRMaterial('saturnRingMat', scene)
+        ringMat.albedoColor = new Color3(0.82, 0.74, 0.58)
+        ringMat.roughness = 0.6
+        ringMat.alpha = 0.85
+        ringMat.backFaceCulling = false
+        const ring = MeshBuilder.CreateTorus(
+          'saturnRing',
+          { diameter: SATURN_RADIUS * 2.7, thickness: SATURN_RADIUS * 0.55, tessellation: 64 },
+          scene,
+        )
+        ring.material = ringMat
+        ring.parent = saturnRoot
+        ring.scaling.y = 0.02
+        ring.freezeWorldMatrix()
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const SATURN_COIN_COUNT = 8
+        for (let i = 0; i < SATURN_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / SATURN_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 4.7 + 0.8
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, SATURN_LANDING_UP) > Math.cos(0.3)) continue
+
+          const coinPos = SATURN_CENTER.add(localUp.scale(SATURN_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-saturno${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-saturno${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.saturno.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, saturnRoot, SATURN_RADIUS, PLANET_SCHOOL_DIRS[i], `saturno-${i}`)
+        })
+
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-saturno', saturnRoot, SATURN_RADIUS, TREASURE_CHEST_DIR, 'saturno')
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = saturnRoot
+        returnRocketRoot.position = SATURN_LANDING_UP.scale(SATURN_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(SATURN_LANDING_UP)
+        const returnHint = new TextBlock('saturnoRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('saturno', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
+      // Urano (lab-114, ÚLTIMO laboratório da frente Sistema Solar) — mesma técnica de faixas dos
+      // outros gigantes, paleta azul-esverdeada pálida. Toque diferenciador: a MALHA do chão é
+      // rotacionada 90° (`rotationQuaternion`, não o `landingUp` — a física continua uma esfera
+      // perfeita, o pouso do foguete não muda) — Urano de verdade gira "deitado" (eixo ~98° de
+      // inclinação, quase paralelo à órbita, ao contrário de todo o resto do sistema solar); com a
+      // malha girada, as faixas (que variam por latitude da textura) aparecem VERTICAIS no ponto
+      // de pouso em vez de horizontais, um jeito simples de sugerir essa característica real sem
+      // reescrever a técnica de textura.
+      function buildUranusIfNeeded() {
+        const uranusRoot = new TransformNode('uranusRoot', scene)
+        uranusRoot.position = URANUS_CENTER
+
+        const bandTexture = new DynamicTexture('uranusBandsTex', { width: 8, height: 512 }, scene, false)
+        const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
+        const bandColors = ['#a8dcd4', '#c0ece4', '#98ccc4', '#b4e0d8', '#8cc0b8']
+        let bandY = 0
+        let bandColorIndex = 0
+        while (bandY < 512) {
+          const bandHeight = 20 + Math.random() * 50
+          bandCtx.fillStyle = bandColors[bandColorIndex % bandColors.length]
+          bandCtx.fillRect(0, bandY, 8, bandHeight)
+          bandY += bandHeight
+          bandColorIndex++
+        }
+        bandTexture.update()
+
+        const groundMat = new PBRMaterial('uranusGroundMat', scene)
+        groundMat.albedoTexture = bandTexture
+        groundMat.roughness = 0.85
+        const groundSphere = MeshBuilder.CreateSphere(
+          'uranusGround',
+          { diameter: URANUS_RADIUS * 2, segments: 48 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = uranusRoot
+        // Eixo "deitado" (ver comentário acima) — só rotaciona a malha/textura, a física por
+        // baixo (`PhysicsAggregate` esférico) não se importa com rotação nenhuma.
+        groundSphere.rotationQuaternion = Quaternion.RotationAxis(Vector3.Right(), Math.PI / 2)
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const URANUS_COIN_COUNT = 7
+        for (let i = 0; i < URANUS_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / URANUS_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 3.9 + 1.3
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, URANUS_LANDING_UP) > Math.cos(0.3)) continue
+
+          const coinPos = URANUS_CENTER.add(localUp.scale(URANUS_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-urano${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-urano${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.urano.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, uranusRoot, URANUS_RADIUS, PLANET_SCHOOL_DIRS[i], `urano-${i}`)
+        })
+
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-urano', uranusRoot, URANUS_RADIUS, TREASURE_CHEST_DIR, 'urano')
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = uranusRoot
+        returnRocketRoot.position = URANUS_LANDING_UP.scale(URANUS_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(URANUS_LANDING_UP)
+        const returnHint = new TextBlock('uranoRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('urano', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
+      // Netuno (lab-114, ÚLTIMO laboratório da frente Sistema Solar) — mesma técnica de faixas
+      // dos outros gigantes, paleta azul profundo. Grande Mancha Escura (decalque fixo, análoga à
+      // Grande Mancha Vermelha de Júpiter — Netuno de verdade tem tempestades escuras parecidas).
+      function buildNeptuneIfNeeded() {
+        const neptuneRoot = new TransformNode('neptuneRoot', scene)
+        neptuneRoot.position = NEPTUNE_CENTER
+
+        const bandTexture = new DynamicTexture('neptuneBandsTex', { width: 8, height: 512 }, scene, false)
+        const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
+        const bandColors = ['#1e3a8a', '#2b4fa8', '#16296b', '#3358b0', '#1a3080']
+        let bandY = 0
+        let bandColorIndex = 0
+        while (bandY < 512) {
+          const bandHeight = 18 + Math.random() * 46
+          bandCtx.fillStyle = bandColors[bandColorIndex % bandColors.length]
+          bandCtx.fillRect(0, bandY, 8, bandHeight)
+          bandY += bandHeight
+          bandColorIndex++
+        }
+        bandTexture.update()
+
+        const groundMat = new PBRMaterial('neptuneGroundMat', scene)
+        groundMat.albedoTexture = bandTexture
+        groundMat.roughness = 0.85
+        const groundSphere = MeshBuilder.CreateSphere(
+          'neptuneGround',
+          { diameter: NEPTUNE_RADIUS * 2, segments: 48 },
+          scene,
+        )
+        groundSphere.material = groundMat
+        groundSphere.parent = neptuneRoot
+        groundSphere.receiveShadows = true
+        groundSphere.computeWorldMatrix(true)
+        new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
+
+        // Grande Mancha Escura — ponto FIXO (não sorteado), mesma técnica da Mancha Vermelha de
+        // Júpiter (lab-112).
+        const spotDir = new Vector3(-0.55, -0.35, 0.76).normalize()
+        const spotMat = new PBRMaterial('neptuneSpotMat', scene)
+        spotMat.albedoColor = new Color3(0.1, 0.14, 0.32)
+        spotMat.roughness = 0.8
+        const spot = MeshBuilder.CreateCylinder(
+          'neptuneGreatDarkSpot',
+          { diameter: 2.6, height: 0.06, tessellation: 24 },
+          scene,
+        )
+        spot.material = spotMat
+        spot.parent = neptuneRoot
+        spot.position = spotDir.scale(NEPTUNE_RADIUS + 0.03)
+        spot.rotationQuaternion = alignmentQuaternion(spotDir)
+        spot.scaling.x = 1.5
+        spot.freezeWorldMatrix()
+
+        // Moedas escondidas — mesmo padrão dos outros planetas-destino.
+        const NEPTUNE_COIN_COUNT = 7
+        for (let i = 0; i < NEPTUNE_COIN_COUNT; i++) {
+          const phi = Math.acos(1 - 2 * ((i + 0.5) / NEPTUNE_COIN_COUNT))
+          const theta = i * GOLDEN_ANGLE * 4.2 + 3.4
+          const localUp = new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+          if (Vector3.Dot(localUp, NEPTUNE_LANDING_UP) > Math.cos(0.3)) continue
+
+          const coinPos = NEPTUNE_CENTER.add(localUp.scale(NEPTUNE_RADIUS + 0.35))
+          const pivot = new TransformNode(`coinPivot-netuno${i}`, scene)
+          pivot.position = coinPos
+          pivot.rotationQuaternion = alignmentQuaternion(localUp)
+          const mesh = MeshBuilder.CreateCylinder(`coin-netuno${i}`, { height: 0.08, diameter: 0.5 }, scene)
+          mesh.parent = pivot
+          mesh.material = coinMat
+          shadowGenerator.addShadowCaster(mesh)
+          coins.push({ pivot, mesh, worldPos: coinPos, collected: false })
+        }
+
+        // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
+        planetQuests.netuno.forEach((quest, i) => {
+          buildPlanetEscolinha(quest, neptuneRoot, NEPTUNE_RADIUS, PLANET_SCHOOL_DIRS[i], `netuno-${i}`)
+        })
+
+        // Baú de tesouro escondido (lab-131).
+        buildTreasureChest('bau-netuno', neptuneRoot, NEPTUNE_RADIUS, TREASURE_CHEST_DIR, 'netuno')
+
+        // Foguete de volta.
+        const returnRocketRoot = buildRocket(scene, shadowGenerator)
+        returnRocketRoot.parent = neptuneRoot
+        returnRocketRoot.position = NEPTUNE_LANDING_UP.scale(NEPTUNE_RADIUS)
+        returnRocketRoot.rotationQuaternion = alignmentQuaternion(NEPTUNE_LANDING_UP)
+        const returnHint = new TextBlock('netunoRocketHint', 'Pressione E pra voltar')
+        returnHint.color = 'white'
+        returnHint.fontSize = mobileFontSize(18)
+        returnHint.fontWeight = 'bold'
+        returnHint.outlineWidth = 3
+        returnHint.outlineColor = 'rgba(0,0,0,0.6)'
+        returnHint.alpha = 0
+        guiTexture.addControl(returnHint)
+        returnHint.linkWithMesh(returnRocketRoot)
+        returnHint.linkOffsetY = -230
+        returnRockets.set('netuno', { root: returnRocketRoot, hintLabel: returnHint })
+      }
+
+      // Despacha pro construtor certo (lab-110) — cada planeta só existe na cena depois da
+      // primeira visita (`builtPlanetIds`), igual já funcionava só com Marte antes deste
+      // laboratório generalizar pra qualquer quantidade de planetas-destino.
+      function buildPlanetIfNeeded(id: string) {
+        if (builtPlanetIds.has(id)) return
+        builtPlanetIds.add(id)
+        if (id === 'marte') buildMarsIfNeeded()
+        else if (id === 'mercurio') buildMercuryIfNeeded()
+        else if (id === 'venus') buildVenusIfNeeded()
+        else if (id === 'jupiter') buildJupiterIfNeeded()
+        else if (id === 'saturno') buildSaturnIfNeeded()
+        else if (id === 'urano') buildUranusIfNeeded()
+        else if (id === 'netuno') buildNeptuneIfNeeded()
       }
 
       // Lagoa (pedido do usuário: "lago com peixe e pato e tartaruga") — separada do rio, num
@@ -4658,10 +5839,28 @@ export function World3D({
         shoeColor: initialShoeOpt ? new Color3(...initialShoeOpt.colorRgb) : undefined,
         backpackColor: initialBackpackOpt ? new Color3(...initialBackpackOpt.colorRgb) : undefined,
       })
+      // lab-122: `buildStudentFigure` já deixa uma cor sólida padrão pronta acima — isso reaplica
+      // com `applyClothingLook`, que também trata o `style` de itens exclusivos (textura/metálico),
+      // não só a cor.
       const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, profile.equippedShirtColorId)
-      if (initialShirtOpt) studentFigure.shirtMat.albedoColor = new Color3(...initialShirtOpt.colorRgb)
+      applyClothingLook(studentFigure.shirtMat, initialShirtOpt, scene, avatarColorFromEmoji(profile.avatarEmoji), 0.7)
+      applyClothingLook(studentFigure.pantsMat, initialPantsOpt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
+      applyClothingLook(studentFigure.shoeMat, initialShoeOpt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
+      applyClothingLook(
+        studentFigure.backpackMat,
+        initialBackpackOpt,
+        scene,
+        Color3.Lerp(avatarColorFromEmoji(profile.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+        0.75,
+      )
       applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
       applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
+      applyGlasses(
+        studentFigure,
+        profile.equippedGlassesId ? findGlassesById(profile.equippedGlassesId) ?? null : null,
+        scene,
+        shadowGenerator,
+      )
       const initialHair = findHairShapeOption(profile.equippedHairShapeId)
       if (initialHair) applyHairShape(studentFigure, initialHair.shape, scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
@@ -4691,7 +5890,7 @@ export function World3D({
       // (cujo eixo Y local já É o "pra cima" do planeta, ver a montagem da rotação do boneco no
       // laço de física), deitado no chão sem rotação extra: `CreateTorus` já nasce plano no
       // plano XZ, com o Y passando pelo "buraco da rosquinha" — exatamente o eixo que já
-      // corresponde a "reto pra cima" nesse nó. Só visível em Marte (`onSecondPlanet`).
+      // corresponde a "reto pra cima" nesse nó. Só visível em Marte (`currentPlanetId === 'marte'`).
       soundRing = MeshBuilder.CreateTorus('soundRing', { diameter: MARS_ENEMY_PERSONAL_SPACE * 2, thickness: 0.04, tessellation: 24 }, scene)
       soundRing.parent = studentFigure.root
       soundRing.position.y = 0.03
@@ -4716,6 +5915,12 @@ export function World3D({
         applyHat(studentFigure, hatId ? findHatById(hatId) ?? null : null, scene, shadowGenerator)
       }
 
+      // Trocar de óculos na lojinha (lab-92) — mesmo padrão de `__setPlayerHat` acima. Ver
+      // useEffect que observa `profile.equippedGlassesId`.
+      ;(scene as any).__setPlayerGlasses = (glassesId: string | null) => {
+        applyGlasses(studentFigure, glassesId ? findGlassesById(glassesId) ?? null : null, scene, shadowGenerator)
+      }
+
       // Espada/arma na mão conforme a seleção da mochila (lab-76, pedido do usuário: "quando eu
       // estiver com espada selecionada ela deve aparecer na mão do boneco") — só a arma
       // SELECIONADA fica visível, mesmo que as duas já tenham sido coletadas; nenhuma selecionada
@@ -4729,21 +5934,25 @@ export function World3D({
       // `__setPlayerHat` acima: um por eixo, cada um observado por um `useEffect` próprio.
       ;(scene as any).__setPlayerShirtColor = (id: string | null) => {
         const opt = findColorOption(SHIRT_COLOR_CATALOG, id)
-        studentFigure.shirtMat.albedoColor = opt ? new Color3(...opt.colorRgb) : avatarColorFromEmoji(profileRef.current.avatarEmoji)
+        applyClothingLook(studentFigure.shirtMat, opt, scene, avatarColorFromEmoji(profileRef.current.avatarEmoji), 0.7)
       }
       ;(scene as any).__setPlayerPantsColor = (id: string | null) => {
         const opt = findColorOption(PANTS_COLOR_CATALOG, id)
-        studentFigure.pantsMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.22, 0.28, 0.48)
+        applyClothingLook(studentFigure.pantsMat, opt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
       }
       ;(scene as any).__setPlayerShoeColor = (id: string | null) => {
         const opt = findColorOption(SHOE_COLOR_CATALOG, id)
-        studentFigure.shoeMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.12, 0.12, 0.14)
+        applyClothingLook(studentFigure.shoeMat, opt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
       }
       ;(scene as any).__setPlayerBackpackColor = (id: string | null) => {
         const opt = findColorOption(BACKPACK_COLOR_CATALOG, id)
-        studentFigure.backpackMat.albedoColor = opt
-          ? new Color3(...opt.colorRgb)
-          : Color3.Lerp(avatarColorFromEmoji(profileRef.current.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5)
+        applyClothingLook(
+          studentFigure.backpackMat,
+          opt,
+          scene,
+          Color3.Lerp(avatarColorFromEmoji(profileRef.current.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+          0.75,
+        )
       }
       ;(scene as any).__setPlayerHairShape = (id: string | null) => {
         const opt = findHairShapeOption(id)
@@ -4865,19 +6074,11 @@ export function World3D({
       foundationMatShared.roughness = 0.95
 
       quests.forEach((quest, index) => {
-        // `QUEST_FIXED_UP` (lab-26): só `q21` usa isso — as outras continuam pela fórmula de
-        // ângulo áureo de sempre, posição inalterada.
-        let localUp = QUEST_FIXED_UP[quest.id]
-        if (!localUp) {
-          const t = quests.length > 1 ? index / (quests.length - 1) : 0
-          const phi = Math.PI * 0.22 + t * Math.PI * 0.4
-          const theta = index * GOLDEN_ANGLE * 1.7
-          localUp = new Vector3(
-            Math.sin(phi) * Math.cos(theta),
-            Math.cos(phi),
-            Math.sin(phi) * Math.sin(theta),
-          )
-        }
+        // lab-95: posição final já vem de `schoolUps` (calculado logo no início de `setup()`,
+        // com relevo REAL medido por raycast — ver comentário longo perto dele) — `QUEST_FIXED_UP`
+        // (lab-26, só `q21`) ou a fórmula de ângulo áureo já afastada de rampa de platô íngreme
+        // demais.
+        const localUp = schoolUps[index]
         const groundRadial = terrainGroundRadial(localUp, terrainHeight(localUp))
         const surfacePos = localUp.scale(groundRadial)
 
@@ -4885,6 +6086,12 @@ export function World3D({
         base.position = surfacePos
         base.rotationQuaternion = alignmentQuaternion(localUp)
 
+        // lab-95: tentativa de encolher a escolinha ~20% foi REVERTIDA — causou um bug real em
+        // produção (reportado pelo usuário ao vivo: "todas as casa estão dentro da terra, até os
+        // NPC estão enterrado... as casinhas só aparecem o telhado"). `settleMeshOnTerrain`
+        // (abaixo) provavelmente reage mal a alguma combinação das dimensões/posições menores —
+        // causa raiz não confirmada ainda, revertido pra parar o bug ao vivo primeiro. Ver
+        // CONTEXT.md do lab-95 pra status da investigação.
         const walls = MeshBuilder.CreateBox(`walls-${quest.id}`, { width: 1.6, height: 1.1, depth: 1.4 }, scene)
         walls.position = new Vector3(0, 0.55, 0)
         walls.material = wallMatShared
@@ -4900,10 +6107,10 @@ export function World3D({
         // Fundação (pedido do usuário, com screenshots: "a casa flutuando numa superfície
         // invisível" mesmo depois de `terrainGroundRadial` confirmar folga ~0 no ANCORA da
         // escola). Causa raiz real: `surfacePos`/`alignmentQuaternion` amostram o terreno em UM
-        // ponto só, mas a caixa de paredes (1.6 x 1.4) é rígida — em terreno com relevo, o
-        // terreno varia até ~1,4 unidade de um canto ao outro da própria escola, deixando um
-        // canto flutuando (chão visível embaixo) enquanto o oposto afunda. Uma base mais funda e
-        // um pouco mais larga que as paredes garante que nenhum canto fique no ar, sem precisar
+        // ponto só, mas a caixa de paredes (reduzida no lab-95, ver comentário acima) é rígida —
+        // em terreno com relevo, o terreno varia de um canto ao outro da própria escola, deixando
+        // um canto flutuando (chão visível embaixo) enquanto o oposto afunda. Uma base mais funda
+        // e um pouco mais larga que as paredes garante que nenhum canto fique no ar, sem precisar
         // inclinar a caixa pra seguir o relevo local.
         const foundation = MeshBuilder.CreateBox(
           `foundation-${quest.id}`,
@@ -4945,6 +6152,25 @@ export function World3D({
         teacher.root.position = new Vector3(0.95, 0, 0.55)
         teacher.root.parent = base
 
+        // lab-87, mesmo bug relatado de novo ("morros invisíveis, casas flutuando em algo
+        // transparente") apesar da fundação maior do lab-28 — causa raiz real: a fundação fixa
+        // cobre a variação de relevo TÍPICA sob a escola, mas não a PIOR, que
+        // depende de onde a escola caiu (perto da borda íngreme de um platô alto, ver
+        // `PLATEAU_CENTERS`, pode variar bem mais que isso na mesma pegada). Em vez de adivinhar
+        // um tamanho de caixa maior de novo, usa a mesma correção multi-vértice que já resolve
+        // isso pras rochas de montanha (`settleMeshOnTerrain`, lab-75): amostra o ponto mais baixo
+        // de cada malha filha (paredes/fundação/porta) contra o relevo real (raycast, não a
+        // fórmula) e desce a escola inteira o suficiente pra nenhum canto ficar boiando — a
+        // fundação continua ajudando (evita o pior caso comum), isso cobre o resto. Telhado e
+        // professor ficam de fora da AMOSTRAGEM (lab-95, ver comentário longo em
+        // `settleMeshOnTerrain`) — nenhum dos dois toca o chão de verdade, e seu alcance além da
+        // pegada das paredes distorcia a decisão de descida do prédio inteiro.
+        settleMeshOnTerrain(base, localUp, [roof, teacher.root])
+        // `settleMeshOnTerrain` pode ter descido `base` — `surfacePos` (usada mais abaixo pra
+        // distância de gatilho da missão e pro topo do telhado) precisa refletir a posição FINAL,
+        // não a de antes do ajuste, senão o gatilho fica levemente descolado da escola visível.
+        surfacePos.copyFrom(base.position)
+
         const label = new TextBlock(`label-${quest.id}`, `${index + 1}`)
         label.color = 'white'
         label.fontSize = mobileFontSize(28)
@@ -4957,6 +6183,662 @@ export function World3D({
 
         portalMeshes.push({ quest, roof, base, surfacePos })
       })
+
+      // lab-95 (diagnóstico TEMPORÁRIO, produção): o usuário reportou escolinhas ainda enterradas
+      // mesmo depois da correção de `SCHOOL_UPS`, e o navegador de automação não reproduziu o
+      // problema em nenhuma das 30 escolas testadas — pra conseguir um dado real do APARELHO do
+      // usuário sem precisar de ferramentas de desenvolvedor (só um print do HUD, que já é sempre
+      // visível, lab-67), calcula aqui, uma vez, quais escolas (se alguma) ficam com a parede
+      // abaixo do nível real do terreno (mesmo método de `terrainGroundRadial`/`settleMeshOnTerrain`
+      // usado pra posicionar de verdade) e mostra o resultado no HUD de debug. REMOVER depois de
+      // confirmar a causa raiz real.
+      const buriedSchoolReport = (() => {
+        const bad: string[] = []
+        for (const { quest, base } of portalMeshes) {
+          const walls = scene.getMeshByName(`walls-${quest.id}`)
+          if (!walls) continue
+          const rootPos = base.getAbsolutePosition()
+          const dir = rootPos.clone().normalize()
+          const terrain = terrainGroundRadial(dir, terrainHeight(dir))
+          walls.computeWorldMatrix(true)
+          const positions = walls.getVerticesData(VertexBuffer.PositionKind)
+          const worldMatrix = walls.getWorldMatrix()
+          let wallsTop = -Infinity
+          if (positions) {
+            for (let i = 0; i < positions.length; i += 3) {
+              const p = Vector3.TransformCoordinates(
+                new Vector3(positions[i], positions[i + 1], positions[i + 2]),
+                worldMatrix,
+              )
+              const proj = Vector3.Dot(p, dir)
+              if (proj > wallsTop) wallsTop = proj
+            }
+          }
+          const gap = wallsTop - terrain
+          if (gap < 1.0) bad.push(`${quest.id}(${gap.toFixed(2)})`)
+        }
+        return bad.length > 0 ? `ENTERRADAS:${bad.join(',')}` : 'ENTERRADAS:nenhuma'
+      })()
+
+      // Carteira de estudos (lab-93, pedido do usuário: "uma carteira de estudo em que o boneco
+      // pode sentar, acessar seu catálogo de conquistas") — objeto FIXO e único no mundo, mesmo
+      // padrão de posicionamento das escolinhas acima (`terrainGroundRadial` +
+      // `settleMeshOnTerrain`), mas sem vínculo com missão nenhuma — perto do spawn (`spawnUp =
+      // (0,1,0)`, definido mais acima), deslocada o bastante pra não competir com o ponto de
+      // chegada.
+      const deskUp = new Vector3(0.35, 1, 0.12).normalize()
+      const deskGroundRadial = terrainGroundRadial(deskUp, terrainHeight(deskUp))
+      const deskSurfacePos = deskUp.scale(deskGroundRadial)
+
+      const deskBase = new TransformNode('carteira-estudos', scene)
+      deskBase.position = deskSurfacePos
+      deskBase.rotationQuaternion = alignmentQuaternion(deskUp)
+
+      const deskWoodMat = new PBRMaterial('deskWoodMat', scene)
+      deskWoodMat.albedoColor = new Color3(0.55, 0.35, 0.2)
+      deskWoodMat.roughness = 0.7
+      const deskMetalMat = new PBRMaterial('deskMetalMat', scene)
+      deskMetalMat.albedoColor = new Color3(0.35, 0.38, 0.42)
+      deskMetalMat.roughness = 0.4
+      deskMetalMat.metallic = 0.5
+      const deskBookMat = new PBRMaterial('deskBookMat', scene)
+      deskBookMat.albedoColor = new Color3(0.75, 0.2, 0.25)
+      deskBookMat.roughness = 0.8
+
+      function addDeskMesh(mesh: Mesh, mat: PBRMaterial) {
+        mesh.material = mat
+        mesh.parent = deskBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        return mesh
+      }
+
+      const deskTop = MeshBuilder.CreateBox('deskTop', { width: 0.7, height: 0.05, depth: 0.45 }, scene)
+      deskTop.position = new Vector3(0, 0.62, 0.2)
+      addDeskMesh(deskTop, deskWoodMat)
+
+      for (const side of [-1, 1]) {
+        const leg = MeshBuilder.CreateCylinder(`deskLeg${side}`, { height: 0.6, diameter: 0.05, tessellation: 8 }, scene)
+        leg.position = new Vector3(side * 0.28, 0.3, 0.05)
+        addDeskMesh(leg, deskMetalMat)
+      }
+
+      const book = MeshBuilder.CreateBox('deskBook', { width: 0.22, height: 0.03, depth: 0.16 }, scene)
+      book.position = new Vector3(0.1, 0.66, 0.22)
+      book.rotation.y = 0.3
+      addDeskMesh(book, deskBookMat)
+
+      // Banquinho — só decorativo (a pose "sentado" é congelada nos pivôs do boneco, não depende
+      // de encaixar geometricamente no assento), vende a ideia de "lugar pra sentar" à frente da
+      // mesa.
+      const deskSeat = MeshBuilder.CreateBox('deskSeat', { width: 0.4, height: 0.05, depth: 0.4 }, scene)
+      deskSeat.position = new Vector3(0, 0.42, -0.28)
+      addDeskMesh(deskSeat, deskWoodMat)
+      for (const side of [-1, 1]) {
+        const leg = MeshBuilder.CreateCylinder(`deskSeatLeg${side}`, { height: 0.4, diameter: 0.04, tessellation: 8 }, scene)
+        leg.position = new Vector3(side * 0.15, 0.2, -0.28)
+        addDeskMesh(leg, deskMetalMat)
+      }
+
+      settleMeshOnTerrain(deskBase, deskUp)
+      deskSurfacePos.copyFrom(deskBase.position)
+
+      const deskLabel = new TextBlock('deskLabel', '🏆')
+      deskLabel.color = 'white'
+      deskLabel.fontSize = mobileFontSize(28)
+      deskLabel.outlineWidth = 4
+      deskLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(deskLabel)
+      deskLabel.linkWithMesh(deskTop)
+      deskLabel.linkOffsetY = -60
+
+      // Minha Casa (lab-105, primeira fatia de docs/plano-comercial-backend.md, Fase E) — espaço
+      // pessoal GRATUITO de todo jogador, nunca cosmético pago (mesmo princípio já aplicado em
+      // progressão/cooperação). Fachada SÓLIDA visível de fora, mesma técnica de construção das
+      // escolinhas (`walls` com `PhysicsAggregate`, fundação mais larga, `settleMeshOnTerrain` com
+      // o telhado excluído da amostragem) — investigação de código confirmou que NENHUM prédio
+      // deste jogo tem interior andável (porta é só decorativa por fora, física sempre sólida);
+      // manter esse padrão aqui evita inventar física de vão de porta que nenhum outro lugar do
+      // arquivo usa. Interação é por gatilho de proximidade (igual à carteira/balcão da loja),
+      // abrindo `MyHousePanel` (2D) — mobília comprável/posicionável fica pra um próximo
+      // laboratório.
+      // Reposicionada (relatado pelo usuário: "fiquei do lado da casa e a legenda não aparece,
+      // pode ser os carros passando") — a direção original ficava a só ~1,2-1,8 unidades do laço
+      // de rua dos carrinhos (`streetCenter`, mais abaixo), bem dentro de `CAR_ENTER_DISTANCE`
+      // (2,0): o jogador via a legenda "Pressione E pra entrar" de um CARRO passando por perto
+      // (texto idêntico ao da casa, ver comentário de `houseEnterHint` abaixo) e, ao apertar E
+      // fora do raio de 1,2 da casa mas dentro do raio do carro, entrava no carro sem perceber —
+      // a "legenda que não funciona" era na verdade a legenda certa, só que de outra coisa. Nova
+      // direção candidata medida (script à parte, mesmo método de lab-09/11/127): pelo menos 2,5
+      // unidades de QUALQUER ponto do laço de rua (folga real acima de `CAR_ENTER_DISTANCE`), sem
+      // colidir com nenhuma escolinha/loja/carteira (>2,2 de cada), longe da decolagem do foguete
+      // (>5), e a só ~3,8 unidades da posição antiga — mesma vizinhança, não um teleporte pra longe.
+      //
+      // SEGUNDO achado real do usuário, na mesma sessão ("acho que a causa é a casa estar enterrada
+      // na terra"): a busca acima só considerava distância a outros prédios/rua, nunca a inclinação
+      // real do terreno — a mesma classe de bug já documentada no lab-95 pras escolinhas
+      // ("TODAS AS CASA ESTÃO DENTRO DA TERRA"), causada por cair perto da rampa de um
+      // `PLATEAU_CENTERS` (a candidata nova ficava bem na borda de um platô de 2,6 de altura,
+      // ~25° de distância angular contra um raio de platô de ~23,5°). Corrigido reaproveitando a
+      // MESMA busca por relevo real (raycast físico, `findFlatterUpReal`) já usada pelas
+      // escolinhas — nunca mais que ~0,26 rad (~3,4m) de desvio da candidata acima, então a folga
+      // de rua/prédios já verificada continua válida mesmo se a busca mover a casa um pouco.
+      const houseCandidateUp = new Vector3(-0.5362211119830486, 0.7986355100472928, 0.27321830311156536).normalize()
+      // Raio angular do "pé" da casa (fundação 1,72×1,52 → meia-diagonal ~1,15) e variância de
+      // relevo que a fundação (1,6 de altura, mesma da escolinha) ainda absorve sem enterrar
+      // paredes/porta — mesmos valores/raciocínio de `SCHOOL_FOOTPRINT_ANGULAR_RADIUS`/
+      // `SCHOOL_SAFE_TERRAIN_VARIANCE`, só que pro footprint da casa.
+      const HOUSE_FOOTPRINT_ANGULAR_RADIUS = 1.2 / PLANET_RADIUS
+      const HOUSE_SAFE_TERRAIN_VARIANCE = 0.6
+      const houseUp = findFlatterUpReal(houseCandidateUp, HOUSE_FOOTPRINT_ANGULAR_RADIUS, HOUSE_SAFE_TERRAIN_VARIANCE)
+      const houseGroundRadial = terrainGroundRadial(houseUp, terrainHeight(houseUp))
+      const houseSurfacePos = houseUp.scale(houseGroundRadial)
+
+      const houseBase = new TransformNode('minha-casa', scene)
+      houseBase.position = houseSurfacePos
+      houseBase.rotationQuaternion = alignmentQuaternion(houseUp)
+
+      const houseWallMat = new PBRMaterial('houseWallMat', scene)
+      houseWallMat.albedoColor = new Color3(0.85, 0.65, 0.5)
+      houseWallMat.roughness = 0.8
+      const houseRoofMat = new PBRMaterial('houseRoofMat', scene)
+      houseRoofMat.albedoColor = new Color3(0.55, 0.3, 0.28)
+      houseRoofMat.roughness = 0.5
+      const houseDoorMat = new PBRMaterial('houseDoorMat', scene)
+      houseDoorMat.albedoColor = new Color3(0.4, 0.25, 0.15)
+      houseDoorMat.roughness = 0.7
+      const houseFoundationMat = new PBRMaterial('houseFoundationMat', scene)
+      houseFoundationMat.albedoColor = new Color3(0.5, 0.42, 0.32)
+      houseFoundationMat.roughness = 0.95
+
+      const houseWalls = MeshBuilder.CreateBox('houseWalls', { width: 1.6, height: 1.1, depth: 1.4 }, scene)
+      houseWalls.position = new Vector3(0, 0.55, 0)
+      houseWalls.material = houseWallMat
+      houseWalls.parent = houseBase
+      houseWalls.receiveShadows = true
+      new PhysicsAggregate(houseWalls, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+      shadowGenerator.addShadowCaster(houseWalls)
+
+      // Mesmo diagnóstico de "prédio enterrado" já usado nas escolinhas (`buriedSchoolReport`,
+      // lab-95) — pedido do usuário no lab-134 ("acho que a causa é a casa estar enterrada na
+      // terra"): checar num dado real do APARELHO dele (só um print do HUD, sem ferramenta de
+      // desenvolvedor) em vez de confiar só na verificação ao vivo em outro aparelho, que já não
+      // reproduziu o mesmo resultado antes. REMOVER depois de confirmar a causa raiz real.
+      const buriedHouseReport = (() => {
+        const rootPos = houseBase.getAbsolutePosition()
+        const dir = rootPos.clone().normalize()
+        const terrain = terrainGroundRadial(dir, terrainHeight(dir))
+        houseWalls.computeWorldMatrix(true)
+        const positions = houseWalls.getVerticesData(VertexBuffer.PositionKind)
+        const worldMatrix = houseWalls.getWorldMatrix()
+        let wallsTop = -Infinity
+        if (positions) {
+          for (let i = 0; i < positions.length; i += 3) {
+            const p = Vector3.TransformCoordinates(
+              new Vector3(positions[i], positions[i + 1], positions[i + 2]),
+              worldMatrix,
+            )
+            const proj = Vector3.Dot(p, dir)
+            if (proj > wallsTop) wallsTop = proj
+          }
+        }
+        const gap = wallsTop - terrain
+        return `CASA:${gap.toFixed(2)}`
+      })()
+
+      const houseFoundation = MeshBuilder.CreateBox(
+        'houseFoundation',
+        { width: 1.72, height: 1.6, depth: 1.52 },
+        scene,
+      )
+      houseFoundation.position = new Vector3(0, -0.65, 0)
+      houseFoundation.material = houseFoundationMat
+      houseFoundation.parent = houseBase
+      houseFoundation.receiveShadows = true
+
+      const houseDoor = MeshBuilder.CreateBox('houseDoor', { width: 0.42, height: 0.62, depth: 0.06 }, scene)
+      houseDoor.position = new Vector3(0, 0.31, 0.71)
+      houseDoor.material = houseDoorMat
+      houseDoor.parent = houseBase
+
+      // lab-123: mesmo padrão de carro/foguete (dica linkada à malha da porta, alpha alternado
+      // por distância a cada quadro, ver bloco perto do fim do arquivo). Texto próprio ("...em
+      // casa", não só "Pressione E pra entrar" genérico) — achado real do usuário: com o texto
+      // genérico idêntico ao do carro, um carro passando perto da casa mostrava a MESMA legenda,
+      // e o jogador não tinha como saber qual das duas coisas E ia acionar.
+      const houseEnterHint = new TextBlock('houseEnterHint', 'Pressione E pra entrar em casa')
+      houseEnterHint.color = 'white'
+      houseEnterHint.fontSize = mobileFontSize(18)
+      houseEnterHint.fontWeight = 'bold'
+      houseEnterHint.outlineWidth = 3
+      houseEnterHint.outlineColor = 'rgba(0,0,0,0.6)'
+      houseEnterHint.alpha = 0
+      guiTexture.addControl(houseEnterHint)
+      houseEnterHint.linkWithMesh(houseDoor)
+      houseEnterHintLabel = houseEnterHint
+
+      const houseRoof = MeshBuilder.CreateCylinder(
+        'houseRoof',
+        { height: 0.8, diameterTop: 0.05, diameterBottom: 2.1, tessellation: 4 },
+        scene,
+      )
+      houseRoof.position = new Vector3(0, 1.5, 0)
+      houseRoof.rotation.y = Math.PI / 4
+      houseRoof.material = houseRoofMat
+      houseRoof.parent = houseBase
+      shadowGenerator.addShadowCaster(houseRoof)
+
+      settleMeshOnTerrain(houseBase, houseUp, [houseRoof])
+      houseSurfacePos.copyFrom(houseBase.position)
+
+      const houseLabel = new TextBlock('houseLabel', '🏠')
+      houseLabel.color = 'white'
+      houseLabel.fontSize = mobileFontSize(28)
+      houseLabel.outlineWidth = 4
+      houseLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(houseLabel)
+      houseLabel.linkWithMesh(houseRoof)
+      houseLabel.linkOffsetY = -70
+
+      // Interior da casa (lab-123, pedido do usuário: "a casa não consigo entrar, ele deve ser
+      // uma mapa interno a parte do mundo virtual... ao chegar perto tenho aperta E e entrar na
+      // casa"). Modelado como mais um "planetinha" de raio grande (curvatura imperceptível numa
+      // sala de poucos metros), bem longe de qualquer outro conteúdo — reaproveita a MESMA
+      // gravidade radial de todo o resto do jogo (`currentWorldCenter`/`currentGroundBaseFn`, ver
+      // comentário na declaração de `insideHouseInterior`), sem Scene/Engine Babylon separada.
+      const HOUSE_INTERIOR_CENTER = new Vector3(150, 0, 150)
+      const HOUSE_INTERIOR_RADIUS = 10
+      const HOUSE_INTERIOR_LANDING_UP = Vector3.Up()
+      const HOUSE_ROOM_HALF_SIZE = 5.5
+      const HOUSE_ROOM_HEIGHT = 3
+      const HOUSE_WALL_THICK = 0.2
+      // A câmera em 3ª pessoa do resto do jogo usa `CAMERA_DISTANCE = 9` — maior que o quarto
+      // inteiro (achado ao verificar ao vivo: a câmera ficava do lado de FORA da parede, olhando
+      // pra face externa dela, exatamente o bug que motivou este comentário). Só dentro de casa,
+      // a câmera usa uma distância/altura bem menor, mantendo folga da parede mesmo com o jogador
+      // encostado nela olhando pro centro da sala.
+      const HOUSE_INTERIOR_CAMERA_DISTANCE = 3.2
+      const HOUSE_INTERIOR_CAMERA_HEIGHT = 2.2
+      // Posicionamento manual de mobília (lab-136) — a peça fantasma nunca pode sair da sala nem
+      // grudar na parede (ficaria parcialmente dentro dela, visualmente errado, embora sem
+      // colisão física de verdade — mobília não tem `PhysicsAggregate`). Margem de 0,7 é uma folga
+      // genérica acima do maior meio-comprimento de qualquer peça do catálogo (a cama, ~0,9 de
+      // largura/2 + folga) — nenhuma tenta encostar de verdade na parede, dá pra ver o contorno
+      // inteiro. Velocidade de movimento igual a `WALK_SPEED` (familiar, mesmo "peso" de andar
+      // normal); rotação em ~90°/s, rápida o bastante pra não ser cansativo girar uma peça 180°.
+      const FURNITURE_PLACEMENT_MARGIN = 0.7
+      const FURNITURE_PLACEMENT_MOVE_SPEED = 3.5
+      const FURNITURE_PLACEMENT_ROTATE_SPEED = 1.6
+      // Opacidade da parede desvanecida por oclusão de câmera (lab-136) — baixa o bastante pra
+      // enxergar o cenário/boneco através dela sem sumir de vez (a sala continua reconhecível
+      // como uma sala, não um espaço aberto).
+      const HOUSE_WALL_FADE_ALPHA = 0.18
+
+      // Visual de cada peça de `FURNITURE_CATALOG` (`data/furniture.ts`, dado de domínio puro) —
+      // mapeamento fica AQUI, não no arquivo de dados, pra não acoplar o catálogo a nenhuma classe
+      // de engine 3D (mesma separação já usada por `hats.ts`/`glasses.ts` vs. `studentFigure.ts`).
+      const FURNITURE_VISUAL_KIND: Record<string, { kind: string; color: Color3 }> = {
+        cama: { kind: 'bed', color: new Color3(0.75, 0.3, 0.35) },
+        mesa_cadeira: { kind: 'table', color: new Color3(0.55, 0.38, 0.22) },
+        tapete: { kind: 'rug', color: new Color3(0.5, 0.25, 0.55) },
+        planta: { kind: 'plant', color: new Color3(0.25, 0.55, 0.3) },
+        luminaria: { kind: 'lamp', color: new Color3(0.9, 0.85, 0.6) },
+        cama_nave: { kind: 'bed', color: new Color3(0.2, 0.3, 0.55) },
+        luminaria_planeta: { kind: 'lamp', color: new Color3(0.5, 0.7, 0.9) },
+        tapete_estrelas: { kind: 'rug', color: new Color3(0.14, 0.12, 0.32) },
+        grama_florida: { kind: 'rug', color: new Color3(0.35, 0.65, 0.35) },
+        banco_madeira: { kind: 'bench', color: new Color3(0.5, 0.35, 0.2) },
+        borboletas_animadas: { kind: 'butterflies', color: new Color3(0.85, 0.4, 0.6) },
+        estante_livros: { kind: 'shelf', color: new Color3(0.45, 0.3, 0.18) },
+        globo_terrestre: { kind: 'globe', color: new Color3(0.25, 0.5, 0.65) },
+        lousa: { kind: 'board', color: new Color3(0.12, 0.35, 0.25) },
+        microscopio: { kind: 'microscope', color: new Color3(0.6, 0.6, 0.65) },
+      }
+
+      // Malha procedural simples por `kind` — mesmo estilo de caixas/cilindros/esferas já usado em
+      // todo o resto do arquivo (mesa da carteira, foguete, etc.), não modelos importados.
+      function buildFurniturePiece(kind: string, color: Color3): TransformNode {
+        const root = new TransformNode(`furniture-${kind}-${Math.random().toString(36).slice(2)}`, scene)
+        const mat = new PBRMaterial(`furnMat-${root.name}`, scene)
+        mat.albedoColor = color
+        mat.roughness = 0.8
+        const add = (mesh: Mesh, y = 0) => {
+          mesh.material = mat
+          mesh.parent = root
+          mesh.position.y = y
+          shadowGenerator.addShadowCaster(mesh)
+          return mesh
+        }
+        if (kind === 'rug') {
+          add(MeshBuilder.CreateBox('rug', { width: 1.4, height: 0.04, depth: 1.0 }, scene), 0.02)
+        } else if (kind === 'bed') {
+          add(MeshBuilder.CreateBox('bedBase', { width: 1.0, height: 0.35, depth: 1.8 }, scene), 0.18)
+          const head = add(MeshBuilder.CreateBox('bedHead', { width: 1.0, height: 0.5, depth: 0.1 }, scene), 0.6)
+          head.position.z = -0.85
+        } else if (kind === 'table') {
+          add(MeshBuilder.CreateBox('tableTop', { width: 0.9, height: 0.06, depth: 0.6 }, scene), 0.62)
+          for (const [sx, sz] of [
+            [-0.4, -0.25],
+            [0.4, -0.25],
+            [-0.4, 0.25],
+            [0.4, 0.25],
+          ]) {
+            const leg = add(MeshBuilder.CreateCylinder('tableLeg', { height: 0.6, diameter: 0.05 }, scene), 0.3)
+            leg.position.x = sx
+            leg.position.z = sz
+          }
+        } else if (kind === 'bench') {
+          add(MeshBuilder.CreateBox('benchTop', { width: 1.1, height: 0.08, depth: 0.35 }, scene), 0.42)
+          for (const sx of [-0.45, 0.45]) {
+            const leg = add(MeshBuilder.CreateBox('benchLeg', { width: 0.06, height: 0.4, depth: 0.3 }, scene), 0.2)
+            leg.position.x = sx
+          }
+        } else if (kind === 'plant') {
+          add(
+            MeshBuilder.CreateCylinder('plantPot', { height: 0.3, diameterTop: 0.35, diameterBottom: 0.25 }, scene),
+            0.15,
+          )
+          add(MeshBuilder.CreateSphere('plantFoliage', { diameter: 0.55 }, scene), 0.55)
+        } else if (kind === 'lamp') {
+          add(MeshBuilder.CreateCylinder('lampPole', { height: 1.1, diameter: 0.05 }, scene), 0.55)
+          const bulb = add(MeshBuilder.CreateSphere('lampBulb', { diameter: 0.28 }, scene), 1.15)
+          ;(bulb.material as PBRMaterial).emissiveColor = color.scale(0.6)
+        } else if (kind === 'shelf') {
+          add(MeshBuilder.CreateBox('shelfBody', { width: 0.9, height: 1.4, depth: 0.3 }, scene), 0.7)
+          const bookMat = new PBRMaterial(`furnBookMat-${root.name}`, scene)
+          bookMat.albedoColor = new Color3(0.7, 0.2, 0.2)
+          for (const y of [0.35, 0.75, 1.15]) {
+            const books = MeshBuilder.CreateBox('shelfBooks', { width: 0.8, height: 0.15, depth: 0.22 }, scene)
+            books.material = bookMat
+            books.parent = root
+            books.position.y = y
+            books.position.z = 0.02
+            shadowGenerator.addShadowCaster(books)
+          }
+        } else if (kind === 'globe') {
+          add(MeshBuilder.CreateCylinder('globeStand', { height: 0.7, diameter: 0.08 }, scene), 0.35)
+          add(MeshBuilder.CreateSphere('globeBall', { diameter: 0.5 }, scene), 0.9)
+        } else if (kind === 'board') {
+          const leg1 = add(MeshBuilder.CreateCylinder('boardLeg1', { height: 1.2, diameter: 0.05 }, scene), 0.6)
+          leg1.position.x = -0.45
+          const leg2 = add(MeshBuilder.CreateCylinder('boardLeg2', { height: 1.2, diameter: 0.05 }, scene), 0.6)
+          leg2.position.x = 0.45
+          add(MeshBuilder.CreateBox('boardPanel', { width: 1.1, height: 0.7, depth: 0.05 }, scene), 1.1)
+        } else if (kind === 'microscope') {
+          add(MeshBuilder.CreateCylinder('microBase', { height: 0.08, diameter: 0.35 }, scene), 0.04)
+          add(MeshBuilder.CreateCylinder('microArm', { height: 0.5, diameter: 0.06 }, scene), 0.3)
+          add(MeshBuilder.CreateSphere('microLens', { diameter: 0.14 }, scene), 0.55)
+        } else if (kind === 'butterflies') {
+          for (let i = 0; i < 3; i++) {
+            const wing = MeshBuilder.CreatePlane(`butterflyWing${i}`, { size: 0.18 }, scene)
+            wing.material = mat
+            wing.parent = root
+            wing.position = new Vector3((i - 1) * 0.3, 0.5 + i * 0.15, (i - 1) * 0.2)
+            wing.billboardMode = Mesh.BILLBOARDMODE_Y
+          }
+        }
+        return root
+      }
+
+      // Reaplica visibilidade de cada peça conforme `progress.unlockedFurnitureIds` — chamada ao
+      // construir a sala, ao entrar de novo, e sempre que a lista muda de verdade (bridge
+      // `__refreshHouseFurniture`, mesmo padrão de `__setAvatarShirtColor` etc., observado por um
+      // `useEffect` em `progress.unlockedFurnitureIds`) — cobre comprar um item novo no balcão SEM
+      // precisar sair e voltar pra ver o móvel aparecer.
+      function refreshHouseFurnitureVisuals() {
+        for (const item of FURNITURE_CATALOG) {
+          houseFurnitureNodes[item.id]?.setEnabled(progressRef.current.unlockedFurnitureIds.includes(item.id))
+        }
+      }
+      ;(scene as any).__refreshHouseFurniture = refreshHouseFurnitureVisuals
+
+      // Construída sob demanda na primeira entrada (mesmo padrão de `buildMarsIfNeeded` etc.) —
+      // nenhum jogador que nunca entrar em casa paga o custo de criar esta sala.
+      function buildHouseInteriorIfNeeded() {
+        if (houseInteriorBuilt) return
+        houseInteriorBuilt = true
+
+        const interiorRoot = new TransformNode('houseInteriorRoot', scene)
+        interiorRoot.position = HOUSE_INTERIOR_CENTER.add(HOUSE_INTERIOR_LANDING_UP.scale(HOUSE_INTERIOR_RADIUS))
+        interiorRoot.rotationQuaternion = alignmentQuaternion(HOUSE_INTERIOR_LANDING_UP)
+        houseInteriorRootNode = interiorRoot
+
+        const S = HOUSE_ROOM_HALF_SIZE
+        const H = HOUSE_ROOM_HEIGHT
+        const T = HOUSE_WALL_THICK
+
+        const floorMat = new PBRMaterial('houseIntFloorMat', scene)
+        floorMat.albedoColor = new Color3(0.68, 0.5, 0.36)
+        floorMat.roughness = 0.85
+        const wallMat = new PBRMaterial('houseIntWallMat', scene)
+        wallMat.albedoColor = new Color3(0.92, 0.86, 0.74)
+        wallMat.roughness = 0.9
+        const ceilingMat = new PBRMaterial('houseIntCeilingMat', scene)
+        ceilingMat.albedoColor = new Color3(0.85, 0.8, 0.7)
+        ceilingMat.roughness = 0.9
+        const doorMat = new PBRMaterial('houseIntDoorMat', scene)
+        doorMat.albedoColor = new Color3(0.4, 0.25, 0.15)
+        doorMat.roughness = 0.7
+
+        const floor = MeshBuilder.CreateBox('houseIntFloor', { width: S * 2, height: T, depth: S * 2 }, scene)
+        floor.position.y = -T / 2
+        floor.material = floorMat
+        floor.parent = interiorRoot
+        floor.receiveShadows = true
+        new PhysicsAggregate(floor, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+
+        const ceiling = MeshBuilder.CreateBox('houseIntCeiling', { width: S * 2, height: T, depth: S * 2 }, scene)
+        ceiling.position.y = H + T / 2
+        ceiling.material = ceilingMat
+        ceiling.parent = interiorRoot
+
+        const wallHalf = H / 2
+        const northWall = MeshBuilder.CreateBox('houseIntWallNorth', { width: S * 2, height: H, depth: T }, scene)
+        northWall.position = new Vector3(0, wallHalf, -S)
+        const southWall = MeshBuilder.CreateBox('houseIntWallSouth', { width: S * 2, height: H, depth: T }, scene)
+        southWall.position = new Vector3(0, wallHalf, S)
+        const eastWall = MeshBuilder.CreateBox('houseIntWallEast', { width: T, height: H, depth: S * 2 }, scene)
+        eastWall.position = new Vector3(S, wallHalf, 0)
+        const westWall = MeshBuilder.CreateBox('houseIntWallWest', { width: T, height: H, depth: S * 2 }, scene)
+        westWall.position = new Vector3(-S, wallHalf, 0)
+        for (const wall of [northWall, southWall, eastWall, westWall]) {
+          // Material CLONADO por parede (lab-136, pedido do usuário: "as paredes precisam ficar
+          // transparentes... a câmera não via conseguir enxergar o cenário e o boneco") — as 4
+          // paredes compartilhavam a MESMA instância de material antes; desvanecer só a parede
+          // entre a câmera e o jogador (ver o loop de física mais abaixo) precisa de alpha
+          // independente por parede, senão desvanecer uma desvaneceria as 4 juntas.
+          const mat = wallMat.clone(`${wallMat.name}-${wall.name}`) as PBRMaterial
+          wall.material = mat
+          houseWallMats[wall.name] = mat
+          wall.parent = interiorRoot
+          wall.receiveShadows = true
+          new PhysicsAggregate(wall, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+          shadowGenerator.addShadowCaster(wall)
+        }
+
+        // Porta única (pedido do usuário: a mesma porta serve pra entrar E sair) — decorativa, sem
+        // vão físico de verdade na parede (mesmo padrão da fachada externa: nenhum prédio deste
+        // jogo tem física de vão de porta, ver comentário na construção da fachada acima).
+        const interiorDoor = MeshBuilder.CreateBox('houseIntDoor', { width: 0.9, height: 1.8, depth: 0.08 }, scene)
+        interiorDoor.position = new Vector3(0, 0.9, S - T / 2 - 0.05)
+        interiorDoor.material = doorMat
+        interiorDoor.parent = interiorRoot
+        houseDoorInsidePos = interiorRoot.position.add(interiorDoor.position)
+
+        const exitHint = new TextBlock('houseExitHint', 'Pressione E pra sair')
+        exitHint.color = 'white'
+        exitHint.fontSize = mobileFontSize(18)
+        exitHint.fontWeight = 'bold'
+        exitHint.outlineWidth = 3
+        exitHint.outlineColor = 'rgba(0,0,0,0.6)'
+        exitHint.alpha = 0
+        guiTexture.addControl(exitHint)
+        exitHint.linkWithMesh(interiorDoor)
+        houseExitHintLabel = exitHint
+
+        // Ponto de nascimento: alguns metros pra dentro da sala, longe da porta (evita disparar a
+        // saída no mesmo instante em que se entra — mesmo espírito de histerese de todo gatilho
+        // deste arquivo). O jogador nasce de frente pra porta (facing +Z, ver `enterHouseInterior`),
+        // então a câmera fica atrás dele, do lado NORTE — precisa de folga daquela parede maior
+        // que `HOUSE_INTERIOR_CAMERA_DISTANCE`, senão a câmera fica do lado de FORA da parede
+        // (bug real pego na verificação ao vivo: com uma folga fixa de 1.8, a câmera de distância
+        // 3.2 furava a parede norte).
+        const spawnClearanceFromBackWall = HOUSE_INTERIOR_CAMERA_DISTANCE + 1
+        houseInteriorSpawnPos = interiorRoot.position.add(
+          new Vector3(0, AVATAR_RADIUS + 0.05, -(S - spawnClearanceFromBackWall)),
+        )
+
+        // Balcão de compras — gatilho de proximidade abre `MyHousePanel` (mesmo painel de sempre,
+        // só muda de onde é aberto: da fachada externa pra dentro da sala).
+        const counterMat = new PBRMaterial('houseCounterMat', scene)
+        counterMat.albedoColor = new Color3(0.6, 0.42, 0.3)
+        counterMat.roughness = 0.7
+        const counter = MeshBuilder.CreateBox('houseCounter', { width: 1.2, height: 0.9, depth: 0.5 }, scene)
+        counter.position = new Vector3(0, 0.45, 0)
+        counter.material = counterMat
+        counter.parent = interiorRoot
+        shadowGenerator.addShadowCaster(counter)
+        houseCounterPos = interiorRoot.position.add(counter.position)
+
+        const counterLabel = new TextBlock('houseCounterLabel', '🛍️ Catálogo')
+        counterLabel.color = 'white'
+        counterLabel.fontSize = mobileFontSize(20)
+        counterLabel.outlineWidth = 4
+        counterLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(counterLabel)
+        counterLabel.linkWithMesh(counter)
+        counterLabel.linkOffsetY = -40
+
+        // Mobília em anel ao redor do balcão, reservando um corredor livre na direção da porta
+        // (evita qualquer peça bloqueando a passagem) — layout genérico, escala sozinho conforme
+        // `FURNITURE_CATALOG` cresce, sem posição fixa por item escrita à mão.
+        const doorAngle = Math.PI / 2 // porta fica em +Z (sul)
+        const doorGap = (32 * Math.PI) / 180
+        const usableArc = Math.PI * 2 - doorGap * 2
+        const startAngle = doorAngle + doorGap
+        const ringRadius = 3.0
+        FURNITURE_CATALOG.forEach((item, i) => {
+          const visual = FURNITURE_VISUAL_KIND[item.id]
+          if (!visual) return
+          const angle = startAngle + (usableArc * (i + 0.5)) / FURNITURE_CATALOG.length
+          const piece = buildFurniturePiece(visual.kind, visual.color)
+          piece.parent = interiorRoot
+          // Posição salva pelo jogador (lab-136, "Mover" no `MyHousePanel`) tem prioridade sobre o
+          // layout padrão em anel — só cai no anel se o jogador nunca reposicionou este item.
+          const saved = progressRef.current.housePlacements[item.id]
+          if (saved) {
+            piece.position = new Vector3(saved.x, 0, saved.z)
+            piece.rotation.y = saved.rotY
+          } else {
+            piece.position = new Vector3(Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius)
+            piece.rotation.y = -angle
+          }
+          houseFurnitureNodes[item.id] = piece
+        })
+
+        refreshHouseFurnitureVisuals()
+      }
+
+      function enterHouseInterior() {
+        buildHouseInteriorIfNeeded()
+        if (!avatarMesh || !avatarBody) return
+        savedOutsideCenter = currentWorldCenter
+        savedOutsideGroundFn = currentGroundBaseFn
+        insideHouseInterior = true
+        currentWorldCenter = HOUSE_INTERIOR_CENTER
+        currentGroundBaseFn = () => HOUSE_INTERIOR_RADIUS
+        // Teleporte físico seguro (mesmo padrão de `teleportAvatarTo`/saída do carro) — posição
+        // exata (sem aproximação de curvatura: a sala é um chão PLANO de verdade, diferente da
+        // superfície esférica que `offsetLandingUp` foi pensado pra aproximar).
+        avatarBody.body.disablePreStep = false
+        avatarMesh.position.copyFrom(houseInteriorSpawnPos)
+        scene.render()
+        avatarBody.body.setLinearVelocity(Vector3.Zero())
+        avatarBody.body.setAngularVelocity(Vector3.Zero())
+        avatarBody.body.disablePreStep = true
+        facing = new Vector3(0, 0, 1)
+        refreshHouseFurnitureVisuals()
+      }
+
+      function exitHouseInterior() {
+        if (!insideHouseInterior) return
+        // Sair de casa com uma peça em modo de posicionamento não deveria deixar o modo "preso"
+        // (o jogador não teria mais como confirmar/cancelar de dentro do painel) — cancela e
+        // restaura a posição anterior, mesmo efeito de apertar "Cancelar".
+        cancelFurniturePlacement()
+        insideHouseInterior = false
+        currentWorldCenter = savedOutsideCenter
+        currentGroundBaseFn = savedOutsideGroundFn
+        teleportAvatarTo(savedOutsideCenter, offsetLandingUp(houseUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
+      }
+
+      // Posicionamento manual de mobília (lab-136, pedido do usuário: "tem que ter opção... de
+      // escolher em que posição da casa deve ficar a peça... o ângulo e posição onde fica o
+      // objeto"). Três funções espelhando o padrão já estabelecido de "entrar/confirmar/cancelar
+      // um modo especial" deste arquivo (ex.: `boardRocket`/`landRocket`, `enterHouseInterior`/
+      // `exitHouseInterior`): `startFurniturePlacement` congela o jogador (mesmo mecanismo de
+      // `sittingAtDesk`/`drivingCar`, ver o loop de física mais abaixo) e deixa a peça "fantasma"
+      // (alpha reduzido) sob controle direto do jogador; `confirmFurniturePlacement` persiste via
+      // `onFurniturePlacedRef` (chega em `useProgress().setFurniturePlacement`, `App.tsx`);
+      // `cancelFurniturePlacement` restaura o snapshot tirado ao entrar, sem gravar nada.
+      function setFurniturePieceAlpha(piece: TransformNode, alpha: number) {
+        for (const mesh of piece.getChildMeshes()) {
+          if (mesh.material) (mesh.material as PBRMaterial).alpha = alpha
+        }
+      }
+
+      function startFurniturePlacement(id: string) {
+        if (!insideHouseInterior) return
+        const piece = houseFurnitureNodes[id]
+        if (!piece || !piece.isEnabled()) return
+        if (placingFurnitureId && placingFurnitureId !== id) cancelFurniturePlacement()
+        placingFurnitureId = id
+        placingFurnitureStartSnapshot = { x: piece.position.x, z: piece.position.z, rotY: piece.rotation.y }
+        placingFurnitureIdRef.current = id
+        setPlacingFurnitureUi(id)
+        setFurniturePieceAlpha(piece, 0.55)
+        // O jogador congela igual a `drivingCar`/`drivingRocket` (ver o loop de física mais
+        // abaixo) — sem zerar a velocidade aqui, qualquer impulso residual (ex.: acabou de andar)
+        // continuaria deslizando o corpo físico sozinho enquanto a gravidade normal já parou de
+        // ser aplicada, uma dessincronização visível entre avatar e câmera durante o modo.
+        if (avatarBody) {
+          avatarBody.body.setLinearVelocity(Vector3.Zero())
+          avatarBody.body.setAngularVelocity(Vector3.Zero())
+        }
+      }
+
+      function confirmFurniturePlacement() {
+        if (!placingFurnitureId) return
+        const piece = houseFurnitureNodes[placingFurnitureId]
+        if (piece) {
+          setFurniturePieceAlpha(piece, 1)
+          onFurniturePlacedRef.current(placingFurnitureId, piece.position.x, piece.position.z, piece.rotation.y)
+        }
+        placingFurnitureId = null
+        placingFurnitureStartSnapshot = null
+        placingFurnitureIdRef.current = null
+        setPlacingFurnitureUi(null)
+      }
+
+      function cancelFurniturePlacement() {
+        if (!placingFurnitureId) return
+        const piece = houseFurnitureNodes[placingFurnitureId]
+        if (piece) {
+          setFurniturePieceAlpha(piece, 1)
+          if (placingFurnitureStartSnapshot) {
+            piece.position.x = placingFurnitureStartSnapshot.x
+            piece.position.z = placingFurnitureStartSnapshot.z
+            piece.rotation.y = placingFurnitureStartSnapshot.rotY
+          }
+        }
+        placingFurnitureId = null
+        placingFurnitureStartSnapshot = null
+        placingFurnitureIdRef.current = null
+        setPlacingFurnitureUi(null)
+      }
+      ;(scene as any).__startFurniturePlacement = startFurniturePlacement
+      ;(scene as any).__confirmFurniturePlacement = confirmFurniturePlacement
+      ;(scene as any).__cancelFurniturePlacement = cancelFurniturePlacement
 
       function applyPortalVisual(entry: (typeof portalMeshes)[number]) {
         const p = progressRef.current
@@ -5635,6 +7517,30 @@ export function World3D({
       // gatilho, no loop de física por quadro).
       const QT_QUIZ_TRIGGER_DISTANCE = 0.85
 
+      // Distância de gatilho da carteira de estudos (lab-93) — maior que a do quiz (a mesa/banco
+      // ocupam mais espaço que a esfera do marcador), mas ainda exige chegar perto de verdade, não
+      // só entrar na mesma região do planeta (mesmo espírito do quiz, valor emprestado do meio
+      // termo entre os dois: menor que `TRIGGER_DISTANCE` das escolas, maior que
+      // `QT_QUIZ_TRIGGER_DISTANCE`).
+      const DESK_TRIGGER_DISTANCE = 1.2
+
+      // Distância de gatilho de Minha Casa — corrigido no lab-134 (achado real do usuário, "a casa
+      // não aceita o comando E", reproduzido só depois de andar de verdade até lá, nunca com
+      // teleporte de depuração direto ao pivô). O valor original (1,2) foi copiado por analogia da
+      // carteira ("fachada ocupa espaço parecido"), sem medir contra a física real da casa: a
+      // parede (`houseWalls`, profundidade 1,4 → meia-profundidade 0,7) tem colisão sólida de
+      // verdade, e a cápsula do avatar (`AVATAR_RADIUS = 0,55`) não consegue chegar mais perto do
+      // que ~0,7+0,55 = 1,25 do pivô `houseBase` encostando de frente na porta — MAIOR que o
+      // próprio raio de gatilho de 1,2! Um jogador andando de verdade fisicamente NUNCA conseguia
+      // chegar perto o bastante, em NENHUMA posição da casa, em nenhum aparelho — só teleporte de
+      // depuração (que ignora colisão) conseguia, mascarando o bug em toda verificação anterior
+      // desta investigação. Corrigido com folga real acima do mínimo geométrico (~1,25).
+      const HOUSE_TRIGGER_DISTANCE = 1.6
+
+      // Distância de gatilho das escolinhas de astronomia dos planetas (lab-115) — mesmo
+      // raciocínio da carteira/Minha Casa: o totem+professor ocupam espaço parecido.
+      const PLANET_SCHOOL_TRIGGER_DISTANCE = 1.2
+
       // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
       // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
       // alto de cada uma (`plateau.height`, o mesmo valor usado por `terrainHeight` — o centro do
@@ -5972,6 +7878,7 @@ export function World3D({
             lastShoeColorId: null,
             lastBackpackColorId: null,
             lastHairShapeId: null,
+            lastGlassesId: null,
             attackAnimTimer: 0,
             attackAnimKind: null,
           }
@@ -6002,29 +7909,37 @@ export function World3D({
         if (state.shirtColorId !== rp.lastShirtColorId) {
           rp.lastShirtColorId = state.shirtColorId
           const opt = findColorOption(SHIRT_COLOR_CATALOG, state.shirtColorId)
-          rp.figure.shirtMat.albedoColor = opt ? new Color3(...opt.colorRgb) : avatarColorFromEmoji(state.avatarEmoji)
+          applyClothingLook(rp.figure.shirtMat, opt, scene, avatarColorFromEmoji(state.avatarEmoji), 0.7)
         }
         if (state.pantsColorId !== rp.lastPantsColorId) {
           rp.lastPantsColorId = state.pantsColorId
           const opt = findColorOption(PANTS_COLOR_CATALOG, state.pantsColorId)
-          rp.figure.pantsMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.22, 0.28, 0.48)
+          applyClothingLook(rp.figure.pantsMat, opt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
         }
         if (state.shoeColorId !== rp.lastShoeColorId) {
           rp.lastShoeColorId = state.shoeColorId
           const opt = findColorOption(SHOE_COLOR_CATALOG, state.shoeColorId)
-          rp.figure.shoeMat.albedoColor = opt ? new Color3(...opt.colorRgb) : new Color3(0.12, 0.12, 0.14)
+          applyClothingLook(rp.figure.shoeMat, opt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
         }
         if (state.backpackColorId !== rp.lastBackpackColorId) {
           rp.lastBackpackColorId = state.backpackColorId
           const opt = findColorOption(BACKPACK_COLOR_CATALOG, state.backpackColorId)
-          rp.figure.backpackMat.albedoColor = opt
-            ? new Color3(...opt.colorRgb)
-            : Color3.Lerp(avatarColorFromEmoji(state.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5)
+          applyClothingLook(
+            rp.figure.backpackMat,
+            opt,
+            scene,
+            Color3.Lerp(avatarColorFromEmoji(state.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+            0.75,
+          )
         }
         if (state.hairShapeId !== rp.lastHairShapeId) {
           rp.lastHairShapeId = state.hairShapeId
           const opt = findHairShapeOption(state.hairShapeId)
           applyHairShape(rp.figure, opt?.shape ?? 'padrao', scene, shadowGenerator)
+        }
+        if (state.glassesId !== rp.lastGlassesId) {
+          rp.lastGlassesId = state.glassesId
+          applyGlasses(rp.figure, state.glassesId ? findGlassesById(state.glassesId) ?? null : null, scene, shadowGenerator)
         }
       }
 
@@ -6178,7 +8093,9 @@ export function World3D({
           else stopRain()
         }
         rainAmount += ((raining ? 1 : 0) - rainAmount) * Math.min(1, dt * 0.5)
-        rainSystem.emitRate = rainAmount * (isLowEndDevice ? 130 : 500)
+        // lab-123: sem chuva dentro de casa (o emissor segue o jogador via `localUp` — sem isso,
+        // continuaria chovendo dentro de um ambiente fechado).
+        rainSystem.emitRate = insideHouseInterior ? 0 : rainAmount * (isLowEndDevice ? 130 : 500)
 
         // Raio: só sorteia/dispara enquanto chove de verdade (rainAmount alto, não só
         // "raining=true" no instante em que a chuva ainda está começando a aparecer).
@@ -6237,8 +8154,31 @@ export function World3D({
           // pulo, orientação visual) já era só relativo a `pos`/`localUp`, então generalizar só
           // este cálculo basta pra funcionar em qualquer um dos dois planetas sem duplicar lógica.
           const relPos = pos.subtract(currentWorldCenter)
-          const dist = relPos.length()
-          const localUp = dist > 0.0001 ? relPos.scale(1 / dist) : new Vector3(0, 1, 0)
+          // Dentro da casa (lab-134, achado real do usuário: "o boneco está enterrado na casa
+          // quase no joelho"): o comentário original que criou o interior (lab-123) assumia que a
+          // curvatura do "planetinha" de raio 10 seria "imperceptível numa sala de poucos metros"
+          // — na prática NÃO é: o chão da sala é REALMENTE PLANO (uma caixa, não uma esfera), mas
+          // `dist`/`localUp` (pensados pra uma esfera, onde a DIREÇÃO a partir do centro codifica
+          // a posição inteira na superfície) tratavam a distância euclidiana até o centro como
+          // "altura acima do chão" e a direção normalizada como "pra cima" — em qualquer ponto
+          // fora do exato centro da sala (o balcão fica lá, mas o jogador anda pela sala toda)
+          // isso afunda o personagem VISUAL cada vez mais fundo no chão de verdade (até ~0,4
+          // unidade nas bordas da sala de 11×11, exatamente o sintoma relatado) e inclina a
+          // gravidade/orientação/câmera pro centro. A física do colisor em si sempre esteve
+          // correta (repousa no chão PLANO de verdade via colisão real, não por esta fórmula).
+          // Corrigido pra sala plana: `dist` vira só a ALTURA acima do plano do centro
+          // (`relPos.y`, não a distância euclidiana 3D) e `localUp` trava na vertical pura
+          // (`HOUSE_INTERIOR_LANDING_UP`) — juntos, tornam gravidade/salto/câmera corretos. Isso
+          // sozinho ainda não bastava pro personagem VISUAL (posição x/z também precisa vir de
+          // `pos` diretamente aqui dentro, não de `localUp` — ver a correção na linha do "grudar
+          // na superfície" mais abaixo, já que uma direção constante não pode codificar posição
+          // horizontal como codifica numa esfera).
+          const dist = insideHouseInterior ? relPos.y : relPos.length()
+          const localUp = insideHouseInterior
+            ? HOUSE_INTERIOR_LANDING_UP
+            : dist > 0.0001
+              ? relPos.scale(1 / dist)
+              : new Vector3(0, 1, 0)
 
           // Chuva acompanha o jogador — reorienta o emissor pro "up" local atual, senão a chuva
           // continuaria caindo na direção de onde o jogador nasceu conforme ele anda pela esfera.
@@ -6248,8 +8188,13 @@ export function World3D({
           // Dirigindo um carro (lab-25): o corpo físico do avatar fica congelado (sem
           // gravidade/velocidade nova) e a figura visual escondida (ver handler de entrar/sair)
           // — o input de teclado vira controle do carro, não do personagem a pé, então nada
-          // aqui deve mexer no avatar enquanto isso. Mesma coisa pilotando o foguete (lab-59).
-          if (!drivingCar && !drivingRocket) {
+          // aqui deve mexer no avatar enquanto isso. Mesma coisa pilotando o foguete (lab-59), e
+          // posicionando mobília (lab-136) — o input de movimento vira controle da peça fantasma
+          // em vez do avatar, ver o bloco de posicionamento logo depois do fim deste `if`.
+          // `sittingAtDesk` (lab-93) NÃO entra aqui de propósito — ver comentário mais abaixo, no
+          // ciclo de caminhada: travar o bloco inteiro impediria o jogador de andar embora da
+          // carteira (a própria saída depende do gatilho de distância rodando com posição real).
+          if (!drivingCar && !drivingRocket && !placingFurnitureId) {
           // Gravidade radial real — puxa sempre pro centro do planeta (origem),
           // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
           body.applyForce(localUp.scale(-GRAVITY), pos)
@@ -6393,15 +8338,37 @@ export function World3D({
           // Altura extra acima do "grudado no chão" quando o colisor físico sobe (pulo) —
           // sem isso o personagem visual ficava sempre preso na superfície e o pulo não aparecia.
           const airHeight = Math.max(0, dist - groundDist)
-          studentFigure.root.position.copyFrom(
-            currentWorldCenter.add(localUp.scale(currentGroundBaseFn(localUp) + 0.02 + airHeight))
-          )
+          if (insideHouseInterior) {
+            // Sala plana (ver comentário acima, na declaração de `dist`/`localUp`): uma direção
+            // "pra cima" constante não pode codificar posição horizontal como codifica numa
+            // esfera, então x/z vêm direto do colisor real (`pos`) em vez de `localUp` — só a
+            // altura usa a mesma fórmula de "grudar no chão" de sempre.
+            studentFigure.root.position.set(
+              pos.x,
+              currentWorldCenter.y + currentGroundBaseFn(localUp) + 0.02 + airHeight,
+              pos.z,
+            )
+          } else {
+            studentFigure.root.position.copyFrom(
+              currentWorldCenter.add(localUp.scale(currentGroundBaseFn(localUp) + 0.02 + airHeight))
+            )
+          }
 
           // Ciclo de caminhada — só avança enquanto o personagem realmente anda (e não está
           // caindo do laser — a cambalhota acima já cuida da pose nesse caso); som de passo
           // sintetizado disparado a cada troca de perna (cruzamento de zero do seno).
-          const moving = laserStunTimer <= 0 && Math.abs(throttle) > 0.05
-          if (moving) {
+          //
+          // Sentado na carteira de estudos (lab-93, `sittingAtDesk`): só esta recálculo de pose
+          // fica de fora (não o bloco inteiro acima) — gravidade/posição/input continuam
+          // funcionando normalmente, senão o jogador ficaria fisicamente preso sem conseguir
+          // andar embora (a saída depende do gatilho de distância da carteira rodando com a
+          // posição real do avatar, mais abaixo). A pose fica congelada onde foi deixada
+          // (`legPivotL.rotation.x = -1.1` etc., setado no gatilho) até `sittingAtDesk` voltar a
+          // `false` sozinho.
+          const moving = !sittingAtDesk && laserStunTimer <= 0 && Math.abs(throttle) > 0.05
+          if (sittingAtDesk) {
+            // não mexe em nada — pose fica exatamente como o gatilho da carteira deixou.
+          } else if (moving) {
             walkPhase += dt * Math.abs(throttle) * (running ? RUN_CYCLE_SPEED : WALK_CYCLE_SPEED)
             const swing = Math.sin(walkPhase) * LEG_SWING_MAX
             studentFigure.legPivotL.rotation.x = swing
@@ -6452,51 +8419,145 @@ export function World3D({
             }
             if (attackAnimTimer <= 0) attackAnimKind = null
           }
-          } // fim do `if (!drivingCar && !drivingRocket)` — resto do bloco (câmera/multiplayer/
-            // ranking/portais) continua rodando normalmente dirigindo ou não.
+          } // fim do `if (!drivingCar && !drivingRocket && !placingFurnitureId)` — resto do bloco
+            // (câmera/multiplayer/ranking/portais) continua rodando normalmente em qualquer caso.
+
+          // Modo de posicionamento de mobília (lab-136, pedido do usuário: "escolher em que
+          // posição da casa deve ficar a peça... o ângulo e posição"): reaproveita o MESMO eixo
+          // x/y de movimento (WASD/joystick, já combinado no topo deste bloco) e os MESMOS botões
+          // de rotação de câmera (◀ ▶) — em vez de mover o avatar/girar a câmera (que ficam
+          // congelados enquanto isso, ver o `if` que acabou de fechar acima), eles movem/giram a
+          // peça fantasma. Evita inventar controles novos só pra este modo — o jogador já sabe
+          // usá-los.
+          if (placingFurnitureId) {
+            const ghost = houseFurnitureNodes[placingFurnitureId]
+            if (ghost) {
+              const limit = HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN
+              ghost.position.x = Math.max(
+                -limit,
+                Math.min(limit, ghost.position.x + x * FURNITURE_PLACEMENT_MOVE_SPEED * dt),
+              )
+              ghost.position.z = Math.max(
+                -limit,
+                Math.min(limit, ghost.position.z + y * FURNITURE_PLACEMENT_MOVE_SPEED * dt),
+              )
+              if (cameraRotateLeftRef.current) ghost.rotation.y -= dt * FURNITURE_PLACEMENT_ROTATE_SPEED
+              if (cameraRotateRightRef.current) ghost.rotation.y += dt * FURNITURE_PLACEMENT_ROTATE_SPEED
+            }
+          }
 
           // câmera segue a bola acompanhando a orientação local do planeta (sobrescrita pela
           // câmera do carro logo abaixo, se `drivingCar` estiver setado neste quadro)
           // Botões de rotação de câmera (lab-55, pedido do usuário — tablet sem mouse pra olhar
           // em volta): giram só a posição da câmera ao redor do jogador (`cameraYawOffsetRef`),
           // sem tocar em `facing` — o boneco continua andando pra onde o direcional manda, só a
-          // vista gira, como olhar em volta sem mudar pra onde anda.
-          if (cameraRotateLeftRef.current) cameraYawOffsetRef.current -= dt * CAMERA_ROTATE_SPEED
-          if (cameraRotateRightRef.current) cameraYawOffsetRef.current += dt * CAMERA_ROTATE_SPEED
+          // vista gira, como olhar em volta sem mudar pra onde anda. Fora enquanto
+          // `placingFurnitureId` (bloco acima já consumiu os mesmos botões pra girar a peça).
+          if (!placingFurnitureId && cameraRotateLeftRef.current) cameraYawOffsetRef.current -= dt * CAMERA_ROTATE_SPEED
+          if (!placingFurnitureId && cameraRotateRightRef.current) cameraYawOffsetRef.current += dt * CAMERA_ROTATE_SPEED
           Matrix.FromQuaternionToRef(Quaternion.RotationAxis(localUp, cameraYawOffsetRef.current), tmpMatrix)
           const camFacing = Vector3.TransformNormal(facing, tmpMatrix).normalize()
-          const desiredCamPos = pos.subtract(camFacing.scale(CAMERA_DISTANCE)).add(localUp.scale(CAMERA_HEIGHT))
+          // lab-123: dentro de casa, a distância/altura padrão (pensada pro terreno aberto lá
+          // fora) colocaria a câmera do lado de FORA da parede — ver comentário na declaração de
+          // `HOUSE_INTERIOR_CAMERA_DISTANCE`.
+          const camDist = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
+          const camHeight = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_HEIGHT : CAMERA_HEIGHT
+          const desiredCamPos = pos.subtract(camFacing.scale(camDist)).add(localUp.scale(camHeight))
           camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
           camera.setTarget(pos)
 
-          // Multiplayer: manda o próprio estado (posição/direção) num ritmo baixo (não todo
-          // quadro) e atualiza a posição/orientação suavizada (lerp) dos jogadores remotos.
+          // Desvanece a parede que estiver entre a câmera e o jogador (lab-136, pedido do
+          // usuário: "as paredes precisam ficar transparentes... a câmera não via conseguir
+          // enxergar o cenário e o boneco") — a sala é pequena (11×11) com a câmera relativamente
+          // perto (`HOUSE_INTERIOR_CAMERA_DISTANCE`), então em cantos apertados a posição
+          // DESEJADA da câmera pode acabar do lado de fora de alguma parede. Em vez de prender a
+          // câmera dentro da sala (mudaria a sensação de câmera do resto do jogo), a parede que a
+          // câmera atravessou fica translúcida — checagem simples de "a câmera passou do plano
+          // desta parede", não um raycast (a sala é uma caixa com paredes ortogonais alinhadas
+          // aos eixos locais de `interiorRoot`, então comparar a coordenada local da câmera contra
+          // ±`HOUSE_ROOM_HALF_SIZE` em cada eixo já identifica exatamente qual parede é). Suaviza
+          // com lerp (não troca de opacidade num só quadro) pra não "piscar".
+          if (insideHouseInterior && houseInteriorRootNode) {
+            const camLocal = camera.position.subtract(houseInteriorRootNode.position)
+            const wallOver: Record<string, boolean> = {
+              houseIntWallNorth: camLocal.z < -HOUSE_ROOM_HALF_SIZE,
+              houseIntWallSouth: camLocal.z > HOUSE_ROOM_HALF_SIZE,
+              houseIntWallEast: camLocal.x > HOUSE_ROOM_HALF_SIZE,
+              houseIntWallWest: camLocal.x < -HOUSE_ROOM_HALF_SIZE,
+            }
+            for (const [name, mat] of Object.entries(houseWallMats)) {
+              const targetAlpha = wallOver[name] ? HOUSE_WALL_FADE_ALPHA : 1
+              mat.alpha += (targetAlpha - mat.alpha) * 0.2
+            }
+          }
+
+          // Multiplayer: manda o próprio estado só quando algo muda de verdade (posição/direção
+          // além do limiar, ou aparência trocada) ou quando o keepalive vence parado — ver
+          // NET_SEND_CHECK_INTERVAL acima pro motivo (orçamento de cota do Durable Object). O
+          // keepalive garante duas coisas ao mesmo tempo: mantém `rp.lastSeen` vivo pros outros
+          // enquanto parado (evita ser removido, ver NET_PEER_TIMEOUT_MS abaixo) e reenvia a
+          // aparência completa periodicamente — sem isso um jogador que entra na sala depois de
+          // outro já parado nunca aprenderia o chapéu/cor dele, já que aparência não tem mais
+          // mensagem própria disparada por evento de "novo jogador" (o relay não avisa quem já
+          // está conectado quando alguém novo entra).
           netSendTimer += dt
-          if (netSendTimer > 0.12) {
+          if (netSendTimer >= NET_SEND_CHECK_INTERVAL) {
             netSendTimer = 0
-            sendState(
-              profileRef.current.name,
-              profileRef.current.avatarEmoji,
-              studentFigure.root.position.asArray() as [number, number, number],
-              facing.asArray() as [number, number, number],
-              progressRef.current.xp,
-              progressRef.current.coins,
-              {
-                hatId: profileRef.current.equippedHatId,
-                hasSword: hasSwordRef.current,
-                hasGun: hasGunRef.current,
-                shirtColorId: profileRef.current.equippedShirtColorId,
-                pantsColorId: profileRef.current.equippedPantsColorId,
-                shoeColorId: profileRef.current.equippedShoeColorId,
-                backpackColorId: profileRef.current.equippedBackpackColorId,
-                hairShapeId: profileRef.current.equippedHairShapeId,
-              },
-            )
+            const currentPos = studentFigure.root.position
+            const moved =
+              !lastSentPos ||
+              !lastSentFacing ||
+              Vector3.Distance(currentPos, lastSentPos) > NET_POSITION_EPSILON ||
+              Vector3.Distance(facing, lastSentFacing) > NET_FACING_EPSILON
+            const appearanceKey = [
+              profileRef.current.equippedHatId,
+              hasSwordRef.current,
+              hasGunRef.current,
+              profileRef.current.equippedShirtColorId,
+              profileRef.current.equippedPantsColorId,
+              profileRef.current.equippedShoeColorId,
+              profileRef.current.equippedBackpackColorId,
+              profileRef.current.equippedHairShapeId,
+              profileRef.current.equippedGlassesId,
+            ].join('|')
+            const appearanceChanged = appearanceKey !== lastSentAppearanceKey
+            const nowMsNet = performance.now()
+            const dueForKeepalive = nowMsNet - lastNetSendMs >= NET_KEEPALIVE_INTERVAL_MS
+            if (moved || appearanceChanged || dueForKeepalive) {
+              sendState(
+                profileRef.current.name,
+                profileRef.current.avatarEmoji,
+                currentPos.asArray() as [number, number, number],
+                facing.asArray() as [number, number, number],
+                progressRef.current.xp,
+                progressRef.current.coins,
+                {
+                  hatId: profileRef.current.equippedHatId,
+                  hasSword: hasSwordRef.current,
+                  hasGun: hasGunRef.current,
+                  shirtColorId: profileRef.current.equippedShirtColorId,
+                  pantsColorId: profileRef.current.equippedPantsColorId,
+                  shoeColorId: profileRef.current.equippedShoeColorId,
+                  backpackColorId: profileRef.current.equippedBackpackColorId,
+                  hairShapeId: profileRef.current.equippedHairShapeId,
+                  glassesId: profileRef.current.equippedGlassesId,
+                },
+              )
+              lastSentPos = currentPos.clone()
+              lastSentFacing = facing.clone()
+              lastSentAppearanceKey = appearanceKey
+              lastNetSendMs = nowMsNet
+            }
           }
           const nowMs = performance.now()
           for (const [remoteId, rp] of remotePlayers) {
-            if (nowMs - rp.lastSeen > 8000) {
+            // Antes do lab-85, `sendState` disparava a cada 0,12s então 8s de silêncio já
+            // significava ~66 mensagens perdidas — sinal forte de desconexão real. Agora um
+            // jogador parado só manda keepalive a cada NET_KEEPALIVE_INTERVAL_MS (5s); um timeout
+            // de remoção também em ~8s deixaria margem curta demais pra um único keepalive
+            // atrasado por jitter de rede não derrubar o jogador remoto à toa da tela dos outros.
+            if (nowMs - rp.lastSeen > NET_PEER_TIMEOUT_MS) {
               removeRemotePlayer(remoteId)
               continue
             }
@@ -6643,12 +8704,91 @@ export function World3D({
               }
             }
 
+            // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo padrão de
+            // histerese gatilho/reset das escolinhas do planeta principal, mas pulando quest já
+            // concluída (mesmo espírito de `portalMeshes`/`completed` acima) via
+            // `completedPlanetQuestIds`, NUNCA `completedQuestIds`.
+            for (const marker of planetQuestMarkers) {
+              if (progressRef.current.completedPlanetQuestIds.includes(marker.quest.id)) continue
+              const d = Vector3.Distance(pos, marker.worldPos)
+              const triggerId = `planet-school-${marker.quest.id}`
+              if (d < PLANET_SCHOOL_TRIGGER_DISTANCE && !triggered.has(triggerId)) {
+                triggered.add(triggerId)
+                onSelectPlanetQuestRef.current(marker.quest.id)
+              } else if (d > RESET_DISTANCE) {
+                triggered.delete(triggerId)
+              }
+            }
+
+            // Baús de tesouro escondidos (lab-131) — achado único e PERMANENTE (nunca reseta, ao
+            // contrário do pote de moedas de Marte), então o próprio `pivot.isEnabled()` já basta
+            // como guarda de idempotência, sem precisar do `Set` de histerese `triggered`/
+            // `RESET_DISTANCE` usado acima (uma vez achado, o baú nunca mais reaparece nesta
+            // sessão, e a construção do próximo planeta já nasce escondida se `Progress` confirmar
+            // que foi achado numa sessão anterior).
+            for (const chest of treasureChestMarkers) {
+              if (!chest.pivot.isEnabled()) continue
+              if (Vector3.Distance(pos, chest.worldPos) < TREASURE_CHEST_TRIGGER_DISTANCE) {
+                chest.pivot.setEnabled(false)
+                chest.label.isVisible = false
+                onFindTreasureChestRef.current(chest.chestId)
+                playCoinCollect()
+                const reward = findTreasureChestById(chest.chestId)?.coinReward ?? 0
+                setTreasureFoundMessage(`💰 Baú encontrado! +${reward} moedas!`)
+                window.setTimeout(() => setTreasureFoundMessage(null), 4000)
+              }
+            }
+
+            // Carteira de estudos (lab-93) — mesmo padrão de gatilho do quiz acima, mas só um
+            // objeto (sem laço). Congela a pose "sentado" nos pivôs do boneco (mesmos valores da
+            // pose usada ao dirigir o carro, ver comentário lá) e abre o catálogo de conquistas.
+            // `sittingAtDesk` só volta a `false` quando o jogador se afasta o bastante — o corpo
+            // continua congelado mesmo depois de fechar o painel, até andar embora de verdade.
+            {
+              const d = Vector3.Distance(pos, deskSurfacePos)
+              if (d < DESK_TRIGGER_DISTANCE && !triggered.has('carteira-estudos')) {
+                triggered.add('carteira-estudos')
+                sittingAtDesk = true
+                studentFigure.legPivotL.rotation.x = -1.1
+                studentFigure.legPivotR.rotation.x = -1.1
+                studentFigure.kneePivotL.rotation.x = 1.5
+                studentFigure.kneePivotR.rotation.x = 1.5
+                studentFigure.armPivotL.rotation.x = -0.4
+                studentFigure.armPivotR.rotation.x = -0.4
+                studentFigure.elbowPivotL.rotation.x = 0.9
+                studentFigure.elbowPivotR.rotation.x = 0.9
+                onOpenAchievementsRef.current()
+              } else if (d > RESET_DISTANCE) {
+                triggered.delete('carteira-estudos')
+                sittingAtDesk = false
+              }
+            }
+
+            // Minha Casa (lab-105) — a partir do lab-123, entrar não é mais automático por
+            // proximidade: vira "Pressione E" (ver `handleInteractPress`), mesmo padrão de
+            // carro/foguete. O gatilho automático antigo foi removido daqui de propósito.
+
             for (const coin of coins) {
               if (coin.collected) continue
               if (Vector3.Distance(pos, coin.worldPos) < 1.3) {
                 coin.collected = true
                 coin.pivot.setEnabled(false)
                 onCollectCoinRef.current()
+                playCoinCollect()
+              }
+            }
+
+            // Pote de moedas na base alienígena de Marte (lab-128) — `marsCoinPotPivot` existe
+            // desde a construção do planeta, mas só fica `isEnabled()` depois de Marte limpo
+            // nesta visita (ver o bloco que chama `setEnabled(true)`) — checar isso aqui evita
+            // coletar o pote ANTES de revelado, só por passar perto de onde ele vai aparecer.
+            // `marsCoinPotCollected` evita coletar de novo sem sair/voltar.
+            if (marsCoinPotPivot && marsCoinPotPivot.isEnabled() && !marsCoinPotCollected) {
+              if (Vector3.Distance(pos, marsCoinPotWorldPos) < MARS_COIN_POT_TRIGGER_DISTANCE) {
+                marsCoinPotCollected = true
+                marsCoinPotPivot.setEnabled(false)
+                if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = false
+                for (let i = 0; i < MARS_COIN_POT_REWARD; i++) onCollectCoinRef.current()
                 playCoinCollect()
               }
             }
@@ -6787,11 +8927,32 @@ export function World3D({
         // ("sonar", cresce e desaparece, recomeça). `soundRingMat` foi dado o `alpha` inicial na
         // construção; aqui só o `alpha` muda por quadro, então o cast é seguro.
         if (soundRing) {
-          soundRing.setEnabled(onSecondPlanet)
-          if (onSecondPlanet) {
+          soundRing.setEnabled(currentPlanetId === 'marte')
+          if (currentPlanetId === 'marte') {
             const pingT = (time % 1.2) / 1.2
             soundRing.scaling.setAll(0.6 + pingT * 1.0)
             ;(soundRing.material as PBRMaterial).alpha = 0.5 * (1 - pingT)
+          }
+        }
+
+        // Cronômetro de sobrevivência (lab-129, pedido do usuário: "o cronometro fica regredindo
+        // se permanecer longe do foguete muito tempo") — só dreia fora do raio seguro perto do
+        // foguete de volta; `Math.ceil` + só atualizar o display quando o inteiro muda evita
+        // re-renderizar 60×/segundo (o de Marte só atualiza em eventos discretos de dano, este
+        // dreia continuamente, então precisa desse cuidado extra).
+        if (avatarMesh && currentPlanetId && DESTINATION_PLANETS[currentPlanetId]?.hasSurvivalTimer) {
+          const returnRocket = returnRockets.get(currentPlanetId)
+          const distToRocket = returnRocket
+            ? Vector3.Distance(avatarMesh.position, returnRocket.root.getAbsolutePosition())
+            : Infinity
+          if (distToRocket > SURVIVAL_TIMER_SAFE_RADIUS) {
+            survivalTimeRef.current = Math.max(0, survivalTimeRef.current - dt * SURVIVAL_TIMER_DRAIN_RATE)
+            const rounded = Math.ceil(survivalTimeRef.current)
+            if (rounded !== lastSurvivalTimeDisplayRef.current) {
+              lastSurvivalTimeDisplayRef.current = rounded
+              setSurvivalTimeDisplay(rounded)
+            }
+            if (survivalTimeRef.current <= 0) respawnFromSurvivalTimeout(currentPlanetId)
           }
         }
 
@@ -6799,8 +8960,8 @@ export function World3D({
         // da "dica" de localização pedida pelo usuário, já que a legenda flutuante sozinha pode
         // passar despercebida) + detecção de "pegou o item" (anda por cima, mesmo raio de coleta
         // espiritualmente parecido com o das moedas). Só roda no planeta principal — os itens não
-        // existem em Marte.
-        if (!onSecondPlanet && avatarMesh) {
+        // existem em nenhum planeta-destino.
+        if (currentPlanetId === null && avatarMesh) {
           if (swordPickup && !hasSwordRef.current) {
             swordPickup.root.rotationQuaternion = alignmentQuaternion(SWORD_LOCATION_DIR).multiply(
               Quaternion.RotationAxis(Vector3.Up(), time * 1.2),
@@ -6844,8 +9005,9 @@ export function World3D({
         // dentro do raio de detecção, em vez de vagar aleatoriamente perto de onde nasceram.
         // `secondPlanetRoot` não tem rotação própria (só translação pra `SECOND_PLANET_CENTER`),
         // então posição local ↔ mundo é só somar/subtrair o centro — mesma conversão simples já
-        // usada pelo laço de física principal pra calcular `localUp` em qualquer planeta.
-        if (onSecondPlanet && avatarMesh) {
+        // usada pelo laço de física principal pra calcular `localUp` em qualquer planeta. Só
+        // Marte tem inimigo (lab-110) — os outros planetas-destino não usam este bloco.
+        if (currentPlanetId === 'marte' && avatarMesh) {
           const avatarLocalPos = avatarMesh.position.subtract(SECOND_PLANET_CENTER)
           // `.normalize()` do Babylon muta o vetor NO LUGAR (diferente de `.add()`/`.subtract()`,
           // que devolvem um vetor novo) — chamar direto em `avatarLocalPos` encolheria ele pra
@@ -7170,19 +9332,60 @@ export function World3D({
           // ângulo não mostrava os motores. Usar o NARIZ DE VERDADE da nave (derivado da rotação
           // que ela já tem, suave por construção via `holdFlipHoldCurve`/`Slerp` acima) resolve
           // os dois problemas de uma vez: a câmera sempre fica do lado oposto ao nariz — vendo os
-          // motores — e nunca mais degenera perto do "pra cima" do mundo.
-          flyingRocket.computeWorldMatrix(true)
-          const shipNoseDir = Vector3.TransformNormal(Vector3.Up(), flyingRocket.getWorldMatrix()).normalize()
-          let upReference = Vector3.Up()
-          if (Math.abs(Vector3.Dot(shipNoseDir, upReference)) > 0.9) upReference = Vector3.Right()
-          const shipUp = upReference.subtract(shipNoseDir.scale(Vector3.Dot(upReference, shipNoseDir))).normalize()
-
-          const desiredShipCamPos = shipPos.subtract(shipNoseDir.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
+          // motores — e nunca mais degenera perto do "pra cima" do mundo. Válido só no CRUZEIRO
+          // (longe de qualquer planeta) — ver o `if` abaixo pras duas pontas de repouso.
+          const inLaunchHold = drivingRocket.progress <= ROCKET_LAUNCH_HOLD_END
+          const inLandingFlip = drivingRocket.progress >= ROCKET_LANDING_FLIP_START
+          let desiredShipCamPos: Vector3
+          let desiredShipCamUp: Vector3
+          if (inLaunchHold || inLandingFlip) {
+            // lab-116, bug real reportado pelo usuário ("a viagem do foguete pra ida pros outros
+            // planetas ta um pouco bugada a camera, fica uma visao dentro da terra"): nas duas
+            // pontas de repouso (decolando/terminando de pousar), o nariz trava apontando pra
+            // LONGE do planeta relevante (reto pra cima da plataforma) — "atrás da cauda" vira
+            // literalmente "pra DENTRO do planeta". Só ficava óbvio saindo do planeta principal
+            // (raio 13, único corpo com `backFaceCulling = false` desde o lab-95 — os outros
+            // planetas-destino são esferas lisas com culling padrão, então "câmera lá dentro" só
+            // mostra vazio, não o próprio interior). Câmera "de lado" aqui: tangente horizontal
+            // (baseada em `facing`, projetada perpendicular ao "pra cima" do planeta) + altura no
+            // PRÓPRIO "pra cima" do planeta relevante (garantido pra FORA da superfície, mesmo
+            // princípio já usado pela câmera do avatar andando) em vez de atrás do nariz/cauda.
+            const planetUp = inLaunchHold ? drivingRocket.fromUp : drivingRocket.toUp
+            let tangent = facing.subtract(planetUp.scale(Vector3.Dot(facing, planetUp)))
+            if (tangent.lengthSquared() < 0.0001) tangent = Vector3.Cross(planetUp, Vector3.Right())
+            tangent.normalize()
+            desiredShipCamPos = shipPos.subtract(tangent.scale(CAMERA_DISTANCE)).add(planetUp.scale(CAMERA_HEIGHT))
+            desiredShipCamUp = planetUp
+          } else {
+            flyingRocket.computeWorldMatrix(true)
+            const shipNoseDir = Vector3.TransformNormal(Vector3.Up(), flyingRocket.getWorldMatrix()).normalize()
+            let upReference = Vector3.Up()
+            if (Math.abs(Vector3.Dot(shipNoseDir, upReference)) > 0.9) upReference = Vector3.Right()
+            const shipUp = upReference.subtract(shipNoseDir.scale(Vector3.Dot(upReference, shipNoseDir))).normalize()
+            desiredShipCamPos = shipPos.subtract(shipNoseDir.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
+            desiredShipCamUp = shipUp
+          }
           camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
-          camera.upVector = Vector3.Lerp(camera.upVector, shipUp, 0.15).normalize()
+          camera.upVector = Vector3.Lerp(camera.upVector, desiredShipCamUp, 0.15).normalize()
           camera.setTarget(shipPos)
 
           if (drivingRocket.progress >= 1 || drivingRocket.progress <= 0) landRocket()
+        }
+
+        // Dica "pressione E" da casa (lab-123) — mesmo padrão do carro/foguete abaixo. Só uma das
+        // duas fica visível por vez: a de entrar (fora, perto da fachada) ou a de sair (dentro,
+        // perto da porta) — nunca as duas juntas.
+        if (avatarMesh && houseEnterHintLabel) {
+          houseEnterHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, houseSurfacePos) < HOUSE_TRIGGER_DISTANCE
+              ? 1
+              : 0
+        }
+        if (avatarMesh && houseExitHintLabel) {
+          houseExitHintLabel.alpha =
+            insideHouseInterior && Vector3.Distance(avatarMesh.position, houseDoorInsidePos) < HOUSE_TRIGGER_DISTANCE
+              ? 1
+              : 0
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
@@ -7206,16 +9409,16 @@ export function World3D({
         // parado perto da plataforma de partida durante o voo inteiro (só `flyingRocket` se move
         // de verdade), então a distância até o foguete parado continuaria pequena o tempo todo.
         if (avatarMesh && !drivingRocket) {
-          const activeRocket = onSecondPlanet ? secondPlanetReturnRocket : mainRocket
+          const activeRocket = currentPlanetId ? returnRockets.get(currentPlanetId) ?? null : mainRocket
           if (activeRocket) {
             // `getAbsolutePosition()` — mesmo motivo do outro ponto de checagem em
-            // `handleInteractPress` (o foguete de volta é filho de `secondPlanetRoot`).
+            // `handleInteractPress` (o foguete de volta é filho da raiz do planeta).
             const d = Vector3.Distance(avatarMesh.position, activeRocket.root.getAbsolutePosition())
             activeRocket.hintLabel.alpha = d < ROCKET_ENTER_DISTANCE ? 1 : 0
           }
         } else if (drivingRocket) {
           if (mainRocket) mainRocket.hintLabel.alpha = 0
-          if (secondPlanetReturnRocket) secondPlanetReturnRocket.hintLabel.alpha = 0
+          for (const r of returnRockets.values()) r.hintLabel.alpha = 0
         }
 
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
@@ -7285,7 +9488,11 @@ export function World3D({
         // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
         // de performance realmente ajudou ou não.
         if (debugRef.current) {
-          debugRef.current.textContent = `${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes`
+          // `buriedHouseReport` logo depois do build stamp (não no fim, como `buriedSchoolReport`)
+          // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
+          // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
+          // resto.
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -7484,6 +9691,17 @@ export function World3D({
     ;(sceneRef.current as any)?.__handleInteractPress?.()
   }
 
+  // Confirmar/Cancelar do modo de posicionamento de mobília (lab-136) — botões React normais
+  // (não Babylon GUI, ver comentário na declaração de `placingFurnitureUi` acima), mesmo padrão
+  // de `handleTouchInteractPress` acima: só repassam pra ponte exposta pelo closure.
+  function handleConfirmFurniturePlacement() {
+    ;(sceneRef.current as any)?.__confirmFurniturePlacement?.()
+  }
+
+  function handleCancelFurniturePlacement() {
+    ;(sceneRef.current as any)?.__cancelFurniturePlacement?.()
+  }
+
   function handleToggleMute() {
     setMuted(toggleAmbienceMute())
   }
@@ -7494,9 +9712,19 @@ export function World3D({
     ;(sceneRef.current as any)?.__showLocalChatBubble?.(messageId)
   }
 
+  // lab-121: nenhum painel/modal (nem os de App.tsx via `suspendTriggers`, nem os internos deste
+  // componente) tirava os botões do HUD da ordem de tabulação enquanto ficavam abertos por cima
+  // dele — um usuário de teclado conseguia dar Tab por dentro de um modal visualmente aberto e
+  // cair nos botões escondidos atrás. `inert` no HUD inteiro resolve isso numa mudança central,
+  // sem precisar de um focus-trap manual em cada um dos 12 painéis.
+  const hudInert = suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen
+
   return (
     <div className="world3d-container">
-      <canvas ref={canvasRef} className="world3d-canvas" />
+      {/* lab-121: o Babylon.js torna o canvas focável (captura teclado do jogo), então ele também
+          precisa de `inert` junto com o HUD — senão dá pra Tab escapar de um modal aberto direto
+          pro canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). */}
+      <canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />
       <div ref={debugRef} className="world3d-debug" />
       <HudHeader
         profile={profile}
@@ -7510,6 +9738,9 @@ export function World3D({
         onOpenRanking={() => setRankingOpen(true)}
         showBag={hasSword || hasGun}
         onOpenBag={() => setBagOpen(true)}
+        onOpenPairing={onOpenPairing}
+        onSwitchProfile={onSwitchProfile}
+        inert={hudInert}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}
       {onMarsCombatZone && (
@@ -7520,6 +9751,11 @@ export function World3D({
       <div ref={dangerOverlayRef} className="mars-danger-overlay" style={{ opacity: 0 }} />
       {marsDeathMessage && <p className="mars-death-message">{marsDeathMessage}</p>}
       {weaponMessage && <p className="mars-death-message weapon-message">{weaponMessage}</p>}
+      {survivalPlanetId && (
+        <SurvivalTimerBar timeLeft={survivalTimeDisplay} maxTime={SURVIVAL_TIMER_MAX} planetId={survivalPlanetId} />
+      )}
+      {survivalDeathMessage && <p className="mars-death-message">{survivalDeathMessage}</p>}
+      {treasureFoundMessage && <p className="mars-death-message">{treasureFoundMessage}</p>}
       {bagOpen && (
         <WeaponBagPanel
           hasSword={hasSword}
@@ -7527,6 +9763,17 @@ export function World3D({
           selected={selectedWeapon}
           onSelect={setSelectedWeapon}
           onClose={() => setBagOpen(false)}
+        />
+      )}
+      {planetPickerOpen && (
+        <PlanetPickerPanel
+          planets={DESTINATION_PLANET_LIST}
+          currentLevel={getLevel(progress.xp)}
+          onChoose={(id) => {
+            setPlanetPickerOpen(false)
+            boardRocketToRef.current(id)
+          }}
+          onClose={() => setPlanetPickerOpen(false)}
         />
       )}
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
@@ -7551,6 +9798,23 @@ export function World3D({
         onRelease={handleCameraRotateRightRelease}
       />
       <TouchActionButton className="touch-action-interact" label="E" onPress={handleTouchInteractPress} />
+      {placingFurnitureUi && (
+        <div className="furniture-placement-bar">
+          <p className="furniture-placement-hint">
+            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi)?.emoji}{' '}
+            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi)?.name} — mova com as setas/WASD ou o
+            analógico, gire com ◀ ▶
+          </p>
+          <div className="furniture-placement-actions">
+            <button type="button" className="furniture-placement-confirm" onClick={handleConfirmFurniturePlacement}>
+              ✅ Confirmar posição
+            </button>
+            <button type="button" className="furniture-placement-cancel" onClick={handleCancelFurniturePlacement}>
+              ✖ Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       {chatOpen && (
         <ChatPanel
           messages={chatMessages}

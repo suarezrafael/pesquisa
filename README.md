@@ -153,8 +153,17 @@ Multiplayer localmente: `cd app/server && node relay.cjs` sobe um relay na porta
 
 ## Deploy
 
+**Automático (lab-104)**: `.github/workflows/ci.yml` roda os testes dos 3 packages em todo push/PR
+e, quando o push é em `main`, publica os 3 alvos (frontend + os dois Workers) depois dos testes
+passarem. Exige dois secrets configurados no repositório GitHub (Settings → Secrets and variables
+→ Actions): `VERCEL_TOKEN` (vercel.com → Account Settings → Tokens) e `CLOUDFLARE_API_TOKEN`
+(dash.cloudflare.com → My Profile → API Tokens → template "Edit Cloudflare Workers"). Push num
+branch de trabalho ou um PR só roda os testes, nunca publica.
+
+**Manual** (sempre funciona, independente do CI):
 ```bash
 cd app && npx vercel --prod --yes                          # frontend (Vercel)
+cd app/server-accounts && npx wrangler deploy                # Worker de contas (Cloudflare)
 cd app/server-cf-relay && npx wrangler deploy               # relay v2 (Cloudflare Workers)
 ```
 

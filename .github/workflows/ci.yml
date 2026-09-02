@@ -1,0 +1,95 @@
+name: CI
+
+# lab-101, G10 (docs/prompts/05-escala-e-viabilidade.md): até aqui os 88 testes deste repositório
+# (39 do jogo + 36 do Worker de contas + 13 do relay) só rodavam se alguém lembrasse de rodar na
+# mão. Três jobs independentes porque são três packages sem workspace de monorepo (cada um com seu
+# próprio package.json/node_modules) — não dá pra instalar tudo de uma vez com um `npm ci` só.
+#
+# lab-104, resto de G10: cada job ganhou um passo de deploy no final, condicionado a
+# `github.ref == 'refs/heads/main' && github.event_name == 'push'` — só publica quando algo chega
+# em `main` de verdade (nunca em push de branch de trabalho/PR, que só rodam os testes acima).
+# Decisão confirmada com o usuário: até este laboratório, TODO deploy (labs 78-103) tinha sido
+# manual, direto de um branch de worktree, sem nunca passar por `main` — `main` estava 86 commits
+# atrás. Exige dois secrets no repositório GitHub (Settings → Secrets and variables → Actions):
+# `VERCEL_TOKEN` e `CLOUDFLARE_API_TOKEN` — nenhum dos dois pode ser gerado por uma sessão do
+# Claude Code (exigem acesso às contas Vercel/Cloudflare do próprio usuário).
+on:
+  push:
+  pull_request:
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      # `npm run build` (tsc -b + vite build) em vez de só `tsc -b` — é o mesmo comando que
+      # `vercel --prod` roda de verdade antes de publicar; falha aqui pega o mesmo erro mais cedo.
+      # Não precisa de nenhum secret novo: `.env`/`.env.production` já estão versionados (só URLs
+      # públicas, conferido antes de escrever este workflow).
+      - run: npm run build
+      - run: npm run test
+      # `VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` substituem o arquivo `.vercel/project.json` (gitignored,
+      # nunca commitado) — não são segredos (só identificadores do projeto), por isso hardcoded
+      # aqui em vez de `secrets.*`. Mesmo comando (`vercel --prod --yes`) já usado manualmente em
+      # todo laboratório anterior, só que agora com `--token` pra autenticação não-interativa.
+      - name: Deploy to Vercel (production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          VERCEL_ORG_ID: team_v5bJ45ceJQA8tR6Nly6P9nWh
+          VERCEL_PROJECT_ID: prj_wnOVBZ6zPRz8k1mvlE9lFG4mr9AO
+        run: npx vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+
+  server-accounts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/server-accounts
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/server-accounts/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run test
+      # `CLOUDFLARE_ACCOUNT_ID` (única conta desta configuração, confirmado via `wrangler whoami`)
+      # não é segredo — hardcoded pelo mesmo motivo do `VERCEL_ORG_ID` acima.
+      - name: Deploy to Cloudflare Workers (production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 354311826c2a9d7954df9674fa2f4ce5
+        run: npm run deploy
+
+  server-cf-relay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/server-cf-relay
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/server-cf-relay/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run test
+      - name: Deploy to Cloudflare Workers (production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 354311826c2a9d7954df9674fa2f4ce5
+        run: npm run deploy

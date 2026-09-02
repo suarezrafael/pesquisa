@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import type { Profile } from '../types'
-import { loadProfile, saveProfile } from './storage'
+import { createProfileSlot, loadProfile, saveProfile } from './storage'
 
 export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile())
 
   function createProfile(name: string, avatarEmoji: string) {
+    // lab-108: cria o slot (roster + torna ativo) ANTES de montar/salvar o perfil — cobre tanto o
+    // primeiro perfil de um aparelho novo quanto um perfil adicional (irmão jogando no mesmo
+    // tablet), sem nenhuma ramificação especial aqui.
+    createProfileSlot(name, avatarEmoji)
     const next: Profile = {
       name,
       avatarEmoji,
@@ -16,6 +20,7 @@ export function useProfile() {
       equippedShoeColorId: null,
       equippedBackpackColorId: null,
       equippedHairShapeId: null,
+      equippedGlassesId: null,
     }
     saveProfile(next)
     setProfile(next)
@@ -87,6 +92,15 @@ export function useProfile() {
     })
   }
 
+  function equipGlasses(id: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, equippedGlassesId: id }
+      saveProfile(next)
+      return next
+    })
+  }
+
   return {
     profile,
     createProfile,
@@ -97,5 +111,6 @@ export function useProfile() {
     equipShoeColor,
     equipBackpackColor,
     equipHairShape,
+    equipGlasses,
   }
 }
