@@ -12,6 +12,17 @@ por esse entitlement (parte da Fase E) já existe do lado do jogo — ver
 `docs/plano-comercial-backend.md` e `labs/lab-82-.../CONTEXT.md`. Fase F em andamento: relatório
 semanal de progresso por e-mail (lab-119, ver nota de privacidade abaixo).
 
+**Backup do banco (lab-143, G14)**: um terceiro Cron Trigger (`DATABASE_BACKUP_CRON`, 10:00 UTC
+diário) exporta `family_accounts`/`subscriptions`/`pairing_codes`/`entitlement_tokens` — as
+únicas tabelas que carregam o vínculo família↔assinatura, nenhuma com PII da criança — pra um
+bucket R2 (`missao-aprender-backups`, binding `DATABASE_BACKUPS`), um objeto JSON por dia
+(`backups/AAAA-MM-DD.json`). Motivo: Neon Free só tem 6h de janela de restauração — sem isso,
+perder o banco significaria perder o vínculo entre uma família e sua assinatura sem jeito de
+reconstruir quem pagou (o Stripe reconstrói a assinatura em si, não esse vínculo). Restauração é
+manual/administrativa (`scripts/restore-from-backup.mjs`), nunca um endpoint — evento raro que já
+exige decisão humana de qualquer forma, diferente de `/progress-backup` (self-service, ver
+abaixo).
+
 ## Rotas
 
 | Rota | Método | Autenticação | Função |
