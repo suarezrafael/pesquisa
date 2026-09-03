@@ -3,6 +3,7 @@
 // reaproveita as classes CSS `.quest-list`/`.quest-list-item` já existentes (o formato ícone +
 // nome + descrição + status encaixa exatamente, sem precisar de CSS novo).
 import { ACHIEVEMENT_CATALOG } from '../data/achievements'
+import { POSTCARD_CATALOG } from '../data/postcards'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Progress } from '../types'
 
@@ -42,6 +43,33 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
                   <span className="quest-list-type">{achievement.description}</span>
                 </div>
                 <span className="quest-list-status">{earned ? '✓' : '🔒'}</span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* lab-141 (cartão-postal colecionável, item do backlog de engajamento discutido em chat,
+            mesma lista de onde saiu o login diário do lab-138) — mesma estrutura de lista dos
+            emblemas acima, dentro do MESMO painel (evita mais um ícone no HUD, que já tem 9
+            botões) — as duas telas são "coleções", cabem bem juntas. */}
+        <h2>Cartões-postais</h2>
+        <p className="subtitle">Pouse de verdade em cada planeta pra colecionar o cartão dele.</p>
+        <div className="quest-list">
+          {POSTCARD_CATALOG.map((postcard) => {
+            const collected = progress.collectedPostcardIds.includes(postcard.planetId)
+            return (
+              <div
+                key={postcard.planetId}
+                className={`quest-list-item ${collected ? 'completed' : 'locked'}`}
+              >
+                <span className="quest-list-index" aria-hidden="true">
+                  {postcard.emoji}
+                </span>
+                <div className="quest-list-info">
+                  <span className="quest-list-title">{collected ? postcard.name : '???'}</span>
+                  <span className="quest-list-type">{collected ? postcard.description : 'Ainda não visitado'}</span>
+                </div>
+                <span className="quest-list-status">{collected ? '✓' : '🔒'}</span>
               </div>
             )
           })}

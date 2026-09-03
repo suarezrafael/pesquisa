@@ -99,6 +99,7 @@ function GameApp() {
     foundTreasureChest,
     resetStreak,
     claimDailyLogin,
+    collectPostcard,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -304,6 +305,7 @@ function GameApp() {
           onOpenMyHouse={() => setShowMyHouse(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
           onFindTreasureChest={foundTreasureChest}
+          onCollectPostcard={collectPostcard}
           onCollectCoin={collectCoin}
           placingFurnitureRequestId={pendingPlacementId}
           onPlacingRequestHandled={() => setPendingPlacementId(null)}

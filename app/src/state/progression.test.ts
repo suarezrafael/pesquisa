@@ -8,6 +8,7 @@ import {
   applyCoinCollected,
   applyDailyLoginReward,
   applyPlanetQuestCompletion,
+  applyPostcardCollected,
   applyQuestCompletion,
   applyStreakReset,
   applyTreasureChestFound,
@@ -519,6 +520,36 @@ describe('unlockMarsReward (lab-94)', () => {
     const result = unlockMarsReward(jaTem)
     expect(result.granted).toBe(false)
     expect(result.progress).toBe(jaTem)
+  })
+})
+
+describe('applyPostcardCollected (lab-141)', () => {
+  it('concede o cartão na primeira chegada, sem mexer em moeda/XP', () => {
+    const result = applyPostcardCollected({ ...emptyProgress, coins: 7 }, 'marte')
+    expect(result.granted).toBe(true)
+    expect(result.progress.collectedPostcardIds).toContain('marte')
+    expect(result.progress.coins).toBe(7)
+    expect(result.progress.xp).toBe(emptyProgress.xp)
+  })
+
+  it('é idempotente — não concede de novo se o jogador já tiver o cartão', () => {
+    const jaTem = { ...emptyProgress, collectedPostcardIds: ['marte'] }
+    const result = applyPostcardCollected(jaTem, 'marte')
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(jaTem)
+  })
+
+  it('não concede nada pra um id de planeta sem cartão no catálogo', () => {
+    const result = applyPostcardCollected(emptyProgress, 'planeta-que-nao-existe')
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(emptyProgress)
+  })
+
+  it('cartões de planetas diferentes acumulam independentemente', () => {
+    const comMarte = applyPostcardCollected(emptyProgress, 'marte').progress
+    const comOsDois = applyPostcardCollected(comMarte, 'venus')
+    expect(comOsDois.granted).toBe(true)
+    expect(comOsDois.progress.collectedPostcardIds).toEqual(['marte', 'venus'])
   })
 })
 

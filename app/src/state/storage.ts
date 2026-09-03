@@ -157,6 +157,8 @@ export const emptyProgress: Progress = {
   housePlacements: {},
   // Recompensa de login diário (lab-138) — ver comentário em `types.ts`.
   loginStreak: 0,
+  // Cartões-postais colecionáveis (lab-141) — ver comentário em `types.ts`.
+  collectedPostcardIds: [],
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

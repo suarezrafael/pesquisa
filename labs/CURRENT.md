@@ -1,6 +1,20 @@
 # Laboratório atual
 
-Último concluído: labs/lab-140-camera-durante-posicionamento-colisao-mobilia/ — dois refinamentos
+Último concluído: labs/lab-141-cartao-postal-colecionavel/ — item do backlog de engajamento (mesma
+lista do login diário, lab-138) puxado de forma AUTÔNOMA nesta sessão: verificação ao vivo do
+lab-140 seguia bloqueada (aba de automação sem foco do sistema operacional) e não havia pedido novo
+do usuário no momento. `data/postcards.ts` novo (7 cartões, um por planeta-destino) +
+`applyPostcardCollected` (`progression.ts`, idempotente, sem moeda/XP) + `Progress.
+collectedPostcardIds` novo — concedido automaticamente ao pousar de verdade num planeta
+(`landRocket`, `World3D.tsx`), aviso transitório só na primeira vez. Galeria nova dentro do
+`AchievementsPanel.tsx` já existente (sem ícone novo no HUD) — cartão não coletado mostra "???".
+`npm run test`: 99/99 (4 testes novos). `npm run build` sem erros. **Não verificado ao vivo** —
+mesma limitação de ambiente do lab-140, ainda sem recuperar; viagem de foguete real também
+historicamente um dos cenários mais trabalhosos de testar ao vivo neste projeto (ver labs 115/127/
+129/130), então a confirmação completa fica pra quando o ambiente permitir. Ver
+`labs/lab-141-cartao-postal-colecionavel/CONTEXT.md`.
+
+Antes desse: labs/lab-140-camera-durante-posicionamento-colisao-mobilia/ — dois refinamentos
 pedidos pelo usuário logo após testar o lab-139 em produção.
 1. **Câmera livre também durante o posicionamento de mobília**: o `pointerdown` de arrastar
    câmera (lab-139) tinha um bloqueio `|| placingFurnitureId` baseado numa suposição errada de

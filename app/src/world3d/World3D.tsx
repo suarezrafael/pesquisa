@@ -52,6 +52,7 @@ import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
 import { FURNITURE_CATALOG } from '../data/furniture'
 import { findTreasureChestById } from '../data/treasureChests'
+import { findPostcardByPlanetId } from '../data/postcards'
 import {
   findColorOption,
   findHairShapeOption,
@@ -149,6 +150,12 @@ interface World3DProps {
   // proximidade real; `App.tsx` repassa direto pra `useProgress().foundTreasureChest`, que já é
   // idempotente sozinho (não precisa de checagem extra aqui).
   onFindTreasureChest: (chestId: string) => void
+  // lab-141 (cartão-postal colecionável) — chamado ao pousar de verdade num planeta-destino
+  // (`landRocket`); `App.tsx` repassa direto pra `useProgress().collectPostcard`. Diferente de
+  // `onFindTreasureChest` acima, devolve `boolean` (se concedeu um cartão NOVO) — pousar num
+  // planeta acontece toda visita (não só a primeira, sem gatilho visual de "já achado" pra
+  // esconder feito o baú), então `World3D.tsx` precisa do retorno pra decidir se mostra o aviso.
+  onCollectPostcard: (planetId: string) => boolean
   onCollectCoin: () => void
   onSwitchProfile: () => void
   suspendTriggers: boolean
@@ -1917,6 +1924,7 @@ export function World3D({
   onOpenMyHouse,
   onUnlockMarsReward,
   onFindTreasureChest,
+  onCollectPostcard,
   onCollectCoin,
   onSwitchProfile,
   suspendTriggers,
@@ -1961,6 +1969,7 @@ export function World3D({
   const onOpenMyHouseRef = useRef(onOpenMyHouse)
   const onUnlockMarsRewardRef = useRef(onUnlockMarsReward)
   const onFindTreasureChestRef = useRef(onFindTreasureChest)
+  const onCollectPostcardRef = useRef(onCollectPostcard)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
   const onFurniturePlacedRef = useRef(onFurniturePlaced)
@@ -1998,6 +2007,9 @@ export function World3D({
   // acima (some sozinho depois de alguns segundos), mas sem barra/estado de "zona" nenhum: é só um
   // achado pontual de exploração.
   const [treasureFoundMessage, setTreasureFoundMessage] = useState<string | null>(null)
+  // Cartão-postal colecionável (lab-141) — mesmo padrão de aviso transitório de
+  // `treasureFoundMessage` acima (some sozinho depois de alguns segundos).
+  const [postcardFoundMessage, setPostcardFoundMessage] = useState<string | null>(null)
   // Contagem de marcianos vivos (lab-65, pedido do usuário: "ao chegar em Marte teve ter uma
   // informação de quantos marcianos tem no planeta") — espelha `marsEnemies.filter(alive).length`
   // (calculado no laço de física, que já percorre esse array todo quadro pra IA) só quando o
@@ -2063,6 +2075,7 @@ export function World3D({
   onOpenMyHouseRef.current = onOpenMyHouse
   onUnlockMarsRewardRef.current = onUnlockMarsReward
   onFindTreasureChestRef.current = onFindTreasureChest
+  onCollectPostcardRef.current = onCollectPostcard
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
   onFurniturePlacedRef.current = onFurniturePlaced
@@ -2726,6 +2739,19 @@ export function World3D({
           currentWorldCenter = planet.center
           currentGroundBaseFn = () => planet.radius
           teleportAvatarTo(planet.center, offsetLandingUp(planet.landingUp, planet.radius, 1.8), currentGroundBaseFn)
+
+          // Cartão-postal colecionável (lab-141) — concedido na PRIMEIRA chegada de verdade a
+          // qualquer planeta-destino (idempotente, `useProgress().collectPostcard` não faz nada
+          // de novo se já tiver); aplica igual pra chegada de verdade OU pouso de volta na origem
+          // ao desistir no meio do caminho (`arrivedAtDestination` false) — nos dois casos o
+          // jogador está pisando de verdade na superfície daquele planeta.
+          if (onCollectPostcardRef.current(arrivedPlanetId)) {
+            const postcard = findPostcardByPlanetId(arrivedPlanetId)
+            if (postcard) {
+              setPostcardFoundMessage(`📮 Novo cartão-postal: ${postcard.name}!`)
+              window.setTimeout(() => setPostcardFoundMessage(null), 4000)
+            }
+          }
 
           // Combate só existe em Marte (lab-110, confirmado com o usuário: os outros
           // planetas-destino são só exploração + moedas escondidas, sem inimigo nenhum).
@@ -9982,6 +10008,7 @@ export function World3D({
       )}
       {survivalDeathMessage && <p className="mars-death-message">{survivalDeathMessage}</p>}
       {treasureFoundMessage && <p className="mars-death-message">{treasureFoundMessage}</p>}
+      {postcardFoundMessage && <p className="mars-death-message">{postcardFoundMessage}</p>}
       {bagOpen && (
         <WeaponBagPanel
           hasSword={hasSword}

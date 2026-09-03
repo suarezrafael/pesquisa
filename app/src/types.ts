@@ -88,4 +88,9 @@ export interface Progress {
   // storage.ts`) da sessão anterior contra hoje. Zera pra 1 (não pra 0) num hiato de 2+ dias —
   // sempre existe "um dia" ao abrir o jogo, mesmo depois de ficar muito tempo sem jogar.
   loginStreak: number
+  // Cartões-postais colecionáveis (lab-141, mesmo backlog de engajamento do login diário) — um id
+  // de planeta-destino aqui significa "já chegou lá pelo menos uma vez, pra sempre" (concedido
+  // automaticamente ao pousar, `applyPostcardCollected`, `state/progression.ts`); puramente de
+  // coleção, sem moeda/XP — mesmo espírito de `badges`, não de recompensa de missão.
+  collectedPostcardIds: string[]
 }
