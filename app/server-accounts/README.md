@@ -33,6 +33,15 @@ exclusão cancela qualquer assinatura Stripe ativa, apaga toda tabela ligada à 
 resolvida: um novo passo do Cron diário (09:00 UTC, mesmo horário da reconciliação Stripe) apaga
 códigos expirados há mais de 30 dias.
 
+**Configuração sem hardcode (lab-145, G15)**: `NEON_AUTH_JWKS_URL` e a origem de fallback usada em
+`/checkout`/`/billing-portal` (quando a chamada não traz header `Origin`) eram string literal em
+`src/index.ts` — agora moram em `[vars]` (`wrangler.toml`), como pede o `[MUST]` de
+`03-arquitetura-sistema.md §5`. Nenhuma das duas é secreta. **Fora de escopo de propósito**: trocar
+o DNS do domínio pros registros CNAME sugeridos pela Vercel (os registros A atuais já funcionam,
+ver `labs/CURRENT.md`) e rotacionar a API key ampla do Neon usada pra provisionar — as duas mexem
+em infraestrutura de produção AO VIVO e exigem confirmação explícita do usuário antes de qualquer
+mudança, à parte deste laboratório.
+
 ## Rotas
 
 | Rota | Método | Autenticação | Função |

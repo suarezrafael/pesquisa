@@ -30,6 +30,19 @@ bucket_name = "missao-aprender-backups"
 # identificador público do catálogo de produtos.
 STRIPE_PRICE_ID = "price_1U7k0BDLQrb3UkMn0MFvRcVf"
 
+# lab-145, G15 (docs/prompts/05-escala-e-viabilidade.md): antes hardcoded em `src/index.ts`,
+# contra o `[MUST]` de `03-arquitetura-sistema.md §5` ("nenhuma URL... hardcoded no código-fonte").
+# Endpoint real descoberto testando ao vivo (ver labs/lab-79-.../CONTEXT.md) — a documentação
+# oficial do Neon Auth usa um domínio que não resolve. Público por definição (é a chave PÚBLICA de
+# verificação de assinatura JWT), por isso `[vars]`, não secret.
+NEON_AUTH_JWKS_URL = "https://ep-cool-meadow-aclfdwm0.neonauth.sa-east-1.aws.neon.tech/neondb/auth/.well-known/jwks.json"
+
+# lab-145, G15: usado só quando uma chamada a `/checkout`/`/billing-portal` não traz header
+# `Origin` (fora de navegador) — o `return_url`/`success_url`/`cancel_url` do Stripe caem aqui.
+# `missaoaprendizado.com` é o domínio próprio (ver labs/CURRENT.md); mantém o Vercel como
+# alternativa só no README, não é preciso ter os dois aqui.
+DEFAULT_ORIGIN = "https://missaoaprendizado.com"
+
 # DATABASE_URL, STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET são secrets, não vars comuns — nunca
 # comitados. Local: app/server-accounts/.dev.vars (gitignored). Produção: `wrangler secret put <NOME>`.
 
