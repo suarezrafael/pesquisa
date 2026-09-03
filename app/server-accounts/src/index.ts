@@ -28,6 +28,7 @@ import {
   isValidProgressSummary,
   isValidSubscriptionStatus,
   NPS_COOLDOWN_DAYS,
+  resolveTrustedOrigin,
   shouldPromptForNps,
   toComparableIso,
   toIsoOrNull,
@@ -45,6 +46,11 @@ export interface Env {
   // a URL pública do próprio jogo), por isso `[vars]`, não `wrangler secret put`.
   NEON_AUTH_JWKS_URL: string
   DEFAULT_ORIGIN: string
+  // lab-147 (achado do review automático do Copilot no PR #16, G15): lista separada por vírgula
+  // dos domínios que podem aparecer em `success_url`/`cancel_url` do Stripe — o header `Origin` é
+  // controlado pelo cliente, então usá-lo sem checar contra isto permitiria redirecionar quem
+  // pagou pra um domínio arbitrário. Ver `resolveTrustedOrigin` (`domain.ts`).
+  ALLOWED_ORIGINS: string
   STRIPE_SECRET_KEY: string
   STRIPE_WEBHOOK_SECRET: string
   STRIPE_PRICE_ID: string
@@ -110,12 +116,27 @@ async function rateLimited(limiter: RateLimit, key: string): Promise<Response | 
 // secret put`. `createRemoteJWKSet` cacheia as chaves em memória do próprio processo do Worker —
 // criado uma vez por isolate (não por request) através deste cache lazy, já que `env` só existe
 // dentro do handler, não no escopo do módulo.
-let jwksCache: ReturnType<typeof createRemoteJWKSet> | null = null
+//
+// lab-147 (achado do review automático do Copilot no PR #16): a primeira versão deste cache
+// ignorava se `env.NEON_AUTH_JWKS_URL` mudava entre chamadas (guardava só o `RemoteJWKSet`, nunca
+// a URL usada pra criá-lo) — inofensivo neste Worker específico (o mesmo isolate sempre recebe o
+// mesmo `env`, vindo de um `wrangler.toml` fixo), mas um bug latente se algum dia este código
+// rodar com `env` variável (testes, múltiplos ambientes no mesmo isolate). Guardando a URL junto
+// do cache, uma mudança em `env.NEON_AUTH_JWKS_URL` recria o `RemoteJWKSet` em vez de continuar
+// verificando contra o endpoint antigo.
+let jwksCache: { url: string; jwks: ReturnType<typeof createRemoteJWKSet> } | null = null
 function getJwks(env: Env): ReturnType<typeof createRemoteJWKSet> {
-  if (!jwksCache) jwksCache = createRemoteJWKSet(new URL(env.NEON_AUTH_JWKS_URL))
-  return jwksCache
+  if (!jwksCache || jwksCache.url !== env.NEON_AUTH_JWKS_URL) {
+    jwksCache = { url: env.NEON_AUTH_JWKS_URL, jwks: createRemoteJWKSet(new URL(env.NEON_AUTH_JWKS_URL)) }
+  }
+  return jwksCache.jwks
 }
 
+// lab-102, resto de G8: primeira entrada de `[triggers] crons` — reconciliação diária
+// Stripe↔banco. 09:00 UTC = 06:00 em São Paulo, fora do horário de pico. Nomeada explicitamente
+// (lab-147, achado do review automático do Copilot no PR #14) — antes era só o `else` implícito
+// de `scheduled()`, então um `controller.cron` não reconhecido caía nela sem nenhum aviso.
+const RECONCILE_CRON = '0 9 * * *'
 // lab-119, Fase F: precisa bater EXATAMENTE com a segunda entrada de `[triggers] crons` em
 // wrangler.toml — é assim que `scheduled()` decide qual das duas tarefas (reconciliação diária ou
 // e-mail semanal) rodar. Segunda-feira 12:00 UTC = 09:00 em São Paulo, fora do horário de pico.
@@ -169,10 +190,13 @@ async function handleCheckout(request: Request, env: Env): Promise<Response> {
   const sql = neon(env.DATABASE_URL)
   const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
 
-  // `DEFAULT_ORIGIN` (`[vars]`, wrangler.toml) só entra quando o header `Origin` não vem (chamada
-  // fora de navegador, ex.: teste manual) — lab-145, G15: antes era um domínio de produção
-  // hardcoded aqui, agora é config por ambiente, como pede `03-arquitetura-sistema.md §5 [MUST]`.
-  const origin = request.headers.get('origin') ?? env.DEFAULT_ORIGIN
+  // `resolveTrustedOrigin` (`domain.ts`, lab-147): só usa o `Origin` da chamada se ele bater com
+  // `ALLOWED_ORIGINS` — o header vem do cliente, então aceitar qualquer valor pra montar
+  // `success_url`/`cancel_url` do Stripe permitiria redirecionar quem pagou pra um domínio
+  // arbitrário (achado do review automático do Copilot no PR #16). `DEFAULT_ORIGIN` (`[vars]`,
+  // wrangler.toml) é o fallback — lab-145, G15: os dois eram domínio de produção hardcoded aqui,
+  // agora são config por ambiente, como pede `03-arquitetura-sistema.md §5 [MUST]`.
+  const origin = resolveTrustedOrigin(request.headers.get('origin'), env.ALLOWED_ORIGINS, env.DEFAULT_ORIGIN)
   const stripe = stripeClient(env)
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
@@ -209,7 +233,7 @@ async function handleBillingPortal(request: Request, env: Env): Promise<Response
     return Response.json({ error: 'nenhuma assinatura encontrada' }, { status: 404 })
   }
 
-  const origin = request.headers.get('origin') ?? env.DEFAULT_ORIGIN
+  const origin = resolveTrustedOrigin(request.headers.get('origin'), env.ALLOWED_ORIGINS, env.DEFAULT_ORIGIN)
   const stripe = stripeClient(env)
   const session = await stripe.billingPortal.sessions.create({
     customer: rows[0].stripe_customer_id,
@@ -1051,11 +1075,16 @@ async function upsertSubscription(
 // jeito, não vale a complexidade de um endpoint de restauração automática pra isso.
 async function backupCriticalTables(env: Env): Promise<void> {
   const sql = neon(env.DATABASE_URL)
+  // lab-147 (achado do review automático do Copilot no PR #14): `select *` faz o backup passar a
+  // exportar automaticamente qualquer coluna nova que uma migração futura adicionar — inclusive
+  // um eventual campo sensível, sem revisão explícita nenhuma. Colunas explícitas (mesma lista de
+  // `scripts/restore-from-backup.mjs`, que já precisava conhecê-las pra fazer o UPSERT) mantêm o
+  // "contrato" do backup estável; uma coluna nova só entra aqui se alguém adicionar de propósito.
   const [familyAccounts, subscriptions, pairingCodes, entitlementTokens] = await Promise.all([
-    sql`select * from family_accounts`,
-    sql`select * from subscriptions`,
-    sql`select * from pairing_codes`,
-    sql`select * from entitlement_tokens`,
+    sql`select id, owner_user_id, created_at from family_accounts`,
+    sql`select id, family_account_id, stripe_customer_id, stripe_subscription_id, status, current_period_end, updated_at, last_event_created_at from subscriptions`,
+    sql`select code, family_account_id, expires_at, redeemed_at from pairing_codes`,
+    sql`select jti, family_account_id, issued_at, revoked_at from entitlement_tokens`,
   ])
 
   const snapshot = {
@@ -1148,10 +1177,14 @@ async function reconcileSubscriptions(env: Env): Promise<void> {
 // próprio.
 async function purgeStalePairingCodes(env: Env): Promise<void> {
   const sql = neon(env.DATABASE_URL)
+  // lab-147 (achado do review automático do Copilot no PR #15): `returning code` devolvia o
+  // código de TODA linha apagada só pra contar quantas foram — payload desnecessário (e mais caro
+  // se um dia houver muitas). `returning 1` conta do mesmo jeito sem carregar dado nenhum de
+  // volta.
   const deleted = (await sql`
     delete from pairing_codes where expires_at < now() - interval '30 days'
-    returning code
-  `) as { code: string }[]
+    returning 1
+  `) as unknown[]
   if (deleted.length > 0) {
     console.log(`[pairing-retention] ${deleted.length} código(s) de pareamento expirado(s) removido(s).`)
   }
@@ -1477,7 +1510,28 @@ export default {
     } else if (controller.cron === DATABASE_BACKUP_CRON) {
       ctx.waitUntil(backupCriticalTables(env))
     } else {
-      ctx.waitUntil(Promise.all([reconcileSubscriptions(env), purgeStalePairingCodes(env)]))
+      // lab-147 (achados do review automático do Copilot, PRs #14 e #15):
+      // 1. Qualquer `controller.cron` NÃO reconhecido caía silenciosamente aqui, como se fosse a
+      //    reconciliação diária (`RECONCILE_CRON`, ver constante abaixo) — um typo em
+      //    `wrangler.toml` no futuro rodaria a tarefa errada sem nenhum aviso. Agora loga um erro
+      //    quando o valor recebido não bate com o esperado, mas ainda roda a reconciliação (é o
+      //    comportamento historicamente mais seguro pros 3 crons já existentes).
+      // 2. `Promise.all` fazia a execução INTEIRA falhar se só uma das duas tarefas rejeitasse,
+      //    mesmo a outra já tendo terminado com sucesso — `Promise.allSettled` roda as duas até o
+      //    fim sempre, com o erro de cada uma (se houver) logado individualmente.
+      if (controller.cron !== RECONCILE_CRON) {
+        console.error(
+          `[scheduled] cron não reconhecido: "${controller.cron}" — esperava "${RECONCILE_CRON}". ` +
+            'Rodando reconciliação diária mesmo assim (comportamento padrão), mas confira wrangler.toml.',
+        )
+      }
+      ctx.waitUntil(
+        Promise.allSettled([reconcileSubscriptions(env), purgeStalePairingCodes(env)]).then((results) => {
+          for (const result of results) {
+            if (result.status === 'rejected') console.error('[scheduled-daily]', String(result.reason))
+          }
+        }),
+      )
     }
   },
 }

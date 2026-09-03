@@ -701,8 +701,15 @@ function AccountDataPanel({ onAccountDeleted }: { onAccountDeleted: () => void }
       const link = document.createElement('a')
       link.href = url
       link.download = `missao-aprender-meus-dados-${new Date().toISOString().slice(0, 10)}.json`
+      // lab-147 (achado do review automático do Copilot no PR #15): revogar a URL IMEDIATAMENTE
+      // depois do `click()` pode cancelar/interromper o download em alguns navegadores (Safari
+      // principalmente) — o navegador ainda pode não ter terminado de ler o blob. Anexa o link ao
+      // DOM antes de clicar (mais confiável em todos os navegadores que clicar num elemento solto)
+      // e adia a revogação pro próximo tick.
+      document.body.appendChild(link)
       link.click()
-      URL.revokeObjectURL(url)
+      document.body.removeChild(link)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch {
       setExportError('Não foi possível baixar seus dados. Tente novamente.')
     } finally {

@@ -43,6 +43,14 @@ NEON_AUTH_JWKS_URL = "https://ep-cool-meadow-aclfdwm0.neonauth.sa-east-1.aws.neo
 # alternativa só no README, não é preciso ter os dois aqui.
 DEFAULT_ORIGIN = "https://missaoaprendizado.com"
 
+# lab-147 (achado do review automático do Copilot no PR #16): lista dos domínios que podem
+# aparecer de verdade num header `Origin` — o header é controlado pelo CLIENTE, então sem checar
+# contra isto, `success_url`/`cancel_url` do Stripe poderiam apontar pra qualquer domínio
+# (`resolveTrustedOrigin`, `src/domain.ts`). Os 3 domínios que hoje servem o front-end de verdade
+# (ver labs/CURRENT.md "Jogo ao vivo"): domínio próprio (com e sem `www`), o projeto Vercel
+# original, e o deploy paralelo no Cloudflare Pages.
+ALLOWED_ORIGINS = "https://missaoaprendizado.com,https://www.missaoaprendizado.com,https://app-two-flax-92.vercel.app,https://missao-aprender-jogo.pages.dev"
+
 # DATABASE_URL, STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET são secrets, não vars comuns — nunca
 # comitados. Local: app/server-accounts/.dev.vars (gitignored). Produção: `wrangler secret put <NOME>`.
 

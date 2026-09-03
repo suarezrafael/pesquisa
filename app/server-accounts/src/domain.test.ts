@@ -20,6 +20,7 @@ import {
   isValidSubscriptionStatus,
   MAX_ACTIVE_DEVICES_PER_FAMILY,
   NPS_COOLDOWN_DAYS,
+  resolveTrustedOrigin,
   shouldPromptForNps,
   toComparableIso,
   toIsoOrNull,
@@ -398,5 +399,31 @@ describe('buildWeeklyProgressEmail — lab-119, Fase F', () => {
   it('cumprimenta pelo nome quando disponível, genérico quando não', () => {
     expect(buildWeeklyProgressEmail(summary, 'Ana').html).toContain('Oi, Ana!')
     expect(buildWeeklyProgressEmail(summary, null).html).toContain('Oi!')
+  })
+})
+
+describe('resolveTrustedOrigin — lab-147 (achado do Copilot: Origin do header é do cliente)', () => {
+  const allowlist = 'https://missaoaprendizado.com,https://app-two-flax-92.vercel.app'
+
+  it('aceita um Origin que está na lista permitida', () => {
+    expect(resolveTrustedOrigin('https://missaoaprendizado.com', allowlist, 'https://default.example')).toBe(
+      'https://missaoaprendizado.com',
+    )
+  })
+
+  it('cai no default quando o Origin não está na lista (possível domínio malicioso)', () => {
+    expect(resolveTrustedOrigin('https://evil.example', allowlist, 'https://default.example')).toBe(
+      'https://default.example',
+    )
+  })
+
+  it('cai no default quando não há header Origin nenhum', () => {
+    expect(resolveTrustedOrigin(null, allowlist, 'https://default.example')).toBe('https://default.example')
+  })
+
+  it('ignora espaço em branco entre os itens da lista', () => {
+    expect(resolveTrustedOrigin('https://b.example', ' https://a.example , https://b.example ', 'https://default.example')).toBe(
+      'https://b.example',
+    )
   })
 })

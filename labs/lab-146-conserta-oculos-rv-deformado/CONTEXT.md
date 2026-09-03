@@ -19,8 +19,32 @@ ficarem em cima/embaixo). Com diâmetro 0.34 — maior que a própria cabeça (e
 — esse disco sobrava pra fora do contorno da cabeça em todas as direções, criando o efeito de
 "deformado"/clutter extra visível. Trocado por `MeshBuilder.CreateTorus` (sem rotação nenhuma — o
 eixo do "buraco" de um torus já nasce em Y, exatamente o formato certo pra um aro na altura dos
-olhos), com diâmetro 0.2 (perto do raio local da cabeça naquela altura, ~0.093×2, não do diâmetro
-total da cabeça) e espessura do tubo 0.028.
+olhos), com diâmetro derivado do raio local da cabeça naquela altura (ver "Correção pós-review do
+Copilot" abaixo — a primeira versão ainda tinha um resíduo do mesmo problema).
+
+## Correção pós-review do Copilot (mesmo laboratório, antes do usuário pedir a leitura de PRs)
+
+O review automático do Copilot no PR #17 (`copilot-pull-request-reviewer`, ver
+`gh api repos/.../pulls/17/comments`) achou um problema real na primeira versão do conserto:
+`diameter: 0.2` fixo (raio do aro 0.1) com `thickness: 0.028` (raio do tubo 0.014) dava um raio
+INTERNO de `0.1 - 0.014 = 0.086` — menor que o raio local da cabeça nessa altura (~0.093,
+calculado acima). Ou seja, o tubo do torus ainda atravessava a cabeça, só bem menos que o disco
+antigo. Verificado à mão (a conta bate) e corrigido derivando o diâmetro do raio local da cabeça
+em vez de um número fixo — `headRadiusAtEyeY = sqrt(0.16² - (EYE_Y - 1.15)²)`, `strapDiameter = 2
+* (headRadiusAtEyeY + thickness/2 + margem de 0.006)` — garante que o aro fica inteiro do lado de
+FORA da cabeça mesmo que as dimensões dela mudem no futuro (~0.226 com os números atuais, contra
+os 0.2 fixos de antes). PR #17 já estava mergeado quando isso foi encontrado — a correção virou um
+segundo commit nesta mesma sessão, novo PR (#18, ver Estado do repositório).
+
+**Segundo round do Copilot, no próprio PR #18**: usar `0.16`/`1.15` fixos "resolve hoje", mas
+quebra em silêncio (`Math.sqrt` de número negativo → `NaN`, malha corrompida em runtime) se `EYE_Y`
+ou a geometria da cabeça mudarem no futuro sem alguém lembrar de atualizar esses dois números aqui
+também — exatamente o tipo de acoplamento frágil que a correção anterior queria evitar. Corrigido
+lendo o raio de verdade direto do mesh (`figure.head.getBoundingInfo().boundingSphere.radius` —
+espaço LOCAL, mesmo espaço de `head.position.y` e de `EYE_Y`, já que `head` e as peças de óculos
+são todas filhas do mesmo `figure.root`) em vez de números fixos, com `Math.max(0, ...)` pra nunca
+gerar `NaN`. `figure.head` já existia como campo público de `StudentFigure` (usado noutro lugar do
+arquivo) — não precisou de nenhuma mudança de interface.
 
 ## Decisões técnicas tomadas
 
@@ -79,4 +103,19 @@ produção antes de considerar este item definitivamente fechado.
   (`equippedGlassesId: 'oculos_rv'`) pra pular a exigência de assinatura ativa, página recarregada
   — mas a tela "Carregando o mundo 3D…" nunca terminou (mesma causa raiz: `document.hidden = true`
   trava o `requestAnimationFrame`). Sem outro caminho de reprodução visual disponível nesta sessão.
-- Deploy: pendente — mesmo fluxo de sempre (push → PR → CI → merge → deploy).
+- Deploy: PR #17 mergeado em `main` (commit `530b180`). **Achado operacional novo, fora do escopo
+  deste bug**: o workflow `CI` do GitHub Actions (o que faz `wrangler deploy` dos dois Workers)
+  NUNCA disparou pra esse push em `main` — confirmado via `gh api .../actions/runs`, checado
+  várias vezes ao longo de mais de 5 minutos, nenhuma `run` nova apareceu pra `head_sha =
+  530b180...`, `head_branch = main`. Apesar disso, o FRONTEND já está atualizado em produção —
+  confirmado de forma independente baixando o bundle real
+  (`https://missaoaprendizado.com/assets/World3D-b5Jm1_hm.js`) e achando `CreateTorus` nele (API
+  que só existe no código por causa deste laboratório) — o que sugere que o deploy do Vercel
+  acontece por integração Git nativa dele, independente do passo `vercel --prod` do workflow `CI`.
+  **Como este PR não mexeu em nenhum dos dois Workers, não há evidência de perda funcional real
+  agora** — mas isso expõe um ponto cego: se o workflow `CI` parar de disparar silenciosamente,
+  mudanças em `server-accounts`/`server-cf-relay` poderiam parecer "deployadas" (merge feito, site
+  no ar) sem o Worker ter sido atualizado de verdade. Vale investigar na próxima vez que algo em
+  `app/server-accounts` ou `app/server-cf-relay` mudar — confirmar o deploy do WORKER
+  explicitamente (não só o `/health`, que responde mesmo com código antigo), e reportar ao usuário
+  se o padrão se repetir.

@@ -74,27 +74,39 @@ if (!confirm) {
 const client = new Client({ connectionString })
 await client.connect()
 try {
-  for (const table of TABLES) {
-    const rows = snapshot[table.name] ?? []
-    if (rows.length === 0) continue
+  // lab-147 (achado do review automático do Copilot no PR #14): sem transação, um erro no meio
+  // do loop (FK, conectividade, tipo inválido) deixava o banco num estado PARCIALMENTE
+  // restaurado — algumas tabelas atualizadas, outras não. Mesmo padrão de `migrate.mjs`
+  // (`begin`/`commit`, `rollback` no `catch`): ou tudo é aplicado, ou nada é.
+  await client.query('begin')
+  try {
+    for (const table of TABLES) {
+      const rows = snapshot[table.name] ?? []
+      if (rows.length === 0) continue
 
-    const cols = table.columns
-    const updateSet = cols.filter((c) => c !== table.pk).map((c) => `${c} = excluded.${c}`).join(', ')
+      const cols = table.columns
+      const updateSet = cols.filter((c) => c !== table.pk).map((c) => `${c} = excluded.${c}`).join(', ')
 
-    let restored = 0
-    for (const row of rows) {
-      const values = cols.map((c) => row[c] ?? null)
-      const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ')
-      await client.query(
-        `insert into ${table.name} (${cols.join(', ')}) values (${placeholders})
-         on conflict (${table.pk}) do update set ${updateSet}`,
-        values,
-      )
-      restored++
+      let restored = 0
+      for (const row of rows) {
+        const values = cols.map((c) => row[c] ?? null)
+        const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ')
+        await client.query(
+          `insert into ${table.name} (${cols.join(', ')}) values (${placeholders})
+           on conflict (${table.pk}) do update set ${updateSet}`,
+          values,
+        )
+        restored++
+      }
+      console.log(`${table.name}: ${restored} linha(s) restaurada(s)/atualizada(s).`)
     }
-    console.log(`${table.name}: ${restored} linha(s) restaurada(s)/atualizada(s).`)
+    await client.query('commit')
+    console.log('\nRestauração concluída.')
+  } catch (err) {
+    await client.query('rollback')
+    console.error('\nErro durante a restauração — nada foi aplicado (rollback):', err.message)
+    throw err
   }
-  console.log('\nRestauração concluída.')
 } finally {
   await client.end()
 }

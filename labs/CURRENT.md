@@ -1,6 +1,28 @@
 # Laboratório atual
 
-Último concluído: labs/lab-146-conserta-oculos-rv-deformado/ — corrige o bug reportado numa sessão
+Último concluído: labs/lab-147-copilot-review-followup/ — pedido do usuário: "você deve ler os
+comentários do PR que o copilot gera na nossa pipeline dos laboratório". O repo tem
+`copilot-pull-request-reviewer` configurado, deixando review automático em todo PR — os PRs 14/15/16
+(labs 143/144/145) tinham "🟡 Changes recommended" nunca lidos antes de mergear. Achados corrigidos:
+restore script sem transação (PR14, corrigido com `BEGIN`/`COMMIT`/`ROLLBACK`), `select *` no
+backup (PR14, colunas explícitas agora), cron não reconhecido rodando silenciosamente (PR14, log
+novo), `Promise.all` que falhava inteiro por uma rejeição (PR15, `Promise.allSettled`),
+`revokeObjectURL` cedo demais podendo cancelar download no Safari (PR15), `returning code`
+desnecessário (PR15). **Achado de segurança (PR16)**: `success_url`/`cancel_url` do Stripe eram
+montados a partir do header `Origin` sem checagem — como a rota não tem CORS restrito e `Origin` é
+setável livre por chamada direta (fora de navegador), um atacante com conta própria podia gerar
+checkout cujo redirecionamento pós-pagamento aponta pra domínio dele (phishing). Nova função pura
+`resolveTrustedOrigin` (`domain.ts`, testada) só aceita `Origin` numa allowlist (`ALLOWED_ORIGINS`,
+`[vars]`); `getJwks` também corrigido pra recriar o cache se `NEON_AUTH_JWKS_URL` mudar.
+
+**Testado ao vivo contra dados reais**: `/checkout` com `Origin` malicioso confirmado NÃO
+reflete-lo (checado direto na API do Stripe com a secret key); `Origin` confiável confirmado
+continua funcionando; cron diário e o log de cron-não-reconhecido testados via
+`/cdn-cgi/local/scheduled`. `npx tsc`/testes limpos: server-accounts 68/68 (4 novos), app 99/99.
+**A partir de agora, ler os comentários do Copilot faz parte do checklist antes de mergear
+qualquer PR desta sessão.** Ver `labs/lab-147-copilot-review-followup/CONTEXT.md`.
+
+Antes desse: labs/lab-146-conserta-oculos-rv-deformado/ — corrige o bug reportado numa sessão
 anterior ("avatar deformado" na lojinha ao equipar óculos), com detalhes coletados nesta sessão:
 qualquer aparelho, só o item "Óculos de Realidade Virtual", só na lojinha, não dentro do jogo.
 Causa raiz achada por leitura de código (`studentFigure.ts`, `applyGlasses`, ramo `shape ===
