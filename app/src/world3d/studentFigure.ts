@@ -603,9 +603,17 @@ export function applyGlasses(
     const visor = MeshBuilder.CreateBox('glassesVisor', { width: 0.24, height: 0.1, depth: 0.08 }, scene)
     visor.position = new Vector3(0, EYE_Y, 0.13)
     add(visor)
-    const strap = MeshBuilder.CreateCylinder('glassesStrap', { height: 0.05, diameter: 0.34, tessellation: 12 }, scene)
-    strap.rotation.x = Math.PI / 2
-    strap.position = new Vector3(0, EYE_Y, -0.02)
+    // lab-146 (bug reportado pelo usuário: "avatar deformado" ao equipar isto, só na tela da
+    // lojinha) — a peça anterior aqui era um `CreateCylinder` girado 90° no X, que NÃO cria um
+    // aro: cria um disco SÓLIDO virado de frente pra câmera. Com diâmetro 0.34 (maior que a
+    // própria cabeça, 0.32), esse disco sobrava pra fora da cabeça em volta inteira — pouco visível
+    // de longe (câmera do jogo principal, 3ª pessoa), mas óbvio na lojinha (preview de perto,
+    // câmera livre pra girar, ver `AvatarPreview3D.tsx`). `CreateTorus` sem rotação já nasce com o
+    // eixo do "buraco" em Y — o formato certo pra um aro na altura dos olhos — com diâmetro pensado
+    // pra abraçar a curvatura da cabeça NESSA altura (mais estreita que o equador, cabeça é uma
+    // esfera de raio 0.16 centrada em y=1.15; em EYE_Y o raio local é ~0.093).
+    const strap = MeshBuilder.CreateTorus('glassesStrap', { diameter: 0.2, thickness: 0.028, tessellation: 20 }, scene)
+    strap.position = new Vector3(0, EYE_Y, 0)
     add(strap)
   }
 }

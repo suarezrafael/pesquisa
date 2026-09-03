@@ -1,6 +1,22 @@
 # Laboratório atual
 
-Último concluído: labs/lab-145-config-sem-hardcode/ — resolve a PARTE SEGURA de G15 de
+Último concluído: labs/lab-146-conserta-oculos-rv-deformado/ — corrige o bug reportado numa sessão
+anterior ("avatar deformado" na lojinha ao equipar óculos), com detalhes coletados nesta sessão:
+qualquer aparelho, só o item "Óculos de Realidade Virtual", só na lojinha, não dentro do jogo.
+Causa raiz achada por leitura de código (`studentFigure.ts`, `applyGlasses`, ramo `shape ===
+'vr'`): a peça "correia" era um `CreateCylinder` girado 90° — isso produz um DISCO SÓLIDO virado
+pra câmera (diâmetro 0.34, maior que a própria cabeça de 0.32), não um aro. Pouco visível na
+câmera distante do jogo principal, óbvio na câmera livre/de perto do preview da lojinha
+(`AvatarPreview3D.tsx`). Trocado por `CreateTorus` sem rotação (eixo do buraco já nasce em Y — o
+formato certo pra um aro na altura dos olhos), diâmetro calculado pro raio LOCAL da cabeça nessa
+altura, não o raio máximo do equador. **Não verificado visualmente**: tentativa real feita (perfil
+via onboarding automatizado + `equippedGlassesId` trocado direto no `localStorage`), mas a tela de
+carregamento do mundo 3D nunca terminou — mesma causa raiz de sempre (`document.hidden = true`
+trava `requestAnimationFrame`), desta vez impedindo até chegar na lojinha. `npx tsc -b`/`npm run
+test`: 99/99, sem teste novo (geometria 3D pura). Ver
+`labs/lab-146-conserta-oculos-rv-deformado/CONTEXT.md`.
+
+Antes desse: labs/lab-145-config-sem-hardcode/ — resolve a PARTE SEGURA de G15 de
 `docs/prompts/05-escala-e-viabilidade.md`: `NEON_AUTH_JWKS_URL` e o fallback de `origin` de
 `/checkout`/`/billing-portal` (antes hardcoded em `src/index.ts`) agora moram em `[vars]`
 (`wrangler.toml`), como pede o `[MUST]` de `03-arquitetura-sistema.md §5`. `createRemoteJWKSet`
