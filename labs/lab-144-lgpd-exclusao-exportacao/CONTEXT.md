@@ -110,4 +110,6 @@ multiplayer citada acima.
   clique em "Baixar meus dados" sem erro → clique em "Excluir..." mostra a confirmação em duas
   etapas com o texto certo → confirmar devolve a tela de login → tentar entrar de novo com a MESMA
   senha devolve "Invalid email or password", confirmando que a conta reamente sumiu.
-- Deploy: pendente — mesmo fluxo de sempre (push → PR → CI → merge → deploy dos 3 jobs).
+- Deploy: PR #15 mergeado em `main` (commit `7c363dd`), os 3 jobs de CI/CD verdes. `GET /health`
+  confirmado `200` pós-deploy; `GET /account/export` sem token confirmado `401` em produção (rota
+  existe e exige autenticação, não `404`).
