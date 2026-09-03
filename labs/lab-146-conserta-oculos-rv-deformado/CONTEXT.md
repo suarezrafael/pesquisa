@@ -34,7 +34,17 @@ em vez de um número fixo — `headRadiusAtEyeY = sqrt(0.16² - (EYE_Y - 1.15)²
 * (headRadiusAtEyeY + thickness/2 + margem de 0.006)` — garante que o aro fica inteiro do lado de
 FORA da cabeça mesmo que as dimensões dela mudem no futuro (~0.226 com os números atuais, contra
 os 0.2 fixos de antes). PR #17 já estava mergeado quando isso foi encontrado — a correção virou um
-segundo commit nesta mesma sessão, novo PR (ver Estado do repositório).
+segundo commit nesta mesma sessão, novo PR (#18, ver Estado do repositório).
+
+**Segundo round do Copilot, no próprio PR #18**: usar `0.16`/`1.15` fixos "resolve hoje", mas
+quebra em silêncio (`Math.sqrt` de número negativo → `NaN`, malha corrompida em runtime) se `EYE_Y`
+ou a geometria da cabeça mudarem no futuro sem alguém lembrar de atualizar esses dois números aqui
+também — exatamente o tipo de acoplamento frágil que a correção anterior queria evitar. Corrigido
+lendo o raio de verdade direto do mesh (`figure.head.getBoundingInfo().boundingSphere.radius` —
+espaço LOCAL, mesmo espaço de `head.position.y` e de `EYE_Y`, já que `head` e as peças de óculos
+são todas filhas do mesmo `figure.root`) em vez de números fixos, com `Math.max(0, ...)` pra nunca
+gerar `NaN`. `figure.head` já existia como campo público de `StudentFigure` (usado noutro lugar do
+arquivo) — não precisou de nenhuma mudança de interface.
 
 ## Decisões técnicas tomadas
 

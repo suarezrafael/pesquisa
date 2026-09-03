@@ -611,16 +611,25 @@ export function applyGlasses(
     // câmera livre pra girar, ver `AvatarPreview3D.tsx`). `CreateTorus` sem rotação já nasce com o
     // eixo do "buraco" em Y — o formato certo pra um aro na altura dos olhos.
     //
-    // Achado do review automático do Copilot no PR deste laboratório: a primeira versão fixava
+    // Achado do review automático do Copilot no PR do lab-146: a primeira versão fixava
     // `diameter: 0.2` (raio do aro 0.1) com `thickness: 0.028` (raio do tubo 0.014) — raio INTERNO
     // do torus = 0.1 - 0.014 = 0.086, menor que o raio local da cabeça nessa altura (cabeça é uma
     // esfera de raio 0.16 centrada em y=1.15; em `EYE_Y` isso dá `sqrt(0.16² - 0.13²) ≈ 0.093`).
     // Ou seja, o tubo ainda atravessava a cabeça (0.086 < 0.093), só bem menos que o disco antigo.
-    // Corrigido derivando o diâmetro do raio local da cabeça (em vez de um número fixo) — garante
-    // que o aro fique inteiro DO LADO DE FORA mesmo que as dimensões da cabeça mudem no futuro.
+    //
+    // Segundo achado do Copilot (mesmo PR, revisão seguinte): calcular isso com `0.16`/`1.15`
+    // fixos "resolve hoje", mas quebra em silêncio (`NaN`, `Math.sqrt` de negativo) se `EYE_Y` ou
+    // a geometria da cabeça mudarem no futuro sem alguém lembrar de atualizar estes dois números
+    // aqui também. Em vez de números fixos, lê o raio de verdade direto do mesh `figure.head`
+    // (`getBoundingInfo().boundingSphere.radius`, espaço LOCAL — mesmo espaço de `head.position.y`
+    // e de `EYE_Y`, já que `head` e as peças de óculos são todas filhas do mesmo `figure.root`) —
+    // acompanha qualquer mudança futura de verdade, e o `Math.max(0, ...)` evita `NaN` se algum
+    // dia `EYE_Y` ficar mais longe do centro da cabeça do que o raio dela.
     const strapTubeThickness = 0.028
     const strapMargin = 0.006
-    const headRadiusAtEyeY = Math.sqrt(0.16 ** 2 - (EYE_Y - 1.15) ** 2)
+    const headRadius = figure.head.getBoundingInfo().boundingSphere.radius
+    const headCenterY = figure.head.position.y
+    const headRadiusAtEyeY = Math.sqrt(Math.max(0, headRadius ** 2 - (EYE_Y - headCenterY) ** 2))
     const strapDiameter = 2 * (headRadiusAtEyeY + strapTubeThickness / 2 + strapMargin)
     const strap = MeshBuilder.CreateTorus(
       'glassesStrap',
