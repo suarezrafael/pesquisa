@@ -64,6 +64,14 @@ export interface Env {
   // POST (salvar) e GET (restaurar) compartilham o mesmo namespace, mesmo espírito do
   // PROGRESS_SUMMARY_LIMITER (autenticado, disparado no máximo uma vez por sessão real de jogo).
   PROGRESS_BACKUP_LIMITER: RateLimit
+  // lab-143 (G14, docs/prompts/05-escala-e-viabilidade.md: "Neon Free tem janela de restauração
+  // de 6 horas... perder o banco = não saber quem pagou") — exportação diária das tabelas que
+  // representam dinheiro real (`family_accounts`/`subscriptions`/`pairing_codes`/
+  // `entitlement_tokens`) pra um lugar durável fora do próprio banco. Confirmado com o usuário via
+  // `AskUserQuestion`: Cloudflare R2 em vez de anexo de e-mail (Resend) — exige cartão cadastrado
+  // na conta Cloudflare pra habilitar R2 (nunca cobrado dentro do nível grátis de 10GB/mês), mas
+  // já era o que o usuário preferiu.
+  DATABASE_BACKUPS: R2Bucket
 }
 
 // IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
@@ -96,6 +104,11 @@ const jwks = createRemoteJWKSet(new URL(NEON_AUTH_JWKS_URL))
 // wrangler.toml — é assim que `scheduled()` decide qual das duas tarefas (reconciliação diária ou
 // e-mail semanal) rodar. Segunda-feira 12:00 UTC = 09:00 em São Paulo, fora do horário de pico.
 const WEEKLY_EMAIL_CRON = '0 12 * * 1'
+// lab-143 (G14): terceira entrada de `[triggers] crons` — 10:00 UTC, uma hora depois da
+// reconciliação diária (09:00 UTC) de propósito, pra nunca competir pelo mesmo minuto de
+// execução. Diário é suficiente pro objetivo (nunca perder mais de ~24h de vínculo família↔
+// assinatura se o banco falhar) sem gerar mais que um objeto novo por dia no bucket.
+const DATABASE_BACKUP_CRON = '0 10 * * *'
 
 async function requireUserId(request: Request): Promise<string | null> {
   const auth = request.headers.get('authorization')
@@ -899,6 +912,40 @@ async function upsertSubscription(
   }
 }
 
+// lab-143 (G14, docs/prompts/05-escala-e-viabilidade.md: "Neon Free tem janela de restauração de
+// 6 horas... family_accounts e o vínculo família↔assinatura são os únicos dados do sistema que
+// representam dinheiro real e não têm exportação periódica. Perder o banco = não saber quem
+// pagou"). Exporta as 4 tabelas que carregam esse vínculo — nenhuma delas guarda PII da criança
+// (nome/e-mail do responsável mora só no schema `neon_auth`, gerenciado pelo próprio Neon, nunca
+// replicado aqui) — pro bucket R2, um objeto JSON por dia (`backups/AAAA-MM-DD.json`). Chamado
+// pelo Cron Trigger (`scheduled`, abaixo). Restauração é manual/administrativa de propósito (ver
+// `scripts/restore-from-backup.mjs`) — divergente de `/progress-backup` (lab-142), que É
+// self-service pra família porque perder o PRÓPRIO progresso é rotina esperada (limpar
+// navegador); perder O BANCO INTEIRO é um evento raro que já exige intervenção humana de qualquer
+// jeito, não vale a complexidade de um endpoint de restauração automática pra isso.
+async function backupCriticalTables(env: Env): Promise<void> {
+  const sql = neon(env.DATABASE_URL)
+  const [familyAccounts, subscriptions, pairingCodes, entitlementTokens] = await Promise.all([
+    sql`select * from family_accounts`,
+    sql`select * from subscriptions`,
+    sql`select * from pairing_codes`,
+    sql`select * from entitlement_tokens`,
+  ])
+
+  const snapshot = {
+    exportedAt: new Date().toISOString(),
+    family_accounts: familyAccounts,
+    subscriptions: subscriptions,
+    pairing_codes: pairingCodes,
+    entitlement_tokens: entitlementTokens,
+  }
+
+  const key = `backups/${new Date().toISOString().slice(0, 10)}.json`
+  await env.DATABASE_BACKUPS.put(key, JSON.stringify(snapshot), {
+    httpMetadata: { contentType: 'application/json' },
+  })
+}
+
 // lab-102, resto de G8: rede de segurança contra um webhook que falhe silenciosamente de um jeito
 // que nem a reentrega do Stripe corrija (lab-96 já cobriu idempotência/ordem, mas nenhum dos dois
 // ajuda se a mudança simplesmente nunca chegou a ser aplicada). Chamado pelo Cron Trigger
@@ -1275,6 +1322,8 @@ export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (controller.cron === WEEKLY_EMAIL_CRON) {
       ctx.waitUntil(sendWeeklyProgressEmails(env))
+    } else if (controller.cron === DATABASE_BACKUP_CRON) {
+      ctx.waitUntil(backupCriticalTables(env))
     } else {
       ctx.waitUntil(reconcileSubscriptions(env))
     }

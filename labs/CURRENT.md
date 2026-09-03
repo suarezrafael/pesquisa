@@ -1,5 +1,16 @@
 # Laboratório atual
 
+Em andamento: labs/lab-143-backup-banco-r2/ — resolve G14 de
+`docs/prompts/05-escala-e-viabilidade.md` (backup diário de `family_accounts`/`subscriptions`/
+`pairing_codes`/`entitlement_tokens` pro Cloudflare R2). Escolha confirmada com o usuário via
+`AskUserQuestion` (R2 em vez de anexo de e-mail, apesar do cartão exigido pra habilitar R2 na
+conta). Código do Worker pronto (Cron Trigger `DATABASE_BACKUP_CRON` 10:00 UTC,
+`backupCriticalTables`, binding `[[r2_buckets]]`, `scripts/restore-from-backup.mjs`) — **bloqueado**
+até o usuário habilitar R2 no dashboard da Cloudflare (adicionar método de pagamento; ação que não
+posso realizar por mim mesmo). `npx tsc --noEmit` limpo, `npm run test` 64/64 (sem teste novo — a
+função nova é I/O puro, sem lógica de domínio pra testar isoladamente). Deploy e teste ao vivo do
+backup em si ainda pendentes. Ver `labs/lab-143-backup-banco-r2/FEATURES.md`.
+
 Último concluído: labs/lab-142-backup-restauracao-progresso/ — resolve G6 de
 `docs/prompts/05-escala-e-viabilidade.md` ("todo o progresso pago mora só no aparelho — limpar
 dados apaga o que a família pagou, sem backup e sem restauração"). Confirmado com o usuário via

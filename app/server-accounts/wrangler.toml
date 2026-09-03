@@ -11,8 +11,19 @@ compatibility_flags = ["nodejs_compat"]
 # 12:00 UTC (09:00 em São Paulo). `scheduled()` (`index.ts`) decide qual das duas tarefas rodar
 # comparando `controller.cron` contra `WEEKLY_EMAIL_CRON` — as duas strings têm que bater
 # exatamente se este valor mudar.
+# lab-143, G14: terceira entrada — exportação diária das tabelas de conta/assinatura/pareamento
+# pro bucket R2, 10:00 UTC, uma hora depois da reconciliação (09:00 UTC) de propósito, pra nunca
+# competir pelo mesmo minuto de execução. Comparada contra `DATABASE_BACKUP_CRON` em `index.ts`.
 [triggers]
-crons = ["0 9 * * *", "0 12 * * 1"]
+crons = ["0 9 * * *", "0 12 * * 1", "0 10 * * *"]
+
+# lab-143, G14 (docs/prompts/05-escala-e-viabilidade.md): bucket R2 pra exportação diária das
+# tabelas que representam dinheiro real (family_accounts/subscriptions/pairing_codes/
+# entitlement_tokens) — Neon Free só tem 6h de janela de restauração, perder o banco hoje
+# significaria perder o vínculo família↔assinatura sem jeito de reconstruir quem pagou.
+[[r2_buckets]]
+binding = "DATABASE_BACKUPS"
+bucket_name = "missao-aprender-backups"
 
 [vars]
 # ID do Price recorrente (R$ 4,99/mês) no Stripe, modo teste — não é secreto, é só um
