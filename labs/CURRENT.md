@@ -1,6 +1,38 @@
 # Laboratório atual
 
-Último concluído: labs/lab-137-polimento-lojinha-familia-pwa/ — os 4 itens de backlog reportados
+Último concluído: labs/lab-138-login-diario/ — recompensa de login diário (item do backlog de
+engajamento que nunca tinha sido escolhido, ver histórico de labs 129-133) + um bug real reportado
+pelo usuário na mesma sessão, achado e corrigido junto.
+1. **Login diário**: `Progress.loginStreak` novo; `applyDailyLoginReward` (`progression.ts`)
+   reaproveita o carimbo `lastPlayedAt` já existente (lab-91) — compara a sessão anterior contra
+   agora, sem storage novo. Mesmo dia = nada; dia seguinte = incrementa e premia; hiato de 2+ dias
+   ou primeira sessão de todas = reinicia em 1. Recompensa em ciclo de 7 dias (5/8/12/15/20/25/40
+   moedas, repete no dia 8), só moeda — nunca XP (mesmo padrão de baú/pote de Marte/combo).
+   `DailyLoginToast.tsx` novo anuncia o dia da sequência e a moeda ganha.
+2. **Bug corrigido (reportado pelo usuário testando `missaoaprendizado.com`)**: "na casa o catalog
+   aparece a cama foguete marcada como habilitado mover sendo que nao tenho esse objeto colocado
+   na casa". Causa: mobília exclusiva de assinante (lab-107) nunca entra em
+   `unlockedFurnitureIds` (só compra normal escreve ali) — `World3D.tsx` só olhava essa lista pra
+   decidir o que construir na sala 3D, então a peça nunca aparecia de verdade pra NENHUM
+   assinante, mesmo `MyHousePanel.tsx` já mostrando "✓ Tem"/"Mover" corretamente há labs. Corrigido
+   passando `entitlementActive` como prop nova pra `World3D`, aplicada em
+   `refreshHouseFurnitureVisuals` com a mesma regra do painel.
+
+**Pendência nova, ainda não investigada**: usuário reportou avatar deformado na lojinha ao
+equipar óculos — tentativa de reprodução ao vivo em produção (compra + equipagem real de "Óculos
+de Sol" na conta real do usuário) não reproduziu, sem erro de console. Precisa de mais informação
+(aparelho, óculos exato, se recarregar resolve) antes de investigar mais fundo.
+
+**Pedidos do usuário pro próximo laboratório** (câmera dentro de casa: girar pra cima/baixo +
+zoom + olhar de um lado pro outro arrastando o mouse; comprar mais de uma unidade do mesmo móvel,
+hoje limitado a 0/1 por item) — ver `labs/lab-138-login-diario/CONTEXT.md` § "O que o próximo
+laboratório deve desenvolver".
+
+`npm run test`: 84/84 (6 testes novos). `npm run build` sem erros. Login diário não verificado ao
+vivo (mudança de dia de calendário difícil de simular numa sessão só — confiança vem dos testes).
+Ver `labs/lab-138-login-diario/CONTEXT.md`.
+
+Antes desse: labs/lab-137-polimento-lojinha-familia-pwa/ — os 4 itens de backlog reportados
 na sequência do lab-133 ("câmera da lojinha de avatar precisa girar ao pressionar+arrastar... +
 mais luz no avatar... mais roupas texturizadas e mais opções na lojinha; painel `/familia` sem
 link de acesso de dentro do jogo"), pedidos juntos numa mesma sessão.

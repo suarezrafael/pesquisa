@@ -311,6 +311,56 @@ export function applyTreasureChestFound(progress: Progress, chestId: string): Tr
   }
 }
 
+// Login diário (lab-138, item do backlog de engajamento discutido em chat) — recompensa em moeda
+// por ciclo de 7 dias consecutivos (dia 8 volta a valer o mesmo que o dia 1, dia 15 idem...),
+// pra sempre ter algo pra mostrar mesmo numa sequência bem longa, sem uma tabela crescendo sem
+// fim. `((streak - 1) % 7) + 1` mapeia qualquer streak pra uma posição 1-7 nesta tabela.
+const DAILY_LOGIN_REWARD_BY_DAY_IN_CYCLE = [5, 8, 12, 15, 20, 25, 40]
+
+function dailyLoginRewardFor(streak: number): number {
+  const dayInCycle = ((streak - 1) % 7) + 1
+  return DAILY_LOGIN_REWARD_BY_DAY_IN_CYCLE[dayInCycle - 1]
+}
+
+// Trunca um ISO qualquer pro número de dias desde a época Unix, em UTC — mesmo raciocínio de
+// "dia" já usado pelo carimbo de `lastPlayedAt` (lab-91), que também é gravado em UTC
+// (`new Date().toISOString()`). Vira do dia limpo à meia-noite LOCAL do fuso do jogador em vez de
+// UTC (ex.: Brasil, UTC-3, a virada acontece 21h no relógio local) — simplificação conhecida,
+// documentada em vez de escondida; não afeta a contagem em si, só EM QUE HORÁRIO exato ela vira.
+function utcDayNumber(iso: string): number {
+  return Math.floor(new Date(iso).getTime() / 86_400_000)
+}
+
+export interface DailyLoginResult {
+  progress: Progress
+  granted: boolean
+  streak: number
+  coins: number
+}
+
+// `previousLastPlayedAtIso` deve ser o valor de `loadLastPlayedAt()` lido ANTES de
+// `touchLastPlayed()` sobrescrever — `App.tsx` é quem garante essa ordem (ver comentário lá).
+// `null` (primeira sessão de todas deste perfil) conta como um hiato — sempre começa do dia 1,
+// mesma regra de qualquer volta depois de 2+ dias sem abrir o jogo.
+export function applyDailyLoginReward(
+  progress: Progress,
+  previousLastPlayedAtIso: string | null,
+  nowIso: string,
+): DailyLoginResult {
+  const dayGap = previousLastPlayedAtIso === null ? Infinity : utcDayNumber(nowIso) - utcDayNumber(previousLastPlayedAtIso)
+
+  if (dayGap === 0) return { progress, granted: false, streak: progress.loginStreak, coins: 0 }
+
+  const streak = dayGap === 1 ? progress.loginStreak + 1 : 1
+  const coins = dailyLoginRewardFor(streak)
+  return {
+    progress: { ...progress, loginStreak: streak, coins: progress.coins + coins },
+    granted: true,
+    streak,
+    coins,
+  }
+}
+
 // Personalização de cores/cabelo (lab-73) — mesma regra de compra de `unlockAvatar`/`unlockHat`,
 // só extraída num helper porque agora são CINCO catálogos iguais (camisa/calça/sapato/mochila/
 // cabelo) em vez de repetir a mesma checagem cinco vezes.

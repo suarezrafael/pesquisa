@@ -125,6 +125,15 @@ import {
 interface World3DProps {
   profile: Profile
   progress: Progress
+  // lab-138, correção de bug real reportado pelo usuário ("na casa o catalog aparece a cama
+  // foguete marcada como habilitado mover sendo que nao tenho esse objeto colocado na casa"):
+  // mobília exclusiva de assinante (lab-107, `subscriptionOnly` em `data/furniture.ts`) nunca
+  // entra em `progress.unlockedFurnitureIds` (só compra normal escreve ali,
+  // `unlockGeneric`/`progression.ts` rejeita item `subscriptionOnly` de propósito) — sem esta
+  // prop, a sala 3D não tinha como saber que um assinante "tem" a peça, então nunca a
+  // construía/mostrava, mesmo com `MyHousePanel.tsx` já mostrando "✓ Tem"/"Mover" corretamente há
+  // labs (mesma regra `usable` de lá precisa valer aqui também).
+  entitlementActive: boolean
   onSelectQuest: (questId: string) => void
   onSelectSurpriseQuiz: (quizId: string) => void
   onSelectPlanetQuest: (planetId: string) => void
@@ -1895,6 +1904,7 @@ function buildLaserGun(scene: Scene, shadowGenerator: ShadowGenerator): Transfor
 export function World3D({
   profile,
   progress,
+  entitlementActive,
   onSelectQuest,
   onSelectSurpriseQuiz,
   onSelectPlanetQuest,
@@ -1933,6 +1943,7 @@ export function World3D({
   const cameraYawOffsetRef = useRef(0)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
+  const entitlementActiveRef = useRef(entitlementActive)
   const suspendRef = useRef(suspendTriggers)
   const onSelectQuestRef = useRef(onSelectQuest)
   const onSelectSurpriseQuizRef = useRef(onSelectSurpriseQuiz)
@@ -2029,6 +2040,7 @@ export function World3D({
 
   profileRef.current = profile
   progressRef.current = progress
+  entitlementActiveRef.current = entitlementActive
   suspendRef.current = suspendTriggers
   onSelectQuestRef.current = onSelectQuest
   onSelectSurpriseQuizRef.current = onSelectSurpriseQuiz
@@ -2098,9 +2110,13 @@ export function World3D({
 
   // lab-123: reaplica visibilidade da mobília dentro de casa assim que uma compra muda
   // `unlockedFurnitureIds` — sem isso, o jogador só veria o móvel novo depois de sair e voltar.
+  // lab-138: `entitlementActive` entrou na dependência pelo mesmo motivo — mobília exclusiva de
+  // assinante (lab-107) agora também depende dela (ver `refreshHouseFurnitureVisuals`), então
+  // resgatar um código de assinatura DURANTE o jogo precisa revelar essas peças sem precisar
+  // sair/voltar de casa também.
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshHouseFurniture?.()
-  }, [progress.unlockedFurnitureIds])
+  }, [progress.unlockedFurnitureIds, entitlementActive])
 
   // lab-129: responder uma escolinha de planeta devolve tempo ao cronômetro de sobrevivência (se
   // o jogador estiver num planeta com cronômetro) — mesmo padrão de bridge de
@@ -6585,9 +6601,20 @@ export function World3D({
       // `__refreshHouseFurniture`, mesmo padrão de `__setAvatarShirtColor` etc., observado por um
       // `useEffect` em `progress.unlockedFurnitureIds`) — cobre comprar um item novo no balcão SEM
       // precisar sair e voltar pra ver o móvel aparecer.
+      //
+      // lab-138 (correção de bug real: "na casa o catalog aparece a cama foguete marcada como
+      // habilitado mover sendo que nao tenho esse objeto colocado na casa") — mobília
+      // `subscriptionOnly` (lab-107) nunca entra em `unlockedFurnitureIds` (só compra normal
+      // escreve ali, `unlockGeneric` rejeita item `subscriptionOnly` de propósito), então
+      // checar só `unlockedFurnitureIds` deixava a peça pra sempre invisível aqui mesmo com
+      // assinatura ativa — `MyHousePanel.tsx` já mostrava "✓ Tem"/"Mover" certo (mesma regra
+      // `usable` de lá), só a sala 3D estava desatualizada.
       function refreshHouseFurnitureVisuals() {
         for (const item of FURNITURE_CATALOG) {
-          houseFurnitureNodes[item.id]?.setEnabled(progressRef.current.unlockedFurnitureIds.includes(item.id))
+          const usable = item.subscriptionOnly
+            ? entitlementActiveRef.current
+            : progressRef.current.unlockedFurnitureIds.includes(item.id)
+          houseFurnitureNodes[item.id]?.setEnabled(usable)
         }
       }
       ;(scene as any).__refreshHouseFurniture = refreshHouseFurnitureVisuals

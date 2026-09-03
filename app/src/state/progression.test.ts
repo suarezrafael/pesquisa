@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyCoinCollected,
+  applyDailyLoginReward,
   applyPlanetQuestCompletion,
   applyQuestCompletion,
   applyStreakReset,
@@ -516,6 +517,54 @@ describe('unlockMarsReward (lab-94)', () => {
     const result = unlockMarsReward(jaTem)
     expect(result.granted).toBe(false)
     expect(result.progress).toBe(jaTem)
+  })
+})
+
+describe('applyDailyLoginReward (lab-138)', () => {
+  it('primeira sessão de todas (sem lastPlayedAt anterior) começa no dia 1 e premia', () => {
+    const result = applyDailyLoginReward(emptyProgress, null, '2026-09-02T12:00:00.000Z')
+    expect(result.granted).toBe(true)
+    expect(result.streak).toBe(1)
+    expect(result.coins).toBe(5)
+    expect(result.progress.loginStreak).toBe(1)
+    expect(result.progress.coins).toBe(5)
+  })
+
+  it('reabrir no mesmo dia não concede de novo (idempotente por dia)', () => {
+    const comStreak = { ...emptyProgress, loginStreak: 3, coins: 100 }
+    const result = applyDailyLoginReward(comStreak, '2026-09-02T08:00:00.000Z', '2026-09-02T20:00:00.000Z')
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(comStreak)
+    expect(result.coins).toBe(0)
+  })
+
+  it('abrir no dia seguinte incrementa a sequência e premia o valor daquele dia', () => {
+    const comStreak = { ...emptyProgress, loginStreak: 1, coins: 0 }
+    const result = applyDailyLoginReward(comStreak, '2026-09-01T10:00:00.000Z', '2026-09-02T10:00:00.000Z')
+    expect(result.granted).toBe(true)
+    expect(result.streak).toBe(2)
+    expect(result.coins).toBe(8)
+    expect(result.progress.loginStreak).toBe(2)
+  })
+
+  it('hiato de 2+ dias reinicia a sequência em 1, não zera', () => {
+    const comStreak = { ...emptyProgress, loginStreak: 6, coins: 0 }
+    const result = applyDailyLoginReward(comStreak, '2026-08-20T10:00:00.000Z', '2026-09-02T10:00:00.000Z')
+    expect(result.granted).toBe(true)
+    expect(result.streak).toBe(1)
+    expect(result.coins).toBe(5)
+  })
+
+  it('ciclo de 7 dias repete o valor do dia 1 no dia 8', () => {
+    const comStreak = { ...emptyProgress, loginStreak: 7, coins: 0 }
+    const result = applyDailyLoginReward(comStreak, '2026-09-01T10:00:00.000Z', '2026-09-02T10:00:00.000Z')
+    expect(result.streak).toBe(8)
+    expect(result.coins).toBe(5)
+  })
+
+  it('nunca concede XP, só moeda — mesmo padrão de baú/pote de Marte/combo', () => {
+    const result = applyDailyLoginReward(emptyProgress, null, '2026-09-02T12:00:00.000Z')
+    expect(result.progress.xp).toBe(emptyProgress.xp)
   })
 })
 

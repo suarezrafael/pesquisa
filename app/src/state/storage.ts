@@ -155,6 +155,8 @@ export const emptyProgress: Progress = {
   currentStreak: 0,
   // Posicionamento manual de mobília dentro de casa (lab-136) — ver comentário em `types.ts`.
   housePlacements: {},
+  // Recompensa de login diário (lab-138) — ver comentário em `types.ts`.
+  loginStreak: 0,
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/
