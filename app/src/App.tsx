@@ -24,10 +24,12 @@ import {
   listProfiles,
   loadLastPlayedAt,
   markTutorialSeen,
+  saveProfile,
+  saveProgress,
   switchActiveProfile,
   touchLastPlayed,
 } from './state/storage'
-import type { Quest } from './types'
+import type { Profile, Progress, Quest } from './types'
 import type { FurnitureOption } from './data/furniture'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
@@ -132,7 +134,8 @@ function GameApp() {
   // Login diário (lab-138) — `null` = nada pra mostrar; populado só quando `claimDailyLogin`
   // devolve `granted: true` (mesmo perfil não ganha duas vezes no mesmo dia — ver `progression.ts`).
   const [dailyLoginReward, setDailyLoginReward] = useState<{ streak: number; coins: number } | null>(null)
-  const { entitlement, redeemCode, redeeming, redeemError, syncProgressSummary } = useEntitlement()
+  const { entitlement, redeemCode, redeeming, redeemError, syncProgressSummary, syncProgressBackup, fetchProgressBackup } =
+    useEntitlement()
   // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
   // decidir se mostra o `ProfilePicker` (quando não há perfil ativo) quanto pra decidir se mostra
   // o botão de trocar perfil no HUD (só faz sentido com 2+ perfis já criados neste aparelho).
@@ -157,8 +160,16 @@ function GameApp() {
   // atualização em tempo real, e isso evita chamar o endpoint a cada moeda coletada). Família sem
   // entitlement ativo nunca dispara isto — ver `syncProgressSummary`/decisão registrada em
   // labs/lab-119-.../FEATURES.md.
+  // lab-142: mesmo gatilho sincroniza o BACKUP completo (`syncProgressBackup`, G6 de
+  // docs/prompts/05-escala-e-viabilidade.md) — não precisa de efeito/condição própria, é
+  // exatamente a mesma janela de oportunidade ("família com assinatura ativa, uma vez por
+  // sessão"). `profile` pode ainda ser `null` aqui (este efeito roda antes do primeiro
+  // `if (!profile)` early return do componente) — sem perfil não há o que sincronizar.
   useEffect(() => {
-    if (entitlement?.active) syncProgressSummary(progress)
+    if (entitlement?.active && profile) {
+      syncProgressSummary(progress)
+      syncProgressBackup(profile, progress)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entitlement?.active])
 
@@ -285,6 +296,19 @@ function GameApp() {
   // que o planeta é limpado de novo.
   function handleUnlockMarsReward() {
     if (unlockMarsReward()) setShowMarsReward(true)
+  }
+
+  // lab-142 (G6): restaura um backup encontrado no servidor por cima do perfil/progresso LOCAIS
+  // deste aparelho — o jogador já confirmou explicitamente na tela de pareamento
+  // (`PairingScreen.tsx`, "Restaurar progresso salvo"), então grava direto no `localStorage`
+  // (`saveProfile`/`saveProgress`, sem passar pelos setters de `useProfile`/`useProgress`, que só
+  // sabem editar UM campo por vez, nunca substituir o objeto inteiro) e recarrega a página —
+  // mesmo padrão de `switchActiveProfile` (troca de perfil) logo abaixo, que também prefere um
+  // reload de verdade a tentar sincronizar manualmente todo o estado do React.
+  function handleRestoreBackup(restoredProfile: Profile, restoredProgress: Progress) {
+    saveProfile(restoredProfile)
+    saveProgress(restoredProgress)
+    window.location.reload()
   }
 
   return (
@@ -429,6 +453,8 @@ function GameApp() {
           redeeming={redeeming}
           redeemError={redeemError}
           onRedeem={redeemCode}
+          onFetchBackup={fetchProgressBackup}
+          onRestoreBackup={handleRestoreBackup}
           onClose={() => setShowPairing(false)}
         />
       )}

@@ -24,6 +24,7 @@ import {
   isTokenRevoked,
   isValidNpsScore,
   isValidProductEventType,
+  isValidProgressBackupPayload,
   isValidProgressSummary,
   isValidSubscriptionStatus,
   NPS_COOLDOWN_DAYS,
@@ -59,6 +60,10 @@ export interface Env {
   PAIRING_GENERATE_LIMITER: RateLimit
   NPS_LIMITER: RateLimit
   PROGRESS_SUMMARY_LIMITER: RateLimit
+  // lab-142 (G6, docs/prompts/05-escala-e-viabilidade.md): backup/restauração de progresso —
+  // POST (salvar) e GET (restaurar) compartilham o mesmo namespace, mesmo espírito do
+  // PROGRESS_SUMMARY_LIMITER (autenticado, disparado no máximo uma vez por sessão real de jogo).
+  PROGRESS_BACKUP_LIMITER: RateLimit
 }
 
 // IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
@@ -520,6 +525,107 @@ async function handleProgressSummary(request: Request, env: Env): Promise<Respon
   `
 
   return new Response(null, { status: 204 })
+}
+
+// lab-142 (G6, docs/prompts/05-escala-e-viabilidade.md: "todo o progresso pago mora só no
+// aparelho — limpar dados apaga o que a família pagou, sem backup e sem restauração") — recebe o
+// `Profile`+`Progress` INTEIROS do jogo (não o resumo de 5 números de `handleProgressSummary`
+// acima) e guarda como uma linha por família, sempre SOBRESCRITA (mesmo espírito de
+// `progress_snapshots`: não é histórico, é o estado mais recente). Mesma autenticação/checagem de
+// revogação de `handleProgressSummary` — token de entitlement, nunca o JWT do responsável.
+async function handleProgressBackupSave(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.PROGRESS_BACKUP_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const auth = request.headers.get('authorization')
+  if (!auth?.startsWith('Bearer ')) return new Response(null, { status: 401 })
+
+  let familyAccountId: string
+  let jti: string | undefined
+  try {
+    const secret = new TextEncoder().encode(env.ENTITLEMENT_SECRET)
+    const { payload } = await jwtVerify(auth.slice('Bearer '.length), secret)
+    if (typeof payload.sub !== 'string') return new Response(null, { status: 401 })
+    familyAccountId = payload.sub
+    jti = payload.jti
+  } catch {
+    return new Response(null, { status: 401 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+
+  if (jti) {
+    const tokenRows = (await sql`
+      select revoked_at from entitlement_tokens where jti = ${jti}
+    `) as { revoked_at: string | null }[]
+    if (isTokenRevoked(jti, tokenRows[0])) return new Response(null, { status: 401 })
+  }
+
+  const body = await request.text()
+  // Bem mais generoso que o limite de 1000 bytes de `handleProgressSummary` (que é só 5 números)
+  // — este payload é o save inteiro (todos os ids desbloqueados/equipados, posições de mobília
+  // etc.), mas ainda assim finito: nenhum save real deste jogo chega perto de 50KB.
+  if (body.length > 50_000) return new Response(null, { status: 413 })
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(body)
+  } catch {
+    return new Response(null, { status: 400 })
+  }
+  if (!isValidProgressBackupPayload(payload)) return new Response(null, { status: 400 })
+
+  await sql`
+    insert into progress_backups (family_account_id, profile, progress, updated_at)
+    values (${familyAccountId}, ${JSON.stringify(payload.profile)}, ${JSON.stringify(payload.progress)}, now())
+    on conflict (family_account_id) do update set
+      profile = excluded.profile,
+      progress = excluded.progress,
+      updated_at = now()
+  `
+
+  return new Response(null, { status: 204 })
+}
+
+// lab-142 — metade "restauração" do backup acima: chamada quando o jogo detecta um perfil local
+// vazio/novo logo depois de um pareamento bem-sucedido (`PairingScreen.tsx`), pra oferecer trazer
+// de volta o progresso da família. Mesma autenticação de `handleProgressBackupSave`. `404` (não
+// `null` vazio) quando a família nunca sincronizou nada — deixa claro pro client que não há o que
+// restaurar, em vez de um corpo vazio ambíguo.
+async function handleProgressBackupFetch(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.PROGRESS_BACKUP_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const auth = request.headers.get('authorization')
+  if (!auth?.startsWith('Bearer ')) return new Response(null, { status: 401 })
+
+  let familyAccountId: string
+  let jti: string | undefined
+  try {
+    const secret = new TextEncoder().encode(env.ENTITLEMENT_SECRET)
+    const { payload } = await jwtVerify(auth.slice('Bearer '.length), secret)
+    if (typeof payload.sub !== 'string') return new Response(null, { status: 401 })
+    familyAccountId = payload.sub
+    jti = payload.jti
+  } catch {
+    return new Response(null, { status: 401 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+
+  if (jti) {
+    const tokenRows = (await sql`
+      select revoked_at from entitlement_tokens where jti = ${jti}
+    `) as { revoked_at: string | null }[]
+    if (isTokenRevoked(jti, tokenRows[0])) return new Response(null, { status: 401 })
+  }
+
+  const rows = (await sql`
+    select profile, progress, updated_at from progress_backups where family_account_id = ${familyAccountId}
+  `) as { profile: unknown; progress: unknown; updated_at: string }[]
+
+  if (rows.length === 0) return new Response(null, { status: 404 })
+  return Response.json({ profile: rows[0].profile, progress: rows[0].progress, updatedAt: rows[0].updated_at })
 }
 
 // lab-97, resto de G7: válvula de segurança pro responsável — "vazei meu código de pareamento,
@@ -1132,6 +1238,14 @@ export default {
 
     if (url.pathname === '/progress-summary' && request.method === 'POST') {
       return withCors(await handleProgressSummary(request, env))
+    }
+
+    if (url.pathname === '/progress-backup' && request.method === 'POST') {
+      return withCors(await handleProgressBackupSave(request, env))
+    }
+
+    if (url.pathname === '/progress-backup' && request.method === 'GET') {
+      return withCors(await handleProgressBackupFetch(request, env))
     }
 
     if (url.pathname === '/entitlement/revoke-all' && request.method === 'POST') {

@@ -100,3 +100,13 @@ namespace_id = "1008"
   [ratelimits.simple]
   limit = 10
   period = 60
+
+[[ratelimits]]
+name = "PROGRESS_BACKUP_LIMITER"
+namespace_id = "1009"
+  # lab-142 (G6): compartilhado entre POST /progress-backup (salvar, no máximo uma vez por sessão
+  # real, mesmo gatilho de PROGRESS_SUMMARY_LIMITER) e GET /progress-backup (restaurar, só
+  # chamado logo depois de um pareamento bem-sucedido — mais raro ainda). Mesmo limite generoso.
+  [ratelimits.simple]
+  limit = 10
+  period = 60
