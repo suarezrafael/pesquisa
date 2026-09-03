@@ -13,6 +13,7 @@ import { GLASSES_CATALOG } from '../data/glasses'
 import { FURNITURE_CATALOG, findFurnitureRewardForPlanet, type FurnitureOption } from '../data/furniture'
 import { findPlanetIdForQuest, isPlanetFullyCompleted } from '../data/planetQuests'
 import { findTreasureChestById } from '../data/treasureChests'
+import { findPostcardByPlanetId } from '../data/postcards'
 import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -307,6 +308,26 @@ export function applyTreasureChestFound(progress: Progress, chestId: string): Tr
       foundTreasureChestIds: [...progress.foundTreasureChestIds, chestId],
       coins: progress.coins + chest.coinReward,
     },
+    granted: true,
+  }
+}
+
+export interface PostcardResult {
+  progress: Progress
+  granted: boolean
+}
+
+// Cartão-postal colecionável (lab-141, item do backlog de engajamento discutido em chat, mesma
+// lista de onde saiu o login diário — lab-138) — mesmo padrão de `unlockMarsReward`/
+// `applyTreasureChestFound` acima: concessão de graça, idempotente (devolve `granted: false` se o
+// jogador já tiver o cartão daquele planeta), disparada por um evento de gameplay (pousar de
+// verdade em `World3D.tsx`), nunca por compra. Sem moeda/XP — é coleção pura, mesmo espírito de
+// `badges`, não recompensa de missão.
+export function applyPostcardCollected(progress: Progress, planetId: string): PostcardResult {
+  if (progress.collectedPostcardIds.includes(planetId)) return { progress, granted: false }
+  if (!findPostcardByPlanetId(planetId)) return { progress, granted: false }
+  return {
+    progress: { ...progress, collectedPostcardIds: [...progress.collectedPostcardIds, planetId] },
     granted: true,
   }
 }

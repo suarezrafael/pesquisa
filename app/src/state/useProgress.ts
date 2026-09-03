@@ -22,6 +22,7 @@ import {
   applyStreakReset,
   applyDailyLoginReward,
   type DailyLoginResult,
+  applyPostcardCollected,
 } from './progression'
 
 export function useProgress() {
@@ -191,6 +192,19 @@ export function useProgress() {
     return result
   }
 
+  // Cartão-postal colecionável (lab-141) — mesmo formato de `foundTreasureChest`/`unlockMarsReward`
+  // acima: devolve se realmente concedeu um cartão novo (o chamador em `World3D.tsx` usa isso pra
+  // decidir se mostra o aviso transitório de "novo cartão", não a cada pouso repetido no mesmo
+  // planeta).
+  function collectPostcard(planetId: string): boolean {
+    const result = applyPostcardCollected(progress, planetId)
+    if (result.granted) {
+      setProgress(result.progress)
+      saveProgress(result.progress)
+    }
+    return result.granted
+  }
+
   return {
     progress,
     completeQuest,
@@ -210,5 +224,6 @@ export function useProgress() {
     foundTreasureChest,
     resetStreak,
     claimDailyLogin,
+    collectPostcard,
   }
 }
