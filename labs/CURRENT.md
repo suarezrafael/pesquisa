@@ -1,17 +1,22 @@
 # Laboratório atual
 
-Em andamento: labs/lab-143-backup-banco-r2/ — resolve G14 de
+Último concluído: labs/lab-143-backup-banco-r2/ — resolve G14 de
 `docs/prompts/05-escala-e-viabilidade.md` (backup diário de `family_accounts`/`subscriptions`/
 `pairing_codes`/`entitlement_tokens` pro Cloudflare R2). Escolha confirmada com o usuário via
 `AskUserQuestion` (R2 em vez de anexo de e-mail, apesar do cartão exigido pra habilitar R2 na
-conta). Código do Worker pronto (Cron Trigger `DATABASE_BACKUP_CRON` 10:00 UTC,
-`backupCriticalTables`, binding `[[r2_buckets]]`, `scripts/restore-from-backup.mjs`) — **bloqueado**
-até o usuário habilitar R2 no dashboard da Cloudflare (adicionar método de pagamento; ação que não
-posso realizar por mim mesmo). `npx tsc --noEmit` limpo, `npm run test` 64/64 (sem teste novo — a
-função nova é I/O puro, sem lógica de domínio pra testar isoladamente). Deploy e teste ao vivo do
-backup em si ainda pendentes. Ver `labs/lab-143-backup-banco-r2/FEATURES.md`.
+conta) — usuário habilitou R2, bucket `missao-aprender-backups` criado. Terceiro Cron Trigger
+(`DATABASE_BACKUP_CRON`, 10:00 UTC), `backupCriticalTables` exporta as 4 tabelas pra um JSON por
+dia no bucket. Restauração é manual/administrativa (`scripts/restore-from-backup.mjs`,
+dry-run por padrão), nunca um endpoint self-service — perder o banco inteiro é raro o bastante que
+já exige decisão humana.
 
-Último concluído: labs/lab-142-backup-restauracao-progresso/ — resolve G6 de
+**Testado ao vivo contra dados reais**: `wrangler dev --test-scheduled` disparando o cron do
+backup contra o banco de PRODUÇÃO real → sucesso sem erro; escrita/leitura/remoção confirmadas
+separadamente no bucket R2 remoto real via `wrangler r2 object put/get/delete --remote`. `npx tsc
+--noEmit` limpo, `npm run test` (server-accounts) 64/64 (sem teste novo — I/O puro, sem lógica de
+domínio isolável). Ver `labs/lab-143-backup-banco-r2/CONTEXT.md`.
+
+Antes desse: labs/lab-142-backup-restauracao-progresso/ — resolve G6 de
 `docs/prompts/05-escala-e-viabilidade.md` ("todo o progresso pago mora só no aparelho — limpar
 dados apaga o que a família pagou, sem backup e sem restauração"). Confirmado com o usuário via
 `AskUserQuestion` antes de começar (item maior/mais delicado que os labs anteriores).

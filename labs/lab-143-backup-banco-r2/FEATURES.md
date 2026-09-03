@@ -1,8 +1,8 @@
 # Laboratório 143 — Backup diário do banco pra Cloudflare R2
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-03
-Fim: -
+Fim: 2026-09-03
 Commit inicial: 5c959055ca399813bbfb0a34700ee7bdf19e0609
 
 ## Objetivo do laboratório
@@ -21,15 +21,13 @@ cartão cadastrado na conta Cloudflare pra habilitar R2 (nunca cobrado dentro do
 - [x] `backupCriticalTables(env)` — exporta `family_accounts`/`subscriptions`/`pairing_codes`/
   `entitlement_tokens` como um objeto JSON por dia (`backups/AAAA-MM-DD.json`) pro bucket R2.
 - [x] Binding `DATABASE_BACKUPS` (`[[r2_buckets]]`) em `wrangler.toml`.
-- [ ] Bucket R2 `missao-aprender-backups` criado de verdade na conta Cloudflare — bloqueado até o
-  usuário habilitar R2 (adicionar método de pagamento no dashboard; nunca feito por mim, ver
-  `docs/prompts/01-seguranca.md`/regra de não inserir dado financeiro).
+- [x] Bucket R2 `missao-aprender-backups` criado de verdade na conta Cloudflare — usuário habilitou
+  R2 (adicionou método de pagamento no dashboard), bucket criado via `wrangler r2 bucket create`.
 - [x] `scripts/restore-from-backup.mjs` — restauração manual/administrativa (upsert por tabela,
   dry-run por padrão, `--confirm` pra aplicar de verdade).
 - [x] Atualização de `README.md` (`app/server-accounts`) documentando o mecanismo.
-- [ ] Teste ao vivo do backup (via `wrangler dev` ou invocação manual do cron) — depende do bucket
-  existir.
-- [ ] Deploy em produção (push → PR → CI → merge).
+- [x] Teste ao vivo do backup — ver Estado do repositório em `CONTEXT.md`.
+- [ ] Deploy em produção (push → PR → CI → merge) — em andamento.
 
 ## Fora de escopo (explicitamente adiado)
 - G13 (LGPD: exclusão de dados, política de retenção, consentimento parental pro multiplayer) —
