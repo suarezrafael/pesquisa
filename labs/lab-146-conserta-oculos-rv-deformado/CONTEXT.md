@@ -79,4 +79,19 @@ produção antes de considerar este item definitivamente fechado.
   (`equippedGlassesId: 'oculos_rv'`) pra pular a exigência de assinatura ativa, página recarregada
   — mas a tela "Carregando o mundo 3D…" nunca terminou (mesma causa raiz: `document.hidden = true`
   trava o `requestAnimationFrame`). Sem outro caminho de reprodução visual disponível nesta sessão.
-- Deploy: pendente — mesmo fluxo de sempre (push → PR → CI → merge → deploy).
+- Deploy: PR #17 mergeado em `main` (commit `530b180`). **Achado operacional novo, fora do escopo
+  deste bug**: o workflow `CI` do GitHub Actions (o que faz `wrangler deploy` dos dois Workers)
+  NUNCA disparou pra esse push em `main` — confirmado via `gh api .../actions/runs`, checado
+  várias vezes ao longo de mais de 5 minutos, nenhuma `run` nova apareceu pra `head_sha =
+  530b180...`, `head_branch = main`. Apesar disso, o FRONTEND já está atualizado em produção —
+  confirmado de forma independente baixando o bundle real
+  (`https://missaoaprendizado.com/assets/World3D-b5Jm1_hm.js`) e achando `CreateTorus` nele (API
+  que só existe no código por causa deste laboratório) — o que sugere que o deploy do Vercel
+  acontece por integração Git nativa dele, independente do passo `vercel --prod` do workflow `CI`.
+  **Como este PR não mexeu em nenhum dos dois Workers, não há evidência de perda funcional real
+  agora** — mas isso expõe um ponto cego: se o workflow `CI` parar de disparar silenciosamente,
+  mudanças em `server-accounts`/`server-cf-relay` poderiam parecer "deployadas" (merge feito, site
+  no ar) sem o Worker ter sido atualizado de verdade. Vale investigar na próxima vez que algo em
+  `app/server-accounts` ou `app/server-cf-relay` mudar — confirmar o deploy do WORKER
+  explicitamente (não só o `/health`, que responde mesmo com código antigo), e reportar ao usuário
+  se o padrão se repetir.
