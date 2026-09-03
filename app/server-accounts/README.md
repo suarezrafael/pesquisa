@@ -24,13 +24,20 @@ semanal de progresso por e-mail (lab-119, ver nota de privacidade abaixo).
 | `/pairing/redeem` | POST | nenhuma (chamado pelo jogo, criança sem conta) | Troca o código por um token de entitlement (HMAC, 180 dias) |
 | `/entitlement` | GET | Bearer = token de entitlement (**não** o JWT do Neon Auth) | `{ active, expiresAt }` — status real da assinatura da família pareada |
 | `/progress-summary` | POST | Bearer = token de entitlement | (lab-119, Fase F) Grava um resumo MÍNIMO de progresso (nível/XP/moedas/missões/emblemas — nunca conteúdo bruto) em `progress_snapshots`, sobrescrevendo o anterior — alimenta o relatório semanal por e-mail |
+| `/progress-backup` | POST | Bearer = token de entitlement | (lab-142, G6) Grava o `Profile`+`Progress` INTEIROS do jogo em `progress_backups`, sobrescrevendo o anterior — permite restaurar depois de limpar dados/trocar de aparelho |
+| `/progress-backup` | GET | Bearer = token de entitlement | (lab-142, G6) Devolve `{ profile, progress, updatedAt }` do backup mais recente da família, ou `404` se nunca sincronizou nada |
 | `/webhooks/stripe` | POST | assinatura HMAC do Stripe | Atualiza `subscriptions` a partir dos eventos do Stripe |
 
-**Nota de privacidade (lab-119)**: até este laboratório, nenhuma tabela deste Worker guardava
-progresso da criança — só o `localStorage` dela. `/progress-summary` muda isso conscientemente
-(decisão registrada em `labs/lab-119-.../FEATURES.md`), mas com um limite duplo: só um RESUMO de
-5 números (nunca resposta de quest/apelido/avatar/horário de atividade) e só enquanto a família
-tiver entitlement ativo — sem assinatura, o jogo nunca chama este endpoint.
+**Nota de privacidade (lab-119, atualizada no lab-142)**: até o lab-119, nenhuma tabela deste
+Worker guardava progresso da criança — só o `localStorage` dela. `/progress-summary` mudou isso
+conscientemente (decisão registrada em `labs/lab-119-.../FEATURES.md`) com um limite duplo: só um
+RESUMO de 5 números (nunca resposta de quest/apelido/avatar/horário de atividade) e só enquanto a
+família tiver entitlement ativo. **`/progress-backup` (lab-142) vai além**: guarda o save
+COMPLETO (nome/avatar/equipados + XP/moedas/missões/cosméticos/posições de mobília), pra resolver
+G6 de `docs/prompts/05-escala-e-viabilidade.md` — "todo o progresso pago mora só no aparelho, sem
+backup e sem restauração". Mesma condição de `/progress-summary` (só com entitlement ativo, mesmo
+token de entitlement, nunca o JWT do responsável) — ver decisão completa em
+`labs/lab-142-.../FEATURES.md` e a nota atualizada em `docs/plano-comercial-backend.md`.
 
 A lógica de negócio pura (quais status do Stripe contam como entitlement ativo, regras do código
 de pareamento) mora em `src/domain.ts`, sem import de `neon`/`Stripe`/`jose` — é o que permite

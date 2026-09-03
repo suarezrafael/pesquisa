@@ -15,6 +15,7 @@ import {
   isTokenRevoked,
   isValidNpsScore,
   isValidProductEventType,
+  isValidProgressBackupPayload,
   isValidProgressSummary,
   isValidSubscriptionStatus,
   MAX_ACTIVE_DEVICES_PER_FAMILY,
@@ -334,6 +335,40 @@ describe('isValidProgressSummary — lab-119, Fase F', () => {
 
   it('rejeita campo com tipo errado (ex.: string em vez de número)', () => {
     expect(isValidProgressSummary({ ...validSummary, badgesCount: '2' })).toBe(false)
+  })
+})
+
+describe('isValidProgressBackupPayload — lab-142 (backup/restauração de progresso, G6)', () => {
+  it('aceita profile/progress como objetos, com qualquer campo dentro (validação estrutural, não campo a campo)', () => {
+    expect(
+      isValidProgressBackupPayload({
+        profile: { name: 'Ana', avatarEmoji: '🦊' },
+        progress: { xp: 100, coins: 20, unlockedHatIds: ['coroa'] },
+      }),
+    ).toBe(true)
+  })
+
+  it('aceita profile/progress vazios (objetos, só sem campos)', () => {
+    expect(isValidProgressBackupPayload({ profile: {}, progress: {} })).toBe(true)
+  })
+
+  it('rejeita payload que não é objeto', () => {
+    expect(isValidProgressBackupPayload(null)).toBe(false)
+    expect(isValidProgressBackupPayload('nada')).toBe(false)
+    expect(isValidProgressBackupPayload(42)).toBe(false)
+    expect(isValidProgressBackupPayload([])).toBe(false)
+  })
+
+  it('rejeita quando falta profile ou progress', () => {
+    expect(isValidProgressBackupPayload({ profile: {} })).toBe(false)
+    expect(isValidProgressBackupPayload({ progress: {} })).toBe(false)
+  })
+
+  it('rejeita profile/progress que não são objetos de verdade (array, string, número)', () => {
+    expect(isValidProgressBackupPayload({ profile: [], progress: {} })).toBe(false)
+    expect(isValidProgressBackupPayload({ profile: {}, progress: 'nada' })).toBe(false)
+    expect(isValidProgressBackupPayload({ profile: {}, progress: 42 })).toBe(false)
+    expect(isValidProgressBackupPayload({ profile: null, progress: {} })).toBe(false)
   })
 })
 

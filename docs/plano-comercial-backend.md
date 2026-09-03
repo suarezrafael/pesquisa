@@ -116,6 +116,22 @@ sincronizado enquanto a família tiver entitlement ativo (ver `POST /progress-su
 `app/server-accounts/README.md`) — sem assinatura, o jogo nunca chama esse endpoint. Decisão
 registrada em `labs/lab-119-.../FEATURES.md`.
 
+**Atualização (lab-142)**: a regra foi RELAXADA de novo, desta vez de forma mais ampla, pra
+resolver G6 de `docs/prompts/05-escala-e-viabilidade.md` ("todo o progresso pago mora só no
+aparelho — limpar dados apaga o que a família pagou, sem backup e sem restauração... fila de
+suporte e de estorno esperando pra acontecer"). `progress_backups` guarda o `Profile`+`Progress`
+INTEIROS (nome/apelido, avatar e equipados incluídos — diferente do resumo do lab-119, que
+excluía isso de propósito) — decisão consciente de que, pra uma restauração de verdade "devolver
+o que a família pagou" fazer sentido, precisa devolver o personagem inteiro, não só os números.
+Justificativa de que isso não é uma exposição nova de privacidade: o apelido da criança já segue
+o catálogo de `data/nicknames.ts`/`nicknameFilter.ts` (não é o nome real, mesmo raciocínio de
+"identificador técnico, não dado pessoal" já usado em `docs/prompts/01-seguranca.md` pro id
+anônimo de analytics), e já é visível a OUTROS jogadores no multiplayer/ranking hoje — guardar
+esse mesmo apelido, criptografado em trânsito (HTTPS) e atrás do MESMO token de entitlement
+autenticado já usado pra `/progress-summary`, não é uma superfície de exposição maior que a que
+já existe. Mesma condição de antes (só com entitlement ativo). Ver `POST`/`GET /progress-backup`
+em `app/server-accounts/README.md` e `labs/lab-142-.../FEATURES.md`.
+
 ## Endpoints (novo Worker `app/server-accounts/`)
 
 | Rota | Quem chama | Função |
@@ -240,7 +256,9 @@ gate pra maximizar o desejo de assinar, não se o modelo de assinatura funciona.
    `app/server-accounts/src/index.ts`) — falta só o usuário configurar `RESEND_API_KEY` (secret,
    conta Resend própria) pro envio de verdade funcionar; o resto já está deployado em produção.
    Ainda faltam: migrar hospedagem do front-end pro Cloudflare Pages (ver achado crítico acima) OU
-   assinar Vercel Pro, e sair do modo teste do Stripe.
+   assinar Vercel Pro, e sair do modo teste do Stripe. **Backup/restauração de progresso (G6 de
+   `docs/prompts/05-escala-e-viabilidade.md`) ✅ construído no lab-142** (`POST`/`GET
+   /progress-backup`, tabela `progress_backups`) — ver atualização de privacidade abaixo.
 
 Cada fase é pequena o bastante pra ser 1-2 laboratórios, seguindo o mesmo convênio já usado no
 resto do projeto (`labs/README.md`).

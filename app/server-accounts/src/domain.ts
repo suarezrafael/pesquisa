@@ -193,6 +193,32 @@ function isPlausibleCount(value: unknown, max: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max
 }
 
+// Backup/restauração de progresso (lab-142, G6 de docs/prompts/05-escala-e-viabilidade.md: "todo
+// o progresso pago mora só no aparelho — limpar dados apaga o que a família pagou, sem backup e
+// sem restauração"). Diferente de `ProgressSummary` acima (5 números, validados campo a campo pra
+// alimentar um e-mail), este payload é o `Profile`+`Progress` INTEIROS do jogo — este Worker é um
+// pacote separado, sem import dos tipos do jogo (`app/src/types.ts`), e replicar campo a campo
+// aqui criaria acoplamento de manutenção (toda vez que o jogo ganhasse um campo novo em
+// `Progress`, este backend precisaria de outro deploy só pra aceitar o backup de novo). Em vez
+// disso, validação ESTRUTURAL (são objetos de verdade, não array/string solta) + limite de
+// tamanho no corpo da requisição (`index.ts`, `handleProgressBackupSave`) — o risco aqui é
+// diferente do `ProgressSummary`: este dado nunca alimenta cálculo nenhum do servidor, só é
+// guardado e devolvido pra MESMA família depois, então um payload malformado só prejudicaria quem
+// mandou (não vira vetor de fraude/erro de negócio).
+export interface ProgressBackupPayload {
+  profile: Record<string, unknown>
+  progress: Record<string, unknown>
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isValidProgressBackupPayload(payload: unknown): payload is ProgressBackupPayload {
+  if (!isPlainObject(payload)) return false
+  return isPlainObject(payload.profile) && isPlainObject(payload.progress)
+}
+
 export function isValidProgressSummary(payload: unknown): payload is ProgressSummary {
   if (!payload || typeof payload !== 'object') return false
   const { level, totalXp, coins, questsCompleted, badgesCount } = payload as Record<string, unknown>

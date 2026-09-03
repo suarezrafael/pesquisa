@@ -1,6 +1,27 @@
 # Laboratório atual
 
-Último concluído: labs/lab-141-cartao-postal-colecionavel/ — item do backlog de engajamento (mesma
+Último concluído: labs/lab-142-backup-restauracao-progresso/ — resolve G6 de
+`docs/prompts/05-escala-e-viabilidade.md` ("todo o progresso pago mora só no aparelho — limpar
+dados apaga o que a família pagou, sem backup e sem restauração"). Confirmado com o usuário via
+`AskUserQuestion` antes de começar (item maior/mais delicado que os labs anteriores).
+`POST`/`GET /progress-backup` (`app/server-accounts`, tabela `progress_backups`, migração `0004`
+já aplicada em produção) guardam o `Profile`+`Progress` INTEIROS (diferente do resumo de 5
+números do lab-119) — validação ESTRUTURAL, não campo a campo (`isValidProgressBackupPayload`,
+evita acoplamento de deploy entre os dois pacotes). `syncProgressBackup` roda no mesmo gatilho já
+existente do resumo semanal; `redeemCode` passou a devolver o token (não `boolean`) pra
+`PairingScreen.tsx` checar na hora se existe backup e oferecer restaurar.
+
+**Verificação real e incomum nesta sessão**: com o navegador de automação continuando bloqueado, o
+BACKEND foi testado de ponta a ponta contra o banco de PRODUÇÃO real via `wrangler dev` local +
+curl + token assinado pra uma família já existente (mesma técnica do lab-119) — 404 sem backup,
+401 sem token, 400 payload malformado, 204+GET confirmando dado salvo, sobrescrita confirmada (não
+duplica linha), 413 em payload de 60KB, 429 no rate limiter depois de 10 chamadas/60s. Dado de
+teste removido da tabela depois. A UI de restauração (`PairingScreen.tsx`) em si NÃO foi
+verificada ao vivo — mesma limitação de ambiente dos labs 140/141. `npm run test`: app 99/99,
+server-accounts 64/64 (5 novos). Typecheck/build limpos nos dois pacotes. Ver
+`labs/lab-142-backup-restauracao-progresso/CONTEXT.md`.
+
+Antes desse: labs/lab-141-cartao-postal-colecionavel/ — item do backlog de engajamento (mesma
 lista do login diário, lab-138) puxado de forma AUTÔNOMA nesta sessão: verificação ao vivo do
 lab-140 seguia bloqueada (aba de automação sem foco do sistema operacional) e não havia pedido novo
 do usuário no momento. `data/postcards.ts` novo (7 cartões, um por planeta-destino) +

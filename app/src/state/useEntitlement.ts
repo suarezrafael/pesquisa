@@ -7,7 +7,7 @@ import {
   type StoredEntitlement,
 } from './entitlementStorage'
 import { getLevel } from './progression'
-import type { Progress } from '../types'
+import type { Profile, Progress } from '../types'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 
@@ -55,7 +55,10 @@ export function useEntitlement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function redeemCode(code: string): Promise<boolean> {
+  // lab-142: devolve o TOKEN novo (não só `boolean`) — `PairingScreen.tsx` precisa dele pra
+  // checar se existe um backup de progresso pra oferecer restaurar, sem esperar o próximo render
+  // (`entitlement.token` só refletiria o valor novo depois de re-renderizar).
+  async function redeemCode(code: string): Promise<string | null> {
     setRedeeming(true)
     setRedeemError(null)
     try {
@@ -67,16 +70,16 @@ export function useEntitlement() {
       const body = (await res.json()) as { token?: string; error?: string }
       if (!res.ok || !body.token) {
         setRedeemError(body.error ?? 'Código inválido ou expirado.')
-        return false
+        return null
       }
       const next: StoredEntitlement = { token: body.token, active: false, expiresAt: null }
       saveEntitlement(next)
       setEntitlement(next)
       await refresh(body.token)
-      return true
+      return body.token
     } catch {
       setRedeemError('Não foi possível conectar. Tente de novo.')
-      return false
+      return null
     } finally {
       setRedeeming(false)
     }
@@ -113,5 +116,56 @@ export function useEntitlement() {
     })
   }
 
-  return { entitlement, redeemCode, redeeming, redeemError, refresh, unpair, syncProgressSummary }
+  // lab-142 (G6, docs/prompts/05-escala-e-viabilidade.md: "todo o progresso pago mora só no
+  // aparelho — limpar dados apaga o que a família pagou, sem backup e sem restauração"). Diferente
+  // de `syncProgressSummary` acima (resumo de 5 números pro e-mail), manda o `Profile`+`Progress`
+  // INTEIROS — mesmo padrão de `fetch` com `keepalive`, falha silenciosa, nunca trava o jogo da
+  // criança. Só deve ser chamado quando `entitlement.active` for `true` (mesma regra de
+  // `syncProgressSummary`, decidida por quem chama, não por esta função).
+  function syncProgressBackup(profile: Profile, progress: Progress): void {
+    const token = entitlement?.token
+    if (!token) return
+    fetch(`${ACCOUNTS_API_URL}/progress-backup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ profile, progress }),
+      keepalive: true,
+    }).catch(() => {
+      // offline/erro de rede — só tenta de novo na próxima sessão, sem incomodar a criança.
+    })
+  }
+
+  // lab-142 — metade "restauração": chamada logo depois de um pareamento bem-sucedido
+  // (`PairingScreen.tsx`), pra oferecer trazer de volta o progresso da família num aparelho
+  // novo/dados limpos. `null` cobre TANTO "a família nunca sincronizou nada" (404) QUANTO
+  // qualquer erro de rede — quem chama trata os dois casos como "nada pra restaurar", nunca
+  // trava o fluxo de pareamento em si por causa disto.
+  async function fetchProgressBackup(
+    tokenOverride?: string,
+  ): Promise<{ profile: Profile; progress: Progress } | null> {
+    const token = tokenOverride ?? entitlement?.token
+    if (!token) return null
+    try {
+      const res = await fetch(`${ACCOUNTS_API_URL}/progress-backup`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      const body = (await res.json()) as { profile: Profile; progress: Progress }
+      return { profile: body.profile, progress: body.progress }
+    } catch {
+      return null
+    }
+  }
+
+  return {
+    entitlement,
+    redeemCode,
+    redeeming,
+    redeemError,
+    refresh,
+    unpair,
+    syncProgressSummary,
+    syncProgressBackup,
+    fetchProgressBackup,
+  }
 }
