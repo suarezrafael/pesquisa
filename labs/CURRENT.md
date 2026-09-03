@@ -1,6 +1,23 @@
 # Laboratório atual
 
-Último concluído: labs/lab-144-lgpd-exclusao-exportacao/ — resolve G13 de
+Último concluído: labs/lab-145-config-sem-hardcode/ — resolve a PARTE SEGURA de G15 de
+`docs/prompts/05-escala-e-viabilidade.md`: `NEON_AUTH_JWKS_URL` e o fallback de `origin` de
+`/checkout`/`/billing-portal` (antes hardcoded em `src/index.ts`) agora moram em `[vars]`
+(`wrangler.toml`), como pede o `[MUST]` de `03-arquitetura-sistema.md §5`. `createRemoteJWKSet`
+virou um cache lazy (`getJwks(env)`, já que `env` só existe dentro do handler). Fallback de
+`origin` trocado de propósito pro domínio próprio (`missaoaprendizado.com`).
+**Explicitamente fora de escopo, confirmado com o usuário antes de começar**: trocar o DNS do
+domínio pro CNAME sugerido pela Vercel e rotacionar a API key ampla do Neon — as duas mexem em
+infraestrutura/credencial de produção ao vivo e exigem confirmação separada.
+
+**Testado ao vivo contra dados reais**: duas contas de teste descartáveis criadas via Neon Auth,
+JWT real verificado com sucesso via o novo `getJwks(env)` (`GET /account/export` → `200`),
+`/checkout` sem header `Origin` devolveu uma URL de checkout do Stripe de verdade (confirma
+`DEFAULT_ORIGIN` populado — Stripe recusaria um `success_url` malformado). Contas de teste
+excluídas depois via `/account/delete` (lab-144). `npx tsc --noEmit`/testes limpos, 64/64, sem
+teste novo (mudança de plumbing/config). Ver `labs/lab-145-config-sem-hardcode/CONTEXT.md`.
+
+Antes desse: labs/lab-144-lgpd-exclusao-exportacao/ — resolve G13 de
 `docs/prompts/05-escala-e-viabilidade.md` (exclusão de conta/dados, portabilidade, retenção de
 `pairing_codes`). Escolhido pelo usuário via `AskUserQuestion` sobre G13 vs. G15. `GET
 /account/export` e `POST /account/delete` (`app/server-accounts`) — exclusão cancela a assinatura

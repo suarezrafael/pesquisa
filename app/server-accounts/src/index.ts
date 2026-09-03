@@ -38,6 +38,13 @@ type Sql = NeonQueryFunction<false, false>
 
 export interface Env {
   DATABASE_URL: string
+  // lab-145, G15 (docs/prompts/05-escala-e-viabilidade.md, `03-arquitetura-sistema.md §5
+  // [MUST]`): as duas de baixo eram URL hardcoded no código-fonte antes deste laboratório — agora
+  // vivem em `[vars]` (wrangler.toml), configuráveis por ambiente sem precisar editar `index.ts`.
+  // Nenhuma das duas é secreta (endpoint JWKS é público por definição; a origem de fallback é só
+  // a URL pública do próprio jogo), por isso `[vars]`, não `wrangler secret put`.
+  NEON_AUTH_JWKS_URL: string
+  DEFAULT_ORIGIN: string
   STRIPE_SECRET_KEY: string
   STRIPE_WEBHOOK_SECRET: string
   STRIPE_PRICE_ID: string
@@ -96,14 +103,18 @@ async function rateLimited(limiter: RateLimit, key: string): Promise<Response | 
   return Response.json({ error: 'muitas tentativas, aguarde um pouco e tente de novo' }, { status: 429 })
 }
 
-// Endpoint real descoberto testando ao vivo (ver labs/lab-79.../CONTEXT.md) — a documentação
-// oficial do Neon Auth usa um domínio que não resolve.
-const NEON_AUTH_JWKS_URL =
-  'https://ep-cool-meadow-aclfdwm0.neonauth.sa-east-1.aws.neon.tech/neondb/auth/.well-known/jwks.json'
-
-// `createRemoteJWKSet` cacheia as chaves em memória do próprio processo do Worker — módulo
-// carregado uma vez por isolate, não por request.
-const jwks = createRemoteJWKSet(new URL(NEON_AUTH_JWKS_URL))
+// lab-145, G15 (docs/prompts/05-escala-e-viabilidade.md, `03-arquitetura-sistema.md §5 [MUST]`:
+// "nenhuma URL ou chave de ambiente hardcoded no código-fonte") — `NEON_AUTH_JWKS_URL` mora em
+// `[vars]` (`wrangler.toml`) agora, não aqui. Não é secreto (é um endpoint JWKS público por
+// definição — a chave PÚBLICA de verificação), então `[vars]` é o lugar certo, não `wrangler
+// secret put`. `createRemoteJWKSet` cacheia as chaves em memória do próprio processo do Worker —
+// criado uma vez por isolate (não por request) através deste cache lazy, já que `env` só existe
+// dentro do handler, não no escopo do módulo.
+let jwksCache: ReturnType<typeof createRemoteJWKSet> | null = null
+function getJwks(env: Env): ReturnType<typeof createRemoteJWKSet> {
+  if (!jwksCache) jwksCache = createRemoteJWKSet(new URL(env.NEON_AUTH_JWKS_URL))
+  return jwksCache
+}
 
 // lab-119, Fase F: precisa bater EXATAMENTE com a segunda entrada de `[triggers] crons` em
 // wrangler.toml — é assim que `scheduled()` decide qual das duas tarefas (reconciliação diária ou
@@ -115,12 +126,12 @@ const WEEKLY_EMAIL_CRON = '0 12 * * 1'
 // assinatura se o banco falhar) sem gerar mais que um objeto novo por dia no bucket.
 const DATABASE_BACKUP_CRON = '0 10 * * *'
 
-async function requireUserId(request: Request): Promise<string | null> {
+async function requireUserId(request: Request, env: Env): Promise<string | null> {
   const auth = request.headers.get('authorization')
   if (!auth?.startsWith('Bearer ')) return null
   const token = auth.slice('Bearer '.length)
   try {
-    const { payload } = await jwtVerify(token, jwks)
+    const { payload } = await jwtVerify(token, getJwks(env))
     return typeof payload.sub === 'string' ? payload.sub : null
   } catch {
     return null
@@ -149,7 +160,7 @@ function stripeClient(env: Env) {
 }
 
 async function handleCheckout(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const limited = await rateLimited(env.CHECKOUT_LIMITER, clientIp(request))
@@ -158,7 +169,10 @@ async function handleCheckout(request: Request, env: Env): Promise<Response> {
   const sql = neon(env.DATABASE_URL)
   const familyAccountId = await findOrCreateFamilyAccount(sql, userId)
 
-  const origin = request.headers.get('origin') ?? 'https://app-two-flax-92.vercel.app'
+  // `DEFAULT_ORIGIN` (`[vars]`, wrangler.toml) só entra quando o header `Origin` não vem (chamada
+  // fora de navegador, ex.: teste manual) — lab-145, G15: antes era um domínio de produção
+  // hardcoded aqui, agora é config por ambiente, como pede `03-arquitetura-sistema.md §5 [MUST]`.
+  const origin = request.headers.get('origin') ?? env.DEFAULT_ORIGIN
   const stripe = stripeClient(env)
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
@@ -178,7 +192,7 @@ async function handleCheckout(request: Request, env: Env): Promise<Response> {
 // fácil quanto a contratação). Devolve a URL do Customer Portal hospedado pelo próprio Stripe
 // (gerencia forma de pagamento, histórico de fatura e cancelamento sem nenhum código nosso).
 async function handleBillingPortal(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const sql = neon(env.DATABASE_URL)
@@ -195,7 +209,7 @@ async function handleBillingPortal(request: Request, env: Env): Promise<Response
     return Response.json({ error: 'nenhuma assinatura encontrada' }, { status: 404 })
   }
 
-  const origin = request.headers.get('origin') ?? 'https://app-two-flax-92.vercel.app'
+  const origin = request.headers.get('origin') ?? env.DEFAULT_ORIGIN
   const stripe = stripeClient(env)
   const session = await stripe.billingPortal.sessions.create({
     customer: rows[0].stripe_customer_id,
@@ -212,7 +226,7 @@ async function handleBillingPortal(request: Request, env: Env): Promise<Response
 // (mesmo padrão de leitura já usado noutras rotas, ex. `handleAdminMetrics`) porque nome/e-mail do
 // responsável também são dados dele, não só as tabelas próprias deste Worker.
 async function handleAccountExport(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const limited = await rateLimited(env.ACCOUNT_LIMITER, clientIp(request))
@@ -266,7 +280,7 @@ async function handleAccountExport(request: Request, env: Env): Promise<Response
 // transação só (`sql.transaction`, batch HTTP não-interativo do driver) — ou tudo é removido, ou
 // nada é, nunca um estado pela metade.
 async function handleAccountDelete(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const limited = await rateLimited(env.ACCOUNT_LIMITER, clientIp(request))
@@ -403,7 +417,7 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
 }
 
 async function handleSubscriptionStatus(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const sql = neon(env.DATABASE_URL)
@@ -423,7 +437,7 @@ async function handleSubscriptionStatus(request: Request, env: Env): Promise<Res
 const PAIRING_CODE_TTL_MS = 15 * 60 * 1000
 
 async function handlePairingGenerate(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const limited = await rateLimited(env.PAIRING_GENERATE_LIMITER, clientIp(request))
@@ -760,7 +774,7 @@ async function handleProgressBackupFetch(request: Request, env: Env): Promise<Re
 // sem lista granular de aparelhos — ver "Fora de escopo" em FEATURES.md) — a criança perde acesso
 // e precisa parear de novo com um código novo.
 async function handleRevokeAllDevices(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const sql = neon(env.DATABASE_URL)
@@ -779,7 +793,7 @@ async function handleRevokeAllDevices(request: Request, env: Env): Promise<Respo
 // de revogação individual (até aqui só existia "revogar todos"). Sem fingerprint/user-agent (fora
 // de escopo desde o lab-97) — a única identificação de cada aparelho é a data de pareamento.
 async function handleListDevices(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const sql = neon(env.DATABASE_URL)
@@ -805,7 +819,7 @@ async function handleListDevices(request: Request, env: Env): Promise<Response> 
 // revogar o `jti` de OUTRA família — 404 genérico tanto pra "não existe" quanto pra "não é seu",
 // pra não vazar se um `jti` alheio existe.
 async function handleRevokeDevice(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const body = (await request.json().catch(() => null)) as { jti?: string } | null
@@ -827,7 +841,7 @@ async function handleRevokeDevice(request: Request, env: Env): Promise<Response>
 // lab-103, resto de G11/`prompt.md` §12: decide se o portal deve mostrar o widget de NPS —
 // nunca respondeu, ou o cooldown (`NPS_COOLDOWN_DAYS`) já venceu desde a última resposta.
 async function handleNpsStatus(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const sql = neon(env.DATABASE_URL)
@@ -851,7 +865,7 @@ async function handleNpsStatus(request: Request, env: Env): Promise<Response> {
 // perguntar de novo cedo demais pela UI; nada impede uma resposta manual fora do cooldown normal
 // se o responsável quiser (ex.: reabrir o formulário via suporte).
 async function handleSubmitNps(request: Request, env: Env): Promise<Response> {
-  const userId = await requireUserId(request)
+  const userId = await requireUserId(request, env)
   if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
 
   const limited = await rateLimited(env.NPS_LIMITER, clientIp(request))
