@@ -71,4 +71,6 @@ resolvido aqui), e G13 tem só o consentimento parental pendente.
   verdade (Stripe teria recusado um `success_url`/`cancel_url` malformado tipo `undefined/familia`,
   então isso confirma que `env.DEFAULT_ORIGIN` chegou populado). As duas contas de teste foram
   excluídas depois (`POST /account/delete`, lab-144) — nenhum dado de teste ficou pra trás.
-- Deploy: pendente — mesmo fluxo de sempre (push → PR → CI → merge → deploy dos 3 jobs).
+- Deploy: PR #16 mergeado em `main` (commit `3ec6fe2`), os 3 jobs de CI/CD verdes. `GET /health`
+  confirmado `200` pós-deploy; `GET /account/export` sem token confirmado `401` (não `500`) —
+  prova que `env.NEON_AUTH_JWKS_URL` chegou populado em produção e o cache lazy funciona ao vivo.
