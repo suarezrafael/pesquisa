@@ -27,7 +27,8 @@ cartão cadastrado na conta Cloudflare pra habilitar R2 (nunca cobrado dentro do
   dry-run por padrão, `--confirm` pra aplicar de verdade).
 - [x] Atualização de `README.md` (`app/server-accounts`) documentando o mecanismo.
 - [x] Teste ao vivo do backup — ver Estado do repositório em `CONTEXT.md`.
-- [ ] Deploy em produção (push → PR → CI → merge) — em andamento.
+- [x] Deploy em produção (PR #14, merge f0c9a9c, os 3 jobs de CI/CD verdes; `server-accounts`
+  redeployado com o novo Cron Trigger e binding R2 ativos, `/health` confirmado 200 pós-deploy).
 
 ## Fora de escopo (explicitamente adiado)
 - G13 (LGPD: exclusão de dados, política de retenção, consentimento parental pro multiplayer) —

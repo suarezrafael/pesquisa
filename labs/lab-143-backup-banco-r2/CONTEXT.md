@@ -78,4 +78,9 @@ Neon).
   `wrangler r2 object put/get/delete --remote` com um objeto de teste
   (`backups/_probe.json`), removido logo em seguida — confirma que o binding, o nome do bucket e as
   credenciais da conta batem exatamente com o que o Worker vai usar em produção.
-- Deploy: PR #14 aberto, aguardando CI/merge.
+- Deploy: PR #14 mergeado em `main` (commit `f0c9a9c`), os 3 jobs de CI/CD verdes (`app`,
+  `server-accounts`, `server-cf-relay`). `GET /health` do Worker `server-accounts` confirmado
+  `200 {"ok":true}` pós-deploy. O primeiro disparo REAL do `DATABASE_BACKUP_CRON` em produção
+  (10:00 UTC) ainda não foi observado ao vivo — só testado localmente contra dados reais (ver
+  acima); confirmar amanhã com `wrangler r2 object get missao-aprender-backups/backups/<data>.json`
+  se quiser certeza de que o Cron real disparou sozinho.
