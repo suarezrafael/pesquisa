@@ -259,3 +259,22 @@ export function buildWeeklyProgressEmail(summary: ProgressSummary, responsibleNa
     `.trim(),
   }
 }
+
+// lab-147 (achado do review automático do Copilot no PR #16): o header `Origin` é controlado
+// pelo CLIENTE — usá-lo sem checagem pra montar `success_url`/`cancel_url` do Stripe permite
+// redirecionar quem acabou de pagar pra um domínio arbitrário (risco de phishing: uma chamada
+// direta à API, fora do navegador, pode mandar qualquer `Origin`; o header não é algo que só o
+// front-end de verdade consiga enviar). Só aceita um `Origin` que já está numa lista conhecida de
+// domínios confiáveis; qualquer outro (ou nenhum) cai no `defaultOrigin` configurado.
+export function resolveTrustedOrigin(
+  originHeader: string | null,
+  allowedOriginsCsv: string,
+  defaultOrigin: string,
+): string {
+  const allowed = allowedOriginsCsv
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+  if (originHeader && allowed.includes(originHeader)) return originHeader
+  return defaultOrigin
+}
