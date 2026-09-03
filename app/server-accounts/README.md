@@ -23,6 +23,16 @@ manual/administrativa (`scripts/restore-from-backup.mjs`), nunca um endpoint —
 exige decisão humana de qualquer forma, diferente de `/progress-backup` (self-service, ver
 abaixo).
 
+**LGPD self-service (lab-144, G13)**: `GET /account/export` (portabilidade) e `POST
+/account/delete` (exclusão, LGPD art. 18) — a Política de Privacidade já PROMETIA os dois por
+e-mail; agora existe um caminho de verdade pelo portal (`/familia`, seção "Meus dados"). A
+exclusão cancela qualquer assinatura Stripe ativa, apaga toda tabela ligada à família
+(`subscriptions`/`pairing_codes`/`entitlement_tokens`/`nps_responses`/`progress_snapshots`/
+`progress_backups`/`family_accounts`) e o próprio usuário do Neon Auth (`neon_auth."user"` +
+`session`/`account`), numa única transação — tudo ou nada. Retenção de `pairing_codes` também
+resolvida: um novo passo do Cron diário (09:00 UTC, mesmo horário da reconciliação Stripe) apaga
+códigos expirados há mais de 30 dias.
+
 ## Rotas
 
 | Rota | Método | Autenticação | Função |
@@ -37,6 +47,8 @@ abaixo).
 | `/progress-summary` | POST | Bearer = token de entitlement | (lab-119, Fase F) Grava um resumo MÍNIMO de progresso (nível/XP/moedas/missões/emblemas — nunca conteúdo bruto) em `progress_snapshots`, sobrescrevendo o anterior — alimenta o relatório semanal por e-mail |
 | `/progress-backup` | POST | Bearer = token de entitlement | (lab-142, G6) Grava o `Profile`+`Progress` INTEIROS do jogo em `progress_backups`, sobrescrevendo o anterior — permite restaurar depois de limpar dados/trocar de aparelho |
 | `/progress-backup` | GET | Bearer = token de entitlement | (lab-142, G6) Devolve `{ profile, progress, updatedAt }` do backup mais recente da família, ou `404` se nunca sincronizou nada |
+| `/account/export` | GET | Bearer JWT (Neon Auth) | (lab-144, G13) Devolve tudo que este Worker guarda sobre o responsável e sua família (portabilidade, LGPD art. 18 V) |
+| `/account/delete` | POST | Bearer JWT (Neon Auth) | (lab-144, G13) Cancela a assinatura Stripe e apaga a conta e todos os dados associados (exclusão, LGPD art. 18 VI) |
 | `/webhooks/stripe` | POST | assinatura HMAC do Stripe | Atualiza `subscriptions` a partir dos eventos do Stripe |
 
 **Nota de privacidade (lab-119, atualizada no lab-142)**: até o lab-119, nenhuma tabela deste

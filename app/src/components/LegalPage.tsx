@@ -102,7 +102,7 @@ function PoliticaDePrivacidade() {
   return (
     <>
       <h1>Política de Privacidade</h1>
-      <p className="legal-updated">Última atualização: 24 de agosto de 2026.</p>
+      <p className="legal-updated">Última atualização: 3 de setembro de 2026.</p>
 
       <p>
         Esta política explica quais dados a Missão Aprender coleta, de quem, e por quê. Seguimos
@@ -180,17 +180,26 @@ function PoliticaDePrivacidade() {
 
       <h2>5. Seus direitos (LGPD)</h2>
       <p>
-        Como responsável, você pode a qualquer momento pedir acesso, correção ou exclusão dos
-        seus dados (e dos dados de progresso salvos localmente da criança, apagando-os do
-        dispositivo), revogar consentimento, ou pedir a portabilidade dos seus dados. Basta
-        escrever para <code>contato@missaoaprendizado.com</code>.
+        Como responsável, você pode a qualquer momento baixar uma cópia de todos os seus dados
+        (portabilidade) ou excluir sua conta e todos os dados associados a ela — direto pelo
+        portal <code>/familia</code>, na seção &ldquo;Meus dados&rdquo;, sem precisar entrar em
+        contato. A exclusão cancela sua assinatura imediatamente e apaga sua conta, códigos de
+        pareamento, aparelhos vinculados e qualquer progresso da criança que tenha sido
+        sincronizado — o jogo continua gratuito e a criança pode continuar jogando, só perde o
+        vínculo com sua conta e o acesso aos itens exclusivos. Se preferir, também pode pedir
+        acesso, correção ou exclusão dos seus dados (e dos dados de progresso salvos localmente
+        da criança, apagando-os do dispositivo) por e-mail:
+        <code> contato@missaoaprendizado.com</code>.
       </p>
 
       <h2>6. Retenção</h2>
       <p>
-        Mantemos os dados do responsável enquanto a conta existir. Ao cancelar e pedir exclusão,
-        removemos os dados associados à conta, exceto o mínimo exigido por obrigação legal (ex.
-        registros fiscais de pagamento).
+        Mantemos os dados do responsável enquanto a conta existir. Ao excluir a conta (pelo portal
+        ou por e-mail), removemos os dados associados a ela imediatamente, exceto o mínimo exigido
+        por obrigação legal (ex. registros fiscais de pagamento, mantidos pela própria Stripe).
+        Códigos de pareamento não usados ou já expirados são apagados automaticamente depois de 30
+        dias — eles só servem dentro dos 15 minutos de validade, então não há motivo pra guardá-los
+        por mais tempo que isso.
       </p>
 
       <h2>7. Contato</h2>

@@ -72,6 +72,11 @@ export interface Env {
   // na conta Cloudflare pra habilitar R2 (nunca cobrado dentro do nível grátis de 10GB/mês), mas
   // já era o que o usuário preferiu.
   DATABASE_BACKUPS: R2Bucket
+  // lab-144, G13 (docs/prompts/05-escala-e-viabilidade.md): compartilhado entre
+  // `POST /account/delete` e `GET /account/export` — autenticado (JWT do responsável) e por
+  // natureza raríssimo (ninguém pede exclusão/exportação repetidamente numa sessão real), mesmo
+  // espírito generoso do resto dos limiters autenticados deste Worker.
+  ACCOUNT_LIMITER: RateLimit
 }
 
 // IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
@@ -198,6 +203,113 @@ async function handleBillingPortal(request: Request, env: Env): Promise<Response
   })
 
   return Response.json({ url: session.url })
+}
+
+// lab-144, G13 (docs/prompts/05-escala-e-viabilidade.md): "não existe... exportação de dados" —
+// portabilidade (LGPD art. 18, V). Devolve TUDO que este Worker guarda sobre o responsável e sua
+// família — mesmo espírito estrutural de `backupCriticalTables` (lab-143), mas aqui o alvo é UMA
+// família só (a de quem está autenticado), nunca o banco inteiro. `neon_auth."user"` é lido direto
+// (mesmo padrão de leitura já usado noutras rotas, ex. `handleAdminMetrics`) porque nome/e-mail do
+// responsável também são dados dele, não só as tabelas próprias deste Worker.
+async function handleAccountExport(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const limited = await rateLimited(env.ACCOUNT_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const sql = neon(env.DATABASE_URL)
+  const userRows = (await sql`
+    select name, email, "createdAt" as created_at from neon_auth."user" where id = ${userId}
+  `) as { name: string; email: string; created_at: string }[]
+  const families = (await sql`
+    select id, created_at from family_accounts where owner_user_id = ${userId}
+  `) as { id: string; created_at: string }[]
+
+  const familiesExport = []
+  for (const family of families) {
+    const [subscriptions, pairingCodes, entitlementTokens, npsResponses, progressSnapshot, progressBackup] =
+      await Promise.all([
+        sql`select stripe_customer_id, status, current_period_end, updated_at from subscriptions where family_account_id = ${family.id}`,
+        sql`select code, expires_at, redeemed_at from pairing_codes where family_account_id = ${family.id}`,
+        sql`select jti, issued_at, revoked_at from entitlement_tokens where family_account_id = ${family.id}`,
+        sql`select score, comment, submitted_at from nps_responses where family_account_id = ${family.id}`,
+        sql`select level, total_xp, coins, quests_completed, badges_count, updated_at from progress_snapshots where family_account_id = ${family.id}`,
+        sql`select profile, progress, updated_at from progress_backups where family_account_id = ${family.id}`,
+      ])
+    familiesExport.push({
+      familyAccountId: family.id,
+      createdAt: family.created_at,
+      subscriptions,
+      pairingCodes,
+      entitlementTokens,
+      npsResponses,
+      progressSnapshot: (progressSnapshot as unknown[])[0] ?? null,
+      progressBackup: (progressBackup as unknown[])[0] ?? null,
+    })
+  }
+
+  return Response.json({
+    exportedAt: new Date().toISOString(),
+    responsible: userRows[0] ?? null,
+    families: familiesExport,
+  })
+}
+
+// lab-144, G13: "não existe caminho de exclusão de conta e dados a pedido do responsável (LGPD
+// art. 18)". Cancela qualquer assinatura Stripe ativa (efeito colateral externo, não dá pra fazer
+// dentro da transação Postgres abaixo, por isso roda antes e best-effort — se o Stripe já não tem
+// mais a assinatura, ou já está cancelada, `catch` só loga e segue com a exclusão dos dados, que é
+// o pedido que realmente importa aqui) e depois apaga TUDO que referencia esta família/usuário,
+// numa ordem que respeita as foreign keys (tabelas que referenciam `family_accounts` primeiro,
+// `family_accounts` antes de `neon_auth."user"`, sessão/conta antes do usuário em si). Uma
+// transação só (`sql.transaction`, batch HTTP não-interativo do driver) — ou tudo é removido, ou
+// nada é, nunca um estado pela metade.
+async function handleAccountDelete(request: Request, env: Env): Promise<Response> {
+  const userId = await requireUserId(request)
+  if (!userId) return Response.json({ error: 'não autenticado' }, { status: 401 })
+
+  const limited = await rateLimited(env.ACCOUNT_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const sql = neon(env.DATABASE_URL)
+  const families = (await sql`
+    select id from family_accounts where owner_user_id = ${userId}
+  `) as { id: string }[]
+
+  const stripe = stripeClient(env)
+  for (const family of families) {
+    const subs = (await sql`
+      select stripe_subscription_id from subscriptions
+      where family_account_id = ${family.id} and stripe_subscription_id is not null
+    `) as { stripe_subscription_id: string }[]
+    for (const sub of subs) {
+      try {
+        await stripe.subscriptions.cancel(sub.stripe_subscription_id)
+      } catch (err) {
+        console.error('[account-delete-stripe]', String(err))
+      }
+    }
+  }
+
+  const deletes = families.flatMap((family) => [
+    sql`delete from entitlement_tokens where family_account_id = ${family.id}`,
+    sql`delete from pairing_codes where family_account_id = ${family.id}`,
+    sql`delete from nps_responses where family_account_id = ${family.id}`,
+    sql`delete from progress_snapshots where family_account_id = ${family.id}`,
+    sql`delete from progress_backups where family_account_id = ${family.id}`,
+    sql`delete from subscriptions where family_account_id = ${family.id}`,
+    sql`delete from family_accounts where id = ${family.id}`,
+  ])
+  deletes.push(
+    sql`delete from neon_auth.session where "userId" = ${userId}`,
+    sql`delete from neon_auth.account where "userId" = ${userId}`,
+    sql`delete from neon_auth.member where "userId" = ${userId}`,
+    sql`delete from neon_auth."user" where id = ${userId}`,
+  )
+  await sql.transaction(deletes)
+
+  return new Response(null, { status: 204 })
 }
 
 // Captura de erro do client (lab-84) — em vez de um serviço de terceiro (exigiria criar conta
@@ -1013,6 +1125,24 @@ async function reconcileSubscriptions(env: Env): Promise<void> {
   console.log(`[reconciliation] verificadas ${rows.length} assinatura(s), ${mismatches} divergência(s) corrigida(s).`)
 }
 
+// lab-144, G13 (docs/prompts/05-escala-e-viabilidade.md): "política de retenção (pairing_codes
+// nunca é purgada)". Um código só serve dentro dos 15 minutos de validade (`expires_at`) — depois
+// disso não tem função nenhuma, redimido ou não, exceto valor eventual de suporte/auditoria ("esse
+// código chegou a ser usado?"). 30 dias dá folga generosa pra esse cenário raro sem deixar a
+// tabela crescer sem limite pra sempre (LGPD art. 15/16: dado só deve ser retido enquanto houver
+// finalidade). Roda junto da reconciliação diária (mesmo Cron, 09:00 UTC) — não precisa de gatilho
+// próprio.
+async function purgeStalePairingCodes(env: Env): Promise<void> {
+  const sql = neon(env.DATABASE_URL)
+  const deleted = (await sql`
+    delete from pairing_codes where expires_at < now() - interval '30 days'
+    returning code
+  `) as { code: string }[]
+  if (deleted.length > 0) {
+    console.log(`[pairing-retention] ${deleted.length} código(s) de pareamento expirado(s) removido(s).`)
+  }
+}
+
 // lab-119, Fase F: chamado pelo segundo Cron Trigger (semanal, ver `scheduled()` abaixo). Só
 // manda e-mail pra família que tem AS DUAS coisas: assinatura ativa/trialing agora (não manda
 // depois que a família cancela — a próxima revalidação de entitlement, que já roda a cada
@@ -1271,6 +1401,14 @@ export default {
       return withCors(await handleBillingPortal(request, env))
     }
 
+    if (url.pathname === '/account/export' && request.method === 'GET') {
+      return withCors(await handleAccountExport(request, env))
+    }
+
+    if (url.pathname === '/account/delete' && request.method === 'POST') {
+      return withCors(await handleAccountDelete(request, env))
+    }
+
     if (url.pathname === '/pairing/generate' && request.method === 'POST') {
       return withCors(await handlePairingGenerate(request, env))
     }
@@ -1325,7 +1463,7 @@ export default {
     } else if (controller.cron === DATABASE_BACKUP_CRON) {
       ctx.waitUntil(backupCriticalTables(env))
     } else {
-      ctx.waitUntil(reconcileSubscriptions(env))
+      ctx.waitUntil(Promise.all([reconcileSubscriptions(env), purgeStalePairingCodes(env)]))
     }
   },
 }

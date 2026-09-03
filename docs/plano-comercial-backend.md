@@ -132,6 +132,18 @@ autenticado já usado pra `/progress-summary`, não é uma superfície de exposi
 já existe. Mesma condição de antes (só com entitlement ativo). Ver `POST`/`GET /progress-backup`
 em `app/server-accounts/README.md` e `labs/lab-142-.../FEATURES.md`.
 
+**Atualização (lab-144, G13 de `docs/prompts/05-escala-e-viabilidade.md`)**: a Política de
+Privacidade (`LegalPage.tsx` §5) sempre PROMETEU acesso/exclusão/portabilidade sob pedido por
+e-mail — agora existe um caminho de verdade em produto: `GET /account/export` (baixa tudo que o
+Worker guarda sobre a família) e `POST /account/delete` (cancela a assinatura Stripe e apaga
+TUDO — a linha do responsável em `neon_auth."user"` incluída — numa única transação), os dois no
+portal `/familia`, seção "Meus dados". Retenção de `pairing_codes` também resolvida: purgados 30
+dias depois de expirar, via o mesmo Cron diário da reconciliação Stripe. Ver
+`app/server-accounts/README.md` e `labs/lab-144-.../FEATURES.md`. **Consentimento parental
+específico pro multiplayer (também citado em G13) ficou de fora desta rodada** — exige desenho de
+produto (quando capturar, o que exatamente é consentido, como tratar famílias já existentes) que
+não é só um endpoint a mais; ver `labs/lab-144-.../CONTEXT.md`.
+
 ## Endpoints (novo Worker `app/server-accounts/`)
 
 | Rota | Quem chama | Função |

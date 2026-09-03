@@ -121,3 +121,12 @@ namespace_id = "1009"
   [ratelimits.simple]
   limit = 10
   period = 60
+
+[[ratelimits]]
+name = "ACCOUNT_LIMITER"
+namespace_id = "1010"
+  # lab-144 (G13): compartilhado entre GET /account/export e POST /account/delete — autenticado,
+  # e por natureza um responsável não pede exclusão/exportação repetidamente numa sessão real.
+  [ratelimits.simple]
+  limit = 5
+  period = 60

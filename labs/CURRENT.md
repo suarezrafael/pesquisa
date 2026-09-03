@@ -1,6 +1,29 @@
 # Laboratório atual
 
-Último concluído: labs/lab-143-backup-banco-r2/ — resolve G14 de
+Último concluído: labs/lab-144-lgpd-exclusao-exportacao/ — resolve G13 de
+`docs/prompts/05-escala-e-viabilidade.md` (exclusão de conta/dados, portabilidade, retenção de
+`pairing_codes`). Escolhido pelo usuário via `AskUserQuestion` sobre G13 vs. G15. `GET
+/account/export` e `POST /account/delete` (`app/server-accounts`) — exclusão cancela a assinatura
+Stripe e apaga tudo (tabelas próprias + `neon_auth."user"`/`session`/`account`) numa transação só.
+Painel "Meus dados" novo em `FamilyPortal.tsx`. Política de Privacidade atualizada — já prometia os
+dois por e-mail, agora tem caminho self-service real. `pairing_codes` expirados há +30 dias são
+purgados no Cron diário já existente. **Consentimento parental pro multiplayer (também citado em
+G13) ficou de fora** — decisão de produto, não só técnica (quando capturar, o que exatamente
+consentir, como tratar famílias já existentes).
+
+**Testado ao vivo, backend E frontend**: conta de teste descartável criada direto no Neon Auth,
+fluxo completo (export → gera família/código → export de novo → delete → export vazio) contra o
+banco de PRODUÇÃO real via `wrangler dev` + curl, confirmado por SQL direto que TUDO sumiu
+(`neon_auth.user`/`session`/`account` inclusos); idempotência e rate limiter confirmados. **UI
+verificada NUM NAVEGADOR DE VERDADE** (não só curl) — diferente da limitação que bloqueou a
+verificação visual dos labs 140-142 (3D/Babylon perde `requestAnimationFrame` em aba sem foco),
+esta tela é 2D sem canvas, funcionou: cadastro → painel aparece → exportar sem erro → excluir com
+confirmação em duas etapas → login de volta → tentar entrar nesse email de novo confirma "Invalid
+email or password". `npx tsc --noEmit`/`npm run build` limpos, testes 64/64 (server-accounts) e
+99/99 (app), sem teste novo (handlers são I/O puro). Ver
+`labs/lab-144-lgpd-exclusao-exportacao/CONTEXT.md`.
+
+Antes desse: labs/lab-143-backup-banco-r2/ — resolve G14 de
 `docs/prompts/05-escala-e-viabilidade.md` (backup diário de `family_accounts`/`subscriptions`/
 `pairing_codes`/`entitlement_tokens` pro Cloudflare R2). Escolha confirmada com o usuário via
 `AskUserQuestion` (R2 em vez de anexo de e-mail, apesar do cartão exigido pra habilitar R2 na
