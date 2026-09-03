@@ -418,12 +418,33 @@ export function unlockGlasses(progress: Progress, id: string): Progress {
   return { ...progress, coins: result.coins, unlockedGlassesIds: result.unlockedIds }
 }
 
-// Mobília de Minha Casa (lab-106) — mesma regra de compra do resto, via `unlockGeneric`
-// (`FURNITURE_CATALOG` já tem o formato `{id, cost, subscriptionOnly?}` que a função espera).
+// Mobília de Minha Casa (lab-106) — NÃO usa `unlockGeneric` (que bloqueia comprar de novo um id já
+// possuído) desde o lab-138 (pedido do usuário: "tem que dar pra colocar mais de um item na casa
+// do mesmo, comprando outro, nao so um"): `unlockedFurnitureIds` guarda um id REPETIDO por cópia
+// comprada (não é mais um conjunto de "tenho/não tenho") — a quantidade de um item é
+// `unlockedFurnitureIds.filter(x => x === id).length`, contada onde precisar (`MyHousePanel.tsx`,
+// `World3D.tsx`). Item `subscriptionOnly`/`planetReward` continua de fora (nunca comprável com
+// moeda, cada um sempre 0 ou 1 cópia, concedido por outro caminho).
 export function unlockFurniture(progress: Progress, id: string): Progress {
-  const result = unlockGeneric(progress.coins, progress.unlockedFurnitureIds, FURNITURE_CATALOG, id)
-  if (!result) return progress
-  return { ...progress, coins: result.coins, unlockedFurnitureIds: result.unlockedIds }
+  const item = FURNITURE_CATALOG.find((c) => c.id === id)
+  if (!item || item.subscriptionOnly || item.planetReward) return progress
+  if (progress.coins < item.cost) return progress
+  return {
+    ...progress,
+    coins: progress.coins - item.cost,
+    unlockedFurnitureIds: [...progress.unlockedFurnitureIds, id],
+  }
+}
+
+// Quantas cópias de um item o jogador tem de verdade (lab-138) — fonte única de verdade
+// reaproveitada tanto pelo painel (`MyHousePanel.tsx`, quantas linhas "Mover" mostrar) quanto pela
+// sala 3D (`World3D.tsx`, quantas peças construir), pra nunca divergir uma da outra. Item
+// `subscriptionOnly` não usa `unlockedFurnitureIds` pra nada (nunca é comprado, ver
+// `unlockFurniture` acima) — sempre 0 ou 1, direto do entitlement. Os outros (compráveis normais E
+// recompensa de planeta) contam quantas vezes o id se repete em `unlockedFurnitureIds`.
+export function furnitureQuantity(item: FurnitureOption, progress: Progress, entitlementActive: boolean): number {
+  if (item.subscriptionOnly) return entitlementActive ? 1 : 0
+  return progress.unlockedFurnitureIds.filter((x) => x === item.id).length
 }
 
 // Posicionamento manual de mobília dentro de casa (lab-136, pedido do usuário: "tem que ter

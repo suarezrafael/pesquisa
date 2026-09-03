@@ -12,6 +12,7 @@ import {
   applyStreakReset,
   applyTreasureChestFound,
   badgesEarnedAt,
+  furnitureQuantity,
   getLevel,
   isQuestUnlocked,
   SUBSCRIBER_COIN_MULTIPLIER,
@@ -31,6 +32,7 @@ import {
   xpIntoLevel,
 } from './progression'
 import { emptyProgress } from './storage'
+import { findFurnitureById } from '../data/furniture'
 import { quests } from '../data/quests'
 import { planetQuests } from '../data/planetQuests'
 import type { Quest } from '../types'
@@ -594,10 +596,46 @@ describe('compra normal com moeda continua funcionando', () => {
     expect(next).toBe(progress)
   })
 
-  it('unlockFurniture não desbloqueia o mesmo item duas vezes nem desconta moeda de novo', () => {
+  // lab-138 (pedido do usuário: "tem que dar pra colocar mais de um item na casa do mesmo,
+  // comprando outro, nao so um") — mudança de comportamento intencional: comprar de novo um item
+  // já possuído ACRESCENTA outra cópia (id repetido em `unlockedFurnitureIds`) e desconta moeda de
+  // novo, ao contrário do resto dos eixos de customização (`unlockHat`/`unlockGlasses`/etc., que
+  // continuam bloqueando comprar duas vezes via `unlockGeneric`).
+  it('unlockFurniture comprado de novo acrescenta outra cópia e desconta moeda de novo', () => {
     const jaTem = { ...emptyProgress, coins: 100, unlockedFurnitureIds: ['cama'] }
     const next = unlockFurniture(jaTem, 'cama')
-    expect(next).toBe(jaTem)
+    expect(next.unlockedFurnitureIds).toEqual(['cama', 'cama'])
+    expect(next.coins).toBe(80)
+  })
+})
+
+describe('furnitureQuantity (lab-138)', () => {
+  it('conta quantas cópias repetidas de um item normal existem em unlockedFurnitureIds', () => {
+    const cama = findFurnitureById('cama')!
+    const progress = { ...emptyProgress, unlockedFurnitureIds: ['cama', 'tapete', 'cama', 'cama'] }
+    expect(furnitureQuantity(cama, progress, false)).toBe(3)
+  })
+
+  it('item normal nunca comprado tem quantidade 0', () => {
+    const cama = findFurnitureById('cama')!
+    expect(furnitureQuantity(cama, emptyProgress, false)).toBe(0)
+  })
+
+  it('item subscriptionOnly ignora unlockedFurnitureIds — só olha entitlementActive', () => {
+    const camaNave = findFurnitureById('cama_nave')!
+    expect(furnitureQuantity(camaNave, emptyProgress, false)).toBe(0)
+    expect(furnitureQuantity(camaNave, emptyProgress, true)).toBe(1)
+    // mesmo se por algum motivo o id aparecesse em unlockedFurnitureIds (não deveria, mas não é
+    // essa lista que decide pra item de assinante), o resultado continua vindo do entitlement.
+    const comIdSolto = { ...emptyProgress, unlockedFurnitureIds: ['cama_nave', 'cama_nave'] }
+    expect(furnitureQuantity(camaNave, comIdSolto, false)).toBe(0)
+  })
+
+  it('item de recompensa de planeta tem quantidade 0 ou 1, nunca mais (concedido uma vez só)', () => {
+    const meteorito = findFurnitureById('meteorito_mercurio')!
+    expect(furnitureQuantity(meteorito, emptyProgress, false)).toBe(0)
+    const concedido = { ...emptyProgress, unlockedFurnitureIds: ['meteorito_mercurio'] }
+    expect(furnitureQuantity(meteorito, concedido, false)).toBe(1)
   })
 
   // lab-136: posicionamento manual de mobília ("Mover" no MyHousePanel) — testes de regressão pro

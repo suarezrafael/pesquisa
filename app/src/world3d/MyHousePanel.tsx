@@ -7,6 +7,7 @@
 // Espacial", "Jardim Encantado") — mesma regra `usable = subscriptionOnly ? entitlementActive :
 // owned` e tag "🔒 Assinantes" já usadas em `AvatarShop.tsx` pra chapéus/óculos exclusivos.
 import { FURNITURE_CATALOG } from '../data/furniture'
+import { furnitureQuantity } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Progress } from '../types'
 
@@ -46,37 +47,47 @@ export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, o
 
         <div className="avatar-shop-grid">
           {FURNITURE_CATALOG.map((item) => {
-            const usable = item.subscriptionOnly ? entitlementActive : progress.unlockedFurnitureIds.includes(item.id)
+            // lab-138 (pedido do usuário: "tem que dar pra colocar mais de um item na casa do
+            // mesmo, comprando outro, nao so um e poder mover") — item normal (nem `subscriptionOnly`
+            // nem `planetReward`) pode ser comprado repetidas vezes; cada cópia vira uma peça
+            // própria na sala 3D, com sua própria posição, movível independente das outras (ver
+            // `furnitureQuantity`/`World3D.tsx`, que passaram a contar/construir por cópia).
+            const quantity = furnitureQuantity(item, progress, entitlementActive)
+            const owned = quantity > 0
             const affordable = progress.coins >= item.cost
+            const canBuyMore = !item.subscriptionOnly && !item.planetReward
 
             return (
-              <div key={item.id} className={`avatar-shop-item ${usable ? 'equipped' : ''}`}>
+              <div key={item.id} className={`avatar-shop-item ${owned ? 'equipped' : ''}`}>
                 <span className="avatar-shop-emoji">{item.emoji}</span>
                 <span className="avatar-shop-name">
                   {item.name} {item.subscriptionOnly && '👑'}
                 </span>
 
-                {usable && <span className="avatar-shop-tag">✓ Tem</span>}
-
-                {usable && (
-                  <button
-                    type="button"
-                    className="avatar-shop-action"
-                    onClick={() => onStartPlacing(item.id)}
-                  >
-                    🖐️ Mover
-                  </button>
+                {owned && (
+                  <span className="avatar-shop-tag">✓ Tem{quantity > 1 ? ` (${quantity})` : ''}</span>
                 )}
 
-                {!usable && item.subscriptionOnly && (
+                {Array.from({ length: quantity }, (_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="avatar-shop-action"
+                    onClick={() => onStartPlacing(`${item.id}#${i}`)}
+                  >
+                    🖐️ Mover{quantity > 1 ? ` #${i + 1}` : ''}
+                  </button>
+                ))}
+
+                {!owned && item.subscriptionOnly && (
                   <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
                 )}
 
-                {!usable && item.planetReward && (
+                {!owned && item.planetReward && (
                   <span className="avatar-shop-tag subscription-lock">🔒 Conquiste o planeta</span>
                 )}
 
-                {!usable && !item.subscriptionOnly && !item.planetReward && (
+                {canBuyMore && (
                   <button
                     type="button"
                     className="avatar-shop-action buy"

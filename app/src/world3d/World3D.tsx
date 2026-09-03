@@ -72,7 +72,7 @@ import {
   type StudentFigure,
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
-import { getLevel, isQuestUnlocked } from '../state/progression'
+import { furnitureQuantity, getLevel, isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress, Quest } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
@@ -1941,6 +1941,14 @@ export function World3D({
   const cameraRotateLeftRef = useRef(false)
   const cameraRotateRightRef = useRef(false)
   const cameraYawOffsetRef = useRef(0)
+  // Câmera livre DENTRO de casa (lab-138, pedido do usuário: "dentro da casa a camera tem que ser
+  // possivel girar para cima dar zoom out e zoom in e olhar de um lado para outro usando o mouse
+  // segura e arrasta") — só ativa dentro do interior (ver `insideHouseInterior` no loop de
+  // física); reaproveita `cameraYawOffsetRef` acima pro giro horizontal (mesmo eixo já usado
+  // pelos botões ◀ ▶ de toque, lab-55), só acrescenta o vertical (`houseCameraPitchOffsetRef`) e
+  // o zoom (`houseCameraZoomRef`) que não existiam antes.
+  const houseCameraPitchOffsetRef = useRef(0)
+  const houseCameraZoomRef = useRef(1)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
   const entitlementActiveRef = useRef(entitlementActive)
@@ -2216,6 +2224,65 @@ export function World3D({
     // quadro pra acompanhar a bola e a curvatura local do planeta.
     const camera = new UniversalCamera('camera', new Vector3(0, PLANET_RADIUS + CAMERA_HEIGHT, -CAMERA_DISTANCE), scene)
     camera.minZ = 0.1
+
+    // Câmera livre dentro de casa via arrastar o mouse (lab-138) — o resto do jogo usa uma câmera
+    // em 3ª pessoa TOTALMENTE controlada por código (posição/alvo recalculados a cada quadro no
+    // loop de física, ver mais abaixo), não o `attachControl` nativo do Babylon (esse aqui é usado
+    // só no preview pequeno da lojinha, `AvatarPreview3D.tsx`, uma cena separada) — por isso o
+    // giro/zoom aqui são ouvintes de ponteiro/roda de rolagem escritos à mão, que só ALIMENTAM os
+    // refs (`cameraYawOffsetRef`/`houseCameraPitchOffsetRef`/`houseCameraZoomRef`) lidos pela MESMA
+    // fórmula de posição de câmera de sempre (ver `desiredCamPos` no loop de física) — nunca tocam
+    // `camera.position` diretamente. Só reage dentro de casa (`insideHouseInterior`) e fora do modo
+    // de posicionar mobília (`placingFurnitureId`, que já usa arrastar/os mesmos botões ◀ ▶ pra
+    // girar a peça fantasma, não a câmera — os dois disputariam o mesmo gesto).
+    let houseCameraDragging = false
+    let houseCameraLastPointerX = 0
+    let houseCameraLastPointerY = 0
+    const HOUSE_CAMERA_DRAG_SENSITIVITY = 0.006
+    const HOUSE_CAMERA_ZOOM_SENSITIVITY = 0.0015
+    const HOUSE_CAMERA_PITCH_MIN = -0.5 // câmera não desce a ponto de ficar debaixo do chão
+    const HOUSE_CAMERA_PITCH_MAX = 1.0 // nem sobe a ponto de ficar colada no teto olhando reto pra baixo
+    const HOUSE_CAMERA_ZOOM_MIN = 0.5 // bem perto do boneco
+    // Bem afastado, mas sem sair da sala (11×11, `HOUSE_ROOM_HALF_SIZE = 5.5`) — achado real
+    // testando ao vivo: 2.2 deixava a câmera do lado de FORA da parede em zoom máximo (a parede
+    // já desvanece nesse caso, então não "quebra" — mas a vista fica estranha, olhando o mundo lá
+    // fora através da parede da sala). 1.4 mantém distância confortável sem sair da sala na
+    // maioria dos ângulos.
+    const HOUSE_CAMERA_ZOOM_MAX = 1.4
+
+    function onHouseCameraPointerDown(e: PointerEvent) {
+      if (!insideHouseInterior || placingFurnitureId || e.button !== 0) return
+      houseCameraDragging = true
+      houseCameraLastPointerX = e.clientX
+      houseCameraLastPointerY = e.clientY
+    }
+    function onHouseCameraPointerMove(e: PointerEvent) {
+      if (!houseCameraDragging) return
+      const dx = e.clientX - houseCameraLastPointerX
+      const dy = e.clientY - houseCameraLastPointerY
+      houseCameraLastPointerX = e.clientX
+      houseCameraLastPointerY = e.clientY
+      cameraYawOffsetRef.current += dx * HOUSE_CAMERA_DRAG_SENSITIVITY
+      houseCameraPitchOffsetRef.current = Math.max(
+        HOUSE_CAMERA_PITCH_MIN,
+        Math.min(HOUSE_CAMERA_PITCH_MAX, houseCameraPitchOffsetRef.current - dy * HOUSE_CAMERA_DRAG_SENSITIVITY),
+      )
+    }
+    function onHouseCameraPointerUp() {
+      houseCameraDragging = false
+    }
+    function onHouseCameraWheel(e: WheelEvent) {
+      if (!insideHouseInterior) return
+      e.preventDefault()
+      houseCameraZoomRef.current = Math.max(
+        HOUSE_CAMERA_ZOOM_MIN,
+        Math.min(HOUSE_CAMERA_ZOOM_MAX, houseCameraZoomRef.current + e.deltaY * HOUSE_CAMERA_ZOOM_SENSITIVITY),
+      )
+    }
+    canvas.addEventListener('pointerdown', onHouseCameraPointerDown)
+    window.addEventListener('pointermove', onHouseCameraPointerMove)
+    window.addEventListener('pointerup', onHouseCameraPointerUp)
+    canvas.addEventListener('wheel', onHouseCameraWheel, { passive: false })
 
     const pipeline = new DefaultRenderingPipeline('quality', true, scene, [camera])
     pipeline.samples = isLowEndDevice ? 1 : 4
@@ -6596,25 +6663,67 @@ export function World3D({
         return root
       }
 
-      // Reaplica visibilidade de cada peça conforme `progress.unlockedFurnitureIds` — chamada ao
-      // construir a sala, ao entrar de novo, e sempre que a lista muda de verdade (bridge
-      // `__refreshHouseFurniture`, mesmo padrão de `__setAvatarShirtColor` etc., observado por um
-      // `useEffect` em `progress.unlockedFurnitureIds`) — cobre comprar um item novo no balcão SEM
-      // precisar sair e voltar pra ver o móvel aparecer.
+      // Reconstrói o conjunto de peças da sala conforme quantas cópias de cada item o jogador tem
+      // de verdade (`furnitureQuantity`, `progression.ts`) — chamada ao construir a sala, ao
+      // entrar de novo, e sempre que `unlockedFurnitureIds`/`entitlementActive` mudam de verdade
+      // (bridge `__refreshHouseFurniture`, mesmo padrão de `__setAvatarShirtColor` etc., observado
+      // por um `useEffect`) — cobre comprar um item novo no balcão (inclusive uma SEGUNDA cópia do
+      // mesmo item, lab-138) SEM precisar sair e voltar pra ver o móvel aparecer.
       //
-      // lab-138 (correção de bug real: "na casa o catalog aparece a cama foguete marcada como
-      // habilitado mover sendo que nao tenho esse objeto colocado na casa") — mobília
-      // `subscriptionOnly` (lab-107) nunca entra em `unlockedFurnitureIds` (só compra normal
-      // escreve ali, `unlockGeneric` rejeita item `subscriptionOnly` de propósito), então
-      // checar só `unlockedFurnitureIds` deixava a peça pra sempre invisível aqui mesmo com
-      // assinatura ativa — `MyHousePanel.tsx` já mostrava "✓ Tem"/"Mover" certo (mesma regra
-      // `usable` de lá), só a sala 3D estava desatualizada.
+      // lab-138 — duas mudanças de arquitetura na mesma função:
+      // 1. Correção de bug real ("na casa o catalog aparece a cama foguete marcada como habilitado
+      //    mover sendo que nao tenho esse objeto colocado na casa"): mobília `subscriptionOnly`
+      //    (lab-107) nunca entra em `unlockedFurnitureIds` — checar só essa lista deixava a peça
+      //    pra sempre invisível aqui mesmo com assinatura ativa, mesmo `MyHousePanel.tsx` já
+      //    mostrando "✓ Tem"/"Mover" certo. `furnitureQuantity` já resolve os dois casos.
+      // 2. "Tem que dar pra colocar mais de um item na casa do mesmo": `houseFurnitureNodes` virou
+      //    um mapa por CÓPIA (`${itemId}#${índice}`), não mais por tipo de item — cada cópia ganha
+      //    sua própria peça 3D, construída sob demanda (só quando a quantidade cresce) e removida
+      //    se cair (só acontece hoje se uma assinatura expirar, já que não existe "vender" mobília
+      //    comum). Posição padrão de uma cópia NOVA usa o mesmo truque de proporção áurea já usado
+      //    noutros scatters deste arquivo — dá uma posição estável só a partir de (índice do
+      //    catálogo, índice da cópia), sem precisar saber quantas peças existem ao todo (que muda
+      //    toda vez que alguém compra mais uma).
       function refreshHouseFurnitureVisuals() {
-        for (const item of FURNITURE_CATALOG) {
-          const usable = item.subscriptionOnly
-            ? entitlementActiveRef.current
-            : progressRef.current.unlockedFurnitureIds.includes(item.id)
-          houseFurnitureNodes[item.id]?.setEnabled(usable)
+        const roomRoot = houseInteriorRootNode
+        if (!roomRoot) return
+        const doorAngle = Math.PI / 2 // porta fica em +Z (sul)
+        const doorGap = (32 * Math.PI) / 180
+        const usableArc = Math.PI * 2 - doorGap * 2
+        const startAngle = doorAngle + doorGap
+        const ringRadius = 3.0
+
+        const desiredKeys = new Set<string>()
+        FURNITURE_CATALOG.forEach((item, itemIndex) => {
+          const visual = FURNITURE_VISUAL_KIND[item.id]
+          if (!visual) return
+          const quantity = furnitureQuantity(item, progressRef.current, entitlementActiveRef.current)
+          for (let i = 0; i < quantity; i++) {
+            const key = `${item.id}#${i}`
+            desiredKeys.add(key)
+            if (houseFurnitureNodes[key]) continue
+            const piece = buildFurniturePiece(visual.kind, visual.color)
+            piece.parent = roomRoot
+            // Posição salva pelo jogador (lab-136, "Mover" no `MyHousePanel`) tem prioridade sobre
+            // o layout padrão em anel — só cai no anel se esta cópia nunca foi reposicionada.
+            const saved = progressRef.current.housePlacements[key]
+            if (saved) {
+              piece.position = new Vector3(saved.x, 0, saved.z)
+              piece.rotation.y = saved.rotY
+            } else {
+              const slotSeed = itemIndex * 97 + i
+              const angle = startAngle + usableArc * ((slotSeed * 0.61803398875) % 1)
+              piece.position = new Vector3(Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius)
+              piece.rotation.y = -angle
+            }
+            houseFurnitureNodes[key] = piece
+          }
+        })
+
+        for (const key of Object.keys(houseFurnitureNodes)) {
+          if (desiredKeys.has(key)) continue
+          houseFurnitureNodes[key].dispose()
+          delete houseFurnitureNodes[key]
         }
       }
       ;(scene as any).__refreshHouseFurniture = refreshHouseFurnitureVisuals
@@ -6736,33 +6845,10 @@ export function World3D({
         counterLabel.linkWithMesh(counter)
         counterLabel.linkOffsetY = -40
 
-        // Mobília em anel ao redor do balcão, reservando um corredor livre na direção da porta
-        // (evita qualquer peça bloqueando a passagem) — layout genérico, escala sozinho conforme
-        // `FURNITURE_CATALOG` cresce, sem posição fixa por item escrita à mão.
-        const doorAngle = Math.PI / 2 // porta fica em +Z (sul)
-        const doorGap = (32 * Math.PI) / 180
-        const usableArc = Math.PI * 2 - doorGap * 2
-        const startAngle = doorAngle + doorGap
-        const ringRadius = 3.0
-        FURNITURE_CATALOG.forEach((item, i) => {
-          const visual = FURNITURE_VISUAL_KIND[item.id]
-          if (!visual) return
-          const angle = startAngle + (usableArc * (i + 0.5)) / FURNITURE_CATALOG.length
-          const piece = buildFurniturePiece(visual.kind, visual.color)
-          piece.parent = interiorRoot
-          // Posição salva pelo jogador (lab-136, "Mover" no `MyHousePanel`) tem prioridade sobre o
-          // layout padrão em anel — só cai no anel se o jogador nunca reposicionou este item.
-          const saved = progressRef.current.housePlacements[item.id]
-          if (saved) {
-            piece.position = new Vector3(saved.x, 0, saved.z)
-            piece.rotation.y = saved.rotY
-          } else {
-            piece.position = new Vector3(Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius)
-            piece.rotation.y = -angle
-          }
-          houseFurnitureNodes[item.id] = piece
-        })
-
+        // Mobília em anel ao redor do balcão — construída por `refreshHouseFurnitureVisuals`
+        // (lab-138: uma peça por CÓPIA possuída, não mais uma por tipo de item; ver comentário na
+        // declaração dela), reservando um corredor livre na direção da porta (evita qualquer peça
+        // bloqueando a passagem).
         refreshHouseFurnitureVisuals()
       }
 
@@ -6772,6 +6858,12 @@ export function World3D({
         savedOutsideCenter = currentWorldCenter
         savedOutsideGroundFn = currentGroundBaseFn
         insideHouseInterior = true
+        // lab-138: câmera livre (arrastar/roda do mouse) começa do mesmo ângulo/distância padrão
+        // a cada entrada — não carrega o giro/zoom de uma visita anterior, mesmo espírito de
+        // `startFurniturePlacement` sempre começar do zero.
+        cameraYawOffsetRef.current = 0
+        houseCameraPitchOffsetRef.current = 0
+        houseCameraZoomRef.current = 1
         currentWorldCenter = HOUSE_INTERIOR_CENTER
         currentGroundBaseFn = () => HOUSE_INTERIOR_RADIUS
         // Teleporte físico seguro (mesmo padrão de `teleportAvatarTo`/saída do carro) — posição
@@ -6814,10 +6906,14 @@ export function World3D({
         }
       }
 
+      // `id` aqui é a CHAVE DA CÓPIA (`${itemId}#${índice}`, lab-138), não mais o id do item do
+      // catálogo — `houseFurnitureNodes` só tem uma entrada pra cada cópia que o jogador
+      // realmente possui (peças não são mais criadas e escondidas, ver `refreshHouseFurnitureVisuals`),
+      // então `houseFurnitureNodes[id]` ausente já basta pra saber que não pode mover.
       function startFurniturePlacement(id: string) {
         if (!insideHouseInterior) return
         const piece = houseFurnitureNodes[id]
-        if (!piece || !piece.isEnabled()) return
+        if (!piece) return
         if (placingFurnitureId && placingFurnitureId !== id) cancelFurniturePlacement()
         placingFurnitureId = id
         placingFurnitureStartSnapshot = { x: piece.position.x, z: piece.position.z, rotY: piece.rotation.y }
@@ -8489,7 +8585,35 @@ export function World3D({
           // `HOUSE_INTERIOR_CAMERA_DISTANCE`.
           const camDist = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
           const camHeight = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_HEIGHT : CAMERA_HEIGHT
-          const desiredCamPos = pos.subtract(camFacing.scale(camDist)).add(localUp.scale(camHeight))
+          // lab-138: dentro de casa, a câmera vira "esférica" ao redor do jogador (giro horizontal
+          // + inclinação vertical + zoom, os três controláveis arrastando/rolando o mouse — ver
+          // ouvintes registrados perto da criação da câmera acima) em vez do offset fixo de
+          // sempre. `basePitch`/`baseRadius` reconstroem o MESMO ângulo/distância de antes deste
+          // laboratório a partir de `camDist`/`camHeight` — com os dois offsets em zero (valor
+          // inicial ao entrar em casa, ver `enterHouseInterior`), a fórmula abaixo dá EXATAMENTE
+          // o mesmo resultado do `pos.subtract(camFacing.scale(camDist)).add(localUp.scale(
+          // camHeight))` de antes, então não muda nada pra quem nunca arrasta o mouse. Fora de
+          // casa continua no offset fixo original, intocado.
+          let desiredCamPos: Vector3
+          if (insideHouseInterior) {
+            const baseRadius = Math.sqrt(camDist * camDist + camHeight * camHeight)
+            const basePitch = Math.atan2(camHeight, camDist)
+            const pitch = basePitch + houseCameraPitchOffsetRef.current
+            const radius = baseRadius * houseCameraZoomRef.current
+            // Trava a altura FINAL (não o ângulo/zoom brutos) — achado real testando ao vivo: com
+            // pitch/zoom no máximo ao mesmo tempo, a câmera furava o teto (`HOUSE_ROOM_HEIGHT = 3`
+            // em `buildHouseInteriorIfNeeded`, não visível aqui — valor fixo abaixo com a mesma
+            // margem, 3 - 0.5) e ficava com a lente literalmente dentro da malha, tela cinza
+            // uniforme. Travar a altura (não o pitch isolado) cobre QUALQUER combinação de
+            // ângulo+zoom, não só o caso que apareceu no teste.
+            const rawVerticalOffset = Math.sin(pitch) * radius
+            const verticalOffset = Math.max(-0.3, Math.min(2.5, rawVerticalOffset))
+            const horizontalOffset = -Math.cos(pitch) * radius
+            const sphericalOffset = camFacing.scale(horizontalOffset).add(localUp.scale(verticalOffset))
+            desiredCamPos = pos.add(sphericalOffset)
+          } else {
+            desiredCamPos = pos.subtract(camFacing.scale(camDist)).add(localUp.scale(camHeight))
+          }
           camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
           camera.setTarget(pos)
@@ -9669,6 +9793,10 @@ export function World3D({
       if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
       if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
       window.removeEventListener('resize', onResize)
+      canvas.removeEventListener('pointerdown', onHouseCameraPointerDown)
+      window.removeEventListener('pointermove', onHouseCameraPointerMove)
+      window.removeEventListener('pointerup', onHouseCameraPointerUp)
+      canvas.removeEventListener('wheel', onHouseCameraWheel)
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
       sceneRef.current = null
@@ -9828,9 +9956,11 @@ export function World3D({
       {placingFurnitureUi && (
         <div className="furniture-placement-bar">
           <p className="furniture-placement-hint">
-            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi)?.emoji}{' '}
-            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi)?.name} — mova com as setas/WASD ou o
-            analógico, gire com ◀ ▶
+            {/* lab-138: `placingFurnitureUi` virou a chave da CÓPIA (`${itemId}#${índice}`), não
+                mais o id puro do catálogo — precisa cortar o sufixo antes de achar o item. */}
+            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi.split('#')[0])?.emoji}{' '}
+            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi.split('#')[0])?.name} — mova com as
+            setas/WASD ou o analógico, gire com ◀ ▶
           </p>
           <div className="furniture-placement-actions">
             <button type="button" className="furniture-placement-confirm" onClick={handleConfirmFurniturePlacement}>

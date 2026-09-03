@@ -1,6 +1,30 @@
 # Laboratório atual
 
-Último concluído: labs/lab-138-login-diario/ — recompensa de login diário (item do backlog de
+Último concluído: labs/lab-139-camera-livre-mobilia-multipla/ — dois pedidos do usuário na
+sequência do lab-138.
+1. **Câmera livre dentro de casa** (`World3D.tsx`): arrastar o mouse gira/inclina, roda do mouse dá
+   zoom — reaproveita a MESMA fórmula de câmera de sempre, generalizada pra "esférica"
+   (`basePitch`/`baseRadius` derivados de `camDist`/`camHeight`), sem mudar nada fora de casa nem
+   pra quem nunca arrasta. Achado real testando ao vivo: pitch+zoom máximos ao mesmo tempo furavam
+   o teto (tela virava cinza uniforme, câmera dentro da malha) — corrigido travando a altura FINAL
+   do deslocamento (não o ângulo isolado, que não bastava sozinho); zoom máximo também reduzido
+   (2.2→1.4) depois de outro achado ao vivo (câmera saindo da sala pela parede, que só desvanece,
+   não "quebra", mas fica estranho).
+2. **Comprar mais de uma cópia do mesmo móvel** (`progression.ts`/`MyHousePanel.tsx`/
+   `World3D.tsx`): `unlockFurniture` parou de bloquear recomprar um item já possuído —
+   `unlockedFurnitureIds` guarda id repetido por cópia, `furnitureQuantity` (nova) conta quantas
+   existem. `houseFurnitureNodes` virou um mapa por CÓPIA (`${itemId}#${índice}`), construído sob
+   demanda; painel mostra "✓ Tem (N)" + um "Mover" por cópia, cada uma com posição independente.
+
+**Verificado ao vivo** (build de produção real via `npm run preview`, navegação com teclado
+sintético): câmera confirmada sem furar o teto depois da correção; mobília múltipla confirmada
+ponta a ponta — comprada "Planta" duas vezes, painel mostrou "✓ Tem (2)"/2 botões "Mover"
+independentes, 2 peças reais na sala, uma movida de verdade sem afetar a outra. Zoom reduzido por
+inspeção visual, sem novo ciclo de teste ao vivo depois do ajuste final (registrado como pendência
+menor). `npm run test`: 88/88 (5 testes novos/atualizados). `npm run build` sem erros. Ver
+`labs/lab-139-camera-livre-mobilia-multipla/CONTEXT.md`.
+
+Antes desse: labs/lab-138-login-diario/ — recompensa de login diário (item do backlog de
 engajamento que nunca tinha sido escolhido, ver histórico de labs 129-133) + um bug real reportado
 pelo usuário na mesma sessão, achado e corrigido junto.
 1. **Login diário**: `Progress.loginStreak` novo; `applyDailyLoginReward` (`progression.ts`)

@@ -77,9 +77,11 @@ export interface Progress {
   currentStreak: number
   // Posição/ângulo escolhidos pelo jogador pra cada peça de mobília dentro de Minha Casa (lab-136,
   // pedido do usuário: "tem que ter opção... de escolher em que posição da casa deve ficar a
-  // peça... o ângulo e posição onde fica o objeto"). Chave = id do item (`data/furniture.ts`);
-  // ausência de uma chave significa "ainda na posição padrão" (layout em anel ao redor do balcão,
-  // ver `World3D.tsx`).
+  // peça... o ângulo e posição onde fica o objeto"). Chave = "chave da cópia"
+  // (`${itemId}#${índice}`, ex. `cama#0`, `cama#1` pra duas camas — lab-138, "tem que dar pra
+  // colocar mais de um item na casa do mesmo"), não mais o id puro do item; ausência de uma chave
+  // significa "esta cópia ainda na posição padrão" (layout em anel ao redor do balcão, ver
+  // `World3D.tsx`).
   housePlacements: Record<string, { x: number; z: number; rotY: number }>
   // Recompensa de login diário (lab-138, item do backlog de engajamento discutido em chat) —
   // dias CONSECUTIVOS que o jogo foi aberto, comparando `lastPlayedAt` (lab-91, `state/
