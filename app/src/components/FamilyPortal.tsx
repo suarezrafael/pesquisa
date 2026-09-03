@@ -673,7 +673,113 @@ function ChildProgressPanel() {
   )
 }
 
-function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+// lab-144, G13 (docs/prompts/05-escala-e-viabilidade.md): "não existe caminho de exclusão de
+// conta e dados... nem exportação de dados". A Política de Privacidade (`LegalPage.tsx` §5) já
+// PROMETIA os dois por e-mail — isso vira self-service de verdade aqui, sem deixar de mencionar o
+// e-mail como alternativa (ver LegalPage.tsx). Exclusão usa o mesmo padrão de confirmação em duas
+// etapas já estabelecido em `PairingCodeGenerator` ("desvincular todos os aparelhos") — ação
+// irreversível, dois cliques em vez de `window.confirm` nativo.
+function AccountDataPanel({ onAccountDeleted }: { onAccountDeleted: () => void }) {
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [deleteConfirming, setDeleteConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function handleExport() {
+    setExportError(null)
+    setExporting(true)
+    try {
+      const res = await authorizedFetch('/account/export')
+      if (!res.ok) {
+        setExportError('Não foi possível baixar seus dados. Tente novamente.')
+        return
+      }
+      const body = await res.text()
+      const blob = new Blob([body], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `missao-aprender-meus-dados-${new Date().toISOString().slice(0, 10)}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setExportError('Não foi possível baixar seus dados. Tente novamente.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleteError(null)
+    setDeleting(true)
+    try {
+      const res = await authorizedFetch('/account/delete', { method: 'POST' })
+      if (!res.ok) {
+        setDeleteError('Não foi possível excluir sua conta. Tente novamente.')
+        return
+      }
+      await authClient.signOut().catch(() => {})
+      onAccountDeleted()
+    } catch {
+      setDeleteError('Não foi possível excluir sua conta. Tente novamente.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="pairing-code-box account-data-panel">
+      <h3>Meus dados</h3>
+      <p className="subtitle">
+        Baixe uma cópia de tudo que guardamos sobre você e sua família, ou exclua sua conta e
+        todos os dados associados a ela.
+      </p>
+      <button type="button" className="nickname-generate-btn" onClick={handleExport} disabled={exporting}>
+        {exporting ? 'Um momento…' : 'Baixar meus dados'}
+      </button>
+      {exportError && <p className="field-hint">{exportError}</p>}
+
+      {deleteConfirming ? (
+        <>
+          <p className="field-hint">
+            Isso apaga sua conta, sua assinatura (cancelada de imediato) e todos os dados
+            associados: códigos de pareamento, aparelhos vinculados e qualquer progresso que a
+            criança tenha sincronizado. A criança pode continuar jogando normalmente — o jogo
+            continua gratuito — mas perde acesso aos itens exclusivos e a este vínculo com sua
+            conta. Não é possível desfazer. Tem certeza?
+          </p>
+          <button type="button" className="secondary-button" onClick={handleDelete} disabled={deleting}>
+            {deleting ? 'Um momento…' : 'Sim, excluir minha conta e meus dados'}
+          </button>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setDeleteConfirming(false)}
+            disabled={deleting}
+          >
+            Cancelar
+          </button>
+        </>
+      ) : (
+        <button type="button" className="text-button" onClick={() => setDeleteConfirming(true)}>
+          Excluir minha conta e todos os dados
+        </button>
+      )}
+      {deleteError && <p className="field-hint">{deleteError}</p>}
+    </div>
+  )
+}
+
+function Dashboard({
+  email,
+  onSignOut,
+  onAccountDeleted,
+}: {
+  email: string
+  onSignOut: () => void
+  onAccountDeleted: () => void
+}) {
   const [status, setStatus] = useState<SubscriptionStatus>('loading')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -757,6 +863,7 @@ function Dashboard({ email, onSignOut }: { email: string; onSignOut: () => void 
       {error && <p className="field-hint">{error}</p>}
       {canPair && <PairingCodeGenerator />}
       {canManageBilling && <NpsWidget />}
+      <AccountDataPanel onAccountDeleted={onAccountDeleted} />
       <button type="button" className="nickname-generate-btn" onClick={onSignOut}>
         Sair
       </button>
@@ -795,6 +902,7 @@ export function FamilyPortal() {
         await authClient.signOut()
         setSession(null)
       }}
+      onAccountDeleted={() => setSession(null)}
     />
   )
 }
