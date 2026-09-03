@@ -72,6 +72,7 @@ import {
   type StudentFigure,
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
+import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
 import { furnitureQuantity, getLevel, isQuestUnlocked } from '../state/progression'
 import type { Profile, Progress, Quest } from '../types'
 import { HudHeader } from './HudHeader'
@@ -1971,6 +1972,11 @@ export function World3D({
   // re-render (por isso o `useState` também, só espelhado).
   const placingFurnitureIdRef = useRef<string | null>(null)
   const [placingFurnitureUi, setPlacingFurnitureUi] = useState<string | null>(null)
+  // lab-140 (pedido do usuário: "os objetos precisam ter uma posição válida com teste de colisão
+  // nas paredes e outros objetos ou será uma posição inválida") — só muda quando a validade muda
+  // de verdade (o loop de física, que roda a cada quadro, só chama o `setState` na TRANSIÇÃO,
+  // nunca todo quadro — senão re-renderizaria a barra de posicionamento 60x/s à toa).
+  const [placingFurnitureInvalid, setPlacingFurnitureInvalid] = useState(false)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
   const [muted, setMuted] = useState(false)
@@ -2232,9 +2238,17 @@ export function World3D({
     // giro/zoom aqui são ouvintes de ponteiro/roda de rolagem escritos à mão, que só ALIMENTAM os
     // refs (`cameraYawOffsetRef`/`houseCameraPitchOffsetRef`/`houseCameraZoomRef`) lidos pela MESMA
     // fórmula de posição de câmera de sempre (ver `desiredCamPos` no loop de física) — nunca tocam
-    // `camera.position` diretamente. Só reage dentro de casa (`insideHouseInterior`) e fora do modo
-    // de posicionar mobília (`placingFurnitureId`, que já usa arrastar/os mesmos botões ◀ ▶ pra
-    // girar a peça fantasma, não a câmera — os dois disputariam o mesmo gesto).
+    // `camera.position` diretamente. Só reage dentro de casa (`insideHouseInterior`).
+    //
+    // lab-140 (achado real: o usuário reportou "ao mover os objetos... eu tenho que conseguir
+    // girar a câmera... senão não consigo acompanhar pra onde estou movendo") — FUNCIONA também
+    // durante o modo de posicionar mobília, de propósito: parecia que ia disputar gesto com os
+    // botões ◀ ▶ (que giram a peça fantasma nesse modo, não a câmera — ver o loop de física mais
+    // abaixo), mas são refs DIFERENTES (`cameraYawOffsetRef`/`houseCameraPitchOffsetRef`, escritos
+    // só por este ouvinte de ponteiro, nunca pelos botões ◀ ▶) — não existe conflito de verdade,
+    // só a suposição errada de que "os dois giram alguma coisa" bastava pra disputar o mesmo
+    // gesto. Segurar o botão do mouse pra girar a câmera e usar ◀ ▶/WASD pra mexer na peça
+    // funcionam ao mesmo tempo sem briga nenhuma.
     let houseCameraDragging = false
     let houseCameraLastPointerX = 0
     let houseCameraLastPointerY = 0
@@ -2251,7 +2265,7 @@ export function World3D({
     const HOUSE_CAMERA_ZOOM_MAX = 1.4
 
     function onHouseCameraPointerDown(e: PointerEvent) {
-      if (!insideHouseInterior || placingFurnitureId || e.button !== 0) return
+      if (!insideHouseInterior || e.button !== 0) return
       houseCameraDragging = true
       houseCameraLastPointerX = e.clientX
       houseCameraLastPointerY = e.clientY
@@ -2433,6 +2447,10 @@ export function World3D({
     // item.
     let placingFurnitureId: string | null = null
     let placingFurnitureStartSnapshot: { x: number; z: number; rotY: number } | null = null
+    // lab-140: valor da ÚLTIMA checagem de validade (colisão), pra só chamar `setPlacingFurnitureInvalid`
+    // na TRANSIÇÃO (o loop de física roda a cada quadro; sem essa memória, chamaria o `setState`
+    // 60x/s sempre que a peça estivesse numa posição inválida, mesmo parada).
+    let placingFurnitureLastValid = true
     // Referência hoisted da sala (lab-136) — construída dentro de `buildHouseInteriorIfNeeded()`,
     // mas o desvanecimento de parede por oclusão de câmera (mais abaixo, no loop de física) e o
     // clamp de posição do modo de posicionamento precisam dela fora daquela função.
@@ -6578,6 +6596,29 @@ export function World3D({
         microscopio: { kind: 'microscope', color: new Color3(0.6, 0.6, 0.65) },
       }
 
+      // Balcão de compras — obstáculo FIXO (nunca se move), centro da sala em coordenada local
+      // (mesma posição de `counter.position` em `buildHouseInteriorIfNeeded`, `x=0, z=0`).
+      const HOUSE_COUNTER_COLLISION = { x: 0, z: 0, radius: 0.9 }
+
+      // Monta a lista de obstáculos (balcão + toda peça JÁ colocada, exceto a que está sendo
+      // movida) e delega a geometria pura pro módulo `houseCollision.ts` (lab-140, testável sem
+      // Babylon — ver os testes lá). A parede em si já é impossível de violar (o movimento durante
+      // o posicionamento trava a posição em `HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN`,
+      // ver o loop de física mais abaixo), então só falta cuidar de objeto-contra-objeto aqui.
+      function isCurrentFurniturePositionValid(excludeKey: string, x: number, z: number): boolean {
+        const movingRadius = collisionRadiusForKind(FURNITURE_VISUAL_KIND[excludeKey.split('#')[0]]?.kind)
+        const obstacles = [HOUSE_COUNTER_COLLISION]
+        for (const [key, piece] of Object.entries(houseFurnitureNodes)) {
+          if (key === excludeKey) continue
+          obstacles.push({
+            x: piece.position.x,
+            z: piece.position.z,
+            radius: collisionRadiusForKind(FURNITURE_VISUAL_KIND[key.split('#')[0]]?.kind),
+          })
+        }
+        return isFurniturePositionValid(x, z, movingRadius, obstacles)
+      }
+
       // Malha procedural simples por `kind` — mesmo estilo de caixas/cilindros/esferas já usado em
       // todo o resto do arquivo (mesa da carteira, foguete, etc.), não modelos importados.
       function buildFurniturePiece(kind: string, color: Color3): TransformNode {
@@ -6906,6 +6947,15 @@ export function World3D({
         }
       }
 
+      // Realce vermelho na peça fantasma quando a posição atual esbarra em outro obstáculo
+      // (lab-140) — `emissiveColor` some (`Color3.Black()`) assim que a posição volta a ser
+      // válida, sem precisar guardar a cor original de cada malha pra restaurar depois.
+      function setFurniturePieceValidTint(piece: TransformNode, valid: boolean) {
+        for (const mesh of piece.getChildMeshes()) {
+          if (mesh.material) (mesh.material as PBRMaterial).emissiveColor = valid ? Color3.Black() : new Color3(0.9, 0.1, 0.1)
+        }
+      }
+
       // `id` aqui é a CHAVE DA CÓPIA (`${itemId}#${índice}`, lab-138), não mais o id do item do
       // catálogo — `houseFurnitureNodes` só tem uma entrada pra cada cópia que o jogador
       // realmente possui (peças não são mais criadas e escondidas, ver `refreshHouseFurnitureVisuals`),
@@ -6920,6 +6970,10 @@ export function World3D({
         placingFurnitureIdRef.current = id
         setPlacingFurnitureUi(id)
         setFurniturePieceAlpha(piece, 0.55)
+        // A posição de entrada já era válida antes (salva OU padrão do anel) — assume válido até
+        // o loop de física recalcular no próximo quadro, evita um "pisca vermelho" de um quadro.
+        placingFurnitureLastValid = true
+        setPlacingFurnitureInvalid(false)
         // O jogador congela igual a `drivingCar`/`drivingRocket` (ver o loop de física mais
         // abaixo) — sem zerar a velocidade aqui, qualquer impulso residual (ex.: acabou de andar)
         // continuaria deslizando o corpo físico sozinho enquanto a gravidade normal já parou de
@@ -6930,17 +6984,23 @@ export function World3D({
         }
       }
 
+      // lab-140: recusa confirmar numa posição inválida (esbarrando no balcão ou noutra peça) —
+      // o jogador continua no modo de posicionamento (nada muda além de nenhum clique "funcionar",
+      // o realce vermelho já explica o porquê) até mover a peça pra um lugar válido ou cancelar.
       function confirmFurniturePlacement() {
         if (!placingFurnitureId) return
         const piece = houseFurnitureNodes[placingFurnitureId]
         if (piece) {
+          if (!isCurrentFurniturePositionValid(placingFurnitureId, piece.position.x, piece.position.z)) return
           setFurniturePieceAlpha(piece, 1)
+          setFurniturePieceValidTint(piece, true)
           onFurniturePlacedRef.current(placingFurnitureId, piece.position.x, piece.position.z, piece.rotation.y)
         }
         placingFurnitureId = null
         placingFurnitureStartSnapshot = null
         placingFurnitureIdRef.current = null
         setPlacingFurnitureUi(null)
+        setPlacingFurnitureInvalid(false)
       }
 
       function cancelFurniturePlacement() {
@@ -6948,12 +7008,14 @@ export function World3D({
         const piece = houseFurnitureNodes[placingFurnitureId]
         if (piece) {
           setFurniturePieceAlpha(piece, 1)
+          setFurniturePieceValidTint(piece, true)
           if (placingFurnitureStartSnapshot) {
             piece.position.x = placingFurnitureStartSnapshot.x
             piece.position.z = placingFurnitureStartSnapshot.z
             piece.rotation.y = placingFurnitureStartSnapshot.rotY
           }
         }
+        setPlacingFurnitureInvalid(false)
         placingFurnitureId = null
         placingFurnitureStartSnapshot = null
         placingFurnitureIdRef.current = null
@@ -8566,6 +8628,15 @@ export function World3D({
               )
               if (cameraRotateLeftRef.current) ghost.rotation.y -= dt * FURNITURE_PLACEMENT_ROTATE_SPEED
               if (cameraRotateRightRef.current) ghost.rotation.y += dt * FURNITURE_PLACEMENT_ROTATE_SPEED
+
+              // lab-140: realce vermelho + trava no "Confirmar posição" (ver `confirmFurniturePlacement`)
+              // quando a peça esbarra no balcão ou noutra mobília já colocada.
+              const valid = isCurrentFurniturePositionValid(placingFurnitureId, ghost.position.x, ghost.position.z)
+              setFurniturePieceValidTint(ghost, valid)
+              if (valid !== placingFurnitureLastValid) {
+                placingFurnitureLastValid = valid
+                setPlacingFurnitureInvalid(!valid)
+              }
             }
           }
 
@@ -9955,15 +10026,30 @@ export function World3D({
       <TouchActionButton className="touch-action-interact" label="E" onPress={handleTouchInteractPress} />
       {placingFurnitureUi && (
         <div className="furniture-placement-bar">
-          <p className="furniture-placement-hint">
-            {/* lab-138: `placingFurnitureUi` virou a chave da CÓPIA (`${itemId}#${índice}`), não
-                mais o id puro do catálogo — precisa cortar o sufixo antes de achar o item. */}
-            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi.split('#')[0])?.emoji}{' '}
-            {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi.split('#')[0])?.name} — mova com as
-            setas/WASD ou o analógico, gire com ◀ ▶
-          </p>
+          {/* lab-140 (pedido do usuário: "os objetos precisam ter uma posição válida com teste de
+              colisão nas paredes e outros objetos ou será uma posição inválida") — o realce
+              vermelho na peça já avisa visualmente; esta linha some/aparece junto, pra quem não
+              tiver certeza do que o vermelho significa. */}
+          {placingFurnitureInvalid ? (
+            <p className="furniture-placement-hint furniture-placement-invalid">
+              ⚠️ Essa posição esbarra em outro móvel — mova pra outro lugar
+            </p>
+          ) : (
+            <p className="furniture-placement-hint">
+              {/* lab-138: `placingFurnitureUi` virou a chave da CÓPIA (`${itemId}#${índice}`), não
+                  mais o id puro do catálogo — precisa cortar o sufixo antes de achar o item. */}
+              {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi.split('#')[0])?.emoji}{' '}
+              {FURNITURE_CATALOG.find((item) => item.id === placingFurnitureUi.split('#')[0])?.name} — mova com as
+              setas/WASD ou o analógico, gire com ◀ ▶
+            </p>
+          )}
           <div className="furniture-placement-actions">
-            <button type="button" className="furniture-placement-confirm" onClick={handleConfirmFurniturePlacement}>
+            <button
+              type="button"
+              className="furniture-placement-confirm"
+              disabled={placingFurnitureInvalid}
+              onClick={handleConfirmFurniturePlacement}
+            >
               ✅ Confirmar posição
             </button>
             <button type="button" className="furniture-placement-cancel" onClick={handleCancelFurniturePlacement}>
