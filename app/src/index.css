@@ -797,6 +797,13 @@ a.nickname-generate-btn {
   pointer-events: none;
 }
 
+/* lab-140 (pedido do usuário: "os objetos precisam ter uma posição válida com teste de colisão nas
+   paredes e outros objetos") — mesmo fundo escuro do aviso normal, só o texto em vermelho já basta
+   pra chamar atenção sem precisar de um componente visual novo. */
+.furniture-placement-invalid {
+  color: var(--danger);
+}
+
 .furniture-placement-actions {
   display: flex;
   gap: 0.6rem;
@@ -817,6 +824,12 @@ a.nickname-generate-btn {
 .furniture-placement-confirm {
   background: var(--accent);
   color: var(--ink);
+}
+
+.furniture-placement-confirm:disabled {
+  background: rgba(255, 255, 255, 0.35);
+  color: rgba(20, 20, 25, 0.5);
+  cursor: not-allowed;
 }
 
 .furniture-placement-cancel {

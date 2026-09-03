@@ -1,6 +1,28 @@
 # Laboratório atual
 
-Último concluído: labs/lab-139-camera-livre-mobilia-multipla/ — dois pedidos do usuário na
+Último concluído: labs/lab-140-camera-durante-posicionamento-colisao-mobilia/ — dois refinamentos
+pedidos pelo usuário logo após testar o lab-139 em produção.
+1. **Câmera livre também durante o posicionamento de mobília**: o `pointerdown` de arrastar
+   câmera (lab-139) tinha um bloqueio `|| placingFurnitureId` baseado numa suposição errada de
+   conflito com os botões ◀ ▶ (que giram a peça fantasma nesse modo) — na verdade são refs
+   DIFERENTES (`cameraYawOffsetRef`/`houseCameraPitchOffsetRef` pro arrastar vs.
+   `cameraRotateLeftRef`/`cameraRotateRightRef` pros botões), sem conflito nenhum. Bloqueio
+   removido.
+2. **Colisão entre peças de mobília**: `houseCollision.ts` novo (geometria pura, círculos com
+   raio aproximado por tipo) checa a peça sendo movida contra o balcão e outras peças já
+   colocadas — posição inválida vira realce vermelho + aviso na barra + "Confirmar posição"
+   desabilitado. Colisão com parede já existia desde o lab-136 (clamp de movimento).
+
+**Pendência desta vez, diferente dos labs anteriores**: a aba de automação do navegador perdeu o
+foco do sistema operacional no meio da verificação (`document.hidden=true`, 0 FPS confirmado —
+`requestAnimationFrame` suspenso pelo próprio Chrome sem foco real) e não recuperou apesar de
+várias tentativas. Sem live-test completo desta vez — confiança vem de `npm run test` (95/95,
+7 testes novos cobrindo a geometria de colisão) + `npm run build` limpo + revisão cuidadosa (a
+mudança da câmera é a remoção de uma condição, com a causa do bloqueio original identificada como
+equivocada). Reverificar ao vivo assim que o ambiente permitir. Ver
+`labs/lab-140-camera-durante-posicionamento-colisao-mobilia/CONTEXT.md`.
+
+Antes desse: labs/lab-139-camera-livre-mobilia-multipla/ — dois pedidos do usuário na
 sequência do lab-138.
 1. **Câmera livre dentro de casa** (`World3D.tsx`): arrastar o mouse gira/inclina, roda do mouse dá
    zoom — reaproveita a MESMA fórmula de câmera de sempre, generalizada pra "esférica"
