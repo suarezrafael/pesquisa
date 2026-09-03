@@ -609,10 +609,24 @@ export function applyGlasses(
     // própria cabeça, 0.32), esse disco sobrava pra fora da cabeça em volta inteira — pouco visível
     // de longe (câmera do jogo principal, 3ª pessoa), mas óbvio na lojinha (preview de perto,
     // câmera livre pra girar, ver `AvatarPreview3D.tsx`). `CreateTorus` sem rotação já nasce com o
-    // eixo do "buraco" em Y — o formato certo pra um aro na altura dos olhos — com diâmetro pensado
-    // pra abraçar a curvatura da cabeça NESSA altura (mais estreita que o equador, cabeça é uma
-    // esfera de raio 0.16 centrada em y=1.15; em EYE_Y o raio local é ~0.093).
-    const strap = MeshBuilder.CreateTorus('glassesStrap', { diameter: 0.2, thickness: 0.028, tessellation: 20 }, scene)
+    // eixo do "buraco" em Y — o formato certo pra um aro na altura dos olhos.
+    //
+    // Achado do review automático do Copilot no PR deste laboratório: a primeira versão fixava
+    // `diameter: 0.2` (raio do aro 0.1) com `thickness: 0.028` (raio do tubo 0.014) — raio INTERNO
+    // do torus = 0.1 - 0.014 = 0.086, menor que o raio local da cabeça nessa altura (cabeça é uma
+    // esfera de raio 0.16 centrada em y=1.15; em `EYE_Y` isso dá `sqrt(0.16² - 0.13²) ≈ 0.093`).
+    // Ou seja, o tubo ainda atravessava a cabeça (0.086 < 0.093), só bem menos que o disco antigo.
+    // Corrigido derivando o diâmetro do raio local da cabeça (em vez de um número fixo) — garante
+    // que o aro fique inteiro DO LADO DE FORA mesmo que as dimensões da cabeça mudem no futuro.
+    const strapTubeThickness = 0.028
+    const strapMargin = 0.006
+    const headRadiusAtEyeY = Math.sqrt(0.16 ** 2 - (EYE_Y - 1.15) ** 2)
+    const strapDiameter = 2 * (headRadiusAtEyeY + strapTubeThickness / 2 + strapMargin)
+    const strap = MeshBuilder.CreateTorus(
+      'glassesStrap',
+      { diameter: strapDiameter, thickness: strapTubeThickness, tessellation: 20 },
+      scene,
+    )
     strap.position = new Vector3(0, EYE_Y, 0)
     add(strap)
   }

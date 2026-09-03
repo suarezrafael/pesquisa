@@ -19,8 +19,22 @@ ficarem em cima/embaixo). Com diâmetro 0.34 — maior que a própria cabeça (e
 — esse disco sobrava pra fora do contorno da cabeça em todas as direções, criando o efeito de
 "deformado"/clutter extra visível. Trocado por `MeshBuilder.CreateTorus` (sem rotação nenhuma — o
 eixo do "buraco" de um torus já nasce em Y, exatamente o formato certo pra um aro na altura dos
-olhos), com diâmetro 0.2 (perto do raio local da cabeça naquela altura, ~0.093×2, não do diâmetro
-total da cabeça) e espessura do tubo 0.028.
+olhos), com diâmetro derivado do raio local da cabeça naquela altura (ver "Correção pós-review do
+Copilot" abaixo — a primeira versão ainda tinha um resíduo do mesmo problema).
+
+## Correção pós-review do Copilot (mesmo laboratório, antes do usuário pedir a leitura de PRs)
+
+O review automático do Copilot no PR #17 (`copilot-pull-request-reviewer`, ver
+`gh api repos/.../pulls/17/comments`) achou um problema real na primeira versão do conserto:
+`diameter: 0.2` fixo (raio do aro 0.1) com `thickness: 0.028` (raio do tubo 0.014) dava um raio
+INTERNO de `0.1 - 0.014 = 0.086` — menor que o raio local da cabeça nessa altura (~0.093,
+calculado acima). Ou seja, o tubo do torus ainda atravessava a cabeça, só bem menos que o disco
+antigo. Verificado à mão (a conta bate) e corrigido derivando o diâmetro do raio local da cabeça
+em vez de um número fixo — `headRadiusAtEyeY = sqrt(0.16² - (EYE_Y - 1.15)²)`, `strapDiameter = 2
+* (headRadiusAtEyeY + thickness/2 + margem de 0.006)` — garante que o aro fica inteiro do lado de
+FORA da cabeça mesmo que as dimensões dela mudem no futuro (~0.226 com os números atuais, contra
+os 0.2 fixos de antes). PR #17 já estava mergeado quando isso foi encontrado — a correção virou um
+segundo commit nesta mesma sessão, novo PR (ver Estado do repositório).
 
 ## Decisões técnicas tomadas
 
