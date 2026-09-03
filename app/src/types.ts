@@ -81,4 +81,9 @@ export interface Progress {
   // ausência de uma chave significa "ainda na posição padrão" (layout em anel ao redor do balcão,
   // ver `World3D.tsx`).
   housePlacements: Record<string, { x: number; z: number; rotY: number }>
+  // Recompensa de login diário (lab-138, item do backlog de engajamento discutido em chat) —
+  // dias CONSECUTIVOS que o jogo foi aberto, comparando `lastPlayedAt` (lab-91, `state/
+  // storage.ts`) da sessão anterior contra hoje. Zera pra 1 (não pra 0) num hiato de 2+ dias —
+  // sempre existe "um dia" ao abrir o jogo, mesmo depois de ficar muito tempo sem jogar.
+  loginStreak: number
 }

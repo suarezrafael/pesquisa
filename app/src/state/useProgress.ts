@@ -20,6 +20,8 @@ import {
   unlockMarsReward as applyMarsRewardUnlock,
   applyTreasureChestFound,
   applyStreakReset,
+  applyDailyLoginReward,
+  type DailyLoginResult,
 } from './progression'
 
 export function useProgress() {
@@ -176,6 +178,19 @@ export function useProgress() {
     })
   }
 
+  // Login diário (lab-138) — `App.tsx` passa o `lastPlayedAt` da sessão ANTERIOR (lido antes de
+  // `touchLastPlayed()` sobrescrever) + o instante de agora; devolve o resultado inteiro (não só
+  // `granted`, como `unlockMarsReward`/`foundTreasureChest`) porque o toast precisa saber QUANTO
+  // ganhou e em que dia da sequência, não só se ganhou algo.
+  function claimDailyLogin(previousLastPlayedAtIso: string | null, nowIso: string): DailyLoginResult {
+    const result = applyDailyLoginReward(progress, previousLastPlayedAtIso, nowIso)
+    if (result.granted) {
+      setProgress(result.progress)
+      saveProgress(result.progress)
+    }
+    return result
+  }
+
   return {
     progress,
     completeQuest,
@@ -194,5 +209,6 @@ export function useProgress() {
     unlockMarsReward,
     foundTreasureChest,
     resetStreak,
+    claimDailyLogin,
   }
 }

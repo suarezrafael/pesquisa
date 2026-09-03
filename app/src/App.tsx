@@ -7,6 +7,7 @@ import { QuestModal } from './components/QuestModal'
 import { RewardToast } from './components/RewardToast'
 import { MarsRewardToast } from './components/MarsRewardToast'
 import { PairingScreen } from './components/PairingScreen'
+import { DailyLoginToast } from './components/DailyLoginToast'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
 import { MyHousePanel } from './world3d/MyHousePanel'
@@ -21,6 +22,7 @@ import {
   clearActiveProfile,
   hasTutorialBeenSeen,
   listProfiles,
+  loadLastPlayedAt,
   markTutorialSeen,
   switchActiveProfile,
   touchLastPlayed,
@@ -96,6 +98,7 @@ function GameApp() {
     unlockMarsReward,
     foundTreasureChest,
     resetStreak,
+    claimDailyLogin,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -125,6 +128,9 @@ function GameApp() {
   // `onPlacingRequestHandled` pra limpar (senão o mesmo id reabriria o modo a cada re-render).
   const [pendingPlacementId, setPendingPlacementId] = useState<string | null>(null)
   const [showMarsReward, setShowMarsReward] = useState(false)
+  // Login diário (lab-138) — `null` = nada pra mostrar; populado só quando `claimDailyLogin`
+  // devolve `granted: true` (mesmo perfil não ganha duas vezes no mesmo dia — ver `progression.ts`).
+  const [dailyLoginReward, setDailyLoginReward] = useState<{ streak: number; coins: number } | null>(null)
   const { entitlement, redeemCode, redeeming, redeemError, syncProgressSummary } = useEntitlement()
   // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
   // decidir se mostra o `ProfilePicker` (quando não há perfil ativo) quanto pra decidir se mostra
@@ -133,8 +139,15 @@ function GameApp() {
 
   // lab-91: carimba "última vez jogado" pro painel de progresso do `/familia` — só quando já
   // existe perfil (senão a criança ainda nem chegou a jogar de verdade, só abriu a tela título).
+  // lab-138: login diário reaproveita o MESMO carimbo, sem storage novo — lê o valor da sessão
+  // ANTERIOR antes de `touchLastPlayed()` sobrescrever (ordem importa: ler depois já veria "agora").
   useEffect(() => {
-    if (profile) touchLastPlayed()
+    if (profile) {
+      const previousLastPlayedAt = loadLastPlayedAt()
+      touchLastPlayed()
+      const result = claimDailyLogin(previousLastPlayedAt, new Date().toISOString())
+      if (result.granted) setDailyLoginReward({ streak: result.streak, coins: result.coins })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!profile])
 
@@ -279,6 +292,7 @@ function GameApp() {
         <World3D
           profile={profile}
           progress={progress}
+          entitlementActive={entitlement?.active ?? false}
           onSelectQuest={handleSelectQuest}
           onSelectSurpriseQuiz={handleSelectSurpriseQuiz}
           onSelectPlanetQuest={handleSelectPlanetQuest}
@@ -373,6 +387,14 @@ function GameApp() {
       )}
 
       {showMarsReward && <MarsRewardToast onContinue={() => setShowMarsReward(false)} />}
+
+      {dailyLoginReward && (
+        <DailyLoginToast
+          streak={dailyLoginReward.streak}
+          coins={dailyLoginReward.coins}
+          onContinue={() => setDailyLoginReward(null)}
+        />
+      )}
 
       {showShop && (
         <AvatarShop
