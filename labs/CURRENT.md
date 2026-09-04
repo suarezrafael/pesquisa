@@ -1,6 +1,19 @@
 # Laboratório atual
 
-Último concluído: labs/lab-151-morros-invisiveis-triangulo-degenerado/ — retomada (3ª vez) do bug
+Último concluído: labs/lab-152-consentimento-parental-multiplayer/ — fecha a última parte de G13
+(`docs/prompts/05-escala-e-viabilidade.md`) deixada de fora pelo lab-144: consentimento parental
+pro multiplayer. Como a maioria das famílias nunca cria conta (jogo local-only pra quem não
+assina), exigir consentimento só via `/familia` bloquearia multiplayer pra quem não paga (fere a
+regra de nunca gatear cooperação atrás de assinatura) — decisão confirmada com o usuário: portão
+parental DENTRO do jogo (desafio de multiplicação de dois dígitos, difícil de cabeça pro
+público-alvo de ~10 anos), por PERFIL (não por aparelho, lab-108). `connectMultiplayer()` só roda
+depois de `hasMultiplayerConsent()`; ícones de chat/ranking abrem o portão em vez do painel quando
+ainda não consentido. Retroativo pra TODO mundo (confirmado com o usuário — ninguém tinha
+consentimento real registrado antes). Verificado ao vivo: portão aparece, erro/acerto funcionam,
+consentimento persiste entre reloads. `tsc -b`/testes limpos (107/107, 6 novos). Ver
+`labs/lab-152-consentimento-parental-multiplayer/CONTEXT.md`.
+
+Antes desse: labs/lab-151-morros-invisiveis-triangulo-degenerado/ — retomada (3ª vez) do bug
 de morros/platôs invisíveis. Usuário confirmou que o bug ainda ocorre no mesmo aparelho (Android/
 Chrome) mesmo depois das duas correções do lab-124, e que continua sólido (só renderização).
 **Medição ao vivo refutou a hipótese principal**: 0 triângulos com área ~0 em 3954 checados perto

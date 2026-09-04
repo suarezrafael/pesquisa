@@ -75,6 +75,8 @@ import {
 import { questTypeColor } from './questVisuals'
 import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
 import { furnitureQuantity, getLevel, isQuestUnlocked } from '../state/progression'
+import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
+import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
@@ -2009,6 +2011,11 @@ export function World3D({
   const [mpConnected, setMpConnected] = useState(false)
   const [rankingOpen, setRankingOpen] = useState(false)
   const [rankingEntries, setRankingEntries] = useState<RankingEntry[]>([])
+  // lab-151, G13: portão parental — `showParentalGate` controla o modal; `pendingMultiplayerOpen`
+  // guarda qual painel (chat/ranking) o jogador tentou abrir, pra abrir sozinho assim que o
+  // responsável autorizar (sem precisar clicar de novo no ícone que disparou o portão).
+  const [showParentalGate, setShowParentalGate] = useState(false)
+  const pendingMultiplayerOpenRef = useRef<(() => void) | null>(null)
   // Vida em Marte (lab-60) — `marsHealthRef` é a fonte de verdade (lida/escrita direto pelo laço
   // de física, sem esperar re-render); `marsHealthDisplay` só espelha esse valor pra desenhar a
   // barra. `onMarsCombatZone` controla se a barra aparece (só faz sentido em Marte, ver
@@ -8254,7 +8261,13 @@ export function World3D({
         }
       })
       const unsubConnection = onConnectionChange((connected) => setMpConnected(connected))
-      connectMultiplayer()
+      // lab-151, G13 (docs/prompts/05-escala-e-viabilidade.md): só conecta (e passa a expor
+      // posição/aparência pra outros jogadores desconhecidos, ver `server-cf-relay/README.md` —
+      // "uma sala global só", não é rede local) se o responsável já autorizou este perfil pelo
+      // portão parental (`ParentalGateModal.tsx`). Sem consentimento, `connectMultiplayer` nunca
+      // roda — `sendState`/`sendChat`/`sendAttack` (mais abaixo) já são no-ops sozinhos quando o
+      // socket nunca chegou a abrir, então nenhum código extra de guarda é preciso lá.
+      if (hasMultiplayerConsent()) connectMultiplayer()
       setMpConnected(isMultiplayerConnected())
 
       // Ranking (lab-20) — bug real reportado pelo usuário: "eu tentei abrir no tablet e os
@@ -10006,12 +10019,38 @@ export function World3D({
     ;(sceneRef.current as any)?.__showLocalChatBubble?.(messageId)
   }
 
+  // lab-151, G13: chat e ranking são os dois únicos pontos de entrada de UI pro multiplayer — se
+  // o responsável ainda não autorizou este perfil, abre o portão em vez do painel; a ação
+  // pretendida (`open`) fica guardada em `pendingMultiplayerOpenRef` e roda sozinha assim que o
+  // portão for resolvido (`handleParentalGateAuthorize` abaixo).
+  function openMultiplayerFeature(open: () => void) {
+    if (hasMultiplayerConsent()) {
+      open()
+      return
+    }
+    pendingMultiplayerOpenRef.current = open
+    setShowParentalGate(true)
+  }
+
+  function handleParentalGateAuthorize() {
+    recordMultiplayerConsent()
+    setShowParentalGate(false)
+    if (!isMultiplayerConnected()) connectMultiplayer()
+    pendingMultiplayerOpenRef.current?.()
+    pendingMultiplayerOpenRef.current = null
+  }
+
+  function handleParentalGateCancel() {
+    setShowParentalGate(false)
+    pendingMultiplayerOpenRef.current = null
+  }
+
   // lab-121: nenhum painel/modal (nem os de App.tsx via `suspendTriggers`, nem os internos deste
   // componente) tirava os botões do HUD da ordem de tabulação enquanto ficavam abertos por cima
   // dele — um usuário de teclado conseguia dar Tab por dentro de um modal visualmente aberto e
   // cair nos botões escondidos atrás. `inert` no HUD inteiro resolve isso numa mudança central,
   // sem precisar de um focus-trap manual em cada um dos 12 painéis.
-  const hudInert = suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen
+  const hudInert = suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
 
   return (
     <div className="world3d-container">
@@ -10028,8 +10067,8 @@ export function World3D({
         onOpenShop={onOpenShop}
         muted={muted}
         onToggleMute={handleToggleMute}
-        onOpenChat={() => setChatOpen(true)}
-        onOpenRanking={() => setRankingOpen(true)}
+        onOpenChat={() => openMultiplayerFeature(() => setChatOpen(true))}
+        onOpenRanking={() => openMultiplayerFeature(() => setRankingOpen(true))}
         showBag={hasSword || hasGun}
         onOpenBag={() => setBagOpen(true)}
         onOpenPairing={onOpenPairing}
@@ -10137,6 +10176,9 @@ export function World3D({
       )}
       {rankingOpen && (
         <RankingPanel entries={rankingEntries} connected={mpConnected} onClose={() => setRankingOpen(false)} />
+      )}
+      {showParentalGate && (
+        <ParentalGateModal onAuthorize={handleParentalGateAuthorize} onCancel={handleParentalGateCancel} />
       )}
     </div>
   )
