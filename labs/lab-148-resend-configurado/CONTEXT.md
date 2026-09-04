@@ -63,4 +63,16 @@ opcionalmente verificar domínio no Resend (ver Pendências acima).
 - Deploy: não se aplica da forma usual — não há código novo pra fazer deploy (o secret já foi
   aplicado direto em produção via `wrangler secret put`, que é imediato, sem precisar de PR/CI). A
   única mudança versionada em git é documentação (`README.md`/`plano-comercial-backend.md`), que
-  ainda assim segue pelo fluxo normal (PR → CI → merge) por consistência com o resto da sessão.
+  ainda assim seguiu pelo fluxo normal (PR #19 → CI → merge, commit `79fe3bb`) por consistência com
+  o resto da sessão — os 3 jobs de CI/CD ficaram verdes.
+- **Confirmação real do próprio usuário**: "recebi o e-mail" — o relatório semanal chegou de
+  verdade na caixa de entrada, não só no log do Worker.
+- **Review automático do Copilot no PR #19** achou 2 problemas reais, corrigidos antes do merge:
+  (1) endereço de e-mail do usuário exposto em texto puro neste `CONTEXT.md` — generalizado pra
+  "conta de teste do usuário"; (2) inline-code Markdown quebrado por uma quebra de linha em
+  `labs/CURRENT.md`. **Discutido com o usuário**: o e-mail também já existia em alguns commits bem
+  mais antigos (labs 78/100, de antes desta sessão) — como o repositório é PÚBLICO, perguntei se
+  ele queria que eu reescrevesse o histórico do git pra remover (via `git filter-repo`/BFG +
+  force-push). Ele preferiu deixar como está (é o próprio e-mail dele, reescrever histórico é uma
+  operação arriscada — quebra qualquer clone/fork existente — sem ganho real de privacidade já que
+  a exposição é anterior a esta sessão). Os arquivos ATUAIS já não repetem o problema.
