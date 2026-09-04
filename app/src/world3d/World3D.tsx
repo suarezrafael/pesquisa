@@ -747,9 +747,11 @@ function terrainHeight(dir: Vector3): number {
 // lab-95 (bug real relatado pelo usuário ao vivo, DEPOIS do lab-95 já ter revertido o encolhimento
 // de escolinha: "TODAS AS CASA ESTÃO DENTRO DA TERRA, ATE OS NPC ESTÃO ENTERRADO... AS CASINHAS SO
 // APARECEM O TELHADO"). Causa raiz de verdade (não é o tamanho da escolinha, que já tinha voltado
-// ao normal quando o bug persistiu): `PLATEAU_CENTERS` tem rampas de até 3,2 unidades de altura
-// numa borda com `smoothstep` — a inclinação máxima da rampa passa de 0,8 unidade de altura por
-// METRO percorrido. Uma escolinha (~1,3m de "raio" contando o beiral do telhado e a posição do
+// ao normal quando o bug persistiu): `PLATEAU_CENTERS` tinha, na época, rampas de até 3,2 unidades
+// de altura numa borda com `smoothstep` — inclinação máxima da rampa passando de 0,8 unidade de
+// altura por METRO percorrido (lab-151 reduziu as alturas pra trazer isso pra ~0,64-0,67; os
+// números abaixo descrevem o raciocínio geométrico, não os valores atuais de `PLATEAU_CENTERS`).
+// Uma escolinha (~1,3m de "raio" contando o beiral do telhado e a posição do
 // professor) que caia bem na rampa de um platô vê cantos com quase 2 unidades de diferença de
 // altura entre si. `settleMeshOnTerrain` (mais abaixo) desce o prédico inteiro até o canto MENOS
 // alto encostar no chão — o que enterra todos os outros cantos na mesma proporção da inclinação
@@ -3623,9 +3625,10 @@ export function World3D({
       planetMat.roughness = 0.97
       planetMat.metallic = 0
       // lab-95 (pedido do usuário: "os morros estão invisíveis... as casas que estão sobre o
-      // morro aparecem flutuando no espaço") — causa raiz: as rampas de `PLATEAU_CENTERS` erguem
-      // o relevo até 3,2 unidades numa malha de só 48 segmentos (~1,7m por segmento); nas rampas
-      // mais íngremes, o deslocamento radial por vértice dobra alguns triângulos sobre si mesmos
+      // morro aparecem flutuando no espaço") — causa raiz: as rampas de `PLATEAU_CENTERS` erguiam
+      // o relevo (alturas reduzidas desde o lab-151 — ver comentário acima da declaração do array)
+      // numa malha de só 48 segmentos (~1,7m por segmento); nas rampas mais íngremes, o
+      // deslocamento radial por vértice dobra alguns triângulos sobre si mesmos
       // o bastante pra inverter a ordem de enrolamento (winding) deles em relação ao restante da
       // esfera — com culling de face traseira ligado (padrão do `PBRMaterial`), esses triângulos
       // ficam invisíveis de fora, mesmo com a colisão física continuando correta (por isso a casa,
