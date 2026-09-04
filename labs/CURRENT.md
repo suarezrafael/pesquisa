@@ -5,8 +5,8 @@ API key (escopo restrito a só enviar); configurada via `wrangler secret put RES
 produção + `.dev.vars` local. Nenhum código novo — o mecanismo (`sendWeeklyProgressEmails`, Cron
 semanal) já existia desde o lab-119, só faltava o secret. **Testado ao vivo com envio real**: antes
 de disparar, consulta read-only confirmou que só 1 família é elegível hoje (a própria conta de
-teste do usuário) — só então o cron foi disparado de verdade (`wrangler dev` + `/cdn-cgi/local/
-scheduled`), log do Worker confirmou `1 enviado(s), 0 falha(s)`. Remetente ainda é o sandbox do
+teste do usuário) — só então o cron foi disparado de verdade (`wrangler dev` +
+`/cdn-cgi/local/scheduled`), log do Worker confirmou `1 enviado(s), 0 falha(s)`. Remetente ainda é o sandbox do
 Resend (`onboarding@resend.dev`) — só entrega pro e-mail da própria conta Resend até um domínio
 próprio ser verificado (próximo passo opcional, exige registros DNS — mesma categoria de mudança
 de G15, não feito sem confirmar). Ver `labs/lab-148-.../CONTEXT.md`.
