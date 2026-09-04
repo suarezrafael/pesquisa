@@ -1,6 +1,20 @@
 # Laboratório atual
 
-Último concluído: labs/lab-150-copilot-review-followup-2-8/ — pedido do usuário: "verifique o
+Último concluído: labs/lab-151-morros-invisiveis-triangulo-degenerado/ — retomada (3ª vez) do bug
+de morros/platôs invisíveis. Usuário confirmou que o bug ainda ocorre no mesmo aparelho (Android/
+Chrome) mesmo depois das duas correções do lab-124, e que continua sólido (só renderização).
+**Medição ao vivo refutou a hipótese principal**: 0 triângulos com área ~0 em 3954 checados perto
+dos platôs — "triângulo genuinamente degenerado" não é a causa. Usuário pediu pra tentar mesmo
+assim uma mudança especulativa: `PLATEAU_CENTERS` teve a `height` reduzida (radius/posição
+intactos) em todos os 12 platôs, trazendo a inclinação máxima de cada rampa de ~0,73-0,87 (perto/
+acima do limiar de 0,8 já flagado desde o lab-95) pra ~0,64-0,67 — sem confirmação prévia de que
+resolve. Verificado sem regressão: `ENTERRADAS` do HUD idêntico antes/depois, `tsc -b`/testes
+limpos (101/101), teleporte real pro topo do platô mais alto sem artefato visual. **Ainda sem
+confirmação do usuário no aparelho real** — se persistir, próximo passo já registrado é pedir
+print + escolinha/platô mais próximo antes de tentar de novo, não adivinhar uma 4ª vez. Ver
+`labs/lab-151-morros-invisiveis-triangulo-degenerado/CONTEXT.md`.
+
+Antes desse: labs/lab-150-copilot-review-followup-2-8/ — pedido do usuário: "verifique o
 backlog se tem algum bug para corrigir". Checados os PRs mais antigos ainda não lidos (2-8, de
 antes desta sessão) — a maioria sem achado real, 3 corrigidos: **`useModalA11y` com closure stale**
 (Esc podia chamar uma versão antiga de `onClose` — hook usado por praticamente todo modal do jogo,

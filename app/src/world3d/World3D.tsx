@@ -313,19 +313,32 @@ function positionOnLoopPath(
 // montanhas anteriores, lagoa, piscina, deserto, os 4 parkours, lojinha, torre, as 21 escolas) —
 // cada uma escolhida como o ponto de MAIOR folga restante depois de já contar as anteriores,
 // então elas não se amontoam nem colidem com nada existente (folga mínima de 18,6°).
+// lab-151 — alturas reduzidas (mantendo `radius`/posição intactos, pra não arriscar sobrepor
+// nenhum marco vizinho já posicionado com folga medida) na retomada (3ª vez) do bug "morros/
+// platôs invisíveis em certos ângulos" (lab-95/lab-124). As duas correções do lab-124
+// (`twoSidedLighting`, normal degenerada) atacavam consequências de iluminação/normal; medição ao
+// vivo neste laboratório (triângulos com área real ~0 perto de cada platô) deu 0/3954 — descarta
+// "triângulo genuinamente dobrado" como causa. Hipótese revisada: mesmo sem área 3D degenerada, a
+// malha grossa (~1,7m/segmento) faz a rampa mais íngreme virar um triângulo bem FINO em TELA numa
+// visão quase de perfil ("certos ângulos") — inconsistência de rasterização entre GPUs pra
+// polígonos quase de canto é documentada. Alturas ajustadas pra trazer a inclinação máxima de cada
+// rampa (fórmula: 1,5 × altura ÷ (raio_angular × PLANET_RADIUS), pico da derivada do smoothstep)
+// de ~0,73-0,87 (todas acima ou perto do limiar de 0,8 já flagado como "demais" desde o lab-95)
+// pra ~0,64-0,67 — sem confirmação do usuário no aparelho real ainda (ele pediu pra tentar mesmo
+// assim, sabendo do risco). Ver `labs/lab-151-.../CONTEXT.md`.
 const PLATEAU_CENTERS = [
-  { dir: new Vector3(0.75, 0.6, -0.2).normalize(), radius: 0.46, height: 3.2 },
-  { dir: new Vector3(-0.5, 0.55, 0.62).normalize(), radius: 0.41, height: 2.6 },
-  { dir: new Vector3(0.15, 0.3, -0.9).normalize(), radius: 0.38, height: 2.8 },
-  { dir: new Vector3(-0.8, 0.25, -0.45).normalize(), radius: 0.35, height: 2.2 },
-  { dir: new Vector3(-0.21, 0.5, 0.84).normalize(), radius: 0.32, height: 2.4 },
-  { dir: new Vector3(-0.25, 0.65, -0.7).normalize(), radius: 0.3, height: 2.0 },
-  { dir: new Vector3(0.55, 0.15, 0.75).normalize(), radius: 0.34, height: 2.3 },
-  { dir: new Vector3(-0.7, 0.5, 0.1).normalize(), radius: 0.28, height: 1.8 },
-  { dir: new Vector3(0.3957395681006683, -0.7660444431189779, 0.5065235487181534).normalize(), radius: 0.3, height: 2.0 },
-  { dir: new Vector3(-0.3257732493748943, -0.6691306063588582, -0.6679341446771153).normalize(), radius: 0.28, height: 1.9 },
-  { dir: new Vector3(-0.9338776729355676, -0.3255681544571564, -0.14791169255948008).normalize(), radius: 0.28, height: 2.1 },
-  { dir: new Vector3(0.5093910906471965, -0.27563735581699905, -0.8151961511485887).normalize(), radius: 0.26, height: 1.8 },
+  { dir: new Vector3(0.75, 0.6, -0.2).normalize(), radius: 0.46, height: 2.6 },
+  { dir: new Vector3(-0.5, 0.55, 0.62).normalize(), radius: 0.41, height: 2.3 },
+  { dir: new Vector3(0.15, 0.3, -0.9).normalize(), radius: 0.38, height: 2.1 },
+  { dir: new Vector3(-0.8, 0.25, -0.45).normalize(), radius: 0.35, height: 2.0 },
+  { dir: new Vector3(-0.21, 0.5, 0.84).normalize(), radius: 0.32, height: 1.8 },
+  { dir: new Vector3(-0.25, 0.65, -0.7).normalize(), radius: 0.3, height: 1.7 },
+  { dir: new Vector3(0.55, 0.15, 0.75).normalize(), radius: 0.34, height: 1.9 },
+  { dir: new Vector3(-0.7, 0.5, 0.1).normalize(), radius: 0.28, height: 1.6 },
+  { dir: new Vector3(0.3957395681006683, -0.7660444431189779, 0.5065235487181534).normalize(), radius: 0.3, height: 1.7 },
+  { dir: new Vector3(-0.3257732493748943, -0.6691306063588582, -0.6679341446771153).normalize(), radius: 0.28, height: 1.6 },
+  { dir: new Vector3(-0.9338776729355676, -0.3255681544571564, -0.14791169255948008).normalize(), radius: 0.28, height: 1.6 },
+  { dir: new Vector3(0.5093910906471965, -0.27563735581699905, -0.8151961511485887).normalize(), radius: 0.26, height: 1.5 },
 ]
 
 // Centro da lagoa e da piscina — a mesma direção usada pra desenhar a água (World3D usa esses
