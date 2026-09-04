@@ -43,6 +43,9 @@ function tutorialSeenKey(id: string): string {
 function lastPlayedKey(id: string): string {
   return `jogo-educativo:lastPlayedAt:${id}`
 }
+function multiplayerConsentKey(id: string): string {
+  return `jogo-educativo:multiplayerConsentAt:${id}`
+}
 
 function loadRoster(): ProfileRosterEntry[] {
   const raw = localStorage.getItem(PROFILE_LIST_KEY)
@@ -260,6 +263,26 @@ export function loadLastPlayedAt(): string | null {
   const id = getActiveProfileId()
   if (!id) return null
   return localStorage.getItem(lastPlayedKey(id))
+}
+
+// lab-151, G13 (docs/prompts/05-escala-e-viabilidade.md): consentimento parental pro multiplayer
+// — a única parte de G13 que o lab-144 tinha deixado de fora. Por PERFIL (não por aparelho, ver
+// `DEVICE_ID_KEY` acima) porque cada criança que usa este aparelho (lab-108, irmãos/perfis
+// múltiplos) precisa do próprio consentimento — o responsável autoriza um perfil de cada vez, não
+// o aparelho inteiro de uma vez. Concedido só depois do portão parental (`ParentalGateModal.tsx`)
+// ser resolvido; `World3D.tsx` só chama `connectMultiplayer()` (e passa a expor posição/aparência
+// pra outros jogadores desconhecidos, ver `app/server-cf-relay/README.md` — "uma sala global só")
+// quando isto é `true`.
+export function hasMultiplayerConsent(): boolean {
+  const id = getActiveProfileId()
+  if (!id) return false
+  return localStorage.getItem(multiplayerConsentKey(id)) !== null
+}
+
+export function recordMultiplayerConsent(nowIso: string = new Date().toISOString()): void {
+  const id = getActiveProfileId()
+  if (!id) return
+  localStorage.setItem(multiplayerConsentKey(id), nowIso)
 }
 
 // lab-99, resto de G11 (prompt.md §12: D1/D7 retention, tempo médio por sessão, quests

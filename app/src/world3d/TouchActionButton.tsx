@@ -6,9 +6,14 @@ interface TouchActionButtonProps {
   // botões do tipo "segurar" precisam).
   onPress: () => void
   onRelease?: () => void
+  // lab-152 (achado do review automático do Copilot no PR do portão parental): estes botões
+  // ficam FORA do container que `World3D.tsx` marca `inert` quando um modal abre (`hudInert`) —
+  // sem repassar `inert` até aqui, um toque neles continuava movendo/pulando o personagem por
+  // baixo de qualquer modal aberto, inclusive o portão parental.
+  inert?: boolean
 }
 
-export function TouchActionButton({ className, label, onPress, onRelease }: TouchActionButtonProps) {
+export function TouchActionButton({ className, label, onPress, onRelease, inert }: TouchActionButtonProps) {
   function handlePointerDown(e: React.PointerEvent) {
     e.currentTarget.setPointerCapture(e.pointerId)
     onPress()
@@ -49,6 +54,7 @@ export function TouchActionButton({ className, label, onPress, onRelease }: Touc
       onPointerCancel={handlePointerUp}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
+      inert={inert}
     >
       {label}
     </button>

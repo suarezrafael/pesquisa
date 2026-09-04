@@ -102,7 +102,7 @@ function PoliticaDePrivacidade() {
   return (
     <>
       <h1>Política de Privacidade</h1>
-      <p className="legal-updated">Última atualização: 3 de setembro de 2026.</p>
+      <p className="legal-updated">Última atualização: 4 de setembro de 2026.</p>
 
       <p>
         Esta política explica quais dados a Missão Aprender coleta, de quem, e por quê. Seguimos
@@ -124,7 +124,9 @@ function PoliticaDePrivacidade() {
         (<code>localStorage</code>), nunca em um servidor associado a uma identidade. Quando a
         criança joga em modo multiplayer, o apelido e a posição no jogo são transmitidos
         momentaneamente para os outros jogadores conectados, sem ficar salvos em lugar nenhum
-        depois que a sessão termina.
+        depois que a sessão termina. Antes da primeira conexão ao multiplayer, o jogo exige que o
+        responsável resolva uma conta simples (portão parental) pra confirmar que está de acordo —
+        a criança não consegue passar por esse portão sozinha.
       </p>
       <p>
         Não existe chat de texto livre — só mensagens pré-definidas de uma lista fechada — então
