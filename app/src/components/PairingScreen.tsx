@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useModalA11y } from '../state/useModalA11y'
 import { getLevel } from '../state/progression'
 import type { Profile, Progress } from '../types'
@@ -40,12 +40,25 @@ export function PairingScreen({
   const [checkingBackup, setCheckingBackup] = useState(false)
   const modalRef = useModalA11y(onClose)
 
+  // lab-149 (achado do review automático do Copilot no PR #13): `handleSubmit` faz dois `await`
+  // seguidos (`onRedeem`/`onFetchBackup`) — se o modal for fechado (× ou Esc, via `useModalA11y`)
+  // enquanto uma dessas chamadas ainda está em voo, os `setState` de depois disparariam num
+  // componente já desmontado (warning do React, risco de leak). `mountedRef` é checado antes de
+  // cada `setState` que vem depois de um `await`.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const token = await onRedeem(code)
-    if (!token) return
+    if (!token || !mountedRef.current) return
     setCheckingBackup(true)
     const backup = await onFetchBackup(token)
+    if (!mountedRef.current) return
     setCheckingBackup(false)
     if (backup) {
       setBackupOffer(backup)

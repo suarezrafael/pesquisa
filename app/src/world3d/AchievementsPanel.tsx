@@ -14,12 +14,15 @@ interface AchievementsPanelProps {
 
 export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps) {
   const modalRef = useModalA11y(onClose)
+  // lab-149 (achado do review automático do Copilot no PR #12): o modal ganhou a seção de
+  // cartões-postais (lab-141) mas o `aria-label` abaixo continuava descrevendo só conquistas —
+  // nome acessível impreciso pra quem usa leitor de tela.
   return (
     <div
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Catálogo de conquistas"
+      aria-label="Catálogo de conquistas e cartões-postais"
       ref={modalRef}
       tabIndex={-1}
     >

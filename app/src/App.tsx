@@ -148,8 +148,12 @@ function GameApp() {
   useEffect(() => {
     if (profile) {
       const previousLastPlayedAt = loadLastPlayedAt()
-      touchLastPlayed()
-      const result = claimDailyLogin(previousLastPlayedAt, new Date().toISOString())
+      // lab-149 (achado do Copilot, PR #9): uma leitura de relógio só, reaproveitada pelos dois
+      // lados — antes eram duas chamadas independentes de `new Date()` que podiam cair em dias
+      // UTC diferentes bem na virada da meia-noite.
+      const nowIso = new Date().toISOString()
+      touchLastPlayed(nowIso)
+      const result = claimDailyLogin(previousLastPlayedAt, nowIso)
       if (result.granted) setDailyLoginReward({ streak: result.streak, coins: result.coins })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,9 +309,16 @@ function GameApp() {
   // sabem editar UM campo por vez, nunca substituir o objeto inteiro) e recarrega a página —
   // mesmo padrão de `switchActiveProfile` (troca de perfil) logo abaixo, que também prefere um
   // reload de verdade a tentar sincronizar manualmente todo o estado do React.
+  // lab-149 (achado do review automático do Copilot no PR #13): `/progress-backup` só valida
+  // ESTRUTURALMENTE (profile/progress são objetos de verdade, não campo a campo — decisão de
+  // propósito, ver lab-142/`isValidProgressBackupPayload`). Um backup de uma versão mais antiga do
+  // jogo (sem um campo que só passou a existir depois) chegaria aqui faltando esse campo — gravar
+  // DIRETO por cima quebraria o jogo depois do reload (`name`/`avatarEmoji` etc. virando
+  // `undefined`). Mescla por cima do que já está no aparelho (não um objeto em branco) — campo
+  // ausente no backup mantém o valor local atual em vez de virar `undefined`.
   function handleRestoreBackup(restoredProfile: Profile, restoredProgress: Progress) {
-    saveProfile(restoredProfile)
-    saveProgress(restoredProgress)
+    if (profile) saveProfile({ ...profile, ...restoredProfile })
+    saveProgress({ ...progress, ...restoredProgress })
     window.location.reload()
   }
 

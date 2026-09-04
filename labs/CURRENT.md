@@ -1,6 +1,23 @@
 # Laboratório atual
 
-Último concluído: labs/lab-148-resend-configurado/ — usuário criou conta no Resend e forneceu a
+Último concluído: labs/lab-149-copilot-review-followup-9-13/ — continuação do lab-147: os PRs 9-13
+(labs 138-142), mergeados nesta sessão ANTES da prática de ler o review do Copilot ser
+estabelecida, tinham "Changes recommended" nunca lido. Achados reais corrigidos: **duplo-crédito no
+login diário** (duas leituras de relógio independentes podiam cair em dias UTC diferentes na
+virada da meia-noite; PR9) e **farm de moeda ajustando o relógio pra trás** (`dayGap` negativo
+concedia recompensa; PR9); **câmera "solta"** ao sair de casa em meio a um arraste (PR10); **brilho
+apagado pra sempre** em mobília com emissive por design, tipo luminária (PR11); **4 achados
+cosméticos/acessibilidade** (aria-label, Markdown quebrado; PR12); **payload de restauração não
+normalizado** (podia quebrar o jogo se o backup for de uma versão antiga; PR13) e **`setState` após
+desmontar** no modal de pareamento (PR13). **Avaliado e mantido**: zoom durante posicionamento de
+mobília (PR10) — o comentário do código já documenta que isso é intencional, com citação real do
+usuário; o achado do Copilot leu mal a intenção. **Documentado, não corrigido**: backup por família
+sobrescreve entre irmãos com perfis diferentes no mesmo aparelho (PR13) — exige mudança de schema +
+desenho de UX, decisão de produto fora do escopo deste laboratório (`docs/plano-comercial-
+backend.md`). `npx tsc -b`/testes limpos, 100/100 (1 novo). Ver
+`labs/lab-149-copilot-review-followup-9-13/CONTEXT.md`.
+
+Antes desse: labs/lab-148-resend-configurado/ — usuário criou conta no Resend e forneceu a
 API key (escopo restrito a só enviar); configurada via `wrangler secret put RESEND_API_KEY` em
 produção + `.dev.vars` local. Nenhum código novo — o mecanismo (`sendWeeklyProgressEmails`, Cron
 semanal) já existia desde o lab-119, só faltava o secret. **Testado ao vivo com envio real**: antes
@@ -130,8 +147,8 @@ Antes desse: labs/lab-141-cartao-postal-colecionavel/ — item do backlog de eng
 lista do login diário, lab-138) puxado de forma AUTÔNOMA nesta sessão: verificação ao vivo do
 lab-140 seguia bloqueada (aba de automação sem foco do sistema operacional) e não havia pedido novo
 do usuário no momento. `data/postcards.ts` novo (7 cartões, um por planeta-destino) +
-`applyPostcardCollected` (`progression.ts`, idempotente, sem moeda/XP) + `Progress.
-collectedPostcardIds` novo — concedido automaticamente ao pousar de verdade num planeta
+`applyPostcardCollected` (`progression.ts`, idempotente, sem moeda/XP) +
+`Progress.collectedPostcardIds` novo — concedido automaticamente ao pousar de verdade num planeta
 (`landRocket`, `World3D.tsx`), aviso transitório só na primeira vez. Galeria nova dentro do
 `AchievementsPanel.tsx` já existente (sem ícone novo no HUD) — cartão não coletado mostra "???".
 `npm run test`: 99/99 (4 testes novos). `npm run build` sem erros. **Não verificado ao vivo** —

@@ -2284,7 +2284,14 @@ export function World3D({
       houseCameraLastPointerY = e.clientY
     }
     function onHouseCameraPointerMove(e: PointerEvent) {
-      if (!houseCameraDragging) return
+      // lab-149 (achado do review automático do Copilot): antes só checava `houseCameraDragging`
+      // — se o jogador começasse a arrastar dentro de casa e saísse (`exitHouseInterior`) ANTES de
+      // soltar o botão, este handler continuava alterando yaw/pitch fora de casa (o `pointerup`
+      // está no `window`, então o arraste "solto" só termina de verdade ao soltar o botão, não ao
+      // sair da casa). `exitHouseInterior` também zera `houseCameraDragging` agora (defesa em
+      // profundidade), mas a checagem aqui garante o comportamento certo mesmo se algum caminho
+      // novo de saída de casa esquecer de zerar a flag.
+      if (!houseCameraDragging || !insideHouseInterior) return
       const dx = e.clientX - houseCameraLastPointerX
       const dy = e.clientY - houseCameraLastPointerY
       houseCameraLastPointerX = e.clientX
@@ -6953,6 +6960,11 @@ export function World3D({
         // restaura a posição anterior, mesmo efeito de apertar "Cancelar".
         cancelFurniturePlacement()
         insideHouseInterior = false
+        // lab-149 (achado do Copilot): se o jogador estava arrastando a câmera livre bem na hora
+        // de sair de casa, o arraste ficaria "solto" (o `pointerup` só chega quando o botão do
+        // mouse é solto, não quando a casa é deixada) — zera aqui também, além da checagem em
+        // `onHouseCameraPointerMove`.
+        houseCameraDragging = false
         currentWorldCenter = savedOutsideCenter
         currentGroundBaseFn = savedOutsideGroundFn
         teleportAvatarTo(savedOutsideCenter, offsetLandingUp(houseUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
@@ -6974,11 +6986,25 @@ export function World3D({
       }
 
       // Realce vermelho na peça fantasma quando a posição atual esbarra em outro obstáculo
-      // (lab-140) — `emissiveColor` some (`Color3.Black()`) assim que a posição volta a ser
-      // válida, sem precisar guardar a cor original de cada malha pra restaurar depois.
+      // (lab-140). lab-149 (achado do review automático do Copilot): a versão original forçava
+      // `emissiveColor = Color3.Black()` quando a posição voltava a ser válida, assumindo que toda
+      // peça começa sem emissive — falso pra peças que usam emissive por design (ex.: o bulbo da
+      // luminária, ver `roofMat.emissiveColor` mais abaixo neste arquivo). Isso apagava o brilho
+      // original PRA SEMPRE assim que o jogador confirmava/cancelava um posicionamento, mesmo fora
+      // do modo de posicionamento. Corrigido guardando a cor emissive original de cada material na
+      // PRIMEIRA vez que ele é tingido (`WeakMap`, não precisa limpar — o material em si já
+      // controla o ciclo de vida) e restaurando ela (não `Color3.Black()`) quando `valid = true`.
+      const originalEmissiveByMaterial = new WeakMap<PBRMaterial, Color3>()
       function setFurniturePieceValidTint(piece: TransformNode, valid: boolean) {
         for (const mesh of piece.getChildMeshes()) {
-          if (mesh.material) (mesh.material as PBRMaterial).emissiveColor = valid ? Color3.Black() : new Color3(0.9, 0.1, 0.1)
+          if (!mesh.material) continue
+          const material = mesh.material as PBRMaterial
+          if (!originalEmissiveByMaterial.has(material)) {
+            originalEmissiveByMaterial.set(material, material.emissiveColor.clone())
+          }
+          material.emissiveColor = valid
+            ? (originalEmissiveByMaterial.get(material) as Color3)
+            : new Color3(0.9, 0.1, 0.1)
         }
       }
 

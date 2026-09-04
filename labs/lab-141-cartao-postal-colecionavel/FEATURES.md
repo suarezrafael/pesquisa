@@ -7,8 +7,8 @@ Commit inicial: fb0b9b87c4bfc35c2ea72958c26d1120d6a19910
 
 ## Objetivo do laboratório
 
-Item do "backlog de engajamento" discutido em chat (mesma lista de onde saiu o login diário, lab-
-138) — nunca escolhido antes. Escolhido de forma autônoma nesta sessão: verificação ao vivo do
+Item do "backlog de engajamento" discutido em chat (mesma lista de onde saiu o login diário,
+lab-138) — nunca escolhido antes. Escolhido de forma autônoma nesta sessão: verificação ao vivo do
 lab-140 seguia bloqueada (aba de automação sem foco do sistema operacional) e não havia pedido novo
 do usuário no momento, então este item conhecido do backlog foi puxado em vez de ficar ocioso.
 

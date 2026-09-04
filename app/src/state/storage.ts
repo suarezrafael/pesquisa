@@ -243,10 +243,17 @@ export function markTutorialSeen(): void {
 // fazendo no jogo) — só um carimbo de "quando foi a última vez que o jogo abriu com um perfil já
 // criado", pra alimentar o painel de progresso do `/familia`. Não é telemetria de sessão nem
 // rastreamento de tempo jogado — um valor só, sobrescrito a cada abertura.
-export function touchLastPlayed(): void {
+// lab-149 (achado do review automático do Copilot no PR #9): aceita um `nowIso` opcional em vez
+// de sempre ler `new Date()` internamente — sem isso, `App.tsx` fazia DUAS leituras de relógio
+// independentes (uma aqui, outra pra `claimDailyLogin`) que podiam cair em dias UTC diferentes se
+// o app abrisse bem na virada da meia-noite, permitindo reivindicar a recompensa do "dia
+// seguinte" enquanto `lastPlayedAt` ficava salvo com o dia anterior — reabrir no mesmo dia real
+// reivindicava de novo. Passando o MESMO `nowIso` pros dois lados, a leitura de relógio vira uma
+// só por sessão.
+export function touchLastPlayed(nowIso: string = new Date().toISOString()): void {
   const id = getActiveProfileId()
   if (!id) return
-  localStorage.setItem(lastPlayedKey(id), new Date().toISOString())
+  localStorage.setItem(lastPlayedKey(id), nowIso)
 }
 
 export function loadLastPlayedAt(): string | null {
