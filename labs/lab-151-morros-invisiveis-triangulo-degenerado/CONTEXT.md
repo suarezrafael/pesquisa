@@ -88,3 +88,9 @@ Sem prioridade única — depende do resultado do teste do usuário em produçã
 - Como verificar de novo: `cd app && npm run dev`, andar/teleportar pelos platôs (ver
   `PLATEAU_CENTERS` em `World3D.tsx`) observando ângulos variados. Confirmação definitiva do bug
   relatado depende do usuário testar em produção no mesmo aparelho Android/Chrome de sempre.
+- **Copilot review no PR #22**: achou 1 achado real — comentários históricos do lab-95 (linhas
+  ~750 e ~3628) citavam os valores antigos de altura/inclinação dos platôs, ficando inconsistentes
+  com o código depois da redução de altura deste laboratório. Corrigido (commit `b8a235d`) antes de
+  mergear.
+- **Deploy**: PR #22 mergeado em `main` (commit `cfdc3ca`), os 3 jobs de CI/CD verdes, app ao vivo
+  (`https://app-two-flax-92.vercel.app`) respondendo `200` pós-deploy.
