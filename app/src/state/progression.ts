@@ -72,6 +72,13 @@ export interface CompletionResult {
   // estes campos.
   planetClearBonusXp?: number
   planetClearBonusCoins?: number
+  // lab-150 (achado do review automático do Copilot no PR #2, nunca lido antes desta sessão): o
+  // evento semanal usado pra calcular `awardedXp`/`awardedCoins` acima — devolvido aqui pra UI
+  // (`RewardToast`) nunca precisar chamar `getCurrentWeeklyEvent()` de novo por conta própria. Sem
+  // isso, se a semana virasse (ou o relógio do aparelho mudasse) entre o cálculo aqui e a
+  // renderização do toast, a linha "Bônus de X aplicado!" podia mostrar um evento diferente do que
+  // realmente foi usado pra calcular os números acima.
+  event: WeeklyEvent
 }
 
 // Combo de respostas certas seguidas (lab-132, pedido do usuário: "combo de respostas certas
@@ -116,6 +123,7 @@ export function applyQuestCompletion(
       awardedCoins: 0,
       currentStreak: progress.currentStreak,
       streakBonusCoins: 0,
+      event,
     }
   }
   const awardedXp = Math.round(quest.xpReward * event.xpMultiplier)
@@ -138,7 +146,7 @@ export function applyQuestCompletion(
     badges,
     currentStreak,
   }
-  return { progress: next, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins }
+  return { progress: next, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event }
 }
 
 // Bônus por limpar um planeta inteiro (lab-133, pedido do usuário: backlog de engajamento) —
@@ -172,6 +180,7 @@ export function applyPlanetQuestCompletion(
       awardedCoins: 0,
       currentStreak: progress.currentStreak,
       streakBonusCoins: 0,
+      event,
     }
   }
   const awardedXp = Math.round(quest.xpReward * event.xpMultiplier)
@@ -217,6 +226,7 @@ export function applyPlanetQuestCompletion(
     streakBonusCoins,
     planetClearBonusXp,
     planetClearBonusCoins,
+    event,
   }
 }
 
@@ -230,6 +240,15 @@ export function isQuestUnlocked(progress: Progress, questIndex: number): boolean
 // individualmente (reaparecem a cada sessão), só a moeda ganha soma no total mesmo.
 export function applyCoinCollected(progress: Progress): Progress {
   return { ...progress, coins: progress.coins + 1 }
+}
+
+// lab-150 (achado do review automático do Copilot no PR #2, nunca lido antes desta sessão): o
+// quiz surpresa premiava várias moedas de uma vez chamando `collectCoin()` (que grava no
+// `localStorage` a CADA chamada, ver `useProgress.ts`) num loop — 8-10 escritas síncronas em
+// sequência por um evento só, trabalho redundante que podia causar stutter. Uma função em lote,
+// uma escrita só.
+export function applyCoinsCollected(progress: Progress, count: number): Progress {
+  return { ...progress, coins: progress.coins + count }
 }
 
 // Troca moedas por um novo avatar na loja. Não faz nada (retorna o mesmo progress) se o avatar

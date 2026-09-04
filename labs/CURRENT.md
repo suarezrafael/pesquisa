@@ -1,6 +1,18 @@
 # Laboratório atual
 
-Último concluído: labs/lab-149-copilot-review-followup-9-13/ — continuação do lab-147: os PRs 9-13
+Último concluído: labs/lab-150-copilot-review-followup-2-8/ — pedido do usuário: "verifique o
+backlog se tem algum bug para corrigir". Checados os PRs mais antigos ainda não lidos (2-8, de
+antes desta sessão) — a maioria sem achado real, 3 corrigidos: **`useModalA11y` com closure stale**
+(Esc podia chamar uma versão antiga de `onClose` — hook usado por praticamente todo modal do jogo,
+impacto amplo), **`TouchActionButton` era um `<div>` clicável** (sem semântica de botão pra leitor
+de tela, trocado por `<button>`), **`RewardToast` recalculava o evento semanal sozinho** em vez de
+usar o mesmo evento já usado pra calcular a recompensa (`CompletionResult` ganhou o campo `event`).
+Também corrigido de passagem: `handleSurpriseQuizCorrect` fazia N escritas no `localStorage` num
+loop (`collectCoin()` repetido) — nova função em lote. Com isso, TODOS os PRs desta sessão (2-20)
+já tiveram seu review do Copilot lido e resolvido. `npx tsc -b`/testes limpos, 101/101 (sem teste
+novo). Ver `labs/lab-150-copilot-review-followup-2-8/CONTEXT.md`.
+
+Antes desse: labs/lab-149-copilot-review-followup-9-13/ — continuação do lab-147: os PRs 9-13
 (labs 138-142), mergeados nesta sessão ANTES da prática de ler o review do Copilot ser
 estabelecida, tinham "Changes recommended" nunca lido. Achados reais corrigidos: **duplo-crédito no
 login diário** (duas leituras de relógio independentes podiam cair em dias UTC diferentes na
@@ -221,10 +233,11 @@ pelo usuário na mesma sessão, achado e corrigido junto.
    passando `entitlementActive` como prop nova pra `World3D`, aplicada em
    `refreshHouseFurnitureVisuals` com a mesma regra do painel.
 
-**Pendência nova, ainda não investigada**: usuário reportou avatar deformado na lojinha ao
-equipar óculos — tentativa de reprodução ao vivo em produção (compra + equipagem real de "Óculos
-de Sol" na conta real do usuário) não reproduziu, sem erro de console. Precisa de mais informação
-(aparelho, óculos exato, se recarregar resolve) antes de investigar mais fundo.
+**Atualização — resolvido**: o reporte acima ("avatar deformado na lojinha ao equipar óculos") era
+sobre os "Óculos de Realidade Virtual", não os "Óculos de Sol" testados aqui (por isso a primeira
+tentativa não reproduziu) — detalhes corretos coletados numa sessão bem mais tarde, causa raiz
+achada e corrigida no lab-146/147/149 (a "correia" do item era um disco maior que a própria
+cabeça). Ver `labs/lab-146-conserta-oculos-rv-deformado/CONTEXT.md`.
 
 **Pedidos do usuário pro próximo laboratório** (câmera dentro de casa: girar pra cima/baixo +
 zoom + olhar de um lado pro outro arrastando o mouse; comprar mais de uma unidade do mesmo móvel,

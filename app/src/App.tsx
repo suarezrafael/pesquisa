@@ -31,6 +31,7 @@ import {
 } from './state/storage'
 import type { Profile, Progress, Quest } from './types'
 import type { FurnitureOption } from './data/furniture'
+import type { WeeklyEvent } from './data/weeklyEvents'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
@@ -87,6 +88,7 @@ function GameApp() {
     completeQuest,
     completePlanetQuest,
     collectCoin,
+    collectCoins,
     unlockAvatar,
     unlockHat,
     unlockShirtColor,
@@ -116,6 +118,9 @@ function GameApp() {
     streakBonusCoins: number
     planetClearBonusXp?: number
     planetClearBonusCoins?: number
+    // lab-150 (achado do Copilot, PR #2): evento semanal capturado no MOMENTO do cálculo da
+    // recompensa (`CompletionResult.event`), não recalculado de novo na hora de mostrar o toast.
+    event: WeeklyEvent
   } | null>(null)
   const [preProfileScreen, setPreProfileScreen] = useState<PreProfileScreen>('title')
   const [tutorialSeen, setTutorialSeen] = useState(hasTutorialBeenSeen)
@@ -219,11 +224,11 @@ function GameApp() {
     if (!activeQuest) return
     // lab-126: bônus de moeda de assinante (`progression.ts`) — `entitlement?.active` já existe
     // aqui via `useEntitlement()`, só precisa ser repassado.
-    const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins } = completeQuest(
+    const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event } = completeQuest(
       activeQuest,
       entitlement?.active,
     )
-    setReward({ quest: activeQuest, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins })
+    setReward({ quest: activeQuest, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event })
     setActiveQuest(null)
   }
 
@@ -241,12 +246,15 @@ function GameApp() {
   }
 
   // Bônus intencionalmente leve (pedido do usuário: "pequeno quiz surpresa" em cada andar do
-  // Prédio dos Enigmas) — só moedas na hora via `collectCoin`, sem passar por `completeQuest`:
+  // Prédio dos Enigmas) — só moedas na hora via `collectCoins`, sem passar por `completeQuest`:
   // não conta pra `completedQuestIds`/badges nem aparece na `QuestListOverlay`, que listam as 21
   // missões das escolas.
+  // lab-150 (achado do Copilot, PR #2): chamava `collectCoin()` em loop, uma escrita no
+  // `localStorage` por moeda (8-10 escritas síncronas seguidas por um evento só). `collectCoins`
+  // credita tudo de uma vez, com uma escrita só.
   function handleSurpriseQuizCorrect() {
     if (!activeSurpriseQuiz) return
-    for (let i = 0; i < activeSurpriseQuiz.coinReward; i++) collectCoin()
+    collectCoins(activeSurpriseQuiz.coinReward)
     setActiveSurpriseQuiz(null)
   }
 
@@ -273,6 +281,7 @@ function GameApp() {
       streakBonusCoins,
       planetClearBonusXp,
       planetClearBonusCoins,
+      event,
     } = completePlanetQuest(activePlanetQuest, entitlement?.active)
     setReward({
       quest: activePlanetQuest,
@@ -284,6 +293,7 @@ function GameApp() {
       streakBonusCoins,
       planetClearBonusXp,
       planetClearBonusCoins,
+      event,
     })
     setActivePlanetQuest(null)
   }
@@ -396,6 +406,7 @@ function GameApp() {
           streakBonusCoins={reward.streakBonusCoins}
           planetClearBonusXp={reward.planetClearBonusXp}
           planetClearBonusCoins={reward.planetClearBonusCoins}
+          event={reward.event}
           onContinue={() => setReward(null)}
         />
       )}

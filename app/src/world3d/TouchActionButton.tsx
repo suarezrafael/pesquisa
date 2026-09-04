@@ -18,14 +18,19 @@ export function TouchActionButton({ className, label, onPress, onRelease }: Touc
     onRelease?.()
   }
 
+  // lab-150 (achado do review automático do Copilot nos PRs #2 e #5, nunca lido antes desta
+  // sessão): era um `<div>` clicável — sem role/foco/teclado, um leitor de tela não anuncia isso
+  // como um botão de verdade. `<button type="button">` dá semântica correta de graça (o CSS já
+  // reseta os estilos padrão de botão nativo, ver `.touch-action-button` em `index.css`).
   return (
-    <div
+    <button
+      type="button"
       className={`touch-action-button ${className}`}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
       {label}
-    </div>
+    </button>
   )
 }
