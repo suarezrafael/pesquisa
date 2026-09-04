@@ -612,6 +612,19 @@ describe('applyDailyLoginReward (lab-138)', () => {
     expect(result.coins).toBe(0)
     expect(result.streak).toBe(5)
   })
+
+  // lab-149 (segundo round do review do Copilot no PR #9, mesmo PR): `dayGap <= 0` sozinho não
+  // cobre `NaN` — comparações com `NaN` são sempre `false` em JS, então um `lastPlayedAt`
+  // corrompido (ISO inválido) passava direto pela guarda anterior e caía no mesmo caminho de
+  // "conceder" que o bug original.
+  it('lastPlayedAt corrompido (ISO inválido, dayGap vira NaN) não concede nem reseta a streak', () => {
+    const comStreak = { ...emptyProgress, loginStreak: 5, coins: 100 }
+    const result = applyDailyLoginReward(comStreak, 'isto-nao-e-um-ISO-valido', '2026-09-02T10:00:00.000Z')
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(comStreak)
+    expect(result.coins).toBe(0)
+    expect(result.streak).toBe(5)
+  })
 })
 
 describe('compra normal com moeda continua funcionando', () => {
