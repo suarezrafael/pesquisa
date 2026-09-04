@@ -74,4 +74,10 @@ backup multi-perfil acima.
   Babylon.js (a mesma técnica de análise geométrica que já funcionou bem no lab-146) + typecheck +
   testes; sem tentativa de reprodução visual desta vez, dado o histórico consistente de falha do
   ambiente de automação nesta sessão específica.
-- Deploy: pendente — mesmo fluxo de sempre (push → PR → CI → merge → deploy).
+- Deploy: PR #20 mergeado em `main` (commit `6d7a481`), os 3 jobs de CI/CD verdes. `GET /health`
+  confirmado `200` pós-deploy.
+- **Segundo round do review do Copilot no PR #20**: achou mais um caso real — `dayGap <= 0` sozinho
+  não cobre `NaN` (comparações com `NaN` são sempre `false` em JS), então um `lastPlayedAt`
+  corrompido (ISO inválido) ainda passava pela guarda e concedia moeda. Corrigido com
+  `!Number.isFinite(dayGap)`, teste novo (101/101 no total). Mesmo padrão do lab-146 (correção em
+  duas rodadas no mesmo PR) — o Copilot re-analisa o diff atualizado a cada push novo.
