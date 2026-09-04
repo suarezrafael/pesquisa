@@ -67,4 +67,12 @@ nunca reconfirmado pelo usuário como resolvido de vez — sem informação nova
   implicitamente que `event` não quebrou o contrato de retorno).
 - Sem verificação visual ao vivo (mesma limitação de ambiente de automação de navegador desta
   sessão) — confiança pela leitura cuidadosa do código + typecheck + testes existentes.
-- Deploy: pendente — mesmo fluxo de sempre (push → PR → CI → merge → deploy).
+- Deploy: PR #21 mergeado em `main` (commit `3421955`), os 3 jobs de CI/CD verdes. `GET /health`
+  confirmado `200` pós-deploy.
+- **Segundo round do review do Copilot no PR #21**: achou mais um caso real — virar `<button>`
+  deu foco/role de graça, mas Enter/Espaço disparam `keydown`/`keyup`, não `pointer*`, então
+  `onPress`/`onRelease` não rodavam via teclado. Corrigido com `handleKeyDown`/`handleKeyUp`
+  (`e.repeat` evita que segurar a tecla dispare `onPress` repetidas vezes pelo auto-repeat do
+  sistema operacional). Terceiro caso nesta sessão (depois do lab-146/PR#17-18 e lab-149/PR#20)
+  onde o Copilot pega um segundo problema relacionado só depois do primeiro round ser corrigido —
+  padrão que vale lembrar: sempre reler o review depois de cada push novo, não só uma vez.
