@@ -21,7 +21,7 @@ existente, não um painel/ícone de HUD novo — cartão não coletado mostra "?
 - **Item escolhido de forma autônoma, não pedido nesta sessão** — registrado explicitamente aqui
   por transparência: com a verificação ao vivo do lab-140 bloqueada (ambiente) e nenhum pedido novo
   do usuário no momento, em vez de ficar ocioso puxei um item já identificado e válido do backlog
-  de engajamento (mesma lista de onde saiu o login diário, lab-138) — mesmo raciocínio que already
+  de engajamento (mesma lista de onde saiu o login diário, lab-138) — mesmo raciocínio que já
   levou ao lab-138.
 - **Concede na chegada por `landRocket`, não por um gatilho de proximidade novo dentro do
   planeta** — mais simples e já é o ÚNICO ponto por onde "chegar" num planeta-destino passa;

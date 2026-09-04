@@ -370,7 +370,12 @@ export function applyDailyLoginReward(
 ): DailyLoginResult {
   const dayGap = previousLastPlayedAtIso === null ? Infinity : utcDayNumber(nowIso) - utcDayNumber(previousLastPlayedAtIso)
 
-  if (dayGap === 0) return { progress, granted: false, streak: progress.loginStreak, coins: 0 }
+  // lab-149 (achado do Copilot, PR #9): `dayGap` negativo (relógio do sistema ajustado pra trás,
+  // ou `lastPlayedAt` corrompido) caía no `else` abaixo igual a qualquer outro valor diferente de
+  // 1 — resetava a streak pra 1 e CONCEDIA moeda, permitindo farm infinito só ajustando o relógio
+  // do aparelho pra trás e pra frente. `dayGap <= 0` (mesmo dia OU um "dia" que voltou no tempo)
+  // agora conta como "não concede", mesmo tratamento de idempotência de `dayGap === 0`.
+  if (dayGap <= 0) return { progress, granted: false, streak: progress.loginStreak, coins: 0 }
 
   const streak = dayGap === 1 ? progress.loginStreak + 1 : 1
   const coins = dailyLoginRewardFor(streak)

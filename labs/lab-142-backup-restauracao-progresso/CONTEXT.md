@@ -67,6 +67,12 @@ Confirmando, `App.tsx` (`handleRestoreBackup`) grava o profile/progress restaura
 - **Restauração é "tudo ou nada"** (ver Decisões) — se um dia isso incomodar (ex.: família quer
   manter o progresso NOVO deste aparelho e só recuperar cosméticos comprados), precisa de desenho
   novo.
+- **Achado do review automático do Copilot (PR #13, lab-149)**: `progress_backups` é uma linha por
+  FAMÍLIA, mas `syncProgressBackup` só manda o perfil ATIVO — numa família com 2+ filhos
+  compartilhando a assinatura, cada sessão sobrescreve o backup do irmão. Documentado com mais
+  detalhe em `docs/plano-comercial-backend.md` (seção de atualização deste laboratório) — exige
+  chave composta + UX de escolha de perfil na restauração, fora de escopo do que foi corrigido no
+  lab-149 (só bugs de tamanho contido, não redesenho de schema).
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

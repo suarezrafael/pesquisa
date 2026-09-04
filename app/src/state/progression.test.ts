@@ -599,6 +599,19 @@ describe('applyDailyLoginReward (lab-138)', () => {
     const result = applyDailyLoginReward(emptyProgress, null, '2026-09-02T12:00:00.000Z')
     expect(result.progress.xp).toBe(emptyProgress.xp)
   })
+
+  // lab-149 (achado do review automático do Copilot no PR #9): `dayGap` negativo (relógio do
+  // sistema ajustado pra trás) não concedia recompensa nem resetava a streak — sem essa guarda,
+  // caía no mesmo caminho de "dia seguinte" e permitia farm infinito de moeda só voltando o
+  // relógio do aparelho.
+  it('relógio ajustado pra trás (nowIso ANTES de lastPlayedAt) não concede nem reseta a streak', () => {
+    const comStreak = { ...emptyProgress, loginStreak: 5, coins: 100 }
+    const result = applyDailyLoginReward(comStreak, '2026-09-02T10:00:00.000Z', '2026-09-01T10:00:00.000Z')
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(comStreak)
+    expect(result.coins).toBe(0)
+    expect(result.streak).toBe(5)
+  })
 })
 
 describe('compra normal com moeda continua funcionando', () => {

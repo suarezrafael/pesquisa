@@ -132,6 +132,18 @@ autenticado já usado pra `/progress-summary`, não é uma superfície de exposi
 já existe. Mesma condição de antes (só com entitlement ativo). Ver `POST`/`GET /progress-backup`
 em `app/server-accounts/README.md` e `labs/lab-142-.../FEATURES.md`.
 
+**Limitação conhecida, achada pelo review automático do Copilot (PR #13, lab-149)**: `progress_backups`
+guarda UMA linha por família (`family_account_id primary key`), mas o jogo já suporta múltiplos
+PERFIS por aparelho (`state/storage.ts`, um por filho — ver lab-108) — `syncProgressBackup` só
+manda o perfil ATIVO no momento. Numa família com 2+ filhos compartilhando a mesma assinatura, o
+backup de cada sessão SOBRESCREVE o da sessão anterior — na prática, só o último perfil jogado
+fica restaurável num aparelho novo. Resolver isso de verdade exige uma chave composta
+(`family_account_id` + algum identificador de perfil) e uma UI de restauração que ofereça escolher
+QUAL perfil restaurar quando houver mais de um — mudança de schema + desenho de UX, não um ajuste
+pequeno; fora de escopo do lab-149 (que só corrigiu achados de tamanho "bug", não decisões de
+produto novas). Candidato a laboratório próprio se o usuário confirmar que múltiplos filhos por
+assinatura é um cenário real a priorizar.
+
 **Atualização (lab-144, G13 de `docs/prompts/05-escala-e-viabilidade.md`)**: a Política de
 Privacidade (`LegalPage.tsx` §5) sempre PROMETEU acesso/exclusão/portabilidade sob pedido por
 e-mail — agora existe um caminho de verdade em produto: `GET /account/export` (baixa tudo que o
