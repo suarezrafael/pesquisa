@@ -29,7 +29,7 @@ Commit inicial → final: a7efbe0dbd42da7106dc06574f2713a67c123a3d..HEAD
    vive dentro da closure de `setup()` (função `async`) e o handler de resize vive no escopo do
    efeito principal, lá fora, foi exposta uma ponte `(scene as any).__syncGuiResolution` — mesmo
    padrão já usado várias vezes neste arquivo pra cruzar essa fronteira de closure.
-4. **`hardwareScalingLevel` revertido de 1.75 (lab-56) pra 1.5`**: 1.75 tinha sido escolhido às
+4. **`hardwareScalingLevel` revertido de 1.75 (lab-56) pra 1.5**: 1.75 tinha sido escolhido às
    cegas (sem aparelho real pra testar) tentando resolver "ainda pesado" — alto demais, deixa o
    MUNDO 3D em si (não só o GUI, que já foi corrigido acima) visivelmente mais borrado num celular
    de verdade. 1.5 é o valor original testado desde o lab-53.

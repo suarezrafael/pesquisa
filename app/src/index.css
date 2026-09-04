@@ -898,6 +898,11 @@ a.nickname-generate-btn {
   border: 2px solid rgba(255, 255, 255, 0.6);
   color: white;
   font-weight: 700;
+  /* lab-150 (achado do Copilot, PRs #2/#5): agora é um <button> de verdade, não um <div> — reseta
+     a fonte pro mesmo tamanho/família do resto do HUD (botões nativos não herdam por padrão) e
+     mostra a mão de "clicável" (o toque em si não depende disso, só ajuda quem usa mouse/trackpad). */
+  font: inherit;
+  cursor: pointer;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   touch-action: none;
   user-select: none;

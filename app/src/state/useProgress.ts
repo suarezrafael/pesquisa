@@ -23,6 +23,7 @@ import {
   applyDailyLoginReward,
   type DailyLoginResult,
   applyPostcardCollected,
+  applyCoinsCollected,
 } from './progression'
 
 export function useProgress() {
@@ -55,6 +56,16 @@ export function useProgress() {
   function collectCoin(): void {
     setProgress((prev) => {
       const next = applyCoinCollected(prev)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  // lab-150 (achado do Copilot, PR #2) — premia várias moedas de uma vez (ex.: quiz surpresa) com
+  // UMA escrita no `localStorage`, em vez de chamar `collectCoin()` em loop.
+  function collectCoins(count: number): void {
+    setProgress((prev) => {
+      const next = applyCoinsCollected(prev, count)
       saveProgress(next)
       return next
     })
@@ -210,6 +221,7 @@ export function useProgress() {
     completeQuest,
     completePlanetQuest,
     collectCoin,
+    collectCoins,
     unlockAvatar,
     unlockHat,
     unlockShirtColor,

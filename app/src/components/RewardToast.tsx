@@ -1,4 +1,4 @@
-import { getCurrentWeeklyEvent } from '../data/weeklyEvents'
+import type { WeeklyEvent } from '../data/weeklyEvents'
 import type { FurnitureOption } from '../data/furniture'
 import { useModalA11y } from '../state/useModalA11y'
 
@@ -6,6 +6,13 @@ interface RewardToastProps {
   awardedXp: number
   awardedCoins: number
   newBadges: string[]
+  // lab-150 (achado do review automático do Copilot no PR #2, nunca lido antes desta sessão): o
+  // evento usado pra calcular `awardedXp`/`awardedCoins` (`CompletionResult.event`,
+  // `progression.ts`) — recebido como prop em vez de chamar `getCurrentWeeklyEvent()` aqui dentro.
+  // Sem isso, se a semana virasse (ou o relógio do aparelho mudasse) entre o cálculo da recompensa
+  // e a renderização deste toast, a linha "Bônus de X aplicado!" podia divergir do evento
+  // realmente usado pra calcular os números acima.
+  event: WeeklyEvent
   // lab-126: bônus de moeda de assinante — linha independente da do evento semanal (as duas podem
   // aparecer juntas, cada uma clara sobre sua própria origem).
   entitlementActive: boolean
@@ -42,9 +49,9 @@ export function RewardToast({
   streakBonusCoins,
   planetClearBonusXp,
   planetClearBonusCoins,
+  event,
   onContinue,
 }: RewardToastProps) {
-  const event = getCurrentWeeklyEvent()
   const hasBonus = event.xpMultiplier > 1 || event.coinMultiplier > 1
   const modalRef = useModalA11y(onContinue)
   return (
