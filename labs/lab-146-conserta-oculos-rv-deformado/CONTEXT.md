@@ -119,3 +119,9 @@ produção antes de considerar este item definitivamente fechado.
   `app/server-accounts` ou `app/server-cf-relay` mudar — confirmar o deploy do WORKER
   explicitamente (não só o `/health`, que responde mesmo com código antigo), e reportar ao usuário
   se o padrão se repetir.
+
+**Atualização**: o segundo round de correção deste bug (derivar o raio da cabeça do mesh de
+verdade, ver seção acima) e o `lab-147` (achados do Copilot nos PRs 14-16) acabaram indo pro MESMO
+PR (#18, branch compartilhada) — ver `labs/lab-147-.../CONTEXT.md` pro estado final de deploy
+dessa leva. Desta vez o workflow `CI` disparou normalmente pro push em `main`, a anomalia acima
+não se repetiu.

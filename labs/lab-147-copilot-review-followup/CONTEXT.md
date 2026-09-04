@@ -73,4 +73,9 @@ mais um passo do checklist, junto de CI verde e testes passando.
   (`/cdn-cgi/local/scheduled`) confirmado rodando reconciliação+purga sem erro; disparado com um
   cron string não reconhecido, confirmado o log de aviso novo aparecendo. Conta de teste excluída
   depois via `/account/delete` (lab-144).
-- Deploy: pendente — mesmo fluxo de sempre (push → PR → CI → merge → deploy).
+- Deploy: PR #18 (que passou a acumular o resto do lab-146 + este laboratório, ver seu histórico
+  de edição) mergeado em `main` (commit `82e1e81`), os 3 jobs de CI/CD verdes — desta vez o
+  workflow `CI` disparou normalmente pro push em `main` (a anomalia registrada em
+  `labs/lab-146-.../CONTEXT.md`, onde o merge do PR #17 não disparou nenhuma `run`, não se repetiu
+  aqui). `GET /health` confirmado `200`; `POST /checkout` sem autenticação confirmado `401` (rota
+  viva, código novo no ar).

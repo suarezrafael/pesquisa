@@ -264,11 +264,13 @@ gate pra maximizar o desejo de assinar, não se o modelo de assinatura funciona.
    `labs/lab-82-.../CONTEXT.md`). Falta "Minha Casa" (feature nova, maior, ainda não iniciada —
    ver a seção "Catálogo de cosméticos (Fase E)" acima pro desenho).
 6. **Fase F — Lançamento comercial (em andamento)**: relatório semanal por e-mail via Resend
-   ✅ construído no lab-119 (`POST /progress-summary`, tabela `progress_snapshots`, Cron semanal em
-   `app/server-accounts/src/index.ts`) — falta só o usuário configurar `RESEND_API_KEY` (secret,
-   conta Resend própria) pro envio de verdade funcionar; o resto já está deployado em produção.
-   Ainda faltam: migrar hospedagem do front-end pro Cloudflare Pages (ver achado crítico acima) OU
-   assinar Vercel Pro, e sair do modo teste do Stripe. **Backup/restauração de progresso (G6 de
+   ✅ construído no lab-119 e **funcionando de ponta a ponta desde o lab-148** (`RESEND_API_KEY`
+   configurado, testado ao vivo enviando um e-mail real) — remetente ainda é o sandbox do Resend
+   (`onboarding@resend.dev`), que só entrega pro e-mail da própria conta Resend até um domínio
+   próprio ser verificado; verificar `missaoaprendizado.com` no Resend é o próximo passo pra
+   enviar pra famílias de verdade. Ainda faltam: migrar hospedagem do front-end pro Cloudflare
+   Pages (ver achado crítico acima) OU assinar Vercel Pro, e sair do modo teste do Stripe.
+   **Backup/restauração de progresso (G6 de
    `docs/prompts/05-escala-e-viabilidade.md`) ✅ construído no lab-142** (`POST`/`GET
    /progress-backup`, tabela `progress_backups`) — ver atualização de privacidade abaixo.
 
