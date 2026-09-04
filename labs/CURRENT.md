@@ -1,6 +1,17 @@
 # Laboratório atual
 
-Último concluído: labs/lab-147-copilot-review-followup/ — pedido do usuário: "você deve ler os
+Último concluído: labs/lab-148-resend-configurado/ — usuário criou conta no Resend e forneceu a
+API key (escopo restrito a só enviar); configurada via `wrangler secret put RESEND_API_KEY` em
+produção + `.dev.vars` local. Nenhum código novo — o mecanismo (`sendWeeklyProgressEmails`, Cron
+semanal) já existia desde o lab-119, só faltava o secret. **Testado ao vivo com envio real**: antes
+de disparar, consulta read-only confirmou que só 1 família é elegível hoje (a própria conta de
+teste do usuário) — só então o cron foi disparado de verdade (`wrangler dev` + `/cdn-cgi/local/
+scheduled`), log do Worker confirmou `1 enviado(s), 0 falha(s)`. Remetente ainda é o sandbox do
+Resend (`onboarding@resend.dev`) — só entrega pro e-mail da própria conta Resend até um domínio
+próprio ser verificado (próximo passo opcional, exige registros DNS — mesma categoria de mudança
+de G15, não feito sem confirmar). Ver `labs/lab-148-.../CONTEXT.md`.
+
+Antes desse: labs/lab-147-copilot-review-followup/ — pedido do usuário: "você deve ler os
 comentários do PR que o copilot gera na nossa pipeline dos laboratório". O repo tem
 `copilot-pull-request-reviewer` configurado, deixando review automático em todo PR — os PRs 14/15/16
 (labs 143/144/145) tinham "🟡 Changes recommended" nunca lidos antes de mergear. Achados corrigidos:

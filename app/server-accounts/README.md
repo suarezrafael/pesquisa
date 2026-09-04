@@ -117,13 +117,15 @@ Não tem nenhuma relação com o Neon Auth: a criança nunca tem conta lá.
 - `ENTITLEMENT_SECRET` (Fase D) — segredo próprio do Worker pra assinar/verificar o token de
   entitlement do jogo (HMAC/HS256), sem relação com o Neon Auth. Mesmo esquema: `.dev.vars`
   local, `wrangler secret put ENTITLEMENT_SECRET` em produção (já configurado).
-- `RESEND_API_KEY` (lab-119, Fase F) — chave da API do Resend, usada só por
-  `sendWeeklyProgressEmails` (chamado pelo Cron semanal). Mesmo esquema: `.dev.vars` local,
-  `wrangler secret put RESEND_API_KEY` em produção. **Ainda NÃO configurado** (nem local nem em
-  produção) — o resto do recurso (endpoint `/progress-summary`, tabela `progress_snapshots`,
-  Cron Trigger) já está deployado e funciona; só o envio de verdade do e-mail semanal depende de
-  uma conta Resend do usuário. Até lá, o Cron semanal roda e loga a falha
-  (`[weekly-email] erro de rede...`) sem quebrar nada, sem impacto no restante do Worker.
+- `RESEND_API_KEY` (lab-119, Fase F; configurado no lab-148) — chave da API do Resend, usada só
+  por `sendWeeklyProgressEmails` (chamado pelo Cron semanal). Mesmo esquema: `.dev.vars` local,
+  `wrangler secret put RESEND_API_KEY` em produção (já configurado nos dois — chave com escopo
+  restrito a só enviar, sem acesso de leitura ao histórico de envios). Remetente ainda é o sandbox
+  do Resend (`onboarding@resend.dev`) — Resend só entrega esse remetente pro e-mail da própria
+  conta Resend até um domínio próprio ser verificado; testado ao vivo com sucesso pra esse caso
+  (a única família com assinatura ativa + resumo sincronizado hoje é a conta de teste do usuário).
+  Verificar `missaoaprendizado.com` no Resend (adicionar registros DNS) é o próximo passo pra
+  enviar de verdade pra famílias com outros e-mails — ver `labs/lab-148-.../CONTEXT.md`.
 - Existe também uma **API key pessoal do Neon** (`missao-aprender-agent`, visível em
   Account Settings → API keys no console do Neon) usada só nesta sessão pra criar o projeto/rodar
   migrações via `neonctl`/scripts locais — não fica em nenhum arquivo do repositório. Se for
@@ -151,7 +153,9 @@ npm run deploy
 ## Próximas fases (ver o plano)
 
 Fase E (cosmético gateado de verdade, consultando `entitlement.active` no front-end) concluída.
-Fase F em andamento: relatório semanal por e-mail construído neste laboratório, falta
-`RESEND_API_KEY` (ver "Segredos" acima) e migrar a hospedagem do front-end pro Cloudflare Pages
-(o Vercel Hobby proíbe uso comercial — Cloudflare Pages paralelo já existe, ver
-`labs/lab-109-.../CONTEXT.md`, falta o corte de DNS de verdade).
+Fase F: relatório semanal por e-mail funcionando de ponta a ponta desde o lab-148
+(`RESEND_API_KEY` configurado), falta só verificar um domínio próprio no Resend pra enviar pra
+e-mails fora da conta Resend do usuário (ver "Segredos" acima). Falta ainda migrar a hospedagem do
+front-end pro Cloudflare Pages (o Vercel Hobby proíbe uso comercial — Cloudflare Pages paralelo já
+existe, ver `labs/lab-109-.../CONTEXT.md`, falta o corte de DNS de verdade — mesma decisão de G15
+que segue pendente de confirmação do usuário).
