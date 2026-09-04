@@ -8261,9 +8261,9 @@ export function World3D({
         }
       })
       const unsubConnection = onConnectionChange((connected) => setMpConnected(connected))
-      // lab-151, G13 (docs/prompts/05-escala-e-viabilidade.md): só conecta (e passa a expor
-      // posição/aparência pra outros jogadores desconhecidos, ver `server-cf-relay/README.md` —
-      // "uma sala global só", não é rede local) se o responsável já autorizou este perfil pelo
+      // lab-152, G13 (docs/prompts/05-escala-e-viabilidade.md): só conecta (e passa a expor
+      // posição/aparência pra outros jogadores desconhecidos, ver `app/server-cf-relay/README.md`
+      // — "uma sala global só", não é rede local) se o responsável já autorizou este perfil pelo
       // portão parental (`ParentalGateModal.tsx`). Sem consentimento, `connectMultiplayer` nunca
       // roda — `sendState`/`sendChat`/`sendAttack` (mais abaixo) já são no-ops sozinhos quando o
       // socket nunca chegou a abrir, então nenhum código extra de guarda é preciso lá.
@@ -10019,7 +10019,7 @@ export function World3D({
     ;(sceneRef.current as any)?.__showLocalChatBubble?.(messageId)
   }
 
-  // lab-151, G13: chat e ranking são os dois únicos pontos de entrada de UI pro multiplayer — se
+  // lab-152, G13: chat e ranking são os dois únicos pontos de entrada de UI pro multiplayer — se
   // o responsável ainda não autorizou este perfil, abre o portão em vez do painel; a ação
   // pretendida (`open`) fica guardada em `pendingMultiplayerOpenRef` e roda sozinha assim que o
   // portão for resolvido (`handleParentalGateAuthorize` abaixo).
@@ -10111,27 +10111,30 @@ export function World3D({
         />
       )}
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
-      <TouchJoystick onChange={handleJoystickChange} />
-      <TouchActionButton className="touch-action-jump" label="⬆️" onPress={handleTouchJumpPress} />
+      <TouchJoystick onChange={handleJoystickChange} inert={hudInert} />
+      <TouchActionButton className="touch-action-jump" label="⬆️" onPress={handleTouchJumpPress} inert={hudInert} />
       <TouchActionButton
         className="touch-action-run"
         label="🏃"
         onPress={handleTouchRunPress}
         onRelease={handleTouchRunRelease}
+        inert={hudInert}
       />
       <TouchActionButton
         className="touch-action-cam-left"
         label="◀"
         onPress={handleCameraRotateLeftPress}
         onRelease={handleCameraRotateLeftRelease}
+        inert={hudInert}
       />
       <TouchActionButton
         className="touch-action-cam-right"
         label="▶"
         onPress={handleCameraRotateRightPress}
         onRelease={handleCameraRotateRightRelease}
+        inert={hudInert}
       />
-      <TouchActionButton className="touch-action-interact" label="E" onPress={handleTouchInteractPress} />
+      <TouchActionButton className="touch-action-interact" label="E" onPress={handleTouchInteractPress} inert={hudInert} />
       {placingFurnitureUi && (
         <div className="furniture-placement-bar">
           {/* lab-140 (pedido do usuário: "os objetos precisam ter uma posição válida com teste de

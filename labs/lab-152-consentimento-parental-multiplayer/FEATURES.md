@@ -10,7 +10,7 @@ Commit inicial: b8a235de55c1fe131a698f2c769ea98c1912a630
 Resolver a última parte de G13 (`docs/prompts/05-escala-e-viabilidade.md`) deixada de fora pelo
 lab-144: "registro de consentimento parental para o multiplayer". Hoje `connectMultiplayer()`
 roda sem NENHUMA checagem, expondo apelido/posição/aparência da criança pra qualquer outro
-jogador conectado (relay é uma sala global só, não rede local — ver `server-cf-relay/README.md`).
+jogador conectado (relay é uma sala global só, não rede local — ver `app/server-cf-relay/README.md`).
 
 ## Investigado antes de planejar
 

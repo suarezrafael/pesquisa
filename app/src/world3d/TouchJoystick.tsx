@@ -2,11 +2,15 @@ import { useRef, useState } from 'react'
 
 interface TouchJoystickProps {
   onChange: (vector: { x: number; y: number }) => void
+  // lab-152 (achado do review automático do Copilot no PR do portão parental): o joystick fica
+  // FORA do container que `World3D.tsx` marca `inert` quando um modal abre — sem repassar `inert`
+  // até aqui, arrastar o dedo nele continuava movendo o personagem por baixo de qualquer modal.
+  inert?: boolean
 }
 
 const MAX_RADIUS = 42
 
-export function TouchJoystick({ onChange }: TouchJoystickProps) {
+export function TouchJoystick({ onChange, inert }: TouchJoystickProps) {
   const baseRef = useRef<HTMLDivElement>(null)
   const activePointerId = useRef<number | null>(null)
   const [knob, setKnob] = useState({ x: 0, y: 0 })
@@ -54,6 +58,7 @@ export function TouchJoystick({ onChange }: TouchJoystickProps) {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      inert={inert}
     >
       <div
         className="joystick-knob"

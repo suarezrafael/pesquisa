@@ -52,6 +52,18 @@ pro multiplayer — que o lab-144 tinha deixado de fora por exigir desenho de pr
   gate" usado por apps infantis — uma pergunta que o público-alvo do jogo tipicamente não resolve
   de cabeça, difícil o bastante sem virar fricção séria pra um adulto com calculadora no bolso.
 
+## Achado real do review automático do Copilot (PR #23)
+
+**Achado de acessibilidade real**: o joystick (`TouchJoystick.tsx`) e os 5 botões de toque
+(`TouchActionButton.tsx`, pulo/correr/girar câmera/interagir) ficam FORA do `<div>` que
+`hudInert` cobre — só `canvas`/`HudHeader` recebiam `inert={hudInert}`. Com o portão parental (ou
+qualquer outro modal — `bagOpen`, `planetPickerOpen`, etc.) aberto, um toque nesses controles
+continuava movendo/pulando o personagem por baixo do modal. Corrigido propagando um novo prop
+`inert?: boolean` até o `<button>`/`<div>` de cada um, passado como `hudInert` nas 6 chamadas em
+`World3D.tsx`. Verificado ao vivo: com o portão aberto, `joystick.inert`/todos os
+`touch-action-button.inert` confirmados `true` via DOM. Achados menores de comentário (número de
+laboratório errado, path do README do relay sem o prefixo `app/`) também corrigidos.
+
 ## Pendências / dívidas conhecidas
 
 - Consentimento não é sincronizado pro backend — famílias assinantes não têm um jeito centralizado
