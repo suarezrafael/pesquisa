@@ -100,3 +100,5 @@ aparelho Android/Chrome dele.
 - Como verificar de novo: `cd app && npm run dev`, abrir o jogo com um perfil qualquer, clicar no
   ícone de chat (💬) ou ranking (🏆) no HUD — deve aparecer "🔒 Portão dos responsáveis" com uma
   conta de multiplicação antes de qualquer painel de multiplayer abrir.
+- **Deploy**: PR #23 mergeado em `main`, os 3 jobs de CI/CD verdes, app ao vivo
+  (`https://app-two-flax-92.vercel.app`) respondendo `200` pós-deploy.
