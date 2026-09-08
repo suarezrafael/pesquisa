@@ -72,6 +72,42 @@ body {
   margin-top: 1.5rem;
 }
 
+/* Sinais de confiança pro responsável (lab-161) — pills pequenas, reconhecíveis num relance,
+   sem competir visualmente com o botão "Jogar" acima (que continua a ação mais forte da tela). */
+.title-trust-signals {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+}
+
+.title-trust-signals li {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-dark);
+  background: #eaf7f8;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+}
+
+/* Faixa separada pro responsável (lab-161) — registro visual mais calmo de propósito (fundo
+   neutro, sem a cor vibrante do CTA principal) pra não misturar o convite pra criança com o
+   pedido de atenção do adulto na mesma tela. */
+.title-parent-band {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e3e8f7;
+}
+
+.title-parent-band p {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #4a5b8c;
+}
+
 /* Tutorial */
 
 .tutorial-screen {

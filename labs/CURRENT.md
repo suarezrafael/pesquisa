@@ -1,6 +1,22 @@
 # Laboratório atual
 
-Último concluído: labs/lab-160-pedidos-de-amizade/ — segundo lab do Grupo B do backlog social
+Último concluído: labs/lab-161-home-inicial-dupla/ — pedido explícito do usuário, seguindo a
+recomendação P0 do `docs/business-analyst-prompt-backlog.md` §4/§6: reformular `TitleScreen` como
+primeira impressão dupla (criança entende em 10s que pode jogar/explorar/customizar/cuidar de
+pet/fazer amigos; responsável entende em 10s que é seguro, sem chat livre, sem compra abusiva, e
+que assinatura é só cosmético). Subtítulo reescrito (aventura/exploração/social primeiro, desafio
+pedagógico como parte do caminho); 4 sinais de confiança em pills curtas; faixa separada por
+`border-top` com link real pra `/familia` ("Área dos responsáveis", mesmo padrão de
+`PairingScreen.tsx`). Botão "Jogar" mantido idêntico em comportamento/destaque. Dois eventos novos
+em `productAnalytics.ts` (`trackPlayClick`/`trackParentAreaClick`) — exigiu adicionar os tipos na
+allowlist `PRODUCT_EVENT_TYPES` de `server-accounts/src/domain.ts` (único ponto que toca backend,
+sem rota/schema/entitlement novo). Verificado ao vivo: build de produção confirma `World3D-*.js`
+(Babylon) continua chunk lazy separado — tela inicial não pesa mais; fluxo completo testado
+(Jogar → onboarding normal; Área dos responsáveis → `/familia` em aba nova, sem navegar a criança
+pra longe). `npx tsc -b`/testes limpos (app 131/131, server-accounts 82/82, 1 novo). Ver
+`labs/lab-161-home-inicial-dupla/CONTEXT.md`.
+
+Antes desse: labs/lab-160-pedidos-de-amizade/ — segundo lab do Grupo B do backlog social
 (lab-158): `FriendsPanel` ganha pedido/aceite/recusa de amizade + remover amizade já aceita (item
 novo, confirmado com o usuário nesta sessão via `AskUserQuestion` — "considerar antes do lab-160
 ir pra produção" no plano do lab-158). `server-accounts` ganha `POST /players/friend-request`/

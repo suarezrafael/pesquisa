@@ -45,3 +45,15 @@ export function installProductAnalytics(): void {
 export function trackQuestCompleted(questId: string): void {
   trackEvent('quest_completed', { questId })
 }
+
+// lab-161 (home inicial dupla criança/responsável, docs/business-analyst-prompt-backlog.md §4
+// P0 item 1): os dois cliques que decidem se a primeira impressão convenceu cada público —
+// "Jogar" (criança) e "Área dos responsáveis" (adulto). Sem isso, não dá pra medir se a proposta
+// dupla da `TitleScreen` está funcionando, só especular.
+export function trackPlayClick(): void {
+  trackEvent('play_click')
+}
+
+export function trackParentAreaClick(): void {
+  trackEvent('parent_area_click')
+}
