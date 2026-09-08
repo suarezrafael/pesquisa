@@ -24,6 +24,10 @@ import {
   type DailyLoginResult,
   applyPostcardCollected,
   applyCoinsCollected,
+  adoptPet as applyAdoptPet,
+  equipPet as applyEquipPet,
+  feedPet as applyFeedPet,
+  type FeedPetResult,
 } from './progression'
 
 export function useProgress() {
@@ -216,6 +220,34 @@ export function useProgress() {
     return result.granted
   }
 
+  // Pets adotáveis (lab-155) — mesmo formato do `unlockFurniture`/`unlockGlasses` acima.
+  function adoptPet(id: string): void {
+    setProgress((prev) => {
+      const next = applyAdoptPet(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  function equipPet(id: string | null): void {
+    setProgress((prev) => {
+      const next = applyEquipPet(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  // Alimentar o pet ativo — mesmo formato de `claimDailyLogin` (devolve o resultado inteiro, não
+  // só um booleano, porque o chamador precisa saber se o estágio mudou pra mostrar um aviso).
+  function feedPet(nowIso: string): FeedPetResult {
+    const result = applyFeedPet(progress, nowIso)
+    if (result.fed) {
+      setProgress(result.progress)
+      saveProgress(result.progress)
+    }
+    return result
+  }
+
   return {
     progress,
     completeQuest,
@@ -237,5 +269,8 @@ export function useProgress() {
     resetStreak,
     claimDailyLogin,
     collectPostcard,
+    adoptPet,
+    equipPet,
+    feedPet,
   }
 }

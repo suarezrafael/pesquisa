@@ -11,6 +11,7 @@ import { DailyLoginToast } from './components/DailyLoginToast'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
 import { MyHousePanel } from './world3d/MyHousePanel'
+import { PetPanel } from './world3d/PetPanel'
 import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
@@ -104,6 +105,9 @@ function GameApp() {
     resetStreak,
     claimDailyLogin,
     collectPostcard,
+    adoptPet,
+    equipPet,
+    feedPet,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -130,6 +134,7 @@ function GameApp() {
   const [showPairing, setShowPairing] = useState(false)
   const [showAchievements, setShowAchievements] = useState(false)
   const [showMyHouse, setShowMyHouse] = useState(false)
+  const [showPets, setShowPets] = useState(false)
   // lab-136 (pedido do usuário: "escolher em que posição da casa deve ficar a peça... o ângulo e
   // posição") — id do item que o jogador clicou "Mover" no `MyHousePanel`; `World3D.tsx` observa
   // essa prop e entra no modo de posicionamento dentro da cena 3D, depois chama
@@ -348,6 +353,7 @@ function GameApp() {
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
           onOpenMyHouse={() => setShowMyHouse(true)}
+          onOpenPets={() => setShowPets(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
           onFindTreasureChest={foundTreasureChest}
           onCollectPostcard={collectPostcard}
@@ -370,6 +376,7 @@ function GameApp() {
             showPairing ||
             showAchievements ||
             showMyHouse ||
+            showPets ||
             showMarsReward
           }
         />
@@ -431,6 +438,16 @@ function GameApp() {
             setPendingPlacementId(id)
           }}
           onClose={() => setShowMyHouse(false)}
+        />
+      )}
+
+      {showPets && (
+        <PetPanel
+          progress={progress}
+          onAdopt={adoptPet}
+          onEquip={equipPet}
+          onFeed={() => feedPet(new Date().toISOString())}
+          onClose={() => setShowPets(false)}
         />
       )}
 

@@ -1,6 +1,17 @@
 # Laboratório atual
 
-Último concluído: labs/lab-154-backlog-social-pets-amigos-ranking/ — laboratório de PLANEJAMENTO
+Último concluído: labs/lab-155-pets-adotaveis/ — primeiro item do Grupo A do backlog social
+(lab-154): adotar um pet com moeda (catálogo de 4, `data/pets.ts`, reaproveita `buildGato`/
+`buildCachorro` já existentes), ele segue o jogador pelo mundo com atraso (`petUp` perseguindo o
+`localUp` real via lerp), e cresce em 3 estágios (filhote/jovem/adulto) conforme é alimentado
+(uma vez por dia real, mesma defesa anti-farm do login diário). Painel novo (🐾 no HUD, mesma
+grade/CSS de `MyHousePanel`), ícone sempre acessível (não gatilho de proximidade, já que pet
+precisa de checagem frequente). Escondido dentro de casa/em veículos (sala plana, sem `up`
+esférico). Verificado direto no motor (posição/escala reais, não só visual): pet segue a ~0,58
+unidade do avatar, escala muda de 0,55 pra 0,8 exatamente no limiar de 3 alimentações. `tsc -b`/
+testes limpos (124/124, 17 novos). Ver `labs/lab-155-pets-adotaveis/CONTEXT.md`.
+
+Antes desse: labs/lab-154-backlog-social-pets-amigos-ranking/ — laboratório de PLANEJAMENTO
 (pedido explícito do usuário: "montar um lab de backlog"), sem código novo. Usuário pediu pets,
 lista de amigos, busca por nickname, status online/último acesso, convites, ver avatar/conquistas
 de amigo, ranking da semana, ofensiva e séries (Bronze/Prata/Ouro/Diamante). Achado central: a
