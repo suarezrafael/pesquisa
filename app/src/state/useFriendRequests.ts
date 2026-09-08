@@ -7,6 +7,10 @@ export interface FriendSummaryItem {
   playerId: string
   nickname: string
   avatarEmoji: string
+  // lab-162 — só presentes nos itens de `friends` (amizade já aceita); `received`/`sent` nunca
+  // carregam status online, já que ainda não são amigos de verdade.
+  lastSeenAt?: string
+  online?: boolean
 }
 
 interface FriendSummary {
@@ -16,6 +20,20 @@ interface FriendSummary {
 }
 
 const EMPTY_SUMMARY: FriendSummary = { received: [], sent: [], friends: [] }
+
+// lab-162 — rótulo curto pra "última vez visto" quando o amigo não está online agora
+// (`FriendSummaryItem.online === false`). Só usado na exibição, nunca na regra de "está online ou
+// não" — essa regra vive só no servidor (`isOnlineNow`, server-accounts/src/domain.ts), evitando
+// duas fontes de verdade divergentes sobre o mesmo limiar de 2 minutos.
+export function formatLastSeen(lastSeenAtIso: string, now: number = Date.now()): string {
+  const diffMs = now - new Date(lastSeenAtIso).getTime()
+  const diffMinutes = Math.floor(diffMs / (60 * 1000))
+  if (diffMinutes < 60) return `há ${Math.max(diffMinutes, 1)} min`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `há ${diffHours}h`
+  const diffDays = Math.floor(diffHours / 24)
+  return `há ${diffDays}d`
+}
 
 // lab-160, Grupo B do backlog social (labs/lab-158-.../FEATURES.md) — pedido/aceite/recusa de
 // amizade + remover amizade já aceita. Mesmo formato de `usePlayerIdentity.ts` (chamada direta ao

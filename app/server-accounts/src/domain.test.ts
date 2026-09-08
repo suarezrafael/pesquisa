@@ -13,6 +13,7 @@ import {
   isEntitlementActive,
   isEventNewerThan,
   isNicknameAllowed,
+  isOnlineNow,
   isPairingCodeUsable,
   isPlausibleSessionDuration,
   isSelfFriendRequest,
@@ -505,5 +506,25 @@ describe('friendResponseStatus (lab-160)', () => {
   it('aceitar vira accepted, recusar vira declined', () => {
     expect(friendResponseStatus(true)).toBe('accepted')
     expect(friendResponseStatus(false)).toBe('declined')
+  })
+})
+
+describe('isOnlineNow (lab-162)', () => {
+  const now = new Date('2026-09-08T12:00:00.000Z').getTime()
+
+  it('considera online um heartbeat de agora mesmo', () => {
+    expect(isOnlineNow('2026-09-08T12:00:00.000Z', now)).toBe(true)
+  })
+
+  it('considera online um heartbeat dentro do limiar de 2 minutos', () => {
+    expect(isOnlineNow('2026-09-08T11:58:30.000Z', now)).toBe(true)
+  })
+
+  it('considera offline um heartbeat mais antigo que 2 minutos', () => {
+    expect(isOnlineNow('2026-09-08T11:57:00.000Z', now)).toBe(false)
+  })
+
+  it('considera offline uma data inválida em vez de lançar erro', () => {
+    expect(isOnlineNow('não é uma data', now)).toBe(false)
   })
 })

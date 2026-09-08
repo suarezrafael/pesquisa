@@ -17,6 +17,7 @@ import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
+import { useHeartbeat } from './state/useHeartbeat'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
 import { findPlanetQuestById } from './data/planetQuests'
@@ -149,6 +150,7 @@ function GameApp() {
   const [dailyLoginReward, setDailyLoginReward] = useState<{ streak: number; coins: number } | null>(null)
   const { entitlement, redeemCode, redeeming, redeemError, syncProgressSummary, syncProgressBackup, fetchProgressBackup } =
     useEntitlement()
+  useHeartbeat()
   // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
   // decidir se mostra o `ProfilePicker` (quando não há perfil ativo) quanto pra decidir se mostra
   // o botão de trocar perfil no HUD (só faz sentido com 2+ perfis já criados neste aparelho).

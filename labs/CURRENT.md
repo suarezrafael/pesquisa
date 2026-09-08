@@ -1,6 +1,23 @@
 # Laboratório atual
 
-Último concluído: labs/lab-161-home-inicial-dupla/ — pedido explícito do usuário, seguindo a
+Último concluído: labs/lab-162-amigos-status-online/ — terceiro lab do Grupo B do backlog social
+(lab-158), conforme sequenciamento do lab-160 (o número "lab-161" original desse plano foi
+consumido pelo lab de home inicial dupla, pedido pontual do usuário — este é o adiado,
+renumerado): heartbeat (`POST /players/heartbeat`, `HEARTBEAT_LIMITER` 120/60s) + status online/
+último acesso na aba "Amigos" do `FriendsPanel`. `isOnlineNow` (server-accounts/domain.ts, pura,
+limiar de 2 minutos) roda NO SERVIDOR — `handleFriendSummary` já devolve `online`/`lastSeenAt`
+prontos, evitando duas fontes de verdade sobre o limiar. `useHeartbeat.ts` (novo hook) roda em
+`App.tsx`/`GameApp` durante toda a sessão (não só com o painel aberto), relendo `loadPlayerId()` a
+cada tick. Verificado ao vivo contra o banco de PRODUÇÃO real: heartbeat validado (400/404/204),
+simulação de "offline há 10 min" confirmada NA UI mudando pra "última vez: há 14 min" e voltando
+pra "🟢 online agora" após heartbeat novo. **Pendência de ambiente, não de código**: o
+`setInterval` do heartbeat não pôde ser observado disparando sozinho na aba de automação
+(`document.hidden = true`, mesma limitação de timers em aba backgrounded já documentada em labs
+130/131/140/141/146) — mitigado disparando a chamada exata do hook via `fetch()` na origem real da
+página, confirmando `204`. `npx tsc -b`/testes limpos (app 131/131, server-accounts 86/86, 4
+novos). Ver `labs/lab-162-amigos-status-online/CONTEXT.md`.
+
+Antes desse: labs/lab-161-home-inicial-dupla/ — pedido explícito do usuário, seguindo a
 recomendação P0 do `docs/business-analyst-prompt-backlog.md` §4/§6: reformular `TitleScreen` como
 primeira impressão dupla (criança entende em 10s que pode jogar/explorar/customizar/cuidar de
 pet/fazer amigos; responsável entende em 10s que é seguro, sem chat livre, sem compra abusiva, e
