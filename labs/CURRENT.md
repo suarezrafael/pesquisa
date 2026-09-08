@@ -12,7 +12,19 @@ novo. Verificado ao vivo contra o banco de PRODUÇÃO real: backend inteiro via 
 duplicata, responder pedido alheio, aceite, remover por não-participante, declined bloqueia
 reenvio mas removed não) + um fluxo completo NA UI real (busca → pedido → aceite → amigo aparece →
 remover → some dos dois lados). `npx tsc -b`/testes limpos (app 131/131, server-accounts 81/81,
-6 novos). Ver `labs/lab-160-pedidos-de-amizade/CONTEXT.md`.
+6 novos). PR #31 teve 6 achados reais do Copilot corrigidos antes do merge: corrida real entre
+duas chamadas concorrentes em sentidos opostos podia criar duas amizades ativas pro mesmo par
+(`unique` só protegia o mesmo sentido) — índice único parcial não-direcional
+(`idx_friendships_unique_active_pair`, `least`/`greatest`) aplicado em produção, handler captura
+a violação (23505) e devolve 409; `fromId`/`toId` inexistente batia na FK e virava 500 (mesma
+classe do bug do `deviceId` no lab-159) — agora 404; ordenação de pedidos pendentes por
+`created_at` ficava errada após reviver um pedido `removed` — trocado por `updated_at`; `refresh()`
+ignorava erros silenciosamente; estado local `sentTo` podia ficar desatualizado — removido, deriva
+só de `summary.sent`. Reverificado ao vivo, incluindo uma corrida real de duas chamadas
+concorrentes (confirmado por consulta direta ao banco: exatamente 1 linha ativa). **Confirma
+deploy em produção**: PR #31 mergeado, CI/CD verde, deploy automático confirmado (`GET /health` e
+`GET /players/friend-summary` respondendo em produção). Ver
+`labs/lab-160-pedidos-de-amizade/CONTEXT.md`.
 
 Antes desse: labs/lab-159-identidade-jogador-busca/ — primeiro lab do Grupo B do backlog
 social (lab-158): identidade de jogador persistente por perfil (`player_identities`, funciona pra
