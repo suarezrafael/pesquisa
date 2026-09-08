@@ -20,6 +20,7 @@ import {
   isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
+  isNicknameAllowed,
   isPlausibleSessionDuration,
   isTokenRevoked,
   isValidNpsScore,
@@ -27,6 +28,7 @@ import {
   isValidProgressBackupPayload,
   isValidProgressSummary,
   isValidSubscriptionStatus,
+  isValidUuid,
   NPS_COOLDOWN_DAYS,
   resolveTrustedOrigin,
   shouldPromptForNps,
@@ -90,6 +92,10 @@ export interface Env {
   // natureza raríssimo (ninguém pede exclusão/exportação repetidamente numa sessão real), mesmo
   // espírito generoso do resto dos limiters autenticados deste Worker.
   ACCOUNT_LIMITER: RateLimit
+  // lab-159, Grupo B do backlog social (labs/lab-158-.../FEATURES.md) — identidade de jogador
+  // persistente por perfil + busca por nickname.
+  PLAYER_REGISTER_LIMITER: RateLimit
+  PLAYER_SEARCH_LIMITER: RateLimit
 }
 
 // IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
@@ -438,6 +444,100 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     console.error('[track-event-invalid]', String(err))
   }
   return new Response(null, { status: 204 })
+}
+
+// lab-159, Grupo B do backlog social (labs/lab-158-.../FEATURES.md) — registra uma identidade de
+// jogador persistente por PERFIL, sem exigir assinatura (mesma regra de `handleTrackEvent` acima:
+// cooperação nunca pode ficar atrás de pagamento, docs/prompts/03-arquitetura-sistema.md).
+// Chamado no máximo uma vez por perfil — o `playerId` devolvido fica guardado localmente
+// (`state/storage.ts`, via `usePlayerIdentity.ts`), reaproveitado dali em diante.
+async function handlePlayerRegister(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.PLAYER_REGISTER_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const body = (await request.json().catch(() => null)) as
+    | { nickname?: string; avatarEmoji?: string; deviceId?: string }
+    | null
+  const nickname = body?.nickname?.trim()
+  const avatarEmoji = body?.avatarEmoji?.trim()
+  const deviceId = body?.deviceId?.trim()
+  if (!nickname || !avatarEmoji || !deviceId) {
+    return Response.json({ error: 'nickname, avatarEmoji e deviceId são obrigatórios' }, { status: 400 })
+  }
+  if (!isValidUuid(deviceId)) {
+    return Response.json({ error: 'deviceId inválido' }, { status: 400 })
+  }
+  // Mesma validação já aplicada no campo de apelido do jogo (`data/nicknameFilter.ts`) — nunca
+  // confia só na validação do lado do cliente (docs/prompts/01-seguranca.md §3): um nickname que
+  // o campo do jogo já recusaria não pode entrar no diretório buscável de qualquer jeito.
+  if (!isNicknameAllowed(nickname)) {
+    return Response.json({ error: 'nickname não permitido' }, { status: 400 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  const rows = (await sql`
+    insert into player_identities (nickname, avatar_emoji, device_id)
+    values (${nickname}, ${avatarEmoji}, ${deviceId})
+    returning id
+  `) as { id: string }[]
+  return Response.json({ playerId: rows[0].id })
+}
+
+const PLAYER_SEARCH_ATTEMPT_LIMIT = 8
+const PLAYER_SEARCH_WINDOW_MS = 60 * 1000
+
+// Mesmo padrão de `checkPairingRedeemAttempts` (UPSERT atômico, defesa real contra força bruta —
+// o binding nativo `PLAYER_SEARCH_LIMITER` acima é só a primeira camada, barata).
+async function checkPlayerSearchAttempts(sql: Sql, ip: string): Promise<boolean> {
+  const now = new Date()
+  const windowCutoff = new Date(now.getTime() - PLAYER_SEARCH_WINDOW_MS)
+  const rows = (await sql`
+    insert into player_search_attempts (ip, window_start, count)
+    values (${ip}, ${now.toISOString()}, 1)
+    on conflict (ip) do update set
+      count = case
+        when player_search_attempts.window_start < ${windowCutoff.toISOString()} then 1
+        else player_search_attempts.count + 1
+      end,
+      window_start = case
+        when player_search_attempts.window_start < ${windowCutoff.toISOString()} then ${now.toISOString()}
+        else player_search_attempts.window_start
+      end
+    returning count
+  `) as { count: number }[]
+  return rows[0].count <= PLAYER_SEARCH_ATTEMPT_LIMIT
+}
+
+// lab-159 — busca SEMPRE exata (case-insensitive), nunca substring/wildcard (achado de segurança
+// do lab-158: busca livre por nickname foi a opção mais arriscada das duas oferecidas ao usuário
+// — permitir prefixo/substring abriria varredura do diretório inteiro por força bruta
+// alfabética). No máximo 5 resultados, cada um só com `{id, nickname, avatarEmoji}` — nunca
+// `deviceId`, data de criação, ou qualquer outro dado.
+async function handlePlayerSearch(request: Request, env: Env): Promise<Response> {
+  const ip = clientIp(request)
+  const limited = await rateLimited(env.PLAYER_SEARCH_LIMITER, ip)
+  if (limited) return limited
+
+  const sql = neon(env.DATABASE_URL)
+  const withinLimit = await checkPlayerSearchAttempts(sql, ip)
+  if (!withinLimit) {
+    return Response.json({ error: 'muitas buscas, aguarde um pouco e tente de novo' }, { status: 429 })
+  }
+
+  const url = new URL(request.url)
+  const nickname = url.searchParams.get('nickname')?.trim()
+  if (!nickname) return Response.json({ error: 'nickname obrigatório' }, { status: 400 })
+
+  const rows = (await sql`
+    select id, nickname, avatar_emoji
+    from player_identities
+    where lower(nickname) = lower(${nickname})
+    limit 5
+  `) as { id: string; nickname: string; avatar_emoji: string }[]
+
+  return Response.json({
+    results: rows.map((r) => ({ id: r.id, nickname: r.nickname, avatarEmoji: r.avatar_emoji })),
+  })
 }
 
 async function handleSubscriptionStatus(request: Request, env: Env): Promise<Response> {
@@ -1422,6 +1522,14 @@ export default {
 
     if (url.pathname === '/events' && request.method === 'POST') {
       return withCors(await handleTrackEvent(request, env))
+    }
+
+    if (url.pathname === '/players/register' && request.method === 'POST') {
+      return withCors(await handlePlayerRegister(request, env))
+    }
+
+    if (url.pathname === '/players/search' && request.method === 'GET') {
+      return withCors(await handlePlayerSearch(request, env))
     }
 
     if (url.pathname === '/admin/metrics' && request.method === 'GET') {

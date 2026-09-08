@@ -146,6 +146,7 @@ interface World3DProps {
   onOpenQuestList: () => void
   onOpenShop: () => void
   onOpenPets: () => void
+  onOpenFriends: () => void
   onOpenPairing: () => void
   onOpenAchievements: () => void
   onOpenMyHouse: () => void
@@ -1944,6 +1945,7 @@ export function World3D({
   onOpenQuestList,
   onOpenShop,
   onOpenPets,
+  onOpenFriends,
   onOpenPairing,
   onOpenAchievements,
   onOpenMyHouse,
@@ -10170,6 +10172,7 @@ export function World3D({
         onOpenQuestList={onOpenQuestList}
         onOpenShop={onOpenShop}
         onOpenPets={onOpenPets}
+        onOpenFriends={onOpenFriends}
         muted={muted}
         onToggleMute={handleToggleMute}
         onOpenChat={() => openMultiplayerFeature(() => setChatOpen(true))}

@@ -12,6 +12,7 @@ import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
 import { MyHousePanel } from './world3d/MyHousePanel'
 import { PetPanel } from './world3d/PetPanel'
+import { FriendsPanel } from './world3d/FriendsPanel'
 import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
@@ -136,6 +137,7 @@ function GameApp() {
   const [showAchievements, setShowAchievements] = useState(false)
   const [showMyHouse, setShowMyHouse] = useState(false)
   const [showPets, setShowPets] = useState(false)
+  const [showFriends, setShowFriends] = useState(false)
   // lab-136 (pedido do usuário: "escolher em que posição da casa deve ficar a peça... o ângulo e
   // posição") — id do item que o jogador clicou "Mover" no `MyHousePanel`; `World3D.tsx` observa
   // essa prop e entra no modo de posicionamento dentro da cena 3D, depois chama
@@ -358,6 +360,7 @@ function GameApp() {
           onOpenAchievements={() => setShowAchievements(true)}
           onOpenMyHouse={() => setShowMyHouse(true)}
           onOpenPets={() => setShowPets(true)}
+          onOpenFriends={() => setShowFriends(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
           onFindTreasureChest={foundTreasureChest}
           onCollectPostcard={collectPostcard}
@@ -381,6 +384,7 @@ function GameApp() {
             showAchievements ||
             showMyHouse ||
             showPets ||
+            showFriends ||
             showMarsReward
           }
         />
@@ -454,6 +458,8 @@ function GameApp() {
           onClose={() => setShowPets(false)}
         />
       )}
+
+      {showFriends && <FriendsPanel profile={profile} onClose={() => setShowFriends(false)} />}
 
       {showMarsReward && <MarsRewardToast onContinue={() => setShowMarsReward(false)} />}
 

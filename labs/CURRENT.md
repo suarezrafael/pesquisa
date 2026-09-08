@@ -1,6 +1,22 @@
 # Laboratório atual
 
-Último concluído: labs/lab-158-amigos-plano-arquitetura/ — laboratório de PLANEJAMENTO (sem
+Último concluído: labs/lab-159-identidade-jogador-busca/ — primeiro lab do Grupo B do backlog
+social (lab-158): identidade de jogador persistente por perfil (`player_identities`, funciona pra
+qualquer jogador, não só assinante) + busca por nickname com as salvaguardas do plano (rate limit
+em duas camadas, correspondência exata via `lower(nickname) = lower($1)`, resultado só
+`{id, nickname, avatarEmoji}`). `server-accounts` ganha `POST /players/register`/
+`GET /players/search`; client ganha `usePlayerIdentity.ts` + `FriendsPanel.tsx` (novo ícone 👥 no
+HUD) — busca já funciona, adicionar amigo mostra "🔒 em breve" (lab-160). **Bug real achado e
+corrigido testando ao vivo**: `<StrictMode>` invoca o `useEffect` de registro do `FriendsPanel`
+duas vezes em dev, e a guarda original (`if (playerId) return`) não pegava a segunda chamada
+antes do primeiro `setPlayerId` comitar — registrava 2 jogadores pro mesmo perfil. Corrigido com
+um `useRef` de trava síncrona em `ensureRegistered`. Verificado ao vivo contra o banco de
+PRODUÇÃO real (`wrangler dev` + navegador real): registro, busca exata devolvendo 1 resultado só
+(confirma a correção), rate limit bloqueando com 429 depois do limite; nenhum dado de teste
+restou no banco. `npx tsc -b`/testes limpos (app 131/131, server-accounts 73/73, 5 novos). Ver
+`labs/lab-159-identidade-jogador-busca/CONTEXT.md`.
+
+Antes desse: labs/lab-158-amigos-plano-arquitetura/ — laboratório de PLANEJAMENTO (sem
 código) destravando o Grupo B do backlog social (lab-154). As 3 perguntas de arquitetura/
 segurança foram respondidas pelo usuário: identidade de jogador persistente por PERFIL (sim, sem
 dado pessoal), busca de amigo LIVRE por nickname (escolha mais arriscada das duas oferecidas —
@@ -9,8 +25,7 @@ mitigada com rate limit + só correspondência exata + resultado só nickname+em
 `app/server-accounts` (único backend que já fala com qualquer jogador sem exigir assinatura,
 mesma regra de `/events`) com `player_identities`/`friendships`/`player_search_attempts` +
 7 endpoints, sequenciados em 4 labs menores (lab-159 a lab-162) em vez de tudo de uma vez. Ver
-`labs/lab-158-amigos-plano-arquitetura/FEATURES.md` pro plano completo — próximo passo
-(lab-159, migração + registro + busca) pede confirmação explícita antes de mexer em produção.
+`labs/lab-158-amigos-plano-arquitetura/FEATURES.md` pro plano completo.
 
 Antes desse: labs/lab-157-ranking-local-perfis/ — último item do Grupo A do backlog social
 (lab-154), que fica assim completo (pets lab-155, séries lab-156, ranking local lab-157).
