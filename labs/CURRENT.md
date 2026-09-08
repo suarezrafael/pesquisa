@@ -1,6 +1,15 @@
 # Laboratório atual
 
-Último concluído: labs/lab-155-pets-adotaveis/ — primeiro item do Grupo A do backlog social
+Último concluído: labs/lab-156-series-bronze-prata-ouro-diamante/ — segundo item do Grupo A do
+backlog social (lab-154). Métrica escolhida pelo usuário via `AskUserQuestion`: nível/XP total
+(não sequência de login nem combo de acertos). `seriesForLevel(level)` novo em `progression.ts`
+(limiares Bronze 1-8/Prata 9-16/Ouro 17-24/Diamante 25+, calibrados pelo teto real de XP do jogo,
+~1300 XP de conteúdo "de uma vez"), emblema (🥉🥈🥇💎) novo no HUD ao lado do nível. Só indicador
+visual, sem recompensa atrelada. Verificado ao vivo: perfil novo mostra "Nível 1 · 🥉 Bronze"; XP
+forçado pro limiar exato de nível 9 mostra "🥈 Prata" corretamente. `tsc -b`/testes limpos
+(125/125, 1 novo). Ver `labs/lab-156-series-bronze-prata-ouro-diamante/CONTEXT.md`.
+
+Antes desse: labs/lab-155-pets-adotaveis/ — primeiro item do Grupo A do backlog social
 (lab-154): adotar um pet com moeda (catálogo de 4, `data/pets.ts`, reaproveita `buildGato`/
 `buildCachorro` já existentes), ele segue o jogador pelo mundo com atraso (`petUp` perseguindo o
 `localUp` real via lerp), e cresce em 3 estágios (filhote/jovem/adulto) conforme é alimentado

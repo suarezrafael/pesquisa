@@ -21,6 +21,7 @@ import {
   isQuestUnlocked,
   petStageFor,
   petStageScale,
+  seriesForLevel,
   SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
@@ -863,5 +864,18 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
     expect(petStageScale('filhote')).toBeLessThan(petStageScale('jovem'))
     expect(petStageScale('jovem')).toBeLessThan(petStageScale('adulto'))
     expect(petStageScale('adulto')).toBe(1)
+  })
+})
+
+describe('seriesForLevel (lab-156)', () => {
+  it('limiares exatos: 1-8 bronze, 9-16 prata, 17-24 ouro, 25+ diamante', () => {
+    expect(seriesForLevel(1)).toBe('bronze')
+    expect(seriesForLevel(8)).toBe('bronze')
+    expect(seriesForLevel(9)).toBe('prata')
+    expect(seriesForLevel(16)).toBe('prata')
+    expect(seriesForLevel(17)).toBe('ouro')
+    expect(seriesForLevel(24)).toBe('ouro')
+    expect(seriesForLevel(25)).toBe('diamante')
+    expect(seriesForLevel(100)).toBe('diamante')
   })
 })

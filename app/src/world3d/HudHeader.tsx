@@ -1,6 +1,15 @@
 import type { Profile, Progress } from '../types'
-import { getLevel, xpIntoLevel } from '../state/progression'
+import { getLevel, seriesForLevel, xpIntoLevel, type PlayerSeries } from '../state/progression'
 import { getCurrentWeeklyEvent } from '../data/weeklyEvents'
+
+// lab-156 — emblema/rótulo por série, só apresentação (a regra de qual nível vira qual série
+// mora em `seriesForLevel`, `state/progression.ts`).
+const SERIES_BADGE: Record<PlayerSeries, { emoji: string; label: string }> = {
+  bronze: { emoji: '🥉', label: 'Bronze' },
+  prata: { emoji: '🥈', label: 'Prata' },
+  ouro: { emoji: '🥇', label: 'Ouro' },
+  diamante: { emoji: '💎', label: 'Diamante' },
+}
 
 interface HudHeaderProps {
   profile: Profile
@@ -44,6 +53,7 @@ export function HudHeader({
   const { current, needed } = xpIntoLevel(progress.xp)
   const percent = Math.min(100, Math.round((current / needed) * 100))
   const weeklyEvent = getCurrentWeeklyEvent()
+  const series = SERIES_BADGE[seriesForLevel(level)]
 
   return (
     <div className="hud-overlay" inert={inert}>
@@ -55,7 +65,12 @@ export function HudHeader({
             <div className="xp-bar" aria-label={`Nível ${level}, ${current} de ${needed} XP`}>
               <div className="xp-bar-fill" style={{ width: `${percent}%` }} />
             </div>
-            <span className="hub-level">Nível {level}</span>
+            <span className="hub-level">
+              Nível {level} ·{' '}
+              <span title={`Série ${series.label}`}>
+                <span aria-hidden="true">{series.emoji}</span> {series.label}
+              </span>
+            </span>
           </div>
           <div className="hub-coins">🪙 {progress.coins}</div>
         </header>
