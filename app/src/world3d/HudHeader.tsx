@@ -66,7 +66,10 @@ export function HudHeader({
               <div className="xp-bar-fill" style={{ width: `${percent}%` }} />
             </div>
             <span className="hub-level">
-              Nível {level} · <span title={`Série ${series.label}`}>{series.emoji} {series.label}</span>
+              Nível {level} ·{' '}
+              <span title={`Série ${series.label}`}>
+                <span aria-hidden="true">{series.emoji}</span> {series.label}
+              </span>
             </span>
           </div>
           <div className="hub-coins">🪙 {progress.coins}</div>

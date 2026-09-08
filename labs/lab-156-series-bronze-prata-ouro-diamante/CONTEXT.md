@@ -27,6 +27,13 @@ combo de acertos — não foram escolhidas).
 - **Só um indicador visual, sem recompensa atrelada**: não pedido; mantém o escopo do laboratório
   pequeno, como o resto do Grupo A.
 
+## Achado real do review automático do Copilot (PR #27)
+
+O emoji da série (🥉🥈🥇💎) estava "nu" dentro do `<span>`, sem `aria-hidden="true"` — padrão já
+seguido em `ChatPanel.tsx`/`AvatarShop.tsx` pra emoji + rótulo (evita leitor de tela anunciar o
+emoji de forma redundante/confusa junto do texto do rótulo). Corrigido envolvendo só o emoji num
+`<span aria-hidden="true">` próprio.
+
 ## Pendências / dívidas conhecidas
 
 Nenhuma nova.
