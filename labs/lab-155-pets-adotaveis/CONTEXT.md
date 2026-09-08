@@ -108,3 +108,5 @@ continua bloqueado nas 3 perguntas de arquitetura/segurança registradas em
   limiar exato de 3 alimentações. Sem erro de console em nenhum passo.
 - Como verificar de novo: `cd app && npm run dev`, clicar no ícone 🐾 do HUD, adotar um pet,
   alimentar, e observar o bichinho seguindo o personagem pelo mundo (fora de casa).
+- **Deploy**: PR #26 mergeado em `main`, os 3 jobs de CI/CD verdes, app ao vivo
+  (`https://app-two-flax-92.vercel.app`) respondendo `200` pós-deploy.

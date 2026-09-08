@@ -58,3 +58,5 @@ arquitetura/segurança em `labs/lab-154-.../FEATURES.md`.
   Prata" corretamente após reload. Sem erro de console.
 - Como verificar de novo: `cd app && npm run dev` — o emblema aparece direto no HUD, ao lado do
   nível, sem precisar abrir nenhum painel.
+- **Deploy**: PR #27 mergeado em `main`, os 3 jobs de CI/CD verdes, app ao vivo
+  (`https://app-two-flax-92.vercel.app`) respondendo `200` pós-deploy.

@@ -88,3 +88,5 @@ chave), verificar domínio no Resend (opcional), e confirmar com o usuário o bu
   `localStorage` depois de confirmar (dado só de teste). Sem erro de console.
 - Como verificar de novo: `cd app && npm run dev`, criar um segundo perfil de verdade (tela de
   troca de perfil), ganhar XP nos dois, abrir o Ranking (🏆) → aba "📱 Neste aparelho".
+- **Deploy**: PR #28 mergeado em `main`, os 3 jobs de CI/CD verdes, app ao vivo
+  (`https://app-two-flax-92.vercel.app`) respondendo `200` pós-deploy.

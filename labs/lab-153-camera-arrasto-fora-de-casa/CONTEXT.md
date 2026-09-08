@@ -96,3 +96,5 @@ mas é feature nova de verdade — precisa de escopo antes de começar.
 - Como verificar de novo: `cd app && npm run dev`, arrastar o dedo/mouse na metade direita da tela
   fora de casa — a câmera deve girar suavemente, proporcional ao arrasto; a metade esquerda não
   deve reagir (reservada pro joystick de movimento).
+- **Deploy**: PR #24 mergeado em `main`, os 3 jobs de CI/CD verdes, app ao vivo
+  (`https://app-two-flax-92.vercel.app`) respondendo `200` pós-deploy.

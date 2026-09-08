@@ -13,8 +13,14 @@ antes do primeiro `setPlayerId` comitar — registrava 2 jogadores pro mesmo per
 um `useRef` de trava síncrona em `ensureRegistered`. Verificado ao vivo contra o banco de
 PRODUÇÃO real (`wrangler dev` + navegador real): registro, busca exata devolvendo 1 resultado só
 (confirma a correção), rate limit bloqueando com 429 depois do limite; nenhum dado de teste
-restou no banco. `npx tsc -b`/testes limpos (app 131/131, server-accounts 73/73, 5 novos). Ver
-`labs/lab-159-identidade-jogador-busca/CONTEXT.md`.
+restou no banco. `npx tsc -b`/testes limpos (app 131/131, server-accounts 73/73, 5 novos). PR #30
+teve 3 achados reais do Copilot corrigidos antes do merge (`deviceId` malformado causava 500 —
+`isValidUuid()` novo em `domain.ts` devolve 400; `searchResults` não era limpo ao iniciar nova
+busca; comentário citava um arquivo que nunca existiu) — reverificado ao vivo contra produção
+(400 confirmado pro `deviceId` inválido). **Confirma deploy em produção**: PR #30 mergeado, CI/CD
+(`server-accounts`/`app`/`server-cf-relay`) rodou verde e fez deploy automático; `GET /health` e
+`GET /players/search` responderam em produção (`missao-aprender-accounts.rafaelvs.workers.dev`)
+logo após o deploy. Ver `labs/lab-159-identidade-jogador-busca/CONTEXT.md`.
 
 Antes desse: labs/lab-158-amigos-plano-arquitetura/ — laboratório de PLANEJAMENTO (sem
 código) destravando o Grupo B do backlog social (lab-154). As 3 perguntas de arquitetura/
