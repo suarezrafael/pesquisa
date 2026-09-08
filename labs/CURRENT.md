@@ -1,6 +1,18 @@
 # Laboratório atual
 
-Último concluído: labs/lab-152-consentimento-parental-multiplayer/ — fecha a última parte de G13
+Último concluído: labs/lab-153-camera-arrasto-fora-de-casa/ — item "pronto pra implementar" da
+pesquisa de mercado feita nesta sessão (usuário pediu pesquisa de concorrentes/monetização/
+engajamento infantil + notou que a câmera fora de casa só girava por botão, não por arrasto como
+Roblox/Minecraft mobile). Generalizou os ouvintes de ponteiro que só existiam pra dentro de casa
+(lab-138) pra também funcionar fora: arrasto na metade DIREITA do canvas gira a câmera (só yaw,
+sem pitch — fora de casa não tem câmera "esférica"); metade esquerda fica livre pro joystick de
+movimento. Aditivo aos botões ◀ ▶ (continuam intactos). Verificado via `PointerEvent` sintético
+(mais confiável que a automação de mouse do navegador, que deu resultado confuso nesse teste
+específico — investigado e descartado como limitação da ferramenta, não do código): câmera orbita
+o avatar sem o avatar se mover, e a metade esquerda não reage. `tsc -b`/testes limpos (107/107,
+sem teste novo). Ver `labs/lab-153-camera-arrasto-fora-de-casa/CONTEXT.md`.
+
+Antes desse: labs/lab-152-consentimento-parental-multiplayer/ — fecha a última parte de G13
 (`docs/prompts/05-escala-e-viabilidade.md`) deixada de fora pelo lab-144: consentimento parental
 pro multiplayer. Como a maioria das famílias nunca cria conta (jogo local-only pra quem não
 assina), exigir consentimento só via `/familia` bloquearia multiplayer pra quem não paga (fere a
