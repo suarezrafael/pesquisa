@@ -28,13 +28,20 @@ export function useFriendRequests(playerId: string | null) {
   async function refresh(): Promise<void> {
     if (!playerId) return
     setLoading(true)
+    setActionError(null)
     try {
       const res = await fetch(`${ACCOUNTS_API_URL}/players/friend-summary?playerId=${encodeURIComponent(playerId)}`)
-      if (!res.ok) return
+      if (!res.ok) {
+        // Achado do review do Copilot (PR #31): antes ignorava silenciosamente qualquer erro
+        // (ex.: 429 do rate limit) — o painel ficava com a lista desatualizada sem explicação.
+        const body = (await res.json().catch(() => null)) as { error?: string } | null
+        setActionError(body?.error ?? 'não foi possível atualizar agora')
+        return
+      }
       const body = (await res.json()) as FriendSummary
       setSummary(body)
     } catch {
-      // sem conexão — painel mantém o último resultado conhecido, mesmo espírito de `search`
+      setActionError('sem conexão') // painel mantém o último resultado conhecido, mesmo espírito de `search`
     } finally {
       setLoading(false)
     }

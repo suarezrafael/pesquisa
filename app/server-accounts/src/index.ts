@@ -10,7 +10,7 @@
 // código curto (gerado pelo responsável no portal) por um token de entitlement assinado por nós
 // mesmos (HMAC, `ENTITLEMENT_SECRET`), guardado localmente no jogo e revalidado em background.
 
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
+import { neon, NeonDbError, type NeonQueryFunction } from '@neondatabase/serverless'
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
 import {
@@ -574,7 +574,19 @@ async function handleFriendRequestSend(request: Request, env: Env): Promise<Resp
   }
 
   const sql = neon(env.DATABASE_URL)
+  // Achado do review do Copilot (PR #31): sem isto, um `fromId`/`toId` inexistente batia na FK do
+  // `insert` abaixo e virava um 500 não tratado (mesma classe de bug do `deviceId` no lab-159).
+  const knownIds = (await sql`
+    select id from player_identities where id in (${fromId}, ${toId})
+  `) as { id: string }[]
+  if (knownIds.length < 2) {
+    return Response.json({ error: 'fromId/toId não encontrado' }, { status: 404 })
+  }
+
   // Cobre os dois sentidos (A→B e B→A) — o índice único da tabela só protege o MESMO sentido.
+  // Ainda é um SELECT-then-INSERT (corrida possível entre duas chamadas concorrentes em sentidos
+  // opostos) — o índice único não-direcional da migração `0006` é quem garante o resultado
+  // correto de verdade; esta checagem só evita a viagem extra ao banco no caso comum.
   const existing = (await sql`
     select id, status from friendships
     where (requester_id = ${fromId} and addressee_id = ${toId})
@@ -584,15 +596,25 @@ async function handleFriendRequestSend(request: Request, env: Env): Promise<Resp
     return Response.json({ error: 'já existe um pedido ou amizade entre esses jogadores' }, { status: 409 })
   }
 
-  // Só chega aqui se a única linha pré-existente possível (mesmo sentido) está `removed` —
-  // upsert revive o pedido em vez de falhar na constraint `unique(requester_id, addressee_id)`.
-  const rows = (await sql`
-    insert into friendships (requester_id, addressee_id, status, updated_at)
-    values (${fromId}, ${toId}, 'pending', now())
-    on conflict (requester_id, addressee_id) do update set status = 'pending', updated_at = now()
-    returning id
-  `) as { id: string }[]
-  return Response.json({ friendshipId: rows[0].id })
+  try {
+    // Só chega aqui se a única linha pré-existente possível (mesmo sentido) está `removed` —
+    // upsert revive o pedido em vez de falhar na constraint `unique(requester_id, addressee_id)`.
+    const rows = (await sql`
+      insert into friendships (requester_id, addressee_id, status, updated_at)
+      values (${fromId}, ${toId}, 'pending', now())
+      on conflict (requester_id, addressee_id) do update set status = 'pending', updated_at = now()
+      returning id
+    `) as { id: string }[]
+    return Response.json({ friendshipId: rows[0].id })
+  } catch (err) {
+    // Corrida real entre duas chamadas concorrentes em sentidos opostos — a checagem `existing`
+    // acima não é atômica, então o índice único não-direcional (`idx_friendships_unique_active_pair`,
+    // migração `0006`) é a última linha de defesa; código 23505 = unique_violation do Postgres.
+    if (err instanceof NeonDbError && err.code === '23505') {
+      return Response.json({ error: 'já existe um pedido ou amizade entre esses jogadores' }, { status: 409 })
+    }
+    throw err
+  }
 }
 
 // lab-160 — só o `addressee_id` do pedido pode aceitar/recusar (o `playerId` do corpo precisa
@@ -680,12 +702,15 @@ async function handleFriendSummary(request: Request, env: Env): Promise<Response
   }
 
   const sql = neon(env.DATABASE_URL)
+  // Ordenado por `updated_at`, não `created_at` (achado do review do Copilot no PR #31): um
+  // pedido `removed` revivido via UPSERT (`handleFriendRequestSend`) preserva `created_at`
+  // original, então ordenar por ele faria um pedido refeito agora aparecer com a data antiga.
   const received = (await sql`
     select f.id, p.id as player_id, p.nickname, p.avatar_emoji
     from friendships f
     join player_identities p on p.id = f.requester_id
     where f.addressee_id = ${playerId} and f.status = 'pending'
-    order by f.created_at asc
+    order by f.updated_at asc
   `) as FriendRow[]
 
   const sent = (await sql`
@@ -693,7 +718,7 @@ async function handleFriendSummary(request: Request, env: Env): Promise<Response
     from friendships f
     join player_identities p on p.id = f.addressee_id
     where f.requester_id = ${playerId} and f.status = 'pending'
-    order by f.created_at asc
+    order by f.updated_at asc
   `) as FriendRow[]
 
   const friends = (await sql`

@@ -20,3 +20,14 @@ create table if not exists friendships (
 -- o painel de Amigos abre a aba de pedidos).
 create index if not exists idx_friendships_addressee_status on friendships (addressee_id, status);
 create index if not exists idx_friendships_requester_status on friendships (requester_id, status);
+
+-- Achado do review automático do Copilot no PR #31: `unique(requester_id, addressee_id)` só
+-- protege o MESMO sentido — duas requisições concorrentes em sentidos opostos (A→B e B→A) podiam
+-- passar pela checagem SELECT-then-INSERT do handler e criar duas linhas ativas pro mesmo par.
+-- Índice único parcial por par NÃO-direcional (`least`/`greatest`), só sobre relações ativas
+-- (`status <> 'removed'`) — uma amizade removida não bloqueia um par de tentar de novo. O handler
+-- captura a violação dessa constraint (código Postgres 23505) e devolve 409 em vez de deixar
+-- vazar como erro 500.
+create unique index if not exists idx_friendships_unique_active_pair
+  on friendships (least(requester_id, addressee_id), greatest(requester_id, addressee_id))
+  where status <> 'removed';

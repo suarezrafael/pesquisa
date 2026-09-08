@@ -23,7 +23,6 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
   const { summary, actionError, refresh, sendRequest, respond, removeFriend } = useFriendRequests(playerId)
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<FriendsTab>('search')
-  const [sentTo, setSentTo] = useState<Set<string>>(new Set())
   const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -39,11 +38,6 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (query.trim()) search(query.trim())
-  }
-
-  async function handleAdd(result: { id: string }) {
-    const ok = await sendRequest(result.id)
-    if (ok) setSentTo((prev) => new Set(prev).add(result.id))
   }
 
   function handleRemoveClick(item: FriendSummaryItem) {
@@ -101,7 +95,7 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
             <div className="chat-panel-messages">
               {searchResults.map((r) => {
                 const alreadyFriend = summary.friends.some((f) => f.playerId === r.id)
-                const alreadySent = sentTo.has(r.id) || summary.sent.some((s) => s.playerId === r.id)
+                const alreadySent = summary.sent.some((s) => s.playerId === r.id)
                 return (
                   <p key={r.id} className="ranking-row">
                     {r.avatarEmoji} <strong>{r.nickname}</strong> —{' '}
@@ -110,7 +104,7 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
                     ) : alreadySent ? (
                       <span>⏳ pedido enviado</span>
                     ) : (
-                      <button type="button" className="chat-category-btn" onClick={() => handleAdd(r)}>
+                      <button type="button" className="chat-category-btn" onClick={() => sendRequest(r.id)}>
                         Adicionar
                       </button>
                     )}
