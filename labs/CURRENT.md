@@ -1,6 +1,18 @@
 # Laboratório atual
 
-Último concluído: labs/lab-157-ranking-local-perfis/ — último item do Grupo A do backlog social
+Último concluído: labs/lab-158-amigos-plano-arquitetura/ — laboratório de PLANEJAMENTO (sem
+código) destravando o Grupo B do backlog social (lab-154). As 3 perguntas de arquitetura/
+segurança foram respondidas pelo usuário: identidade de jogador persistente por PERFIL (sim, sem
+dado pessoal), busca de amigo LIVRE por nickname (escolha mais arriscada das duas oferecidas —
+mitigada com rate limit + só correspondência exata + resultado só nickname+emoji), consentimento
+(o portão de multiplayer do lab-152 já cobre, sem portão novo). Plano técnico: estender
+`app/server-accounts` (único backend que já fala com qualquer jogador sem exigir assinatura,
+mesma regra de `/events`) com `player_identities`/`friendships`/`player_search_attempts` +
+7 endpoints, sequenciados em 4 labs menores (lab-159 a lab-162) em vez de tudo de uma vez. Ver
+`labs/lab-158-amigos-plano-arquitetura/FEATURES.md` pro plano completo — próximo passo
+(lab-159, migração + registro + busca) pede confirmação explícita antes de mexer em produção.
+
+Antes desse: labs/lab-157-ranking-local-perfis/ — último item do Grupo A do backlog social
 (lab-154), que fica assim completo (pets lab-155, séries lab-156, ranking local lab-157).
 `RankingPanel` ganhou duas abas: "🌐 Online agora" (comportamento original, intocado) e "📱 Neste
 aparelho" (nova, só aparece com 2+ perfis no roster do aparelho, lab-108), ordenada por XP GANHO
