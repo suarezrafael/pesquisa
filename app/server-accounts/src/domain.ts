@@ -159,7 +159,15 @@ export function isAtDeviceLimit(activeTokenCount: number): boolean {
 // `POST /events` — mesma filosofia de "nunca confiar em input do client sem checar" já usada em
 // `ALLOWED_CLIENT_MESSAGE_TYPES` do relay (server-cf-relay). Um tipo fora desta lista é
 // silenciosamente recusado, não vira uma linha nova e imprevista na tabela de eventos.
-const PRODUCT_EVENT_TYPES = new Set(['session_start', 'session_end', 'quest_completed'])
+// lab-161 (home inicial dupla criança/responsável): `play_click`/`parent_area_click` medem se os
+// dois CTAs da `TitleScreen` convencem cada público — sem meta (nenhum dado além do tipo/hora).
+const PRODUCT_EVENT_TYPES = new Set([
+  'session_start',
+  'session_end',
+  'quest_completed',
+  'play_click',
+  'parent_area_click',
+])
 
 export function isValidProductEventType(type: string): boolean {
   return PRODUCT_EVENT_TYPES.has(type)

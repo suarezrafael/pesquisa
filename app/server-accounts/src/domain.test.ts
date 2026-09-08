@@ -206,7 +206,7 @@ describe('isAtDeviceLimit — lab-97, resto de G7 (limite de 3 aparelhos por fam
 })
 
 describe('isValidProductEventType — lab-99, resto de G11', () => {
-  it('aceita os 3 tipos de evento conhecidos', () => {
+  it('aceita os tipos de evento conhecidos', () => {
     expect(isValidProductEventType('session_start')).toBe(true)
     expect(isValidProductEventType('session_end')).toBe(true)
     expect(isValidProductEventType('quest_completed')).toBe(true)
@@ -215,6 +215,11 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
   it('rejeita um tipo desconhecido — nunca confia em input do client sem checar', () => {
     expect(isValidProductEventType('qualquer_coisa')).toBe(false)
     expect(isValidProductEventType('')).toBe(false)
+  })
+
+  it('aceita os eventos da home inicial dupla (lab-161)', () => {
+    expect(isValidProductEventType('play_click')).toBe(true)
+    expect(isValidProductEventType('parent_area_click')).toBe(true)
   })
 })
 
