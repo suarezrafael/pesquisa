@@ -48,6 +48,17 @@ Commit inicial → final: 643d123c352ac419800d6bd5659b582e8a18d49f..HEAD
   `localStorage` só é atualizado depois de `saveProgress`, que roda de forma síncrona na maioria
   dos casos mas não há garantia formal disso em TODOS os caminhos).
 
+## Achados reais do review automático do Copilot (PR #28)
+
+- **`loadProgressForProfileId` sem `migrateLegacyProfileIfNeeded()`**: diferente de `loadProgress`/
+  `listProfiles`, a função nova não migrava perfil legado — não quebrava HOJE (`RankingPanel`
+  sempre chama `listProfiles()` antes, que já migra), mas era uma inconsistência de API real: a
+  função é exportada e um uso futuro sem essa chamada antes deixaria de migrar. Corrigido chamando
+  `migrateLegacyProfileIfNeeded()` também aqui, igual às funções irmãs.
+- **`localEntries` calculado em todo render, mesmo na aba "Online agora"**: leituras de
+  `localStorage` + ordenação rodando à toa sempre que houvesse 2+ perfis, independente de qual aba
+  estava aberta. Corrigido só montando a lista quando `tab === 'local'`.
+
 ## Pendências / dívidas conhecidas
 
 Nenhuma nova. Com este laboratório, o Grupo A do backlog social (lab-154) está completo: pets

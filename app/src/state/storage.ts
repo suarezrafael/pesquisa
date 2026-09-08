@@ -238,8 +238,13 @@ export function loadProgress(): Progress {
 // lab-157: variante de `loadProgress` pra ler o `Progress` de QUALQUER perfil do roster (lab-108),
 // não só o ativo — ranking local entre irmãos do mesmo aparelho precisa comparar todos de uma vez,
 // sem trocar de perfil ativo pra isso (`switchActiveProfile`/reload, caro e visível demais só pra
-// ler um número). Mesmo parsing/fallback de `loadProgress`, só parametrizado pelo id.
+// ler um número). Mesmo parsing/fallback de `loadProgress` — incluindo a migração de perfil legado
+// (achado do review automático do Copilot: sem essa chamada aqui, chamar esta função exportada sem
+// passar antes por `listProfiles()`/`loadProgress()` deixaria de migrar um perfil legado ainda não
+// convertido pro sistema de slots, mesmo não sendo o caso hoje em `RankingPanel`, que já chama
+// `listProfiles()` antes).
 export function loadProgressForProfileId(id: string): Progress {
+  migrateLegacyProfileIfNeeded()
   const raw = localStorage.getItem(progressKey(id))
   if (!raw) return emptyProgress
   try {

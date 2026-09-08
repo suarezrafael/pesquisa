@@ -48,7 +48,10 @@ export function RankingPanel({ entries, connected, profile, progress, onClose }:
   // aparecer com múltiplos perfis (lab-108): ranking de uma pessoa só não diz nada.
   const roster = listProfiles()
   const showLocalTab = roster.length > 1
-  const localEntries = showLocalTab ? buildLocalEntries(profile, progress, new Date().toISOString()) : []
+  // lab-157 (achado do review automático do Copilot): só monta a lista local (leituras de
+  // `localStorage` + ordenação) quando a aba local está de fato ABERTA — antes rodava em todo
+  // render sempre que houvesse 2+ perfis, mesmo olhando "Online agora".
+  const localEntries = tab === 'local' ? buildLocalEntries(profile, progress, new Date().toISOString()) : []
 
   return (
     <div
