@@ -13,7 +13,12 @@ allowlist `PRODUCT_EVENT_TYPES` de `server-accounts/src/domain.ts` (único ponto
 sem rota/schema/entitlement novo). Verificado ao vivo: build de produção confirma `World3D-*.js`
 (Babylon) continua chunk lazy separado — tela inicial não pesa mais; fluxo completo testado
 (Jogar → onboarding normal; Área dos responsáveis → `/familia` em aba nova, sem navegar a criança
-pra longe). `npx tsc -b`/testes limpos (app 131/131, server-accounts 82/82, 1 novo). Ver
+pra longe). `npx tsc -b`/testes limpos (app 131/131, server-accounts 82/82, 1 novo). PR #34 teve
+1 achado real do Copilot corrigido antes do merge: link pra `/familia` com `target="_blank"` só
+tinha `rel="noreferrer"` — trocado por `rel="noopener noreferrer"` (defesa contra tabnabbing via
+`window.opener`). **Confirma deploy em produção**: PR #34 mergeado, CI/CD verde, deploy automático
+confirmado (`GET /health` 200, evento `play_click` agora aceito com 204 — antes do deploy
+devolvia 400, allowlist antiga —, frontend em `app-two-flax-92.vercel.app` respondendo 200). Ver
 `labs/lab-161-home-inicial-dupla/CONTEXT.md`.
 
 Antes desse: labs/lab-160-pedidos-de-amizade/ — segundo lab do Grupo B do backlog social
