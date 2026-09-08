@@ -1,6 +1,19 @@
 # Laboratório atual
 
-Último concluído: labs/lab-153-camera-arrasto-fora-de-casa/ — item "pronto pra implementar" da
+Último concluído: labs/lab-154-backlog-social-pets-amigos-ranking/ — laboratório de PLANEJAMENTO
+(pedido explícito do usuário: "montar um lab de backlog"), sem código novo. Usuário pediu pets,
+lista de amigos, busca por nickname, status online/último acesso, convites, ver avatar/conquistas
+de amigo, ranking da semana, ofensiva e séries (Bronze/Prata/Ouro/Diamante). Achado central: a
+lista se divide em dois grupos bem diferentes — **Grupo A** (pets, séries, ranking local entre
+perfis do mesmo aparelho) dá pra construir na arquitetura de hoje, sem decisão pendente; **Grupo B**
+(lista de amigos, busca por nick, status online, convites) exige criar uma identidade de jogador
+BUSCÁVEL pra toda criança, não só assinante — pivô real que sai do "a criança nunca cria conta"
+atual, com implicação de segurança infantil (superfície nova de risco, mais sensível que o chat
+fechado) que precisa de decisão explícita do usuário antes de qualquer código, mesma categoria de
+G13/G15 já tratados nesta sessão. Ver `labs/lab-154-backlog-social-pets-amigos-ranking/FEATURES.md`
+pro detalhamento item a item e as perguntas em aberto.
+
+Antes desse: labs/lab-153-camera-arrasto-fora-de-casa/ — item "pronto pra implementar" da
 pesquisa de mercado feita nesta sessão (usuário pediu pesquisa de concorrentes/monetização/
 engajamento infantil + notou que a câmera fora de casa só girava por botão, não por arrasto como
 Roblox/Minecraft mobile). Generalizou os ouvintes de ponteiro que só existiam pra dentro de casa
