@@ -28,6 +28,7 @@ import {
   equipPet as applyEquipPet,
   feedPet as applyFeedPet,
   type FeedPetResult,
+  syncWeeklyXpSnapshot as applySyncWeeklyXpSnapshot,
 } from './progression'
 
 export function useProgress() {
@@ -258,6 +259,18 @@ export function useProgress() {
     return result
   }
 
+  // Ranking local entre perfis (lab-157) — mesmo gatilho/formato de `touchLastPlayed`, uma vez
+  // por sessão (ver `App.tsx`): reseta o snapshot de XP semanal se a semana real mudou desde a
+  // última vez, sem mexer em nada se ainda é a mesma semana (ver `syncWeeklyXpSnapshot`).
+  function syncWeeklyXp(nowIso: string): void {
+    setProgress((prev) => {
+      const next = applySyncWeeklyXpSnapshot(prev, nowIso)
+      if (next === prev) return prev
+      saveProgress(next)
+      return next
+    })
+  }
+
   return {
     progress,
     completeQuest,
@@ -282,5 +295,6 @@ export function useProgress() {
     adoptPet,
     equipPet,
     feedPet,
+    syncWeeklyXp,
   }
 }

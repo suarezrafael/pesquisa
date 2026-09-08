@@ -61,3 +61,16 @@ export function getCurrentWeeklyEvent(date: Date = new Date()): WeeklyEvent {
   const week = isoWeekNumber(date)
   return WEEKLY_EVENTS[week % WEEKLY_EVENTS.length]
 }
+
+// lab-157 (ranking local entre perfis do mesmo aparelho, Grupo A do backlog social do lab-154) —
+// chave de semana estável ("2026-W23"), reaproveitando a MESMA definição ISO 8601 já usada pra
+// girar o evento semanal (garante que "essa semana" signifique a mesma coisa nos dois lugares).
+// Precisa do ANO-DA-SEMANA ISO (não `date.getFullYear()` puro — nos últimos/primeiros dias de
+// dezembro/janeiro os dois podem divergir), por isso repete o mesmo ajuste de quinta-feira em vez
+// de só reaproveitar `isoWeekNumber` sozinho.
+export function isoWeekKey(date: Date = new Date()): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const dayNum = (d.getUTCDay() + 6) % 7
+  d.setUTCDate(d.getUTCDate() - dayNum + 3)
+  return `${d.getUTCFullYear()}-W${isoWeekNumber(date)}`
+}
