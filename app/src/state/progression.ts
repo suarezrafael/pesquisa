@@ -34,6 +34,21 @@ export function xpIntoLevel(xp: number): { current: number; needed: number } {
   return { current: xp - floor, needed: xpForLevel(level) - floor }
 }
 
+// Séries (lab-156, item do backlog social planejado no lab-154) — indicador de status por nível,
+// métrica escolhida pelo usuário via `AskUserQuestion` (nível/XP total, não a sequência de login
+// nem o combo de acertos — as outras duas opções oferecidas). Limiares calibrados em quartis
+// aproximados: o conteúdo "de uma vez" do jogo (30 missões principais + 36 escolinhas de planeta,
+// sem contar moeda repetível, que não dá XP) soma ~1300 XP, o que dá nível máximo em torno de
+// ~33-34 com a fórmula atual de `xpForLevel`.
+export type PlayerSeries = 'bronze' | 'prata' | 'ouro' | 'diamante'
+
+export function seriesForLevel(level: number): PlayerSeries {
+  if (level >= 25) return 'diamante'
+  if (level >= 17) return 'ouro'
+  if (level >= 9) return 'prata'
+  return 'bronze'
+}
+
 // Exportadas (lab-93) pra `data/achievements.ts` usar como fonte única de verdade — sem isso, o
 // catálogo de conquistas teria que duplicar essas strings, arriscando os dois lados divergirem.
 export const BADGE_FIRST_QUEST = 'Primeira Missão'
