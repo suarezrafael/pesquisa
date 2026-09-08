@@ -6,13 +6,16 @@ import { describe, expect, it } from 'vitest'
 import {
   buildWeeklyProgressEmail,
   calculateNpsScore,
+  friendResponseStatus,
   generatePairingCode,
+  hasActiveFriendship,
   isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
   isNicknameAllowed,
   isPairingCodeUsable,
   isPlausibleSessionDuration,
+  isSelfFriendRequest,
   isTokenRevoked,
   isValidNpsScore,
   isValidProductEventType,
@@ -464,5 +467,38 @@ describe('isValidUuid (lab-159)', () => {
     expect(isValidUuid('')).toBe(false)
     expect(isValidUuid('não sou um uuid')).toBe(false)
     expect(isValidUuid('9b1deb4d-3b7d-4bad-9bdd')).toBe(false)
+  })
+})
+
+describe('isSelfFriendRequest (lab-160)', () => {
+  it('detecta pedido pra si mesmo', () => {
+    expect(isSelfFriendRequest('a', 'a')).toBe(true)
+  })
+
+  it('não acusa pedido entre jogadores diferentes', () => {
+    expect(isSelfFriendRequest('a', 'b')).toBe(false)
+  })
+})
+
+describe('hasActiveFriendship (lab-160)', () => {
+  it('sem nenhuma linha, não há amizade ativa', () => {
+    expect(hasActiveFriendship([])).toBe(false)
+  })
+
+  it('pending/accepted/declined contam como ativa (bloqueiam pedido novo)', () => {
+    expect(hasActiveFriendship([{ status: 'pending' }])).toBe(true)
+    expect(hasActiveFriendship([{ status: 'accepted' }])).toBe(true)
+    expect(hasActiveFriendship([{ status: 'declined' }])).toBe(true)
+  })
+
+  it('só `removed` libera pedir de novo', () => {
+    expect(hasActiveFriendship([{ status: 'removed' }])).toBe(false)
+  })
+})
+
+describe('friendResponseStatus (lab-160)', () => {
+  it('aceitar vira accepted, recusar vira declined', () => {
+    expect(friendResponseStatus(true)).toBe('accepted')
+    expect(friendResponseStatus(false)).toBe('declined')
   })
 })

@@ -10,18 +10,21 @@
 // código curto (gerado pelo responsável no portal) por um token de entitlement assinado por nós
 // mesmos (HMAC, `ENTITLEMENT_SECRET`), guardado localmente no jogo e revalidado em background.
 
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
+import { neon, NeonDbError, type NeonQueryFunction } from '@neondatabase/serverless'
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
 import Stripe from 'stripe'
 import {
   buildWeeklyProgressEmail,
   calculateNpsScore,
+  friendResponseStatus,
   generatePairingCode,
+  hasActiveFriendship,
   isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
   isNicknameAllowed,
   isPlausibleSessionDuration,
+  isSelfFriendRequest,
   isTokenRevoked,
   isValidNpsScore,
   isValidProductEventType,
@@ -96,6 +99,9 @@ export interface Env {
   // persistente por perfil + busca por nickname.
   PLAYER_REGISTER_LIMITER: RateLimit
   PLAYER_SEARCH_LIMITER: RateLimit
+  // lab-160 — compartilhado entre as 4 rotas de pedido/aceite/recusa/remoção de amizade (mesmo
+  // espírito de PROGRESS_BACKUP_LIMITER cobrindo leitura e escrita com um namespace só).
+  FRIEND_REQUEST_LIMITER: RateLimit
 }
 
 // IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
@@ -537,6 +543,199 @@ async function handlePlayerSearch(request: Request, env: Env): Promise<Response>
 
   return Response.json({
     results: rows.map((r) => ({ id: r.id, nickname: r.nickname, avatarEmoji: r.avatar_emoji })),
+  })
+}
+
+type FriendRow = { id: string; player_id: string; nickname: string; avatar_emoji: string }
+
+function shapeFriendRow(row: FriendRow) {
+  return { friendshipId: row.id, playerId: row.player_id, nickname: row.nickname, avatarEmoji: row.avatar_emoji }
+}
+
+// lab-160, Grupo B do backlog social — envia um pedido de amizade. `playerId` não tem assinatura
+// nenhuma (mesmo modelo de confiança do resto do Grupo B: é um id opaco guardado no client, não
+// uma credencial verificada por senha/token) — aceitável porque o pior caso de abuso é alguém
+// mandar pedido em nome de outro `playerId` que já conhece, não um vazamento de dado sensível.
+async function handleFriendRequestSend(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.FRIEND_REQUEST_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const body = (await request.json().catch(() => null)) as { fromId?: string; toId?: string } | null
+  const fromId = body?.fromId?.trim()
+  const toId = body?.toId?.trim()
+  if (!fromId || !toId) {
+    return Response.json({ error: 'fromId e toId são obrigatórios' }, { status: 400 })
+  }
+  if (!isValidUuid(fromId) || !isValidUuid(toId)) {
+    return Response.json({ error: 'fromId/toId inválido' }, { status: 400 })
+  }
+  if (isSelfFriendRequest(fromId, toId)) {
+    return Response.json({ error: 'não é possível pedir amizade pra si mesmo' }, { status: 400 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  // Achado do review do Copilot (PR #31): sem isto, um `fromId`/`toId` inexistente batia na FK do
+  // `insert` abaixo e virava um 500 não tratado (mesma classe de bug do `deviceId` no lab-159).
+  const knownIds = (await sql`
+    select id from player_identities where id in (${fromId}, ${toId})
+  `) as { id: string }[]
+  if (knownIds.length < 2) {
+    return Response.json({ error: 'fromId/toId não encontrado' }, { status: 404 })
+  }
+
+  // Cobre os dois sentidos (A→B e B→A) — o índice único da tabela só protege o MESMO sentido.
+  // Ainda é um SELECT-then-INSERT (corrida possível entre duas chamadas concorrentes em sentidos
+  // opostos) — o índice único não-direcional da migração `0006` é quem garante o resultado
+  // correto de verdade; esta checagem só evita a viagem extra ao banco no caso comum.
+  const existing = (await sql`
+    select id, status from friendships
+    where (requester_id = ${fromId} and addressee_id = ${toId})
+       or (requester_id = ${toId} and addressee_id = ${fromId})
+  `) as { id: string; status: string }[]
+  if (hasActiveFriendship(existing)) {
+    return Response.json({ error: 'já existe um pedido ou amizade entre esses jogadores' }, { status: 409 })
+  }
+
+  try {
+    // Só chega aqui se a única linha pré-existente possível (mesmo sentido) está `removed` —
+    // upsert revive o pedido em vez de falhar na constraint `unique(requester_id, addressee_id)`.
+    const rows = (await sql`
+      insert into friendships (requester_id, addressee_id, status, updated_at)
+      values (${fromId}, ${toId}, 'pending', now())
+      on conflict (requester_id, addressee_id) do update set status = 'pending', updated_at = now()
+      returning id
+    `) as { id: string }[]
+    return Response.json({ friendshipId: rows[0].id })
+  } catch (err) {
+    // Corrida real entre duas chamadas concorrentes em sentidos opostos — a checagem `existing`
+    // acima não é atômica, então o índice único não-direcional (`idx_friendships_unique_active_pair`,
+    // migração `0006`) é a última linha de defesa; código 23505 = unique_violation do Postgres.
+    if (err instanceof NeonDbError && err.code === '23505') {
+      return Response.json({ error: 'já existe um pedido ou amizade entre esses jogadores' }, { status: 409 })
+    }
+    throw err
+  }
+}
+
+// lab-160 — só o `addressee_id` do pedido pode aceitar/recusar (o `playerId` do corpo precisa
+// bater com quem recebeu, senão 403 — impede que o remetente responda o próprio pedido).
+async function handleFriendRequestRespond(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.FRIEND_REQUEST_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const body = (await request.json().catch(() => null)) as
+    | { requestId?: string; playerId?: string; accept?: boolean }
+    | null
+  const requestId = body?.requestId?.trim()
+  const playerId = body?.playerId?.trim()
+  const accept = body?.accept
+  if (!requestId || !playerId || typeof accept !== 'boolean') {
+    return Response.json({ error: 'requestId, playerId e accept são obrigatórios' }, { status: 400 })
+  }
+  if (!isValidUuid(requestId) || !isValidUuid(playerId)) {
+    return Response.json({ error: 'requestId/playerId inválido' }, { status: 400 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  const rows = (await sql`
+    select id, addressee_id, status from friendships where id = ${requestId}
+  `) as { id: string; addressee_id: string; status: string }[]
+  const friendship = rows[0]
+  if (!friendship) return Response.json({ error: 'pedido não encontrado' }, { status: 404 })
+  if (friendship.addressee_id !== playerId) {
+    return Response.json({ error: 'só quem recebeu o pedido pode responder' }, { status: 403 })
+  }
+  if (friendship.status !== 'pending') {
+    return Response.json({ error: 'esse pedido já foi respondido' }, { status: 409 })
+  }
+
+  const newStatus = friendResponseStatus(accept)
+  await sql`update friendships set status = ${newStatus}, updated_at = now() where id = ${requestId}`
+  return Response.json({ status: newStatus })
+}
+
+// lab-160 — soft-delete de uma amizade `accepted` (histórico preservado, mesmo espírito de
+// token revogado/pairing_code expirado — nunca DELETE físico de uma relação social). Qualquer um
+// dos dois lados pode remover; `playerId` precisa ser um dos dois, senão 403.
+async function handleFriendRequestRemove(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.FRIEND_REQUEST_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const body = (await request.json().catch(() => null)) as { playerId?: string; friendshipId?: string } | null
+  const playerId = body?.playerId?.trim()
+  const friendshipId = body?.friendshipId?.trim()
+  if (!playerId || !friendshipId) {
+    return Response.json({ error: 'playerId e friendshipId são obrigatórios' }, { status: 400 })
+  }
+  if (!isValidUuid(playerId) || !isValidUuid(friendshipId)) {
+    return Response.json({ error: 'playerId/friendshipId inválido' }, { status: 400 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  const rows = (await sql`
+    select id, requester_id, addressee_id, status from friendships where id = ${friendshipId}
+  `) as { id: string; requester_id: string; addressee_id: string; status: string }[]
+  const friendship = rows[0]
+  if (!friendship) return Response.json({ error: 'amizade não encontrada' }, { status: 404 })
+  if (friendship.requester_id !== playerId && friendship.addressee_id !== playerId) {
+    return Response.json({ error: 'só quem faz parte da amizade pode removê-la' }, { status: 403 })
+  }
+  if (friendship.status !== 'accepted') {
+    return Response.json({ error: 'essa amizade não está ativa' }, { status: 409 })
+  }
+
+  await sql`update friendships set status = 'removed', updated_at = now() where id = ${friendshipId}`
+  return new Response(null, { status: 204 })
+}
+
+// lab-160 — uma chamada só devolve os 3 grupos que o painel de Amigos precisa mostrar: pedidos
+// pendentes recebidos, pedidos pendentes enviados, e amizades já aceitas (pra alimentar o botão
+// "Remover" deste lab — status online/último acesso é o `lastSeenAt` do lab-161, ainda não existe).
+async function handleFriendSummary(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.FRIEND_REQUEST_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const url = new URL(request.url)
+  const playerId = url.searchParams.get('playerId')?.trim()
+  if (!playerId || !isValidUuid(playerId)) {
+    return Response.json({ error: 'playerId inválido' }, { status: 400 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  // Ordenado por `updated_at`, não `created_at` (achado do review do Copilot no PR #31): um
+  // pedido `removed` revivido via UPSERT (`handleFriendRequestSend`) preserva `created_at`
+  // original, então ordenar por ele faria um pedido refeito agora aparecer com a data antiga.
+  const received = (await sql`
+    select f.id, p.id as player_id, p.nickname, p.avatar_emoji
+    from friendships f
+    join player_identities p on p.id = f.requester_id
+    where f.addressee_id = ${playerId} and f.status = 'pending'
+    order by f.updated_at asc
+  `) as FriendRow[]
+
+  const sent = (await sql`
+    select f.id, p.id as player_id, p.nickname, p.avatar_emoji
+    from friendships f
+    join player_identities p on p.id = f.addressee_id
+    where f.requester_id = ${playerId} and f.status = 'pending'
+    order by f.updated_at asc
+  `) as FriendRow[]
+
+  const friends = (await sql`
+    select f.id,
+      case when f.requester_id = ${playerId} then f.addressee_id else f.requester_id end as player_id,
+      p.nickname, p.avatar_emoji
+    from friendships f
+    join player_identities p
+      on p.id = (case when f.requester_id = ${playerId} then f.addressee_id else f.requester_id end)
+    where (f.requester_id = ${playerId} or f.addressee_id = ${playerId}) and f.status = 'accepted'
+    order by f.updated_at desc
+  `) as FriendRow[]
+
+  return Response.json({
+    received: received.map(shapeFriendRow),
+    sent: sent.map(shapeFriendRow),
+    friends: friends.map(shapeFriendRow),
   })
 }
 
@@ -1530,6 +1729,22 @@ export default {
 
     if (url.pathname === '/players/search' && request.method === 'GET') {
       return withCors(await handlePlayerSearch(request, env))
+    }
+
+    if (url.pathname === '/players/friend-request' && request.method === 'POST') {
+      return withCors(await handleFriendRequestSend(request, env))
+    }
+
+    if (url.pathname === '/players/friend-request/respond' && request.method === 'POST') {
+      return withCors(await handleFriendRequestRespond(request, env))
+    }
+
+    if (url.pathname === '/players/friend-request/remove' && request.method === 'POST') {
+      return withCors(await handleFriendRequestRemove(request, env))
+    }
+
+    if (url.pathname === '/players/friend-summary' && request.method === 'GET') {
+      return withCors(await handleFriendSummary(request, env))
     }
 
     if (url.pathname === '/admin/metrics' && request.method === 'GET') {

@@ -174,3 +174,14 @@ namespace_id = "1012"
   [ratelimits.simple]
   limit = 8
   period = 60
+
+[[ratelimits]]
+name = "FRIEND_REQUEST_LIMITER"
+namespace_id = "1013"
+  # lab-160 — compartilhado pelas 4 rotas de pedido/aceite/recusa/remoção de amizade (mesmo
+  # espírito de PROGRESS_BACKUP_LIMITER cobrindo leitura e escrita com um namespace só). Mais
+  # generoso que PLAYER_SEARCH_LIMITER porque não é uma rota de enumeração de diretório — o painel
+  # de Amigos chama `friend-summary` toda vez que abre/troca de aba.
+  [ratelimits.simple]
+  limit = 20
+  period = 60

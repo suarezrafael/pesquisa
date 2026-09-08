@@ -312,3 +312,22 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export function isValidUuid(value: string): boolean {
   return UUID_PATTERN.test(value)
 }
+
+// lab-160 — um jogador não pode pedir amizade pra si mesmo (o `playerId` guardado localmente é
+// único por perfil, então `fromId === toId` só acontece por bug de client ou tentativa deliberada).
+export function isSelfFriendRequest(fromId: string, toId: string): boolean {
+  return fromId === toId
+}
+
+// lab-160 — só bloqueia um pedido novo se já existe uma relação ATIVA entre os dois jogadores em
+// qualquer sentido (`pending`/`accepted`/`declined`); uma amizade `removed` (desfeita antes) libera
+// pedir de novo. `declined` também bloqueia de propósito — evita reenvio repetido logo após recusa.
+export function hasActiveFriendship(rows: { status: string }[]): boolean {
+  return rows.some((row) => row.status !== 'removed')
+}
+
+export type FriendRequestResponseStatus = 'accepted' | 'declined'
+
+export function friendResponseStatus(accept: boolean): FriendRequestResponseStatus {
+  return accept ? 'accepted' : 'declined'
+}
