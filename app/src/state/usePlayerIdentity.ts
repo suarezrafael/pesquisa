@@ -57,6 +57,7 @@ export function usePlayerIdentity() {
   async function search(nickname: string): Promise<void> {
     setSearching(true)
     setSearchError(null)
+    setSearchResults([])
     try {
       const res = await fetch(`${ACCOUNTS_API_URL}/players/search?nickname=${encodeURIComponent(nickname)}`)
       const body = (await res.json().catch(() => null)) as { results?: PlayerSearchResult[]; error?: string } | null

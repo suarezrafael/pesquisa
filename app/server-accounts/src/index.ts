@@ -28,6 +28,7 @@ import {
   isValidProgressBackupPayload,
   isValidProgressSummary,
   isValidSubscriptionStatus,
+  isValidUuid,
   NPS_COOLDOWN_DAYS,
   resolveTrustedOrigin,
   shouldPromptForNps,
@@ -449,7 +450,7 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
 // jogador persistente por PERFIL, sem exigir assinatura (mesma regra de `handleTrackEvent` acima:
 // cooperação nunca pode ficar atrás de pagamento, docs/prompts/03-arquitetura-sistema.md).
 // Chamado no máximo uma vez por perfil — o `playerId` devolvido fica guardado localmente
-// (`state/playerIdentity.ts`), reaproveitado dali em diante.
+// (`state/storage.ts`, via `usePlayerIdentity.ts`), reaproveitado dali em diante.
 async function handlePlayerRegister(request: Request, env: Env): Promise<Response> {
   const limited = await rateLimited(env.PLAYER_REGISTER_LIMITER, clientIp(request))
   if (limited) return limited
@@ -462,6 +463,9 @@ async function handlePlayerRegister(request: Request, env: Env): Promise<Respons
   const deviceId = body?.deviceId?.trim()
   if (!nickname || !avatarEmoji || !deviceId) {
     return Response.json({ error: 'nickname, avatarEmoji e deviceId são obrigatórios' }, { status: 400 })
+  }
+  if (!isValidUuid(deviceId)) {
+    return Response.json({ error: 'deviceId inválido' }, { status: 400 })
   }
   // Mesma validação já aplicada no campo de apelido do jogo (`data/nicknameFilter.ts`) — nunca
   // confia só na validação do lado do cliente (docs/prompts/01-seguranca.md §3): um nickname que

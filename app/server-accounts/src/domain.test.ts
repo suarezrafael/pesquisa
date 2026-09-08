@@ -19,6 +19,7 @@ import {
   isValidProgressBackupPayload,
   isValidProgressSummary,
   isValidSubscriptionStatus,
+  isValidUuid,
   MAX_ACTIVE_DEVICES_PER_FAMILY,
   NPS_COOLDOWN_DAYS,
   resolveTrustedOrigin,
@@ -451,5 +452,17 @@ describe('isNicknameAllowed (lab-159) — mesma cópia de app/src/data/nicknameF
 
   it('recusa nickname absurdamente longo', () => {
     expect(isNicknameAllowed('a'.repeat(41))).toBe(false)
+  })
+})
+
+describe('isValidUuid (lab-159)', () => {
+  it('aceita um uuid v4 válido', () => {
+    expect(isValidUuid('9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d')).toBe(true)
+  })
+
+  it('recusa string vazia, texto arbitrário ou uuid malformado', () => {
+    expect(isValidUuid('')).toBe(false)
+    expect(isValidUuid('não sou um uuid')).toBe(false)
+    expect(isValidUuid('9b1deb4d-3b7d-4bad-9bdd')).toBe(false)
   })
 })
