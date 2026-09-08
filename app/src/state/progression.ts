@@ -14,7 +14,7 @@ import { FURNITURE_CATALOG, findFurnitureRewardForPlanet, type FurnitureOption }
 import { findPlanetIdForQuest, isPlanetFullyCompleted } from '../data/planetQuests'
 import { findTreasureChestById } from '../data/treasureChests'
 import { findPostcardByPlanetId } from '../data/postcards'
-import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
+import { getCurrentWeeklyEvent, isoWeekKey, type WeeklyEvent } from '../data/weeklyEvents'
 import { PET_CATALOG } from '../data/pets'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -47,6 +47,28 @@ export function seriesForLevel(level: number): PlayerSeries {
   if (level >= 17) return 'ouro'
   if (level >= 9) return 'prata'
   return 'bronze'
+}
+
+// Ranking local entre perfis do aparelho (lab-157, último item do Grupo A do backlog social do
+// lab-154) — "XP ganho nesta semana" é derivado, não guardado direto: compara `xp` contra o valor
+// que ele tinha no INÍCIO da semana atual (`weeklyXpSnapshot`), resetado sempre que a chave da
+// semana muda (`isoWeekKey`, `data/weeklyEvents.ts` — mesma definição de "semana" já usada pro
+// evento semanal). Chamada uma vez por sessão (mesmo gatilho de `touchLastPlayed`), nunca a cada
+// ganho de XP — resetar o snapshot é sempre idempotente (não perde progresso da semana em curso).
+export function syncWeeklyXpSnapshot(progress: Progress, nowIso: string): Progress {
+  const currentWeekKey = isoWeekKey(new Date(nowIso))
+  if (progress.weeklyXpWeekKey === currentWeekKey) return progress
+  return { ...progress, weeklyXpWeekKey: currentWeekKey, weeklyXpSnapshot: progress.xp }
+}
+
+// Leitura pura (nunca muta `progress`) — usada pra montar o ranking comparando vários perfis de
+// uma vez. Se o snapshot guardado é de uma semana ANTERIOR (perfil que não abre o jogo há um
+// tempo, ou nunca sincronizou), o ganho desta semana é 0 — correto: ele realmente não jogou nada
+// NESTA semana ainda, `syncWeeklyXpSnapshot` só roda quando o perfil de fato é aberto.
+export function weeklyXpEarned(progress: Progress, nowIso: string): number {
+  const currentWeekKey = isoWeekKey(new Date(nowIso))
+  if (progress.weeklyXpWeekKey !== currentWeekKey) return 0
+  return Math.max(0, progress.xp - progress.weeklyXpSnapshot)
 }
 
 // Exportadas (lab-93) pra `data/achievements.ts` usar como fonte única de verdade — sem isso, o

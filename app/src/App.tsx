@@ -108,6 +108,7 @@ function GameApp() {
     adoptPet,
     equipPet,
     feedPet,
+    syncWeeklyXp,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -165,6 +166,9 @@ function GameApp() {
       touchLastPlayed(nowIso)
       const result = claimDailyLogin(previousLastPlayedAt, nowIso)
       if (result.granted) setDailyLoginReward({ streak: result.streak, coins: result.coins })
+      // Ranking local entre perfis (lab-157) — mesmo gatilho/instante de agora, reaproveitado sem
+      // outra leitura de relógio.
+      syncWeeklyXp(nowIso)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!profile])

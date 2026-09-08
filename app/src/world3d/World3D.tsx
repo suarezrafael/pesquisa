@@ -10283,7 +10283,13 @@ export function World3D({
         />
       )}
       {rankingOpen && (
-        <RankingPanel entries={rankingEntries} connected={mpConnected} onClose={() => setRankingOpen(false)} />
+        <RankingPanel
+          entries={rankingEntries}
+          connected={mpConnected}
+          profile={profile}
+          progress={progress}
+          onClose={() => setRankingOpen(false)}
+        />
       )}
       {showParentalGate && (
         <ParentalGateModal onAuthorize={handleParentalGateAuthorize} onCancel={handleParentalGateCancel} />

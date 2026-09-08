@@ -1,6 +1,18 @@
 # Laboratório atual
 
-Último concluído: labs/lab-156-series-bronze-prata-ouro-diamante/ — segundo item do Grupo A do
+Último concluído: labs/lab-157-ranking-local-perfis/ — último item do Grupo A do backlog social
+(lab-154), que fica assim completo (pets lab-155, séries lab-156, ranking local lab-157).
+`RankingPanel` ganhou duas abas: "🌐 Online agora" (comportamento original, intocado) e "📱 Neste
+aparelho" (nova, só aparece com 2+ perfis no roster do aparelho, lab-108), ordenada por XP GANHO
+NA SEMANA (não XP total) — derivado comparando `xp` atual contra um snapshot do início da semana
+(`weeklyXpWeekKey`/`weeklyXpSnapshot` novos em `Progress`, chave de semana reaproveitada de
+`data/weeklyEvents.ts`, exportada como `isoWeekKey`). `storage.ts` ganhou `loadProgressForProfileId`
+(lê qualquer perfil do roster, não só o ativo) e `getActiveProfileId` exportada. Verificado ao vivo
+com um perfil de teste (irmão fictício) com mais XP semanal mas menos XP total que o ativo —
+ranking ordenou certo pela semana, não pelo total. `tsc -b`/testes limpos (131/131, 6 novos). Ver
+`labs/lab-157-ranking-local-perfis/CONTEXT.md`.
+
+Antes desse: labs/lab-156-series-bronze-prata-ouro-diamante/ — segundo item do Grupo A do
 backlog social (lab-154). Métrica escolhida pelo usuário via `AskUserQuestion`: nível/XP total
 (não sequência de login nem combo de acertos). `seriesForLevel(level)` novo em `progression.ts`
 (limiares Bronze 1-8/Prata 9-16/Ouro 17-24/Diamante 25+, calibrados pelo teto real de XP do jogo,

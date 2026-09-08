@@ -61,7 +61,10 @@ function saveRoster(roster: ProfileRosterEntry[]): void {
   localStorage.setItem(PROFILE_LIST_KEY, JSON.stringify(roster))
 }
 
-function getActiveProfileId(): string | null {
+// lab-157: exportada (era só interna até aqui) — ranking local entre perfis precisa identificar
+// QUAL linha do roster é "você" sem depender de comparar nome (dois perfis podem ter o mesmo
+// nome escolhido pela criança).
+export function getActiveProfileId(): string | null {
   return localStorage.getItem(ACTIVE_PROFILE_ID_KEY)
 }
 
@@ -167,6 +170,9 @@ export const emptyProgress: Progress = {
   equippedPetId: null,
   petCareCounts: {},
   lastPetFeedAt: null,
+  // Ranking local entre perfis (lab-157) — ver comentário em `types.ts`.
+  weeklyXpWeekKey: null,
+  weeklyXpSnapshot: 0,
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/
@@ -220,6 +226,20 @@ export function loadProgress(): Progress {
   migrateLegacyProfileIfNeeded()
   const id = getActiveProfileId()
   if (!id) return emptyProgress
+  const raw = localStorage.getItem(progressKey(id))
+  if (!raw) return emptyProgress
+  try {
+    return { ...emptyProgress, ...(JSON.parse(raw) as Progress) }
+  } catch {
+    return emptyProgress
+  }
+}
+
+// lab-157: variante de `loadProgress` pra ler o `Progress` de QUALQUER perfil do roster (lab-108),
+// não só o ativo — ranking local entre irmãos do mesmo aparelho precisa comparar todos de uma vez,
+// sem trocar de perfil ativo pra isso (`switchActiveProfile`/reload, caro e visível demais só pra
+// ler um número). Mesmo parsing/fallback de `loadProgress`, só parametrizado pelo id.
+export function loadProgressForProfileId(id: string): Progress {
   const raw = localStorage.getItem(progressKey(id))
   if (!raw) return emptyProgress
   try {

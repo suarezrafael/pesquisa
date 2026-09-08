@@ -22,6 +22,8 @@ import {
   petStageFor,
   petStageScale,
   seriesForLevel,
+  syncWeeklyXpSnapshot,
+  weeklyXpEarned,
   SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
@@ -864,6 +866,48 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
     expect(petStageScale('filhote')).toBeLessThan(petStageScale('jovem'))
     expect(petStageScale('jovem')).toBeLessThan(petStageScale('adulto'))
     expect(petStageScale('adulto')).toBe(1)
+  })
+})
+
+describe('syncWeeklyXpSnapshot/weeklyXpEarned (lab-157)', () => {
+  it('primeira sincronização (weeklyXpWeekKey null) sempre reseta o snapshot pro xp atual', () => {
+    const progress = { ...emptyProgress, xp: 150 }
+    const next = syncWeeklyXpSnapshot(progress, '2026-09-08T12:00:00.000Z')
+    expect(next.weeklyXpWeekKey).not.toBeNull()
+    expect(next.weeklyXpSnapshot).toBe(150)
+  })
+
+  it('sincronizar de novo na MESMA semana não muda nada (idempotente)', () => {
+    const synced = syncWeeklyXpSnapshot({ ...emptyProgress, xp: 150 }, '2026-09-08T12:00:00.000Z')
+    const comMaisXp = { ...synced, xp: 200 } // ganhou XP durante a semana
+    const segunda = syncWeeklyXpSnapshot(comMaisXp, '2026-09-10T12:00:00.000Z') // mesma semana
+    expect(segunda).toBe(comMaisXp) // mesma referência — não mexeu em nada
+  })
+
+  it('sincronizar numa semana NOVA reseta o snapshot pro xp atual', () => {
+    const synced = syncWeeklyXpSnapshot({ ...emptyProgress, xp: 150 }, '2026-09-08T12:00:00.000Z')
+    const comMaisXp = { ...synced, xp: 200 }
+    const semanaSeguinte = syncWeeklyXpSnapshot(comMaisXp, '2026-09-15T12:00:00.000Z')
+    expect(semanaSeguinte.weeklyXpSnapshot).toBe(200)
+    expect(semanaSeguinte.weeklyXpWeekKey).not.toBe(synced.weeklyXpWeekKey)
+  })
+
+  it('weeklyXpEarned calcula a diferença dentro da mesma semana', () => {
+    const synced = syncWeeklyXpSnapshot({ ...emptyProgress, xp: 150 }, '2026-09-08T12:00:00.000Z')
+    const comMaisXp = { ...synced, xp: 230 }
+    expect(weeklyXpEarned(comMaisXp, '2026-09-10T12:00:00.000Z')).toBe(80)
+  })
+
+  it('weeklyXpEarned devolve 0 se o snapshot é de uma semana anterior (perfil que não abriu essa semana)', () => {
+    const synced = syncWeeklyXpSnapshot({ ...emptyProgress, xp: 150 }, '2026-09-08T12:00:00.000Z')
+    const comMaisXp = { ...synced, xp: 500 }
+    expect(weeklyXpEarned(comMaisXp, '2026-09-15T12:00:00.000Z')).toBe(0)
+  })
+
+  it('weeklyXpEarned nunca é negativo mesmo se xp cair abaixo do snapshot (defensivo)', () => {
+    const synced = syncWeeklyXpSnapshot({ ...emptyProgress, xp: 150 }, '2026-09-08T12:00:00.000Z')
+    const comMenosXp = { ...synced, xp: 100 }
+    expect(weeklyXpEarned(comMenosXp, '2026-09-09T12:00:00.000Z')).toBe(0)
   })
 })
 
