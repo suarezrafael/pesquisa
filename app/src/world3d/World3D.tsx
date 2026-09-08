@@ -2266,28 +2266,43 @@ export function World3D({
     const camera = new UniversalCamera('camera', new Vector3(0, PLANET_RADIUS + CAMERA_HEIGHT, -CAMERA_DISTANCE), scene)
     camera.minZ = 0.1
 
-    // Câmera livre dentro de casa via arrastar o mouse (lab-138) — o resto do jogo usa uma câmera
-    // em 3ª pessoa TOTALMENTE controlada por código (posição/alvo recalculados a cada quadro no
-    // loop de física, ver mais abaixo), não o `attachControl` nativo do Babylon (esse aqui é usado
-    // só no preview pequeno da lojinha, `AvatarPreview3D.tsx`, uma cena separada) — por isso o
-    // giro/zoom aqui são ouvintes de ponteiro/roda de rolagem escritos à mão, que só ALIMENTAM os
-    // refs (`cameraYawOffsetRef`/`houseCameraPitchOffsetRef`/`houseCameraZoomRef`) lidos pela MESMA
-    // fórmula de posição de câmera de sempre (ver `desiredCamPos` no loop de física) — nunca tocam
-    // `camera.position` diretamente. Só reage dentro de casa (`insideHouseInterior`).
+    // Câmera livre via arrastar o dedo/mouse — dentro de casa desde o lab-138 (giro+inclinação+
+    // zoom), e desde o lab-153 TAMBÉM do lado de fora (só giro, ver `outdoorDrag` abaixo). O resto
+    // do jogo usa uma câmera em 3ª pessoa TOTALMENTE controlada por código (posição/alvo
+    // recalculados a cada quadro no loop de física, ver mais abaixo), não o `attachControl` nativo
+    // do Babylon (esse aqui é usado só no preview pequeno da lojinha, `AvatarPreview3D.tsx`, uma
+    // cena separada) — por isso o giro/zoom aqui são ouvintes de ponteiro/roda de rolagem escritos
+    // à mão, que só ALIMENTAM os refs (`cameraYawOffsetRef`/`houseCameraPitchOffsetRef`/
+    // `houseCameraZoomRef`) lidos pela MESMA fórmula de posição de câmera de sempre (ver
+    // `desiredCamPos` no loop de física) — nunca tocam `camera.position` diretamente.
+    // `PointerEvent` unifica mouse/toque/caneta sozinho — o mesmo ouvinte já cobre arrastar com o
+    // dedo num tablet e arrastar com o mouse no desktop, sem código separado por tipo de input.
     //
     // lab-140 (achado real: o usuário reportou "ao mover os objetos... eu tenho que conseguir
-    // girar a câmera... senão não consigo acompanhar pra onde estou movendo") — FUNCIONA também
-    // durante o modo de posicionar mobília, de propósito: parecia que ia disputar gesto com os
-    // botões ◀ ▶ (que giram a peça fantasma nesse modo, não a câmera — ver o loop de física mais
-    // abaixo), mas são refs DIFERENTES (`cameraYawOffsetRef`/`houseCameraPitchOffsetRef`, escritos
-    // só por este ouvinte de ponteiro, nunca pelos botões ◀ ▶) — não existe conflito de verdade,
-    // só a suposição errada de que "os dois giram alguma coisa" bastava pra disputar o mesmo
-    // gesto. Segurar o botão do mouse pra girar a câmera e usar ◀ ▶/WASD pra mexer na peça
-    // funcionam ao mesmo tempo sem briga nenhuma.
-    let houseCameraDragging = false
-    let houseCameraLastPointerX = 0
-    let houseCameraLastPointerY = 0
-    const HOUSE_CAMERA_DRAG_SENSITIVITY = 0.006
+    // girar a câmera... senão não consigo acompanhar pra onde estou movendo") — dentro de casa,
+    // FUNCIONA também durante o modo de posicionar mobília, de propósito: parecia que ia disputar
+    // gesto com os botões ◀ ▶ (que giram a peça fantasma nesse modo, não a câmera — ver o loop de
+    // física mais abaixo), mas são refs DIFERENTES (`cameraYawOffsetRef`/
+    // `houseCameraPitchOffsetRef`, escritos só por este ouvinte de ponteiro, nunca pelos botões
+    // ◀ ▶) — não existe conflito de verdade, só a suposição errada de que "os dois giram alguma
+    // coisa" bastava pra disputar o mesmo gesto. Segurar o botão do mouse pra girar a câmera e usar
+    // ◀ ▶/WASD pra mexer na peça funcionam ao mesmo tempo sem briga nenhuma.
+    //
+    // lab-153 (pesquisa de mercado: Roblox/Minecraft mobile giram a câmera arrastando a METADE
+    // DIREITA da tela, não só com botões de rotação em velocidade fixa — padrão que o público-alvo
+    // já traz de outros jogos) — do lado de fora, o giro por arraste só COMEÇA se o toque inicial
+    // cair na metade direita do `<canvas>` (`outdoorDrag`, decidido uma vez no `pointerdown`,
+    // guardado até soltar — recalcular a cada `pointermove` deixaria o giro "escapar" pra esquerda
+    // no meio do arraste, sem motivo). A metade esquerda fica reservada pro `TouchJoystick` de
+    // movimento (elemento HTML separado, por cima do canvas — sem conflito de verdade, só reserva
+    // de área). ADITIVO aos botões ◀ ▶ (que continuam existindo e funcionando exatamente como
+    // antes) — nunca os substitui, porque eles são `<button>` de verdade com suporte a teclado
+    // (lab-150), e arrastar é um gesto só de ponteiro/toque.
+    let cameraDragging = false
+    let outdoorDrag = false // true = arrasto começou do lado de fora (só giro); false = dentro de casa (giro+inclinação)
+    let cameraDragLastX = 0
+    let cameraDragLastY = 0
+    const CAMERA_DRAG_SENSITIVITY = 0.006
     const HOUSE_CAMERA_ZOOM_SENSITIVITY = 0.0015
     const HOUSE_CAMERA_PITCH_MIN = -0.5 // câmera não desce a ponto de ficar debaixo do chão
     const HOUSE_CAMERA_PITCH_MAX = 1.0 // nem sobe a ponto de ficar colada no teto olhando reto pra baixo
@@ -2299,33 +2314,47 @@ export function World3D({
     // maioria dos ângulos.
     const HOUSE_CAMERA_ZOOM_MAX = 1.4
 
-    function onHouseCameraPointerDown(e: PointerEvent) {
-      if (!insideHouseInterior || e.button !== 0) return
-      houseCameraDragging = true
-      houseCameraLastPointerX = e.clientX
-      houseCameraLastPointerY = e.clientY
+    function onCameraPointerDown(e: PointerEvent) {
+      if (e.button !== 0) return
+      if (insideHouseInterior) {
+        outdoorDrag = false
+      } else {
+        if (!canvas) return
+        const rect = canvas.getBoundingClientRect()
+        if (e.clientX < rect.left + rect.width / 2) return // metade esquerda: reservada pro joystick de movimento
+        outdoorDrag = true
+      }
+      cameraDragging = true
+      cameraDragLastX = e.clientX
+      cameraDragLastY = e.clientY
     }
-    function onHouseCameraPointerMove(e: PointerEvent) {
-      // lab-149 (achado do review automático do Copilot): antes só checava `houseCameraDragging`
-      // — se o jogador começasse a arrastar dentro de casa e saísse (`exitHouseInterior`) ANTES de
-      // soltar o botão, este handler continuava alterando yaw/pitch fora de casa (o `pointerup`
-      // está no `window`, então o arraste "solto" só termina de verdade ao soltar o botão, não ao
-      // sair da casa). `exitHouseInterior` também zera `houseCameraDragging` agora (defesa em
-      // profundidade), mas a checagem aqui garante o comportamento certo mesmo se algum caminho
-      // novo de saída de casa esquecer de zerar a flag.
-      if (!houseCameraDragging || !insideHouseInterior) return
-      const dx = e.clientX - houseCameraLastPointerX
-      const dy = e.clientY - houseCameraLastPointerY
-      houseCameraLastPointerX = e.clientX
-      houseCameraLastPointerY = e.clientY
-      cameraYawOffsetRef.current += dx * HOUSE_CAMERA_DRAG_SENSITIVITY
-      houseCameraPitchOffsetRef.current = Math.max(
-        HOUSE_CAMERA_PITCH_MIN,
-        Math.min(HOUSE_CAMERA_PITCH_MAX, houseCameraPitchOffsetRef.current - dy * HOUSE_CAMERA_DRAG_SENSITIVITY),
-      )
+    function onCameraPointerMove(e: PointerEvent) {
+      // lab-149 (achado do review automático do Copilot): se o jogador começasse a arrastar dentro
+      // de casa e saísse (`exitHouseInterior`) ANTES de soltar o botão, este handler continuava
+      // alterando yaw/pitch fora de casa (o `pointerup` está no `window`, então o arraste "solto"
+      // só termina de verdade ao soltar o botão, não ao sair da casa). `exitHouseInterior` zera
+      // `cameraDragging` também (defesa em profundidade) — desde o lab-153 isso encerra o arraste
+      // por completo ao sair de casa (em vez de deixá-lo "continuar" como giro de fora, que exigiria
+      // rastrear a mudança de modo no meio do gesto sem ganho real) — o jogador só precisa começar
+      // um novo arraste do lado de fora se quiser continuar girando.
+      if (!cameraDragging) return
+      const dx = e.clientX - cameraDragLastX
+      const dy = e.clientY - cameraDragLastY
+      cameraDragLastX = e.clientX
+      cameraDragLastY = e.clientY
+      cameraYawOffsetRef.current += dx * CAMERA_DRAG_SENSITIVITY
+      // Inclinação vertical (pitch) é um recurso só de dentro de casa (câmera "esférica" do
+      // lab-138) — do lado de fora a câmera usa um offset fixo de altura (ver `desiredCamPos` mais
+      // abaixo), sem conceito de pitch pra ajustar.
+      if (!outdoorDrag) {
+        houseCameraPitchOffsetRef.current = Math.max(
+          HOUSE_CAMERA_PITCH_MIN,
+          Math.min(HOUSE_CAMERA_PITCH_MAX, houseCameraPitchOffsetRef.current - dy * CAMERA_DRAG_SENSITIVITY),
+        )
+      }
     }
-    function onHouseCameraPointerUp() {
-      houseCameraDragging = false
+    function onCameraPointerUp() {
+      cameraDragging = false
     }
     function onHouseCameraWheel(e: WheelEvent) {
       if (!insideHouseInterior) return
@@ -2335,9 +2364,9 @@ export function World3D({
         Math.min(HOUSE_CAMERA_ZOOM_MAX, houseCameraZoomRef.current + e.deltaY * HOUSE_CAMERA_ZOOM_SENSITIVITY),
       )
     }
-    canvas.addEventListener('pointerdown', onHouseCameraPointerDown)
-    window.addEventListener('pointermove', onHouseCameraPointerMove)
-    window.addEventListener('pointerup', onHouseCameraPointerUp)
+    canvas.addEventListener('pointerdown', onCameraPointerDown)
+    window.addEventListener('pointermove', onCameraPointerMove)
+    window.addEventListener('pointerup', onCameraPointerUp)
     canvas.addEventListener('wheel', onHouseCameraWheel, { passive: false })
 
     const pipeline = new DefaultRenderingPipeline('quality', true, scene, [camera])
@@ -6986,8 +7015,8 @@ export function World3D({
         // lab-149 (achado do Copilot): se o jogador estava arrastando a câmera livre bem na hora
         // de sair de casa, o arraste ficaria "solto" (o `pointerup` só chega quando o botão do
         // mouse é solto, não quando a casa é deixada) — zera aqui também, além da checagem em
-        // `onHouseCameraPointerMove`.
-        houseCameraDragging = false
+        // `onCameraPointerMove`.
+        cameraDragging = false
         currentWorldCenter = savedOutsideCenter
         currentGroundBaseFn = savedOutsideGroundFn
         teleportAvatarTo(savedOutsideCenter, offsetLandingUp(houseUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
@@ -9945,9 +9974,9 @@ export function World3D({
       if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
       if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
       window.removeEventListener('resize', onResize)
-      canvas.removeEventListener('pointerdown', onHouseCameraPointerDown)
-      window.removeEventListener('pointermove', onHouseCameraPointerMove)
-      window.removeEventListener('pointerup', onHouseCameraPointerUp)
+      canvas.removeEventListener('pointerdown', onCameraPointerDown)
+      window.removeEventListener('pointermove', onCameraPointerMove)
+      window.removeEventListener('pointerup', onCameraPointerUp)
       canvas.removeEventListener('wheel', onHouseCameraWheel)
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
