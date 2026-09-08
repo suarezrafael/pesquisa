@@ -2300,6 +2300,13 @@ export function World3D({
     // (lab-150), e arrastar é um gesto só de ponteiro/toque.
     let cameraDragging = false
     let outdoorDrag = false // true = arrasto começou do lado de fora (só giro); false = dentro de casa (giro+inclinação)
+    // lab-153 (achado real do review automático do Copilot): sem rastrear QUAL ponteiro iniciou o
+    // arrasto, um segundo dedo tocando em qualquer lugar (ex.: o `TouchJoystick` de movimento, do
+    // lado esquerdo, ao mesmo tempo que a câmera é arrastada com o outro dedo) também disparava
+    // `pointermove`/`pointerup` que este ouvinte (registrado no `window`) processava como se fosse
+    // o mesmo arrasto — no multitoque real (andar E olhar em volta ao mesmo tempo, uso normal em
+    // qualquer jogo mobile) o giro da câmera ficaria errático, misturando os dois toques.
+    let cameraDragPointerId: number | null = null
     let cameraDragLastX = 0
     let cameraDragLastY = 0
     const CAMERA_DRAG_SENSITIVITY = 0.006
@@ -2316,6 +2323,7 @@ export function World3D({
 
     function onCameraPointerDown(e: PointerEvent) {
       if (e.button !== 0) return
+      if (cameraDragPointerId !== null) return // já tem um dedo/ponteiro girando a câmera — ignora um segundo
       if (insideHouseInterior) {
         outdoorDrag = false
       } else {
@@ -2325,6 +2333,7 @@ export function World3D({
         outdoorDrag = true
       }
       cameraDragging = true
+      cameraDragPointerId = e.pointerId
       cameraDragLastX = e.clientX
       cameraDragLastY = e.clientY
     }
@@ -2337,7 +2346,7 @@ export function World3D({
       // por completo ao sair de casa (em vez de deixá-lo "continuar" como giro de fora, que exigiria
       // rastrear a mudança de modo no meio do gesto sem ganho real) — o jogador só precisa começar
       // um novo arraste do lado de fora se quiser continuar girando.
-      if (!cameraDragging) return
+      if (!cameraDragging || e.pointerId !== cameraDragPointerId) return
       const dx = e.clientX - cameraDragLastX
       const dy = e.clientY - cameraDragLastY
       cameraDragLastX = e.clientX
@@ -2353,8 +2362,10 @@ export function World3D({
         )
       }
     }
-    function onCameraPointerUp() {
+    function onCameraPointerUp(e: PointerEvent) {
+      if (e.pointerId !== cameraDragPointerId) return // outro dedo/ponteiro soltando — não é o que gira a câmera
       cameraDragging = false
+      cameraDragPointerId = null
     }
     function onHouseCameraWheel(e: WheelEvent) {
       if (!insideHouseInterior) return
@@ -7017,6 +7028,7 @@ export function World3D({
         // mouse é solto, não quando a casa é deixada) — zera aqui também, além da checagem em
         // `onCameraPointerMove`.
         cameraDragging = false
+        cameraDragPointerId = null
         currentWorldCenter = savedOutsideCenter
         currentGroundBaseFn = savedOutsideGroundFn
         teleportAvatarTo(savedOutsideCenter, offsetLandingUp(houseUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)

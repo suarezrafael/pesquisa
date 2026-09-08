@@ -45,6 +45,19 @@ Em `app/src/world3d/World3D.tsx`, os ouvintes de ponteiro que antes só existiam
 - **`PointerEvent` cobre mouse e toque no mesmo código**: nenhuma ramificação por tipo de input foi
   necessária — o mesmo padrão já usado pelo arrasto de dentro de casa desde o lab-138.
 
+## Achado real do review automático do Copilot (PR #24)
+
+**Achado real de multitoque**: os ouvintes globais (`window`) de `pointermove`/`pointerup` não
+checavam QUAL ponteiro (`pointerId`) tinha iniciado o arrasto — um segundo dedo tocando em
+qualquer lugar (o cenário óbvio: o `TouchJoystick` de movimento, do lado esquerdo, ao mesmo tempo
+que a câmera é arrastada com outro dedo do lado direito — uso normal, "andar E olhar em volta ao
+mesmo tempo") também disparava eventos que este handler processava como se fossem o mesmo arrasto,
+misturando os dois toques. Corrigido guardando `cameraDragPointerId` no `pointerdown` e ignorando
+qualquer `pointermove`/`pointerup` de um `pointerId` diferente. **Verificado ao vivo** com dois
+`PointerEvent` sintéticos de `pointerId` diferentes simultâneos: o ponteiro "estranho" (simulando
+o dedo do joystick) não mexeu a câmera nem um pouco; o ponteiro real do arrasto girou a câmera
+normalmente.
+
 ## Pendências / dívidas conhecidas
 
 - **A verificação visual via automação de mouse do navegador (`left_click_drag`) deu um resultado
