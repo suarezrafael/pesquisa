@@ -162,6 +162,11 @@ export const emptyProgress: Progress = {
   loginStreak: 0,
   // Cartões-postais colecionáveis (lab-141) — ver comentário em `types.ts`.
   collectedPostcardIds: [],
+  // Pets adotáveis (lab-155) — ver comentário em `types.ts`.
+  unlockedPetIds: [],
+  equippedPetId: null,
+  petCareCounts: {},
+  lastPetFeedAt: null,
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

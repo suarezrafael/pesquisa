@@ -24,6 +24,10 @@ import {
   type DailyLoginResult,
   applyPostcardCollected,
   applyCoinsCollected,
+  adoptPet as applyAdoptPet,
+  equipPet as applyEquipPet,
+  feedPet as applyFeedPet,
+  type FeedPetResult,
 } from './progression'
 
 export function useProgress() {
@@ -216,6 +220,44 @@ export function useProgress() {
     return result.granted
   }
 
+  // Pets adotáveis (lab-155) — mesmo formato do `unlockFurniture`/`unlockGlasses` acima.
+  function adoptPet(id: string): void {
+    setProgress((prev) => {
+      const next = applyAdoptPet(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  function equipPet(id: string | null): void {
+    setProgress((prev) => {
+      const next = applyEquipPet(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  // Alimentar o pet ativo — mesmo formato de `claimDailyLogin` (devolve o resultado inteiro, não
+  // só um booleano, porque o chamador precisa saber se o estágio mudou pra mostrar um aviso).
+  // lab-155 (achado real do review automático do Copilot no PR #26): diferente do resto deste
+  // arquivo, `feedPet` é chamado por um botão que o jogador pode clicar repetidas vezes bem
+  // rápido, antes do React re-renderizar com o `lastPetFeedAt` novo (que é o que desabilita o
+  // botão) — ler `progress` do closure do componente (como `unlockMarsReward`/`claimDailyLogin`
+  // fazem, chamados só uma vez por evento, nunca por clique repetido) arriscava computar duas
+  // chamadas em cima do MESMO estado desatualizado. `setProgress` com atualização FUNCIONAL
+  // sempre aplica sobre o estado mais recente da fila (mesmo sob batching do React); `result` é
+  // capturado de dentro do updater pra ainda devolver o resultado de forma síncrona pro chamador.
+  function feedPet(nowIso: string): FeedPetResult {
+    let result!: FeedPetResult
+    setProgress((prev) => {
+      result = applyFeedPet(prev, nowIso)
+      if (!result.fed) return prev
+      saveProgress(result.progress)
+      return result.progress
+    })
+    return result
+  }
+
   return {
     progress,
     completeQuest,
@@ -237,5 +279,8 @@ export function useProgress() {
     resetStreak,
     claimDailyLogin,
     collectPostcard,
+    adoptPet,
+    equipPet,
+    feedPet,
   }
 }

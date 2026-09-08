@@ -15,6 +15,7 @@ import { findPlanetIdForQuest, isPlanetFullyCompleted } from '../data/planetQues
 import { findTreasureChestById } from '../data/treasureChests'
 import { findPostcardByPlanetId } from '../data/postcards'
 import { getCurrentWeeklyEvent, type WeeklyEvent } from '../data/weeklyEvents'
+import { PET_CATALOG } from '../data/pets'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
 export function xpForLevel(level: number): number {
@@ -531,5 +532,83 @@ export function unlockPlanetFurnitureReward(progress: Progress, planetId: string
     progress: { ...progress, unlockedFurnitureIds: [...progress.unlockedFurnitureIds, item.id] },
     granted: true,
     item,
+  }
+}
+
+// Pets adotáveis (lab-155) — ver comentário em `types.ts`/`data/pets.ts`. Adotar usa o MESMO
+// `unlockGeneric` de compra do resto do jogo (chapéu/roupa/etc.) — `PET_CATALOG` já tem o formato
+// `{id, cost}` que a função espera.
+export function adoptPet(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(progress.coins, progress.unlockedPetIds, PET_CATALOG, id)
+  if (!result) return progress
+  // Primeiro pet adotado já sai equipado (senão o jogador pagaria moeda e não veria nada de
+  // diferente no mundo até descobrir sozinho que precisa "equipar" em algum painel) — pets
+  // seguintes NÃO trocam o equipado automaticamente, só ficam disponíveis pra escolher.
+  return {
+    ...progress,
+    coins: result.coins,
+    unlockedPetIds: result.unlockedIds,
+    equippedPetId: progress.equippedPetId ?? id,
+  }
+}
+
+export function equipPet(progress: Progress, id: string | null): Progress {
+  if (id !== null && !progress.unlockedPetIds.includes(id)) return progress
+  return { ...progress, equippedPetId: id }
+}
+
+export type PetStage = 'filhote' | 'jovem' | 'adulto'
+
+// Limiares em número de alimentações (não em dias corridos) — de propósito: um jogador que
+// esquece o jogo por uma semana não deveria ver o pet "crescer sozinho" sem cuidado nenhum; só
+// CUIDAR (ação real, com o limite de uma vez por dia de `feedPet` abaixo) faz o pet avançar.
+const PET_STAGE_JOVEM_AT = 3
+const PET_STAGE_ADULTO_AT = 7
+
+export function petStageFor(careCount: number): PetStage {
+  if (careCount >= PET_STAGE_ADULTO_AT) return 'adulto'
+  if (careCount >= PET_STAGE_JOVEM_AT) return 'jovem'
+  return 'filhote'
+}
+
+// Escala visual por estágio (`World3D.tsx` aplica em `root.scaling.setAll`) — filhote bem menor
+// que o modelo "adulto" padrão (escala 1) que os outros bichos do planeta já usam.
+export function petStageScale(stage: PetStage): number {
+  if (stage === 'adulto') return 1
+  if (stage === 'jovem') return 0.8
+  return 0.55
+}
+
+export interface FeedPetResult {
+  progress: Progress
+  fed: boolean
+  newStage?: PetStage
+}
+
+// Alimentar é limitado a uma vez por dia real (mesmo espírito anti-farm de
+// `applyDailyLoginReward`) — sem isso, o jogador só precisaria clicar repetidamente pra fazer o
+// pet crescer instantaneamente, esvaziando o sentido de "cuidar ao longo do tempo". `dayGap`
+// negativo ou não-finito (relógio ajustado pra trás, dado corrompido) também bloqueia — mesma
+// defesa de `applyDailyLoginReward`, aqui mais simples porque não existe "sequência" pra manter,
+// só uma contagem total que nunca deveria voltar atrás.
+export function feedPet(progress: Progress, nowIso: string): FeedPetResult {
+  const petId = progress.equippedPetId
+  if (!petId) return { progress, fed: false }
+  const dayGap =
+    progress.lastPetFeedAt === null ? Infinity : utcDayNumber(nowIso) - utcDayNumber(progress.lastPetFeedAt)
+  if (!(dayGap >= 1)) return { progress, fed: false }
+
+  const prevCount = progress.petCareCounts[petId] ?? 0
+  const newCount = prevCount + 1
+  const prevStage = petStageFor(prevCount)
+  const newStage = petStageFor(newCount)
+  return {
+    progress: {
+      ...progress,
+      petCareCounts: { ...progress.petCareCounts, [petId]: newCount },
+      lastPetFeedAt: nowIso,
+    },
+    fed: true,
+    newStage: newStage !== prevStage ? newStage : undefined,
   }
 }

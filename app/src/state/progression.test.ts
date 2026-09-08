@@ -5,6 +5,7 @@
 // graça)". Este arquivo é o primeiro teste automatizado do projeto (lab-83).
 import { describe, expect, it } from 'vitest'
 import {
+  adoptPet,
   applyCoinCollected,
   applyDailyLoginReward,
   applyPlanetQuestCompletion,
@@ -13,9 +14,13 @@ import {
   applyStreakReset,
   applyTreasureChestFound,
   badgesEarnedAt,
+  equipPet,
+  feedPet,
   furnitureQuantity,
   getLevel,
   isQuestUnlocked,
+  petStageFor,
+  petStageScale,
   SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
@@ -34,6 +39,7 @@ import {
 } from './progression'
 import { emptyProgress } from './storage'
 import { findFurnitureById } from '../data/furniture'
+import { PET_CATALOG } from '../data/pets'
 import { quests } from '../data/quests'
 import { planetQuests } from '../data/planetQuests'
 import type { Quest } from '../types'
@@ -733,5 +739,129 @@ describe('furnitureQuantity (lab-138)', () => {
     const next = unlockHairShape({ ...emptyProgress, coins: 12 }, 'cabelo_moicano')
     expect(next.unlockedHairShapeIds).toContain('cabelo_moicano')
     expect(next.coins).toBe(0)
+  })
+})
+
+describe('adoptPet/equipPet/feedPet (lab-155)', () => {
+  const petId = PET_CATALOG[0].id
+  const petCost = PET_CATALOG[0].cost
+  const secondPetId = PET_CATALOG[1].id
+
+  it('adoptPet não faz nada sem moeda suficiente', () => {
+    const progress = { ...emptyProgress, coins: petCost - 1 }
+    const next = adoptPet(progress, petId)
+    expect(next).toBe(progress)
+  })
+
+  it('adoptPet não faz nada pra um id que não existe no catálogo', () => {
+    const progress = { ...emptyProgress, coins: 9999 }
+    const next = adoptPet(progress, 'pet-que-nao-existe')
+    expect(next).toBe(progress)
+  })
+
+  it('adoptPet desbloqueia, desconta o custo, e equipa automaticamente o primeiro pet', () => {
+    const next = adoptPet({ ...emptyProgress, coins: petCost }, petId)
+    expect(next.unlockedPetIds).toEqual([petId])
+    expect(next.coins).toBe(0)
+    expect(next.equippedPetId).toBe(petId)
+  })
+
+  it('adotar um segundo pet NÃO troca o equipado automaticamente', () => {
+    const comPrimeiro = { ...emptyProgress, coins: 9999, unlockedPetIds: [petId], equippedPetId: petId }
+    const next = adoptPet(comPrimeiro, secondPetId)
+    expect(next.unlockedPetIds).toEqual([petId, secondPetId])
+    expect(next.equippedPetId).toBe(petId)
+  })
+
+  it('equipPet recusa um pet que o jogador não possui', () => {
+    const progress = { ...emptyProgress, unlockedPetIds: [petId], equippedPetId: petId }
+    const next = equipPet(progress, secondPetId)
+    expect(next).toBe(progress)
+  })
+
+  it('equipPet troca pro pet possuído', () => {
+    const progress = { ...emptyProgress, unlockedPetIds: [petId, secondPetId], equippedPetId: petId }
+    const next = equipPet(progress, secondPetId)
+    expect(next.equippedPetId).toBe(secondPetId)
+  })
+
+  it('equipPet(null) desequipa (nenhum pet segue o jogador)', () => {
+    const progress = { ...emptyProgress, unlockedPetIds: [petId], equippedPetId: petId }
+    const next = equipPet(progress, null)
+    expect(next.equippedPetId).toBeNull()
+  })
+
+  it('feedPet não faz nada sem pet equipado', () => {
+    const result = feedPet(emptyProgress, '2026-09-08T12:00:00.000Z')
+    expect(result.fed).toBe(false)
+    expect(result.progress).toBe(emptyProgress)
+  })
+
+  it('primeira alimentação de todas conta e não muda de estágio (ainda filhote)', () => {
+    const progress = { ...emptyProgress, equippedPetId: petId }
+    const result = feedPet(progress, '2026-09-08T12:00:00.000Z')
+    expect(result.fed).toBe(true)
+    expect(result.progress.petCareCounts[petId]).toBe(1)
+    expect(result.newStage).toBeUndefined()
+  })
+
+  it('alimentar de novo no MESMO dia não conta (uma vez por dia real)', () => {
+    const progress = { ...emptyProgress, equippedPetId: petId, petCareCounts: { [petId]: 1 }, lastPetFeedAt: '2026-09-08T08:00:00.000Z' }
+    const result = feedPet(progress, '2026-09-08T20:00:00.000Z')
+    expect(result.fed).toBe(false)
+    expect(result.progress).toBe(progress)
+  })
+
+  it('alimentar no dia seguinte conta de novo', () => {
+    const progress = { ...emptyProgress, equippedPetId: petId, petCareCounts: { [petId]: 1 }, lastPetFeedAt: '2026-09-08T08:00:00.000Z' }
+    const result = feedPet(progress, '2026-09-09T08:00:00.000Z')
+    expect(result.fed).toBe(true)
+    expect(result.progress.petCareCounts[petId]).toBe(2)
+  })
+
+  it('a 3ª alimentação avança o estágio de filhote pra jovem', () => {
+    const progress = { ...emptyProgress, equippedPetId: petId, petCareCounts: { [petId]: 2 }, lastPetFeedAt: '2026-09-06T08:00:00.000Z' }
+    const result = feedPet(progress, '2026-09-08T08:00:00.000Z')
+    expect(result.newStage).toBe('jovem')
+  })
+
+  it('a 7ª alimentação avança o estágio de jovem pra adulto', () => {
+    const progress = { ...emptyProgress, equippedPetId: petId, petCareCounts: { [petId]: 6 }, lastPetFeedAt: '2026-09-10T08:00:00.000Z' }
+    const result = feedPet(progress, '2026-09-11T08:00:00.000Z')
+    expect(result.newStage).toBe('adulto')
+  })
+
+  it('relógio ajustado pra trás não conta como nova alimentação (mesma defesa do login diário)', () => {
+    const progress = { ...emptyProgress, equippedPetId: petId, petCareCounts: { [petId]: 1 }, lastPetFeedAt: '2026-09-10T08:00:00.000Z' }
+    const result = feedPet(progress, '2026-09-08T08:00:00.000Z')
+    expect(result.fed).toBe(false)
+    expect(result.progress).toBe(progress)
+  })
+
+  it('cada pet cresce no próprio ritmo — trocar de equipado não mistura as contagens', () => {
+    const progress = {
+      ...emptyProgress,
+      equippedPetId: secondPetId,
+      petCareCounts: { [petId]: 6 },
+      lastPetFeedAt: '2026-09-07T08:00:00.000Z',
+    }
+    const result = feedPet(progress, '2026-09-08T08:00:00.000Z')
+    expect(result.progress.petCareCounts[petId]).toBe(6)
+    expect(result.progress.petCareCounts[secondPetId]).toBe(1)
+  })
+
+  it('petStageFor: limiares exatos (0/2 filhote, 3/6 jovem, 7+ adulto)', () => {
+    expect(petStageFor(0)).toBe('filhote')
+    expect(petStageFor(2)).toBe('filhote')
+    expect(petStageFor(3)).toBe('jovem')
+    expect(petStageFor(6)).toBe('jovem')
+    expect(petStageFor(7)).toBe('adulto')
+    expect(petStageFor(50)).toBe('adulto')
+  })
+
+  it('petStageScale cresce com o estágio', () => {
+    expect(petStageScale('filhote')).toBeLessThan(petStageScale('jovem'))
+    expect(petStageScale('jovem')).toBeLessThan(petStageScale('adulto'))
+    expect(petStageScale('adulto')).toBe(1)
   })
 })

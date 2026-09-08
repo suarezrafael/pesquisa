@@ -93,4 +93,18 @@ export interface Progress {
   // automaticamente ao pousar, `applyPostcardCollected`, `state/progression.ts`); puramente de
   // coleção, sem moeda/XP — mesmo espírito de `badges`, não de recompensa de missão.
   collectedPostcardIds: string[]
+  // Pets adotáveis (lab-155, item de maior alavancagem de engajamento encontrado na pesquisa de
+  // mercado desta sessão — o core loop do Adopt Me!). `unlockedPetIds` segue o MESMO espírito de
+  // `unlockedHatIds` (comprado com moeda, pode possuir vários); `equippedPetId` é o único que
+  // segue o jogador pelo mundo por vez (`null` = nenhum pet ativo) — mesmo padrão de
+  // `equippedHatId`, não um array, pra não encher o planeta de bichos seguindo ao mesmo tempo.
+  unlockedPetIds: string[]
+  equippedPetId: string | null
+  // Quantas vezes cada pet já foi alimentado, pra sempre (mesmo trocando de pet ativo e voltando)
+  // — determina o estágio de crescimento (`petStageFor`, `state/progression.ts`). Chave = id do
+  // catálogo (`data/pets.ts`), não o pet "ativo" — cada pet cresce no próprio ritmo de cuidado.
+  petCareCounts: Record<string, number>
+  // Data/hora da última alimentação (de QUALQUER pet) — trava alimentar mais de uma vez por dia
+  // real, mesmo espírito anti-farm de `loginStreak`/`lastPlayedAt`.
+  lastPetFeedAt: string | null
 }

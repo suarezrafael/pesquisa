@@ -51,6 +51,7 @@ import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
 import { FURNITURE_CATALOG } from '../data/furniture'
+import { findPetById } from '../data/pets'
 import { findTreasureChestById } from '../data/treasureChests'
 import { findPostcardByPlanetId } from '../data/postcards'
 import {
@@ -74,7 +75,7 @@ import {
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
 import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
-import { furnitureQuantity, getLevel, isQuestUnlocked } from '../state/progression'
+import { furnitureQuantity, getLevel, isQuestUnlocked, petStageFor, petStageScale } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
@@ -144,6 +145,7 @@ interface World3DProps {
   onOpenHelp: () => void
   onOpenQuestList: () => void
   onOpenShop: () => void
+  onOpenPets: () => void
   onOpenPairing: () => void
   onOpenAchievements: () => void
   onOpenMyHouse: () => void
@@ -210,6 +212,11 @@ const BIRD_CHIRP_RADIUS = 3.5 // pedido do usuário: pássaros cantam baixinho q
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const CAMERA_ROTATE_SPEED = 1.6 // rad/s — velocidade de giro da câmera segurando os botões ◀/▶
+// lab-155 — o pet adotável não anda por conta própria; só persegue o `localUp` do jogador a cada
+// quadro (`Vector3.Lerp`, não uma velocidade angular fixa como a câmera acima). Valor achado por
+// tentativa: alto o bastante pra não "sumir" de vista quando o jogador corre, baixo o bastante
+// pra sobrar um atraso visível (senão colaria em cima do jogador, sem parecer "seguindo").
+const PET_FOLLOW_LERP_SPEED = 3
 // Orçamento de rede do multiplayer (lab-85, docs/prompts/05-escala-e-viabilidade.md achado G1):
 // antes, `sendState` disparava incondicionalmente a cada 0,12s (8,33 msg/s por jogador) — a cota
 // gratuita de Durable Objects (100.000 requests/dia, cada mensagem WebSocket conta como uma)
@@ -1936,6 +1943,7 @@ export function World3D({
   onOpenHelp,
   onOpenQuestList,
   onOpenShop,
+  onOpenPets,
   onOpenPairing,
   onOpenAchievements,
   onOpenMyHouse,
@@ -2173,6 +2181,13 @@ export function World3D({
   useEffect(() => {
     ;(sceneRef.current as any)?.__onPlanetQuestCompleted?.()
   }, [progress.completedPlanetQuestIds])
+
+  // Pet adotável (lab-155) — mesmo padrão de bridge de `__refreshHouseFurniture` acima: adotar,
+  // trocar o equipado, ou alimentar (que pode mudar o estágio de crescimento) todos mudam algo que
+  // precisa reconstruir a malha 3D do pet, sem esperar sair/voltar do jogo pra ver o resultado.
+  useEffect(() => {
+    ;(sceneRef.current as any)?.__refreshPet?.()
+  }, [progress.equippedPetId, progress.petCareCounts])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -7895,6 +7910,34 @@ export function World3D({
       })
       if (import.meta.env.DEV) (window as any).__perchedCats = perchedCats
 
+      // Pet adotável (lab-155, maior alavancagem de engajamento encontrada na pesquisa de mercado
+      // desta sessão) — segue o jogador pelo mundo (`petUp`, atualizado no loop de física logo
+      // abaixo). Escondido dentro de casa/em veículo (o interior é uma sala PLANA, sem conceito
+      // de `up` esférico — mesma razão que a chuva/gravidade tratam esse caso à parte — e não faz
+      // sentido flutuar ao lado de um carro/foguete pilotado); reaparece ao voltar pra fora,
+      // reaproveitando `currentGroundBaseFn`/`currentWorldCenter` (os mesmos usados pra chão do
+      // avatar) — funciona em qualquer planeta-destino sem código extra por planeta.
+      let petRoot: TransformNode | null = null
+      const petUp = avatarMesh ? avatarMesh.position.subtract(currentWorldCenter).normalize() : Vector3.Up()
+      function rebuildPet() {
+        petRoot?.dispose()
+        petRoot = null
+        if (!avatarMesh) return
+        const equippedId = progressRef.current.equippedPetId
+        if (!equippedId) return
+        const pet = findPetById(equippedId)
+        if (!pet) return
+        const stage = petStageFor(progressRef.current.petCareCounts[equippedId] ?? 0)
+        const scale = petStageScale(stage)
+        const furColor = new Color3(...pet.furColorRgb)
+        const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
+        root.scaling.setAll(scale)
+        root.position.copyFrom(avatarMesh.position)
+        petRoot = root
+      }
+      rebuildPet()
+      ;(scene as any).__refreshPet = rebuildPet
+
       // Piscina com gente (pedido do usuário: "picina com gente nela") — separada da lagoa
       // (theta bem distante: lagoa fica em 2.6, rio em 0.15-1.35). Reaproveita o mesmo boneco
       // do personagem/professor (buildStudentFigure), só que parado (sem ciclo de caminhada) e
@@ -8491,6 +8534,26 @@ export function World3D({
           // continuaria caindo na direção de onde o jogador nasceu conforme ele anda pela esfera.
           rainAnchor.position.copyFrom(pos)
           rainAnchor.rotationQuaternion = alignmentQuaternion(localUp)
+
+          // Pet adotável (lab-155) segue o jogador com um pequeno atraso — `petUp` persegue
+          // `localUp` a cada quadro (nunca "teleporta" pra cima dele), o que sozinho já produz o
+          // efeito de "vindo atrás" sem precisar calcular uma posição de rastro explícita.
+          // Escondido dentro de casa/dirigindo (ver comentário em `rebuildPet`, onde `petRoot` é
+          // criado).
+          if (petRoot) {
+            const petVisible = !insideHouseInterior && !drivingCar && !drivingRocket
+            petRoot.setEnabled(petVisible)
+            if (petVisible) {
+              // lab-155 (achado do review automático do Copilot): `Vector3.Lerp` aloca um Vector3
+              // NOVO a cada quadro (60x/s enquanto o pet está visível) — `LerpToRef` escreve
+              // direto em `petUp`, sem alocar; `normalize()` também já muda o próprio vetor sem
+              // criar outro.
+              Vector3.LerpToRef(petUp, localUp, Math.min(1, dt * PET_FOLLOW_LERP_SPEED), petUp)
+              petUp.normalize()
+              petRoot.position.copyFrom(currentWorldCenter.add(petUp.scale(currentGroundBaseFn(petUp) + 0.02)))
+              petRoot.rotationQuaternion = alignmentQuaternion(petUp)
+            }
+          }
 
           // Dirigindo um carro (lab-25): o corpo físico do avatar fica congelado (sem
           // gravidade/velocidade nova) e a figura visual escondida (ver handler de entrar/sair)
@@ -10106,6 +10169,7 @@ export function World3D({
         onOpenHelp={onOpenHelp}
         onOpenQuestList={onOpenQuestList}
         onOpenShop={onOpenShop}
+        onOpenPets={onOpenPets}
         muted={muted}
         onToggleMute={handleToggleMute}
         onOpenChat={() => openMultiplayerFeature(() => setChatOpen(true))}
