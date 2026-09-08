@@ -1,6 +1,20 @@
 # Laboratório atual
 
-Último concluído: labs/lab-159-identidade-jogador-busca/ — primeiro lab do Grupo B do backlog
+Último concluído: labs/lab-160-pedidos-de-amizade/ — segundo lab do Grupo B do backlog social
+(lab-158): `FriendsPanel` ganha pedido/aceite/recusa de amizade + remover amizade já aceita (item
+novo, confirmado com o usuário nesta sessão via `AskUserQuestion` — "considerar antes do lab-160
+ir pra produção" no plano do lab-158). `server-accounts` ganha `POST /players/friend-request`/
+`respond`/`remove` + `GET /players/friend-summary` (pedidos pendentes recebidos/enviados +
+amigos aceitos numa chamada só). 3 regras de negócio puras extraídas pra `domain.ts`
+(`isSelfFriendRequest`/`hasActiveFriendship`/`friendResponseStatus`, testadas). `FriendsPanel`
+ganha 3 abas (Buscar/Pedidos/Amigos); remover amigo tem confirmação de dois cliques, sem modal
+novo. Verificado ao vivo contra o banco de PRODUÇÃO real: backend inteiro via curl (self-request,
+duplicata, responder pedido alheio, aceite, remover por não-participante, declined bloqueia
+reenvio mas removed não) + um fluxo completo NA UI real (busca → pedido → aceite → amigo aparece →
+remover → some dos dois lados). `npx tsc -b`/testes limpos (app 131/131, server-accounts 81/81,
+6 novos). Ver `labs/lab-160-pedidos-de-amizade/CONTEXT.md`.
+
+Antes desse: labs/lab-159-identidade-jogador-busca/ — primeiro lab do Grupo B do backlog
 social (lab-158): identidade de jogador persistente por perfil (`player_identities`, funciona pra
 qualquer jogador, não só assinante) + busca por nickname com as salvaguardas do plano (rate limit
 em duas camadas, correspondência exata via `lower(nickname) = lower($1)`, resultado só
