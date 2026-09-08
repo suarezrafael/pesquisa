@@ -7918,7 +7918,7 @@ export function World3D({
       // reaproveitando `currentGroundBaseFn`/`currentWorldCenter` (os mesmos usados pra chão do
       // avatar) — funciona em qualquer planeta-destino sem código extra por planeta.
       let petRoot: TransformNode | null = null
-      let petUp = avatarMesh ? avatarMesh.position.subtract(currentWorldCenter).normalize() : Vector3.Up()
+      const petUp = avatarMesh ? avatarMesh.position.subtract(currentWorldCenter).normalize() : Vector3.Up()
       function rebuildPet() {
         petRoot?.dispose()
         petRoot = null
@@ -8544,7 +8544,12 @@ export function World3D({
             const petVisible = !insideHouseInterior && !drivingCar && !drivingRocket
             petRoot.setEnabled(petVisible)
             if (petVisible) {
-              petUp = Vector3.Lerp(petUp, localUp, Math.min(1, dt * PET_FOLLOW_LERP_SPEED)).normalize()
+              // lab-155 (achado do review automático do Copilot): `Vector3.Lerp` aloca um Vector3
+              // NOVO a cada quadro (60x/s enquanto o pet está visível) — `LerpToRef` escreve
+              // direto em `petUp`, sem alocar; `normalize()` também já muda o próprio vetor sem
+              // criar outro.
+              Vector3.LerpToRef(petUp, localUp, Math.min(1, dt * PET_FOLLOW_LERP_SPEED), petUp)
+              petUp.normalize()
               petRoot.position.copyFrom(currentWorldCenter.add(petUp.scale(currentGroundBaseFn(petUp) + 0.02)))
               petRoot.rotationQuaternion = alignmentQuaternion(petUp)
             }

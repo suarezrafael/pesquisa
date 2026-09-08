@@ -57,6 +57,23 @@ Adopt Me! identificado como maior alavancagem de engajamento na pesquisa de merc
   razão documentada pra chuva/gravidade nesse ambiente); reaproveitar a lógica esférica ali
   quebraria, e construir uma versão própria pro interior é escopo maior, não pedido agora.
 
+## Achados reais do review automático do Copilot (PR #26)
+
+- **Corrida de estado real em `useProgress.feedPet`**: diferente do resto do arquivo (chamados só
+  uma vez por evento — `claimDailyLogin` no mount, `unlockMarsReward`/`foundTreasureChest` por
+  gatilho de mundo), `feedPet` é chamado por um BOTÃO clicável repetidas vezes — ler `progress` do
+  closure do componente (em vez de `setProgress` com atualização funcional) arriscava duas
+  chamadas rápidas (antes do React re-renderizar com `lastPetFeedAt` novo, o que desabilita o
+  botão) computarem a partir do MESMO estado desatualizado. Corrigido usando `setProgress((prev) =>
+  ...)`, sempre aplicado sobre o estado mais recente da fila, com `result` capturado de dentro do
+  updater pra continuar devolvendo o valor de forma síncrona pro chamador. **Verificado ao vivo**:
+  3 cliques sintéticos disparados no MESMO tick (`btn.click()` três vezes seguidas, mais agressivo
+  que qualquer duplo-clique humano) resultaram em `careCount: 1`, não 3.
+- **Alocação por quadro em `World3D.tsx`**: `Vector3.Lerp(...)` cria um `Vector3` novo a cada
+  quadro enquanto o pet está visível (60x/s) — trocado por `Vector3.LerpToRef` (escreve direto em
+  `petUp`, sem alocar) + `petUp.normalize()` (já muta o próprio vetor). `petUp` virou `const` (nunca
+  mais reatribuído, só mutado in-place).
+
 ## Pendências / dívidas conhecidas
 
 - Nenhum aviso/toast quando o pet muda de estágio — o jogador só vê a mudança reabrindo o
