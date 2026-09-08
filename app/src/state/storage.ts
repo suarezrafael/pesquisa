@@ -46,6 +46,9 @@ function lastPlayedKey(id: string): string {
 function multiplayerConsentKey(id: string): string {
   return `jogo-educativo:multiplayerConsentAt:${id}`
 }
+function playerIdKey(id: string): string {
+  return `jogo-educativo:playerId:${id}`
+}
 
 function loadRoster(): ProfileRosterEntry[] {
   const raw = localStorage.getItem(PROFILE_LIST_KEY)
@@ -313,6 +316,22 @@ export function recordMultiplayerConsent(nowIso: string = new Date().toISOString
   const id = getActiveProfileId()
   if (!id) return
   localStorage.setItem(multiplayerConsentKey(id), nowIso)
+}
+
+// lab-159, Grupo B do backlog social (labs/lab-158-.../FEATURES.md) — id opaco devolvido por
+// `POST /players/register` (`server-accounts`), guardado por PERFIL (mesmo espírito de
+// `multiplayerConsentKey` acima — cada criança/perfil tem a própria identidade de jogador, não o
+// aparelho inteiro). `null` = ainda não registrado (perfil nunca abriu o painel de Amigos).
+export function loadPlayerId(): string | null {
+  const id = getActiveProfileId()
+  if (!id) return null
+  return localStorage.getItem(playerIdKey(id))
+}
+
+export function savePlayerId(playerId: string): void {
+  const id = getActiveProfileId()
+  if (!id) return
+  localStorage.setItem(playerIdKey(id), playerId)
 }
 
 // lab-99, resto de G11 (prompt.md §12: D1/D7 retention, tempo médio por sessão, quests

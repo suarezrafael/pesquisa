@@ -151,3 +151,26 @@ namespace_id = "1010"
   [ratelimits.simple]
   limit = 5
   period = 60
+
+[[ratelimits]]
+name = "PLAYER_REGISTER_LIMITER"
+namespace_id = "1011"
+  # lab-159, Grupo B do backlog social — público como EVENTS_LIMITER (qualquer jogador, sem
+  # exigir assinatura), chamado no máximo uma vez por perfil na vida (`playerId` fica guardado
+  # localmente depois do primeiro registro) — mesmo limite generoso o bastante pra nunca esbarrar
+  # em uso real.
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[[ratelimits]]
+name = "PLAYER_SEARCH_LIMITER"
+namespace_id = "1012"
+  # lab-159 — a rota mais sensível do Grupo B: busca livre por nickname cria um diretório de
+  # crianças pesquisável (decisão do usuário, labs/lab-158-.../FEATURES.md, achado de segurança).
+  # Mesmo limite apertado de PAIRING_REDEEM_LIMITER (a outra rota pública de força-bruta deste
+  # Worker) — o `player_search_attempts` (0005_player_identities.sql) é a defesa que realmente
+  # segura em produção, este binding nativo é só a primeira camada.
+  [ratelimits.simple]
+  limit = 8
+  period = 60

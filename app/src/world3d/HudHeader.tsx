@@ -18,6 +18,7 @@ interface HudHeaderProps {
   onOpenQuestList: () => void
   onOpenShop: () => void
   onOpenPets: () => void
+  onOpenFriends: () => void
   muted: boolean
   onToggleMute: () => void
   onOpenChat: () => void
@@ -39,6 +40,7 @@ export function HudHeader({
   onOpenQuestList,
   onOpenShop,
   onOpenPets,
+  onOpenFriends,
   muted,
   onToggleMute,
   onOpenChat,
@@ -83,6 +85,9 @@ export function HudHeader({
         </button>
         <button type="button" className="help-button" onClick={onOpenPets} aria-label="Ver pets">
           🐾
+        </button>
+        <button type="button" className="help-button" onClick={onOpenFriends} aria-label="Ver amigos">
+          👥
         </button>
         <button
           type="button"

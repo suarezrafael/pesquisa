@@ -278,3 +278,31 @@ export function resolveTrustedOrigin(
   if (originHeader && allowed.includes(originHeader)) return originHeader
   return defaultOrigin
 }
+
+// lab-159 (Grupo B do backlog social, labs/lab-158-.../FEATURES.md) — mesma cópia proposital de
+// `app/src/data/nicknameFilter.ts`/`server-cf-relay/src/index.ts` (não dá pra importar entre os
+// três pacotes deployáveis, cada um publica separado). Valida o nickname no REGISTRO da
+// identidade de jogador — nunca deixa entrar no diretório buscável (`player_identities`) um
+// apelido que o client já bloquearia, mesma defesa em profundidade de "nunca confiar só na
+// validação do lado do cliente" (docs/prompts/01-seguranca.md §3).
+const NICKNAME_CHAR_PATTERN = /^[\p{L} ]+$/u
+const NICKNAME_BLOCKED_TERMS = [
+  'idiota', 'estupido', 'estupida', 'imbecil', 'babaca', 'otario', 'otaria', 'retardado',
+  'retardada', 'burro', 'burra', 'porra', 'merda', 'caralho', 'bosta', 'putaria', 'puta',
+  'piranha', 'vagabundo', 'vagabunda', 'cacete', 'fdp', 'pqp', 'buceta', 'xoxota', 'viado',
+  'veado', 'bicha', 'macaco', 'nazista', 'hitler', 'estuprador', 'estupradora', 'pedofilo',
+  'pedofila', 'suicida', 'suicidio', 'estuprar', 'sexo', 'pornografia', 'foder', 'fudido',
+  'desgraca', 'corno', 'corna',
+]
+
+function normalizeForBlocklist(input: string): string {
+  return input.normalize('NFD').toLowerCase().replace(/[^a-z]/g, '')
+}
+
+export function isNicknameAllowed(name: string): boolean {
+  const trimmed = name.trim()
+  if (!trimmed || trimmed.length > 40) return false
+  if (!NICKNAME_CHAR_PATTERN.test(trimmed)) return false
+  const normalized = normalizeForBlocklist(trimmed)
+  return !NICKNAME_BLOCKED_TERMS.some((term) => normalized.includes(term))
+}

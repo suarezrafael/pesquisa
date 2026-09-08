@@ -10,6 +10,7 @@ import {
   isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
+  isNicknameAllowed,
   isPairingCodeUsable,
   isPlausibleSessionDuration,
   isTokenRevoked,
@@ -425,5 +426,30 @@ describe('resolveTrustedOrigin — lab-147 (achado do Copilot: Origin do header 
     expect(resolveTrustedOrigin('https://b.example', ' https://a.example , https://b.example ', 'https://default.example')).toBe(
       'https://b.example',
     )
+  })
+})
+
+describe('isNicknameAllowed (lab-159) — mesma cópia de app/src/data/nicknameFilter.ts', () => {
+  it('aceita um nickname normal, só letras e espaço', () => {
+    expect(isNicknameAllowed('Raposa Corajosa')).toBe(true)
+  })
+
+  it('recusa vazio ou só espaço', () => {
+    expect(isNicknameAllowed('')).toBe(false)
+    expect(isNicknameAllowed('   ')).toBe(false)
+  })
+
+  it('recusa número ou símbolo', () => {
+    expect(isNicknameAllowed('Raposa123')).toBe(false)
+    expect(isNicknameAllowed('Raposa!')).toBe(false)
+  })
+
+  it('recusa termo da lista de bloqueio, mesmo com acento/maiúscula', () => {
+    expect(isNicknameAllowed('Idiota')).toBe(false)
+    expect(isNicknameAllowed('ESTÚPIDO')).toBe(false)
+  })
+
+  it('recusa nickname absurdamente longo', () => {
+    expect(isNicknameAllowed('a'.repeat(41))).toBe(false)
   })
 })
