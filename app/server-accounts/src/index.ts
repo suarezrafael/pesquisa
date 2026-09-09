@@ -1430,11 +1430,18 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       (select count(*)::int from player_identities where created_at >= now() - interval '7 days') as new_players
   `) as { friend_requests_sent: number; friend_requests_accepted: number; new_players: number }[]
 
+  // Achado do review do Copilot (PR #39): a primeira versão desta query também contava
+  // `subscriptions` com `status = 'active' and updated_at >= 7 dias` como "assinaturas ativadas na
+  // semana" — mas `upsertSubscription` (mais abaixo neste arquivo) sempre atualiza `updated_at`
+  // em QUALQUER webhook do Stripe pra aquela linha (renovação, tentativa de pagamento falha, etc.),
+  // não só na transição real pra `active`. Sem uma coluna própria tipo `activated_at` (schema
+  // novo, fora do escopo deste lab de catálogo/dashboard), não dá pra distinguir "acabou de
+  // assinar" de "só teve um webhook de rotina" — inflaria o número. Removido até existir uma fonte
+  // confiável (registrado como pendência em `docs/event-catalog.md`).
   const [weeklyCommercialRow] = (await sql`
     select
-      (select count(*)::int from family_accounts where created_at >= now() - interval '7 days') as new_families,
-      (select count(*)::int from subscriptions where status = 'active' and updated_at >= now() - interval '7 days') as new_active_subscriptions
-  `) as { new_families: number; new_active_subscriptions: number }[]
+      (select count(*)::int from family_accounts where created_at >= now() - interval '7 days') as new_families
+  `) as { new_families: number }[]
 
   return Response.json({
     totalDevices: Number(devices.total_devices),
@@ -1463,7 +1470,6 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     },
     weeklyCommercial: {
       newFamilies: weeklyCommercialRow.new_families,
-      newActiveSubscriptions: weeklyCommercialRow.new_active_subscriptions,
     },
   })
 }

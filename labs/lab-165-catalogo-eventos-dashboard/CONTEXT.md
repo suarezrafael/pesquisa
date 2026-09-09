@@ -50,12 +50,29 @@ renumerado de "Lab 164" no documento pra lab-165 real deste repositório.
   lab-166 (página familiar transparente) mexer nesse fluxo; instrumentá-los agora, sem a página
   ainda existir do jeito novo, arriscaria medir a versão errada da UI.
 
+## Achados do review do Copilot (PR #39), corrigidos antes do merge
+
+1. **Query do `weeklyFunnel` sem índice que sirva** — filtra `product_events` só por
+   `occurred_at`, mas os dois índices compostos existentes (`idx_product_events_device_occurred`,
+   `idx_product_events_type_occurred`) têm outra coluna na frente, inútil pra essa consulta —
+   forçaria scan da tabela inteira conforme ela cresce. Corrigido com a migração
+   `0008_product_events_occurred_at_index.sql` (índice simples em `occurred_at`), **já aplicada em
+   produção**.
+2. **`weeklyCommercial.newActiveSubscriptions` media a coisa errada** — calculado por
+   `subscriptions.updated_at` onde `status = 'active'`, mas `updated_at` é tocado em QUALQUER
+   webhook do Stripe pra aquela linha (renovação, tentativa de pagamento falha), não só na
+   transição real pra `active` (`upsertSubscription`). Removido em vez de mantido errado — uma
+   métrica correta precisaria de uma coluna nova tipo `activated_at`, fora do escopo deste lab
+   (registrado como pendência abaixo).
+
 ## Pendências / dívidas conhecidas
 
 As 3 já registradas em `docs/event-catalog.md` (seção "Pendências conhecidas"): funil de
 `checkout_started`/etc. (nasce no lab-166), North Star "8 min + 1 desafio" exato (precisaria de um
 id de sessão comum entre eventos, não existe hoje), `safe_social_session_rate` (sem fonte de dado
-histórica no relay de multiplayer).
+histórica no relay de multiplayer) — e uma quarta, nova, do achado do Copilot acima: "assinaturas
+ativadas na semana" precisa de uma coluna `activated_at` real (schema + lógica no webhook do
+Stripe) pra ser medida corretamente; até lá, `weeklyCommercial` só reporta `newFamilies`.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

@@ -78,13 +78,21 @@ podia falhar silenciosamente por rede; a linha na tabela é a fonte de verdade r
 | Pedidos de amizade aceitos na semana | `friendships.updated_at` onde `status = 'accepted'` (lab-160) |
 | Jogadores novos na semana | `player_identities.created_at` (lab-159) |
 | Famílias novas na semana | `family_accounts.created_at` (Fase A) |
-| Assinaturas ativadas na semana | `subscriptions.updated_at` onde `status = 'active'` (Fase C) |
 
 ## Pendências conhecidas (fora de escopo deste lab, registradas pro backlog)
 
 - `checkout_started`/`family_landing_viewed`/`parent_signup_started` (citados no documento como
   parte do funil de conversão adulta) ainda não existem como evento nem como estado consultável —
   vão nascer junto da reformulação da página familiar (lab-166), que mexe exatamente nesse fluxo.
+- **"Assinaturas ativadas na semana" não existe hoje, de propósito** (achado do review do Copilot
+  no PR #39, `weeklyCommercial`): a primeira versão deste lab tentou aproximar isso por
+  `subscriptions.updated_at` onde `status = 'active'`, mas `updated_at` é tocado em QUALQUER
+  webhook do Stripe pra aquela linha (renovação, tentativa de pagamento falha, etc. — ver
+  `upsertSubscription`, `server-accounts/src/index.ts`), não só na transição real pra `active`;
+  contar assim infla o número e mede a coisa errada. Uma métrica correta precisaria de uma coluna
+  própria tipo `activated_at`, escrita só quando o status realmente TRANSICIONA pra `active` — isso
+  é uma mudança de schema + lógica no handler do webhook, fora do escopo deste lab de
+  catálogo/dashboard só-leitura. Candidato a lab futuro se essa métrica virar prioridade real.
 - North Star "sessão de pelo menos 8 minutos com pelo menos 1 desafio educativo" ainda não é uma
   métrica isolada — precisaria de uma consulta cruzando `session_end.durationMs >= 8min` com
   `quest_completed` na MESMA sessão, e hoje não existe um id de sessão comum entre eventos de uma
