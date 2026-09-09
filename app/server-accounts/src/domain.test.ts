@@ -215,6 +215,13 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
     expect(isValidProductEventType('quest_completed')).toBe(true)
   })
 
+  it('aceita os tipos de ativação do lab-164', () => {
+    expect(isValidProductEventType('time_to_first_control')).toBe(true)
+    expect(isValidProductEventType('time_to_first_learning_challenge')).toBe(true)
+    expect(isValidProductEventType('time_to_first_reward')).toBe(true)
+    expect(isValidProductEventType('activation_cycle_completed')).toBe(true)
+  })
+
   it('rejeita um tipo desconhecido — nunca confia em input do client sem checar', () => {
     expect(isValidProductEventType('qualquer_coisa')).toBe(false)
     expect(isValidProductEventType('')).toBe(false)

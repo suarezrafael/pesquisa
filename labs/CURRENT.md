@@ -1,16 +1,52 @@
 # Laboratório atual
 
-Em andamento: labs/lab-164-jornada-ativacao-10-minutos/ — primeiro item do novo backlog guiado por
-métricas (`docs/market-metrics-engagement-backlog.md`, seção 6, "Lab 163" no documento —
-renumerado pra lab-164 porque o lab-163 real deste repo já foi usado pro perfil público de amigo).
-Objetivo guiado no primeiro acesso + marcador visual apontando a primeira escolinha + instrumentação
-fina de ativação (`time_to_first_control`/`time_to_first_learning_challenge`/`time_to_first_reward`).
-Sequência de prioridade confirmada pelo usuário pros próximos laboratórios: lab-165 catálogo de
-eventos, lab-166 página familiar transparente, lab-167 mapa de habilidades/relatório (mesma ordem
-do documento, cada um +1 pelo mesmo motivo de renumeração). Ver
-`labs/lab-164-jornada-ativacao-10-minutos/FEATURES.md`.
+Último concluído: labs/lab-165-catalogo-eventos-dashboard/ — segundo item da sequência confirmada
+pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 164" no documento — renumerado pra
+lab-165). `docs/event-catalog.md` novo documenta os 9 tipos de evento existentes (quando disparam,
+arquivo de origem, `meta`, métrica que alimentam) + nota de ausência de PII infantil.
+`GET /admin/metrics` ganha campos novos, todos sobre uma janela de 7 dias (diferente do resto do
+endpoint, que é acumulado desde o início): `weeklyFunnel` (dispositivos únicos por evento de
+ativação, uma query só sem filtro de tipo — evita passar array como parâmetro, mesma decisão do
+lab-163 sobre `badges`/jsonb), `weeklySocial` e `weeklyCommercial` (direto de `friendships`/
+`player_identities`/`family_accounts`, sem evento de client novo — a informação já existe mais
+confiável em tabela própria). Sem UI de dashboard (mantém o padrão JSON já usado desde o lab-99).
+`npx tsc --noEmit`/testes limpos (server-accounts 97/97, sem teste novo — I/O puro, sem lógica de
+domínio isolável, mesmo padrão do resto de `handleAdminMetrics`). PR #39 teve 2 achados reais do
+Copilot corrigidos antes do merge: `weeklyFunnel` filtrava `product_events` só por `occurred_at`
+sem nenhum índice compatível (migração `0008`, índice simples em `occurred_at`, **já aplicada em
+produção**); `weeklyCommercial.newActiveSubscriptions` media qualquer webhook do Stripe
+(renovação/falha de pagamento) como "ativação" — removido em vez de mantido errado, registrado como
+pendência (precisa de coluna `activated_at` nova, fora de escopo). **Verificado ao vivo contra
+produção** (`wrangler dev` local, só leitura): campos novos responderam com números plausíveis
+(`weeklyFunnel.playClick: 2`, `questCompleted: 3`), 401 confirmado sem secret/com secret errado.
+**Confirma deploy em produção**: PR #39 mergeado, CI/CD verde nos 3 workers, deploy automático
+confirmado (`GET /health` 200). Ver `labs/lab-165-catalogo-eventos-dashboard/CONTEXT.md`.
 
-Último concluído: labs/lab-163-perfil-publico-amigo/ — último item do Grupo B do backlog social
+Antes desse: labs/lab-164-jornada-ativacao-10-minutos/ — primeiro item do novo backlog guiado
+por métricas (`docs/market-metrics-engagement-backlog.md`, seção 6, "Lab 163" no documento —
+renumerado pra lab-164 porque o lab-163 real deste repo já foi usado pro perfil público de amigo).
+Feixe de luz vertical emissivo acima da primeira escolinha (`quests[0]`, sempre desbloqueada),
+visível só pra perfil sem nenhuma missão concluída (`applyActivationBeaconVisual`, mesmo gatilho de
+`applyPortalVisual`/`__refreshPortals`) — some pra sempre assim que a primeira missão é respondida.
+Instrumentação fina de ativação nova em `productAnalytics.ts` (`trackFirstControl`/
+`trackFirstLearningChallenge`/`trackFirstReward`), cada uma disparando no máximo uma vez por sessão;
+`activation_cycle_completed` soma quando é a primeira missão da vida do perfil E dentro de 10
+minutos da sessão. `PRODUCT_EVENT_TYPES` (`server-accounts/src/domain.ts`) ganhou os 4 tipos novos
+— sem migração/endpoint novo, só allowlist. Verificado ao vivo (`npm run dev` + Chrome real via
+automação): feixe confirmado visível/some corretamente por screenshot (perfil de teste restaurado
+ao final); instrumentação confirmada disparando na hora certa via monkey-patch de `window.fetch` +
+técnica de forçar `engine._deltaTime`/`scene.render()` manual (mesma limitação de foco de aba já
+documentada em labs 135/140/141/146/162) — corpo/resposta da requisição não confirmados por falta
+de acesso à internet real deste ambiente de automação (`fetch` a qualquer host externo falha ali,
+não é bug de código). `npx tsc -b`/testes limpos (app 136/136, sem teste novo; server-accounts
+97/97, 1 novo). `npm run build` sem regressão de bundle. PR #38 teve 1 achado real do Copilot
+corrigido antes do merge (`new Color3(...)` alocado a cada frame no pulso do feixe — GC/jank em
+mobile — trocado por `.set()` em-place no `Color3` já existente do material). **Confirma deploy em
+produção**: PR #38 mergeado, CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health`
+200 em produção — sem migração de banco desta vez, só allowlist de eventos). Ver
+`labs/lab-164-jornada-ativacao-10-minutos/CONTEXT.md`.
+
+Antes desse: labs/lab-163-perfil-publico-amigo/ — último item do Grupo B do backlog social
 (lab-158, agora completo): `GET /players/:id/public-profile` (avatar equipado + conquistas de um
 amigo, nunca XP/moeda/progresso/família). Sincronizado via piggyback no heartbeat já existente
 (`equippedLook`/`badges` opcionais no corpo de `POST /players/heartbeat`, upsert em duas colunas

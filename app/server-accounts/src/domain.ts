@@ -167,6 +167,12 @@ const PRODUCT_EVENT_TYPES = new Set([
   'quest_completed',
   'play_click',
   'parent_area_click',
+  // lab-164 (docs/market-metrics-engagement-backlog.md §4) — instrumentação fina da jornada de
+  // ativação de 10 minutos, ver `app/src/productAnalytics.ts`.
+  'time_to_first_control',
+  'time_to_first_learning_challenge',
+  'time_to_first_reward',
+  'activation_cycle_completed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
