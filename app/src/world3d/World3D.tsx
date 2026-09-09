@@ -8481,10 +8481,12 @@ export function World3D({
         time += dt
 
         // lab-164 — pulso suave de brilho no feixe "comece aqui" (só custa nada quando desligado,
-        // `isEnabled()` evita animar um material invisível à toa).
+        // `isEnabled()` evita animar um material invisível à toa). Achado do review do Copilot
+        // (PR #38): `new Color3(...)` a cada frame alocava lixo continuamente — `.set()` ajusta o
+        // `Color3` já existente do material em-place, sem alocação nova.
         if (activationBeaconMat && activationBeacon?.isEnabled()) {
           const pulse = 0.55 + 0.35 * Math.sin(time * 2.2)
-          activationBeaconMat.emissiveColor = new Color3(1, 0.8, 0.15).scale(pulse)
+          activationBeaconMat.emissiveColor.set(pulse, pulse * 0.8, pulse * 0.15)
         }
 
         weatherTimer -= dt
