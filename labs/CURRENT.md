@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Em andamento: labs/lab-164-jornada-ativacao-10-minutos/ — primeiro item do novo backlog guiado por
+métricas (`docs/market-metrics-engagement-backlog.md`, seção 6, "Lab 163" no documento —
+renumerado pra lab-164 porque o lab-163 real deste repo já foi usado pro perfil público de amigo).
+Objetivo guiado no primeiro acesso + marcador visual apontando a primeira escolinha + instrumentação
+fina de ativação (`time_to_first_control`/`time_to_first_learning_challenge`/`time_to_first_reward`).
+Sequência de prioridade confirmada pelo usuário pros próximos laboratórios: lab-165 catálogo de
+eventos, lab-166 página familiar transparente, lab-167 mapa de habilidades/relatório (mesma ordem
+do documento, cada um +1 pelo mesmo motivo de renumeração). Ver
+`labs/lab-164-jornada-ativacao-10-minutos/FEATURES.md`.
+
 Último concluído: labs/lab-163-perfil-publico-amigo/ — último item do Grupo B do backlog social
 (lab-158, agora completo): `GET /players/:id/public-profile` (avatar equipado + conquistas de um
 amigo, nunca XP/moeda/progresso/família). Sincronizado via piggyback no heartbeat já existente
