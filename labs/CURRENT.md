@@ -1,6 +1,29 @@
 # Laboratório atual
 
-Último concluído: labs/lab-166-pagina-familiar-transparente/ — terceiro item da sequência
+Último concluído: labs/lab-167-mapa-habilidades-relatorio/ — quarto e último item confirmado da
+sequência (`docs/market-metrics-engagement-backlog.md`, "Lab 166" no documento — renumerado pra
+lab-167). Função pura `skillBreakdown` (client) conta missões concluídas por tipo (lógica/
+matemática/leitura, `data/quests.ts` já tem o campo, nunca `planetQuests.ts` — sem sinal real de
+habilidade ali) — usada no `ChildProgressPanel` (`/familia`, nova linha de estatísticas + "ponto
+forte"/"pra praticar mais") e sincronizada pro `ProgressSummary` (`syncProgressSummary`). Migração
+`0009` (3 colunas nullable em `progress_snapshots`) + `describeSkillFocus` (server, função pura)
+adiciona a mesma seção ao relatório semanal por e-mail — tom de incentivo, nunca avaliação escolar,
+`null` quando as 3 habilidades empatam (sem sinal real). `npx tsc -b`/testes limpos (app 139/139, 3
+novos; server-accounts 107/107, 9 novos). `npm run build` sem regressão de bundle. **Verificado ao
+vivo contra produção**: migração aplicada; 401/400 confirmados sem escrever no banco (família real
+única de produção conferida antes/depois, intacta); fluxo completo testado num navegador real via
+conta de teste DESCARTÁVEL (criada e depois excluída por completo via `/account/delete`, confirmado
+por tentativa de login pós-exclusão falhando) — `ChildProgressPanel` mostrando a contagem por
+habilidade e "Ponto forte: Lógica. Pra praticar mais: Matemática." batendo exatamente com o
+progresso real do perfil de teste. PR #41 teve 1 achado real do Copilot corrigido antes do merge
+(`Object.keys(SKILL_LABELS) as QuestType[]` mascarava divergência futura entre as chaves — trocado
+por uma constante `SKILL_TYPES` tipada, sem cast). **Confirma deploy em produção**: PR #41
+mergeado, CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health` 200). **Com isso,
+os 4 itens confirmados pelo usuário nesta sessão (ativação de 10 min, catálogo de eventos, página
+familiar, mapa de habilidades) estão completos.** Ver
+`labs/lab-167-mapa-habilidades-relatorio/CONTEXT.md`.
+
+Antes desse: labs/lab-166-pagina-familiar-transparente/ — terceiro item da sequência
 confirmada pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 165" no documento —
 renumerado pra lab-166). Nova tela `FamilyValueProp` (`components/FamilyPortal.tsx`) entre o portão
 de matemática e o login: segurança, aprendizagem sempre grátis, grátis vs pago, exemplo ilustrativo

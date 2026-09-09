@@ -22,6 +22,7 @@ import {
   petStageFor,
   petStageScale,
   seriesForLevel,
+  skillBreakdown,
   syncWeeklyXpSnapshot,
   weeklyXpEarned,
   SUBSCRIBER_COIN_MULTIPLIER,
@@ -437,6 +438,36 @@ describe('isQuestUnlocked', () => {
       completedQuestIds: [quests[0].id],
     }
     expect(isQuestUnlocked(progressComQuestUm, 1)).toBe(true)
+  })
+})
+
+describe('skillBreakdown (lab-167)', () => {
+  it('perfil sem missão concluída começa zerado nas 3 habilidades', () => {
+    expect(skillBreakdown(emptyProgress)).toEqual({ logica: 0, matematica: 0, leitura: 0 })
+  })
+
+  it('conta cada missão concluída na habilidade certa', () => {
+    const logica = quests.find((q) => q.type === 'logica')!
+    const matematica = quests.find((q) => q.type === 'matematica')!
+    const leitura = quests.find((q) => q.type === 'leitura')!
+    const progress: typeof emptyProgress = {
+      ...emptyProgress,
+      completedQuestIds: [logica.id, matematica.id],
+    }
+    const result = skillBreakdown(progress)
+    expect(result.logica).toBe(1)
+    expect(result.matematica).toBe(1)
+    expect(result.leitura).toBe(0)
+    // sanidade: a missão de leitura escolhida acima nunca foi marcada como concluída
+    expect(progress.completedQuestIds).not.toContain(leitura.id)
+  })
+
+  it('nunca conta as perguntas de astronomia dos outros planetas (completedPlanetQuestIds)', () => {
+    const progress: typeof emptyProgress = {
+      ...emptyProgress,
+      completedPlanetQuestIds: Object.values(planetQuests).flat().map((q) => q.id),
+    }
+    expect(skillBreakdown(progress)).toEqual({ logica: 0, matematica: 0, leitura: 0 })
   })
 })
 

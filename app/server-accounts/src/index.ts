@@ -291,7 +291,7 @@ async function handleAccountExport(request: Request, env: Env): Promise<Response
         sql`select code, expires_at, redeemed_at from pairing_codes where family_account_id = ${family.id}`,
         sql`select jti, issued_at, revoked_at from entitlement_tokens where family_account_id = ${family.id}`,
         sql`select score, comment, submitted_at from nps_responses where family_account_id = ${family.id}`,
-        sql`select level, total_xp, coins, quests_completed, badges_count, updated_at from progress_snapshots where family_account_id = ${family.id}`,
+        sql`select level, total_xp, coins, quests_completed, badges_count, logica_completed, matematica_completed, leitura_completed, updated_at from progress_snapshots where family_account_id = ${family.id}`,
         sql`select profile, progress, updated_at from progress_backups where family_account_id = ${family.id}`,
       ])
     familiesExport.push({
@@ -1080,15 +1080,27 @@ async function handleProgressSummary(request: Request, env: Env): Promise<Respon
   if (!isValidProgressSummary(payload)) return new Response(null, { status: 400 })
   const summary: ProgressSummary = payload
 
+  // lab-167 — os 3 campos de habilidade são `?? null` porque `ProgressSummary` os define
+  // opcionais (`isValidProgressSummary` aceita ausentes, ver comentário lá) — um cliente antigo
+  // ainda sem essa versão não deve quebrar o resto do resumo.
   await sql`
-    insert into progress_snapshots (family_account_id, level, total_xp, coins, quests_completed, badges_count, updated_at)
-    values (${familyAccountId}, ${summary.level}, ${summary.totalXp}, ${summary.coins}, ${summary.questsCompleted}, ${summary.badgesCount}, now())
+    insert into progress_snapshots (
+      family_account_id, level, total_xp, coins, quests_completed, badges_count,
+      logica_completed, matematica_completed, leitura_completed, updated_at
+    )
+    values (
+      ${familyAccountId}, ${summary.level}, ${summary.totalXp}, ${summary.coins}, ${summary.questsCompleted}, ${summary.badgesCount},
+      ${summary.logicaCompleted ?? null}, ${summary.matematicaCompleted ?? null}, ${summary.leituraCompleted ?? null}, now()
+    )
     on conflict (family_account_id) do update set
       level = excluded.level,
       total_xp = excluded.total_xp,
       coins = excluded.coins,
       quests_completed = excluded.quests_completed,
       badges_count = excluded.badges_count,
+      logica_completed = excluded.logica_completed,
+      matematica_completed = excluded.matematica_completed,
+      leitura_completed = excluded.leitura_completed,
       updated_at = now()
   `
 
@@ -1675,6 +1687,7 @@ async function sendWeeklyProgressEmails(env: Env): Promise<void> {
     )
     select
       p.level, p.total_xp, p.coins, p.quests_completed, p.badges_count,
+      p.logica_completed, p.matematica_completed, p.leitura_completed,
       u.email, u.name
     from progress_snapshots p
     join latest_subscription ls on ls.family_account_id = p.family_account_id
@@ -1687,6 +1700,9 @@ async function sendWeeklyProgressEmails(env: Env): Promise<void> {
     coins: number
     quests_completed: number
     badges_count: number
+    logica_completed: number | null
+    matematica_completed: number | null
+    leitura_completed: number | null
     email: string
     name: string | null
   }[]
@@ -1701,6 +1717,11 @@ async function sendWeeklyProgressEmails(env: Env): Promise<void> {
         coins: row.coins,
         questsCompleted: row.quests_completed,
         badgesCount: row.badges_count,
+        // lab-167 — `null` (snapshot antigo, gravado antes deste lab) vira `undefined`, mesmo
+        // significado de "não sei" que `ProgressSummary` já usa pro campo opcional.
+        logicaCompleted: row.logica_completed ?? undefined,
+        matematicaCompleted: row.matematica_completed ?? undefined,
+        leituraCompleted: row.leitura_completed ?? undefined,
       },
       row.name,
     )

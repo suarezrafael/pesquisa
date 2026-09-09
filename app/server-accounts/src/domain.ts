@@ -205,6 +205,14 @@ export interface ProgressSummary {
   coins: number
   questsCompleted: number
   badgesCount: number
+  // lab-167 (docs/market-metrics-engagement-backlog.md §6, "Lab 166" no documento) — mapa de
+  // habilidades: contagem das missões do PLANETA PRINCIPAL concluídas por tipo (`data/quests.ts`
+  // do client, `skillBreakdown`), nunca as perguntas de astronomia dos outros planetas (essas não
+  // têm habilidade real distinta, ver comentário em `skillBreakdown`). Opcionais — clientes
+  // antigos (antes deste lab) continuam mandando o resumo sem eles.
+  logicaCompleted?: number
+  matematicaCompleted?: number
+  leituraCompleted?: number
 }
 
 function isPlausibleCount(value: unknown, max: number): value is number {
@@ -237,15 +245,28 @@ export function isValidProgressBackupPayload(payload: unknown): payload is Progr
   return isPlainObject(payload.profile) && isPlainObject(payload.progress)
 }
 
+// lab-167 — os 3 campos de habilidade são OPCIONAIS de propósito: um cliente já em produção antes
+// deste deploy ainda manda o resumo sem eles por um tempo (até recarregar a página), e isso não
+// pode virar 400 nem perder o resto do resumo — só omite a seção de habilidades do e-mail quando
+// ausentes (ver `buildWeeklyProgressEmail`). Quando presentes, ainda validados como qualquer
+// contagem — nunca confia no client sem checar (docs/prompts/01-seguranca.md §3).
+function isPlausibleOptionalCount(value: unknown, max: number): boolean {
+  return value === undefined || isPlausibleCount(value, max)
+}
+
 export function isValidProgressSummary(payload: unknown): payload is ProgressSummary {
   if (!payload || typeof payload !== 'object') return false
-  const { level, totalXp, coins, questsCompleted, badgesCount } = payload as Record<string, unknown>
+  const { level, totalXp, coins, questsCompleted, badgesCount, logicaCompleted, matematicaCompleted, leituraCompleted } =
+    payload as Record<string, unknown>
   return (
     isPlausibleCount(level, 999) &&
     isPlausibleCount(totalXp, 1_000_000) &&
     isPlausibleCount(coins, 1_000_000) &&
     isPlausibleCount(questsCompleted, 10_000) &&
-    isPlausibleCount(badgesCount, 100)
+    isPlausibleCount(badgesCount, 100) &&
+    isPlausibleOptionalCount(logicaCompleted, 10_000) &&
+    isPlausibleOptionalCount(matematicaCompleted, 10_000) &&
+    isPlausibleOptionalCount(leituraCompleted, 10_000)
   )
 }
 
@@ -257,10 +278,56 @@ export interface WeeklyProgressEmail {
   html: string
 }
 
+// lab-167 (docs/market-metrics-engagement-backlog.md §6, "Lab 166" no documento) — mapa de
+// habilidades. Tom deliberadamente de incentivo, nunca de avaliação escolar (achado do "Riscos"
+// citado no documento: "parecer avaliação escolar formal"): "ponto forte"/"pra praticar mais" em
+// vez de "nota"/"fraco em"; nunca promete melhoria acadêmica garantida.
+export type SkillName = 'lógica' | 'matemática' | 'leitura'
+
+const SKILL_ACTIVITY_SUGGESTION: Record<SkillName, string> = {
+  lógica: 'um desafio de sequência ou padrão',
+  matemática: 'uma missão de contas ou problemas',
+  leitura: 'uma missão de interpretação de texto',
+}
+
+export interface SkillFocus {
+  strongest: SkillName
+  weakest: SkillName
+  suggestion: string
+}
+
+// Devolve `null` quando não há sinal suficiente pra dizer algo útil: cliente ainda não manda os 3
+// campos (versão antiga do jogo, ver `ProgressSummary`), ou as 3 habilidades estão empatadas (nem
+// "ponto forte" nem "pra praticar mais" fariam sentido sem alguma diferença real entre elas —
+// mesmo cuidado do "Riscos" do documento: "dados insuficientes para inferências fortes").
+export function describeSkillFocus(
+  logicaCompleted: number | undefined,
+  matematicaCompleted: number | undefined,
+  leituraCompleted: number | undefined,
+): SkillFocus | null {
+  if (logicaCompleted === undefined || matematicaCompleted === undefined || leituraCompleted === undefined) {
+    return null
+  }
+  const entries: { name: SkillName; count: number }[] = [
+    { name: 'lógica', count: logicaCompleted },
+    { name: 'matemática', count: matematicaCompleted },
+    { name: 'leitura', count: leituraCompleted },
+  ]
+  const strongest = entries.reduce((a, b) => (b.count > a.count ? b : a))
+  const weakest = entries.reduce((a, b) => (b.count < a.count ? b : a))
+  if (strongest.count === weakest.count) return null
+  return { strongest: strongest.name, weakest: weakest.name, suggestion: SKILL_ACTIVITY_SUGGESTION[weakest.name] }
+}
+
 export function buildWeeklyProgressEmail(summary: ProgressSummary, responsibleName: string | null): WeeklyProgressEmail {
   const greeting = responsibleName ? `Oi, ${responsibleName}!` : 'Oi!'
   const questWord = summary.questsCompleted === 1 ? 'missão concluída' : 'missões concluídas'
   const badgeWord = summary.badgesCount === 1 ? 'emblema conquistado' : 'emblemas conquistados'
+  const skillFocus = describeSkillFocus(summary.logicaCompleted, summary.matematicaCompleted, summary.leituraCompleted)
+  const skillSection = skillFocus
+    ? `<p>Ponto forte da semana: <strong>${skillFocus.strongest}</strong>. Pra praticar mais:
+      <strong>${skillFocus.weakest}</strong> — que tal ${skillFocus.suggestion} na próxima sessão?</p>`
+    : ''
   return {
     subject: 'Resumo semanal do progresso — Missão Aprender',
     html: `
@@ -272,6 +339,7 @@ export function buildWeeklyProgressEmail(summary: ProgressSummary, responsibleNa
         <li>${summary.coins} moedas guardadas</li>
         <li>${summary.badgesCount} ${badgeWord}</li>
       </ul>
+      ${skillSection}
       <p>Continue incentivando a curiosidade dele(a)! Você recebe este e-mail porque tem uma
       assinatura ativa vinculada a esta conta.</p>
     `.trim(),
