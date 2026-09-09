@@ -185,3 +185,13 @@ namespace_id = "1013"
   [ratelimits.simple]
   limit = 20
   period = 60
+
+[[ratelimits]]
+name = "HEARTBEAT_LIMITER"
+namespace_id = "1014"
+  # lab-162 — chamado a cada ~60s durante toda sessão de jogo (não só quando o painel de Amigos
+  # está aberto), por isso bem mais generoso que os outros: uma sessão de 1h já soma ~60 chamadas
+  # sozinha, sem nenhum abuso envolvido.
+  [ratelimits.simple]
+  limit = 120
+  period = 60

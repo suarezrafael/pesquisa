@@ -23,6 +23,7 @@ import {
   isEntitlementActive,
   isEventNewerThan,
   isNicknameAllowed,
+  isOnlineNow,
   isPlausibleSessionDuration,
   isSelfFriendRequest,
   isTokenRevoked,
@@ -102,6 +103,10 @@ export interface Env {
   // lab-160 — compartilhado entre as 4 rotas de pedido/aceite/recusa/remoção de amizade (mesmo
   // espírito de PROGRESS_BACKUP_LIMITER cobrindo leitura e escrita com um namespace só).
   FRIEND_REQUEST_LIMITER: RateLimit
+  // lab-162 — chamado a cada ~60s durante toda sessão de jogo enquanto o jogador tem `playerId`
+  // registrado; precisa de limite bem mais generoso que os outros (uma sessão de 1h já soma ~60
+  // chamadas sozinha).
+  HEARTBEAT_LIMITER: RateLimit
 }
 
 // IP real do cliente — Cloudflare sempre preenche esse header nos Workers (não é confiável vindo
@@ -552,6 +557,18 @@ function shapeFriendRow(row: FriendRow) {
   return { friendshipId: row.id, playerId: row.player_id, nickname: row.nickname, avatarEmoji: row.avatar_emoji }
 }
 
+// lab-162 — só a lista de amigos JÁ ACEITOS carrega status online (`received`/`sent` são pedidos
+// pendentes, não faz sentido mostrar "online" de alguém que ainda não é seu amigo).
+type AcceptedFriendRow = FriendRow & { last_seen_at: string }
+
+function shapeAcceptedFriendRow(row: AcceptedFriendRow) {
+  return {
+    ...shapeFriendRow(row),
+    lastSeenAt: row.last_seen_at,
+    online: isOnlineNow(row.last_seen_at),
+  }
+}
+
 // lab-160, Grupo B do backlog social — envia um pedido de amizade. `playerId` não tem assinatura
 // nenhuma (mesmo modelo de confiança do resto do Grupo B: é um id opaco guardado no client, não
 // uma credencial verificada por senha/token) — aceitável porque o pior caso de abuso é alguém
@@ -721,22 +738,51 @@ async function handleFriendSummary(request: Request, env: Env): Promise<Response
     order by f.updated_at asc
   `) as FriendRow[]
 
+  // lab-162: `last_seen_at` a mais que as duas queries acima — só amigos já aceitos mostram
+  // status online.
   const friends = (await sql`
     select f.id,
       case when f.requester_id = ${playerId} then f.addressee_id else f.requester_id end as player_id,
-      p.nickname, p.avatar_emoji
+      p.nickname, p.avatar_emoji, p.last_seen_at
     from friendships f
     join player_identities p
       on p.id = (case when f.requester_id = ${playerId} then f.addressee_id else f.requester_id end)
     where (f.requester_id = ${playerId} or f.addressee_id = ${playerId}) and f.status = 'accepted'
     order by f.updated_at desc
-  `) as FriendRow[]
+  `) as AcceptedFriendRow[]
 
   return Response.json({
     received: received.map(shapeFriendRow),
     sent: sent.map(shapeFriendRow),
-    friends: friends.map(shapeFriendRow),
+    friends: friends.map(shapeAcceptedFriendRow),
   })
+}
+
+// lab-162 — atualiza `last_seen_at`; chamado a cada ~60s pelo client enquanto o jogo está aberto
+// E o jogador já tem `playerId` registrado (nunca antes disso, mesmo raciocínio de
+// `handlePlayerRegister`: não cria carga/dado pra quem nunca abriu o painel de Amigos).
+async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
+  const limited = await rateLimited(env.HEARTBEAT_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  const body = (await request.json().catch(() => null)) as { playerId?: unknown } | null
+  // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
+  // checar o tipo antes de `.trim()`, um número/objeto no lugar de string lançaria TypeError não
+  // tratado (500) em vez do 400 esperado pra input malformado.
+  if (typeof body?.playerId !== 'string') {
+    return Response.json({ error: 'playerId inválido' }, { status: 400 })
+  }
+  const playerId = body.playerId.trim()
+  if (!playerId || !isValidUuid(playerId)) {
+    return Response.json({ error: 'playerId inválido' }, { status: 400 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  const rows = (await sql`
+    update player_identities set last_seen_at = now() where id = ${playerId} returning id
+  `) as { id: string }[]
+  if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
+  return new Response(null, { status: 204 })
 }
 
 async function handleSubscriptionStatus(request: Request, env: Env): Promise<Response> {
@@ -1745,6 +1791,10 @@ export default {
 
     if (url.pathname === '/players/friend-summary' && request.method === 'GET') {
       return withCors(await handleFriendSummary(request, env))
+    }
+
+    if (url.pathname === '/players/heartbeat' && request.method === 'POST') {
+      return withCors(await handleHeartbeat(request, env))
     }
 
     if (url.pathname === '/admin/metrics' && request.method === 'GET') {

@@ -1552,6 +1552,13 @@ a.nickname-generate-btn {
   color: var(--primary-dark);
 }
 
+/* Status online/último acesso (lab-162, FriendsPanel.tsx, aba Amigos) — texto discreto, não
+   compete com o nome do amigo. */
+.friend-online-badge {
+  font-size: 0.78rem;
+  color: #68739e;
+}
+
 .ranking-place {
   display: inline-block;
   min-width: 1.6em;

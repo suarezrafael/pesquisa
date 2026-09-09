@@ -339,3 +339,18 @@ export type FriendRequestResponseStatus = 'accepted' | 'declined'
 export function friendResponseStatus(accept: boolean): FriendRequestResponseStatus {
   return accept ? 'accepted' : 'declined'
 }
+
+// lab-162, Grupo B do backlog social — "online agora" é derivado do heartbeat
+// (`POST /players/heartbeat`, chamado a cada ~60s pelo client), não de presença de WebSocket do
+// relay de multiplayer (mais simples, e continua funcionando mesmo se o relay cair — mesmo
+// raciocínio já registrado no plano do lab-158). Limiar de 2 minutos: folgado o bastante pra
+// cobrir uma falha isolada de heartbeat (rede instável, aba em segundo plano por um instante) sem
+// mostrar "offline" errado, apertado o bastante pra não mostrar "online" muito depois de a criança
+// ter saído do jogo.
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000
+
+export function isOnlineNow(lastSeenAtIso: string, now: number = Date.now()): boolean {
+  const lastSeenAtMs = new Date(lastSeenAtIso).getTime()
+  if (!Number.isFinite(lastSeenAtMs)) return false
+  return now - lastSeenAtMs <= ONLINE_THRESHOLD_MS
+}

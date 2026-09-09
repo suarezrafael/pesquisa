@@ -1,10 +1,10 @@
-// Painel de Amigos (lab-159: só busca; lab-160: pedido/aceite/recusa/remover amizade, labs/
-// lab-158-.../FEATURES.md). Registra a identidade de jogador (`usePlayerIdentity.ensureRegistered`)
-// na primeira vez que este painel abre, não no onboarding — evita registrar quem nunca usa a busca.
-// Status online/último acesso fica pro lab-161 — a aba "Amigos" aqui só lista quem já foi aceito.
+// Painel de Amigos (lab-159: só busca; lab-160: pedido/aceite/recusa/remover amizade; lab-162:
+// status online/último acesso, labs/lab-158-.../FEATURES.md). Registra a identidade de jogador
+// (`usePlayerIdentity.ensureRegistered`) na primeira vez que este painel abre, não no onboarding —
+// evita registrar quem nunca usa a busca.
 import { useEffect, useState } from 'react'
 import { usePlayerIdentity } from '../state/usePlayerIdentity'
-import { useFriendRequests, type FriendSummaryItem } from '../state/useFriendRequests'
+import { useFriendRequests, formatLastSeen, type FriendSummaryItem } from '../state/useFriendRequests'
 import { getOrCreateDeviceId } from '../state/storage'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Profile } from '../types'
@@ -146,7 +146,13 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
             {summary.friends.length === 0 && <p className="chat-empty">Você ainda não tem amigos adicionados.</p>}
             {summary.friends.map((f) => (
               <p key={f.friendshipId} className="ranking-row">
-                {f.avatarEmoji} <strong>{f.nickname}</strong> —{' '}
+                {f.avatarEmoji} <strong>{f.nickname}</strong>{' '}
+                {f.online ? (
+                  <span className="friend-online-badge">🟢 online agora</span>
+                ) : (
+                  f.lastSeenAt && <span className="friend-online-badge">última vez: {formatLastSeen(f.lastSeenAt)}</span>
+                )}{' '}
+                —{' '}
                 <button type="button" className="chat-category-btn" onClick={() => handleRemoveClick(f)}>
                   {confirmingRemoveId === f.friendshipId ? 'Confirmar remoção?' : 'Remover'}
                 </button>
