@@ -7,6 +7,7 @@ import { usePlayerIdentity } from '../state/usePlayerIdentity'
 import { useFriendRequests, formatLastSeen, type FriendSummaryItem } from '../state/useFriendRequests'
 import { getOrCreateDeviceId } from '../state/storage'
 import { useModalA11y } from '../state/useModalA11y'
+import { PlayerPublicProfileView } from './PlayerPublicProfileView'
 import type { Profile } from '../types'
 
 interface FriendsPanelProps {
@@ -24,6 +25,10 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<FriendsTab>('search')
   const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | null>(null)
+  // lab-163 — perfil público de um amigo (avatar equipado + conquistas) substitui o conteúdo do
+  // painel em vez de abrir um segundo diálogo empilhado (ver comentário em
+  // `PlayerPublicProfileView.tsx` sobre o conflito de Esc entre dois `useModalA11y`).
+  const [viewingFriend, setViewingFriend] = useState<FriendSummaryItem | null>(null)
 
   useEffect(() => {
     ensureRegistered(profile.name, profile.avatarEmoji, getOrCreateDeviceId())
@@ -57,6 +62,14 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×
         </button>
+        {viewingFriend ? (
+          <PlayerPublicProfileView
+            playerId={viewingFriend.playerId}
+            nickname={viewingFriend.nickname}
+            onBack={() => setViewingFriend(null)}
+          />
+        ) : (
+          <>
         <h2>👥 Amigos</h2>
 
         <div className="chat-panel-categories">
@@ -153,12 +166,17 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
                   f.lastSeenAt && <span className="friend-online-badge">última vez: {formatLastSeen(f.lastSeenAt)}</span>
                 )}{' '}
                 —{' '}
+                <button type="button" className="chat-category-btn" onClick={() => setViewingFriend(f)}>
+                  Ver perfil
+                </button>{' '}
                 <button type="button" className="chat-category-btn" onClick={() => handleRemoveClick(f)}>
                   {confirmingRemoveId === f.friendshipId ? 'Confirmar remoção?' : 'Remover'}
                 </button>
               </p>
             ))}
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

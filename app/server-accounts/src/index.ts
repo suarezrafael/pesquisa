@@ -27,6 +27,8 @@ import {
   isPlausibleSessionDuration,
   isSelfFriendRequest,
   isTokenRevoked,
+  isValidBadgeList,
+  isValidEquippedLook,
   isValidNpsScore,
   isValidProductEventType,
   isValidProgressBackupPayload,
@@ -765,7 +767,9 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   const limited = await rateLimited(env.HEARTBEAT_LIMITER, clientIp(request))
   if (limited) return limited
 
-  const body = (await request.json().catch(() => null)) as { playerId?: unknown } | null
+  const body = (await request.json().catch(() => null)) as
+    | { playerId?: unknown; equippedLook?: unknown; badges?: unknown }
+    | null
   // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
   // checar o tipo antes de `.trim()`, um número/objeto no lugar de string lançaria TypeError não
   // tratado (500) em vez do 400 esperado pra input malformado.
@@ -777,12 +781,68 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     return Response.json({ error: 'playerId inválido' }, { status: 400 })
   }
 
+  // lab-163 — os dois campos são opcionais (heartbeats de clientes ainda não atualizados mandam só
+  // `playerId`); quando vêm, viram o snapshot atual usado por `GET /players/:id/public-profile`.
+  // `undefined` (campo ausente) preserva o valor já salvo (`coalesce` abaixo); presente mas
+  // malformado é 400, nunca gravado silenciosamente.
+  let equippedLookJson: string | null = null
+  if (body.equippedLook !== undefined) {
+    if (!isValidEquippedLook(body.equippedLook)) {
+      return Response.json({ error: 'equippedLook inválido' }, { status: 400 })
+    }
+    equippedLookJson = JSON.stringify(body.equippedLook)
+  }
+
+  let badgesJson: string | null = null
+  if (body.badges !== undefined) {
+    if (!isValidBadgeList(body.badges)) {
+      return Response.json({ error: 'badges inválido' }, { status: 400 })
+    }
+    badgesJson = JSON.stringify(body.badges)
+  }
+
   const sql = neon(env.DATABASE_URL)
   const rows = (await sql`
-    update player_identities set last_seen_at = now() where id = ${playerId} returning id
+    update player_identities set
+      last_seen_at = now(),
+      equipped_look = coalesce(${equippedLookJson}::jsonb, equipped_look),
+      badges = coalesce(${badgesJson}::jsonb, badges)
+    where id = ${playerId} returning id
   `) as { id: string }[]
   if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
   return new Response(null, { status: 204 })
+}
+
+// lab-163, último item do Grupo B do backlog social (labs/lab-158-.../FEATURES.md) — avatar
+// equipado + conquistas de UM jogador, sincronizados via `POST /players/heartbeat` acima. Sem
+// autenticação/entitlement (mesma regra de `handlePlayerSearch`/`handleFriendSummary`: funciona
+// pra qualquer jogador, pago ou não) — reusa o mesmo rate limiter de amizade, mesmo espírito de
+// `handleFriendSummary` (leitura leve, não sensível o bastante pro seu próprio namespace).
+// NUNCA seleciona `xp`/`coins`/`device_id`/família — só as colunas de aparência+conquista, regra
+// definida no plano do lab-158 sem mudança.
+async function handlePlayerPublicProfile(request: Request, env: Env, playerId: string): Promise<Response> {
+  const limited = await rateLimited(env.FRIEND_REQUEST_LIMITER, clientIp(request))
+  if (limited) return limited
+
+  if (!isValidUuid(playerId)) {
+    return Response.json({ error: 'playerId inválido' }, { status: 400 })
+  }
+
+  const sql = neon(env.DATABASE_URL)
+  const rows = (await sql`
+    select nickname, avatar_emoji, equipped_look, badges
+    from player_identities
+    where id = ${playerId}
+  `) as { nickname: string; avatar_emoji: string; equipped_look: unknown; badges: unknown }[]
+  if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
+
+  const row = rows[0]
+  return Response.json({
+    nickname: row.nickname,
+    avatarEmoji: row.avatar_emoji,
+    equippedLook: row.equipped_look ?? null,
+    badges: row.badges ?? [],
+  })
 }
 
 async function handleSubscriptionStatus(request: Request, env: Env): Promise<Response> {
@@ -1795,6 +1855,13 @@ export default {
 
     if (url.pathname === '/players/heartbeat' && request.method === 'POST') {
       return withCors(await handleHeartbeat(request, env))
+    }
+
+    // lab-163 — primeira rota deste Worker com segmento dinâmico (`:id`); um regex simples basta,
+    // sem trazer um router de verdade pra um caso só.
+    const publicProfileMatch = url.pathname.match(/^\/players\/([^/]+)\/public-profile$/)
+    if (publicProfileMatch && request.method === 'GET') {
+      return withCors(await handlePlayerPublicProfile(request, env, publicProfileMatch[1]))
     }
 
     if (url.pathname === '/admin/metrics' && request.method === 'GET') {
