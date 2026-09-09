@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-167-mapa-habilidades-relatorio/ — quarto e último item confirmado da
+sequência (`docs/market-metrics-engagement-backlog.md`, "Lab 166" no documento — renumerado pra
+lab-167). Função pura `skillBreakdown` conta missões concluídas por tipo (lógica/matemática/leitura,
+`data/quests.ts` já tem o campo, sem categorização nova necessária) — usada no `ChildProgressPanel`
+(`/familia`) e no `ProgressSummary`/relatório semanal por e-mail (ponto forte, pra praticar mais,
+atividade sugerida). Ver `labs/lab-167-mapa-habilidades-relatorio/FEATURES.md`.
+
 Último concluído: labs/lab-166-pagina-familiar-transparente/ — terceiro item da sequência
 confirmada pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 165" no documento —
 renumerado pra lab-166). Nova tela `FamilyValueProp` (`components/FamilyPortal.tsx`) entre o portão
