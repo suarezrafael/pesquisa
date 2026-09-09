@@ -1,8 +1,8 @@
 # Laboratório 166 — página familiar com proposta paga transparente
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-09
-Fim: -
+Fim: 2026-09-09
 Commit inicial: ac54d0dc18d7ee89ae3244e62cceee7bf800af8e
 
 ## Objetivo do laboratório
@@ -39,19 +39,19 @@ contexto ao redor.
 
 ## Funcionalidades planejadas
 
-- [ ] Nova tela de "proposta de valor" (`FamilyValueProp`, dentro de `FamilyPortal.tsx`) inserida
+- [x] Nova tela de "proposta de valor" (`FamilyValueProp`, dentro de `FamilyPortal.tsx`) inserida
       ENTRE o portão de matemática (`ParentalGateScreen`, já existente, intacto) e o login
       (`LoginScreen`) — seções citadas no documento: segurança (sem chat livre, sem PII da
       criança), aprendizagem sempre grátis, comparação grátis vs pago (só cosmético/conveniência),
       preço (R$ 4,99/mês), cancelamento, link pra privacidade, ausência explícita de pay-to-win.
-- [ ] Exemplo BREVE do relatório semanal (uma descrição/mockup simples do que o responsável recebe
+- [x] Exemplo BREVE do relatório semanal (uma descrição/mockup simples do que o responsável recebe
       — não o preview interativo com dados reais, isso é escopo de um lab de "preview de relatório"
       mais à frente na sequência do documento, fora deste).
-- [ ] CTA único pra continuar ("Entrar / Criar conta"), levando pro `LoginScreen` já existente —
+- [x] CTA único pra continuar ("Entrar / Criar conta"), levando pro `LoginScreen` já existente —
       sem checkout novo, sem desconto, sem campanha (explicitamente fora de escopo no documento).
-- [ ] `Dashboard` (pós-login) ganha uma lista curta de benefícios ao lado do botão "Assinar", em
+- [x] `Dashboard` (pós-login) ganha um parágrafo curto de benefícios ao lado do botão "Assinar", em
       vez do botão isolado de hoje — reforça a mesma mensagem pra quem já passou da tela nova.
-- [ ] 3 eventos novos de analytics (pendência já registrada em `docs/event-catalog.md`, lab-165):
+- [x] 3 eventos novos de analytics (pendência já registrada em `docs/event-catalog.md`, lab-165):
       `family_landing_viewed` (tela de proposta de valor exibida), `parent_signup_started` (clique
       em "Entrar / Criar conta"), `checkout_started` (`handleSubscribe` recebe uma URL de checkout
       válida, antes do redirect) — allowlist `PRODUCT_EVENT_TYPES` (`server-accounts/src/domain.ts`)

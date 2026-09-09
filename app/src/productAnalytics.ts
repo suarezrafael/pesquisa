@@ -114,3 +114,20 @@ export function trackFirstReward(isFirstQuestEver: boolean): void {
     trackEvent('activation_cycle_completed', { durationMs })
   }
 }
+
+// lab-166 (docs/market-metrics-engagement-backlog.md §6, "Lab 165" no documento) — funil de
+// conversão adulta, pendência já registrada em `docs/event-catalog.md` no lab-165. Diferente dos
+// eventos de ativação acima, estes não têm limite de "uma vez por sessão" — cada visita à página
+// familiar, cada início de cadastro e cada checkout iniciado é um evento próprio, mesmo padrão de
+// `trackPlayClick`/`trackParentAreaClick` (lab-161).
+export function trackFamilyLandingViewed(): void {
+  trackEvent('family_landing_viewed')
+}
+
+export function trackParentSignupStarted(): void {
+  trackEvent('parent_signup_started')
+}
+
+export function trackCheckoutStarted(): void {
+  trackEvent('checkout_started')
+}
