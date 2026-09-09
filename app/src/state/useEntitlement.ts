@@ -6,7 +6,7 @@ import {
   shouldTrustCachedEntitlementOnFailure,
   type StoredEntitlement,
 } from './entitlementStorage'
-import { getLevel } from './progression'
+import { getLevel, skillBreakdown } from './progression'
 import type { Profile, Progress } from '../types'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
@@ -100,6 +100,10 @@ export function useEntitlement() {
   function syncProgressSummary(progress: Progress): void {
     const token = entitlement?.token
     if (!token) return
+    // lab-167 — mapa de habilidades (docs/market-metrics-engagement-backlog.md §6, "Lab 166" no
+    // documento): reaproveita `skillBreakdown` (mesma fonte que `ChildProgressPanel` mostra
+    // localmente) pra alimentar o relatório semanal por e-mail com o mesmo recorte por habilidade.
+    const skills = skillBreakdown(progress)
     fetch(`${ACCOUNTS_API_URL}/progress-summary`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -109,6 +113,9 @@ export function useEntitlement() {
         coins: progress.coins,
         questsCompleted: progress.completedQuestIds.length + progress.completedPlanetQuestIds.length,
         badgesCount: progress.badges.length,
+        logicaCompleted: skills.logica,
+        matematicaCompleted: skills.matematica,
+        leituraCompleted: skills.leitura,
       }),
       keepalive: true,
     }).catch(() => {
