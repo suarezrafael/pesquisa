@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Progress, Quest } from '../types'
-import { trackQuestCompleted } from '../productAnalytics'
+import { trackFirstReward, trackQuestCompleted } from '../productAnalytics'
 import { loadProgress, saveProgress } from './storage'
 import {
   applyCoinCollected,
@@ -42,10 +42,17 @@ export function useProgress() {
     // conclusão GENUÍNA (o array de concluídas cresceu), senão "quests concluídas por
     // dispositivo" ficaria inflado por reprises da mesma missão.
     const wasAlreadyCompleted = progress.completedQuestIds.includes(quest.id)
+    // lab-164 (jornada de ativação de 10 minutos) — lido ANTES de `applyQuestCompletion`: só um
+    // perfil que ainda não tinha NENHUMA missão concluída pode fechar o "ciclo de ativação"
+    // (ver `trackFirstReward`, `productAnalytics.ts`).
+    const isFirstQuestEver = progress.completedQuestIds.length === 0
     const result = applyQuestCompletion(progress, quest, undefined, entitlementActive)
     setProgress(result.progress)
     saveProgress(result.progress)
-    if (!wasAlreadyCompleted) trackQuestCompleted(quest.id)
+    if (!wasAlreadyCompleted) {
+      trackQuestCompleted(quest.id)
+      trackFirstReward(isFirstQuestEver)
+    }
     return result
   }
 

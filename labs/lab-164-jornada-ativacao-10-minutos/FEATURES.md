@@ -1,8 +1,8 @@
 # Laboratório 164 — jornada de ativação de 10 minutos
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-09
-Fim: -
+Fim: 2026-09-09
 Commit inicial: ad1944e0cfce007c73e0002eddf77cef72cbc58d
 
 ## Objetivo do laboratório
@@ -43,21 +43,24 @@ documento, cada um renumerado +1 pelo mesmo motivo acima):
 (Escopo citado quase literalmente da seção 6 do documento, "Lab 163", adaptado aos arquivos reais
 deste repositório)
 
-- [ ] Objetivo guiado no primeiro acesso — perfil novo, sem `completedQuestIds`: indicar
+- [x] Objetivo guiado no primeiro acesso — perfil novo, sem `completedQuestIds`: indicar
       visualmente qual escolinha procurar primeiro (referência: `docs/market-metrics-engagement-
       backlog.md` seção 6, Lab 163/P0).
-- [ ] Marcador visual no planeta (seta/holograma/trilha) apontando a primeira escolinha, sem
-      atrapalhar quem já é jogador antigo (perfil com progresso não vê o marcador).
-- [ ] Primeira missão curta já identificada/priorizada entre as existentes em `data/quests.ts`
-      (não uma quest nova — reaproveitar o catálogo atual).
-- [ ] Evento novo de instrumentação: ciclo de ativação concluído em até 10 minutos
-      (`time_to_first_control`, `time_to_first_learning_challenge`, `time_to_first_reward` — nomes
-      citados na seção 4 "Métricas de apoio" do documento), adicionado a `productAnalytics.ts` +
-      allowlist `PRODUCT_EVENT_TYPES` (`server-accounts/src/domain.ts`, mesmo padrão do lab-161).
-- [ ] Recompensa da primeira missão continua gratuita/idêntica ao fluxo atual — este lab não cria
-      recompensa nova, só mede e guia o caminho até ela.
-- [ ] Estado salvo: se a criança sair no meio do ciclo guiado e voltar, retoma sem repetir o que já
-      fez (reaproveita `completedQuestIds`/`localStorage` já existentes).
+- [x] Marcador visual no planeta (feixe de luz vertical, `world3d/World3D.tsx`) apontando a
+      primeira escolinha, sem atrapalhar quem já é jogador antigo (perfil com progresso não vê o
+      marcador — ver "Decisões técnicas" no `CONTEXT.md`).
+- [x] Primeira missão curta já identificada/priorizada entre as existentes em `data/quests.ts`
+      (`quests[0]`, `q01` — não uma quest nova, reaproveita o catálogo atual e a ordem de
+      desbloqueio já existente, `isQuestUnlocked`).
+- [x] Evento novo de instrumentação: ciclo de ativação concluído em até 10 minutos
+      (`time_to_first_control`, `time_to_first_learning_challenge`, `time_to_first_reward`,
+      `activation_cycle_completed`), adicionado a `productAnalytics.ts` + allowlist
+      `PRODUCT_EVENT_TYPES` (`server-accounts/src/domain.ts`, mesmo padrão do lab-161).
+- [x] Recompensa da primeira missão continua gratuita/idêntica ao fluxo atual — este lab não criou
+      recompensa nova, só mediu e guiou o caminho até ela.
+- [x] Estado salvo: automático — a visibilidade do marcador e a instrumentação derivam de
+      `progress.completedQuestIds` (persistido, lab-91) e do relógio da SESSÃO atual, nunca de
+      estado só-de-memória que se perderia ao sair/voltar.
 
 ## Fora de escopo (explicitamente adiado)
 

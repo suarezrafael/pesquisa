@@ -34,6 +34,7 @@ function trackEvent(type: string, meta?: Record<string, unknown>): void {
 // verdade).
 export function installProductAnalytics(): void {
   const sessionStartedAt = performance.now()
+  sessionStartedAtMs = sessionStartedAt
   trackEvent('session_start')
   window.addEventListener('pagehide', () => {
     trackEvent('session_end', { durationMs: Math.round(performance.now() - sessionStartedAt) })
@@ -56,4 +57,60 @@ export function trackPlayClick(): void {
 
 export function trackParentAreaClick(): void {
   trackEvent('parent_area_click')
+}
+
+// lab-164 (docs/market-metrics-engagement-backlog.md §4, "Métricas de apoio") — instrumentação
+// fina da jornada de ativação de 10 minutos. Cada evento dispara no máximo uma vez POR SESSÃO
+// (flag em memória, não `localStorage`): mede fricção/desempenho de carregamento a cada sessão,
+// não só a ativação de um perfil novo — um jogador veterano reabrindo o jogo também gera esses
+// eventos de novo, o que é o comportamento certo (senão nunca saberíamos se o carregamento
+// piorou pra quem já joga há meses).
+let sessionStartedAtMs: number | null = null
+let firstControlSent = false
+let firstLearningChallengeSent = false
+let firstRewardSent = false
+
+// Perfis novos completam o ciclo "jogar + aprender + recompensa" dentro desta janela ou não
+// contam como ativados (docs/market-metrics-engagement-backlog.md §4, North Star).
+const ACTIVATION_WINDOW_MS = 10 * 60 * 1000
+
+function elapsedSinceSessionStartMs(): number | null {
+  if (sessionStartedAtMs === null) return null
+  return Math.round(performance.now() - sessionStartedAtMs)
+}
+
+// Chamado pelo movimento do avatar (teclado/joystick combinados, `world3d/World3D.tsx`) — sinal
+// de "conseguiu controlar o personagem", citado literalmente na definição da métrica no documento.
+export function trackFirstControl(): void {
+  if (firstControlSent) return
+  firstControlSent = true
+  const durationMs = elapsedSinceSessionStartMs()
+  if (durationMs !== null) trackEvent('time_to_first_control', { durationMs })
+}
+
+// Chamado quando a criança abre a PRIMEIRA missão da sessão (`App.tsx`, `handleSelectQuest`) —
+// nunca em toda abertura de missão, senão a métrica deixaria de significar "primeira vez".
+export function trackFirstLearningChallenge(): void {
+  if (firstLearningChallengeSent) return
+  firstLearningChallengeSent = true
+  const durationMs = elapsedSinceSessionStartMs()
+  if (durationMs !== null) trackEvent('time_to_first_learning_challenge', { durationMs })
+}
+
+// Chamado pela PRIMEIRA conclusão genuína de missão da sessão (`state/useProgress.ts`,
+// `completeQuest`, mesmo guard de `wasAlreadyCompleted` que já protege `trackQuestCompleted`
+// contra reprise inflar a métrica). `isFirstQuestEver` vem de fora porque só quem chama sabe se
+// `completedQuestIds` estava vazio ANTES desta conclusão — só nesse caso, e só dentro da janela
+// de 10 minutos, o "ciclo de ativação" (jogar + aprender + recompensa) conta como fechado; um
+// jogador veterano completando sua próxima missão do dia gera `time_to_first_reward` (útil pra
+// medir desempenho da sessão) mas nunca `activation_cycle_completed`.
+export function trackFirstReward(isFirstQuestEver: boolean): void {
+  if (firstRewardSent) return
+  firstRewardSent = true
+  const durationMs = elapsedSinceSessionStartMs()
+  if (durationMs === null) return
+  trackEvent('time_to_first_reward', { durationMs })
+  if (isFirstQuestEver && durationMs <= ACTIVATION_WINDOW_MS) {
+    trackEvent('activation_cycle_completed', { durationMs })
+  }
 }
