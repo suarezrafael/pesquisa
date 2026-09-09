@@ -15,7 +15,15 @@ pra "🟢 online agora" após heartbeat novo. **Pendência de ambiente, não de 
 (`document.hidden = true`, mesma limitação de timers em aba backgrounded já documentada em labs
 130/131/140/141/146) — mitigado disparando a chamada exata do hook via `fetch()` na origem real da
 página, confirmando `204`. `npx tsc -b`/testes limpos (app 131/131, server-accounts 86/86, 4
-novos). Ver `labs/lab-162-amigos-status-online/CONTEXT.md`.
+novos). PR #35 teve 2 achados reais do Copilot corrigidos antes do merge: `handleHeartbeat`
+confiava no cast de tipo sem checar em runtime — um `playerId` número/objeto batia em `.trim()` e
+virava 500 (mesma classe do bug do `deviceId` no lab-159) — agora 400 via type guard explícito;
+`formatLastSeen` propagava `NaN` pra UI ("há NaNd") com data inválida — agora cai num fallback
+("há um tempo"), com 5 testes novos (`useFriendRequests.test.ts`, primeira lógica pura testável
+deste módulo). Reverificado ao vivo (400 confirmado pros dois tipos malformados). **Confirma
+deploy em produção**: PR #35 mergeado, CI/CD verde, deploy automático confirmado (`GET /health` e
+`POST /players/heartbeat` respondendo corretamente em produção). Ver
+`labs/lab-162-amigos-status-online/CONTEXT.md`.
 
 Antes desse: labs/lab-161-home-inicial-dupla/ — pedido explícito do usuário, seguindo a
 recomendação P0 do `docs/business-analyst-prompt-backlog.md` §4/§6: reformular `TitleScreen` como
