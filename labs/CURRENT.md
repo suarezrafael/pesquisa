@@ -1,5 +1,9 @@
 # Laboratório atual
 
+Em andamento: labs/lab-163-perfil-publico-amigo/ — último item do Grupo B do backlog social
+(lab-158): `GET /players/:id/public-profile` (avatar equipado + conquistas de um amigo, nunca XP/
+moeda/progresso/família). Ver `labs/lab-163-perfil-publico-amigo/FEATURES.md`.
+
 Último concluído: labs/lab-162-amigos-status-online/ — terceiro lab do Grupo B do backlog social
 (lab-158), conforme sequenciamento do lab-160 (o número "lab-161" original desse plano foi
 consumido pelo lab de home inicial dupla, pedido pontual do usuário — este é o adiado,

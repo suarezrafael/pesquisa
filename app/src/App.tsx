@@ -150,7 +150,7 @@ function GameApp() {
   const [dailyLoginReward, setDailyLoginReward] = useState<{ streak: number; coins: number } | null>(null)
   const { entitlement, redeemCode, redeeming, redeemError, syncProgressSummary, syncProgressBackup, fetchProgressBackup } =
     useEntitlement()
-  useHeartbeat()
+  useHeartbeat(profile, progress)
   // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
   // decidir se mostra o `ProfilePicker` (quando não há perfil ativo) quanto pra decidir se mostra
   // o botão de trocar perfil no HUD (só faz sentido com 2+ perfis já criados neste aparelho).
