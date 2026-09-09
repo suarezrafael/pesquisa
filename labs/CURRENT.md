@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-165-catalogo-eventos-dashboard/ — segundo item da sequência confirmada pelo
+usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 164" no documento — renumerado pra
+lab-165). Catálogo de eventos (`docs/event-catalog.md`) + `GET /admin/metrics` ganha funil semanal
+(ativação/social/comercial), reaproveitando dados já existentes (`product_events`/`friendships`/
+`family_accounts`/`subscriptions`) sem instrumentação de client nova. Ver
+`labs/lab-165-catalogo-eventos-dashboard/FEATURES.md`.
+
 Último concluído: labs/lab-164-jornada-ativacao-10-minutos/ — primeiro item do novo backlog guiado
 por métricas (`docs/market-metrics-engagement-backlog.md`, seção 6, "Lab 163" no documento —
 renumerado pra lab-164 porque o lab-163 real deste repo já foi usado pro perfil público de amigo).
