@@ -1,6 +1,27 @@
 # Laboratório atual
 
-Último concluído: labs/lab-165-catalogo-eventos-dashboard/ — segundo item da sequência confirmada
+Último concluído: labs/lab-166-pagina-familiar-transparente/ — terceiro item da sequência
+confirmada pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 165" no documento —
+renumerado pra lab-166). Nova tela `FamilyValueProp` (`components/FamilyPortal.tsx`) entre o portão
+de matemática e o login: segurança, aprendizagem sempre grátis, grátis vs pago, exemplo ilustrativo
+do relatório semanal, cancelamento, links pra privacidade/termos — sessão já autenticada pula
+direto pro `Dashboard`, sem ver a tela de novo. `Dashboard` ganha um parágrafo de benefícios ao
+lado do botão "Assinar", antes isolado. 3 eventos novos de analytics
+(`family_landing_viewed`/`parent_signup_started`/`checkout_started`, pendência já registrada no
+lab-165, resolvida agora — `docs/event-catalog.md` atualizado). `npx tsc -b`/testes limpos (app
+136/136, sem teste novo; server-accounts 98/98, 1 novo). `npm run build` sem regressão de bundle.
+**Verificado ao vivo** (Chrome real via automação): fluxo completo (gate → proposta de valor →
+login) confirmado por screenshot; `family_landing_viewed`/`parent_signup_started` confirmados
+disparando com payload correto via monkey-patch de `fetch`; `checkout_started` não verificado ao
+vivo (exigiria conta + assinatura + checkout real do Stripe), confiança por revisão de código (mesma
+função já provada nos outros dois eventos). PR #40 teve 1 achado real do Copilot corrigido antes
+do merge: links `target="_blank"` pra `/privacidade`/`/termos` (2 novos da `FamilyValueProp` + 2
+preexistentes no `LoginScreen`) só tinham `rel="noreferrer"` — trocado por `rel="noopener
+noreferrer"` nas 4 ocorrências do arquivo, mesma classe de bug já corrigida no lab-161 (PR #34).
+**Confirma deploy em produção**: PR #40 mergeado, CI/CD verde nos 3 workers, deploy automático
+confirmado (`GET /health` 200). Ver `labs/lab-166-pagina-familiar-transparente/CONTEXT.md`.
+
+Antes desse: labs/lab-165-catalogo-eventos-dashboard/ — segundo item da sequência confirmada
 pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 164" no documento — renumerado pra
 lab-165). `docs/event-catalog.md` novo documenta os 9 tipos de evento existentes (quando disparam,
 arquivo de origem, `meta`, métrica que alimentam) + nota de ausência de PII infantil.

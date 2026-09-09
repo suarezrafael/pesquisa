@@ -43,6 +43,9 @@ linha nova e imprevista na tabela.
 | `time_to_first_learning_challenge` | Primeira missão aberta NESTA sessão (lab-164) | `App.tsx`, `handleSelectQuest` | `durationMs` | 1x por sessão |
 | `time_to_first_reward` | Primeira conclusão genuína de missão NESTA sessão (lab-164) | `state/useProgress.ts`, `completeQuest` (via `trackFirstReward`) | `durationMs` | 1x por sessão |
 | `activation_cycle_completed` | Igual ao de cima, mas só quando é a PRIMEIRA missão da vida do perfil (`completedQuestIds` vazio antes) E dentro de 10 minutos da sessão (lab-164) | `productAnalytics.ts`, `trackFirstReward` | `durationMs` | 0 ou 1x por perfil (a vida toda) |
+| `family_landing_viewed` | Tela de proposta de valor exibida em `/familia`, depois do portão de matemática (lab-166) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por exibição (sem limite de sessão) |
+| `parent_signup_started` | Clique em "Entrar / Criar conta" na tela de proposta de valor (lab-166) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
+| `checkout_started` | `POST /checkout` devolve uma URL válida, antes do redirect pro Stripe (lab-166) | `components/FamilyPortal.tsx`, `Dashboard.handleSubscribe` | — | 1x por tentativa de checkout |
 
 ## Qual métrica do documento cada evento alimenta
 
@@ -59,9 +62,10 @@ decisão").
   `GET /admin/metrics` → `weeklyFunnel` (lab-165).
 - **Retenção infantil** (D1/D7) — já calculada desde o lab-99 a partir de QUALQUER evento
   (`handleAdminMetrics`, `d1Retention`/`d7Retention`), não depende de nenhum evento específico.
-- **Confiança do responsável** / **conversão adulta** — `parent_area_click` mede quem sequer chega
-  na área dos responsáveis; famílias/assinaturas novas vêm direto de `family_accounts`/
-  `subscriptions` (não são eventos, são estado já persistido — ver `weeklyCommercial` abaixo).
+- **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
+  → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
+  clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de
+  `family_accounts` (não é evento, é estado já persistido — ver `weeklyCommercial` abaixo).
 - **`title_play_click_rate`** — `play_click` / total de sessões (`session_start`).
 
 ## O que NÃO é evento de client (mas ainda vira número no funil semanal)
@@ -81,9 +85,8 @@ podia falhar silenciosamente por rede; a linha na tabela é a fonte de verdade r
 
 ## Pendências conhecidas (fora de escopo deste lab, registradas pro backlog)
 
-- `checkout_started`/`family_landing_viewed`/`parent_signup_started` (citados no documento como
-  parte do funil de conversão adulta) ainda não existem como evento nem como estado consultável —
-  vão nascer junto da reformulação da página familiar (lab-166), que mexe exatamente nesse fluxo.
+- ~~`checkout_started`/`family_landing_viewed`/`parent_signup_started` ainda não existem~~ —
+  **resolvido no lab-166** (`FamilyValueProp`/`Dashboard.handleSubscribe`, ver tabela acima).
 - **"Assinaturas ativadas na semana" não existe hoje, de propósito** (achado do review do Copilot
   no PR #39, `weeklyCommercial`): a primeira versão deste lab tentou aproximar isso por
   `subscriptions.updated_at` onde `status = 'active'`, mas `updated_at` é tocado em QUALQUER
