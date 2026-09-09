@@ -5,7 +5,7 @@
 -- assinantes (`server-accounts` nunca guarda progresso de jogo, só a camada comercial).
 --
 -- `equipped_look` é jsonb (não colunas separadas) pra não acoplar este schema a cada eixo de
--- customização do client (`Profile.equipped*` já mudou de forma several vezes, labs 24/73/92) —
+-- customização do client (`Profile.equipped*` já mudou de forma várias vezes, labs 24/73/92) —
 -- o Worker nunca lê os campos individualmente, só repassa o objeto inteiro pro perfil público.
 -- `badges` também jsonb (não `text[]`) por consistência com o resto do Worker, que já usa jsonb
 -- pra listas/objetos vindos do client (`progress_backups`, `product_events.metadata`), evitando

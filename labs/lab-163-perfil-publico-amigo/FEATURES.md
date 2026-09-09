@@ -24,7 +24,8 @@ progresso de jogo, só a camada comercial, `docs/plano-comercial-backend.md`).
 Decisão: piggyback no heartbeat já existente (`useHeartbeat.ts`, roda a cada 60s durante toda a
 sessão) — o corpo do `POST /players/heartbeat` ganha campos opcionais (`equippedLook`, `badges`),
 o servidor faz upsert em colunas novas de `player_identities` (`equipped_look` jsonb, `badges`
-text[]) sempre que vierem presentes. Sem endpoint novo de sincronização, sem intervalo novo. Não é
+jsonb — ver "Decisão tomada durante a implementação" abaixo pra por que `badges` não virou
+`text[]`) sempre que vierem presentes. Sem endpoint novo de sincronização, sem intervalo novo. Não é
 dado sensível (mesma classe de nickname+emoji já sincronizados desde o lab-159) — não muda a
 superfície de risco do lab-158, só estende o que já era sincronizado.
 

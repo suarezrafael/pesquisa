@@ -40,7 +40,10 @@ export function usePlayerPublicProfile(playerId: string | null) {
         const res = await fetch(`${ACCOUNTS_API_URL}/players/${encodeURIComponent(playerId!)}/public-profile`)
         const body = (await res.json().catch(() => null)) as (PlayerPublicProfile & { error?: string }) | null
         if (cancelled) return
-        if (!res.ok) {
+        // Achado do review do Copilot (PR #37): resposta 2xx com corpo vazio/inválido (`.catch`
+        // acima devolve `null`) não pode virar "perfil carregado com sucesso, mas vazio" — sem
+        // esta checagem a UI ficava sem dado nenhum e sem explicação do porquê.
+        if (!res.ok || body === null) {
           setError(body?.error ?? 'não foi possível carregar o perfil agora')
           return
         }

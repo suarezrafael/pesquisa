@@ -28,7 +28,10 @@ export function PlayerPublicProfileView({ playerId, nickname, onBack }: PlayerPu
       <button type="button" className="chat-category-btn" onClick={onBack}>
         ← Voltar
       </button>
-      <h2>{nickname}</h2>
+      {/* Achado do review do Copilot (PR #37): `nickname` (prop, do `friend-summary` já carregado
+          antes de abrir esta view) pode estar desatualizado se o amigo mudou de apelido depois —
+          `profile.nickname`, assim que carrega, é a fonte mais recente. */}
+      <h2>{profile?.nickname ?? nickname}</h2>
 
       {loading && <p>Carregando…</p>}
       {error && <p className="field-hint">{error}</p>}
