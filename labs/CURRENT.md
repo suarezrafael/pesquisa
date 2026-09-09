@@ -14,8 +14,12 @@ lab-165, resolvida agora — `docs/event-catalog.md` atualizado). `npx tsc -b`/t
 login) confirmado por screenshot; `family_landing_viewed`/`parent_signup_started` confirmados
 disparando com payload correto via monkey-patch de `fetch`; `checkout_started` não verificado ao
 vivo (exigiria conta + assinatura + checkout real do Stripe), confiança por revisão de código (mesma
-função já provada nos outros dois eventos). Ver
-`labs/lab-166-pagina-familiar-transparente/CONTEXT.md`.
+função já provada nos outros dois eventos). PR #40 teve 1 achado real do Copilot corrigido antes
+do merge: links `target="_blank"` pra `/privacidade`/`/termos` (2 novos da `FamilyValueProp` + 2
+preexistentes no `LoginScreen`) só tinham `rel="noreferrer"` — trocado por `rel="noopener
+noreferrer"` nas 4 ocorrências do arquivo, mesma classe de bug já corrigida no lab-161 (PR #34).
+**Confirma deploy em produção**: PR #40 mergeado, CI/CD verde nos 3 workers, deploy automático
+confirmado (`GET /health` 200). Ver `labs/lab-166-pagina-familiar-transparente/CONTEXT.md`.
 
 Antes desse: labs/lab-165-catalogo-eventos-dashboard/ — segundo item da sequência confirmada
 pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 164" no documento — renumerado pra
