@@ -16,7 +16,14 @@ testes limpos (app 136/136, sem teste novo; server-accounts 96/96, 10 novos). `n
 no `public-profile` seguinte, heartbeat só com `playerId` confirmado NÃO apaga o snapshot salvo
 (`coalesce`), 400 nos três payloads malformados testados, 404/400 de id inexistente/mal formado, e
 o fluxo social completo (pedido → aceite → `B` vendo o perfil de `A`). Todo dado de teste removido
-do banco ao final. Ver `labs/lab-163-perfil-publico-amigo/CONTEXT.md`.
+do banco ao final. PR #37 teve 4 achados reais do Copilot corrigidos antes do merge (resposta 2xx
+com corpo inválido virando "sucesso" silencioso no hook novo; título da view de perfil usando o
+nickname desatualizado do `friend-summary` em vez do `profile.nickname` mais recente; typo em
+comentário da migração; `FEATURES.md` ainda citando `badges` como `text[]` depois de a decisão real
+ter virado jsonb). **Confirma deploy em produção**: PR #37 mergeado, CI/CD verde, deploy automático
+confirmado (`GET /health` 200 e `GET /players/:id/public-profile` respondendo 404/400 corretamente
+em produção, `missao-aprender-accounts.rafaelvs.workers.dev`). Ver
+`labs/lab-163-perfil-publico-amigo/CONTEXT.md`.
 
 Antes desse: labs/lab-162-amigos-status-online/ — terceiro lab do Grupo B do backlog social
 (lab-158), conforme sequenciamento do lab-160 (o número "lab-161" original desse plano foi
