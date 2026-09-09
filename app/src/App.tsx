@@ -18,6 +18,7 @@ import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { useHeartbeat } from './state/useHeartbeat'
+import { trackFirstLearningChallenge } from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
 import { findPlanetQuestById } from './data/planetQuests'
@@ -231,6 +232,10 @@ function GameApp() {
   function handleSelectQuest(questId: string) {
     const quest = quests.find((q) => q.id === questId) ?? null
     setActiveQuest(quest)
+    // lab-164 (jornada de ativação de 10 minutos) — "primeira missão aberta NESTA sessão", não
+    // "primeira missão da vida do perfil"; `trackFirstLearningChallenge` já só dispara uma vez
+    // por sessão sozinho.
+    if (quest) trackFirstLearningChallenge()
   }
 
   function handleQuestCorrect() {

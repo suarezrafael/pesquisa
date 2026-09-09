@@ -77,6 +77,7 @@ import { questTypeColor } from './questVisuals'
 import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
 import { furnitureQuantity, getLevel, isQuestUnlocked, petStageFor, petStageScale } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
+import { trackFirstControl } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import { HudHeader } from './HudHeader'
@@ -2469,6 +2470,11 @@ export function World3D({
     const tmpQuat = new Quaternion()
     const triggered = new Set<string>()
     const portalMeshes: { quest: (typeof quests)[number]; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
+    // lab-164 (jornada de ativação de 10 minutos) — feixe de luz "comece aqui" acima da primeira
+    // escolinha (`quests[0]`), criado depois do laço de `quests.forEach` mais abaixo; visibilidade
+    // controlada por `applyActivationBeaconVisual` (mesmo gatilho de `applyPortalVisual`).
+    let activationBeacon: Mesh | null = null
+    let activationBeaconMat: PBRMaterial | null = null
     const remotePlayers = new Map<string, RemotePlayer>()
     let netSendTimer = 0
     let lastSentPos: Vector3 | null = null
@@ -6398,6 +6404,33 @@ export function World3D({
         portalMeshes.push({ quest, roof, base, surfacePos })
       })
 
+      // lab-164 (jornada de ativação de 10 minutos, docs/market-metrics-engagement-backlog.md) —
+      // "objetivo guiado no primeiro acesso": um feixe de luz vertical acima da PRIMEIRA escolinha
+      // (`quests[0]`, sempre desbloqueada desde o início, `isQuestUnlocked`) — a matriz de lacunas
+      // do documento (seção 5, "Fantasia jogável imediata") aponta que hoje a criança decide
+      // sozinha pra qual escolinha ir, sem indicação nenhuma de "comece aqui". Visibilidade
+      // controlada por `applyActivationBeaconVisual` mais abaixo (só perfil sem nenhuma missão
+      // concluída ainda vê o feixe — some assim que a primeira missão é respondida, mesmo gatilho
+      // de `progress` que já atualiza `applyPortalVisual`).
+      if (portalMeshes[0]) {
+        const beacon = MeshBuilder.CreateCylinder(
+          'activationBeacon',
+          { height: 3, diameterTop: 0.04, diameterBottom: 0.4, tessellation: 10 },
+          scene,
+        )
+        beacon.parent = portalMeshes[0].base
+        beacon.position = new Vector3(0, 3.4, 0) // acima do telhado (topo do telhado ~1,9)
+        beacon.isPickable = false
+        const beaconMat = new PBRMaterial('activationBeaconMat', scene)
+        beaconMat.albedoColor = new Color3(1, 0.85, 0.2)
+        beaconMat.emissiveColor = new Color3(1, 0.8, 0.15)
+        beaconMat.alpha = 0.55
+        beaconMat.backFaceCulling = false
+        beacon.material = beaconMat
+        activationBeacon = beacon
+        activationBeaconMat = beaconMat
+      }
+
       // lab-95 (diagnóstico TEMPORÁRIO, produção): o usuário reportou escolinhas ainda enterradas
       // mesmo depois da correção de `SCHOOL_UPS`, e o navegador de automação não reproduziu o
       // problema em nenhuma das 30 escolas testadas — pra conseguir um dado real do APARELHO do
@@ -7179,8 +7212,18 @@ export function World3D({
         entry.roof.visibility = unlocked || completed ? 1 : 0.55
       }
 
+      // lab-164 — some assim que a criança conclui a PRIMEIRA missão de verdade, nunca mais volta
+      // depois disso (mesmo perfil que já jogou não precisa de "comece aqui" de novo).
+      function applyActivationBeaconVisual() {
+        activationBeacon?.setEnabled(progressRef.current.completedQuestIds.length === 0)
+      }
+
       portalMeshes.forEach(applyPortalVisual)
-      ;(scene as any).__refreshPortals = () => portalMeshes.forEach(applyPortalVisual)
+      applyActivationBeaconVisual()
+      ;(scene as any).__refreshPortals = () => {
+        portalMeshes.forEach(applyPortalVisual)
+        applyActivationBeaconVisual()
+      }
 
       // Loja navegável (lab-16, pedido do usuário: "uma loja que dá pra entrar") — diferente das
       // escolas (paredes sólidas decorativas, o jogador nunca "entra" de verdade, só dispara a
@@ -8437,6 +8480,15 @@ export function World3D({
         const dt = engine.getDeltaTime() / 1000
         time += dt
 
+        // lab-164 — pulso suave de brilho no feixe "comece aqui" (só custa nada quando desligado,
+        // `isEnabled()` evita animar um material invisível à toa). Achado do review do Copilot
+        // (PR #38): `new Color3(...)` a cada frame alocava lixo continuamente — `.set()` ajusta o
+        // `Color3` já existente do material em-place, sem alocação nova.
+        if (activationBeaconMat && activationBeacon?.isEnabled()) {
+          const pulse = 0.55 + 0.35 * Math.sin(time * 2.2)
+          activationBeaconMat.emissiveColor.set(pulse, pulse * 0.8, pulse * 0.15)
+        }
+
         weatherTimer -= dt
         if (weatherTimer <= 0) {
           raining = !raining
@@ -8491,6 +8543,10 @@ export function World3D({
         if (keysDown['arrowleft'] || keysDown['a']) x -= 1
         if (keysDown['arrowright'] || keysDown['d']) x += 1
         const mag = Math.hypot(x, y)
+        // lab-164 (jornada de ativação de 10 minutos) — "conseguiu controlar o personagem" (mesma
+        // definição citada em docs/market-metrics-engagement-backlog.md §4), primeiro sinal de
+        // movimento real por teclado OU joystick; a função já só dispara uma vez por sessão.
+        if (mag > 0) trackFirstControl()
         if (mag > 1) {
           x /= mag
           y /= mag
