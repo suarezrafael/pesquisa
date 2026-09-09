@@ -1,8 +1,8 @@
 # Laboratório 167 — mapa de habilidades e relatório de aprendizagem
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-09
-Fim: -
+Fim: 2026-09-09
 Commit inicial: dc38da3a5a9a3e59269303aedb95f1fc096d73bc
 
 ## Objetivo do laboratório
@@ -36,25 +36,24 @@ relatório semanal."
 
 ## Funcionalidades planejadas
 
-- [ ] Função pura nova `skillBreakdown(progress: Progress): Record<QuestType, number>`
+- [x] Função pura nova `skillBreakdown(progress: Progress): Record<QuestType, number>`
       (`state/progression.ts`) — conta quantas das 30 missões de `data/quests.ts` em
       `completedQuestIds` são de cada tipo. Testável em isolamento (mesmo padrão de
       `progression.test.ts`).
-- [ ] `ChildProgressPanel` (`components/FamilyPortal.tsx`) ganha um recorte por habilidade
+- [x] `ChildProgressPanel` (`components/FamilyPortal.tsx`) ganha um recorte por habilidade
       (🧩 Lógica X/10, 🔢 Matemática X/10, 📖 Leitura X/10) + uma linha de "ponto forte" (maior
       contagem) e "pra praticar mais" (menor contagem, só se houver diferença real).
-- [ ] `ProgressSummary` (`server-accounts/src/domain.ts`) ganha 3 campos novos —
+- [x] `ProgressSummary` (`server-accounts/src/domain.ts`) ganha 3 campos novos —
       `logicaCompleted`/`matematicaCompleted`/`leituraCompleted` — validados por
       `isValidProgressSummary` (mesmo padrão `isPlausibleCount` já usado pros outros campos).
-- [ ] `syncProgressSummary` (`state/useEntitlement.ts`) passa a enviar os 3 números novos, usando
+- [x] `syncProgressSummary` (`state/useEntitlement.ts`) passa a enviar os 3 números novos, usando
       `skillBreakdown`.
-- [ ] `buildWeeklyProgressEmail` (`server-accounts/src/domain.ts`) ganha uma seção nova: contagem
+- [x] `buildWeeklyProgressEmail` (`server-accounts/src/domain.ts`) ganha uma seção nova: contagem
       por habilidade, "ponto forte", "pra praticar mais" e uma sugestão de atividade genérica
       ligada à habilidade mais fraca (citado no critério de aceite do documento: "relatório mostra
       pontos fortes, pontos a praticar e atividade sugerida").
-- [ ] Testes de domínio novos pra `skillBreakdown` e pra qualquer lógica pura extraída de
-      `buildWeeklyProgressEmail` (se a escolha de "ponto forte"/"praticar mais" virar função
-      própria, testável sem HTML).
+- [x] Testes de domínio novos pra `skillBreakdown`, `describeSkillFocus` (função pura extraída de
+      `buildWeeklyProgressEmail`) e `isValidProgressSummary` (campos opcionais novos).
 
 ## Fora de escopo (explicitamente citado no documento)
 

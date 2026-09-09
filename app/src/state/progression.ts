@@ -1,4 +1,4 @@
-import type { Progress, Quest } from '../types'
+import type { Progress, Quest, QuestType } from '../types'
 import { quests } from '../data/quests'
 import { findAvatarById } from '../data/avatars'
 import { findHatById } from '../data/hats'
@@ -272,6 +272,22 @@ export function isQuestUnlocked(progress: Progress, questIndex: number): boolean
   if (questIndex === 0) return true
   const previousQuest = quests[questIndex - 1]
   return progress.completedQuestIds.includes(previousQuest.id)
+}
+
+// lab-167 (docs/market-metrics-engagement-backlog.md §6, "Lab 166" no documento) — mapa de
+// habilidades: conta quantas das 30 missões do PLANETA PRINCIPAL (`data/quests.ts`) já concluídas
+// são de cada tipo. Só `quests` (nunca `data/planetQuests.ts`) — as 36 perguntas de astronomia
+// reaproveitam o mesmo formato `Quest`, mas todas marcadas `'logica'` sem distinção real (não é
+// sinal de habilidade de verdade); misturar inflaria a contagem sem dado genuíno, mesmo cuidado de
+// isolamento já registrado pra `completedPlanetQuestIds` vs. `completedQuestIds` (`types.ts`).
+export function skillBreakdown(progress: Progress): Record<QuestType, number> {
+  const breakdown: Record<QuestType, number> = { logica: 0, matematica: 0, leitura: 0 }
+  for (const quest of quests) {
+    if (progress.completedQuestIds.includes(quest.id)) {
+      breakdown[quest.type] += 1
+    }
+  }
+  return breakdown
 }
 
 // Moedinhas espalhadas pelo terreno pra explorar — bônus à parte das missões, não persistem

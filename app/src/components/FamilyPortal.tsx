@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { isAuthApiError } from '@neondatabase/neon-js/auth'
 import { authClient } from '../auth/neonAuthClient'
 import { loadLastPlayedAt, loadProfile, loadProgress } from '../state/storage'
-import { getLevel, xpIntoLevel } from '../state/progression'
+import { getLevel, skillBreakdown, xpIntoLevel } from '../state/progression'
 import { quests } from '../data/quests'
 import { trackCheckoutStarted, trackFamilyLandingViewed, trackParentSignupStarted } from '../productAnalytics'
+import type { QuestType } from '../types'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 const NEON_AUTH_URL = import.meta.env.VITE_NEON_AUTH_URL as string
@@ -694,6 +695,14 @@ function NpsWidget() {
 // pareamento abre nessa mesma aba/navegador). Sincronizar progresso entre aparelhos diferentes
 // exigiria mandar dado de criança pro servidor — decisão de arquitetura maior, fora de escopo
 // aqui (mesma categoria do que ficou de fora em G6 no lab-90).
+// lab-167 (docs/market-metrics-engagement-backlog.md §6, "Lab 166" no documento) — mesmos 3 tipos
+// de `data/quests.ts` (`QuestType`), só rótulo/emoji pra exibição.
+const SKILL_LABELS: Record<QuestType, { emoji: string; label: string }> = {
+  logica: { emoji: '🧩', label: 'Lógica' },
+  matematica: { emoji: '🔢', label: 'Matemática' },
+  leitura: { emoji: '📖', label: 'Leitura' },
+}
+
 function ChildProgressPanel() {
   const profile = loadProfile()
 
@@ -713,6 +722,25 @@ function ChildProgressPanel() {
   const lastPlayedAt = loadLastPlayedAt()
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
+
+  // lab-167 — mapa de habilidades: quantas das 30 missões concluídas são de cada tipo, e o total
+  // POSSÍVEL de cada tipo (calculado do catálogo real, não fixo em "10" — resiste a mudança futura
+  // no número de missões por habilidade).
+  const skillTotals: Record<QuestType, number> = { logica: 0, matematica: 0, leitura: 0 }
+  for (const quest of quests) skillTotals[quest.type] += 1
+  const skillCompleted = skillBreakdown(progress)
+  const skillEntries = (Object.keys(SKILL_LABELS) as QuestType[]).map((type) => ({
+    type,
+    completed: skillCompleted[type],
+    total: skillTotals[type],
+  }))
+  // "Ponto forte"/"pra praticar mais" só faz sentido com missão concluída de verdade E alguma
+  // diferença real entre habilidades — perfil zerado ou com as 3 empatadas não mostra nada (evita
+  // um "ponto forte: Lógica" vazio de sentido quando tudo está em 0, e evita soar como avaliação
+  // escolar formal quando não há sinal real pra distinguir).
+  const mostPracticed = skillEntries.reduce((a, b) => (b.completed > a.completed ? b : a))
+  const leastPracticed = skillEntries.reduce((a, b) => (b.completed < a.completed ? b : a))
+  const showSkillFocus = mostPracticed.completed > leastPracticed.completed
 
   return (
     <div className="pairing-code-box progress-panel">
@@ -736,6 +764,22 @@ function ChildProgressPanel() {
           <span>missões concluídas</span>
         </div>
       </div>
+      <div className="progress-panel-stats">
+        {skillEntries.map((entry) => (
+          <div key={entry.type} className="progress-panel-stat">
+            <strong>
+              {SKILL_LABELS[entry.type].emoji} {entry.completed}/{entry.total}
+            </strong>
+            <span>{SKILL_LABELS[entry.type].label}</span>
+          </div>
+        ))}
+      </div>
+      {showSkillFocus && (
+        <p className="field-hint">
+          Ponto forte: {SKILL_LABELS[mostPracticed.type].label}. Pra praticar mais:{' '}
+          {SKILL_LABELS[leastPracticed.type].label}.
+        </p>
+      )}
       {progress.badges.length > 0 && (
         <p className="progress-panel-badges">
           {progress.badges.map((badge) => (

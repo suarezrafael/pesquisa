@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildWeeklyProgressEmail,
   calculateNpsScore,
+  describeSkillFocus,
   friendResponseStatus,
   generatePairingCode,
   hasActiveFriendship,
@@ -363,6 +364,20 @@ describe('isValidProgressSummary — lab-119, Fase F', () => {
   it('rejeita campo com tipo errado (ex.: string em vez de número)', () => {
     expect(isValidProgressSummary({ ...validSummary, badgesCount: '2' })).toBe(false)
   })
+
+  it('lab-167: aceita sem os 3 campos de habilidade (cliente antigo, ainda não manda)', () => {
+    expect(isValidProgressSummary(validSummary)).toBe(true)
+  })
+
+  it('lab-167: aceita com os 3 campos de habilidade plausíveis', () => {
+    expect(
+      isValidProgressSummary({ ...validSummary, logicaCompleted: 5, matematicaCompleted: 3, leituraCompleted: 4 }),
+    ).toBe(true)
+  })
+
+  it('lab-167: rejeita campo de habilidade com tipo errado quando presente', () => {
+    expect(isValidProgressSummary({ ...validSummary, logicaCompleted: 'cinco' })).toBe(false)
+  })
 })
 
 describe('isValidProgressBackupPayload — lab-142 (backup/restauração de progresso, G6)', () => {
@@ -399,6 +414,27 @@ describe('isValidProgressBackupPayload — lab-142 (backup/restauração de prog
   })
 })
 
+describe('describeSkillFocus — lab-167 (mapa de habilidades)', () => {
+  it('devolve null quando algum campo está ausente (cliente antigo)', () => {
+    expect(describeSkillFocus(undefined, 3, 4)).toBeNull()
+    expect(describeSkillFocus(2, undefined, 4)).toBeNull()
+    expect(describeSkillFocus(2, 3, undefined)).toBeNull()
+  })
+
+  it('devolve null quando as 3 habilidades estão empatadas (perfil zerado ou equilibrado)', () => {
+    expect(describeSkillFocus(0, 0, 0)).toBeNull()
+    expect(describeSkillFocus(4, 4, 4)).toBeNull()
+  })
+
+  it('identifica ponto forte e pra praticar mais quando há diferença real', () => {
+    const focus = describeSkillFocus(8, 2, 5)
+    expect(focus).not.toBeNull()
+    expect(focus!.strongest).toBe('lógica')
+    expect(focus!.weakest).toBe('matemática')
+    expect(focus!.suggestion.length).toBeGreaterThan(0)
+  })
+})
+
 describe('buildWeeklyProgressEmail — lab-119, Fase F', () => {
   const summary = { level: 5, totalXp: 320, coins: 154, questsCompleted: 1, badgesCount: 1 }
 
@@ -425,6 +461,30 @@ describe('buildWeeklyProgressEmail — lab-119, Fase F', () => {
   it('cumprimenta pelo nome quando disponível, genérico quando não', () => {
     expect(buildWeeklyProgressEmail(summary, 'Ana').html).toContain('Oi, Ana!')
     expect(buildWeeklyProgressEmail(summary, null).html).toContain('Oi!')
+  })
+
+  it('lab-167: sem os 3 campos de habilidade, não mostra seção de ponto forte/praticar mais', () => {
+    const email = buildWeeklyProgressEmail(summary, null)
+    expect(email.html).not.toContain('Ponto forte')
+    expect(email.html).not.toContain('Pra praticar mais')
+  })
+
+  it('lab-167: com diferença real entre habilidades, mostra ponto forte e sugestão', () => {
+    const email = buildWeeklyProgressEmail(
+      { ...summary, logicaCompleted: 8, matematicaCompleted: 2, leituraCompleted: 5 },
+      null,
+    )
+    expect(email.html).toContain('Ponto forte da semana: <strong>lógica</strong>')
+    expect(email.html).toContain('Pra praticar mais')
+    expect(email.html).toContain('matemática')
+  })
+
+  it('lab-167: com as 3 habilidades empatadas, não mostra a seção (sem sinal real)', () => {
+    const email = buildWeeklyProgressEmail(
+      { ...summary, logicaCompleted: 3, matematicaCompleted: 3, leituraCompleted: 3 },
+      null,
+    )
+    expect(email.html).not.toContain('Ponto forte')
   })
 })
 
