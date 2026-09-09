@@ -173,6 +173,10 @@ const PRODUCT_EVENT_TYPES = new Set([
   'time_to_first_learning_challenge',
   'time_to_first_reward',
   'activation_cycle_completed',
+  // lab-166 — funil de conversão adulta (pendência registrada em docs/event-catalog.md no lab-165).
+  'family_landing_viewed',
+  'parent_signup_started',
+  'checkout_started',
 ])
 
 export function isValidProductEventType(type: string): boolean {

@@ -4,6 +4,7 @@ import { authClient } from '../auth/neonAuthClient'
 import { loadLastPlayedAt, loadProfile, loadProgress } from '../state/storage'
 import { getLevel, xpIntoLevel } from '../state/progression'
 import { quests } from '../data/quests'
+import { trackCheckoutStarted, trackFamilyLandingViewed, trackParentSignupStarted } from '../productAnalytics'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 const NEON_AUTH_URL = import.meta.env.VITE_NEON_AUTH_URL as string
@@ -86,6 +87,86 @@ function ParentalGateScreen({ gate }: { gate: ReturnType<typeof useParentalGate>
           Continuar
         </button>
       </form>
+    </div>
+  )
+}
+
+// lab-166 (docs/market-metrics-engagement-backlog.md §6, "Lab 165" no documento) — tela entre o
+// portão de matemática e o login. Antes deste lab, quem passava do portão caía direto num
+// formulário de entrar/criar conta sem nenhuma explicação — só descobria preço/benefícios DEPOIS
+// de já ter criado conta, no `Dashboard`. Só aparece pra quem ainda não tem sessão (`FamilyPortal`
+// abaixo pula direto pro `Dashboard` se já houver sessão — responsável que já assina não precisa
+// ver isto de novo toda vez que abre `/familia`).
+function FamilyValueProp({ onContinue }: { onContinue: () => void }) {
+  useEffect(() => {
+    trackFamilyLandingViewed()
+  }, [])
+
+  function handleContinue() {
+    trackParentSignupStarted()
+    onContinue()
+  }
+
+  return (
+    <div className="screen onboarding">
+      <h1>Antes de continuar</h1>
+      <p className="subtitle">
+        Um resumo rápido do que a Missão Aprender é — e não é — pra quem cuida de quem vai jogar.
+      </p>
+
+      <h2>🔒 Segurança</h2>
+      <p>
+        Sem chat livre — a criança só troca mensagens prontas de uma lista fechada, nunca texto
+        digitado. Nunca pedimos nome real, e-mail ou telefone da criança; ela escolhe só um
+        apelido e um avatar, sem dado pessoal nenhum.
+      </p>
+
+      <h2>📚 Aprendizagem sempre grátis</h2>
+      <p>
+        Missões de lógica, matemática e leitura, progresso, cooperação com amigos, pets e casa
+        virtual — tudo isso é <strong>100% gratuito e sempre será</strong>, com assinatura ou sem.
+      </p>
+
+      <h2>💎 O que a assinatura muda</h2>
+      <ul>
+        <li>✓ Grátis pra sempre: missões, progresso, amigos, pets, casa, cosméticos ganhos jogando</li>
+        <li>💎 R$ 4,99/mês (opcional): roupas/acessórios exclusivos, relatório semanal por e-mail, backup automático do progresso</li>
+      </ul>
+      <p>
+        Nunca vendemos vantagem em missão, atalho de progresso ou item aleatório pago — só
+        personalização visual e conveniência pra quem assina.
+      </p>
+
+      <h2>📄 Um exemplo do relatório semanal</h2>
+      <p>
+        <em>
+          "Esta semana, seu explorador completou 4 missões (lógica, matemática e leitura),
+          alcançou o nível 6 e brincou com 2 amigos. Sugestão de conversa: pergunte sobre a missão
+          de frações!"
+        </em>
+      </p>
+      <p className="subtitle">
+        Exemplo ilustrativo — quem assina recebe o relatório de verdade, por e-mail, toda semana.
+      </p>
+
+      <h2>💳 Cancelamento</h2>
+      <p>Cancele quando quiser, direto por aqui — sem multa e sem precisar ligar pra ninguém.</p>
+
+      <p className="subtitle">
+        Detalhes completos na{' '}
+        <a href="/privacidade" target="_blank" rel="noreferrer">
+          Política de Privacidade
+        </a>{' '}
+        e nos{' '}
+        <a href="/termos" target="_blank" rel="noreferrer">
+          Termos de Uso
+        </a>
+        .
+      </p>
+
+      <button type="button" className="primary-button" onClick={handleContinue}>
+        Entrar / Criar conta
+      </button>
     </div>
   )
 }
@@ -818,6 +899,7 @@ function Dashboard({
         setError(body.error ?? 'Não foi possível iniciar a assinatura. Tente novamente.')
         return
       }
+      trackCheckoutStarted()
       window.location.href = body.url
     } catch {
       setError('Não foi possível iniciar a assinatura. Tente novamente.')
@@ -858,9 +940,18 @@ function Dashboard({
         {status === 'loading' ? 'Verificando…' : STATUS_LABEL[status]}
       </p>
       {canSubscribe && (
-        <button type="button" className="primary-button" onClick={handleSubscribe} disabled={busy}>
-          {busy ? 'Um momento…' : 'Assinar por R$ 4,99/mês'}
-        </button>
+        <>
+          {/* lab-166 — reforça a mesma mensagem da `FamilyValueProp` (grátis vs pago) pra quem já
+              criou conta mas ainda não assinou; antes deste lab o botão aparecia sozinho, sem
+              nenhum contexto de benefício ao redor. */}
+          <p className="subtitle">
+            Roupas/acessórios exclusivos, relatório semanal por e-mail e backup automático do
+            progresso — a aprendizagem continua 100% grátis com ou sem assinatura.
+          </p>
+          <button type="button" className="primary-button" onClick={handleSubscribe} disabled={busy}>
+            {busy ? 'Um momento…' : 'Assinar por R$ 4,99/mês'}
+          </button>
+        </>
       )}
       {canManageBilling && (
         <button type="button" className="nickname-generate-btn" onClick={handleManageBilling} disabled={busy}>
@@ -881,6 +972,9 @@ function Dashboard({
 export function FamilyPortal() {
   const gate = useParentalGate()
   const [session, setSession] = useState<{ email: string } | null | 'loading'>('loading')
+  // lab-166 — controla só a exibição da tela nova (`FamilyValueProp`); quem já tem sessão pula
+  // direto pro `Dashboard` mais abaixo, então este estado nunca chega a importar pra esse caso.
+  const [valuePropSeen, setValuePropSeen] = useState(false)
 
   async function refreshSession() {
     try {
@@ -900,6 +994,11 @@ export function FamilyPortal() {
 
   if (!gate.passed) return <ParentalGateScreen gate={gate} />
   if (session === 'loading') return <div className="screen onboarding" />
+  // Sessão já existente pula a proposta de valor (não faz sentido mostrar propaganda pra quem já
+  // é cliente toda vez que abre `/familia`) — só quem ainda vai criar/entrar numa conta a vê.
+  if (!session && !valuePropSeen) {
+    return <FamilyValueProp onContinue={() => setValuePropSeen(true)} />
+  }
   if (!session) return <LoginScreen onAuthenticated={refreshSession} />
 
   return (

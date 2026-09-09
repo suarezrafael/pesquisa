@@ -222,6 +222,12 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
     expect(isValidProductEventType('activation_cycle_completed')).toBe(true)
   })
 
+  it('aceita os tipos de conversão adulta do lab-166', () => {
+    expect(isValidProductEventType('family_landing_viewed')).toBe(true)
+    expect(isValidProductEventType('parent_signup_started')).toBe(true)
+    expect(isValidProductEventType('checkout_started')).toBe(true)
+  })
+
   it('rejeita um tipo desconhecido — nunca confia em input do client sem checar', () => {
     expect(isValidProductEventType('qualquer_coisa')).toBe(false)
     expect(isValidProductEventType('')).toBe(false)
