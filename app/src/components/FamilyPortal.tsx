@@ -702,6 +702,11 @@ const SKILL_LABELS: Record<QuestType, { emoji: string; label: string }> = {
   matematica: { emoji: '🔢', label: 'Matemática' },
   leitura: { emoji: '📖', label: 'Leitura' },
 }
+// Achado do review do Copilot (PR #41): `Object.keys(SKILL_LABELS) as QuestType[]` mascarava uma
+// eventual divergência entre as chaves de `SKILL_LABELS` e `QuestType` (se `QuestType` ganhasse um
+// 4º valor, o cast continuaria compilando escondendo a UI incompleta). Uma constante tipada não
+// precisa de cast nenhum.
+const SKILL_TYPES: readonly QuestType[] = ['logica', 'matematica', 'leitura']
 
 function ChildProgressPanel() {
   const profile = loadProfile()
@@ -729,7 +734,7 @@ function ChildProgressPanel() {
   const skillTotals: Record<QuestType, number> = { logica: 0, matematica: 0, leitura: 0 }
   for (const quest of quests) skillTotals[quest.type] += 1
   const skillCompleted = skillBreakdown(progress)
-  const skillEntries = (Object.keys(SKILL_LABELS) as QuestType[]).map((type) => ({
+  const skillEntries = SKILL_TYPES.map((type) => ({
     type,
     completed: skillCompleted[type],
     total: skillTotals[type],
