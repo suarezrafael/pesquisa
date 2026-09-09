@@ -26,7 +26,11 @@ const EMPTY_SUMMARY: FriendSummary = { received: [], sent: [], friends: [] }
 // não" — essa regra vive só no servidor (`isOnlineNow`, server-accounts/src/domain.ts), evitando
 // duas fontes de verdade divergentes sobre o mesmo limiar de 2 minutos.
 export function formatLastSeen(lastSeenAtIso: string, now: number = Date.now()): string {
-  const diffMs = now - new Date(lastSeenAtIso).getTime()
+  const lastSeenAtMs = new Date(lastSeenAtIso).getTime()
+  // Achado do review do Copilot (PR #35): sem esta checagem, uma data inválida (resposta
+  // inesperada, dado antigo em cache) propagava `NaN` até o texto final ("há NaNd" na UI).
+  if (!Number.isFinite(lastSeenAtMs)) return 'há um tempo'
+  const diffMs = now - lastSeenAtMs
   const diffMinutes = Math.floor(diffMs / (60 * 1000))
   if (diffMinutes < 60) return `há ${Math.max(diffMinutes, 1)} min`
   const diffHours = Math.floor(diffMinutes / 60)

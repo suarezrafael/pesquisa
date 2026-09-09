@@ -765,8 +765,14 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   const limited = await rateLimited(env.HEARTBEAT_LIMITER, clientIp(request))
   if (limited) return limited
 
-  const body = (await request.json().catch(() => null)) as { playerId?: string } | null
-  const playerId = body?.playerId?.trim()
+  const body = (await request.json().catch(() => null)) as { playerId?: unknown } | null
+  // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
+  // checar o tipo antes de `.trim()`, um número/objeto no lugar de string lançaria TypeError não
+  // tratado (500) em vez do 400 esperado pra input malformado.
+  if (typeof body?.playerId !== 'string') {
+    return Response.json({ error: 'playerId inválido' }, { status: 400 })
+  }
+  const playerId = body.playerId.trim()
   if (!playerId || !isValidUuid(playerId)) {
     return Response.json({ error: 'playerId inválido' }, { status: 400 })
   }
