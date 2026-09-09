@@ -17,7 +17,11 @@ técnica de forçar `engine._deltaTime`/`scene.render()` manual (mesma limitaç�
 documentada em labs 135/140/141/146/162) — corpo/resposta da requisição não confirmados por falta
 de acesso à internet real deste ambiente de automação (`fetch` a qualquer host externo falha ali,
 não é bug de código). `npx tsc -b`/testes limpos (app 136/136, sem teste novo; server-accounts
-97/97, 1 novo). `npm run build` sem regressão de bundle. Ver
+97/97, 1 novo). `npm run build` sem regressão de bundle. PR #38 teve 1 achado real do Copilot
+corrigido antes do merge (`new Color3(...)` alocado a cada frame no pulso do feixe — GC/jank em
+mobile — trocado por `.set()` em-place no `Color3` já existente do material). **Confirma deploy em
+produção**: PR #38 mergeado, CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health`
+200 em produção — sem migração de banco desta vez, só allowlist de eventos). Ver
 `labs/lab-164-jornada-ativacao-10-minutos/CONTEXT.md`.
 
 Antes desse: labs/lab-163-perfil-publico-amigo/ — último item do Grupo B do backlog social
