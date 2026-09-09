@@ -15,7 +15,13 @@ vivo contra produção**: migração aplicada; 401/400 confirmados sem escrever 
 conta de teste DESCARTÁVEL (criada e depois excluída por completo via `/account/delete`, confirmado
 por tentativa de login pós-exclusão falhando) — `ChildProgressPanel` mostrando a contagem por
 habilidade e "Ponto forte: Lógica. Pra praticar mais: Matemática." batendo exatamente com o
-progresso real do perfil de teste. Ver `labs/lab-167-mapa-habilidades-relatorio/CONTEXT.md`.
+progresso real do perfil de teste. PR #41 teve 1 achado real do Copilot corrigido antes do merge
+(`Object.keys(SKILL_LABELS) as QuestType[]` mascarava divergência futura entre as chaves — trocado
+por uma constante `SKILL_TYPES` tipada, sem cast). **Confirma deploy em produção**: PR #41
+mergeado, CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health` 200). **Com isso,
+os 4 itens confirmados pelo usuário nesta sessão (ativação de 10 min, catálogo de eventos, página
+familiar, mapa de habilidades) estão completos.** Ver
+`labs/lab-167-mapa-habilidades-relatorio/CONTEXT.md`.
 
 Antes desse: labs/lab-166-pagina-familiar-transparente/ — terceiro item da sequência
 confirmada pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 165" no documento —
