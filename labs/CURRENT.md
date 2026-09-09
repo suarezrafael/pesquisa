@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Em andamento: labs/lab-166-pagina-familiar-transparente/ — terceiro item da sequência confirmada
+pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 165" no documento — renumerado pra
+lab-166). Nova tela de proposta de valor entre o portão de matemática e o login (segurança,
+aprendizagem sempre grátis, grátis vs pago, preço, cancelamento, exemplo breve de relatório) +
+3 eventos novos de analytics (`family_landing_viewed`/`parent_signup_started`/`checkout_started`,
+pendência já registrada no lab-165). Ver
+`labs/lab-166-pagina-familiar-transparente/FEATURES.md`.
+
 Último concluído: labs/lab-165-catalogo-eventos-dashboard/ — segundo item da sequência confirmada
 pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 164" no documento — renumerado pra
 lab-165). `docs/event-catalog.md` novo documenta os 9 tipos de evento existentes (quando disparam,
