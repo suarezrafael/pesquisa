@@ -4,17 +4,23 @@
 pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 164" no documento — renumerado pra
 lab-165). `docs/event-catalog.md` novo documenta os 9 tipos de evento existentes (quando disparam,
 arquivo de origem, `meta`, métrica que alimentam) + nota de ausência de PII infantil.
-`GET /admin/metrics` ganha 3 campos novos, todos sobre uma janela de 7 dias (diferente do resto do
+`GET /admin/metrics` ganha campos novos, todos sobre uma janela de 7 dias (diferente do resto do
 endpoint, que é acumulado desde o início): `weeklyFunnel` (dispositivos únicos por evento de
 ativação, uma query só sem filtro de tipo — evita passar array como parâmetro, mesma decisão do
 lab-163 sobre `badges`/jsonb), `weeklySocial` e `weeklyCommercial` (direto de `friendships`/
-`player_identities`/`family_accounts`/`subscriptions`, sem evento de client novo — a informação já
-existe mais confiável em tabela própria). Sem UI de dashboard (mantém o padrão JSON já usado desde
-o lab-99). `npx tsc --noEmit`/testes limpos (server-accounts 97/97, sem teste novo — I/O puro, sem
-lógica de domínio isolável, mesmo padrão do resto de `handleAdminMetrics`). **Verificado ao vivo
-contra produção** (`wrangler dev` local, só leitura): os 3 campos novos responderam com números
-plausíveis (`weeklyFunnel.playClick: 2`, `questCompleted: 3`), 401 confirmado sem secret/com
-secret errado. Ver `labs/lab-165-catalogo-eventos-dashboard/CONTEXT.md`.
+`player_identities`/`family_accounts`, sem evento de client novo — a informação já existe mais
+confiável em tabela própria). Sem UI de dashboard (mantém o padrão JSON já usado desde o lab-99).
+`npx tsc --noEmit`/testes limpos (server-accounts 97/97, sem teste novo — I/O puro, sem lógica de
+domínio isolável, mesmo padrão do resto de `handleAdminMetrics`). PR #39 teve 2 achados reais do
+Copilot corrigidos antes do merge: `weeklyFunnel` filtrava `product_events` só por `occurred_at`
+sem nenhum índice compatível (migração `0008`, índice simples em `occurred_at`, **já aplicada em
+produção**); `weeklyCommercial.newActiveSubscriptions` media qualquer webhook do Stripe
+(renovação/falha de pagamento) como "ativação" — removido em vez de mantido errado, registrado como
+pendência (precisa de coluna `activated_at` nova, fora de escopo). **Verificado ao vivo contra
+produção** (`wrangler dev` local, só leitura): campos novos responderam com números plausíveis
+(`weeklyFunnel.playClick: 2`, `questCompleted: 3`), 401 confirmado sem secret/com secret errado.
+**Confirma deploy em produção**: PR #39 mergeado, CI/CD verde nos 3 workers, deploy automático
+confirmado (`GET /health` 200). Ver `labs/lab-165-catalogo-eventos-dashboard/CONTEXT.md`.
 
 Antes desse: labs/lab-164-jornada-ativacao-10-minutos/ — primeiro item do novo backlog guiado
 por métricas (`docs/market-metrics-engagement-backlog.md`, seção 6, "Lab 163" no documento —
