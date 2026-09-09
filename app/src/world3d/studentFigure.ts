@@ -431,6 +431,13 @@ export function applyBonecoFeatures(
     beak.position = new Vector3(0, HEAD_Y - 0.01, 0.16)
     add(beak)
   } else if (features.special === 'mane') {
+    // Achado ao vivo (lab-168, bug urgente reportado pelo usuário: "espetos na cara do avatar"
+    // — Leão/Fênix, os dois únicos avatares com `special: 'mane'`): o anel original ficava quase
+    // todo na MESMA profundidade rasa (Z entre -0,03 e +0,07 — perto da frente da cabeça, onde
+    // ficam olhos/focinho, ver `getBoundingInfo` medido ao vivo). De qualquer ângulo que não fosse
+    // exatamente de frente, os espetos apareciam cruzando o rosto em vez de emoldurar por fora.
+    // Reposicionado pra sempre ficar ATRÁS do plano do rosto (Z negativo fixo) — continua a mesma
+    // distribuição em anel (frente/topo/lados, `cos`/`sin` em X/Y), só nunca mais na frente da cara.
     const spikeCount = 10
     for (let s = 0; s < spikeCount; s++) {
       const angle = (s / spikeCount) * Math.PI * 2
@@ -439,7 +446,7 @@ export function applyBonecoFeatures(
         { height: 0.13, diameterTop: 0, diameterBottom: 0.06, tessellation: 3 },
         scene,
       )
-      spike.position = new Vector3(Math.cos(angle) * 0.16, HEAD_Y + Math.sin(angle) * 0.1, Math.sin(angle) * 0.05 + 0.02)
+      spike.position = new Vector3(Math.cos(angle) * 0.16, HEAD_Y + Math.sin(angle) * 0.1, -0.12)
       spike.rotation.z = angle + Math.PI / 2
       add(spike)
     }
@@ -491,8 +498,16 @@ export function applyHat(
   const HAT_Y = 1.34
 
   if (hat.shape === 'cap') {
-    const brim = MeshBuilder.CreateCylinder('hatCapBrim', { height: 0.03, diameter: 0.34, tessellation: 16 }, scene)
-    brim.position = new Vector3(0, HAT_Y - 0.06, 0.08)
+    // Achado ao vivo (lab-168, bug urgente reportado pelo usuário: "peças sumindo ao selecionar
+    // chapéu"): o brim original era um CILINDRO CHEIO — um disco de 360° (raio 0,17, maior que o
+    // raio da cabeça, 0,16) bem dentro da faixa vertical da cabeça (y=1,28, cabeça vai de 0,99 a
+    // 1,31). A câmera da lojinha olha de cima (beta ~1,37 rad) — de boa parte dos ângulos, esse
+    // disco opaco cobria a cabeça inteira por baixo, fazendo o rosto "sumir" (confirmado com
+    // `getBoundingInfo` ao vivo: disco e cabeça realmente se sobrepõem naquela altura). Um boné de
+    // verdade só tem peça na FRENTE (a viseira) — trocado por uma caixa achatada só na frente, sem
+    // disco nenhum por baixo da cabeça.
+    const brim = MeshBuilder.CreateBox('hatCapBrim', { width: 0.22, height: 0.025, depth: 0.14 }, scene)
+    brim.position = new Vector3(0, HAT_Y - 0.05, 0.18)
     add(brim)
     const dome = MeshBuilder.CreateSphere('hatCapDome', { diameter: 0.34, slice: 0.55 }, scene)
     dome.position.y = HAT_Y

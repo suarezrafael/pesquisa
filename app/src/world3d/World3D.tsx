@@ -219,6 +219,11 @@ const CAMERA_ROTATE_SPEED = 1.6 // rad/s — velocidade de giro da câmera segur
 // tentativa: alto o bastante pra não "sumir" de vista quando o jogador corre, baixo o bastante
 // pra sobrar um atraso visível (senão colaria em cima do jogador, sem parecer "seguindo").
 const PET_FOLLOW_LERP_SPEED = 3
+// lab-168 (bug real reportado pelo usuário: pet só perseguia o rastro EXATO de trás do jogador,
+// sem nunca se comportar como os bichinhos que já vagam pelo planeta — coelho/gato/etc., que
+// pulam e viram na direção do movimento). Alvo agora é um ponto ao LADO do jogador, não atrás.
+const PET_SIDE_DISTANCE = 0.65 // unidades de distância lateral do jogador
+const PET_HOP_SPEED = 9 // mesma faixa (8-11) usada pelos bichinhos terrestres (`hopSpeed`)
 // Orçamento de rede do multiplayer (lab-85, docs/prompts/05-escala-e-viabilidade.md achado G1):
 // antes, `sendState` disparava incondicionalmente a cada 0,12s (8,33 msg/s por jogador) — a cota
 // gratuita de Durable Objects (100.000 requests/dia, cada mensagem WebSocket conta como uma)
@@ -7964,6 +7969,12 @@ export function World3D({
       // avatar) — funciona em qualquer planeta-destino sem código extra por planeta.
       let petRoot: TransformNode | null = null
       const petUp = avatarMesh ? avatarMesh.position.subtract(currentWorldCenter).normalize() : Vector3.Up()
+      // lab-168 — mesmo par (`forward`/`hopPhase`) que cada bicho vagando pelo planeta já tem
+      // (`Critter`, mais abaixo), só que pro pet só existe UM, então guardado à parte em vez de
+      // dentro de um objeto por instância.
+      const petForwardSeed = Math.abs(petUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+      let petForward = Vector3.Cross(petUp, petForwardSeed).normalize()
+      let petHopPhase = Math.random() * Math.PI * 2
       function rebuildPet() {
         petRoot?.dispose()
         petRoot = null
@@ -8593,23 +8604,65 @@ export function World3D({
           rainAnchor.position.copyFrom(pos)
           rainAnchor.rotationQuaternion = alignmentQuaternion(localUp)
 
-          // Pet adotável (lab-155) segue o jogador com um pequeno atraso — `petUp` persegue
-          // `localUp` a cada quadro (nunca "teleporta" pra cima dele), o que sozinho já produz o
-          // efeito de "vindo atrás" sem precisar calcular uma posição de rastro explícita.
+          // Pet adotável (lab-155, refeito no lab-168 por 2 bugs reais reportados pelo usuário)
+          // — antes só perseguia o `localUp` EXATO do jogador (sempre grudado no rastro de trás,
+          // sem pulo, sem virar na direção do movimento — diferente dos bichinhos que já vagam
+          // pelo planeta, `critters` mais abaixo). Agora persegue um ponto ao LADO do jogador
+          // (perpendicular a `facing`, reprojetado de volta pra esfera), com o mesmo pulo
+          // (`Math.sin`) e giro-pra-direção-do-movimento (matriz right/up/forward) já usados por
+          // eles — acompanha do lado em qualquer direção que o jogador vire, não só atrás.
           // Escondido dentro de casa/dirigindo (ver comentário em `rebuildPet`, onde `petRoot` é
           // criado).
           if (petRoot) {
             const petVisible = !insideHouseInterior && !drivingCar && !drivingRocket
             petRoot.setEnabled(petVisible)
-            if (petVisible) {
+            if (petVisible && avatarMesh) {
+              const sideDir = Vector3.Cross(localUp, facing).normalize()
+              const targetPetUp = avatarMesh.position
+                .add(sideDir.scale(PET_SIDE_DISTANCE))
+                .subtract(currentWorldCenter)
+                .normalize()
+              const petAngleToTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(petUp, targetPetUp))))
+              const petMoving = petAngleToTarget > 0.02
+
               // lab-155 (achado do review automático do Copilot): `Vector3.Lerp` aloca um Vector3
               // NOVO a cada quadro (60x/s enquanto o pet está visível) — `LerpToRef` escreve
               // direto em `petUp`, sem alocar; `normalize()` também já muda o próprio vetor sem
               // criar outro.
-              Vector3.LerpToRef(petUp, localUp, Math.min(1, dt * PET_FOLLOW_LERP_SPEED), petUp)
+              Vector3.LerpToRef(petUp, targetPetUp, Math.min(1, dt * PET_FOLLOW_LERP_SPEED), petUp)
               petUp.normalize()
-              petRoot.position.copyFrom(currentWorldCenter.add(petUp.scale(currentGroundBaseFn(petUp) + 0.02)))
-              petRoot.rotationQuaternion = alignmentQuaternion(petUp)
+
+              let petFwd = targetPetUp.subtract(petUp.scale(Vector3.Dot(targetPetUp, petUp)))
+              if (petFwd.lengthSquared() > 1e-6) {
+                petFwd.normalize()
+                petForward = petFwd
+              } else {
+                petFwd = petForward
+              }
+
+              petHopPhase += dt * PET_HOP_SPEED * (petMoving ? 1 : 0.15)
+              const petHop = Math.max(0, Math.sin(petHopPhase)) * 0.05
+
+              // lab-168 (bug real: "pet escondido embaixo da terra") — `currentGroundBaseFn` usa
+              // só a FÓRMULA analítica do relevo (`terrainHeight`), sem raycast contra o mesh de
+              // verdade; perto de rampa/platô isso diverge da malha real (mesma causa raiz já
+              // documentada nos labs 95/134/135 pras escolinhas/casa). Ali a correção era
+              // ESTÁTICA (uma vez, ao construir); o pet se move todo quadro seguindo o jogador,
+              // que pode estar em QUALQUER relevo do planeta principal — usa o mesmo raycast
+              // físico real (`terrainGroundRadial`) já usado pras escolinhas/casa. Nos outros
+              // contextos (planeta-destino, dentro de casa) mantém `currentGroundBaseFn`, que já
+              // é exato ali (raio fixo/sala plana, sem relevo formulado pra divergir).
+              const petGroundBase =
+                currentPlanetId === null && !insideHouseInterior
+                  ? terrainGroundRadial(petUp, terrainHeight(petUp))
+                  : currentGroundBaseFn(petUp)
+
+              petRoot.position.copyFrom(currentWorldCenter.add(petUp.scale(petGroundBase + 0.02 + petHop)))
+
+              const petRight = Vector3.Cross(petUp, petFwd).normalize()
+              Matrix.FromXYZAxesToRef(petRight, petUp, petFwd, tmpMatrix)
+              Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
+              petRoot.rotationQuaternion = tmpQuat.clone()
             }
           }
 
