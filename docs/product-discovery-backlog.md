@@ -1,243 +1,243 @@
-# Missao Aprender - Backlog de Discovery, Mercado e Produto
+# Missão Aprender - Backlog de Discovery, Mercado e Produto
 
 Data: 2026-09-08
 
-Este documento complementa `docs/business-analyst-prompt-backlog.md`. Ele existe para orientar os proximos laboratorios depois da melhoria da primeira tela/home, sem misturar pesquisa de mercado, UX, monetizacao e seguranca infantil dentro de um unico lab grande.
+Este documento complementa `docs/business-analyst-prompt-backlog.md`. Ele existe para orientar os próximos laboratórios depois da melhoria da primeira tela/home, sem misturar pesquisa de mercado, UX, monetização e segurança infantil dentro de um único lab grande.
 
 ## Contexto atual
 
-Estado considerado: lab-160 concluido.
+Estado considerado: lab-160 concluído.
 
-O jogo ja tem conteudo suficiente para validar aderencia inicial: mundo 3D, quests, planetas, casa, pets, cosmeticos, ranking, login diario, cartoes-postais, multiplayer seguro por catalogo e sistema de amigos com busca/pedido/aceite/recusa/remocao.
+O jogo já tem conteúdo suficiente para validar aderência inicial: mundo 3D, quests, planetas, casa, pets, cosméticos, ranking, login diário, cartões-postais, multiplayer seguro por catálogo e sistema de amigos com busca/pedido/aceite/recusa/remoção.
 
-A prioridade de produto agora nao e simplesmente aumentar escopo. A prioridade e responder quatro perguntas de negocio:
+A prioridade de produto agora não é simplesmente aumentar escopo. A prioridade é responder quatro perguntas de negócio:
 
-1. A crianca entende rapidamente que isso e um jogo desejavel, nao so um quiz escolar?
-2. O responsavel entende rapidamente que e seguro, educativo e monetizado de forma etica?
-3. O social aumenta retorno sem aumentar risco infantil de forma inaceitavel?
-4. A assinatura de R$ 4,99/mes tem valor percebido suficiente para o responsavel?
+1. A criança entende rapidamente que isso é um jogo desejável, não só um quiz escolar?
+2. O responsável entende rapidamente que é seguro, educativo e monetizado de forma ética?
+3. O social aumenta retorno sem aumentar risco infantil de forma inaceitável?
+4. A assinatura de R$ 4,99/mês tem valor percebido suficiente para o responsável?
 
-## Principios para os proximos labs
+## Princípios para os próximos labs
 
-- Aprendizagem, progresso, quests, cooperacao e conteudo pedagogico continuam sempre gratis.
-- Assinatura so pode liberar cosmeticos, conveniencia visual, casa/decoracao premium e beneficios de responsavel.
-- Nenhum upsell deve ser pressionado diretamente contra a crianca.
-- Nenhum lab social deve introduzir texto livre, UGC aberto, foto, audio, video ou dado de contato.
-- Toda recomendacao de produto deve ter metrica ou teste de validacao associado.
-- Preferir labs pequenos que testem uma hipotese por vez.
+- Aprendizagem, progresso, quests, cooperação e conteúdo pedagógico continuam sempre grátis.
+- Assinatura só pode liberar cosméticos, conveniência visual, casa/decoração premium e benefícios de responsável.
+- Nenhum upsell deve ser pressionado diretamente contra a criança.
+- Nenhum lab social deve introduzir texto livre, UGC aberto, foto, áudio, vídeo ou dado de contato.
+- Toda recomendação de produto deve ter métrica ou teste de validação associado.
+- Preferir labs pequenos que testem uma hipótese por vez.
 
-## Backlog P0 - Aderencia e funil inicial
+## Backlog P0 - Aderência e funil inicial
 
-### 1. Home dupla crianca/responsavel
+### 1. Home dupla criança/responsável
 
 Prioridade: P0
 
-Problema / hipotese: a primeira tela precisa vender duas promessas diferentes sem confundir: diversao para a crianca e confianca para o responsavel.
+Problema / hipótese: a primeira tela precisa vender duas promessas diferentes sem confundir: diversão para a criança e confiança para o responsável.
 
-Usuario beneficiado: crianca nova, responsavel avaliando o produto.
+Usuário beneficiado: criança nova, responsável avaliando o produto.
 
-Escopo: CTA principal para jogar, CTA secundario para area dos responsaveis, prova visual do jogo, sinais de confianca, promessa de monetizacao etica.
+Escopo: CTA principal para jogar, CTA secundário para área dos responsáveis, prova visual do jogo, sinais de confiança, promessa de monetização ética.
 
-Fora de escopo: checkout direto, mudancas de Stripe, novos cosmeticos, novas quests.
+Fora de escopo: checkout direto, mudanças de Stripe, novos cosméticos, novas quests.
 
-Criterios de aceite: em 10 segundos, a crianca entende que pode explorar/customizar/conquistar; o responsavel entende seguranca/educacao/assinatura cosmetica; Babylon continua lazy-loaded.
+Critérios de aceite: em 10 segundos, a criança entende que pode explorar/customizar/conquistar; o responsável entende segurança/educação/assinatura cosmética; Babylon continua lazy-loaded.
 
-Metricas esperadas: `title_play_clicked`, `title_family_area_clicked`, taxa de criacao de perfil, taxa de acesso a `/familia`.
+Métricas esperadas: `title_play_clicked`, `title_family_area_clicked`, taxa de criação de perfil, taxa de acesso a `/familia`.
 
 Riscos: tela parecer marketing demais; linguagem adulta invadir o fluxo infantil; sugerir por engano que precisa pagar para aprender.
 
-### 2. Pre-venda responsavel antes do login
+### 2. Pré-venda responsável antes do login
 
 Prioridade: P0
 
-Problema / hipotese: pedir login antes de explicar valor reduz conversao do responsavel.
+Problema / hipótese: pedir login antes de explicar valor reduz conversão do responsável.
 
-Usuario beneficiado: responsavel ainda nao cadastrado.
+Usuário beneficiado: responsável ainda não cadastrado.
 
-Escopo: uma camada antes de login no `/familia` com preco, beneficios, seguranca, privacidade, cancelamento e regra de aprendizagem gratis.
+Escopo: uma camada antes de login no `/familia` com preço, benefícios, segurança, privacidade, cancelamento e regra de aprendizagem grátis.
 
-Fora de escopo: mudar checkout, plano anual, teste de preco.
+Fora de escopo: mudar checkout, plano anual, teste de preço.
 
-Criterios de aceite: responsavel entende o que paga antes de criar conta; checkout continua atras de login e parental gate; nao ha promessa que o produto ainda nao cumpra.
+Critérios de aceite: responsável entende o que paga antes de criar conta; checkout continua atrás de login e parental gate; não há promessa que o produto ainda não cumpra.
 
-Metricas esperadas: `family_landing_viewed`, `parent_signup_started`, `checkout_started`.
+Métricas esperadas: `family_landing_viewed`, `parent_signup_started`, `checkout_started`.
 
-Riscos: prometer relatorio/email para familias externas antes do dominio Resend estar verificado; excesso de texto.
+Riscos: prometer relatório/email para famílias externas antes do domínio Resend estar verificado; excesso de texto.
 
-### 3. Instrumentacao de funil comercial e social
+### 3. Instrumentação de funil comercial e social
 
 Prioridade: P0
 
-Problema / hipotese: as metricas atuais cobrem sessao e quest, mas ainda faltam eventos para medir home, responsavel, assinatura e social.
+Problema / hipótese: as métricas atuais cobrem sessão e quest, mas ainda faltam eventos para medir home, responsável, assinatura e social.
 
-Usuario beneficiado: PO/produto.
+Usuário beneficiado: PO/produto.
 
-Escopo: eventos anonimos/minimizados para cliques da home, abertura de `/familia`, parental gate, cadastro, checkout, pareamento, lojinha, amigos.
+Escopo: eventos anônimos/minimizados para cliques da home, abertura de `/familia`, parental gate, cadastro, checkout, pareamento, lojinha, amigos.
 
-Fora de escopo: dashboard sofisticado, ferramenta paga, coleta de PII da crianca.
+Fora de escopo: dashboard sofisticado, ferramenta paga, coleta de PII da criança.
 
-Criterios de aceite: eventos nao quebram jogo se falharem; payload nao inclui nome real, email da crianca, resposta de quest ou chat; documentar catalogo de eventos.
+Critérios de aceite: eventos não quebram jogo se falharem; payload não inclui nome real, email da criança, resposta de quest ou chat; documentar catálogo de eventos.
 
-Metricas esperadas: funil visitante -> perfil -> quest -> retorno -> responsavel -> checkout.
+Métricas esperadas: funil visitante -> perfil -> quest -> retorno -> responsável -> checkout.
 
 Riscos: excesso de eventos gerar custo; metadados acabarem expondo dado infantil.
 
-## Backlog P1 - Retencao saudavel e social seguro
+## Backlog P1 - Retenção saudável e social seguro
 
 ### 4. Status de amigos com privacidade
 
 Prioridade: P1
 
-Problema / hipotese: saber que amigos existem/estao ativos aumenta retorno, mas horario preciso pode expor padrao de rotina infantil.
+Problema / hipótese: saber que amigos existem/estão ativos aumenta retorno, mas horário preciso pode expor padrão de rotina infantil.
 
-Usuario beneficiado: crianca que joga com amigos.
+Usuário beneficiado: criança que joga com amigos.
 
-Escopo: mostrar estados seguros como `online agora`, `jogou recentemente`, `faz alguns dias`, sem horario exato. Atualizar `FriendsPanel` e backend conforme plano do lab-158.
+Escopo: mostrar estados seguros como `online agora`, `jogou recentemente`, `faz alguns dias`, sem horário exato. Atualizar `FriendsPanel` e backend conforme plano do lab-158.
 
-Fora de escopo: chat livre, DM, notificacao push, localizacao, horario detalhado.
+Fora de escopo: chat livre, DM, notificação push, localização, horário detalhado.
 
-Criterios de aceite: nenhum dado pessoal novo; sem mostrar ultimo acesso exato; rate limit preservado; testes de dominio/backend.
+Critérios de aceite: nenhum dado pessoal novo; sem mostrar último acesso exato; rate limit preservado; testes de domínio/backend.
 
-Metricas esperadas: retorno D1/D7 de usuarios com amigos, abertura de painel de amigos, pedidos enviados/aceitos.
+Métricas esperadas: retorno D1/D7 de usuários com amigos, abertura de painel de amigos, pedidos enviados/aceitos.
 
-Riscos: criar ansiedade social; aumentar superficie de contato com desconhecidos.
+Riscos: criar ansiedade social; aumentar superfície de contato com desconhecidos.
 
-### 5. Perfil publico seguro de amigo
-
-Prioridade: P1
-
-Problema / hipotese: criancas valorizam identidade, avatar e conquistas. Um perfil seguro de amigo pode aumentar motivacao sem precisar de texto livre.
-
-Usuario beneficiado: crianca e grupo de amigos.
-
-Escopo: visualizar avatar, pet equipado, serie, alguns badges/cartoes-postais e talvez casa em modo somente leitura no futuro.
-
-Fora de escopo: bio livre, foto, comentario, mural, troca de itens, comparacao agressiva.
-
-Criterios de aceite: perfil contem apenas dados de jogo; nao contem nome real, email, contato, texto livre; bloquear/remover amigo remove acesso ao perfil.
-
-Metricas esperadas: abertura de perfil, retorno semanal, taxa de amizade aceita.
-
-Riscos: status visual virar pressao de compra; constrangimento por comparacao.
-
-### 6. Missoes sociais cooperativas sem comunicacao livre
+### 5. Perfil público seguro de amigo
 
 Prioridade: P1
 
-Problema / hipotese: cooperacao aumenta engajamento quando o objetivo e claro e a comunicacao pode ser feita por emotes/mensagens prontas.
+Problema / hipótese: crianças valorizam identidade, avatar e conquistas. Um perfil seguro de amigo pode aumentar motivação sem precisar de texto livre.
 
-Usuario beneficiado: criancas jogando juntas.
+Usuário beneficiado: criança e grupo de amigos.
 
-Escopo: pequenas tarefas cooperativas: visitar mesma escola, completar desafio semanal, achar cartao-postal, ver pet/casa do amigo.
+Escopo: visualizar avatar, pet equipado, série, alguns badges/cartões-postais e talvez casa em modo somente leitura no futuro.
+
+Fora de escopo: bio livre, foto, comentário, mural, troca de itens, comparação agressiva.
+
+Critérios de aceite: perfil contém apenas dados de jogo; não contém nome real, email, contato, texto livre; bloquear/remover amigo remove acesso ao perfil.
+
+Métricas esperadas: abertura de perfil, retorno semanal, taxa de amizade aceita.
+
+Riscos: status visual virar pressão de compra; constrangimento por comparação.
+
+### 6. Missões sociais cooperativas sem comunicação livre
+
+Prioridade: P1
+
+Problema / hipótese: cooperação aumenta engajamento quando o objetivo é claro e a comunicação pode ser feita por emotes/mensagens prontas.
+
+Usuário beneficiado: crianças jogando juntas.
+
+Escopo: pequenas tarefas cooperativas: visitar mesma escola, completar desafio semanal, achar cartão-postal, ver pet/casa do amigo.
 
 Fora de escopo: chat livre, salas privadas complexas, matchmaking com desconhecidos sem guardrails.
 
-Criterios de aceite: solo continua funcional; social nao bloqueia aprendizagem; mensagens continuam catalogadas.
+Critérios de aceite: solo continua funcional; social não bloqueia aprendizagem; mensagens continuam catalogadas.
 
-Metricas esperadas: sessoes com 2+ jogadores, missao social iniciada/concluida, retorno de usuario com amigo.
+Métricas esperadas: sessões com 2+ jogadores, missão social iniciada/concluída, retorno de usuário com amigo.
 
-Riscos: dependencia de amigo reduzir satisfacao solo; abuso de convites.
+Riscos: dependência de amigo reduzir satisfação solo; abuso de convites.
 
-## Backlog P1 - Monetizacao etica
+## Backlog P1 - Monetização ética
 
-### 7. Vitrine de beneficios de assinatura no `/familia`
-
-Prioridade: P1
-
-Problema / hipotese: o responsavel precisa ver valor concreto antes de assinar, e a crianca nao deve receber pressao direta.
-
-Usuario beneficiado: responsavel comprador.
-
-Escopo: preview de cosmeticos, casa/decoracao premium, relatorio, backup/restauracao, preco e cancelamento. Texto explicito: `conteudo educativo sempre gratis`.
-
-Fora de escopo: desconto por urgencia, contador regressivo, loot box, teste A/B de preco.
-
-Criterios de aceite: checkout so aparece no portal do responsavel; nenhum beneficio pedagógico exclusivo; copiar nao promete vantagem em quest, XP ou ranking.
-
-Metricas esperadas: visualizacao da vitrine, clique em checkout, conclusao de pareamento.
-
-Riscos: parecer pay-to-win; prometer envio de email amplo antes de resolver dominio Resend.
-
-### 8. Preview de relatorio semanal
+### 7. Vitrine de benefícios de assinatura no `/familia`
 
 Prioridade: P1
 
-Problema / hipotese: relatorio e um dos beneficios mais fortes para o responsavel, mas precisa ser demonstravel antes da compra.
+Problema / hipótese: o responsável precisa ver valor concreto antes de assinar, e a criança não deve receber pressão direta.
 
-Usuario beneficiado: responsavel.
+Usuário beneficiado: responsável comprador.
 
-Escopo: bloco de exemplo ou preview local com nivel, missoes concluidas, habilidades praticadas e sugestao de conversa com a crianca.
+Escopo: preview de cosméticos, casa/decoração premium, relatório, backup/restauração, preço e cancelamento. Texto explícito: `conteúdo educativo sempre grátis`.
 
-Fora de escopo: diagnostico pedagogico profundo, IA generativa, ranking escolar.
+Fora de escopo: desconto por urgência, contador regressivo, loot box, teste A/B de preço.
 
-Criterios de aceite: dados sao minimos e explicados; sem expor respostas individuais da crianca; funciona mesmo sem assinatura como exemplo estatico ou preview local.
+Critérios de aceite: checkout só aparece no portal do responsável; nenhum benefício pedagógico exclusivo; a copy não promete vantagem em quest, XP ou ranking.
 
-Metricas esperadas: clique em checkout apos ver relatorio, tempo na tela `/familia`.
+Métricas esperadas: visualização da vitrine, clique em checkout, conclusão de pareamento.
 
-Riscos: responsavel interpretar como avaliacao escolar formal; privacidade do progresso.
+Riscos: parecer pay-to-win; prometer envio de email amplo antes de resolver domínio Resend.
+
+### 8. Preview de relatório semanal
+
+Prioridade: P1
+
+Problema / hipótese: relatório é um dos benefícios mais fortes para o responsável, mas precisa ser demonstrável antes da compra.
+
+Usuário beneficiado: responsável.
+
+Escopo: bloco de exemplo ou preview local com nível, missões concluídas, habilidades praticadas e sugestão de conversa com a criança.
+
+Fora de escopo: diagnóstico pedagógico profundo, IA generativa, ranking escolar.
+
+Critérios de aceite: dados são mínimos e explicados; sem expor respostas individuais da criança; funciona mesmo sem assinatura como exemplo estático ou preview local.
+
+Métricas esperadas: clique em checkout após ver relatório, tempo na tela `/familia`.
+
+Riscos: responsável interpretar como avaliação escolar formal; privacidade do progresso.
 
 ## Backlog P2 - Pesquisa e canais
 
 ### 9. Teste de 5 segundos da home
 
-Prioridade: P2 como pesquisa, mas deve acontecer logo apos o lab da home.
+Prioridade: P2 como pesquisa, mas deve acontecer logo após o lab da home.
 
-Problema / hipotese: a nova home pode parecer clara para quem construiu, mas confusa para familias reais.
+Problema / hipótese: a nova home pode parecer clara para quem construiu, mas confusa para famílias reais.
 
-Usuario beneficiado: PO/produto.
+Usuário beneficiado: PO/produto.
 
-Escopo: testar com 5 criancas e 5 responsaveis. Perguntar: `o que e isso?`, `onde voce clicaria?`, `e seguro?`, `tem que pagar o que?`.
+Escopo: testar com 5 crianças e 5 responsáveis. Perguntar: `o que é isso?`, `onde você clicaria?`, `é seguro?`, `tem que pagar o que?`.
 
-Fora de escopo: pesquisa estatistica grande.
+Fora de escopo: pesquisa estatística grande.
 
-Criterios de aceite: registrar respostas anonimas e ajustar copy/UX se 2+ participantes errarem a proposta central.
+Critérios de aceite: registrar respostas anônimas e ajustar copy/UX se 2+ participantes errarem a proposta central.
 
-Metricas esperadas: compreensao da proposta, intencao de jogar, confianca do responsavel.
+Métricas esperadas: compreensão da proposta, intenção de jogar, confiança do responsável.
 
-Riscos: vies por testar so com familia/proximos.
+Riscos: viés por testar só com família/próximos.
 
-### 10. Sessao observada de primeira jogatina
+### 10. Sessão observada de primeira jogatina
 
 Prioridade: P2
 
-Problema / hipotese: a aderencia real depende de a crianca sentir diversao antes de se cansar/confundir.
+Problema / hipótese: a aderência real depende de a criança sentir diversão antes de se cansar/confundir.
 
-Usuario beneficiado: crianca nova.
+Usuário beneficiado: criança nova.
 
-Escopo: sessao de 15-20 minutos observada, sem instruir demais. Medir tempo ate movimento fluido, primeira quest, primeira recompensa, abertura de loja/amigos/pet.
+Escopo: sessão de 15-20 minutos observada, sem instruir demais. Medir tempo até movimento fluido, primeira quest, primeira recompensa, abertura de loja/amigos/pet.
 
 Fora de escopo: teste escolar formal.
 
-Criterios de aceite: documentar 5 maiores pontos de atrito; transformar os 2 maiores em labs.
+Critérios de aceite: documentar 5 maiores pontos de atrito; transformar os 2 maiores em labs.
 
-Metricas esperadas: tempo ate primeira recompensa, pedido espontaneo para continuar, confusoes de controle.
+Métricas esperadas: tempo até primeira recompensa, pedido espontâneo para continuar, confusões de controle.
 
-Riscos: uma crianca muito experiente em Roblox enviesar para cima; uma crianca sem familiaridade enviesar para baixo.
+Riscos: uma criança muito experiente em Roblox enviesar para cima; uma criança sem familiaridade enviesar para baixo.
 
 ### 11. Teardown competitivo
 
 Prioridade: P2
 
-Problema / hipotese: Missao Aprender precisa se posicionar contra jogos sociais e edtechs, nao so contra outros quizzes.
+Problema / hipótese: Missão Aprender precisa se posicionar contra jogos sociais e edtechs, não só contra outros quizzes.
 
-Usuario beneficiado: PO/marketing/produto.
+Usuário beneficiado: PO/marketing/produto.
 
-Escopo: comparar Roblox, Minecraft Education, Prodigy, Duolingo, Kahoot/Quizizz e jogos infantis populares no Brasil por: gancho inicial, loop, social, avatar, monetizacao, seguranca, proposta para pais.
+Escopo: comparar Roblox, Minecraft Education, Prodigy, Duolingo, Kahoot/Quizizz e jogos infantis populares no Brasil por: gancho inicial, loop, social, avatar, monetização, segurança, proposta para pais.
 
-Fora de escopo: copiar mecanicas predatorias.
+Fora de escopo: copiar mecânicas predatórias.
 
-Criterios de aceite: tabela com oportunidades replicaveis eticamente e mecanicas proibidas/arriscadas.
+Critérios de aceite: tabela com oportunidades replicáveis eticamente e mecânicas proibidas/arriscadas.
 
-Metricas esperadas: lista de hipoteses de produto priorizadas.
+Métricas esperadas: lista de hipóteses de produto priorizadas.
 
 Riscos: adotar FOMO/loot/gacha por parecer eficiente.
 
-## Recomendacao de sequencia
+## Recomendação de sequência
 
 1. Finalizar o lab da home dupla.
-2. Fazer o pre-login do `/familia` com proposta de valor clara.
-3. Completar instrumentacao de funil.
+2. Fazer o pré-login do `/familia` com proposta de valor clara.
+3. Completar instrumentação de funil.
 4. Retomar social com status de amigos seguro.
-5. Fazer teste real de 5 segundos e primeira sessao observada.
+5. Fazer teste real de 5 segundos e primeira sessão observada.
 
-A pergunta principal desta fase e: `O jogo ja tem uma proposta que uma crianca quer jogar e um responsavel entende/confiaria em permitir ou pagar?`
+A pergunta principal desta fase é: `O jogo já tem uma proposta que uma criança quer jogar e um responsável entende/confiaria em permitir ou pagar?`
