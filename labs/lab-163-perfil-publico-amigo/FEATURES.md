@@ -1,8 +1,8 @@
 # Laboratório 163 — perfil público de amigo (avatar + conquistas)
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-09
-Fim: -
+Fim: 2026-09-09
 Commit inicial: 9670e3c92873dbb8b017e6a8b5faf84522adc13b
 
 ## Objetivo do laboratório
