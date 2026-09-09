@@ -1393,6 +1393,49 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
   const d7Eligible = Number(retention.d7_eligible)
   const d7Returned = Number(retention.d7_returned)
 
+  // lab-165 (docs/market-metrics-engagement-backlog.md, "Lab 164" no documento) — funil SEMANAL
+  // (últimos 7 dias), diferente de tudo acima (que é média/total acumulado desde o início do
+  // produto). Uma linha por tipo de evento com contagem de dispositivos ÚNICOS que dispararam
+  // aquele evento nesta janela — sem filtrar por tipo na query (a lista de tipos é pequena, ver
+  // `PRODUCT_EVENT_TYPES` em `domain.ts`, e nenhum outro endpoint deste Worker passa um array como
+  // parâmetro pro driver, mesma decisão do lab-163 sobre `badges` virar jsonb em vez de `text[]`):
+  // o `group by` já limita o resultado só aos tipos que realmente ocorreram na janela.
+  const weeklyEventCountRows = (await sql`
+    select event_type, count(distinct device_id)::int as devices
+    from product_events
+    where occurred_at >= now() - interval '7 days'
+    group by event_type
+  `) as { event_type: string; devices: number }[]
+  const weeklyEventDevices = new Map(weeklyEventCountRows.map((row) => [row.event_type, row.devices]))
+  const weeklyDevices = (type: string) => weeklyEventDevices.get(type) ?? 0
+
+  const weeklyFunnel = {
+    playClick: weeklyDevices('play_click'),
+    firstControl: weeklyDevices('time_to_first_control'),
+    firstLearningChallenge: weeklyDevices('time_to_first_learning_challenge'),
+    firstReward: weeklyDevices('time_to_first_reward'),
+    activationCycleCompleted: weeklyDevices('activation_cycle_completed'),
+    questCompleted: weeklyDevices('quest_completed'),
+    parentAreaClick: weeklyDevices('parent_area_click'),
+  }
+
+  // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,
+  // Fase C/`docs/plano-comercial-backend.md` pro comercial), nunca de `product_events`: essa
+  // informação já existe estruturada ali, criar evento de client novo só duplicaria o que o banco
+  // já sabe.
+  const [weeklySocialRow] = (await sql`
+    select
+      (select count(*)::int from friendships where created_at >= now() - interval '7 days') as friend_requests_sent,
+      (select count(*)::int from friendships where status = 'accepted' and updated_at >= now() - interval '7 days') as friend_requests_accepted,
+      (select count(*)::int from player_identities where created_at >= now() - interval '7 days') as new_players
+  `) as { friend_requests_sent: number; friend_requests_accepted: number; new_players: number }[]
+
+  const [weeklyCommercialRow] = (await sql`
+    select
+      (select count(*)::int from family_accounts where created_at >= now() - interval '7 days') as new_families,
+      (select count(*)::int from subscriptions where status = 'active' and updated_at >= now() - interval '7 days') as new_active_subscriptions
+  `) as { new_families: number; new_active_subscriptions: number }[]
+
   return Response.json({
     totalDevices: Number(devices.total_devices),
     d1Retention: {
@@ -1412,6 +1455,16 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       : null,
     devicesWithAtLeastOneQuest: Number(quests.devices_with_quest),
     nps,
+    weeklyFunnel,
+    weeklySocial: {
+      friendRequestsSent: weeklySocialRow.friend_requests_sent,
+      friendRequestsAccepted: weeklySocialRow.friend_requests_accepted,
+      newPlayers: weeklySocialRow.new_players,
+    },
+    weeklyCommercial: {
+      newFamilies: weeklyCommercialRow.new_families,
+      newActiveSubscriptions: weeklyCommercialRow.new_active_subscriptions,
+    },
   })
 }
 

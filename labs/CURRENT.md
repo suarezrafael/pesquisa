@@ -1,13 +1,22 @@
 # Laboratório atual
 
-Em andamento: labs/lab-165-catalogo-eventos-dashboard/ — segundo item da sequência confirmada pelo
-usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 164" no documento — renumerado pra
-lab-165). Catálogo de eventos (`docs/event-catalog.md`) + `GET /admin/metrics` ganha funil semanal
-(ativação/social/comercial), reaproveitando dados já existentes (`product_events`/`friendships`/
-`family_accounts`/`subscriptions`) sem instrumentação de client nova. Ver
-`labs/lab-165-catalogo-eventos-dashboard/FEATURES.md`.
+Último concluído: labs/lab-165-catalogo-eventos-dashboard/ — segundo item da sequência confirmada
+pelo usuário (`docs/market-metrics-engagement-backlog.md`, "Lab 164" no documento — renumerado pra
+lab-165). `docs/event-catalog.md` novo documenta os 9 tipos de evento existentes (quando disparam,
+arquivo de origem, `meta`, métrica que alimentam) + nota de ausência de PII infantil.
+`GET /admin/metrics` ganha 3 campos novos, todos sobre uma janela de 7 dias (diferente do resto do
+endpoint, que é acumulado desde o início): `weeklyFunnel` (dispositivos únicos por evento de
+ativação, uma query só sem filtro de tipo — evita passar array como parâmetro, mesma decisão do
+lab-163 sobre `badges`/jsonb), `weeklySocial` e `weeklyCommercial` (direto de `friendships`/
+`player_identities`/`family_accounts`/`subscriptions`, sem evento de client novo — a informação já
+existe mais confiável em tabela própria). Sem UI de dashboard (mantém o padrão JSON já usado desde
+o lab-99). `npx tsc --noEmit`/testes limpos (server-accounts 97/97, sem teste novo — I/O puro, sem
+lógica de domínio isolável, mesmo padrão do resto de `handleAdminMetrics`). **Verificado ao vivo
+contra produção** (`wrangler dev` local, só leitura): os 3 campos novos responderam com números
+plausíveis (`weeklyFunnel.playClick: 2`, `questCompleted: 3`), 401 confirmado sem secret/com
+secret errado. Ver `labs/lab-165-catalogo-eventos-dashboard/CONTEXT.md`.
 
-Último concluído: labs/lab-164-jornada-ativacao-10-minutos/ — primeiro item do novo backlog guiado
+Antes desse: labs/lab-164-jornada-ativacao-10-minutos/ — primeiro item do novo backlog guiado
 por métricas (`docs/market-metrics-engagement-backlog.md`, seção 6, "Lab 163" no documento —
 renumerado pra lab-164 porque o lab-163 real deste repo já foi usado pro perfil público de amigo).
 Feixe de luz vertical emissivo acima da primeira escolinha (`quests[0]`, sempre desbloqueada),

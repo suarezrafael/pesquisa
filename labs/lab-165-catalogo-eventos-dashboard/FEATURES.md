@@ -1,8 +1,8 @@
 # Laboratório 165 — catálogo de eventos e dashboard semanal de produto
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-09
-Fim: -
+Fim: 2026-09-09
 Commit inicial: 8ebf4484a6465b96eb58b251eb3fdba3870dfb55
 
 ## Objetivo do laboratório
@@ -40,21 +40,22 @@ acumuladas de todo o histórico.
 
 ## Funcionalidades planejadas
 
-- [ ] `docs/event-catalog.md` novo — taxonomia completa: nome do evento, quando dispara, arquivo
+- [x] `docs/event-catalog.md` novo — taxonomia completa: nome do evento, quando dispara, arquivo
       de origem, propriedades em `meta` (se houver), qual métrica primária/de apoio do documento
       cada um alimenta (seção 4 do `market-metrics-engagement-backlog.md`), e uma nota explícita de
       que nenhum evento carrega PII infantil (nome real, e-mail, resposta de quest, texto de chat).
-- [ ] `GET /admin/metrics` ganha um campo novo `weeklyFunnel` (últimos 7 dias, não a vida toda do
+- [x] `GET /admin/metrics` ganha um campo novo `weeklyFunnel` (últimos 7 dias, não a vida toda do
       produto): contagem de dispositivos únicos por evento de ativação (`play_click` →
       `time_to_first_control` → `time_to_first_learning_challenge` → `time_to_first_reward` →
       `activation_cycle_completed`), `quest_completed` da semana, `parent_area_click` da semana.
-- [ ] Campo novo `weeklySocial`: pedidos de amizade enviados/aceitos na semana e novos jogadores
+- [x] Campo novo `weeklySocial`: pedidos de amizade enviados/aceitos na semana e novos jogadores
       registrados (`player_identities`) na semana — direto de `friendships`/`player_identities`,
       sem evento de client novo.
-- [ ] Campo novo `weeklyCommercial`: famílias novas (`family_accounts.created_at`) e assinaturas
+- [x] Campo novo `weeklyCommercial`: famílias novas (`family_accounts.created_at`) e assinaturas
       ativadas (`subscriptions`, status `active`) na semana — direto das tabelas já existentes.
-- [ ] Testes de domínio para qualquer lógica pura extraída (ex.: cálculo de janela de 7 dias, se
-      virar uma função isolada e testável em `domain.ts`, mesmo padrão de `isOnlineNow`).
+- [x] Testes de domínio para qualquer lógica pura extraída — nenhuma lógica pura nova nasceu (todo
+      o funil é SQL + leitura direta, mesmo estilo já usado no resto de `handleAdminMetrics` desde
+      o lab-99, que também não tem teste de domínio próprio); nenhum teste novo necessário.
 
 ## Fora de escopo (explicitamente adiado)
 
