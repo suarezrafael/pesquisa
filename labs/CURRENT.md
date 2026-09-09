@@ -1,6 +1,24 @@
 # Laboratório atual
 
-Último concluído: labs/lab-162-amigos-status-online/ — terceiro lab do Grupo B do backlog social
+Último concluído: labs/lab-163-perfil-publico-amigo/ — último item do Grupo B do backlog social
+(lab-158, agora completo): `GET /players/:id/public-profile` (avatar equipado + conquistas de um
+amigo, nunca XP/moeda/progresso/família). Sincronizado via piggyback no heartbeat já existente
+(`equippedLook`/`badges` opcionais no corpo de `POST /players/heartbeat`, upsert em duas colunas
+jsonb novas de `player_identities`, migração `0007`) — decisão registrada no `FEATURES.md` antes
+de codar, evita endpoint/intervalo de sync novo. `FriendsPanel.tsx` ganha botão "Ver perfil" por
+amigo aceito, abrindo `PlayerPublicProfileView.tsx` (reaproveita `AvatarPreview3D.tsx` +
+`ACHIEVEMENT_CATALOG`) — **como uma visão embutida no mesmo painel, não um segundo modal
+empilhado**: achado ao implementar a UI, dois `useModalA11y` simultâneos registrariam dois
+listeners de Esc na `window`, e apertar Esc uma vez fecharia os dois painéis juntos. `npx tsc -b`/
+testes limpos (app 136/136, sem teste novo; server-accounts 96/96, 10 novos). `npm run build`
+(app) limpo. **Migração `0007` já aplicada em produção e verificada ao vivo contra o banco real**
+(`wrangler dev` local): dois jogadores de teste, heartbeat com `equippedLook`/`badges` refletido
+no `public-profile` seguinte, heartbeat só com `playerId` confirmado NÃO apaga o snapshot salvo
+(`coalesce`), 400 nos três payloads malformados testados, 404/400 de id inexistente/mal formado, e
+o fluxo social completo (pedido → aceite → `B` vendo o perfil de `A`). Todo dado de teste removido
+do banco ao final. Ver `labs/lab-163-perfil-publico-amigo/CONTEXT.md`.
+
+Antes desse: labs/lab-162-amigos-status-online/ — terceiro lab do Grupo B do backlog social
 (lab-158), conforme sequenciamento do lab-160 (o número "lab-161" original desse plano foi
 consumido pelo lab de home inicial dupla, pedido pontual do usuário — este é o adiado,
 renumerado): heartbeat (`POST /players/heartbeat`, `HEARTBEAT_LIMITER` 120/60s) + status online/

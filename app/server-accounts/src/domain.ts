@@ -354,3 +354,63 @@ export function isOnlineNow(lastSeenAtIso: string, now: number = Date.now()): bo
   if (!Number.isFinite(lastSeenAtMs)) return false
   return now - lastSeenAtMs <= ONLINE_THRESHOLD_MS
 }
+
+// lab-163, último item do Grupo B do backlog social — snapshot do visual equipado
+// (`Profile.equipped*` no client), sincronizado via `POST /players/heartbeat` (piggyback no
+// mecanismo já existente do lab-162, sem endpoint/intervalo novo) e devolvido por
+// `GET /players/:id/public-profile`. Espelha exatamente os 7 eixos de customização do client —
+// nunca `avatarEmoji` (esse já mora em `player_identities.avatar_emoji` desde o lab-159).
+export interface EquippedLook {
+  equippedHatId: string | null
+  equippedShirtColorId: string | null
+  equippedPantsColorId: string | null
+  equippedShoeColorId: string | null
+  equippedBackpackColorId: string | null
+  equippedHairShapeId: string | null
+  equippedGlassesId: string | null
+}
+
+const EQUIPPED_LOOK_KEYS: (keyof EquippedLook)[] = [
+  'equippedHatId',
+  'equippedShirtColorId',
+  'equippedPantsColorId',
+  'equippedShoeColorId',
+  'equippedBackpackColorId',
+  'equippedHairShapeId',
+  'equippedGlassesId',
+]
+
+// Ids de catálogo (hats.ts/customization.ts/glasses.ts) são sempre curtos e kebab-case — este
+// teto é só uma defesa generosa contra payload de heartbeat malformado/abusivo, não uma regra de
+// negócio real (mesmo espírito de `isNicknameAllowed` limitando tamanho antes de checar conteúdo).
+const EQUIPPED_ID_MAX_LENGTH = 60
+
+function isValidEquippedId(value: unknown): value is string | null {
+  return value === null || (typeof value === 'string' && value.length > 0 && value.length <= EQUIPPED_ID_MAX_LENGTH)
+}
+
+// `POST /players/heartbeat` recebe `equippedLook` de input público — mesmo raciocínio do achado
+// do Copilot no PR #35 pro `playerId` (lab-162): nunca confia no formato antes de gravar no banco.
+// Exige EXATAMENTE os 7 eixos conhecidos, nem a mais nem a menos, pra não deixar o client gravar
+// campos arbitrários dentro do jsonb.
+export function isValidEquippedLook(value: unknown): value is EquippedLook {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record)
+  if (keys.length !== EQUIPPED_LOOK_KEYS.length) return false
+  return EQUIPPED_LOOK_KEYS.every((key) => key in record && isValidEquippedId(record[key]))
+}
+
+// `Progress.badges` de hoje tem só 3 ids possíveis (`ACHIEVEMENT_CATALOG`) — os limites abaixo são
+// generosos de propósito (catálogo pode crescer) sem abrir espaço pra um heartbeat malicioso
+// inflar o jsonb guardado por jogador.
+const BADGE_MAX_COUNT = 50
+const BADGE_MAX_LENGTH = 60
+
+export function isValidBadgeList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= BADGE_MAX_COUNT &&
+    value.every((badge) => typeof badge === 'string' && badge.length > 0 && badge.length <= BADGE_MAX_LENGTH)
+  )
+}

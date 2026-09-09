@@ -18,6 +18,8 @@ import {
   isPlausibleSessionDuration,
   isSelfFriendRequest,
   isTokenRevoked,
+  isValidBadgeList,
+  isValidEquippedLook,
   isValidNpsScore,
   isValidProductEventType,
   isValidProgressBackupPayload,
@@ -526,5 +528,64 @@ describe('isOnlineNow (lab-162)', () => {
 
   it('considera offline uma data inválida em vez de lançar erro', () => {
     expect(isOnlineNow('não é uma data', now)).toBe(false)
+  })
+})
+
+const VALID_EQUIPPED_LOOK = {
+  equippedHatId: 'chapeu-pirata',
+  equippedShirtColorId: null,
+  equippedPantsColorId: 'calca-azul',
+  equippedShoeColorId: null,
+  equippedBackpackColorId: null,
+  equippedHairShapeId: 'longo',
+  equippedGlassesId: null,
+}
+
+describe('isValidEquippedLook (lab-163)', () => {
+  it('aceita os 7 eixos conhecidos, cada um string ou null', () => {
+    expect(isValidEquippedLook(VALID_EQUIPPED_LOOK)).toBe(true)
+  })
+
+  it('rejeita quando falta um eixo', () => {
+    const { equippedGlassesId, ...rest } = VALID_EQUIPPED_LOOK
+    expect(isValidEquippedLook(rest)).toBe(false)
+  })
+
+  it('rejeita campo extra desconhecido (não deixa o client gravar chave arbitrária no jsonb)', () => {
+    expect(isValidEquippedLook({ ...VALID_EQUIPPED_LOOK, extra: 'x' })).toBe(false)
+  })
+
+  it('rejeita um eixo com tipo errado', () => {
+    expect(isValidEquippedLook({ ...VALID_EQUIPPED_LOOK, equippedHatId: 42 })).toBe(false)
+  })
+
+  it('rejeita array, string e null no lugar de objeto', () => {
+    expect(isValidEquippedLook([])).toBe(false)
+    expect(isValidEquippedLook('nope')).toBe(false)
+    expect(isValidEquippedLook(null)).toBe(false)
+  })
+})
+
+describe('isValidBadgeList (lab-163)', () => {
+  it('aceita uma lista de strings não vazias', () => {
+    expect(isValidBadgeList(['Primeira Missão', 'Metade do Caminho'])).toBe(true)
+  })
+
+  it('aceita lista vazia (jogador sem conquista ainda)', () => {
+    expect(isValidBadgeList([])).toBe(true)
+  })
+
+  it('rejeita item vazio ou não-string na lista', () => {
+    expect(isValidBadgeList(['ok', ''])).toBe(false)
+    expect(isValidBadgeList(['ok', 42])).toBe(false)
+  })
+
+  it('rejeita lista com mais de 50 itens (defesa contra payload abusivo)', () => {
+    expect(isValidBadgeList(Array.from({ length: 51 }, (_, i) => `b${i}`))).toBe(false)
+  })
+
+  it('rejeita algo que não é array', () => {
+    expect(isValidBadgeList('não é lista')).toBe(false)
+    expect(isValidBadgeList(null)).toBe(false)
   })
 })
