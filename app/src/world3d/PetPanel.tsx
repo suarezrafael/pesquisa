@@ -5,7 +5,7 @@
 // espírito de qualquer outro catálogo comprável com moeda, só com um eixo de "equipar" a mais
 // (só UM pet segue o jogador pelo mundo por vez, mesmo padrão de chapéu/óculos).
 import { PET_CATALOG } from '../data/pets'
-import { petStageFor } from '../state/progression'
+import { petAgeYears, petLifecycleStage, petStageFor } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Progress } from '../types'
 
@@ -21,6 +21,9 @@ const STAGE_LABEL: Record<string, string> = {
   filhote: '🍼 Filhote',
   jovem: '🌱 Jovem',
   adulto: '⭐ Adulto',
+  // lab-169 — ciclo de vida (1 dia real = 1 "ano" de convivência). Nunca substitui/remove o pet:
+  // é só um selo de carinho por tempo de companhia, ver `petLifecycleStage` (`progression.ts`).
+  idoso: '🧓 Idoso',
 }
 
 // Comparação de calendário LOCAL, só pra decidir se mostra o botão "Alimentar" já desabilitado —
@@ -41,6 +44,9 @@ function fedToday(lastPetFeedAt: string | null): boolean {
 export function PetPanel({ progress, onAdopt, onEquip, onFeed, onClose }: PetPanelProps) {
   const modalRef = useModalA11y(onClose)
   const alreadyFedToday = fedToday(progress.lastPetFeedAt)
+  // lab-169 — um só "agora" pra todo o painel (a idade muda no máximo 1x por dia real, não
+  // precisa recalcular por pet nem se preocupar com o milissegundo exato do render).
+  const nowIso = new Date().toISOString()
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Pets" ref={modalRef} tabIndex={-1}>
@@ -51,7 +57,8 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onClose }: PetPan
         <h2>🐾 Pets</h2>
         <p className="subtitle">
           Adote um companheiro com as moedas que você já ganhou nas missões. Alimente uma vez por
-          dia pra ele crescer — filhote, depois jovem, depois adulto.
+          dia pra ele crescer — filhote, depois jovem, depois adulto. Com o tempo de convivência,
+          ele também fica um adulto idoso — mas continua com você pra sempre.
         </p>
 
         <div className="avatar-shop-grid">
@@ -59,7 +66,9 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onClose }: PetPan
             const owned = progress.unlockedPetIds.includes(pet.id)
             const equipped = progress.equippedPetId === pet.id
             const affordable = progress.coins >= pet.cost
-            const stage = petStageFor(progress.petCareCounts[pet.id] ?? 0)
+            const careStage = petStageFor(progress.petCareCounts[pet.id] ?? 0)
+            const ageYears = petAgeYears(progress, pet.id, nowIso)
+            const stage = petLifecycleStage(careStage, ageYears)
 
             return (
               <div key={pet.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''}`}>
@@ -67,6 +76,11 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onClose }: PetPan
                 <span className="avatar-shop-name">{pet.name}</span>
 
                 {owned && <span className="avatar-shop-tag">{STAGE_LABEL[stage]}</span>}
+                {owned && (
+                  <span className="avatar-shop-tag">
+                    {ageYears === 0 ? 'Recém-adotado' : ageYears === 1 ? '1 ano de convivência' : `${ageYears} anos de convivência`}
+                  </span>
+                )}
 
                 {equipped ? (
                   <>

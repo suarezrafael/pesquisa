@@ -75,7 +75,15 @@ import {
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
 import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
-import { furnitureQuantity, getLevel, isQuestUnlocked, petStageFor, petStageScale } from '../state/progression'
+import {
+  furnitureQuantity,
+  getLevel,
+  isQuestUnlocked,
+  petAgeYears,
+  petLifecycleStage,
+  petStageFor,
+  petStageScale,
+} from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
 import { trackFirstControl } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
@@ -8077,9 +8085,20 @@ export function World3D({
         if (!equippedId) return
         const pet = findPetById(equippedId)
         if (!pet) return
-        const stage = petStageFor(progressRef.current.petCareCounts[equippedId] ?? 0)
+        // lab-169 (ciclo de vida: "incrementando os anos por dias", morte descartada
+        // explicitamente pelo usuário via `AskUserQuestion` — "envelhece mas nunca morre de
+        // verdade") — o estágio mostrado combina os dois eixos independentes de
+        // `progression.ts`: `careStage` (cuidado real, alimentação) decide filhote/jovem/adulto
+        // como sempre decidiu; `petLifecycleStage` só ACRESCENTA "idoso" por cima quando o pet já
+        // é adulto E já convive há tempo o bastante, sem nunca remover/matar o pet.
+        const careStage = petStageFor(progressRef.current.petCareCounts[equippedId] ?? 0)
+        const ageYears = petAgeYears(progressRef.current, equippedId, new Date().toISOString())
+        const stage = petLifecycleStage(careStage, ageYears)
         const scale = petStageScale(stage)
-        const furColor = new Color3(...pet.furColorRgb)
+        const baseFurColor = new Color3(...pet.furColorRgb)
+        // Único sinal visual de "idoso" — pelo mais grisalho, mesmo corpo/tamanho de um adulto
+        // (`petStageScale`) — nunca some, nunca fica doente, nunca reduz.
+        const furColor = stage === 'idoso' ? Color3.Lerp(baseFurColor, new Color3(0.8, 0.8, 0.8), 0.45) : baseFurColor
         const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
         root.scaling.setAll(scale)
         root.position.copyFrom(avatarMesh.position)

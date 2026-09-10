@@ -28,11 +28,20 @@ import {
   equipPet as applyEquipPet,
   feedPet as applyFeedPet,
   type FeedPetResult,
+  backfillPetAdoptedAt,
   syncWeeklyXpSnapshot as applySyncWeeklyXpSnapshot,
 } from './progression'
 
 export function useProgress() {
-  const [progress, setProgress] = useState<Progress>(() => loadProgress())
+  // lab-169 — perfis com pet adotado antes do ciclo de vida existir não têm `petAdoptedAt`;
+  // preenche uma vez ao carregar (começando a contar idade a partir de HOJE) e já salva se algo
+  // mudou, mesmo padrão de auto-cura de `migrateLegacyProfileIfNeeded` (`storage.ts`).
+  const [progress, setProgress] = useState<Progress>(() => {
+    const loaded = loadProgress()
+    const migrated = backfillPetAdoptedAt(loaded, new Date().toISOString())
+    if (migrated !== loaded) saveProgress(migrated)
+    return migrated
+  })
 
   // lab-126: `entitlementActive` aplica o bônus de moeda de assinante (`progression.ts`) — default
   // `false` preserva o comportamento de quem chama sem saber/se importar com entitlement.
@@ -231,7 +240,7 @@ export function useProgress() {
   // Pets adotáveis (lab-155) — mesmo formato do `unlockFurniture`/`unlockGlasses` acima.
   function adoptPet(id: string): void {
     setProgress((prev) => {
-      const next = applyAdoptPet(prev, id)
+      const next = applyAdoptPet(prev, id, new Date().toISOString())
       saveProgress(next)
       return next
     })

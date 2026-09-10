@@ -173,6 +173,8 @@ export const emptyProgress: Progress = {
   equippedPetId: null,
   petCareCounts: {},
   lastPetFeedAt: null,
+  // Ciclo de vida (lab-169) — ver comentário em `types.ts`.
+  petAdoptedAt: {},
   // Ranking local entre perfis (lab-157) — ver comentário em `types.ts`.
   weeklyXpWeekKey: null,
   weeklyXpSnapshot: 0,
