@@ -7975,6 +7975,13 @@ export function World3D({
       const petForwardSeed = Math.abs(petUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
       let petForward = Vector3.Cross(petUp, petForwardSeed).normalize()
       let petHopPhase = Math.random() * Math.PI * 2
+      // lab-168 (achado do review automático do Copilot): `tmpQuat.clone()` no loop do pet
+      // alocava um Quaternion NOVO a cada quadro (60x/s enquanto visível) — mesma classe do
+      // achado do lab-155 pra `Vector3.Lerp`. Um quaternion persistente + `FromRotationMatrixToRef`
+      // escrevendo direto nele evita a alocação; a mesma instância fica atribuída a
+      // `rotationQuaternion` desde a criação do pet (`rebuildPet`), então não precisa reatribuir
+      // a propriedade a cada quadro.
+      const petQuat = new Quaternion()
       function rebuildPet() {
         petRoot?.dispose()
         petRoot = null
@@ -7989,6 +7996,7 @@ export function World3D({
         const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
         root.scaling.setAll(scale)
         root.position.copyFrom(avatarMesh.position)
+        root.rotationQuaternion = petQuat
         petRoot = root
       }
       rebuildPet()
@@ -8661,8 +8669,7 @@ export function World3D({
 
               const petRight = Vector3.Cross(petUp, petFwd).normalize()
               Matrix.FromXYZAxesToRef(petRight, petUp, petFwd, tmpMatrix)
-              Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-              petRoot.rotationQuaternion = tmpQuat.clone()
+              Quaternion.FromRotationMatrixToRef(tmpMatrix, petQuat)
             }
           }
 

@@ -47,7 +47,11 @@ coelhos e devem acompanhar pelo lado ao se mover"), 3 bugs + 1 mudança de compo
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova.
+Nenhuma nova. PR #42 teve 1 achado real do Copilot corrigido antes do merge: `tmpQuat.clone()` no
+loop do pet alocava um `Quaternion` novo a cada quadro (60x/s enquanto visível) — mesma classe do
+achado do lab-155 pra `Vector3.Lerp`. Trocado por um `Quaternion` persistente (`petQuat`) escrito
+direto via `FromRotationMatrixToRef`, atribuído a `rotationQuaternion` uma única vez (na criação
+do pet, `rebuildPet`), sem realocar nem reatribuir a cada quadro.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
