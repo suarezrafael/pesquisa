@@ -3239,8 +3239,15 @@ export function World3D({
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, coopSurfacePos) < COOP_CHALLENGE_TRIGGER_DISTANCE) {
           const partnerId = nearestRemotePlayerWithin(avatarMesh.position, COOP_PARTNER_NEARBY_DISTANCE)
           if (partnerId) {
+            // lab-172 (achado do review automático do Copilot): sem limpar o estado da
+            // tentativa ANTERIOR com este mesmo parceiro (confirmação já recebida antes,
+            // recompensa já concedida antes), uma tentativa NOVA podia completar sozinha
+            // (reaproveitando uma confirmação velha) ou nunca mais completar (bloqueada por já
+            // ter recompensado antes) — cada tentativa começa do zero.
             coopPartnerId = partnerId
             coopMyAnswerCorrectAt = null
+            coopPartnerDoneAt.delete(partnerId)
+            if (coopRewardedForPartner === partnerId) coopRewardedForPartner = null
             const incomplete = quests.filter((q) => !progressRef.current.completedQuestIds.includes(q.id))
             const pool = incomplete.length > 0 ? incomplete : quests
             const quest = pool[Math.floor(Math.random() * pool.length)]
@@ -8855,7 +8862,11 @@ export function World3D({
         if (coopRewardedForPartner === coopPartnerId) return
         const partnerDoneAt = coopPartnerDoneAt.get(coopPartnerId)
         if (partnerDoneAt === undefined) return
-        if (Math.abs(Date.now() - partnerDoneAt) > COOP_COMPLETION_WINDOW_MS) return
+        // lab-172 (achado do review automático do Copilot): a janela precisa comparar os DOIS
+        // eventos relevantes (quando EU acertei vs. quando o PARCEIRO confirmou) — comparar
+        // contra `Date.now()` (o instante da CHECAGEM, não de nenhum dos dois eventos) aceitava/
+        // rejeitava errado se a checagem em si acontecesse com atraso.
+        if (Math.abs(coopMyAnswerCorrectAt - partnerDoneAt) > COOP_COMPLETION_WINDOW_MS) return
         coopRewardedForPartner = coopPartnerId
         onCoopChallengeCompletedRef.current()
       }

@@ -169,7 +169,10 @@ export function connect(): void {
     } catch {
       return
     }
-    if (msg.type === 'welcome') selfId = msg.id
+    // lab-172 (achado do review automático do Copilot): nunca confia em tipo vindo da rede sem
+    // checar — um `welcome` malformado (ou de um relay adulterado) deixaria `selfId` diferente de
+    // `string | null`, quebrando a comparação em `getSelfId()`/`coop-done`.
+    if (msg.type === 'welcome' && typeof msg.id === 'string') selfId = msg.id
     else if (msg.type === 'state') stateHandlers.forEach((h) => h(msg as RemoteState))
     else if (msg.type === 'attack') attackHandlers.forEach((h) => h(msg as AttackEvent))
     else if (msg.type === 'coop-done') coopDoneHandlers.forEach((h) => h(msg as CoopDoneEvent))

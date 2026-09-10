@@ -62,7 +62,18 @@ confirmados, que exigiria trabalho novo de identidade).
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova.
+Nenhuma nova. PR #46 teve 3 achados reais do Copilot corrigidos antes do merge:
+- **Janela de conclusão comparava contra `Date.now()` (o instante da CHECAGEM), não os dois
+  eventos relevantes** (quando eu acertei vs. quando o parceiro confirmou) — `coopMyAnswerCorrectAt`
+  ficava sem uso na validação. Corrigido pra comparar `coopMyAnswerCorrectAt` contra
+  `partnerDoneAt` diretamente.
+- **Estado de tentativa anterior (`coopRewardedForPartner`/`coopPartnerDoneAt`) não era limpo ao
+  abrir um desafio NOVO com o mesmo parceiro** — podia bloquear pra sempre uma tentativa
+  legítima seguinte (já tinha recompensado antes) ou completar sozinha reaproveitando uma
+  confirmação velha (sem o parceiro confirmar de novo). Corrigido limpando os dois ao abrir cada
+  tentativa nova.
+- **`selfId = msg.id` sem checar tipo** (`multiplayer.ts`) — um `welcome` malformado vindo da rede
+  quebraria a suposição de `string | null`. Corrigido com `typeof msg.id === 'string'`.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
