@@ -17,6 +17,7 @@ import {
   unlockGlasses as applyGlassesUnlock,
   unlockFurniture as applyFurnitureUnlock,
   setFurniturePlacement as applySetFurniturePlacement,
+  removeFurniture as applyRemoveFurniture,
   unlockMarsReward as applyMarsRewardUnlock,
   applyTreasureChestFound,
   applyStreakReset,
@@ -184,6 +185,16 @@ export function useProgress() {
     })
   }
 
+  // Excluir mobília (lab-170, pedido do usuário: "tem que ter como excluir objetos da casa
+  // tbm") — mesmo formato de `unlockFurniture`/`setFurniturePlacement` acima.
+  function removeFurniture(key: string): void {
+    setProgress((prev) => {
+      const next = applyRemoveFurniture(prev, key)
+      saveProgress(next)
+      return next
+    })
+  }
+
   // Brinde de Marte (lab-94) — diferente dos outros `unlockXxx`, devolve se realmente concedeu
   // algo novo (o chamador em `App.tsx` usa isso pra decidir se mostra o aviso de novo item).
   function unlockMarsReward(): boolean {
@@ -310,6 +321,7 @@ export function useProgress() {
     unlockGlasses,
     unlockFurniture,
     setFurniturePlacement,
+    removeFurniture,
     unlockMarsReward,
     foundTreasureChest,
     resetStreak,
