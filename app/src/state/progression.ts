@@ -658,11 +658,19 @@ export function petStageScale(stage: PetStage): number {
 // (`petAdoptedAt`) — reaproveita o mesmo `utcDayNumber` (dia UTC) já usado por `feedPet`/
 // `applyDailyLoginReward`, mesmo raciocínio de "dia" do resto do jogo. Pet sem `petAdoptedAt`
 // registrado (não deveria acontecer depois de `backfillPetAdoptedAt` rodar no carregamento, mas
-// defensivo aqui também) conta como recém-adotado (idade 0), nunca erro/`NaN`.
+// defensivo aqui também) conta como recém-adotado (idade 0), nunca erro/`NaN`. lab-169 (achado do
+// review automático do Copilot): uma data corrompida/ISO inválida faz `utcDayNumber` devolver
+// `NaN` (não lança erro) — sem o `Number.isFinite` abaixo, esse `NaN` vazaria pra escala/estágio
+// visual do pet; mesmo cuidado que `applyDailyLoginReward`/`feedPet` já têm com relógio
+// corrompido, só que ali um `NaN` em `dayGap` já falha a comparação `>= 1` sozinho — aqui não há
+// comparação parecida, por isso a checagem explícita.
 export function petAgeYears(progress: Progress, petId: string, nowIso: string): number {
   const adoptedAtIso = progress.petAdoptedAt[petId]
   if (!adoptedAtIso) return 0
-  return Math.max(0, utcDayNumber(nowIso) - utcDayNumber(adoptedAtIso))
+  const nowDay = utcDayNumber(nowIso)
+  const adoptedAtDay = utcDayNumber(adoptedAtIso)
+  if (!Number.isFinite(nowDay) || !Number.isFinite(adoptedAtDay)) return 0
+  return Math.max(0, nowDay - adoptedAtDay)
 }
 
 // Idade em que um pet JÁ ADULTO (por cuidado real, `petStageFor`) passa a ser mostrado como

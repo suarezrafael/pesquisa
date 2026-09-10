@@ -57,7 +57,7 @@ verdade"). O usuário escolheu a terceira, a mais segura das três.
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova. PR #43 teve 2 achados reais do Copilot corrigidos antes do merge:
+Nenhuma nova. PR #43 teve 4 achados reais do Copilot corrigidos antes do merge, em 3 rodadas:
 - **`saveProgress` dentro do inicializador do `useState`** (`useProgress.ts`) — side effect em
   fase de render; `StrictMode` roda o inicializador 2x em dev, arriscando escrita duplicada/
   imprevisível. Movido pra um `useEffect` (array de dependência vazio, roda uma vez de verdade).
@@ -67,6 +67,14 @@ Nenhuma nova. PR #43 teve 2 achados reais do Copilot corrigidos antes do merge:
   atingir 30+ anos sem nunca ficar grisalho até outro evento forçar refresh. Adicionado
   `petAgingInterval` (`setInterval` de 1h, mesmo padrão de `refreshRanking` sobrevivendo em
   segundo plano) chamando `rebuildPet` periodicamente.
+- **`petAgeYears` podia devolver `NaN`** com uma data de adoção corrompida/ISO inválida
+  (`utcDayNumber` devolve `NaN` sem lançar erro) — o comentário original já dizia "nunca NaN", mas
+  faltava a checagem de verdade; adicionado `Number.isFinite` nos dois dias antes de subtrair,
+  mesmo cuidado que `applyDailyLoginReward`/`feedPet` já têm com relógio corrompido.
+- **`petAgingInterval` sem checar `disposed`** — um disparo já enfileirado bem na hora do
+  desmonte do componente rodaria `rebuildPet` DEPOIS de `scene.dispose()`/`engine.dispose()`;
+  callback agora checa `disposed` antes de chamar `rebuildPet`, mesmo padrão já usado logo após
+  o `await HavokPhysics()`.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

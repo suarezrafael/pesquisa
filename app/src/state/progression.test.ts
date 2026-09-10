@@ -922,6 +922,11 @@ describe('petAgeYears/petLifecycleStage/backfillPetAdoptedAt (lab-169, ciclo de 
     expect(petAgeYears(emptyProgress, 'pet-sem-data', '2026-09-08T12:00:00.000Z')).toBe(0)
   })
 
+  it('petAgeYears devolve 0 (nunca NaN) com uma data de adoção corrompida/ISO inválida', () => {
+    const progress = { ...emptyProgress, petAdoptedAt: { [petId]: 'nao-e-uma-data' } }
+    expect(petAgeYears(progress, petId, '2026-09-08T12:00:00.000Z')).toBe(0)
+  })
+
   it('petLifecycleStage só promove pra "idoso" quem já é adulto E tem 30+ anos', () => {
     expect(petLifecycleStage('filhote', 999)).toBe('filhote')
     expect(petLifecycleStage('jovem', 999)).toBe('jovem')

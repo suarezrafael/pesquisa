@@ -8118,7 +8118,14 @@ export function World3D({
       // continua rodando em segundo plano (mesmo raciocínio de `refreshRanking` acima) — barato
       // o bastante (reconstrói só um pet) pra não precisar de lógica condicional de "mudou
       // mesmo", só reconstrói de novo.
-      petAgingInterval = window.setInterval(rebuildPet, 60 * 60 * 1000)
+      // lab-169 (achado do review automático do Copilot): sem a checagem de `disposed`, um
+      // disparo do intervalo já enfileirado bem na hora do cleanup rodaria DEPOIS de
+      // `scene.dispose()`/`engine.dispose()` (mesmo cuidado que `if (disposed) return` já tem
+      // logo após o `await HavokPhysics()` acima) — tentaria criar/descartar malha numa cena já
+      // destruída.
+      petAgingInterval = window.setInterval(() => {
+        if (!disposed) rebuildPet()
+      }, 60 * 60 * 1000)
 
       // Piscina com gente (pedido do usuário: "picina com gente nela") — separada da lagoa
       // (theta bem distante: lagoa fica em 2.6, rio em 0.15-1.35). Reaproveita o mesmo boneco
