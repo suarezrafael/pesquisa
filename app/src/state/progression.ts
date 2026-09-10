@@ -76,6 +76,8 @@ export function weeklyXpEarned(progress: Progress, nowIso: string): number {
 export const BADGE_FIRST_QUEST = 'Primeira Missão'
 export const BADGE_HALFWAY = 'Metade do Caminho'
 export const BADGE_ALL_DONE = 'Mestre das Missões'
+// lab-172 — ver `applyCoopChallengeCompleted` abaixo.
+export const BADGE_COOP_FIRST = 'Dupla Dinâmica'
 
 export function badgesEarnedAt(completedCount: number): string[] {
   const earned: string[] = []
@@ -172,8 +174,13 @@ export function applyQuestCompletion(
     quest.coinReward * event.coinMultiplier * (entitlementActive ? SUBSCRIBER_COIN_MULTIPLIER : 1),
   )
   const completedQuestIds = [...progress.completedQuestIds, quest.id]
-  const badges = badgesEarnedAt(completedQuestIds.length)
-  const newBadges = badges.filter((b) => !progress.badges.includes(b))
+  const questBadges = badgesEarnedAt(completedQuestIds.length)
+  const newBadges = questBadges.filter((b) => !progress.badges.includes(b))
+  // lab-172 (achado ao adicionar o emblema do desafio cooperativo): `badgesEarnedAt` só conhece os
+  // 3 emblemas de missão — atribuir o resultado dela direto a `progress.badges` SUBSTITUIRIA
+  // qualquer emblema de outra origem (ex.: "Dupla Dinâmica") na próxima missão concluída. União,
+  // nunca substituição — nenhum emblema já ganho se perde por completar mais uma missão.
+  const badges = Array.from(new Set([...progress.badges, ...questBadges]))
   const currentStreak = progress.currentStreak + 1
   const streakBonusCoins = streakBonusFor(currentStreak)
   const next: Progress = {
@@ -779,5 +786,44 @@ export function feedPet(progress: Progress, nowIso: string): FeedPetResult {
     },
     fed: true,
     newStage: newStage !== prevStage ? newStage : undefined,
+  }
+}
+
+export interface CoopChallengeResult {
+  progress: Progress
+  rewarded: boolean
+  coins: number
+  newBadge: boolean
+}
+
+// Recompensa modesta ("recompensa coletiva grátis", docs/market-metrics-engagement-backlog.md
+// item 7 da ordem sugerida) — mesma ordem de grandeza do menor dia do ciclo de login diário (5
+// moedas), nunca a maior recompensa do jogo (não é o objetivo principal, é um empurrão extra pra
+// cooperar).
+const COOP_CHALLENGE_COINS = 10
+
+// lab-172 (desafio cooperativo fechado) — uma vez por dia real por PERFIL (mesmo espírito
+// anti-farm de `feedPet`/`applyDailyLoginReward`): cada participante da dupla grava o próprio
+// `lastCoopChallengeAt` e ganha sua própria recompensa — não é um estado compartilhado entre os
+// dois jogadores (o "compartilhado" é só terem resolvido juntos, não o registro de progresso).
+// `newBadge` só na primeira vez de todas (`BADGE_COOP_FIRST`), reaproveitando `progress.badges`
+// como qualquer outra conquista.
+export function applyCoopChallengeCompleted(progress: Progress, nowIso: string): CoopChallengeResult {
+  const dayGap =
+    progress.lastCoopChallengeAt === null ? Infinity : utcDayNumber(nowIso) - utcDayNumber(progress.lastCoopChallengeAt)
+  if (!(dayGap >= 1)) return { progress, rewarded: false, coins: 0, newBadge: false }
+
+  const newBadge = !progress.badges.includes(BADGE_COOP_FIRST)
+  const badges = newBadge ? [...progress.badges, BADGE_COOP_FIRST] : progress.badges
+  return {
+    progress: {
+      ...progress,
+      coins: progress.coins + COOP_CHALLENGE_COINS,
+      badges,
+      lastCoopChallengeAt: nowIso,
+    },
+    rewarded: true,
+    coins: COOP_CHALLENGE_COINS,
+    newBadge,
   }
 }

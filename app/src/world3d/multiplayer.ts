@@ -46,6 +46,15 @@ export interface AttackEvent {
   toPos: [number, number, number]
 }
 
+// lab-172 (desafio cooperativo fechado) — `partnerId` é o `id` de conexão (ver `RemoteState.id`)
+// de quem o REMETENTE considera seu parceiro no momento; quem recebe checa se `partnerId` bate
+// com o PRÓPRIO id (`getSelfId()`) pra saber se foi escolhido de volta — o "par" só se confirma
+// quando os dois se apontam mutuamente, nunca por um lado só.
+export interface CoopDoneEvent {
+  id: string
+  partnerId: string
+}
+
 // Ranking local (lab-20): entrada derivada do próprio jogador + do `RemoteState` de cada peer
 // conectado, não um tipo transmitido pela rede (é montado localmente em `World3D.tsx`).
 export interface RankingEntry {
@@ -71,6 +80,7 @@ type LeaveHandler = (id: string) => void
 type ChatHandler = (msg: ChatMessage) => void
 type ConnectionHandler = (connected: boolean) => void
 type AttackHandler = (attack: AttackEvent) => void
+type CoopDoneHandler = (event: CoopDoneEvent) => void
 
 const RELAY_PORT = 3001
 
@@ -100,6 +110,11 @@ let leaveHandlers: LeaveHandler[] = []
 let chatHandlers: ChatHandler[] = []
 let connectionHandlers: ConnectionHandler[] = []
 let attackHandlers: AttackHandler[] = []
+let coopDoneHandlers: CoopDoneHandler[] = []
+// lab-172 — o próprio `id` de conexão, atribuído pelo relay na mensagem `welcome` (antes disto,
+// nenhum código do cliente lia essa mensagem — o relay já mandava, só não tinha consumidor).
+// Precisa saber o PRÓPRIO id pra reconhecer quando um `coop-done` alheio aponta de volta pra si.
+let selfId: string | null = null
 
 function relayUrl(): string {
   const configured = import.meta.env.VITE_RELAY_URL as string | undefined
@@ -154,8 +169,10 @@ export function connect(): void {
     } catch {
       return
     }
-    if (msg.type === 'state') stateHandlers.forEach((h) => h(msg as RemoteState))
+    if (msg.type === 'welcome') selfId = msg.id
+    else if (msg.type === 'state') stateHandlers.forEach((h) => h(msg as RemoteState))
     else if (msg.type === 'attack') attackHandlers.forEach((h) => h(msg as AttackEvent))
+    else if (msg.type === 'coop-done') coopDoneHandlers.forEach((h) => h(msg as CoopDoneEvent))
     else if (msg.type === 'chat') {
       // Nunca confia em texto vindo da rede — só repassa se `messageId` bater com uma entrada
       // conhecida do catálogo (o relay já valida isso também, mas checar de novo aqui é
@@ -169,6 +186,7 @@ export function connect(): void {
 
   ws.onclose = () => {
     socket = null
+    selfId = null
     notifyConnection(false)
     scheduleReconnect()
   }
@@ -229,6 +247,19 @@ export function sendChat(name: string, messageId: string): void {
   socket.send(JSON.stringify({ type: 'chat', name: name.slice(0, 40), messageId }))
 }
 
+// lab-172 — avisa que ESTE jogador completou sua parte do desafio em dupla, apontando quem ele
+// considera parceiro no momento (`partnerId`, um `RemoteState.id` visto por perto). Disparado uma
+// vez só, no momento da resposta certa (mesmo espírito avulso de `sendAttack`, não contínuo como
+// `sendState`).
+export function sendCoopDone(partnerId: string): void {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return
+  socket.send(JSON.stringify({ type: 'coop-done', partnerId }))
+}
+
+export function getSelfId(): string | null {
+  return selfId
+}
+
 export function onRemoteState(handler: StateHandler): () => void {
   stateHandlers.push(handler)
   return () => {
@@ -254,6 +285,13 @@ export function onRemoteAttack(handler: AttackHandler): () => void {
   attackHandlers.push(handler)
   return () => {
     attackHandlers = attackHandlers.filter((h) => h !== handler)
+  }
+}
+
+export function onCoopDone(handler: CoopDoneHandler): () => void {
+  coopDoneHandlers.push(handler)
+  return () => {
+    coopDoneHandlers = coopDoneHandlers.filter((h) => h !== handler)
   }
 }
 

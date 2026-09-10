@@ -8,6 +8,7 @@ import { RewardToast } from './components/RewardToast'
 import { MarsRewardToast } from './components/MarsRewardToast'
 import { PairingScreen } from './components/PairingScreen'
 import { DailyLoginToast } from './components/DailyLoginToast'
+import { CoopChallengeToast } from './components/CoopChallengeToast'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
 import { MyHousePanel } from './world3d/MyHousePanel'
@@ -112,11 +113,19 @@ function GameApp() {
     adoptPet,
     equipPet,
     feedPet,
+    coopChallengeCompleted,
     syncWeeklyXp,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [activePlanetQuest, setActivePlanetQuest] = useState<Quest | null>(null)
+  // Desafio em dupla (lab-172) — `activeCoopQuest` abre o `QuestModal`; `coopAnswerSignalId`
+  // avisa `World3D.tsx` (mesma ponte de `pendingPlacementId`/`onPlacingRequestHandled` abaixo)
+  // que a resposta certa aconteceu, pra mandar `sendCoopDone` pelo relé; `coopReward` só é
+  // populado depois que `World3D.tsx` confirma que o PARCEIRO também respondeu certo.
+  const [activeCoopQuest, setActiveCoopQuest] = useState<Quest | null>(null)
+  const [coopAnswerSignalId, setCoopAnswerSignalId] = useState<string | null>(null)
+  const [coopReward, setCoopReward] = useState<{ coins: number; newBadge: boolean } | null>(null)
   const [reward, setReward] = useState<{
     quest: Quest
     newBadges: string[]
@@ -324,6 +333,33 @@ function GameApp() {
     setActivePlanetQuest(null)
   }
 
+  // Desafio em dupla (lab-172) — DIFERENTE das outras missões: acertar aqui nunca credita XP/moeda
+  // na hora (a pergunta em si não é nova, `completedQuestIds`/badges de missão normal não mudam
+  // por respondê-la de novo aqui) — só fecha o modal e avisa `World3D.tsx` (`coopAnswerSignalId`)
+  // que ESTE jogador terminou, pra ele mandar `sendCoopDone` pelo relé. A recompensa de verdade só
+  // vem depois, em `handleCoopChallengeCompleted`, quando o PARCEIRO também confirmar.
+  function handleCoopQuestCorrect() {
+    setActiveCoopQuest(null)
+    setCoopAnswerSignalId(crypto.randomUUID())
+  }
+
+  function handleCoopAnswerHandled() {
+    setCoopAnswerSignalId(null)
+  }
+
+  function handleCloseCoopQuest() {
+    setActiveCoopQuest(null)
+  }
+
+  // Chamado por `World3D.tsx` só depois que os DOIS participantes já confirmaram pelo relé —
+  // `coopChallengeCompleted` (`useProgress.ts`) já aplica o próprio limite de uma vez por dia real
+  // (`rewarded: false` se este perfil já ganhou hoje); nesse caso não mostra nada, silenciosamente
+  // (o jogador já resolveu o desafio de verdade com o parceiro, só não ganha moeda de novo hoje).
+  function handleCoopChallengeCompleted() {
+    const result = coopChallengeCompleted(new Date().toISOString())
+    if (result.rewarded) setCoopReward({ coins: result.coins, newBadge: result.newBadge })
+  }
+
   // Brinde de Marte (lab-94) — `unlockMarsReward()` já é idempotente (não faz nada se o jogador já
   // tiver o item); o aviso só aparece quando realmente concedeu algo novo, não a cada visita em
   // que o planeta é limpado de novo.
@@ -376,6 +412,10 @@ function GameApp() {
           placingFurnitureRequestId={pendingPlacementId}
           onPlacingRequestHandled={() => setPendingPlacementId(null)}
           onFurniturePlaced={setFurniturePlacement}
+          onOpenCoopChallenge={setActiveCoopQuest}
+          coopAnswerSignalId={coopAnswerSignalId}
+          onCoopAnswerHandled={handleCoopAnswerHandled}
+          onCoopChallengeCompleted={handleCoopChallengeCompleted}
           onSwitchProfile={() => {
             clearActiveProfile()
             window.location.reload()
@@ -384,7 +424,9 @@ function GameApp() {
             activeQuest !== null ||
             activeSurpriseQuiz !== null ||
             activePlanetQuest !== null ||
+            activeCoopQuest !== null ||
             reward !== null ||
+            coopReward !== null ||
             showHelp ||
             showQuestList ||
             showShop ||
@@ -415,6 +457,18 @@ function GameApp() {
           quest={activePlanetQuest}
           onCorrect={handleCompletePlanetQuest}
           onClose={handleClosePlanetQuest}
+        />
+      )}
+
+      {activeCoopQuest && (
+        <QuestModal quest={activeCoopQuest} onCorrect={handleCoopQuestCorrect} onClose={handleCloseCoopQuest} />
+      )}
+
+      {coopReward && (
+        <CoopChallengeToast
+          coins={coopReward.coins}
+          newBadge={coopReward.newBadge}
+          onContinue={() => setCoopReward(null)}
         />
       )}
 

@@ -4,8 +4,10 @@ import {
   RECONNECT_MAX_ATTEMPTS,
   RECONNECT_MAX_DELAY_MS,
   computeReconnectDelayMs,
+  getSelfId,
   sendAttack,
   sendChat,
+  sendCoopDone,
   sendState,
   shouldGiveUpReconnecting,
 } from './multiplayer'
@@ -82,5 +84,15 @@ describe('envio de rede sem conexão (modo solo)', () => {
   it('sendAttack e sendChat também não lançam sem conexão', () => {
     expect(() => sendAttack('sword', 'et', [0, 0, 0], [1, 0, 0])).not.toThrow()
     expect(() => sendChat('Nome', 'oi')).not.toThrow()
+  })
+
+  // lab-172 (desafio cooperativo) — mesmo cuidado das outras funções de envio: sem conexão, o
+  // jogo solo não pode quebrar.
+  it('sendCoopDone não lança sem conexão', () => {
+    expect(() => sendCoopDone('abc12345')).not.toThrow()
+  })
+
+  it('getSelfId é null antes de qualquer `welcome` recebido do relay (nunca conectou)', () => {
+    expect(getSelfId()).toBeNull()
   })
 })

@@ -121,17 +121,21 @@ import {
 import {
   connect as connectMultiplayer,
   disconnect as disconnectMultiplayer,
+  getSelfId,
   isConnected as isMultiplayerConnected,
   onChat,
   onConnectionChange,
+  onCoopDone,
   onRemoteAttack,
   onRemoteLeave,
   onRemoteState,
   sendAttack,
   sendChat,
+  sendCoopDone,
   sendState,
   type AttackEvent,
   type ChatMessage,
+  type CoopDoneEvent,
   type RankingEntry,
   type RemoteState,
 } from './multiplayer'
@@ -183,6 +187,19 @@ interface World3DProps {
   placingFurnitureRequestId: string | null
   onPlacingRequestHandled: () => void
   onFurniturePlaced: (id: string, x: number, z: number, rotY: number) => void
+  // lab-172 (desafio cooperativo fechado, docs/market-metrics-engagement-backlog.md item 7 da
+  // ordem sugerida) — `onOpenCoopChallenge` abre o `QuestModal` (vive em `App.tsx`) com a missão
+  // sorteada pra este jogador. `coopAnswerSignalId` é o mesmo tipo de ponte de
+  // `placingFurnitureRequestId`/`onPlacingRequestHandled` abaixo: `App.tsx` muda o id (nunca
+  // `null` de novo pro mesmo evento) quando o `QuestModal` do desafio chama `onCorrect` — só
+  // então este componente sabe que a resposta certa aconteceu (o clique em si acontece fora
+  // deste componente) e manda `sendCoopDone` pelo relé. `onCoopChallengeCompleted` só é chamado
+  // depois que ESTE jogador respondeu certo E o parceiro também confirmou pelo relé — nunca por
+  // acertar sozinho.
+  onOpenCoopChallenge: (quest: Quest) => void
+  coopAnswerSignalId: string | null
+  onCoopAnswerHandled: () => void
+  onCoopChallengeCompleted: () => void
 }
 
 const PLANET_RADIUS = 13
@@ -1972,6 +1989,10 @@ export function World3D({
   placingFurnitureRequestId,
   onPlacingRequestHandled,
   onFurniturePlaced,
+  onOpenCoopChallenge,
+  coopAnswerSignalId,
+  onCoopAnswerHandled,
+  onCoopChallengeCompleted,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
@@ -2014,6 +2035,8 @@ export function World3D({
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
   const onFurniturePlacedRef = useRef(onFurniturePlaced)
+  const onOpenCoopChallengeRef = useRef(onOpenCoopChallenge)
+  const onCoopChallengeCompletedRef = useRef(onCoopChallengeCompleted)
   // lab-136: espelha o item sendo posicionado pra fora do loop de física (Confirmar/Cancelar são
   // botões React normais, não Babylon GUI — mesmo raciocínio de `survivalPlanetId`/
   // `survivalTimeRef` acima: o closure do loop precisa de um valor ATUAL a cada quadro (por isso
@@ -2125,6 +2148,8 @@ export function World3D({
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
   onFurniturePlacedRef.current = onFurniturePlaced
+  onOpenCoopChallengeRef.current = onOpenCoopChallenge
+  onCoopChallengeCompletedRef.current = onCoopChallengeCompleted
 
   // lab-136: entra no modo de posicionamento de mobília sempre que `App.tsx` pede um id novo
   // (clique em "Mover" no `MyHousePanel`, que fica fora deste componente) — mesmo padrão de
@@ -2136,6 +2161,16 @@ export function World3D({
     ;(sceneRef.current as any)?.__startFurniturePlacement?.(placingFurnitureRequestId)
     onPlacingRequestHandled()
   }, [placingFurnitureRequestId, onPlacingRequestHandled])
+
+  // lab-172 — mesma ponte de `placingFurnitureRequestId` acima: `App.tsx` muda
+  // `coopAnswerSignalId` quando o `QuestModal` do desafio em dupla chama `onCorrect` (o clique
+  // acontece fora deste componente); só então este código sabe que a resposta certa aconteceu e
+  // manda `sendCoopDone` pelo relé (dentro de `__onCoopAnswerCorrect`, ver `setup()`).
+  useEffect(() => {
+    if (!coopAnswerSignalId) return
+    ;(sceneRef.current as any)?.__onCoopAnswerCorrect?.()
+    onCoopAnswerHandled()
+  }, [coopAnswerSignalId, onCoopAnswerHandled])
 
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()
@@ -2525,6 +2560,18 @@ export function World3D({
     // tecla `E` (`handleInteractPress`) — por isso pode travar o loop de física inteiro (mesma
     // categoria de `drivingCar`/`drivingRocket`) sem impedir o jogador de "sair" depois.
     let restingInBedKey: string | null = null
+    // lab-172 (desafio cooperativo fechado) — `coopPartnerId` é o `id` de conexão do outro
+    // jogador que estava mais perto quando ESTE jogador abriu o desafio (`handleInteractPress`);
+    // `coopMyAnswerCorrectAt` (`Date.now()`, não `performance.now()` — precisa ser comparável
+    // entre os DOIS aparelhos, que têm relógios de página próprios) marca quando este jogador
+    // respondeu certo; `coopPartnerDoneAt` guarda, por `id` de quem mandou, quando um `coop-done`
+    // QUE APONTA PRA MIM (`partnerId === getSelfId()`) chegou — cobre tanto "meu parceiro já
+    // respondeu antes de mim" quanto "depois". `coopRewardedForPartner` evita conceder a
+    // recompensa duas vezes pro mesmo par (ex.: a mensagem de confirmação chegando de novo).
+    let coopPartnerId: string | null = null
+    let coopMyAnswerCorrectAt: number | null = null
+    const coopPartnerDoneAt = new Map<string, number>()
+    let coopRewardedForPartner: string | null = null
     // Brinde de Marte (lab-94) — "já concedeu o brinde NESTA visita" (evita chamar
     // `onUnlockMarsRewardRef` a cada quadro enquanto o jogador fica parado com os 6 inimigos já
     // mortos). Resetado junto com os inimigos a cada nova chegada em Marte, mesmo ponto do
@@ -2566,6 +2613,10 @@ export function World3D({
     let houseCounterPos = Vector3.Zero()
     let houseExitHintLabel: TextBlock | null = null
     let houseEnterHintLabel: TextBlock | null = null
+    // lab-172 — mesmo padrão de `houseEnterHintLabel`, só que também exige um parceiro por perto
+    // (ver uso no loop de física) — sozinho, o jogador nunca vê a dica, pra não convidar pra um
+    // desafio que não dá pra completar sozinho.
+    let coopEnterHintLabel: TextBlock | null = null
     const houseFurnitureNodes: Record<string, TransformNode> = {}
     // Posicionamento manual de mobília (lab-136) — `placingFurnitureId` é a fonte de verdade LIDA
     // pelo loop de física a cada quadro (mesmo padrão de `sittingAtDesk`/`drivingCar` acima: um
@@ -3085,6 +3136,22 @@ export function World3D({
         window.setTimeout(() => beam.dispose(), 180)
       }
 
+      // Desafio em dupla (lab-172) — jogador remoto mais próximo de `pos`, dentro do raio dado, se
+      // houver algum; usado tanto pra decidir se a dica "Pressione E" aparece quanto pra escolher
+      // o `partnerId` no momento de abrir o desafio.
+      function nearestRemotePlayerWithin(pos: Vector3, maxDist: number): string | null {
+        let best: string | null = null
+        let bestDist = maxDist
+        for (const [id, rp] of remotePlayers) {
+          const d = Vector3.Distance(pos, rp.figure.root.position)
+          if (d < bestDist) {
+            bestDist = d
+            best = id
+          }
+        }
+        return best
+      }
+
       // Ação genérica da tecla E — entrar/sair do carro OU embarcar/desembarcar do foguete,
       // dependendo do que está por perto (nunca os dois ao mesmo tempo, o carro só existe no
       // planeta principal). Extraída numa função nomeada (não só inline em `onKeyDown`) pra poder
@@ -3163,6 +3230,23 @@ export function World3D({
         } else if (Vector3.Distance(avatarMesh.position, houseSurfacePos) < HOUSE_TRIGGER_DISTANCE) {
           enterHouseInterior()
           return
+        }
+
+        // Desafio em dupla (lab-172) — só abre com outro jogador de verdade por perto (a dica
+        // "Pressione E" só aparece nesse caso também, ver loop de física); sorteia uma missão
+        // ainda não concluída (mesmo pool de `data/quests.ts` de sempre, sem catálogo novo) e
+        // guarda quem é o parceiro NESTA tentativa antes de abrir o modal (`App.tsx`).
+        if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, coopSurfacePos) < COOP_CHALLENGE_TRIGGER_DISTANCE) {
+          const partnerId = nearestRemotePlayerWithin(avatarMesh.position, COOP_PARTNER_NEARBY_DISTANCE)
+          if (partnerId) {
+            coopPartnerId = partnerId
+            coopMyAnswerCorrectAt = null
+            const incomplete = quests.filter((q) => !progressRef.current.completedQuestIds.includes(q.id))
+            const pool = incomplete.length > 0 ? incomplete : quests
+            const quest = pool[Math.floor(Math.random() * pool.length)]
+            onOpenCoopChallengeRef.current(quest)
+            return
+          }
         }
 
         let nearestCar: Carro | null = null
@@ -6598,6 +6682,76 @@ export function World3D({
       deskLabel.linkWithMesh(deskTop)
       deskLabel.linkOffsetY = -60
 
+      // Desafio em dupla (lab-172, docs/market-metrics-engagement-backlog.md item 7 da ordem
+      // sugerida: "desafio... com objetivos educativos complementares, chat fechado e recompensa
+      // coletiva grátis") — dois pedestais lado a lado com uma bandeirola compartilhada entre
+      // eles, mesmo espírito visual de "lugar de dois" que a carteira de estudos já usa pra "lugar
+      // de um". Objeto FIXO e único, mesmo padrão de posicionamento da carteira (`settleMeshOnTerrain`
+      // real, não a fórmula analítica sozinha).
+      const coopUp = new Vector3(-0.15, 0.4, -0.9).normalize()
+      const coopGroundRadial = terrainGroundRadial(coopUp, terrainHeight(coopUp))
+      const coopSurfacePos = coopUp.scale(coopGroundRadial)
+
+      const coopBase = new TransformNode('desafio-em-dupla', scene)
+      coopBase.position = coopSurfacePos
+      coopBase.rotationQuaternion = alignmentQuaternion(coopUp)
+
+      const coopStoneMat = new PBRMaterial('coopStoneMat', scene)
+      coopStoneMat.albedoColor = new Color3(0.55, 0.52, 0.58)
+      coopStoneMat.roughness = 0.75
+      const coopFlagMat = new PBRMaterial('coopFlagMat', scene)
+      coopFlagMat.albedoColor = new Color3(0.85, 0.45, 0.15)
+      coopFlagMat.roughness = 0.6
+
+      function addCoopMesh(mesh: Mesh, mat: PBRMaterial) {
+        mesh.material = mat
+        mesh.parent = coopBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        return mesh
+      }
+
+      let coopPedestalTop: Mesh | null = null
+      for (const side of [-1, 1]) {
+        const pedestal = MeshBuilder.CreateCylinder(
+          `coopPedestal${side}`,
+          { height: 0.5, diameterTop: 0.32, diameterBottom: 0.4, tessellation: 8 },
+          scene,
+        )
+        pedestal.position = new Vector3(side * 0.45, 0.25, 0)
+        addCoopMesh(pedestal, coopStoneMat)
+        if (side === 1) coopPedestalTop = pedestal
+      }
+      const coopFlag = MeshBuilder.CreateBox('coopFlag', { width: 1.1, height: 0.3, depth: 0.02 }, scene)
+      coopFlag.position = new Vector3(0, 0.75, 0)
+      addCoopMesh(coopFlag, coopFlagMat)
+
+      settleMeshOnTerrain(coopBase, coopUp)
+      coopSurfacePos.copyFrom(coopBase.position)
+
+      const coopLabel = new TextBlock('coopLabel', '🤝')
+      coopLabel.color = 'white'
+      coopLabel.fontSize = mobileFontSize(28)
+      coopLabel.outlineWidth = 4
+      coopLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(coopLabel)
+      coopLabel.linkWithMesh(coopPedestalTop ?? coopFlag)
+      coopLabel.linkOffsetY = -60
+
+      // Dica "Pressione E" (lab-172) — só some visível quando há outro jogador por perto (ver
+      // uso no loop de física); pra alguém sozinho, mostrar a dica convidaria pra um desafio
+      // impossível de terminar sem parceiro.
+      const coopEnterHint = new TextBlock('coopEnterHint', 'Pressione E pro desafio em dupla')
+      coopEnterHint.color = 'white'
+      coopEnterHint.fontSize = mobileFontSize(18)
+      coopEnterHint.fontWeight = 'bold'
+      coopEnterHint.outlineWidth = 3
+      coopEnterHint.outlineColor = 'rgba(0,0,0,0.6)'
+      coopEnterHint.alpha = 0
+      guiTexture.addControl(coopEnterHint)
+      coopEnterHint.linkWithMesh(coopFlag)
+      coopEnterHintLabel = coopEnterHint
+
       // Minha Casa (lab-105, primeira fatia de docs/plano-comercial-backend.md, Fase E) — espaço
       // pessoal GRATUITO de todo jogador, nunca cosmético pago (mesmo princípio já aplicado em
       // progressão/cooperação). Fachada SÓLIDA visível de fora, mesma técnica de construção das
@@ -8129,6 +8283,20 @@ export function World3D({
       // `QT_QUIZ_TRIGGER_DISTANCE`).
       const DESK_TRIGGER_DISTANCE = 1.2
 
+      // Distância de gatilho do desafio em dupla (lab-172) — dois pedestais lado a lado (0,9 de
+      // afastamento entre centros), mesma faixa da carteira de estudos (objeto de tamanho parecido).
+      const COOP_CHALLENGE_TRIGGER_DISTANCE = 1.3
+      // Raio em que um jogador REMOTO conta como "por perto" pra formar dupla — um pouco maior
+      // que o de interação com a peça em si, pra não exigir os dois exatamente em cima do mesmo
+      // pixel (dá folga suficiente pros dois pedestais, sem alcançar um jogador do outro lado do
+      // mapa).
+      const COOP_PARTNER_NEARBY_DISTANCE = 2.5
+      // Janela de tolerância entre as duas respostas certas (`Date.now()`, comparável entre os
+      // dois aparelhos, ao contrário de `performance.now()` que cada um conta a partir da própria
+      // carga de página) — generosa (90s) porque ler a própria pergunta, decidir, e clicar leva
+      // um tempo real de criança, e os dois raramente terminam no mesmo segundo exato.
+      const COOP_COMPLETION_WINDOW_MS = 90_000
+
       // Distância de gatilho de Minha Casa — corrigido no lab-134 (achado real do usuário, "a casa
       // não aceita o comando E", reproduzido só depois de andar de verdade até lá, nunca com
       // teleporte de depuração direto ao pivô). O valor original (1,2) foi copiado por analogia da
@@ -8678,6 +8846,33 @@ export function World3D({
           fireLaserBeam(Vector3.FromArray(attack.fromPos), Vector3.FromArray(attack.toPos))
         }
       })
+      // Desafio em dupla (lab-172) — checa se JÁ dá pra completar (as duas metades já bateram,
+      // dentro da janela) sempre que algo novo aconteceu: logo depois de eu mesmo responder certo
+      // (caso o parceiro já tivesse confirmado antes) e sempre que um `coop-done` alheio chega
+      // (caso eu já tivesse confirmado antes dele).
+      function tryCompleteCoopChallenge() {
+        if (!coopPartnerId || coopMyAnswerCorrectAt === null) return
+        if (coopRewardedForPartner === coopPartnerId) return
+        const partnerDoneAt = coopPartnerDoneAt.get(coopPartnerId)
+        if (partnerDoneAt === undefined) return
+        if (Math.abs(Date.now() - partnerDoneAt) > COOP_COMPLETION_WINDOW_MS) return
+        coopRewardedForPartner = coopPartnerId
+        onCoopChallengeCompletedRef.current()
+      }
+      const unsubCoopDone = onCoopDone((event: CoopDoneEvent) => {
+        // Só me interessa quem me apontou de volta como parceiro — `coop-done` de qualquer outra
+        // dupla formada em outro canto do mapa não deve interferir aqui.
+        if (event.partnerId !== getSelfId()) return
+        coopPartnerDoneAt.set(event.id, Date.now())
+        tryCompleteCoopChallenge()
+      })
+      ;(scene as any).__onCoopAnswerCorrect = () => {
+        if (!coopPartnerId) return
+        coopMyAnswerCorrectAt = Date.now()
+        sendCoopDone(coopPartnerId)
+        tryCompleteCoopChallenge()
+      }
+
       const unsubConnection = onConnectionChange((connected) => setMpConnected(connected))
       // lab-152, G13 (docs/prompts/05-escala-e-viabilidade.md): só conecta (e passa a expor
       // posição/aparência pra outros jogadores desconhecidos, ver `app/server-cf-relay/README.md`
@@ -8726,6 +8921,7 @@ export function World3D({
         unsubLeave()
         unsubChat()
         unsubAttack()
+        unsubCoopDone()
         unsubConnection()
         disconnectMultiplayer()
         window.clearInterval(rankingInterval)
@@ -10195,6 +10391,17 @@ export function World3D({
             insideHouseInterior && Vector3.Distance(avatarMesh.position, houseDoorInsidePos) < HOUSE_TRIGGER_DISTANCE
               ? 1
               : 0
+        }
+
+        // Dica "pressione E" do desafio em dupla (lab-172) — só acende com outro jogador de
+        // verdade por perto (mesmo raio `COOP_PARTNER_NEARBY_DISTANCE` usado ao abrir de fato,
+        // `handleInteractPress`); sozinho, o jogador nunca vê o convite pra um desafio impossível
+        // de terminar sem parceiro.
+        if (avatarMesh && coopEnterHintLabel) {
+          const nearLandmark =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, coopSurfacePos) < COOP_CHALLENGE_TRIGGER_DISTANCE
+          coopEnterHintLabel.alpha =
+            nearLandmark && nearestRemotePlayerWithin(avatarMesh.position, COOP_PARTNER_NEARBY_DISTANCE) !== null ? 1 : 0
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
