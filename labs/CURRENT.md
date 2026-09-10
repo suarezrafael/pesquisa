@@ -1,6 +1,34 @@
 # Laboratório atual
 
-Último concluído: labs/lab-168-bugs-avatar-pet-urgentes/ — 4 bugs urgentes reportados pelo
+Último concluído: labs/lab-169-ciclo-de-vida-pet/ — pedido do usuário, adiado de propósito no
+lab-168 pra uma conversa de design dedicada ("o pet tem que ter ciclo de vida ele deve crescer
+envelhecer e morrer"). Retomado nesta sessão ("pode fazer um ciclo de vida normal, incrementado
+os anos por dias"). Perguntado via `AskUserQuestion` como a "morte" deveria funcionar pra uma
+criança de ~10 anos (3 opções) — o usuário escolheu explicitamente **"envelhece mas nunca morre
+de verdade"**, a mais segura das três. 1 dia real corrido = 1 "ano" do pet, contado desde a
+adoção (`Progress.petAdoptedAt`, novo). Um pet JÁ ADULTO (por cuidado real, `petCareCounts`,
+motor de crescimento intocado) também vira "idoso" depois de ~30 dias de convivência
+(`petLifecycleStage`) — só tingimento grisalho no pelo (`Color3.Lerp`), mesma escala de adulto,
+nunca removido/perdido. Perfis com pet adotado antes desta funcionalidade existir são migrados
+sozinhos no carregamento (`backfillPetAdoptedAt`). `PetPanel` mostra "🧓 Idoso" + "N anos de
+convivência" por pet. `npx tsc -b`/testes limpos (146/146, 8 novos). `npm run build` sem
+regressão de bundle. **Verificado ao vivo via Chrome real**: confirmado que perfis existentes são
+migrados sozinhos (pet adotado numa sessão anterior ganhou `petAdoptedAt` automaticamente);
+forçado um pet a 40 "anos" + adulto e confirmado `PetPanel` mostrando "🧓 Idoso" + "40 anos de
+convivência", e o pet no mundo 3D com escala 1 (igual adulto) e cor do pelo batendo exatamente
+com a fórmula esperada (`Color3.Lerp` 45% pra cinza), não só parecido visualmente. PR #43 teve 6
+achados reais do Copilot corrigidos em 3 rodadas: `saveProgress` dentro do inicializador do
+`useState` (side effect em render, `StrictMode` roda 2x — movido pra `useEffect`); pet só
+ficava "idoso" com outro evento acontecendo (adicionado `setInterval` de 1h chamando
+`rebuildPet`); `petAgeYears` podia devolver `NaN` com data corrompida (guarda `Number.isFinite`);
+`petAgingInterval` sem checar `disposed` (podia rodar após `scene.dispose()`); `adoptPet` sempre
+sobrescrevia `petAdoptedAt` (podia "rejuvenescer" um pet com progress inconsistente — agora
+preserva a data existente); `backfillPetAdoptedAt` usava o operador `in` (consulta a cadeia de
+protótipos — trocado por checagem `=== undefined`). **Confirma deploy em produção**: PR #43
+mergeado, CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health` 200, app
+respondendo 200 no Vercel). Ver `labs/lab-169-ciclo-de-vida-pet/CONTEXT.md`.
+
+Antes desse: labs/lab-168-bugs-avatar-pet-urgentes/ — 4 bugs urgentes reportados pelo
 usuário com print ("bug de pecas sumindo ao selecionar chapeu na lojinha, e tem espetos na cara
 do avatar, e o pet esta escondido embaixo da terra... e fazer deploy") + um 5º bug reportado no
 meio da mesma sessão ("o vulcao de venus... aparece o botao mover mas eles nao esta visiveis na

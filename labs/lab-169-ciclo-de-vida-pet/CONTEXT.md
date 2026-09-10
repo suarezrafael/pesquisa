@@ -1,7 +1,7 @@
 # Contexto — Laboratório 169 — ciclo de vida do pet (idade por dias, sem morte)
 
 Preenchido em: 2026-09-09
-Commit inicial → final: ce153b869fcca4ad40a460a44c01f32335f425f0..(PR aberto, ver seção final)
+Commit inicial → final: ce153b869fcca4ad40a460a44c01f32335f425f0..0011465 (PR #43, mergeado)
 
 ## O que foi feito
 
@@ -97,7 +97,9 @@ backlog geral (`docs/market-metrics-engagement-backlog.md`/`docs/product-discove
 
 ## Estado do repositório ao final
 
-- Branch: a definir no momento do commit.
+- Branch: `lab-169-ciclo-de-vida-pet` (mergeada e apagada). **Confirma deploy em produção**: PR
+  #43 mergeado (6 achados reais do Copilot corrigidos em 3 rodadas de review), CI/CD verde nos 3
+  workers, deploy automático confirmado (`GET /health` 200, app respondendo 200 no Vercel).
 - `npx tsc -b`: limpo. `npm run test` (app): 144/144 (5 novos — `petAgeYears`,
   `petLifecycleStage`, `backfillPetAdoptedAt`, `adoptPet` gravando `petAdoptedAt`,
   `petStageScale('idoso')`). `npm run build`: limpo, sem regressão de bundle.
