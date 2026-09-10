@@ -17,7 +17,9 @@ interface PetPanelProps {
   onClose: () => void
 }
 
-const STAGE_LABEL: Record<string, string> = {
+// lab-171 — exportado pra `AchievementsPanel.tsx` reaproveitar o mesmo rótulo na nova seção de
+// pets do álbum, em vez de duplicar o mapa.
+export const STAGE_LABEL: Record<string, string> = {
   filhote: '🍼 Filhote',
   jovem: '🌱 Jovem',
   adulto: '⭐ Adulto',

@@ -1,6 +1,23 @@
 # Laboratório atual
 
-Último concluído: labs/lab-170-casa-interativa/ — pedido do usuário num turno com 3 itens: bug de
+Último concluído: labs/lab-171-album-conquistas/ — álbum central de conquistas e coleções
+(`docs/market-metrics-engagement-backlog.md` §10, item 5, renumerado de "lab-167" no documento, já
+que o lab-167 real deste repositório foi usado pro mapa de habilidades). `AchievementsPanel.tsx`
+(lab-93/141) já mostrava emblemas e cartões-postais; ganhou uma seção nova "Pets" (mesmo padrão
+visual, possuído mostra nome/emoji/estágio via `petStageFor`/`petLifecycleStage`/`petAgeYears` já
+existentes do lab-155/169, não possuído mostra "???"/custo) e um destaque "🎯 Próximo objetivo" no
+topo (primeiro item ainda bloqueado, prioridade emblema → cartão-postal → pet — do "mais
+alcançável" pro "menos"). `nextObjective` (função pura nova) mora no próprio componente, não em
+`progression.ts`, pra evitar import circular (`data/achievements.ts` já importa DE
+`progression.ts`). Cosméticos comprados com moeda ficaram deliberadamente fora de escopo (sem
+narrativa de conquista, já visíveis nas próprias lojas). `npx tsc -b`/testes limpos (152/152, sem
+teste novo — mudança de apresentação pura). `npm run build` sem regressão de bundle. **Verificado
+ao vivo via Chrome real**: teleportado pra carteira de estudos (gatilho que abre o painel),
+confirmado por screenshot o destaque "🎯 Próximo objetivo: Metade do Caminho" e a seção Pets nova
+mostrando "Gato Laranja ✓ 🧓 Idoso" (reaproveita o estágio combinado do lab-169) + 3 pets
+bloqueados como "???"/custo. Ver `labs/lab-171-album-conquistas/CONTEXT.md`.
+
+Antes desse: labs/lab-170-casa-interativa/ — pedido do usuário num turno com 3 itens: bug de
 setas de posicionamento de mobília invertidas, excluir objetos da casa (só existia adicionar), e
 objetos interativos pela tecla E (deitar na cama, reação genérica pros outros). Confirmado via
 `AskUserQuestion`: tudo num lab só, excluir nunca devolve moeda. **Setas invertidas**: `y`
