@@ -107,6 +107,14 @@ export interface Progress {
   // Data/hora da última alimentação (de QUALQUER pet) — trava alimentar mais de uma vez por dia
   // real, mesmo espírito anti-farm de `loginStreak`/`lastPlayedAt`.
   lastPetFeedAt: string | null
+  // lab-169 (pedido do usuário: "ciclo de vida normal, incrementando os anos por dias") — data/hora
+  // da adoção de cada pet (chave = id do catálogo, igual `petCareCounts`), nunca sobrescrita depois.
+  // `petAgeYears` (`state/progression.ts`) usa isto pra contar quantos dias reais (= "anos" do
+  // pet) se passaram desde a adoção, EIXO SEPARADO de `petCareCounts`: crescer (filhote→jovem→
+  // adulto) continua exigindo cuidado real, de propósito (ver comentário em `petStageFor`); a
+  // idade só decide se um pet JÁ adulto também vira "idoso" (`petLifecycleStage`), nunca se ele
+  // cresce sozinho sem ser alimentado.
+  petAdoptedAt: Record<string, string>
   // Ranking local entre perfis do mesmo aparelho (lab-157, item do backlog social do lab-154) —
   // "XP ganho nesta semana" não existe como número guardado direto (só o total acumulado, `xp`
   // acima); é derivado comparando `xp` contra o valor QUE ELE TINHA no início da semana atual

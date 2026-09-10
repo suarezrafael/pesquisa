@@ -75,7 +75,15 @@ import {
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
 import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
-import { furnitureQuantity, getLevel, isQuestUnlocked, petStageFor, petStageScale } from '../state/progression'
+import {
+  furnitureQuantity,
+  getLevel,
+  isQuestUnlocked,
+  petAgeYears,
+  petLifecycleStage,
+  petStageFor,
+  petStageScale,
+} from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
 import { trackFirstControl } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
@@ -2468,6 +2476,10 @@ export function World3D({
     let havokPlugin: HavokPlugin | null = null
     let avatarBody: PhysicsAggregate | null = null
     let avatarMesh: Mesh | null = null
+    // lab-169 — declarado aqui (fora de `setup()`, mesmo padrão de `havokPlugin`/`disposed`) pra
+    // ficar visível tanto de dentro de `setup()` (onde é atribuído, perto de `rebuildPet`) quanto
+    // do cleanup no final deste efeito (onde é limpo).
+    let petAgingInterval: number | null = null
     let facing = new Vector3(0, 0, 1)
     let walkPhase = 0
     let lastFootSign = 0
@@ -8077,9 +8089,20 @@ export function World3D({
         if (!equippedId) return
         const pet = findPetById(equippedId)
         if (!pet) return
-        const stage = petStageFor(progressRef.current.petCareCounts[equippedId] ?? 0)
+        // lab-169 (ciclo de vida: "incrementando os anos por dias", morte descartada
+        // explicitamente pelo usuário via `AskUserQuestion` — "envelhece mas nunca morre de
+        // verdade") — o estágio mostrado combina os dois eixos independentes de
+        // `progression.ts`: `careStage` (cuidado real, alimentação) decide filhote/jovem/adulto
+        // como sempre decidiu; `petLifecycleStage` só ACRESCENTA "idoso" por cima quando o pet já
+        // é adulto E já convive há tempo o bastante, sem nunca remover/matar o pet.
+        const careStage = petStageFor(progressRef.current.petCareCounts[equippedId] ?? 0)
+        const ageYears = petAgeYears(progressRef.current, equippedId, new Date().toISOString())
+        const stage = petLifecycleStage(careStage, ageYears)
         const scale = petStageScale(stage)
-        const furColor = new Color3(...pet.furColorRgb)
+        const baseFurColor = new Color3(...pet.furColorRgb)
+        // Único sinal visual de "idoso" — pelo mais grisalho, mesmo corpo/tamanho de um adulto
+        // (`petStageScale`) — nunca some, nunca fica doente, nunca reduz.
+        const furColor = stage === 'idoso' ? Color3.Lerp(baseFurColor, new Color3(0.8, 0.8, 0.8), 0.45) : baseFurColor
         const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
         root.scaling.setAll(scale)
         root.position.copyFrom(avatarMesh.position)
@@ -8088,6 +8111,21 @@ export function World3D({
       }
       rebuildPet()
       ;(scene as any).__refreshPet = rebuildPet
+      // lab-169 (achado do review automático do Copilot): o estágio combinado depende de tempo
+      // real (`petAgeYears`), não só dos eventos que já disparam `__refreshPet` (adotar/
+      // alimentar/trocar de pet) — numa sessão longa que atravessa a virada de "ano" (1 dia UTC),
+      // o pet só ficaria grisalho depois de outro evento acontecer, sem reload. `setInterval`
+      // continua rodando em segundo plano (mesmo raciocínio de `refreshRanking` acima) — barato
+      // o bastante (reconstrói só um pet) pra não precisar de lógica condicional de "mudou
+      // mesmo", só reconstrói de novo.
+      // lab-169 (achado do review automático do Copilot): sem a checagem de `disposed`, um
+      // disparo do intervalo já enfileirado bem na hora do cleanup rodaria DEPOIS de
+      // `scene.dispose()`/`engine.dispose()` (mesmo cuidado que `if (disposed) return` já tem
+      // logo após o `await HavokPhysics()` acima) — tentaria criar/descartar malha numa cena já
+      // destruída.
+      petAgingInterval = window.setInterval(() => {
+        if (!disposed) rebuildPet()
+      }, 60 * 60 * 1000)
 
       // Piscina com gente (pedido do usuário: "picina com gente nela") — separada da lagoa
       // (theta bem distante: lagoa fica em 2.6, rio em 0.15-1.35). Reaproveita o mesmo boneco
@@ -10256,6 +10294,7 @@ export function World3D({
       disposed = true
       if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
       if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
+      if (petAgingInterval !== null) window.clearInterval(petAgingInterval)
       window.removeEventListener('resize', onResize)
       canvas.removeEventListener('pointerdown', onCameraPointerDown)
       window.removeEventListener('pointermove', onCameraPointerMove)
