@@ -50,7 +50,7 @@ import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
-import { FURNITURE_CATALOG } from '../data/furniture'
+import { FURNITURE_CATALOG, findFurnitureById } from '../data/furniture'
 import { findPetById } from '../data/pets'
 import { findTreasureChestById } from '../data/treasureChests'
 import { findPostcardByPlanetId } from '../data/postcards'
@@ -2518,6 +2518,13 @@ export function World3D({
     // `RESET_DISTANCE` no loop de física). Ao contrário do carro, não precisa de tecla `E`/estado
     // de "qual carro" — só um boolean, porque só existe uma carteira no mundo.
     let sittingAtDesk = false
+    // lab-170 (pedido do usuário: "ao se aproximar na cama tem que ter como deitar") — mesmo
+    // espírito de `drivingCar`: congela o corpo físico e reparenta a figura visual na própria
+    // cama (`houseFurnitureNodes[restingInBedKey]`), null = de pé. Ao contrário de
+    // `sittingAtDesk` (gatilho automático por proximidade), esta é ligada/desligada só pela
+    // tecla `E` (`handleInteractPress`) — por isso pode travar o loop de física inteiro (mesma
+    // categoria de `drivingCar`/`drivingRocket`) sem impedir o jogador de "sair" depois.
+    let restingInBedKey: string | null = null
     // Brinde de Marte (lab-94) — "já concedeu o brinde NESTA visita" (evita chamar
     // `onUnlockMarsRewardRef` a cada quadro enquanto o jogador fica parado com os 6 inimigos já
     // mortos). Resetado junto com os inimigos a cada nova chegada em Marte, mesmo ponto do
@@ -3134,6 +3141,24 @@ export function World3D({
           if (Vector3.Distance(avatarMesh.position, houseCounterPos) < HOUSE_TRIGGER_DISTANCE) {
             onOpenMyHouseRef.current()
             return
+          }
+          // lab-170 (pedido do usuário: "ao se aproximar na cama tem que ter como deitar" /
+          // "outros objetos tem que ser interativos, pela tecla E") — já deitado, `E` levanta;
+          // senão, a peça mais próxima decide (cama = deitar, qualquer outra = reação genérica).
+          if (restingInBedKey) {
+            getUpFromBed()
+            return
+          }
+          if (!placingFurnitureId) {
+            const near = nearestFurniturePiece()
+            if (near) {
+              if (near.kind === 'bed') {
+                lieDownOnBed(near.key, near.piece)
+              } else {
+                showFurnitureReaction(near.key)
+              }
+              return
+            }
           }
         } else if (Vector3.Distance(avatarMesh.position, houseSurfacePos) < HOUSE_TRIGGER_DISTANCE) {
           enterHouseInterior()
@@ -6103,6 +6128,23 @@ export function World3D({
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
       if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure
 
+      // lab-170 (pedido do usuário: "outros objetos tem que ser interativos, pela tecla E") —
+      // balão flutuante ligado à própria cabeça do jogador LOCAL (diferente de `chatLabel`, que
+      // só existe pros jogadores remotos/NPCs — o jogador nunca via a própria fala/reação acima
+      // da própria cabeça até agora). Mesmo padrão visual (`TextBlock` + `linkWithMesh` +
+      // `showChatBubbleText`, já usado pro chat remoto), só que disparado localmente ao
+      // interagir com um móvel, não por rede.
+      const furnitureReactionLabel = new TextBlock('furnitureReactionLabel', '')
+      furnitureReactionLabel.color = 'white'
+      furnitureReactionLabel.fontSize = mobileFontSize(20)
+      furnitureReactionLabel.outlineWidth = 3
+      furnitureReactionLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      furnitureReactionLabel.alpha = 0
+      guiTexture.addControl(furnitureReactionLabel)
+      furnitureReactionLabel.linkWithMesh(studentFigure.head)
+      furnitureReactionLabel.linkOffsetY = -55
+      let furnitureReactionTimeout: number | null = null
+
       // Espada/arma "equipadas" (lab-62, pedido do usuário: "como eu sei que peguei o item, tem
       // animação que eu estou segurando o item?") — cópias pequenas presas na mão (parentadas no
       // cotovelo, que já é o fim do antebraço), escondidas até o item ser coletado (ver detecção
@@ -6975,6 +7017,10 @@ export function World3D({
       //    noutros scatters deste arquivo — dá uma posição estável só a partir de (índice do
       //    catálogo, índice da cópia), sem precisar saber quantas peças existem ao todo (que muda
       //    toda vez que alguém compra mais uma).
+      // lab-170 — quantidade de cada item na ÚLTIMA vez que `refreshHouseFurnitureVisuals` rodou;
+      // só existe pra detectar quando ela DIMINUI (exclusão, ver comentário lá dentro), nunca lido
+      // fora desta função.
+      const lastFurnitureQuantity: Record<string, number> = {}
       function refreshHouseFurnitureVisuals() {
         const roomRoot = houseInteriorRootNode
         if (!roomRoot) return
@@ -6989,6 +7035,27 @@ export function World3D({
           const visual = FURNITURE_VISUAL_KIND[item.id]
           if (!visual) return
           const quantity = furnitureQuantity(item, progressRef.current, entitlementActiveRef.current)
+          // lab-170 (bug real: excluir uma cópia do MEIO reindexa `housePlacements` pra manter os
+          // índices contíguos — ver `removeFurniture`, `progression.ts` —, mas as cópias JÁ
+          // CONSTRUÍDAS na cena abaixo continuam com as chaves/posições ANTIGAS; o laço de
+          // "constrói só o que falta" (`if (houseFurnitureNodes[key]) continue`) foi pensado só
+          // pra quantidade CRESCENDO (comprar mais uma, sempre no fim) — com quantidade
+          // diminuindo, a peça que sobra na cena não é necessariamente a peça certa. Detectar
+          // quantidade MENOR que da última vez e descartar TODAS as cópias antigas desse item
+          // força reconstruir do zero a partir de `housePlacements` já reindexado — caminho raro
+          // (só ao excluir), sem custo nenhum pra comprar/mover, que continuam incrementais.
+          const previousQuantity = lastFurnitureQuantity[item.id]
+          if (previousQuantity !== undefined && quantity < previousQuantity) {
+            for (let i = 0; i < previousQuantity; i++) {
+              const staleKey = `${item.id}#${i}`
+              const staleNode = houseFurnitureNodes[staleKey]
+              if (staleNode) {
+                staleNode.dispose()
+                delete houseFurnitureNodes[staleKey]
+              }
+            }
+          }
+          lastFurnitureQuantity[item.id] = quantity
           for (let i = 0; i < quantity; i++) {
             const key = `${item.id}#${i}`
             desiredKeys.add(key)
@@ -7294,6 +7361,79 @@ export function World3D({
       ;(scene as any).__startFurniturePlacement = startFurniturePlacement
       ;(scene as any).__confirmFurniturePlacement = confirmFurniturePlacement
       ;(scene as any).__cancelFurniturePlacement = cancelFurniturePlacement
+
+      // lab-170 (pedido do usuário: "outros objetos tem que ser interativos, pela tecla E") — a
+      // peça de mobília mais próxima do jogador, DENTRO do raio de interação, se houver alguma.
+      // Só considera peças com uma entrada em `FURNITURE_VISUAL_KIND` (todo o catálogo tem, ver
+      // acima) — não itens de outra natureza (balcão, escolinha etc., que já têm seus próprios
+      // gatilhos em `handleInteractPress`).
+      function nearestFurniturePiece(): { key: string; piece: TransformNode; kind: string } | null {
+        if (!avatarMesh) return null
+        let best: { key: string; piece: TransformNode; kind: string } | null = null
+        let bestDist = FURNITURE_INTERACT_DISTANCE
+        for (const [key, piece] of Object.entries(houseFurnitureNodes)) {
+          const kind = FURNITURE_VISUAL_KIND[key.split('#')[0]]?.kind
+          if (!kind) continue
+          // `piece.position` é LOCAL (a peça é filha de `houseInteriorRootNode`, deslocado por
+          // `HOUSE_INTERIOR_CENTER`); `avatarMesh.position` é sempre mundo — `getAbsolutePosition`
+          // corrige a comparação (achado ao vivo: sem isto, a "distância" sempre dava um valor
+          // gigante, do tamanho do próprio deslocamento da sala, e a interação nunca disparava).
+          const d = Vector3.Distance(avatarMesh.position, piece.getAbsolutePosition())
+          if (d < bestDist) {
+            bestDist = d
+            best = { key, piece, kind }
+          }
+        }
+        return best
+      }
+
+      // Deitar na cama (pedido do usuário: "ao se aproximar na cama tem que ter como deitar") —
+      // mesmo mecanismo de reparentar+pose fixa já usado ao entrar num carro
+      // (`handleInteractPress`, "Pose sentada"), só que deitado: gira a figura inteira 90° (fica
+      // horizontal) e usa uma pose neutra (braços/pernas retos) em vez da pose sentada do carro.
+      function lieDownOnBed(key: string, piece: TransformNode) {
+        if (!avatarBody) return
+        restingInBedKey = key
+        avatarBody.body.setLinearVelocity(Vector3.Zero())
+        avatarBody.body.setAngularVelocity(Vector3.Zero())
+        studentFigure.root.parent = piece
+        studentFigure.root.position = new Vector3(0, 0.42, 0.15)
+        studentFigure.root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Right(), -Math.PI / 2)
+        studentFigure.legPivotL.rotation.x = 0
+        studentFigure.legPivotR.rotation.x = 0
+        studentFigure.kneePivotL.rotation.x = 0
+        studentFigure.kneePivotR.rotation.x = 0
+        studentFigure.armPivotL.rotation.x = 0
+        studentFigure.armPivotR.rotation.x = 0
+        studentFigure.elbowPivotL.rotation.x = 0
+        studentFigure.elbowPivotR.rotation.x = 0
+      }
+
+      // Levantar da cama — mesmo padrão de "sair do carro" (desparenta, devolve a pose neutra);
+      // não precisa reposicionar `studentFigure.root` manualmente porque o loop de física normal
+      // (destravado no mesmo quadro, já que `restingInBedKey` volta a `null` antes dele rodar)
+      // já recalcula a posição/pose da figura a partir de `avatarMesh` todo quadro.
+      function getUpFromBed() {
+        if (!restingInBedKey) return
+        restingInBedKey = null
+        studentFigure.root.parent = null
+        studentFigure.root.rotationQuaternion = Quaternion.Identity()
+      }
+
+      // Reação genérica pra qualquer outro móvel (pedido do usuário: "outros objetos tem que ser
+      // interativos, pela tecla E") — em vez de uma pose/animação única por item (19 no
+      // catálogo, cresce a cada lab-130-like), mostra um balão com o próprio emoji+nome do item
+      // (`FURNITURE_CATALOG`, já existe pra tudo) acima da cabeça do jogador. Cobre automaticamente
+      // qualquer item novo do catálogo, sem precisar de código novo por peça.
+      function showFurnitureReaction(key: string) {
+        const item = findFurnitureById(key.split('#')[0])
+        if (!item) return
+        furnitureReactionTimeout = showChatBubbleText(
+          furnitureReactionLabel,
+          `${item.emoji} ${item.name}`,
+          furnitureReactionTimeout,
+        )
+      }
 
       function applyPortalVisual(entry: (typeof portalMeshes)[number]) {
         const p = progressRef.current
@@ -8005,6 +8145,11 @@ export function World3D({
       // Distância de gatilho das escolinhas de astronomia dos planetas (lab-115) — mesmo
       // raciocínio da carteira/Minha Casa: o totem+professor ocupam espaço parecido.
       const PLANET_SCHOOL_TRIGGER_DISTANCE = 1.2
+
+      // lab-170 (pedido do usuário: "outros objetos tem que ser interativos, pela tecla E") —
+      // raio de gatilho pra QUALQUER peça de mobília (bem menor que o das escolinhas/casa: uma
+      // cama/estante ocupa bem menos espaço que um totem inteiro).
+      const FURNITURE_INTERACT_DISTANCE = 1.1
 
       // Moedas escondidas (pedido do usuário: "hidden collectibles/easter eggs" — recompensam
       // explorar o mapa) — uma no pico exato de cada montanha (`PLATEAU_CENTERS`), o ponto mais
@@ -8810,7 +8955,10 @@ export function World3D({
           // `sittingAtDesk` (lab-93) NÃO entra aqui de propósito — ver comentário mais abaixo, no
           // ciclo de caminhada: travar o bloco inteiro impediria o jogador de andar embora da
           // carteira (a própria saída depende do gatilho de distância rodando com posição real).
-          if (!drivingCar && !drivingRocket && !placingFurnitureId) {
+          // `restingInBedKey` (lab-170) É diferente: sair só depende da tecla `E`
+          // (`handleInteractPress`), nunca de distância — pode travar o bloco inteiro com
+          // segurança, mesma categoria de `drivingCar`/`drivingRocket`.
+          if (!drivingCar && !drivingRocket && !placingFurnitureId && !restingInBedKey) {
           // Gravidade radial real — puxa sempre pro centro do planeta (origem),
           // aplicada como força a cada quadro, não a gravidade uniforme padrão da engine.
           body.applyForce(localUp.scale(-GRAVITY), pos)
@@ -9053,9 +9201,17 @@ export function World3D({
                 -limit,
                 Math.min(limit, ghost.position.x + x * FURNITURE_PLACEMENT_MOVE_SPEED * dt),
               )
+              // lab-170 (bug real reportado pelo usuário: "a seta pra cima deve ser pra frente...
+              // a seta pra tras deve ser pra tras") — `y` já nasce com o MESMO sinal usado pro
+              // "throttle" do avatar a pé, uns parágrafos acima (`const throttle = -y`): seta
+              // pra cima solta `y = -1`. O avatar já nega esse sinal antes de aplicar
+              // (`throttle = -y` anda pra frente, `+facing`); a peça fantasma aplicava `y` DIRETO
+              // em Z, sem negar — pra cima empurrava a peça pra -Z (fundo da sala, entrando pela
+              // porta que fica no eixo +Z), o oposto de "frente". Negado aqui pra bater com a
+              // mesma convenção já estabelecida pro avatar.
               ghost.position.z = Math.max(
                 -limit,
-                Math.min(limit, ghost.position.z + y * FURNITURE_PLACEMENT_MOVE_SPEED * dt),
+                Math.min(limit, ghost.position.z - y * FURNITURE_PLACEMENT_MOVE_SPEED * dt),
               )
               if (cameraRotateLeftRef.current) ghost.rotation.y -= dt * FURNITURE_PLACEMENT_ROTATE_SPEED
               if (cameraRotateRightRef.current) ghost.rotation.y += dt * FURNITURE_PLACEMENT_ROTATE_SPEED

@@ -103,6 +103,7 @@ function GameApp() {
     unlockGlasses,
     unlockFurniture,
     setFurniturePlacement,
+    removeFurniture,
     unlockMarsReward,
     foundTreasureChest,
     resetStreak,
@@ -452,6 +453,7 @@ function GameApp() {
             setShowMyHouse(false)
             setPendingPlacementId(id)
           }}
+          onRemoveFurniture={removeFurniture}
           onClose={() => setShowMyHouse(false)}
         />
       )}

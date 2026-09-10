@@ -33,6 +33,7 @@ import {
   unlockBackpackColor,
   unlockFurniture,
   setFurniturePlacement,
+  removeFurniture,
   unlockGlasses,
   unlockHat,
   unlockHairShape,
@@ -335,6 +336,65 @@ describe('unlockFurniture — itens de recompensa de planeta não são compráve
     expect(next).toBe(comMoedas)
     expect(next.unlockedFurnitureIds).not.toContain('meteorito_mercurio')
     expect(next.coins).toBe(9999)
+  })
+})
+
+describe('removeFurniture (lab-170, pedido do usuário: "tem que ter como excluir objetos")', () => {
+  it('remove uma cópia sem devolver moeda', () => {
+    const progress = { ...emptyProgress, coins: 3, unlockedFurnitureIds: ['planta', 'planta'] }
+    const next = removeFurniture(progress, 'planta#0')
+    expect(next.unlockedFurnitureIds).toEqual(['planta'])
+    expect(next.coins).toBe(3) // nunca reembolsa, decisão confirmada com o usuário
+  })
+
+  it('reindexa housePlacements ao excluir uma cópia do MEIO, preservando a posição das que sobram', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['planta', 'planta', 'planta'],
+      housePlacements: {
+        'planta#0': { x: 1, z: 1, rotY: 0 },
+        'planta#1': { x: 2, z: 2, rotY: 0.5 },
+        'planta#2': { x: 3, z: 3, rotY: 1 },
+      },
+    }
+    const next = removeFurniture(progress, 'planta#1')
+    expect(next.unlockedFurnitureIds).toEqual(['planta', 'planta'])
+    // a cópia #0 não mexe; a que era #2 vira #1, preservando SUA posição (3,3), não a da excluída
+    expect(next.housePlacements['planta#0']).toEqual({ x: 1, z: 1, rotY: 0 })
+    expect(next.housePlacements['planta#1']).toEqual({ x: 3, z: 3, rotY: 1 })
+    expect(next.housePlacements['planta#2']).toBeUndefined()
+  })
+
+  it('não remove item subscriptionOnly nem planetReward', () => {
+    const progress = { ...emptyProgress, unlockedFurnitureIds: ['meteorito_mercurio'] }
+    const next = removeFurniture(progress, 'meteorito_mercurio#0')
+    expect(next).toBe(progress)
+  })
+
+  it('não faz nada com um índice fora do intervalo (ex.: já excluído, chave obsoleta)', () => {
+    const progress = { ...emptyProgress, unlockedFurnitureIds: ['planta'] }
+    const next = removeFurniture(progress, 'planta#5')
+    expect(next).toBe(progress)
+  })
+
+  it('não faz nada com um item que não existe no catálogo', () => {
+    const progress = { ...emptyProgress, unlockedFurnitureIds: ['planta'] }
+    const next = removeFurniture(progress, 'item-que-nao-existe#0')
+    expect(next).toBe(progress)
+  })
+
+  it('descarta (nunca propaga como "#NaN") uma chave de housePlacements legada/corrompida sem índice numérico', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['planta', 'planta'],
+      housePlacements: {
+        planta: { x: 9, z: 9, rotY: 0 }, // chave legada sem "#<índice>" — nunca deveria existir, mas não pode virar lixo
+        'planta#1': { x: 1, z: 1, rotY: 0 },
+      },
+    }
+    const next = removeFurniture(progress, 'planta#0')
+    expect(Object.keys(next.housePlacements)).not.toContain('planta#NaN')
+    expect(next.housePlacements['planta#0']).toEqual({ x: 1, z: 1, rotY: 0 })
   })
 })
 
