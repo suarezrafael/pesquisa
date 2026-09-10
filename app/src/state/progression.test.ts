@@ -382,6 +382,20 @@ describe('removeFurniture (lab-170, pedido do usuário: "tem que ter como exclui
     const next = removeFurniture(progress, 'item-que-nao-existe#0')
     expect(next).toBe(progress)
   })
+
+  it('descarta (nunca propaga como "#NaN") uma chave de housePlacements legada/corrompida sem índice numérico', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['planta', 'planta'],
+      housePlacements: {
+        planta: { x: 9, z: 9, rotY: 0 }, // chave legada sem "#<índice>" — nunca deveria existir, mas não pode virar lixo
+        'planta#1': { x: 1, z: 1, rotY: 0 },
+      },
+    }
+    const next = removeFurniture(progress, 'planta#0')
+    expect(Object.keys(next.housePlacements)).not.toContain('planta#NaN')
+    expect(next.housePlacements['planta#0']).toEqual({ x: 1, z: 1, rotY: 0 })
+  })
 })
 
 describe('combo de respostas certas seguidas (lab-132)', () => {

@@ -600,6 +600,12 @@ export function removeFurniture(progress: Progress, key: string): Progress {
       continue
     }
     const placementIndex = Number(placementIndexStr)
+    // lab-170 (achado do review automático do Copilot): uma chave legada/corrompida sem sufixo
+    // `#<índice>` numérico (`placementIndexStr` ausente/não-numérico) vira `NaN` aqui — sem esta
+    // checagem, `NaN > index` é sempre falso e a entrada seria regravada como `${id}#NaN`,
+    // propagando lixo pra sempre. Uma chave assim já era inútil (nenhum código lê `${id}#NaN`),
+    // então é descartada em vez de preservada.
+    if (!Number.isFinite(placementIndex)) continue
     if (placementIndex === index) continue
     const newIndex = placementIndex > index ? placementIndex - 1 : placementIndex
     housePlacements[`${id}#${newIndex}`] = placement

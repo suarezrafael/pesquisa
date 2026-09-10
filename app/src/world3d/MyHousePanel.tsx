@@ -101,7 +101,11 @@ export function MyHousePanel({
                 {Array.from({ length: quantity }, (_, i) => {
                   const key = `${item.id}#${i}`
                   return (
-                    <div key={i} className="my-house-copy-row">
+                    // lab-170 (achado do review automático do Copilot): `key={i}` (índice) deixava
+                    // o React reaproveitar a linha errada depois de excluir uma cópia do meio
+                    // (reindexação muda o que cada índice representa) — `key` estável (mesma
+                    // string usada como identidade da cópia em todo o resto do arquivo) evita isso.
+                    <div key={key} className="my-house-copy-row">
                       <button type="button" className="avatar-shop-action" onClick={() => onStartPlacing(key)}>
                         🖐️ Mover{quantity > 1 ? ` #${i + 1}` : ''}
                       </button>

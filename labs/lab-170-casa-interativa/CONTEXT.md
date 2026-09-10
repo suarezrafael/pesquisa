@@ -67,7 +67,14 @@ moeda.
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova.
+Nenhuma nova. PR #44 teve 2 achados reais do Copilot corrigidos antes do merge:
+- **`removeFurniture` podia propagar chaves `${id}#NaN`** em `housePlacements` — uma entrada
+  legada/corrompida sem sufixo `#<índice>` numérico virava `NaN` na reindexação e era regravada
+  como lixo. Descartada em vez de preservada (já era inútil, nenhum código lê `${id}#NaN`).
+- **`key={i}` (índice) na lista de cópias** (`MyHousePanel.tsx`) — podia fazer o React reaproveitar
+  a linha errada do DOM depois de excluir uma cópia do meio (reindexação muda o que cada índice
+  representa). Trocado pela mesma string estável (`${item.id}#${i}`) já usada como identidade da
+  cópia em todo o resto do arquivo.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
