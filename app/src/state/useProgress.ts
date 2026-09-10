@@ -30,6 +30,8 @@ import {
   feedPet as applyFeedPet,
   type FeedPetResult,
   backfillPetAdoptedAt,
+  applyCoopChallengeCompleted,
+  type CoopChallengeResult,
   syncWeeklyXpSnapshot as applySyncWeeklyXpSnapshot,
 } from './progression'
 
@@ -293,6 +295,20 @@ export function useProgress() {
     return result
   }
 
+  // Desafio em dupla (lab-172) — chamado por `World3D.tsx` só depois que os DOIS participantes já
+  // confirmaram pelo relé (ver `onCoopChallengeCompleted`, bridge do jogo 3D); mesmo formato
+  // funcional de `feedPet` acima (protege contra clique/evento duplo antes do re-render).
+  function coopChallengeCompleted(nowIso: string): CoopChallengeResult {
+    let result!: CoopChallengeResult
+    setProgress((prev) => {
+      result = applyCoopChallengeCompleted(prev, nowIso)
+      if (!result.rewarded) return prev
+      saveProgress(result.progress)
+      return result.progress
+    })
+    return result
+  }
+
   // Ranking local entre perfis (lab-157) — mesmo gatilho/formato de `touchLastPlayed`, uma vez
   // por sessão (ver `App.tsx`): reseta o snapshot de XP semanal se a semana real mudou desde a
   // última vez, sem mexer em nada se ainda é a mesma semana (ver `syncWeeklyXpSnapshot`).
@@ -330,6 +346,7 @@ export function useProgress() {
     adoptPet,
     equipPet,
     feedPet,
+    coopChallengeCompleted,
     syncWeeklyXp,
   }
 }

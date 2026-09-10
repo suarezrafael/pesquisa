@@ -1,6 +1,39 @@
 # Laboratório atual
 
-Último concluído: labs/lab-171-album-conquistas/ — álbum central de conquistas e coleções
+Último concluído: labs/lab-172-desafio-cooperativo/ — desafio cooperativo fechado
+(`docs/market-metrics-engagement-backlog.md` §10, item 7 da ordem sugerida). Perguntado ao
+usuário via `AskUserQuestion` quem pode formar dupla — confirmado: qualquer jogador multiplayer
+por perto (reaproveita o portão parental do multiplayer do lab-152, não restrito a amigos
+confirmados). Mecânica: cada participante responde SUA PRÓPRIA missão (sorteada do pool normal de
+`data/quests.ts`) de forma independente — nunca precisam trocar um valor calculado entre si
+(satisfaz "sem comunicação livre" do documento literalmente, já que o chat fechado só tem frases
+fixas, não dá pra transmitir números). Landmark novo (`desafio-em-dupla`, dois pedestais +
+bandeirola) com dica "Pressione E" só quando outro jogador está de verdade por perto. Handshake
+pelo relé multiplayer: novo tipo de mensagem `coop-done` (`server-cf-relay` + `multiplayer.ts`,
+que também passou a ler a mensagem `welcome` do relé — existia desde sempre, mas nenhum código do
+cliente consumia); cada cliente decide sozinho se o par se formou (os dois se apontaram
+mutuamente, janela de 90s, `Date.now()` — não `performance.now()`, incomparável entre aparelhos).
+Recompensa: 10 moedas + emblema "Dupla Dinâmica" (primeira vez), uma vez por dia real por perfil.
+**Bug real corrigido de passagem**: `applyQuestCompletion` substituía `progress.badges` inteiro
+em vez de unir — completar qualquer missão depois de ganhar um emblema de outra origem (como o
+novo "Dupla Dinâmica") apagaria esse emblema silenciosamente; corrigido pra união. `npx tsc -b`/
+testes limpos (app 160/160, 8 novos; server-cf-relay 13/13, sem teste novo). `npm run build` sem
+regressão de bundle. **Verificado ao vivo, ponta a ponta, com relé e segundo jogador de
+VERDADE**: subiu uma instância LOCAL do relé real (`wrangler dev`) + segundo processo Vite
+apontando pra ela; um WebSocket bruto simulou um segundo jogador de verdade no MESMO relé.
+Confirmado passo a passo: jogador remoto aparece na cena 3D; dica só acende com parceiro por
+perto; `E` abre a missão sorteada; responder certo dispara `coop-done` de verdade pelo relé; a
+confirmação do parceiro completa o desafio (toast, moeda 117→127, emblema novo no HUD); tentar de
+novo no MESMO dia não recompensa de novo (anti-farm confirmado). PR #46 teve 3 achados reais do
+Copilot corrigidos antes do merge: janela de conclusão comparava contra `Date.now()` (instante da
+checagem) em vez dos dois eventos relevantes; estado de tentativa anterior não era limpo ao abrir
+um desafio novo com o mesmo parceiro (podia travar pra sempre ou completar sozinho reaproveitando
+confirmação velha); `selfId` era atribuído sem checar tipo. **Confirma deploy em produção**: PR
+#46 mergeado, CI/CD verde nos 3 workers — incluindo `server-cf-relay`, o próprio relé de produção
+—, deploy automático confirmado (`GET /health` 200, app respondendo 200 no Vercel). Ver
+`labs/lab-172-desafio-cooperativo/CONTEXT.md`.
+
+Antes desse: labs/lab-171-album-conquistas/ — álbum central de conquistas e coleções
 (`docs/market-metrics-engagement-backlog.md` §10, item 5, renumerado de "lab-167" no documento, já
 que o lab-167 real deste repositório foi usado pro mapa de habilidades). `AchievementsPanel.tsx`
 (lab-93/141) já mostrava emblemas e cartões-postais; ganhou uma seção nova "Pets" (mesmo padrão
