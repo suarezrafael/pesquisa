@@ -19,8 +19,8 @@ interface PetPanelProps {
   // lab-174 (achado do review automático do Copilot no PR #48): devolve se a recompensa foi
   // REALMENTE concedida (`applyPetDailyChallengeCompleted.rewarded`) — sem isso, a UI só sabia se
   // a resposta escolhida batia com `correctChoiceId`, e podia mostrar "acertou! +5 moedas" mesmo
-  // quando o domínio recusa (ex.: o dia já virou, ou o painel foi aberto antes de meia-noite e só
-  // respondido depois).
+  // quando o domínio recusa (já recompensado no dia UTC atual, `dayGap < 1`, ou carimbo salvo
+  // corrompido/inválido).
   onChallengeCorrect: () => boolean
   onClose: () => void
 }

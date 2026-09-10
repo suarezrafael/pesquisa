@@ -81,6 +81,12 @@ Segunda rodada do Copilot (mesmo PR, commit `518667b`) trouxe mais 2 achados rea
   texto, especialmente relevante agora que a função foi exportada e passou a ser lida por mais
   gente.
 
+Terceira rodada do Copilot (commit `e5d3f68`): "Approval recommended", 0 achados novos — só um
+ajuste de documentação sugerido no comentário do próprio `onChallengeCorrect` (os cenários citados
+de recusa não batiam com a regra real de `applyPetDailyChallengeCompleted`: só recusa quando já
+recompensado no dia UTC atual ou com carimbo corrompido, não "dia virou"/"aberto antes de meia-noite"
+como o texto anterior sugeria). Corrigido.
+
 ## Pendências / dívidas conhecidas
 
 Nenhuma nova.
