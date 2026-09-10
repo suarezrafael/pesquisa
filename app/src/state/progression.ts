@@ -603,8 +603,12 @@ export function adoptPet(progress: Progress, id: string, nowIso: string): Progre
     unlockedPetIds: result.unlockedIds,
     equippedPetId: progress.equippedPetId ?? id,
     // lab-169 — marca o início da contagem de idade (`petAgeYears`) deste pet; nunca sobrescrita
-    // depois (não existe "readotar" o mesmo pet, `unlockGeneric` já recusou acima se já tivesse).
-    petAdoptedAt: { ...progress.petAdoptedAt, [id]: nowIso },
+    // depois. `unlockGeneric` já recusa readotar um pet que já está em `unlockedPetIds`, mas um
+    // `progress` inconsistente/corrompido (achado do review automático do Copilot) — ex.: o id
+    // sumiu de `unlockedPetIds` só que `petAdoptedAt` ainda tem a data antiga — não pode
+    // "rejuvenescer" o pet só porque `adoptPet` rodou de novo; preserva a data já existente
+    // quando houver.
+    petAdoptedAt: { ...progress.petAdoptedAt, [id]: progress.petAdoptedAt[id] ?? nowIso },
   }
 }
 
@@ -616,7 +620,12 @@ export function adoptPet(progress: Progress, id: string, nowIso: string): Progre
 // `equipPet`/`unlockGeneric` acima, pra quem chama poder comparar por referência e decidir se
 // precisa salvar.
 export function backfillPetAdoptedAt(progress: Progress, nowIso: string): Progress {
-  const missing = progress.unlockedPetIds.filter((id) => !(id in progress.petAdoptedAt))
+  // lab-169 (achado do review automático do Copilot): `id in progress.petAdoptedAt` também
+  // consulta a cadeia de protótipos (ex.: `'toString' in {}` é `true`) — com dados de
+  // `localStorage` corrompidos/id inesperado, isso podia considerar uma chave "existente" sem
+  // ser uma entrada real gravada por `adoptPet`. Checar `=== undefined` direto no valor evita
+  // esse caso.
+  const missing = progress.unlockedPetIds.filter((id) => progress.petAdoptedAt[id] === undefined)
   if (missing.length === 0) return progress
   const petAdoptedAt = { ...progress.petAdoptedAt }
   for (const id of missing) petAdoptedAt[id] = nowIso

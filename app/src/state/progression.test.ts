@@ -806,6 +806,13 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
     expect(next.petAdoptedAt[petId]).toBe(adoptedAtIso)
   })
 
+  it('adoptPet preserva a data de adoção já existente em vez de "rejuvenescer" o pet (progress inconsistente)', () => {
+    const dataAntiga = '2026-01-01T00:00:00.000Z'
+    const progressInconsistente = { ...emptyProgress, coins: 9999, petAdoptedAt: { [petId]: dataAntiga } }
+    const next = adoptPet(progressInconsistente, petId, adoptedAtIso)
+    expect(next.petAdoptedAt[petId]).toBe(dataAntiga)
+  })
+
   it('adotar um segundo pet NÃO troca o equipado automaticamente', () => {
     const comPrimeiro = { ...emptyProgress, coins: 9999, unlockedPetIds: [petId], equippedPetId: petId }
     const next = adoptPet(comPrimeiro, secondPetId, adoptedAtIso)

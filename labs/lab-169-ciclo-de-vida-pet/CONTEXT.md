@@ -57,7 +57,7 @@ verdade"). O usuário escolheu a terceira, a mais segura das três.
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova. PR #43 teve 4 achados reais do Copilot corrigidos antes do merge, em 3 rodadas:
+Nenhuma nova. PR #43 teve 6 achados reais do Copilot corrigidos antes do merge, em 4 rodadas:
 - **`saveProgress` dentro do inicializador do `useState`** (`useProgress.ts`) — side effect em
   fase de render; `StrictMode` roda o inicializador 2x em dev, arriscando escrita duplicada/
   imprevisível. Movido pra um `useEffect` (array de dependência vazio, roda uma vez de verdade).
@@ -75,6 +75,15 @@ Nenhuma nova. PR #43 teve 4 achados reais do Copilot corrigidos antes do merge, 
   desmonte do componente rodaria `rebuildPet` DEPOIS de `scene.dispose()`/`engine.dispose()`;
   callback agora checa `disposed` antes de chamar `rebuildPet`, mesmo padrão já usado logo após
   o `await HavokPhysics()`.
+- **`adoptPet` podia "rejuvenescer" um pet já adotado** — sempre sobrescrevia `petAdoptedAt[id]`
+  com `nowIso`, contradizendo o próprio comentário ("nunca sobrescrita depois"); um `progress`
+  inconsistente/corrompido (id sumiu de `unlockedPetIds` mas a data antiga ainda existia) faria
+  `adoptPet` reiniciar a idade do zero. Agora preserva `progress.petAdoptedAt[id]` quando já
+  existir, só usa `nowIso` na primeira vez de verdade.
+- **`backfillPetAdoptedAt` usava o operador `in`**, que também consulta a cadeia de protótipos
+  (`'toString' in {}` é `true`) — com dado corrompido/id inesperado no `localStorage`, podia
+  considerar uma chave "existente" sem ser uma entrada real. Trocado por checagem direta
+  `=== undefined` no valor.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
