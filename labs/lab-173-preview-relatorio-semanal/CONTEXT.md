@@ -1,7 +1,7 @@
 # Contexto — Laboratório 173 — preview de relatório semanal antes da assinatura
 
 Preenchido em: 2026-09-10
-Commit inicial → final: 2fefaf3837658bc0d63b73ab5b4b576c54718be9..(PR aberto, ver seção final)
+Commit inicial → final: 2fefaf3837658bc0d63b73ab5b4b576c54718be9..a987453 (PR #47, mergeada em main)
 
 ## O que foi feito
 
@@ -62,7 +62,8 @@ usuários reais, fora do escopo de um laboratório de código. Aguardar pedido n
 
 ## Estado do repositório ao final
 
-- Branch: a definir no momento do commit.
+- Branch: `lab-173-preview-relatorio-semanal`, mergeada em `main` via PR #47 (merge commit
+  `a987453`), branch remota apagada após o merge.
 - `npx tsc -b`/`npm run test` (app): limpo, 160/160 (sem teste novo — mudança de apresentação
   pura, sem lógica de domínio nova). `npm run build` (app): limpo, sem regressão de bundle.
   `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 109/109 (1 novo, allowlist do
@@ -74,3 +75,12 @@ usuários reais, fora do escopo de um laboratório de código. Aguardar pedido n
   `window.fetch` (mesma técnica já usada nos labs 164/166 pra confirmar disparo sem depender de
   acesso à internet real deste ambiente — corpo/resposta HTTP de verdade não confirmados, mesma
   limitação já documentada).
+- **Revisão do Copilot (PR #47)**: 1 achado real corrigido — `trackWeeklyReportPreviewViewed()`
+  disparava dentro do handler de clique, podendo contar 2x num clique duplo/rápido antes do React
+  remover o botão; corrigido movendo o disparo pra um `useEffect` na transição de
+  `showReportPreview` pra `true`. Segunda passada do Copilot (commit `213cb00`): "Approval
+  recommended", 0 achados novos.
+- **CI/CD**: verde nos 3 workers (app/server-accounts/server-cf-relay) tanto na PR quanto em
+  `main` pós-merge. **Deploy em produção confirmado**: `GET /health` do `server-accounts`
+  (`https://missao-aprender-accounts.rafaelvs.workers.dev/health`) → 200; app
+  (`https://app-two-flax-92.vercel.app`) → 200.

@@ -13,8 +13,14 @@ documento) foi omitido de propósito — o e-mail de verdade não tem esse campo
 prometeria algo que a entrega real não cumpre. `npx tsc -b`/testes limpos (app 160/160, sem teste
 novo; server-accounts 109/109, 1 novo). `npm run build` sem regressão de bundle. **Verificado ao
 vivo**: fluxo completo confirmado (portão → proposta de valor → clique → cartão com conteúdo
-exato); evento confirmado disparando com payload correto via monkey-patch de `fetch`. Ver
-`labs/lab-173-preview-relatorio-semanal/CONTEXT.md`.
+exato); evento confirmado disparando com payload correto via monkey-patch de `fetch`. PR #47 teve
+1 achado real do Copilot corrigido antes do merge: `trackWeeklyReportPreviewViewed()` disparava
+dentro do handler de clique, podendo contar 2x num clique duplo/rápido antes do React remover o
+botão — corrigido movendo o disparo pra um `useEffect` na transição de estado (segunda passada do
+Copilot: "Approval recommended", 0 achados novos). **Confirma deploy em produção**: PR #47
+mergeado (commit `a987453`), CI/CD verde nos 3 workers, deploy automático confirmado (`GET
+/health` 200 em `missao-aprender-accounts.rafaelvs.workers.dev`, app respondendo 200 no Vercel).
+Ver `labs/lab-173-preview-relatorio-semanal/CONTEXT.md`.
 
 Antes desse: labs/lab-172-desafio-cooperativo/ — desafio cooperativo fechado
 (`docs/market-metrics-engagement-backlog.md` §10, item 7 da ordem sugerida). Perguntado ao
