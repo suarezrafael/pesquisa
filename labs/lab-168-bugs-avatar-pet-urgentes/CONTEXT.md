@@ -1,7 +1,7 @@
 # Contexto — Laboratório 168 — bugs urgentes de avatar/pet + pet acompanha pelo lado
 
 Preenchido em: 2026-09-09
-Commit inicial → final: 75049310cb69636c818063cbb9d71c3068234e64..(PR aberto, ver seção final)
+Commit inicial → final: 75049310cb69636c818063cbb9d71c3068234e64..d43ffce (PR #42, mergeado)
 
 ## O que foi feito
 
@@ -89,8 +89,11 @@ comunicar isso sem gerar ansiedade — mesma categoria de decisão sensível já
 
 ## Estado do repositório ao final
 
-- Branch: a definir no momento do commit (mesmo padrão dos labs 163-167 — branch de PR a partir de
-  `main`, sem worktree nesta sessão).
+- Branch: `lab-168-bugs-avatar-pet-urgentes` (mergeada e apagada). **Confirma deploy em
+  produção**: PR #42 mergeado (3 achados reais do Copilot corrigidos em 2 rodadas de review),
+  CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health` 200 em
+  `missao-aprender-accounts.rafaelvs.workers.dev`, app respondendo 200 em
+  `app-two-flax-92.vercel.app`).
 - `npx tsc -b`: limpo. `npm run test` (app): 139/139, sem teste novo (mudança de geometria 3D e
   loop de física, sem lógica de domínio pura nova isolável — mesmo padrão de labs de geometria
   anteriores, ex. lab-146). `npm run build`: limpo, sem regressão de bundle.

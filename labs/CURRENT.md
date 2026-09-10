@@ -1,6 +1,43 @@
 # Laboratório atual
 
-Último concluído: labs/lab-167-mapa-habilidades-relatorio/ — quarto e último item confirmado da
+Último concluído: labs/lab-168-bugs-avatar-pet-urgentes/ — 4 bugs urgentes reportados pelo
+usuário com print ("bug de pecas sumindo ao selecionar chapeu na lojinha, e tem espetos na cara
+do avatar, e o pet esta escondido embaixo da terra... e fazer deploy") + um 5º bug reportado no
+meio da mesma sessão ("o vulcao de venus... aparece o botao mover mas eles nao esta visiveis na
+casa"). **Boné da lojinha**: a borda (`applyHat`, `studentFigure.ts`) era um disco cheio maior que
+a cabeça, dentro da faixa vertical dela — cobria o rosto por baixo em vários ângulos; trocada por
+uma viseira só na frente + calota. **Espetos no rosto** (Leão/Fênix, `applyBonecoFeatures`): anel
+da juba ficava numa profundidade rasa que cruzava olhos/focinho; reposicionado pra sempre atrás do
+plano do rosto. **Pet enterrado em rampas de platô**: a altura do pet usava só a fórmula analítica
+de relevo (diverge da malha real perto de rampas, mesma classe dos labs 95/124/134/135/151);
+trocado por raycast físico real (`terrainGroundRadial`) no planeta principal. **Pet acompanha pelo
+lado**: reaproveita o mesmo padrão de pulo + orientação por direção-de-movimento já usado pelos
+bichinhos (`Critter`) que vagam pelo planeta, em vez de só perseguir o rastro exato de trás do
+jogador parado. **Recompensas de planeta invisíveis**: as 6 (não só Vênus) nunca tinham entrada em
+`FURNITURE_VISUAL_KIND` desde o lab-130 — `refreshHouseFurnitureVisuals` pulava a peça em silêncio
+mesmo com "Mover" liberado; adicionadas 6 geometrias novas temáticas ao planeta de origem
+(crateras, vulcão, mancha, anel, cristal, redemoinho). `npx tsc -b`/testes limpos (139/139, sem
+teste novo — geometria 3D e loop de física, sem lógica de domínio pura isolável). `npm run build`
+sem regressão de bundle. **Verificado ao vivo via Chrome real** (automação): boné/espetos
+confirmados por `getBoundingInfo`/screenshot antes e depois; pet enterrado reproduzido no ponto
+mais íngreme de uma rampa de platô real (`PLATEAU_CENTERS[0]`, ângulo na metade do raio) e
+confirmado corrigido por raycast físico direto (Havok, via `Proxy` interceptando
+`plugin.raycast`), pet a ~0,03 unidade acima da malha real (dentro do offset esperado); pet ao
+lado confirmado convergindo pra ~0,76 unidade do avatar (alvo: 0,65); recompensas de planeta
+confirmadas construídas com malha real (200-3500+ vértices cada) e habilitadas — não confirmado
+por screenshot (câmera dentro de casa só renderizou céu/neblina neste ambiente de automação,
+mesmo apontada pro centro da sala, incluindo móveis já existentes antes desta correção — aponta
+pra peculiaridade deste ambiente específico, não da geometria). PR #42 teve 3 achados reais do
+Copilot corrigidos em 2 rodadas: `Quaternion` alocado por quadro no pet (`tmpQuat.clone()`, mesma
+classe do achado do lab-155 pra `Vector3.Lerp`); `Math.acos` desnecessário por quadro (trocado por
+comparação de produto escalar); comentário desatualizado na correção da juba. **Ciclo de vida do
+pet (crescer/envelhecer/morrer)**, pedido pelo usuário no mesmo turno, foi explicitamente ADIADO
+— precisa de conversa de design dedicada antes de qualquer código, dado o cuidado já existente no
+repo com nunca punir a criança. **Confirma deploy em produção**: PR #42 mergeado, CI/CD verde nos
+3 workers, deploy automático confirmado (`GET /health` 200, app respondendo 200 no Vercel). Ver
+`labs/lab-168-bugs-avatar-pet-urgentes/CONTEXT.md`.
+
+Antes desse: labs/lab-167-mapa-habilidades-relatorio/ — quarto e último item confirmado da
 sequência (`docs/market-metrics-engagement-backlog.md`, "Lab 166" no documento — renumerado pra
 lab-167). Função pura `skillBreakdown` (client) conta missões concluídas por tipo (lógica/
 matemática/leitura, `data/quests.ts` já tem o campo, nunca `planetQuests.ts` — sem sinal real de
