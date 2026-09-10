@@ -60,11 +60,16 @@ coelhos e devem acompanhar pelo lado ao se mover"), 3 bugs + 1 mudança de compo
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova. PR #42 teve 1 achado real do Copilot corrigido antes do merge: `tmpQuat.clone()` no
-loop do pet alocava um `Quaternion` novo a cada quadro (60x/s enquanto visível) — mesma classe do
-achado do lab-155 pra `Vector3.Lerp`. Trocado por um `Quaternion` persistente (`petQuat`) escrito
-direto via `FromRotationMatrixToRef`, atribuído a `rotationQuaternion` uma única vez (na criação
-do pet, `rebuildPet`), sem realocar nem reatribuir a cada quadro.
+Nenhuma nova. PR #42 teve 3 achados reais do Copilot corrigidos antes do merge, em duas rodadas de
+review:
+- **1ª rodada**: `tmpQuat.clone()` no loop do pet alocava um `Quaternion` novo a cada quadro (60x/s
+  enquanto visível) — mesma classe do achado do lab-155 pra `Vector3.Lerp`. Trocado por um
+  `Quaternion` persistente (`petQuat`) escrito direto via `FromRotationMatrixToRef`, atribuído a
+  `rotationQuaternion` uma única vez (na criação do pet, `rebuildPet`).
+- **2ª rodada**: `Math.acos(...)` a cada quadro só pra decidir "o pet está se movendo" — trocado
+  por comparar o produto escalar direto contra `Math.cos(0.02)` (equivalente, sem `acos`/clamp);
+  comentário da correção da juba (`studentFigure.ts`) ainda falava em distribuição "na frente",
+  que não existe mais depois da correção (Z sempre negativo) — texto ajustado.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

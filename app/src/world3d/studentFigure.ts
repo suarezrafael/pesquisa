@@ -436,8 +436,10 @@ export function applyBonecoFeatures(
     // todo na MESMA profundidade rasa (Z entre -0,03 e +0,07 — perto da frente da cabeça, onde
     // ficam olhos/focinho, ver `getBoundingInfo` medido ao vivo). De qualquer ângulo que não fosse
     // exatamente de frente, os espetos apareciam cruzando o rosto em vez de emoldurar por fora.
-    // Reposicionado pra sempre ficar ATRÁS do plano do rosto (Z negativo fixo) — continua a mesma
-    // distribuição em anel (frente/topo/lados, `cos`/`sin` em X/Y), só nunca mais na frente da cara.
+    // Reposicionado pra sempre ficar ATRÁS do plano do rosto (Z negativo fixo, achado do review
+    // automático do Copilot: o comentário antigo ainda falava em distribuição "na frente", que não
+    // existe mais) — continua em anel (`cos`/`sin` em X/Y), só que inteiro atrás da cabeça, nunca
+    // mais cruzando o rosto.
     const spikeCount = 10
     for (let s = 0; s < spikeCount; s++) {
       const angle = (s / spikeCount) * Math.PI * 2

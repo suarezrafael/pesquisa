@@ -8717,8 +8717,11 @@ export function World3D({
                 .add(sideDir.scale(PET_SIDE_DISTANCE))
                 .subtract(currentWorldCenter)
                 .normalize()
-              const petAngleToTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(petUp, targetPetUp))))
-              const petMoving = petAngleToTarget > 0.02
+              // lab-168 (achado do review automático do Copilot): `Math.acos` a cada quadro só
+              // pra decidir "o pet está se movendo" é mais caro que precisa — comparar o produto
+              // escalar direto contra o cosseno do limiar equivale a comparar o ângulo, sem
+              // `acos`/clamp.
+              const petMoving = Vector3.Dot(petUp, targetPetUp) < Math.cos(0.02)
 
               // lab-155 (achado do review automático do Copilot): `Vector3.Lerp` aloca um Vector3
               // NOVO a cada quadro (60x/s enquanto o pet está visível) — `LerpToRef` escreve
