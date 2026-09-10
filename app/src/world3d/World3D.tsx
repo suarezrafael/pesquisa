@@ -6745,6 +6745,18 @@ export function World3D({
         globo_terrestre: { kind: 'globe', color: new Color3(0.25, 0.5, 0.65) },
         lousa: { kind: 'board', color: new Color3(0.12, 0.35, 0.25) },
         microscopio: { kind: 'microscope', color: new Color3(0.6, 0.6, 0.65) },
+        // lab-168 (bug real reportado pelo usuário: "o vulcao de venus... aparece o botao mover
+        // mas eles nao esta visiveis na casa"): as 6 recompensas de planeta (lab-130,
+        // `data/furniture.ts`, `planetReward`) nunca tinham entrada aqui — `MyHousePanel`/
+        // `unlockPlanetFurnitureReward` sempre trataram o item como possuído de verdade (dá pra
+        // "Mover"), mas `refreshHouseFurnitureVisuals` (`if (!visual) return`, logo abaixo) pulava
+        // a peça em silêncio há 6 planetas inteiros, não só Vênus.
+        meteorito_mercurio: { kind: 'meteor', color: new Color3(0.45, 0.42, 0.38) },
+        vulcao_venus: { kind: 'volcano', color: new Color3(0.5, 0.24, 0.16) },
+        mancha_jupiter: { kind: 'spot', color: new Color3(0.75, 0.35, 0.2) },
+        anel_saturno: { kind: 'ring', color: new Color3(0.78, 0.68, 0.48) },
+        cristal_urano: { kind: 'crystal', color: new Color3(0.55, 0.85, 0.9) },
+        redemoinho_netuno: { kind: 'whirl', color: new Color3(0.2, 0.35, 0.75) },
       }
 
       // Balcão de compras — obstáculo FIXO (nunca se move), centro da sala em coordenada local
@@ -6851,6 +6863,81 @@ export function World3D({
             wing.position = new Vector3((i - 1) * 0.3, 0.5 + i * 0.15, (i - 1) * 0.2)
             wing.billboardMode = Mesh.BILLBOARDMODE_Y
           }
+        } else if (kind === 'meteor') {
+          // lab-168 — Mercúrio é cheio de crateras (lab-110): pedra base + 3 crateras menores e
+          // mais escuras, meio afundadas na superfície.
+          add(MeshBuilder.CreateSphere('meteorBody', { diameter: 0.5, segments: 8 }, scene), 0.25)
+          const craterMat = new PBRMaterial(`furnCraterMat-${root.name}`, scene)
+          craterMat.albedoColor = color.scale(0.55)
+          craterMat.roughness = 0.9
+          for (const [cx, cy, cz] of [
+            [0.15, 0.35, 0.2],
+            [-0.18, 0.15, 0.15],
+            [0.05, 0.42, -0.18],
+          ]) {
+            const crater = MeshBuilder.CreateSphere('meteorCrater', { diameter: 0.14, segments: 6 }, scene)
+            crater.material = craterMat
+            crater.parent = root
+            crater.position = new Vector3(cx, cy, cz)
+            shadowGenerator.addShadowCaster(crater)
+          }
+        } else if (kind === 'volcano') {
+          // lab-168 — Vênus é vulcânico (lab-111): cone da montanha + poça de lava emissiva na
+          // cratera do topo.
+          add(MeshBuilder.CreateCylinder('volcanoCone', { height: 0.6, diameterTop: 0.16, diameterBottom: 0.62 }, scene), 0.3)
+          const lava = add(MeshBuilder.CreateCylinder('volcanoLava', { height: 0.04, diameter: 0.14 }, scene), 0.62)
+          const lavaMat = new PBRMaterial(`furnLavaMat-${root.name}`, scene)
+          lavaMat.albedoColor = new Color3(0.9, 0.35, 0.05)
+          lavaMat.emissiveColor = new Color3(0.9, 0.35, 0.05)
+          lava.material = lavaMat
+        } else if (kind === 'spot') {
+          // lab-168 — a Grande Mancha Vermelha de Júpiter (lab-112): disco achatado flutuando
+          // sobre uma base curta, lembrando uma tempestade vista de cima.
+          add(MeshBuilder.CreateCylinder('spotBase', { height: 0.06, diameter: 0.5 }, scene), 0.4)
+          const swirl = add(MeshBuilder.CreateSphere('spotSwirl', { diameter: 0.4 }, scene), 0.44)
+          swirl.scaling.y = 0.3
+        } else if (kind === 'ring') {
+          // lab-168 — o anel de Saturno (lab-113): mini-planeta com um anel inclinado ao redor,
+          // mesma técnica (`CreateTorus` deitado, girado em X) do anel real do planeta-destino.
+          add(MeshBuilder.CreateSphere('ringPlanet', { diameter: 0.4 }, scene), 0.5)
+          const ring = add(
+            MeshBuilder.CreateTorus('ringDisc', { diameter: 0.75, thickness: 0.05, tessellation: 32 }, scene),
+            0.5,
+          )
+          ring.rotation.x = Math.PI / 2.6
+          const ringMat = new PBRMaterial(`furnRingMat-${root.name}`, scene)
+          ringMat.albedoColor = color.scale(1.15)
+          ringMat.roughness = 0.6
+          ring.material = ringMat
+        } else if (kind === 'crystal') {
+          // lab-168 — Urano é um gigante de gelo (lab-114): dois cones ponta-com-ponta formando um
+          // cristal de gelo, com um leve brilho emissivo.
+          const top = add(MeshBuilder.CreateCylinder('crystalTop', { height: 0.4, diameterTop: 0, diameterBottom: 0.3 }, scene), 0.6)
+          const bottom = add(
+            MeshBuilder.CreateCylinder('crystalBottom', { height: 0.25, diameterTop: 0.3, diameterBottom: 0 }, scene),
+            0.275,
+          )
+          const crystalMat = new PBRMaterial(`furnCrystalMat-${root.name}`, scene)
+          crystalMat.albedoColor = color
+          crystalMat.emissiveColor = color.scale(0.25)
+          crystalMat.roughness = 0.2
+          top.material = crystalMat
+          bottom.material = crystalMat
+        } else if (kind === 'whirl') {
+          // lab-168 — Netuno tem ventos fortíssimos e a Grande Mancha Escura (lab-114): anel
+          // inclinado representando o redemoinho + uma esfera escura excêntrica pra mancha.
+          const swirl = add(
+            MeshBuilder.CreateTorus('whirlRing', { diameter: 0.55, thickness: 0.1, tessellation: 24 }, scene),
+            0.4,
+          )
+          swirl.rotation.x = Math.PI / 3.2
+          const darkSpot = MeshBuilder.CreateSphere('whirlDarkSpot', { diameter: 0.16 }, scene)
+          const darkMat = new PBRMaterial(`furnDarkSpotMat-${root.name}`, scene)
+          darkMat.albedoColor = new Color3(0.1, 0.15, 0.35)
+          darkSpot.material = darkMat
+          darkSpot.parent = root
+          darkSpot.position = new Vector3(0.16, 0.4, 0.05)
+          shadowGenerator.addShadowCaster(darkSpot)
         }
         return root
       }

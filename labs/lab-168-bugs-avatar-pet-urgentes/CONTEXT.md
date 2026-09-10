@@ -33,6 +33,19 @@ coelhos e devem acompanhar pelo lado ao se mover"), 3 bugs + 1 mudança de compo
   jogador (`Vector3.Cross(localUp, facing)`), pulo (`Math.sin(hopPhase)`) e orientação por matriz
   (right/up/forward) — acompanha virando pra qualquer direção, não só andando reto atrás.
 
+- **Bug reportado no meio da sessão: "vulcão de Vênus" com "Mover" liberado mas invisível na
+  casa** (`World3D.tsx`) — as 6 recompensas de planeta (lab-130, `data/furniture.ts`) nunca
+  tinham entrada em `FURNITURE_VISUAL_KIND`, o mapa que `refreshHouseFurnitureVisuals` usa pra
+  decidir a geometria 3D de cada item (`if (!visual) return`, pulando a peça em SILÊNCIO — sem
+  erro, sem log). `MyHousePanel`/`unlockPlanetFurnitureReward` sempre trataram o item como
+  possuído de verdade (mostrando "✓ Tem"/"Mover"), então o bug afetava as 6 recompensas inteiras
+  desde o lab-130, não só Vênus — o usuário só notou a de Vênus porque foi a que acabou de
+  desbloquear. Adicionadas 6 geometrias novas em `buildFurniturePiece` + `FURNITURE_VISUAL_KIND`
+  + `FURNITURE_COLLISION_RADIUS` (`houseCollision.ts`), temáticas ao que já existe em cada planeta
+  (mesmo raciocínio do comentário original do lab-130): crateras (Mercúrio), vulcão com lava
+  emissiva (Vênus), mancha achatada (Júpiter), mini-planeta com anel inclinado (Saturno), cristal
+  de gelo (Urano), redemoinho com mancha escura excêntrica (Netuno).
+
 ## Decisões técnicas tomadas
 
 - **Raycast só no planeta principal outdoors** — nos outros contextos (planeta-destino, dentro de
@@ -91,3 +104,15 @@ comunicar isso sem gerar ansiedade — mesma categoria de decisão sensível já
     enterrado.
   - Pet ao lado: confirmado convergindo pra ~0,76 unidade do avatar (perto do alvo configurado,
     `PET_SIDE_DISTANCE = 0,65`, mais a variação de pulo/lerp).
+  - Recompensas de planeta invisíveis: reproduzido o bug relatado (concedidas as 6 no
+    `localStorage` de um perfil de teste local, `refreshHouseFurnitureVisuals` gerava 0 nós antes
+    da correção); depois da correção, os 6 `TransformNode` (`furniture-meteor-*`/`-volcano-*`/
+    `-spot-*`/`-ring-*`/`-crystal-*`/`-whirl-*`) confirmados construídos, com malha real (200-3500+
+    vértices cada, nenhum vazio), posicionados dentro da sala e habilitados (`isEnabled() ===
+    true`). **Não confirmado por screenshot** — a câmera dentro de casa neste ambiente de
+    automação renderizou só o céu/neblina de fundo mesmo apontada pro centro da sala (nenhuma
+    parede/chão/móvel apareceu, nem os já existentes antes desta correção), o que aponta pra uma
+    peculiaridade de renderização deste ambiente específico (câmera `UniversalCamera`
+    reposicionada manualmente via script, fora do fluxo normal do jogo), não um problema da
+    geometria em si — confiança vem da inspeção direta da malha/posição real na cena, não de uma
+    captura visual.

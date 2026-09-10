@@ -31,6 +31,15 @@ pelo planeta.
       jogador (perpendicular à direção que ele olha), com o mesmo pulo (`Math.sin`) e giro pra
       direção do movimento (matriz right/up/forward) já usados pelos bichinhos — funciona virando
       pra qualquer direção, não só andando reto.
+- [x] **Bug reportado no meio da sessão: "vulcão de Vênus" com botão Mover mas invisível na casa**
+      (`World3D.tsx`, `FURNITURE_VISUAL_KIND`) — as 6 recompensas de planeta (lab-130,
+      `data/furniture.ts`, `meteorito_mercurio`/`vulcao_venus`/`mancha_jupiter`/`anel_saturno`/
+      `cristal_urano`/`redemoinho_netuno`) nunca tinham entrada no mapa que decide a geometria 3D
+      de cada peça — `refreshHouseFurnitureVisuals` pulava a peça em silêncio
+      (`if (!visual) return`) pras 6, não só Vênus, mesmo `MyHousePanel`/`unlockPlanetFurnitureReward`
+      já tratando o item como possuído de verdade (habilitando "Mover"). Adicionadas as 6 geometrias
+      novas (temáticas ao que já existe em cada planeta: crateras, vulcão, mancha, anel, cristal de
+      gelo, redemoinho).
 
 ## Fora de escopo (explicitamente adiado)
 

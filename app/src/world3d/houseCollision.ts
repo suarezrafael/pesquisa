@@ -26,6 +26,14 @@ export const FURNITURE_COLLISION_RADIUS: Record<string, number> = {
   globe: 0.35,
   board: 0.5,
   microscope: 0.35,
+  // lab-168 — recompensas de planeta (lab-130), antes ausentes daqui e do mapa visual em
+  // `World3D.tsx` (bug: apareciam com "Mover" liberado mas nunca eram construídas na sala).
+  meteor: 0.3,
+  volcano: 0.35,
+  spot: 0.3,
+  ring: 0.4,
+  crystal: 0.25,
+  whirl: 0.3,
 }
 export const FURNITURE_COLLISION_RADIUS_DEFAULT = 0.6
 
