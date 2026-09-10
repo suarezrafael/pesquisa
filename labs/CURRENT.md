@@ -15,7 +15,16 @@ o botão até o dia seguinte. `npx tsc -b`/testes limpos (165/165, 5 novos). `np
 regressão de bundle. **Verificado ao vivo via Chrome real**: pet de teste adotado/equipado via
 `localStorage`, botão confirmado aparecendo, resposta errada confirmada sem penalidade (moedas
 inalteradas, convite pra tentar de novo), resposta certa confirmada concedendo exatamente +5
-moedas e travando o botão até o dia seguinte; perfil de teste restaurado ao final. Ver
+moedas e travando o botão até o dia seguinte; perfil de teste restaurado ao final. PR #48 teve 3
+rodadas de achados reais do Copilot corrigidos antes do merge: `doneToday` (UI) comparava
+calendário LOCAL enquanto o domínio usa dia UTC (`utcDayNumber`, agora exportado e reaproveitado)
+— em fusos à frente de UTC a UI podia mostrar "acertou! +5 moedas" sem o domínio conceder nada;
+`onChallengeCorrect` passou a devolver se a recompensa foi REALMENTE concedida, e um bug irmão
+achado ao reverificar ao vivo (o cartão sumia no mesmo instante da recompensa, antes da mensagem de
+sucesso aparecer) foi corrigido junto; `challengeQuest.passage` não era renderizado (perguntas de
+leitura ficavam sem contexto); comentário de `utcDayNumber` invertia UTC/local. **Confirma deploy em
+produção**: PR #48 mergeado (commit `30572e5`), CI/CD verde nos 3 workers, `GET /health` 200 em
+`missao-aprender-accounts.rafaelvs.workers.dev`, app respondendo 200 no Vercel. Ver
 `labs/lab-174-desafio-educativo-pet/CONTEXT.md`.
 
 **Com este lab, todos os 8 itens da "Ordem sugerida" (§10) do

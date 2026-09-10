@@ -1,7 +1,7 @@
 # Contexto — Laboratório 174 — desafio educativo leve na rotina diária do pet
 
 Preenchido em: 2026-09-10
-Commit inicial → final: ea36511d5f6bb10dda3bb4b2d2b356da684a29a8..(PR aberto, ver seção final)
+Commit inicial → final: ea36511d5f6bb10dda3bb4b2d2b356da684a29a8..30572e54c44912849b33c3eb61bb70acd1e6ddfe (PR #48, mergeada em main)
 
 ## O que foi feito
 
@@ -107,7 +107,11 @@ código. Aguardar pedido novo do usuário sobre qual desses (ou outro item) prio
 
 ## Estado do repositório ao final
 
-- Branch: `lab-174-desafio-educativo-pet`.
+- Branch: `lab-174-desafio-educativo-pet`, mergeada em `main` via PR #48 (merge commit
+  `30572e5`), branch remota apagada após o merge. **Confirma deploy em produção**: CI/CD verde
+  nos 3 workers, `GET /health` do `server-accounts`
+  (`https://missao-aprender-accounts.rafaelvs.workers.dev/health`) → 200; app
+  (`https://app-two-flax-92.vercel.app`) → 200.
 - `npx tsc -b`/`npm run test` (app): limpo, 165/165 (5 novos, `applyPetDailyChallengeCompleted`).
   `npm run build`: limpo, sem regressão de bundle (nenhum chunk novo, mudança só em componentes já
   existentes).
