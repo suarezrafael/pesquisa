@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import {
   adoptPet,
   applyCoinCollected,
+  applyCoopChallengeCompleted,
   applyDailyLoginReward,
   applyPlanetQuestCompletion,
   applyPostcardCollected,
@@ -15,6 +16,9 @@ import {
   applyTreasureChestFound,
   backfillPetAdoptedAt,
   badgesEarnedAt,
+  BADGE_ALL_DONE,
+  BADGE_COOP_FIRST,
+  BADGE_FIRST_QUEST,
   equipPet,
   feedPet,
   furnitureQuantity,
@@ -971,6 +975,62 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
     expect(petStageScale('jovem')).toBeLessThan(petStageScale('adulto'))
     expect(petStageScale('adulto')).toBe(1)
     expect(petStageScale('idoso')).toBe(1)
+  })
+})
+
+describe('applyCoopChallengeCompleted (lab-172, desafio em dupla)', () => {
+  it('recompensa a primeira vez, concede o emblema "Dupla Dinâmica" e grava a data', () => {
+    const result = applyCoopChallengeCompleted(emptyProgress, '2026-09-10T12:00:00.000Z')
+    expect(result.rewarded).toBe(true)
+    expect(result.newBadge).toBe(true)
+    expect(result.coins).toBeGreaterThan(0)
+    expect(result.progress.coins).toBe(result.coins)
+    expect(result.progress.badges).toContain(BADGE_COOP_FIRST)
+    expect(result.progress.lastCoopChallengeAt).toBe('2026-09-10T12:00:00.000Z')
+  })
+
+  it('não recompensa de novo no MESMO dia real (uma vez por dia, mesmo padrão de feedPet)', () => {
+    const progress = { ...emptyProgress, lastCoopChallengeAt: '2026-09-10T08:00:00.000Z' }
+    const result = applyCoopChallengeCompleted(progress, '2026-09-10T20:00:00.000Z')
+    expect(result.rewarded).toBe(false)
+    expect(result.progress).toBe(progress)
+  })
+
+  it('recompensa de novo no dia seguinte, mas sem repetir o emblema (já ganho antes)', () => {
+    const progress = {
+      ...emptyProgress,
+      badges: [BADGE_COOP_FIRST],
+      lastCoopChallengeAt: '2026-09-10T08:00:00.000Z',
+    }
+    const result = applyCoopChallengeCompleted(progress, '2026-09-11T08:00:00.000Z')
+    expect(result.rewarded).toBe(true)
+    expect(result.newBadge).toBe(false)
+    expect(result.progress.badges).toEqual([BADGE_COOP_FIRST])
+  })
+
+  it('relógio ajustado pra trás não conta como novo dia (mesma defesa de feedPet/login diário)', () => {
+    const progress = { ...emptyProgress, lastCoopChallengeAt: '2026-09-10T08:00:00.000Z' }
+    const result = applyCoopChallengeCompleted(progress, '2026-09-08T08:00:00.000Z')
+    expect(result.rewarded).toBe(false)
+  })
+})
+
+describe('applyQuestCompletion preserva emblemas de outras origens (lab-172, achado ao adicionar o emblema do desafio em dupla)', () => {
+  it('completar uma missão normal NUNCA apaga um emblema já ganho de outra origem (ex.: Dupla Dinâmica)', () => {
+    const progress = { ...emptyProgress, badges: [BADGE_COOP_FIRST] }
+    const result = applyQuestCompletion(progress, quests[0], NO_BONUS_EVENT)
+    expect(result.progress.badges).toContain(BADGE_COOP_FIRST)
+    expect(result.progress.badges).toContain(BADGE_FIRST_QUEST)
+  })
+
+  it('completar TODAS as missões ainda concede Mestre das Missões junto com um emblema de outra origem', () => {
+    let progress = { ...emptyProgress, badges: [BADGE_COOP_FIRST] }
+    for (const quest of quests) {
+      progress = applyQuestCompletion(progress, quest, NO_BONUS_EVENT).progress
+    }
+    expect(progress.badges).toEqual(
+      expect.arrayContaining([BADGE_COOP_FIRST, BADGE_FIRST_QUEST, BADGE_ALL_DONE]),
+    )
   })
 })
 

@@ -86,7 +86,12 @@ function sanitizedNameForBroadcast(rawName: unknown): string {
 // originados pelo cliente hoje (ver `src/world3d/multiplayer.ts`: `sendState`/`sendAttack`/
 // `sendChat`); `welcome`/`leave` são gerados só pelo próprio relay, nunca esperados vindos de um
 // cliente.
-const ALLOWED_CLIENT_MESSAGE_TYPES = new Set(['state', 'attack', 'chat'])
+// lab-172 (desafio cooperativo fechado) — `coop-done` avisa quem o cliente considera seu parceiro
+// no momento (`partnerId`, o `id` de conexão do outro jogador) que completou a própria parte;
+// cada cliente decide sozinho se o par realmente se formou (ver `onCoopDone`,
+// `app/src/world3d/multiplayer.ts`) — o relay só repassa, mesma responsabilidade de `attack`/
+// `chat` (nunca decide nada de jogo, só valida forma e broadcast).
+const ALLOWED_CLIENT_MESSAGE_TYPES = new Set(['state', 'attack', 'chat', 'coop-done'])
 
 function isVec3(v: unknown): v is [number, number, number] {
   return Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number' && Number.isFinite(n))
@@ -257,6 +262,14 @@ export class Relay implements DurableObject {
         if (msg.enemyKind !== 'et' && msg.enemyKind !== 'robo') return
         if (!isVec3(msg.fromPos) || !isVec3(msg.toPos)) return
         this.broadcast(ws, { ...msg, id })
+        return
+      }
+      if (msg.type === 'coop-done') {
+        // `partnerId` é só o `id` de conexão (formato `crypto.randomUUID().slice(0, 8)`, ver
+        // acima) de outro jogador — nunca dado do jogador em si, então não precisa da mesma
+        // sanitização de nome/mensagem de `chat`.
+        if (typeof msg.partnerId !== 'string' || msg.partnerId.length === 0 || msg.partnerId.length > 32) return
+        this.broadcast(ws, { type: 'coop-done', partnerId: msg.partnerId, id })
         return
       }
     } catch (err) {

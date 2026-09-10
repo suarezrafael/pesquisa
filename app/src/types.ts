@@ -115,6 +115,12 @@ export interface Progress {
   // idade só decide se um pet JÁ adulto também vira "idoso" (`petLifecycleStage`), nunca se ele
   // cresce sozinho sem ser alimentado.
   petAdoptedAt: Record<string, string>
+  // lab-172 (desafio cooperativo, docs/market-metrics-engagement-backlog.md item 7 da ordem
+  // sugerida) — data/hora da última vez que ESTE perfil completou sua parte do desafio em dupla;
+  // trava recompensar mais de uma vez por dia real, mesmo espírito anti-farm de `lastPetFeedAt`/
+  // `loginStreak`. Cada participante da dupla grava o PRÓPRIO carimbo — não é um estado
+  // compartilhado entre os dois jogadores.
+  lastCoopChallengeAt: string | null
   // Ranking local entre perfis do mesmo aparelho (lab-157, item do backlog social do lab-154) —
   // "XP ganho nesta semana" não existe como número guardado direto (só o total acumulado, `xp`
   // acima); é derivado comparando `xp` contra o valor QUE ELE TINHA no início da semana atual
