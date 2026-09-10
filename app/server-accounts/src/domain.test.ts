@@ -229,6 +229,10 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
     expect(isValidProductEventType('checkout_started')).toBe(true)
   })
 
+  it('aceita o preview do relatório semanal do lab-173', () => {
+    expect(isValidProductEventType('weekly_report_preview_viewed')).toBe(true)
+  })
+
   it('rejeita um tipo desconhecido — nunca confia em input do client sem checar', () => {
     expect(isValidProductEventType('qualquer_coisa')).toBe(false)
     expect(isValidProductEventType('')).toBe(false)

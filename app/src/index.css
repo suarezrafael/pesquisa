@@ -417,6 +417,44 @@ a.nickname-generate-btn {
   cursor: not-allowed;
 }
 
+/* lab-173 — preview do relatório semanal em `/familia` (recolhido por padrão, ver
+   `FamilyValueProp`). Botão neutro (nem `--primary` nem `--danger`, pra não competir
+   visualmente com o CTA principal "Entrar / Criar conta" da mesma tela). */
+.preview-toggle-button {
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.6rem 1rem;
+  border: 2px solid var(--accent-dark);
+  border-radius: 999px;
+  background: white;
+  color: var(--accent-dark);
+  cursor: pointer;
+}
+
+.weekly-report-preview {
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  background: #f5fdfe;
+}
+
+.weekly-report-preview-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-dark);
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.weekly-report-preview-subject {
+  font-weight: 700;
+  color: var(--ink);
+}
+
 /* Widget de NPS (lab-103) — mesmo cartão de `.pairing-code-box`. `<select>` nativo em vez de
    botões 0-10 customizados: acessível/touch-friendly por padrão do navegador, sem precisar
    desenhar 11 alvos de toque separados. */

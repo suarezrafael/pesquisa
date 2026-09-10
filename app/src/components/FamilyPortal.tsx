@@ -4,7 +4,12 @@ import { authClient } from '../auth/neonAuthClient'
 import { loadLastPlayedAt, loadProfile, loadProgress } from '../state/storage'
 import { getLevel, skillBreakdown, xpIntoLevel } from '../state/progression'
 import { quests } from '../data/quests'
-import { trackCheckoutStarted, trackFamilyLandingViewed, trackParentSignupStarted } from '../productAnalytics'
+import {
+  trackCheckoutStarted,
+  trackFamilyLandingViewed,
+  trackParentSignupStarted,
+  trackWeeklyReportPreviewViewed,
+} from '../productAnalytics'
 import type { QuestType } from '../types'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
@@ -99,6 +104,12 @@ function ParentalGateScreen({ gate }: { gate: ReturnType<typeof useParentalGate>
 // abaixo pula direto pro `Dashboard` se já houver sessão — responsável que já assina não precisa
 // ver isto de novo toda vez que abre `/familia`).
 function FamilyValueProp({ onContinue }: { onContinue: () => void }) {
+  // lab-173 (docs/market-metrics-engagement-backlog.md §10, item 8, "Preview de relatório
+  // semanal antes da assinatura") — recolhido por padrão; abrir de propósito é o sinal de
+  // interesse que a métrica do documento pede ("clique em preview"), diferente do exemplo de uma
+  // frase só que já ficava sempre visível (lab-166).
+  const [showReportPreview, setShowReportPreview] = useState(false)
+
   useEffect(() => {
     trackFamilyLandingViewed()
   }, [])
@@ -106,6 +117,11 @@ function FamilyValueProp({ onContinue }: { onContinue: () => void }) {
   function handleContinue() {
     trackParentSignupStarted()
     onContinue()
+  }
+
+  function handleShowReportPreview() {
+    trackWeeklyReportPreviewViewed()
+    setShowReportPreview(true)
   }
 
   return (
@@ -138,17 +154,36 @@ function FamilyValueProp({ onContinue }: { onContinue: () => void }) {
         personalização visual e conveniência pra quem assina.
       </p>
 
-      <h2>📄 Um exemplo do relatório semanal</h2>
-      <p>
-        <em>
-          "Esta semana, seu explorador completou 4 missões (lógica, matemática e leitura),
-          alcançou o nível 6 e brincou com 2 amigos. Sugestão de conversa: pergunte sobre a missão
-          de frações!"
-        </em>
-      </p>
-      <p className="subtitle">
-        Exemplo ilustrativo — quem assina recebe o relatório de verdade, por e-mail, toda semana.
-      </p>
+      <h2>📄 O relatório semanal</h2>
+      {!showReportPreview ? (
+        <button type="button" className="preview-toggle-button" onClick={handleShowReportPreview}>
+          👀 Ver exemplo do relatório semanal
+        </button>
+      ) : (
+        <div className="weekly-report-preview">
+          <span className="weekly-report-preview-tag">EXEMPLO — dados fictícios</span>
+          <p className="weekly-report-preview-subject">
+            📧 Resumo semanal do progresso — Missão Aprender
+          </p>
+          <p>Oi! Aqui está o resumo desta semana:</p>
+          <ul>
+            <li>
+              <strong>Nível 6</strong> (350 XP no total)
+            </li>
+            <li>4 missões concluídas</li>
+            <li>120 moedas guardadas</li>
+            <li>2 emblemas conquistados</li>
+          </ul>
+          <p>
+            Ponto forte da semana: <strong>Matemática</strong>. Pra praticar mais:{' '}
+            <strong>Leitura</strong> — que tal um desafio de leitura na próxima sessão?
+          </p>
+          <p className="subtitle">
+            Exemplo com números fictícios — quem assina recebe o relatório de verdade, com o
+            progresso real, por e-mail, toda semana.
+          </p>
+        </div>
+      )}
 
       <h2>💳 Cancelamento</h2>
       <p>Cancele quando quiser, direto por aqui — sem multa e sem precisar ligar pra ninguém.</p>
