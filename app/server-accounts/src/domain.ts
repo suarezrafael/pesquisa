@@ -177,6 +177,9 @@ const PRODUCT_EVENT_TYPES = new Set([
   'family_landing_viewed',
   'parent_signup_started',
   'checkout_started',
+  // lab-173 (docs/market-metrics-engagement-backlog.md §10, item 8) — mede interesse real no
+  // preview do relatório semanal, ver app/src/productAnalytics.ts.
+  'weekly_report_preview_viewed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
