@@ -1,6 +1,35 @@
 # Laboratório atual
 
-Último concluído: labs/lab-169-ciclo-de-vida-pet/ — pedido do usuário, adiado de propósito no
+Último concluído: labs/lab-170-casa-interativa/ — pedido do usuário num turno com 3 itens: bug de
+setas de posicionamento de mobília invertidas, excluir objetos da casa (só existia adicionar), e
+objetos interativos pela tecla E (deitar na cama, reação genérica pros outros). Confirmado via
+`AskUserQuestion`: tudo num lab só, excluir nunca devolve moeda. **Setas invertidas**: `y`
+(cima/baixo) já tinha o mesmo sinal do "throttle" do avatar a pé, mas a peça fantasma aplicava
+direto sem negar — corrigido. **Excluir mobília** (`removeFurniture`, `progression.ts` +
+`MyHousePanel.tsx`): remove uma cópia sem devolver moeda, confirmação de dois cliques, reindexa
+`housePlacements` preservando a posição das cópias restantes; nunca remove item
+`subscriptionOnly`/`planetReward`. **Bug real achado implementando**: a reconstrução da cena 3D
+só sabia lidar com quantidade CRESCENDO — excluir do meio fazia a peça errada sumir; corrigido
+forçando reconstrução completa do item quando a quantidade diminui. **Deitar na cama**
+(`restingInBedKey`, mesma categoria de `drivingCar`/`drivingRocket`): reparenta a figura na cama
+com pose deitada (rotação 90°), `E` de novo levanta. **Reação genérica**: balão com emoji+nome do
+item (`FURNITURE_CATALOG`) acima da cabeça do jogador, cobre qualquer item presente/futuro sem
+código novo. **Bug real achado testando ao vivo**: a checagem de proximidade comparava posição
+LOCAL da peça contra posição de MUNDO do avatar — a interação nunca disparava; corrigido com
+`getAbsolutePosition()`. `npx tsc -b`/testes limpos (152/152, 6 novos). `npm run build` sem
+regressão de bundle. **Verificado ao vivo via Chrome real**: 3 plantas em posições distintas,
+excluída a do meio pelo painel real — as duas restantes confirmadas EXATAMENTE nas posições
+certas, sem reembolso de moeda; deitar/levantar da cama confirmado por reparenting/quaternion +
+screenshot; reação genérica confirmada mostrando "🪴 Planta"; seta de posicionamento confirmada
+movendo a peça pra frente (+Z) em vez de pra trás. PR #44 teve 2 achados reais do Copilot
+corrigidos: `removeFurniture` podia propagar chaves `${id}#NaN` em `housePlacements` (entrada
+legada/corrompida) — descartada em vez de preservada; `key={i}` (índice) na lista de cópias
+podia fazer o React reaproveitar a linha errada após reindexação — trocado por chave estável.
+**Confirma deploy em produção**: PR #44 mergeado, CI/CD verde nos 3 workers, deploy automático
+confirmado (`GET /health` 200, app respondendo 200 no Vercel). Ver
+`labs/lab-170-casa-interativa/CONTEXT.md`.
+
+Antes desse: labs/lab-169-ciclo-de-vida-pet/ — pedido do usuário, adiado de propósito no
 lab-168 pra uma conversa de design dedicada ("o pet tem que ter ciclo de vida ele deve crescer
 envelhecer e morrer"). Retomado nesta sessão ("pode fazer um ciclo de vida normal, incrementado
 os anos por dias"). Perguntado via `AskUserQuestion` como a "morte" deveria funcionar pra uma

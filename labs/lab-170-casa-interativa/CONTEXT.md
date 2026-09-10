@@ -1,7 +1,7 @@
 # Contexto — Laboratório 170 — casa interativa (deitar, excluir móvel, setas corrigidas)
 
 Preenchido em: 2026-09-09
-Commit inicial → final: ff06b63b432696783ee124246cac5e5059802ea9..(PR aberto, ver seção final)
+Commit inicial → final: ff06b63b432696783ee124246cac5e5059802ea9..dc0166f (PR #44, mergeado)
 
 ## O que foi feito
 
@@ -88,7 +88,9 @@ vira um pedido novo, escopo maior (uma pose por tipo, não reaproveitável).
 
 ## Estado do repositório ao final
 
-- Branch: a definir no momento do commit.
+- Branch: `lab-170-casa-interativa` (mergeada e apagada). **Confirma deploy em produção**: PR
+  #44 mergeado (2 achados reais do Copilot corrigidos), CI/CD verde nos 3 workers, deploy
+  automático confirmado (`GET /health` 200, app respondendo 200 no Vercel).
 - `npx tsc -b`: limpo. `npm run test` (app): 151/151 (5 novos — `removeFurniture`: remove sem
   reembolso, reindexação preserva posição das cópias restantes, recusa item
   subscriptionOnly/planetReward, recusa índice fora do intervalo, recusa item inexistente).
