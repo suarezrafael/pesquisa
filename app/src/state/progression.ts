@@ -428,7 +428,13 @@ function dailyLoginRewardFor(streak: number): number {
 // (`new Date().toISOString()`). Vira do dia limpo à meia-noite LOCAL do fuso do jogador em vez de
 // UTC (ex.: Brasil, UTC-3, a virada acontece 21h no relógio local) — simplificação conhecida,
 // documentada em vez de escondida; não afeta a contagem em si, só EM QUE HORÁRIO exato ela vira.
-function utcDayNumber(iso: string): number {
+// Exportado (lab-174, achado do review automático do Copilot no PR #48): `PetPanel.tsx` usava um
+// critério de "dia" diferente (calendário LOCAL) só pra decidir se mostra um botão diário já
+// desabilitado — pra fusos com deslocamento POSITIVO (à frente de UTC), o dia local vira ANTES do
+// dia UTC, então a UI podia habilitar o botão umas horas antes da regra de domínio realmente
+// aceitar, mostrando "acertei" sem conceder a recompensa. Reaproveitar a mesma função elimina a
+// divergência de raiz, em vez de só tratar o sintoma.
+export function utcDayNumber(iso: string): number {
   return Math.floor(new Date(iso).getTime() / 86_400_000)
 }
 

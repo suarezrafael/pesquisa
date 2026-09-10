@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import { PET_CATALOG } from '../data/pets'
 import { quests } from '../data/quests'
-import { petAgeYears, petLifecycleStage, petStageFor, type PetStage } from '../state/progression'
+import { petAgeYears, petLifecycleStage, petStageFor, utcDayNumber, type PetStage } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Progress, Quest } from '../types'
 
@@ -16,7 +16,12 @@ interface PetPanelProps {
   onAdopt: (id: string) => void
   onEquip: (id: string) => void
   onFeed: () => void
-  onChallengeCorrect: () => void
+  // lab-174 (achado do review automático do Copilot no PR #48): devolve se a recompensa foi
+  // REALMENTE concedida (`applyPetDailyChallengeCompleted.rewarded`) — sem isso, a UI só sabia se
+  // a resposta escolhida batia com `correctChoiceId`, e podia mostrar "acertou! +5 moedas" mesmo
+  // quando o domínio recusa (ex.: o dia já virou, ou o painel foi aberto antes de meia-noite e só
+  // respondido depois).
+  onChallengeCorrect: () => boolean
   onClose: () => void
 }
 
@@ -34,20 +39,15 @@ export const STAGE_LABEL: Record<PetStage, string> = {
   idoso: '🧓 Idoso',
 }
 
-// Comparação de calendário LOCAL, só pra decidir se mostra um botão de ação diária (alimentar,
-// desafio educativo) já desabilitado — a checagem de verdade (que decide se conta) é
-// `feedPet`/`applyPetDailyChallengeCompleted` (`state/progression.ts`), por dia UTC. Uma pequena
-// divergência na virada exata do dia é só cosmética aqui (o botão continuaria clicável até 1
-// chamada a mais, sem efeito nenhum já que a função de domínio recusa silenciosamente).
-function doneToday(lastActionAt: string | null): boolean {
+// lab-174 (achado do review automático do Copilot no PR #48): antes comparava calendário LOCAL
+// (`getFullYear`/`getMonth`/`getDate`), um critério de "dia" DIFERENTE do usado pelas regras de
+// domínio (`feedPet`/`applyPetDailyChallengeCompleted`, por dia UTC via `utcDayNumber`) — em
+// fusos à FRENTE de UTC, o dia local vira antes do dia UTC, deixando a UI habilitar o botão horas
+// antes do domínio realmente aceitar a ação. Reaproveitar `utcDayNumber` elimina a divergência de
+// raiz, em vez de só documentá-la como aceitável.
+function doneToday(lastActionAt: string | null, nowIso: string): boolean {
   if (!lastActionAt) return false
-  const last = new Date(lastActionAt)
-  const now = new Date()
-  return (
-    last.getFullYear() === now.getFullYear() &&
-    last.getMonth() === now.getMonth() &&
-    last.getDate() === now.getDate()
-  )
+  return utcDayNumber(lastActionAt) === utcDayNumber(nowIso)
 }
 
 function pickRandomQuest(): Quest {
@@ -56,7 +56,10 @@ function pickRandomQuest(): Quest {
 
 export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrect, onClose }: PetPanelProps) {
   const modalRef = useModalA11y(onClose)
-  const alreadyFedToday = doneToday(progress.lastPetFeedAt)
+  // lab-169 — um só "agora" pra todo o painel (a idade muda no máximo 1x por dia real, não
+  // precisa recalcular por pet nem se preocupar com o milissegundo exato do render).
+  const nowIso = new Date().toISOString()
+  const alreadyFedToday = doneToday(progress.lastPetFeedAt, nowIso)
   // lab-174 (desafio educativo leve, docs/market-metrics-engagement-backlog.md item 6 da ordem
   // sugerida) — sorteado uma vez por abertura do painel, do mesmo banco de `data/quests.ts` já
   // usado pelo desafio cooperativo (lab-172), sem catálogo novo. Responder errado nunca bloqueia
@@ -65,18 +68,22 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
   const [challengeQuest] = useState<Quest>(pickRandomQuest)
   const [challengeOpen, setChallengeOpen] = useState(false)
   const [challengeChoiceId, setChallengeChoiceId] = useState<string | null>(null)
-  const [challengeFeedback, setChallengeFeedback] = useState<'correct' | 'wrong' | null>(null)
-  const alreadyChallengedToday = doneToday(progress.lastPetChallengeAt)
-  // lab-169 — um só "agora" pra todo o painel (a idade muda no máximo 1x por dia real, não
-  // precisa recalcular por pet nem se preocupar com o milissegundo exato do render).
-  const nowIso = new Date().toISOString()
+  const [challengeFeedback, setChallengeFeedback] = useState<'correct' | 'wrong' | 'already-done' | null>(null)
+  const alreadyChallengedToday = doneToday(progress.lastPetChallengeAt, nowIso)
 
   function handleChooseChallenge(choiceId: string) {
-    if (challengeFeedback === 'correct') return
+    if (challengeFeedback === 'correct' || challengeFeedback === 'already-done') return
     setChallengeChoiceId(choiceId)
     const isCorrect = choiceId === challengeQuest.correctChoiceId
-    setChallengeFeedback(isCorrect ? 'correct' : 'wrong')
-    if (isCorrect) onChallengeCorrect()
+    if (!isCorrect) {
+      setChallengeFeedback('wrong')
+      return
+    }
+    // lab-174 (achado do review automático do Copilot no PR #48): só sela a UI como "acertou" se
+    // `onChallengeCorrect` confirmar que a recompensa foi REALMENTE concedida — senão a criança
+    // veria "Isso aí! +5 moedas" sem receber nada e ficaria travada sem poder tentar de novo.
+    const rewarded = onChallengeCorrect()
+    setChallengeFeedback(rewarded ? 'correct' : 'already-done')
   }
 
   return (
@@ -147,7 +154,11 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
           })}
         </div>
 
-        {challengeOpen && !alreadyChallengedToday && (
+        {/* `challengeFeedback !== null` mantém o cartão visível depois de responder, mesmo que
+            `alreadyChallengedToday` vire `true` no re-render seguinte (progress atualizado com a
+            recompensa) — sem isso, a mensagem "Isso aí! +5 moedas" nunca chegava a aparecer, o
+            cartão sumia no mesmo instante em que a recompensa era concedida. */}
+        {challengeOpen && (!alreadyChallengedToday || challengeFeedback !== null) && (
           <div className="pet-challenge-card">
             <p className="quest-prompt">{challengeQuest.prompt}</p>
             <div className="quest-choices">
@@ -161,7 +172,7 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
                     key={choice.id}
                     className={`quest-choice ${showCorrect ? 'correct' : ''} ${showWrong ? 'wrong' : ''}`}
                     onClick={() => handleChooseChallenge(choice.id)}
-                    disabled={challengeFeedback === 'correct'}
+                    disabled={challengeFeedback === 'correct' || challengeFeedback === 'already-done'}
                   >
                     {choice.label}
                   </button>
@@ -170,6 +181,9 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
             </div>
             {challengeFeedback === 'wrong' && (
               <p className="quest-feedback wrong">Quase! Tente outra opção. 💪</p>
+            )}
+            {challengeFeedback === 'already-done' && (
+              <p className="quest-feedback correct">Você já fez o desafio de hoje! Volte amanhã. 🎉</p>
             )}
             {challengeFeedback === 'correct' && (
               <p className="quest-feedback correct">Isso aí! 🪙 +5 moedas pro cuidado de hoje.</p>

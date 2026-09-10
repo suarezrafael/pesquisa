@@ -519,7 +519,7 @@ function GameApp() {
           onAdopt={adoptPet}
           onEquip={equipPet}
           onFeed={() => feedPet(new Date().toISOString())}
-          onChallengeCorrect={() => petDailyChallengeCompleted(new Date().toISOString())}
+          onChallengeCorrect={() => petDailyChallengeCompleted(new Date().toISOString()).rewarded}
           onClose={() => setShowPets(false)}
         />
       )}

@@ -48,6 +48,27 @@ o "desafio educativo leve" — hoje alimentar o pet era só um clique, sem apren
   rotina do pet ("streak punitivo, cobrança pra recuperar sequência"); bloquear tentativas ou
   reduzir a recompensa por errar violaria o mesmo princípio.
 
+## Achados do review automático do Copilot (PR #48, corrigidos antes do merge)
+
+- **`doneToday` (`PetPanel.tsx`) comparava calendário LOCAL, divergindo do critério de "dia" da
+  regra de domínio (`utcDayNumber`, UTC)** — em fusos à FRENTE de UTC, o dia local vira antes do
+  dia UTC, deixando a UI habilitar o botão horas antes do domínio aceitar de verdade. Corrigido
+  reaproveitando `utcDayNumber` (agora exportado de `progression.ts`) nos dois botões diários
+  (alimentar e desafio), eliminando a divergência de raiz em vez de só documentá-la como aceitável
+  (como o comentário original de `fedToday` fazia).
+- **UI selava "acertou! +5 moedas" sem confirmar se a recompensa foi REALMENTE concedida** —
+  `onChallengeCorrect` não devolvia nada; agora devolve o `rewarded` real
+  (`applyPetDailyChallengeCompleted(...).rewarded`), e a UI só mostra a mensagem de sucesso quando
+  isso é `true`; um novo estado `already-done` cobre o caso raro em que o domínio recusa mesmo com
+  a resposta certa (avisa "Você já fez o desafio de hoje!" em vez de travar a criança numa mensagem
+  de sucesso falsa).
+- **Achado ao verificar a correção acima ao vivo (não veio do Copilot)**: o cartão de pergunta
+  inteiro desaparecia no MESMO instante em que a recompensa era concedida — `alreadyChallengedToday`
+  vira `true` assim que o `progress` atualizado chega via re-render, e a condição original
+  (`challengeOpen && !alreadyChallengedToday`) escondia o cartão antes da mensagem "Isso aí!"
+  chegar a aparecer na tela. Corrigido mantendo o cartão visível enquanto `challengeFeedback !==
+  null`.
+
 ## Pendências / dívidas conhecidas
 
 Nenhuma nova.
@@ -83,3 +104,9 @@ código. Aguardar pedido novo do usuário sobre qual desses (ou outro item) prio
   feito hoje"),
   `lastPetChallengeAt` gravado no `localStorage` com o timestamp real do clique. Perfil de teste
   restaurado ao estado original (moedas, pet equipado, `lastPetChallengeAt`) ao final.
+- **Reverificado ao vivo depois dos achados do Copilot**: mesmo fluxo repetido do zero (novo pet
+  de teste, nova pergunta sorteada — "O que aconteceu com o foguete?") confirmou a mensagem "Isso
+  aí! 🪙 +5 moedas pro cuidado de hoje." agora aparecendo de verdade na tela (127→132, +5 exato) e
+  permanecendo visível junto com "🎓 Desafio feito hoje" no botão — antes da correção do bug de
+  desaparecimento, essa mensagem nunca chegava a ser vista. Perfil de teste restaurado de novo ao
+  final.
