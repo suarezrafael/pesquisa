@@ -1,6 +1,39 @@
 # Laboratório atual
 
-Último concluído: labs/lab-173-preview-relatorio-semanal/ — preview de relatório semanal antes da
+Último concluído: labs/lab-174-desafio-educativo-pet/ — desafio educativo leve na rotina diária
+do pet (`docs/market-metrics-engagement-backlog.md` §10, item 6). Confirmado com o usuário via
+`AskUserQuestion` que todo o resto do backlog top-8 já estava completo (checado item a item nesta
+sessão, inclusive "vitrine ética de assinatura" — já coberta pelos labs 166/173) e que o único
+pedaço faltando deste item era o "desafio educativo leve": alimentar o pet era só um clique, sem
+aprendizado junto. Nova função pura `applyPetDailyChallengeCompleted` (`state/progression.ts`,
+mesmo padrão anti-farm de `feedPet`/`applyCoopChallengeCompleted`, 5 moedas 1x/dia real, só com
+pet equipado). `PetPanel.tsx` ganhou botão "🎓 Desafio rápido do dia" ao lado de "Alimentar" —
+abre um cartão inline (reaproveita as classes do `QuestModal`) com 1 pergunta sorteada de
+`data/quests.ts` (mesmo banco do desafio cooperativo do lab-172, sem catálogo novo). Errar nunca
+bloqueia nem pune (documento proíbe punição na rotina do pet); acertar dá a recompensa e desabilita
+o botão até o dia seguinte. `npx tsc -b`/testes limpos (165/165, 5 novos). `npm run build` sem
+regressão de bundle. **Verificado ao vivo via Chrome real**: pet de teste adotado/equipado via
+`localStorage`, botão confirmado aparecendo, resposta errada confirmada sem penalidade (moedas
+inalteradas, convite pra tentar de novo), resposta certa confirmada concedendo exatamente +5
+moedas e travando o botão até o dia seguinte; perfil de teste restaurado ao final. PR #48 teve 3
+rodadas de achados reais do Copilot corrigidos antes do merge: `doneToday` (UI) comparava
+calendário LOCAL enquanto o domínio usa dia UTC (`utcDayNumber`, agora exportado e reaproveitado)
+— em fusos à frente de UTC a UI podia mostrar "acertou! +5 moedas" sem o domínio conceder nada;
+`onChallengeCorrect` passou a devolver se a recompensa foi REALMENTE concedida, e um bug irmão
+achado ao reverificar ao vivo (o cartão sumia no mesmo instante da recompensa, antes da mensagem de
+sucesso aparecer) foi corrigido junto; `challengeQuest.passage` não era renderizado (perguntas de
+leitura ficavam sem contexto); comentário de `utcDayNumber` invertia UTC/local. **Confirma deploy em
+produção**: PR #48 mergeado (commit `30572e5`), CI/CD verde nos 3 workers, `GET /health` 200 em
+`missao-aprender-accounts.rafaelvs.workers.dev`, app respondendo 200 no Vercel. Ver
+`labs/lab-174-desafio-educativo-pet/CONTEXT.md`.
+
+**Com este lab, todos os 8 itens da "Ordem sugerida" (§10) do
+`docs/market-metrics-engagement-backlog.md` estão completos.** Resta no documento: "Lab 171 - Casa
+visitável somente leitura" (P1, fora da lista top-8) e os itens de pesquisa/aquisição (fora de
+escopo de laboratório de código até haver evidência real de ativação/retenção). Aguardando novo
+pedido do usuário.
+
+Antes desse: labs/lab-173-preview-relatorio-semanal/ — preview de relatório semanal antes da
 assinatura (`docs/market-metrics-engagement-backlog.md` §10, item 8; já registrado como "fora de
 escopo" pelo próprio lab-166). `FamilyValueProp` (`components/FamilyPortal.tsx`) ganhou um cartão
 de preview estruturado (mesmo formato do e-mail real, `buildWeeklyProgressEmail`: nível/XP,

@@ -19,7 +19,7 @@ interface AchievementsPanelProps {
 // coleções": "destacar próximos itens ganháveis grátis") — primeiro item AINDA bloqueado, em
 // ordem de prioridade emblema → cartão-postal → pet (emblema é conquista pura, sem custo nem
 // viagem; cartão-postal exige viajar; pet exige moeda — do "mais alcançável" pro "menos"). Função
-// pura pequena e específica de apresentação, mesmo padrão de `fedToday` em `PetPanel.tsx` — não
+// pura pequena e específica de apresentação, mesmo padrão de `doneToday` em `PetPanel.tsx` — não
 // mora em `progression.ts` porque `data/achievements.ts` já importa DE lá (`BADGE_FIRST_QUEST`
 // etc.); importar `ACHIEVEMENT_CATALOG` de volta em `progression.ts` criaria import circular.
 function nextObjective(progress: Progress): { emoji: string; name: string; description: string } | null {

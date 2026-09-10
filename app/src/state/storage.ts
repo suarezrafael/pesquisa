@@ -177,6 +177,8 @@ export const emptyProgress: Progress = {
   petAdoptedAt: {},
   // Desafio cooperativo (lab-172) — ver comentário em `types.ts`.
   lastCoopChallengeAt: null,
+  // Desafio educativo leve do pet (lab-174) — ver comentário em `types.ts`.
+  lastPetChallengeAt: null,
   // Ranking local entre perfis (lab-157) — ver comentário em `types.ts`.
   weeklyXpWeekKey: null,
   weeklyXpSnapshot: 0,

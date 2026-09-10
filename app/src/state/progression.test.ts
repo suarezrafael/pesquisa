@@ -8,6 +8,7 @@ import {
   adoptPet,
   applyCoinCollected,
   applyCoopChallengeCompleted,
+  applyPetDailyChallengeCompleted,
   applyDailyLoginReward,
   applyPlanetQuestCompletion,
   applyPostcardCollected,
@@ -1011,6 +1012,54 @@ describe('applyCoopChallengeCompleted (lab-172, desafio em dupla)', () => {
   it('relógio ajustado pra trás não conta como novo dia (mesma defesa de feedPet/login diário)', () => {
     const progress = { ...emptyProgress, lastCoopChallengeAt: '2026-09-10T08:00:00.000Z' }
     const result = applyCoopChallengeCompleted(progress, '2026-09-08T08:00:00.000Z')
+    expect(result.rewarded).toBe(false)
+  })
+})
+
+describe('applyPetDailyChallengeCompleted (lab-174, desafio educativo leve da rotina do pet)', () => {
+  it('não recompensa sem pet equipado', () => {
+    const result = applyPetDailyChallengeCompleted(emptyProgress, '2026-09-10T12:00:00.000Z')
+    expect(result.rewarded).toBe(false)
+    expect(result.progress).toBe(emptyProgress)
+  })
+
+  it('recompensa a primeira vez com pet equipado e grava a data', () => {
+    const progress = { ...emptyProgress, equippedPetId: 'gato' }
+    const result = applyPetDailyChallengeCompleted(progress, '2026-09-10T12:00:00.000Z')
+    expect(result.rewarded).toBe(true)
+    expect(result.coins).toBeGreaterThan(0)
+    expect(result.progress.coins).toBe(result.coins)
+    expect(result.progress.lastPetChallengeAt).toBe('2026-09-10T12:00:00.000Z')
+  })
+
+  it('não recompensa de novo no MESMO dia real (uma vez por dia, mesmo padrão de feedPet/coop)', () => {
+    const progress = {
+      ...emptyProgress,
+      equippedPetId: 'gato',
+      lastPetChallengeAt: '2026-09-10T08:00:00.000Z',
+    }
+    const result = applyPetDailyChallengeCompleted(progress, '2026-09-10T20:00:00.000Z')
+    expect(result.rewarded).toBe(false)
+    expect(result.progress).toBe(progress)
+  })
+
+  it('recompensa de novo no dia seguinte', () => {
+    const progress = {
+      ...emptyProgress,
+      equippedPetId: 'gato',
+      lastPetChallengeAt: '2026-09-10T08:00:00.000Z',
+    }
+    const result = applyPetDailyChallengeCompleted(progress, '2026-09-11T08:00:00.000Z')
+    expect(result.rewarded).toBe(true)
+  })
+
+  it('relógio ajustado pra trás não conta como novo dia (mesma defesa de feedPet/login diário)', () => {
+    const progress = {
+      ...emptyProgress,
+      equippedPetId: 'gato',
+      lastPetChallengeAt: '2026-09-10T08:00:00.000Z',
+    }
+    const result = applyPetDailyChallengeCompleted(progress, '2026-09-08T08:00:00.000Z')
     expect(result.rewarded).toBe(false)
   })
 })

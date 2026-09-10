@@ -121,6 +121,11 @@ export interface Progress {
   // `loginStreak`. Cada participante da dupla grava o PRÓPRIO carimbo — não é um estado
   // compartilhado entre os dois jogadores.
   lastCoopChallengeAt: string | null
+  // lab-174 (rotina diária saudável com pet, docs/market-metrics-engagement-backlog.md item 6 da
+  // ordem sugerida) — data/hora da última vez que este perfil acertou o desafio educativo leve
+  // ligado ao pet; trava recompensar mais de uma vez por dia real, mesmo espírito anti-farm de
+  // `lastPetFeedAt`/`lastCoopChallengeAt`.
+  lastPetChallengeAt: string | null
   // Ranking local entre perfis do mesmo aparelho (lab-157, item do backlog social do lab-154) —
   // "XP ganho nesta semana" não existe como número guardado direto (só o total acumulado, `xp`
   // acima); é derivado comparando `xp` contra o valor QUE ELE TINHA no início da semana atual
