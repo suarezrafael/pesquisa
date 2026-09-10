@@ -6,6 +6,7 @@
 // item é só possuído ou não). lab-107 acrescentou os 2 sets exclusivos de assinante ("Quarto
 // Espacial", "Jardim Encantado") — mesma regra `usable = subscriptionOnly ? entitlementActive :
 // owned` e tag "🔒 Assinantes" já usadas em `AvatarShop.tsx` pra chapéus/óculos exclusivos.
+import { useState } from 'react'
 import { FURNITURE_CATALOG } from '../data/furniture'
 import { furnitureQuantity } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
@@ -21,11 +22,35 @@ interface MyHousePanelProps {
   // aparece pra itens `usable`, e o próprio `World3D.tsx` ignora o pedido se o jogador não estiver
   // no interior no momento).
   onStartPlacing: (id: string) => void
+  // lab-170 (pedido do usuário: "tem que ter como excluir objetos da casa tbm, hoje so tem como
+  // colocar mais um") — remove uma cópia comprada, sem devolver moeda (decisão confirmada com o
+  // usuário). Só aparece pra item comum (nunca `subscriptionOnly`/`planetReward`, ver
+  // `removeFurniture` em `progression.ts`).
+  onRemoveFurniture: (key: string) => void
   onClose: () => void
 }
 
-export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, onStartPlacing, onClose }: MyHousePanelProps) {
+export function MyHousePanel({
+  progress,
+  entitlementActive,
+  onUnlockFurniture,
+  onStartPlacing,
+  onRemoveFurniture,
+  onClose,
+}: MyHousePanelProps) {
   const modalRef = useModalA11y(onClose)
+  // Confirmação de dois cliques (mesmo padrão de "Remover" amigo, `FriendsPanel.tsx`, lab-160) —
+  // evita apagar um móvel comprado sem querer, sem precisar de um modal novo.
+  const [confirmingRemoveKey, setConfirmingRemoveKey] = useState<string | null>(null)
+
+  function handleRemoveClick(key: string) {
+    if (confirmingRemoveKey === key) {
+      onRemoveFurniture(key)
+      setConfirmingRemoveKey(null)
+    } else {
+      setConfirmingRemoveKey(key)
+    }
+  }
   return (
     <div
       className="modal-overlay"
@@ -56,6 +81,11 @@ export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, o
             const owned = quantity > 0
             const affordable = progress.coins >= item.cost
             const canBuyMore = !item.subscriptionOnly && !item.planetReward
+            // lab-170 — mesma regra de `removeFurniture` (`progression.ts`): só item comum é
+            // excluível, nunca `subscriptionOnly`/`planetReward` (nada a "devolver" excluindo o
+            // primeiro; o segundo é conquista permanente, perder por engano não teria como refazer
+            // sem reconquistar o planeta).
+            const canRemove = canBuyMore
 
             return (
               <div key={item.id} className={`avatar-shop-item ${owned ? 'equipped' : ''}`}>
@@ -68,16 +98,29 @@ export function MyHousePanel({ progress, entitlementActive, onUnlockFurniture, o
                   <span className="avatar-shop-tag">✓ Tem{quantity > 1 ? ` (${quantity})` : ''}</span>
                 )}
 
-                {Array.from({ length: quantity }, (_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className="avatar-shop-action"
-                    onClick={() => onStartPlacing(`${item.id}#${i}`)}
-                  >
-                    🖐️ Mover{quantity > 1 ? ` #${i + 1}` : ''}
-                  </button>
-                ))}
+                {Array.from({ length: quantity }, (_, i) => {
+                  const key = `${item.id}#${i}`
+                  return (
+                    // lab-170 (achado do review automático do Copilot): `key={i}` (índice) deixava
+                    // o React reaproveitar a linha errada depois de excluir uma cópia do meio
+                    // (reindexação muda o que cada índice representa) — `key` estável (mesma
+                    // string usada como identidade da cópia em todo o resto do arquivo) evita isso.
+                    <div key={key} className="my-house-copy-row">
+                      <button type="button" className="avatar-shop-action" onClick={() => onStartPlacing(key)}>
+                        🖐️ Mover{quantity > 1 ? ` #${i + 1}` : ''}
+                      </button>
+                      {canRemove && (
+                        <button
+                          type="button"
+                          className="avatar-shop-action remove"
+                          onClick={() => handleRemoveClick(key)}
+                        >
+                          {confirmingRemoveKey === key ? 'Confirmar exclusão?' : '🗑️ Excluir'}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
 
                 {!owned && item.subscriptionOnly && (
                   <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>

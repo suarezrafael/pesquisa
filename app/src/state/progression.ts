@@ -567,6 +567,53 @@ export function setFurniturePlacement(progress: Progress, id: string, x: number,
   return { ...progress, housePlacements: { ...progress.housePlacements, [id]: { x, z, rotY } } }
 }
 
+// lab-170 (pedido do usuário: "tem que ter como excluir objetos da casa tbm, hoje so tem como
+// colocar mais um") — remove UMA cópia comprada, sem devolver moeda (decisão confirmada com o
+// usuário: reembolsar abriria brecha pra comprar-e-excluir repetidas vezes só pra girar moeda).
+// `key` no mesmo formato `${itemId}#${índice}` já usado por `housePlacements`/`World3D.tsx`.
+// Itens `subscriptionOnly`/`planetReward` nunca são removíveis — nunca são "comprados" com moeda
+// (nada a reembolsar/economizar excluindo), e recompensa de planeta é conquista permanente, não
+// dá pra reconquistar o planeta só pra recuperar o item apagado por engano.
+export function removeFurniture(progress: Progress, key: string): Progress {
+  const [id, indexStr] = key.split('#')
+  const index = Number(indexStr)
+  const item = FURNITURE_CATALOG.find((c) => c.id === id)
+  if (!item || item.subscriptionOnly || item.planetReward) return progress
+  const currentQuantity = progress.unlockedFurnitureIds.filter((x) => x === id).length
+  if (!Number.isInteger(index) || index < 0 || index >= currentQuantity) return progress
+
+  const removeAt = progress.unlockedFurnitureIds.indexOf(id)
+  const unlockedFurnitureIds = [
+    ...progress.unlockedFurnitureIds.slice(0, removeAt),
+    ...progress.unlockedFurnitureIds.slice(removeAt + 1),
+  ]
+
+  // Cópias são anônimas/intercambiáveis (a identidade de cada uma vem só do índice posicional
+  // usado em `housePlacements`/`World3D.tsx`, não de qual elemento saiu do array acima) — remover
+  // a cópia `index` e deslizar toda cópia de índice MAIOR uma posição pra baixo preserva a
+  // posição salva de cada cópia que continua existindo.
+  const housePlacements: Progress['housePlacements'] = {}
+  for (const [placementKey, placement] of Object.entries(progress.housePlacements)) {
+    const [placementId, placementIndexStr] = placementKey.split('#')
+    if (placementId !== id) {
+      housePlacements[placementKey] = placement
+      continue
+    }
+    const placementIndex = Number(placementIndexStr)
+    // lab-170 (achado do review automático do Copilot): uma chave legada/corrompida sem sufixo
+    // `#<índice>` numérico (`placementIndexStr` ausente/não-numérico) vira `NaN` aqui — sem esta
+    // checagem, `NaN > index` é sempre falso e a entrada seria regravada como `${id}#NaN`,
+    // propagando lixo pra sempre. Uma chave assim já era inútil (nenhum código lê `${id}#NaN`),
+    // então é descartada em vez de preservada.
+    if (!Number.isFinite(placementIndex)) continue
+    if (placementIndex === index) continue
+    const newIndex = placementIndex > index ? placementIndex - 1 : placementIndex
+    housePlacements[`${id}#${newIndex}`] = placement
+  }
+
+  return { ...progress, unlockedFurnitureIds, housePlacements }
+}
+
 export interface PlanetFurnitureRewardResult {
   progress: Progress
   granted: boolean

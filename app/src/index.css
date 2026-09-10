@@ -1419,6 +1419,19 @@ a.nickname-generate-btn {
   cursor: not-allowed;
 }
 
+/* lab-170 — "Excluir" mobília (`MyHousePanel.tsx`), mesma cor de aviso de "Remover" amigo
+   (`--danger`) já usada pra outras ações destrutivas neste projeto. */
+.avatar-shop-action.remove {
+  background: var(--danger);
+  color: white;
+}
+
+.my-house-copy-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
 /* Chat multiplayer */
 
 .chat-panel {
