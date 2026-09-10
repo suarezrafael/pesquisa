@@ -160,6 +160,7 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
             cartão sumia no mesmo instante em que a recompensa era concedida. */}
         {challengeOpen && (!alreadyChallengedToday || challengeFeedback !== null) && (
           <div className="pet-challenge-card">
+            {challengeQuest.passage && <p className="quest-passage">{challengeQuest.passage}</p>}
             <p className="quest-prompt">{challengeQuest.prompt}</p>
             <div className="quest-choices">
               {challengeQuest.choices.map((choice) => {

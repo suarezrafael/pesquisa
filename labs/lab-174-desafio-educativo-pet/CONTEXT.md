@@ -69,6 +69,18 @@ o "desafio educativo leve" — hoje alimentar o pet era só um clique, sem apren
   chegar a aparecer na tela. Corrigido mantendo o cartão visível enquanto `challengeFeedback !==
   null`.
 
+Segunda rodada do Copilot (mesmo PR, commit `518667b`) trouxe mais 2 achados reais:
+
+- **`challengeQuest.passage` nunca era renderizado no cartão inline** — perguntas de leitura
+  (`type: 'leitura'`, têm um texto de apoio em `passage`) ficavam sem contexto/indecifráveis no
+  desafio do pet, mesmo já sendo renderizado normalmente pelo `QuestModal`. Corrigido reaproveitando
+  a mesma classe `.quest-passage` (já existente) antes do `quest-prompt`.
+- **Comentário de `utcDayNumber` invertia UTC/local** — dizia "vira à meia-noite LOCAL... em vez
+  de UTC", quando na verdade a função vira à meia-noite UTC (o próprio exemplo do Brasil, 21h no
+  relógio local, já provava isso — só a frase-guia estava com os termos trocados). Corrigido o
+  texto, especialmente relevante agora que a função foi exportada e passou a ser lida por mais
+  gente.
+
 ## Pendências / dívidas conhecidas
 
 Nenhuma nova.
@@ -110,3 +122,7 @@ código. Aguardar pedido novo do usuário sobre qual desses (ou outro item) prio
   permanecendo visível junto com "🎓 Desafio feito hoje" no botão — antes da correção do bug de
   desaparecimento, essa mensagem nunca chegava a ser vista. Perfil de teste restaurado de novo ao
   final.
+- **Reverificado de novo pra confirmar o `passage`**: `Math.random` sobrescrito temporariamente
+  pra forçar o sorteio de uma quest de leitura conhecida (`q03`, "O Gato Sonolento") — o texto de
+  apoio ("Miau era um gato muito esperto...") confirmado aparecendo no cartão antes da pergunta,
+  como esperado.

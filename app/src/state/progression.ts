@@ -423,11 +423,14 @@ function dailyLoginRewardFor(streak: number): number {
   return DAILY_LOGIN_REWARD_BY_DAY_IN_CYCLE[dayInCycle - 1]
 }
 
-// Trunca um ISO qualquer pro número de dias desde a época Unix, em UTC — mesmo raciocínio de
-// "dia" já usado pelo carimbo de `lastPlayedAt` (lab-91), que também é gravado em UTC
-// (`new Date().toISOString()`). Vira do dia limpo à meia-noite LOCAL do fuso do jogador em vez de
-// UTC (ex.: Brasil, UTC-3, a virada acontece 21h no relógio local) — simplificação conhecida,
-// documentada em vez de escondida; não afeta a contagem em si, só EM QUE HORÁRIO exato ela vira.
+// Trunca um ISO qualquer pro número de dias desde a época Unix, EM UTC (não no fuso local do
+// jogador) — mesmo raciocínio de "dia" já usado pelo carimbo de `lastPlayedAt` (lab-91), que
+// também é gravado em UTC (`new Date().toISOString()`). A virada acontece à meia-noite UTC, que
+// cai num horário diferente da meia-noite local (ex.: Brasil, UTC-3, a virada acontece 21h no
+// relógio local, não 0h) — simplificação conhecida, documentada em vez de escondida; não afeta a
+// contagem em si, só EM QUE HORÁRIO exato ela vira. lab-174 (achado do review automático do
+// Copilot no PR #48): o texto anterior deste comentário invertia UTC/local, o que confundia
+// justamente o tipo de uso que motivou exportar esta função — ver comentário logo abaixo.
 // Exportado (lab-174, achado do review automático do Copilot no PR #48): `PetPanel.tsx` usava um
 // critério de "dia" diferente (calendário LOCAL) só pra decidir se mostra um botão diário já
 // desabilitado — pra fusos com deslocamento POSITIVO (à frente de UTC), o dia local vira ANTES do
