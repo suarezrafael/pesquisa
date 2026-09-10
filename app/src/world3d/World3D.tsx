@@ -219,6 +219,11 @@ const CAMERA_ROTATE_SPEED = 1.6 // rad/s — velocidade de giro da câmera segur
 // tentativa: alto o bastante pra não "sumir" de vista quando o jogador corre, baixo o bastante
 // pra sobrar um atraso visível (senão colaria em cima do jogador, sem parecer "seguindo").
 const PET_FOLLOW_LERP_SPEED = 3
+// lab-168 (bug real reportado pelo usuário: pet só perseguia o rastro EXATO de trás do jogador,
+// sem nunca se comportar como os bichinhos que já vagam pelo planeta — coelho/gato/etc., que
+// pulam e viram na direção do movimento). Alvo agora é um ponto ao LADO do jogador, não atrás.
+const PET_SIDE_DISTANCE = 0.65 // unidades de distância lateral do jogador
+const PET_HOP_SPEED = 9 // mesma faixa (8-11) usada pelos bichinhos terrestres (`hopSpeed`)
 // Orçamento de rede do multiplayer (lab-85, docs/prompts/05-escala-e-viabilidade.md achado G1):
 // antes, `sendState` disparava incondicionalmente a cada 0,12s (8,33 msg/s por jogador) — a cota
 // gratuita de Durable Objects (100.000 requests/dia, cada mensagem WebSocket conta como uma)
@@ -6740,6 +6745,18 @@ export function World3D({
         globo_terrestre: { kind: 'globe', color: new Color3(0.25, 0.5, 0.65) },
         lousa: { kind: 'board', color: new Color3(0.12, 0.35, 0.25) },
         microscopio: { kind: 'microscope', color: new Color3(0.6, 0.6, 0.65) },
+        // lab-168 (bug real reportado pelo usuário: "o vulcao de venus... aparece o botao mover
+        // mas eles nao esta visiveis na casa"): as 6 recompensas de planeta (lab-130,
+        // `data/furniture.ts`, `planetReward`) nunca tinham entrada aqui — `MyHousePanel`/
+        // `unlockPlanetFurnitureReward` sempre trataram o item como possuído de verdade (dá pra
+        // "Mover"), mas `refreshHouseFurnitureVisuals` (`if (!visual) return`, logo abaixo) pulava
+        // a peça em silêncio há 6 planetas inteiros, não só Vênus.
+        meteorito_mercurio: { kind: 'meteor', color: new Color3(0.45, 0.42, 0.38) },
+        vulcao_venus: { kind: 'volcano', color: new Color3(0.5, 0.24, 0.16) },
+        mancha_jupiter: { kind: 'spot', color: new Color3(0.75, 0.35, 0.2) },
+        anel_saturno: { kind: 'ring', color: new Color3(0.78, 0.68, 0.48) },
+        cristal_urano: { kind: 'crystal', color: new Color3(0.55, 0.85, 0.9) },
+        redemoinho_netuno: { kind: 'whirl', color: new Color3(0.2, 0.35, 0.75) },
       }
 
       // Balcão de compras — obstáculo FIXO (nunca se move), centro da sala em coordenada local
@@ -6846,6 +6863,81 @@ export function World3D({
             wing.position = new Vector3((i - 1) * 0.3, 0.5 + i * 0.15, (i - 1) * 0.2)
             wing.billboardMode = Mesh.BILLBOARDMODE_Y
           }
+        } else if (kind === 'meteor') {
+          // lab-168 — Mercúrio é cheio de crateras (lab-110): pedra base + 3 crateras menores e
+          // mais escuras, meio afundadas na superfície.
+          add(MeshBuilder.CreateSphere('meteorBody', { diameter: 0.5, segments: 8 }, scene), 0.25)
+          const craterMat = new PBRMaterial(`furnCraterMat-${root.name}`, scene)
+          craterMat.albedoColor = color.scale(0.55)
+          craterMat.roughness = 0.9
+          for (const [cx, cy, cz] of [
+            [0.15, 0.35, 0.2],
+            [-0.18, 0.15, 0.15],
+            [0.05, 0.42, -0.18],
+          ]) {
+            const crater = MeshBuilder.CreateSphere('meteorCrater', { diameter: 0.14, segments: 6 }, scene)
+            crater.material = craterMat
+            crater.parent = root
+            crater.position = new Vector3(cx, cy, cz)
+            shadowGenerator.addShadowCaster(crater)
+          }
+        } else if (kind === 'volcano') {
+          // lab-168 — Vênus é vulcânico (lab-111): cone da montanha + poça de lava emissiva na
+          // cratera do topo.
+          add(MeshBuilder.CreateCylinder('volcanoCone', { height: 0.6, diameterTop: 0.16, diameterBottom: 0.62 }, scene), 0.3)
+          const lava = add(MeshBuilder.CreateCylinder('volcanoLava', { height: 0.04, diameter: 0.14 }, scene), 0.62)
+          const lavaMat = new PBRMaterial(`furnLavaMat-${root.name}`, scene)
+          lavaMat.albedoColor = new Color3(0.9, 0.35, 0.05)
+          lavaMat.emissiveColor = new Color3(0.9, 0.35, 0.05)
+          lava.material = lavaMat
+        } else if (kind === 'spot') {
+          // lab-168 — a Grande Mancha Vermelha de Júpiter (lab-112): disco achatado flutuando
+          // sobre uma base curta, lembrando uma tempestade vista de cima.
+          add(MeshBuilder.CreateCylinder('spotBase', { height: 0.06, diameter: 0.5 }, scene), 0.4)
+          const swirl = add(MeshBuilder.CreateSphere('spotSwirl', { diameter: 0.4 }, scene), 0.44)
+          swirl.scaling.y = 0.3
+        } else if (kind === 'ring') {
+          // lab-168 — o anel de Saturno (lab-113): mini-planeta com um anel inclinado ao redor,
+          // mesma técnica (`CreateTorus` deitado, girado em X) do anel real do planeta-destino.
+          add(MeshBuilder.CreateSphere('ringPlanet', { diameter: 0.4 }, scene), 0.5)
+          const ring = add(
+            MeshBuilder.CreateTorus('ringDisc', { diameter: 0.75, thickness: 0.05, tessellation: 32 }, scene),
+            0.5,
+          )
+          ring.rotation.x = Math.PI / 2.6
+          const ringMat = new PBRMaterial(`furnRingMat-${root.name}`, scene)
+          ringMat.albedoColor = color.scale(1.15)
+          ringMat.roughness = 0.6
+          ring.material = ringMat
+        } else if (kind === 'crystal') {
+          // lab-168 — Urano é um gigante de gelo (lab-114): dois cones ponta-com-ponta formando um
+          // cristal de gelo, com um leve brilho emissivo.
+          const top = add(MeshBuilder.CreateCylinder('crystalTop', { height: 0.4, diameterTop: 0, diameterBottom: 0.3 }, scene), 0.6)
+          const bottom = add(
+            MeshBuilder.CreateCylinder('crystalBottom', { height: 0.25, diameterTop: 0.3, diameterBottom: 0 }, scene),
+            0.275,
+          )
+          const crystalMat = new PBRMaterial(`furnCrystalMat-${root.name}`, scene)
+          crystalMat.albedoColor = color
+          crystalMat.emissiveColor = color.scale(0.25)
+          crystalMat.roughness = 0.2
+          top.material = crystalMat
+          bottom.material = crystalMat
+        } else if (kind === 'whirl') {
+          // lab-168 — Netuno tem ventos fortíssimos e a Grande Mancha Escura (lab-114): anel
+          // inclinado representando o redemoinho + uma esfera escura excêntrica pra mancha.
+          const swirl = add(
+            MeshBuilder.CreateTorus('whirlRing', { diameter: 0.55, thickness: 0.1, tessellation: 24 }, scene),
+            0.4,
+          )
+          swirl.rotation.x = Math.PI / 3.2
+          const darkSpot = MeshBuilder.CreateSphere('whirlDarkSpot', { diameter: 0.16 }, scene)
+          const darkMat = new PBRMaterial(`furnDarkSpotMat-${root.name}`, scene)
+          darkMat.albedoColor = new Color3(0.1, 0.15, 0.35)
+          darkSpot.material = darkMat
+          darkSpot.parent = root
+          darkSpot.position = new Vector3(0.16, 0.4, 0.05)
+          shadowGenerator.addShadowCaster(darkSpot)
         }
         return root
       }
@@ -7964,6 +8056,19 @@ export function World3D({
       // avatar) — funciona em qualquer planeta-destino sem código extra por planeta.
       let petRoot: TransformNode | null = null
       const petUp = avatarMesh ? avatarMesh.position.subtract(currentWorldCenter).normalize() : Vector3.Up()
+      // lab-168 — mesmo par (`forward`/`hopPhase`) que cada bicho vagando pelo planeta já tem
+      // (`Critter`, mais abaixo), só que pro pet só existe UM, então guardado à parte em vez de
+      // dentro de um objeto por instância.
+      const petForwardSeed = Math.abs(petUp.y) < 0.9 ? Vector3.Up() : Vector3.Right()
+      let petForward = Vector3.Cross(petUp, petForwardSeed).normalize()
+      let petHopPhase = Math.random() * Math.PI * 2
+      // lab-168 (achado do review automático do Copilot): `tmpQuat.clone()` no loop do pet
+      // alocava um Quaternion NOVO a cada quadro (60x/s enquanto visível) — mesma classe do
+      // achado do lab-155 pra `Vector3.Lerp`. Um quaternion persistente + `FromRotationMatrixToRef`
+      // escrevendo direto nele evita a alocação; a mesma instância fica atribuída a
+      // `rotationQuaternion` desde a criação do pet (`rebuildPet`), então não precisa reatribuir
+      // a propriedade a cada quadro.
+      const petQuat = new Quaternion()
       function rebuildPet() {
         petRoot?.dispose()
         petRoot = null
@@ -7978,6 +8083,7 @@ export function World3D({
         const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
         root.scaling.setAll(scale)
         root.position.copyFrom(avatarMesh.position)
+        root.rotationQuaternion = petQuat
         petRoot = root
       }
       rebuildPet()
@@ -8593,23 +8699,67 @@ export function World3D({
           rainAnchor.position.copyFrom(pos)
           rainAnchor.rotationQuaternion = alignmentQuaternion(localUp)
 
-          // Pet adotável (lab-155) segue o jogador com um pequeno atraso — `petUp` persegue
-          // `localUp` a cada quadro (nunca "teleporta" pra cima dele), o que sozinho já produz o
-          // efeito de "vindo atrás" sem precisar calcular uma posição de rastro explícita.
+          // Pet adotável (lab-155, refeito no lab-168 por 2 bugs reais reportados pelo usuário)
+          // — antes só perseguia o `localUp` EXATO do jogador (sempre grudado no rastro de trás,
+          // sem pulo, sem virar na direção do movimento — diferente dos bichinhos que já vagam
+          // pelo planeta, `critters` mais abaixo). Agora persegue um ponto ao LADO do jogador
+          // (perpendicular a `facing`, reprojetado de volta pra esfera), com o mesmo pulo
+          // (`Math.sin`) e giro-pra-direção-do-movimento (matriz right/up/forward) já usados por
+          // eles — acompanha do lado em qualquer direção que o jogador vire, não só atrás.
           // Escondido dentro de casa/dirigindo (ver comentário em `rebuildPet`, onde `petRoot` é
           // criado).
           if (petRoot) {
             const petVisible = !insideHouseInterior && !drivingCar && !drivingRocket
             petRoot.setEnabled(petVisible)
-            if (petVisible) {
+            if (petVisible && avatarMesh) {
+              const sideDir = Vector3.Cross(localUp, facing).normalize()
+              const targetPetUp = avatarMesh.position
+                .add(sideDir.scale(PET_SIDE_DISTANCE))
+                .subtract(currentWorldCenter)
+                .normalize()
+              // lab-168 (achado do review automático do Copilot): `Math.acos` a cada quadro só
+              // pra decidir "o pet está se movendo" é mais caro que precisa — comparar o produto
+              // escalar direto contra o cosseno do limiar equivale a comparar o ângulo, sem
+              // `acos`/clamp.
+              const petMoving = Vector3.Dot(petUp, targetPetUp) < Math.cos(0.02)
+
               // lab-155 (achado do review automático do Copilot): `Vector3.Lerp` aloca um Vector3
               // NOVO a cada quadro (60x/s enquanto o pet está visível) — `LerpToRef` escreve
               // direto em `petUp`, sem alocar; `normalize()` também já muda o próprio vetor sem
               // criar outro.
-              Vector3.LerpToRef(petUp, localUp, Math.min(1, dt * PET_FOLLOW_LERP_SPEED), petUp)
+              Vector3.LerpToRef(petUp, targetPetUp, Math.min(1, dt * PET_FOLLOW_LERP_SPEED), petUp)
               petUp.normalize()
-              petRoot.position.copyFrom(currentWorldCenter.add(petUp.scale(currentGroundBaseFn(petUp) + 0.02)))
-              petRoot.rotationQuaternion = alignmentQuaternion(petUp)
+
+              let petFwd = targetPetUp.subtract(petUp.scale(Vector3.Dot(targetPetUp, petUp)))
+              if (petFwd.lengthSquared() > 1e-6) {
+                petFwd.normalize()
+                petForward = petFwd
+              } else {
+                petFwd = petForward
+              }
+
+              petHopPhase += dt * PET_HOP_SPEED * (petMoving ? 1 : 0.15)
+              const petHop = Math.max(0, Math.sin(petHopPhase)) * 0.05
+
+              // lab-168 (bug real: "pet escondido embaixo da terra") — `currentGroundBaseFn` usa
+              // só a FÓRMULA analítica do relevo (`terrainHeight`), sem raycast contra o mesh de
+              // verdade; perto de rampa/platô isso diverge da malha real (mesma causa raiz já
+              // documentada nos labs 95/134/135 pras escolinhas/casa). Ali a correção era
+              // ESTÁTICA (uma vez, ao construir); o pet se move todo quadro seguindo o jogador,
+              // que pode estar em QUALQUER relevo do planeta principal — usa o mesmo raycast
+              // físico real (`terrainGroundRadial`) já usado pras escolinhas/casa. Nos outros
+              // contextos (planeta-destino, dentro de casa) mantém `currentGroundBaseFn`, que já
+              // é exato ali (raio fixo/sala plana, sem relevo formulado pra divergir).
+              const petGroundBase =
+                currentPlanetId === null && !insideHouseInterior
+                  ? terrainGroundRadial(petUp, terrainHeight(petUp))
+                  : currentGroundBaseFn(petUp)
+
+              petRoot.position.copyFrom(currentWorldCenter.add(petUp.scale(petGroundBase + 0.02 + petHop)))
+
+              const petRight = Vector3.Cross(petUp, petFwd).normalize()
+              Matrix.FromXYZAxesToRef(petRight, petUp, petFwd, tmpMatrix)
+              Quaternion.FromRotationMatrixToRef(tmpMatrix, petQuat)
             }
           }
 
