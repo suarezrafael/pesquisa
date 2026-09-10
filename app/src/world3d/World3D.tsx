@@ -2476,6 +2476,10 @@ export function World3D({
     let havokPlugin: HavokPlugin | null = null
     let avatarBody: PhysicsAggregate | null = null
     let avatarMesh: Mesh | null = null
+    // lab-169 — declarado aqui (fora de `setup()`, mesmo padrão de `havokPlugin`/`disposed`) pra
+    // ficar visível tanto de dentro de `setup()` (onde é atribuído, perto de `rebuildPet`) quanto
+    // do cleanup no final deste efeito (onde é limpo).
+    let petAgingInterval: number | null = null
     let facing = new Vector3(0, 0, 1)
     let walkPhase = 0
     let lastFootSign = 0
@@ -8107,6 +8111,14 @@ export function World3D({
       }
       rebuildPet()
       ;(scene as any).__refreshPet = rebuildPet
+      // lab-169 (achado do review automático do Copilot): o estágio combinado depende de tempo
+      // real (`petAgeYears`), não só dos eventos que já disparam `__refreshPet` (adotar/
+      // alimentar/trocar de pet) — numa sessão longa que atravessa a virada de "ano" (1 dia UTC),
+      // o pet só ficaria grisalho depois de outro evento acontecer, sem reload. `setInterval`
+      // continua rodando em segundo plano (mesmo raciocínio de `refreshRanking` acima) — barato
+      // o bastante (reconstrói só um pet) pra não precisar de lógica condicional de "mudou
+      // mesmo", só reconstrói de novo.
+      petAgingInterval = window.setInterval(rebuildPet, 60 * 60 * 1000)
 
       // Piscina com gente (pedido do usuário: "picina com gente nela") — separada da lagoa
       // (theta bem distante: lagoa fica em 2.6, rio em 0.15-1.35). Reaproveita o mesmo boneco
@@ -10275,6 +10287,7 @@ export function World3D({
       disposed = true
       if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
       if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
+      if (petAgingInterval !== null) window.clearInterval(petAgingInterval)
       window.removeEventListener('resize', onResize)
       canvas.removeEventListener('pointerdown', onCameraPointerDown)
       window.removeEventListener('pointermove', onCameraPointerMove)

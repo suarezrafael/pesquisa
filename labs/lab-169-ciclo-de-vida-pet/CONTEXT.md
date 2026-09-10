@@ -57,7 +57,16 @@ verdade"). O usuário escolheu a terceira, a mais segura das três.
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova.
+Nenhuma nova. PR #43 teve 2 achados reais do Copilot corrigidos antes do merge:
+- **`saveProgress` dentro do inicializador do `useState`** (`useProgress.ts`) — side effect em
+  fase de render; `StrictMode` roda o inicializador 2x em dev, arriscando escrita duplicada/
+  imprevisível. Movido pra um `useEffect` (array de dependência vazio, roda uma vez de verdade).
+- **Pet só ficava "idoso" com outro evento acontecendo** (`World3D.tsx`) — o estágio combinado
+  depende de tempo real (`petAgeYears`), mas `__refreshPet` só disparava em mudanças de
+  `equippedPetId`/`petCareCounts`; numa sessão longa atravessando a virada de dia, o pet podia
+  atingir 30+ anos sem nunca ficar grisalho até outro evento forçar refresh. Adicionado
+  `petAgingInterval` (`setInterval` de 1h, mesmo padrão de `refreshRanking` sobrevivendo em
+  segundo plano) chamando `rebuildPet` periodicamente.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

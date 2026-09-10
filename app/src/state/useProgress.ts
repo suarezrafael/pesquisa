@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Progress, Quest } from '../types'
 import { trackFirstReward, trackQuestCompleted } from '../productAnalytics'
 import { loadProgress, saveProgress } from './storage'
@@ -33,15 +33,22 @@ import {
 } from './progression'
 
 export function useProgress() {
-  // lab-169 — perfis com pet adotado antes do ciclo de vida existir não têm `petAdoptedAt`;
-  // preenche uma vez ao carregar (começando a contar idade a partir de HOJE) e já salva se algo
-  // mudou, mesmo padrão de auto-cura de `migrateLegacyProfileIfNeeded` (`storage.ts`).
-  const [progress, setProgress] = useState<Progress>(() => {
-    const loaded = loadProgress()
-    const migrated = backfillPetAdoptedAt(loaded, new Date().toISOString())
-    if (migrated !== loaded) saveProgress(migrated)
-    return migrated
-  })
+  const [progress, setProgress] = useState<Progress>(() => loadProgress())
+
+  // lab-169 (achado do review automático do Copilot): perfis com pet adotado antes do ciclo de
+  // vida existir não têm `petAdoptedAt`; preenche uma vez ao carregar (começando a contar idade a
+  // partir de HOJE). Rodar isto no `useEffect` (não dentro do inicializador do `useState` acima)
+  // evita side effect em fase de render — `StrictMode` roda o inicializador 2x em dev, arriscando
+  // uma escrita duplicada/imprevisível em `saveProgress`; `useEffect` com array de dependência
+  // vazio já roda só uma vez de verdade por montagem.
+  useEffect(() => {
+    setProgress((prev) => {
+      const migrated = backfillPetAdoptedAt(prev, new Date().toISOString())
+      if (migrated !== prev) saveProgress(migrated)
+      return migrated
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // lab-126: `entitlementActive` aplica o bônus de moeda de assinante (`progression.ts`) — default
   // `false` preserva o comportamento de quem chama sem saber/se importar com entitlement.
