@@ -1159,6 +1159,17 @@ a.nickname-generate-btn {
   color: var(--danger);
 }
 
+/* lab-174 — cartão inline do desafio educativo leve em `PetPanel.tsx` (reaproveita
+   `.quest-prompt`/`.quest-choices`/`.quest-choice`/`.quest-feedback` do `QuestModal`, só um
+   contêiner com destaque visual pra separar do resto do painel). */
+.pet-challenge-card {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: #f5fdfe;
+}
+
 /* Reward */
 
 .reward-modal {

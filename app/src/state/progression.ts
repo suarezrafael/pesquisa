@@ -423,12 +423,21 @@ function dailyLoginRewardFor(streak: number): number {
   return DAILY_LOGIN_REWARD_BY_DAY_IN_CYCLE[dayInCycle - 1]
 }
 
-// Trunca um ISO qualquer pro número de dias desde a época Unix, em UTC — mesmo raciocínio de
-// "dia" já usado pelo carimbo de `lastPlayedAt` (lab-91), que também é gravado em UTC
-// (`new Date().toISOString()`). Vira do dia limpo à meia-noite LOCAL do fuso do jogador em vez de
-// UTC (ex.: Brasil, UTC-3, a virada acontece 21h no relógio local) — simplificação conhecida,
-// documentada em vez de escondida; não afeta a contagem em si, só EM QUE HORÁRIO exato ela vira.
-function utcDayNumber(iso: string): number {
+// Trunca um ISO qualquer pro número de dias desde a época Unix, EM UTC (não no fuso local do
+// jogador) — mesmo raciocínio de "dia" já usado pelo carimbo de `lastPlayedAt` (lab-91), que
+// também é gravado em UTC (`new Date().toISOString()`). A virada acontece à meia-noite UTC, que
+// cai num horário diferente da meia-noite local (ex.: Brasil, UTC-3, a virada acontece 21h no
+// relógio local, não 0h) — simplificação conhecida, documentada em vez de escondida; não afeta a
+// contagem em si, só EM QUE HORÁRIO exato ela vira. lab-174 (achado do review automático do
+// Copilot no PR #48): o texto anterior deste comentário invertia UTC/local, o que confundia
+// justamente o tipo de uso que motivou exportar esta função — ver comentário logo abaixo.
+// Exportado (lab-174, achado do review automático do Copilot no PR #48): `PetPanel.tsx` usava um
+// critério de "dia" diferente (calendário LOCAL) só pra decidir se mostra um botão diário já
+// desabilitado — pra fusos com deslocamento POSITIVO (à frente de UTC), o dia local vira ANTES do
+// dia UTC, então a UI podia habilitar o botão umas horas antes da regra de domínio realmente
+// aceitar, mostrando "acertei" sem conceder a recompensa. Reaproveitar a mesma função elimina a
+// divergência de raiz, em vez de só tratar o sintoma.
+export function utcDayNumber(iso: string): number {
   return Math.floor(new Date(iso).getTime() / 86_400_000)
 }
 
@@ -825,5 +834,37 @@ export function applyCoopChallengeCompleted(progress: Progress, nowIso: string):
     rewarded: true,
     coins: COOP_CHALLENGE_COINS,
     newBadge,
+  }
+}
+
+export interface PetDailyChallengeResult {
+  progress: Progress
+  rewarded: boolean
+  coins: number
+}
+
+// Recompensa modesta (mesma ordem de grandeza do menor dia do ciclo de login diário, 5 moedas) —
+// o "desafio educativo leve" pedido em docs/market-metrics-engagement-backlog.md item 6 da ordem
+// sugerida ("rotina diária saudável com pet"): o documento proíbe explicitamente punir ausência
+// (streak punitivo, cobrança pra recuperar sequência), então isto é só um convite com recompensa
+// pequena, nunca uma obrigação — alimentar o pet continua liberado independente de responder.
+const PET_DAILY_CHALLENGE_COINS = 5
+
+// Uma vez por dia real por perfil, mesmo espírito anti-farm de `feedPet`/
+// `applyCoopChallengeCompleted` — sem pet equipado não há "rotina do pet" pra recompensar.
+export function applyPetDailyChallengeCompleted(progress: Progress, nowIso: string): PetDailyChallengeResult {
+  if (!progress.equippedPetId) return { progress, rewarded: false, coins: 0 }
+  const dayGap =
+    progress.lastPetChallengeAt === null ? Infinity : utcDayNumber(nowIso) - utcDayNumber(progress.lastPetChallengeAt)
+  if (!(dayGap >= 1)) return { progress, rewarded: false, coins: 0 }
+
+  return {
+    progress: {
+      ...progress,
+      coins: progress.coins + PET_DAILY_CHALLENGE_COINS,
+      lastPetChallengeAt: nowIso,
+    },
+    rewarded: true,
+    coins: PET_DAILY_CHALLENGE_COINS,
   }
 }
