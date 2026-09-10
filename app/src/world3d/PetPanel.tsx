@@ -5,7 +5,7 @@
 // espírito de qualquer outro catálogo comprável com moeda, só com um eixo de "equipar" a mais
 // (só UM pet segue o jogador pelo mundo por vez, mesmo padrão de chapéu/óculos).
 import { PET_CATALOG } from '../data/pets'
-import { petAgeYears, petLifecycleStage, petStageFor } from '../state/progression'
+import { petAgeYears, petLifecycleStage, petStageFor, type PetStage } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Progress } from '../types'
 
@@ -17,9 +17,12 @@ interface PetPanelProps {
   onClose: () => void
 }
 
-// lab-171 — exportado pra `AchievementsPanel.tsx` reaproveitar o mesmo rótulo na nova seção de
-// pets do álbum, em vez de duplicar o mapa.
-export const STAGE_LABEL: Record<string, string> = {
+// lab-171 (achado do review automático do Copilot): `Record<string, string>` era permissivo
+// demais — um typo ou um `PetStage` novo sem entrada aqui viraria `undefined` em runtime sem o
+// TypeScript avisar. `Record<PetStage, string>` obriga cobrir todo estágio existente.
+// Exportado pra `AchievementsPanel.tsx` reaproveitar o mesmo rótulo na nova seção de pets do
+// álbum, em vez de duplicar o mapa.
+export const STAGE_LABEL: Record<PetStage, string> = {
   filhote: '🍼 Filhote',
   jovem: '🌱 Jovem',
   adulto: '⭐ Adulto',

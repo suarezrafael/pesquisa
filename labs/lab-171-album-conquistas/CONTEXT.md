@@ -42,7 +42,11 @@ pets e um destaque de "próximo objetivo".
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova.
+Nenhuma nova. PR #45 teve 2 achados reais do Copilot corrigidos antes do merge (review "Approval
+recommended" com 2 nits): `new Date().toISOString()` chamado dentro do laço de pets (uma vez por
+item, repetido à toa) — movido pra uma variável `nowIso` calculada uma vez no topo do componente;
+`STAGE_LABEL: Record<string, string>` (`PetPanel.tsx`) permissivo demais — trocado por
+`Record<PetStage, string>`, obrigando cobrir todo estágio existente.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

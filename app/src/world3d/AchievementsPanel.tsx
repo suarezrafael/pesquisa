@@ -38,6 +38,10 @@ function nextObjective(progress: Progress): { emoji: string; name: string; descr
 export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps) {
   const modalRef = useModalA11y(onClose)
   const objective = nextObjective(progress)
+  // lab-171 (achado do review automático do Copilot): calculado uma vez aqui em vez de dentro do
+  // laço de pets abaixo — evita trabalho repetido a cada item E timestamps ligeiramente
+  // diferentes dentro do mesmo painel se a virada de dia acontecesse no meio do render.
+  const nowIso = new Date().toISOString()
   // lab-149 (achado do review automático do Copilot no PR #12): o modal ganhou a seção de
   // cartões-postais (lab-141) mas o `aria-label` abaixo continuava descrevendo só conquistas —
   // nome acessível impreciso pra quem usa leitor de tela.
@@ -124,7 +128,7 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
           {PET_CATALOG.map((pet) => {
             const owned = progress.unlockedPetIds.includes(pet.id)
             const careStage = petStageFor(progress.petCareCounts[pet.id] ?? 0)
-            const ageYears = petAgeYears(progress, pet.id, new Date().toISOString())
+            const ageYears = petAgeYears(progress, pet.id, nowIso)
             const stage = petLifecycleStage(careStage, ageYears)
             return (
               <div key={pet.id} className={`quest-list-item ${owned ? 'completed' : 'locked'}`}>
