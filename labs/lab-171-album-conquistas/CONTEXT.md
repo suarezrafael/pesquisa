@@ -1,7 +1,7 @@
 # Contexto — Laboratório 171 — álbum central de conquistas e coleções
 
 Preenchido em: 2026-09-10
-Commit inicial → final: 7615d603fd71eaece23dbbd42cf004b832ad43cf..(PR aberto, ver seção final)
+Commit inicial → final: 7615d603fd71eaece23dbbd42cf004b832ad43cf..266d08a (PR #45, mergeado)
 
 ## O que foi feito
 
@@ -63,7 +63,10 @@ do usuário ou confirmação de qual desses dois puxar.
 
 ## Estado do repositório ao final
 
-- Branch: a definir no momento do commit.
+- Branch: `lab-171-album-conquistas` (mergeada e apagada). **Confirma deploy em produção**: PR
+  #45 mergeado (2 achados reais do Copilot corrigidos, review inicial já "Approval recommended"),
+  CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health` 200, app respondendo 200
+  no Vercel).
 - `npx tsc -b`: limpo. `npm run test` (app): 152/152, sem teste novo (mudança de apresentação
   pura, sem lógica de domínio nova isolável em `progression.ts` — ver decisão técnica acima).
   `npm run build`: limpo, sem regressão de bundle.

@@ -15,7 +15,12 @@ teste novo — mudança de apresentação pura). `npm run build` sem regressão 
 ao vivo via Chrome real**: teleportado pra carteira de estudos (gatilho que abre o painel),
 confirmado por screenshot o destaque "🎯 Próximo objetivo: Metade do Caminho" e a seção Pets nova
 mostrando "Gato Laranja ✓ 🧓 Idoso" (reaproveita o estágio combinado do lab-169) + 3 pets
-bloqueados como "???"/custo. Ver `labs/lab-171-album-conquistas/CONTEXT.md`.
+bloqueados como "???"/custo. PR #45 teve 2 achados reais do Copilot corrigidos antes do merge
+(review inicial já "Approval recommended"): `new Date().toISOString()` repetido dentro do laço de
+pets — movido pra uma variável calculada uma vez; `STAGE_LABEL: Record<string, string>`
+permissivo demais — trocado por `Record<PetStage, string>`. **Confirma deploy em produção**: PR
+#45 mergeado, CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health` 200, app
+respondendo 200 no Vercel). Ver `labs/lab-171-album-conquistas/CONTEXT.md`.
 
 Antes desse: labs/lab-170-casa-interativa/ — pedido do usuário num turno com 3 itens: bug de
 setas de posicionamento de mobília invertidas, excluir objetos da casa (só existia adicionar), e
