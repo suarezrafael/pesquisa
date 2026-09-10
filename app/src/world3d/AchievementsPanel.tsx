@@ -4,7 +4,10 @@
 // nome + descrição + status encaixa exatamente, sem precisar de CSS novo).
 import { ACHIEVEMENT_CATALOG } from '../data/achievements'
 import { POSTCARD_CATALOG } from '../data/postcards'
+import { PET_CATALOG } from '../data/pets'
+import { petAgeYears, petLifecycleStage, petStageFor } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
+import { STAGE_LABEL } from './PetPanel'
 import type { Progress } from '../types'
 
 interface AchievementsPanelProps {
@@ -12,8 +15,33 @@ interface AchievementsPanelProps {
   onClose: () => void
 }
 
+// lab-171 (docs/market-metrics-engagement-backlog.md §10, item 5, "álbum central de conquistas e
+// coleções": "destacar próximos itens ganháveis grátis") — primeiro item AINDA bloqueado, em
+// ordem de prioridade emblema → cartão-postal → pet (emblema é conquista pura, sem custo nem
+// viagem; cartão-postal exige viajar; pet exige moeda — do "mais alcançável" pro "menos"). Função
+// pura pequena e específica de apresentação, mesmo padrão de `fedToday` em `PetPanel.tsx` — não
+// mora em `progression.ts` porque `data/achievements.ts` já importa DE lá (`BADGE_FIRST_QUEST`
+// etc.); importar `ACHIEVEMENT_CATALOG` de volta em `progression.ts` criaria import circular.
+function nextObjective(progress: Progress): { emoji: string; name: string; description: string } | null {
+  const achievement = ACHIEVEMENT_CATALOG.find((a) => !progress.badges.includes(a.id))
+  if (achievement) return achievement
+  const postcard = POSTCARD_CATALOG.find((p) => !progress.collectedPostcardIds.includes(p.planetId))
+  if (postcard) {
+    const planetName = postcard.name.replace('Saudações de ', '')
+    return { emoji: postcard.emoji, name: `Cartão de ${planetName}`, description: 'Pouse de verdade lá pra colecionar.' }
+  }
+  const pet = PET_CATALOG.find((p) => !progress.unlockedPetIds.includes(p.id))
+  if (pet) return { emoji: pet.emoji, name: pet.name, description: `Adote por 🪙 ${pet.cost} moedas.` }
+  return null
+}
+
 export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps) {
   const modalRef = useModalA11y(onClose)
+  const objective = nextObjective(progress)
+  // lab-171 (achado do review automático do Copilot): calculado uma vez aqui em vez de dentro do
+  // laço de pets abaixo — evita trabalho repetido a cada item E timestamps ligeiramente
+  // diferentes dentro do mesmo painel se a virada de dia acontecesse no meio do render.
+  const nowIso = new Date().toISOString()
   // lab-149 (achado do review automático do Copilot no PR #12): o modal ganhou a seção de
   // cartões-postais (lab-141) mas o `aria-label` abaixo continuava descrevendo só conquistas —
   // nome acessível impreciso pra quem usa leitor de tela.
@@ -30,6 +58,18 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
           ×
         </button>
+        {objective && (
+          <div className="next-objective-callout">
+            <span className="next-objective-emoji" aria-hidden="true">
+              {objective.emoji}
+            </span>
+            <div>
+              <strong>🎯 Próximo objetivo: {objective.name}</strong>
+              <p>{objective.description}</p>
+            </div>
+          </div>
+        )}
+
         <h2>Catálogo de conquistas</h2>
         <p className="subtitle">Complete missões pra desbloquear cada uma.</p>
 
@@ -73,6 +113,33 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
                   <span className="quest-list-type">{collected ? postcard.description : 'Ainda não visitado'}</span>
                 </div>
                 <span className="quest-list-status">{collected ? '✓' : '🔒'}</span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* lab-171 (docs/market-metrics-engagement-backlog.md §10, item 5, "álbum central de
+            conquistas e coleções": "medalhas, pets, cosméticos... planetas visitados") — mesma
+            estrutura de lista das outras duas seções acima; pet ainda não adotado usa "???",
+            mesmo tratamento de cartão-postal não coletado. */}
+        <h2>Pets</h2>
+        <p className="subtitle">Adote com moedas ganhas nas missões pra ver cada um crescer.</p>
+        <div className="quest-list">
+          {PET_CATALOG.map((pet) => {
+            const owned = progress.unlockedPetIds.includes(pet.id)
+            const careStage = petStageFor(progress.petCareCounts[pet.id] ?? 0)
+            const ageYears = petAgeYears(progress, pet.id, nowIso)
+            const stage = petLifecycleStage(careStage, ageYears)
+            return (
+              <div key={pet.id} className={`quest-list-item ${owned ? 'completed' : 'locked'}`}>
+                <span className="quest-list-index" aria-hidden="true">
+                  {owned ? pet.emoji : '❓'}
+                </span>
+                <div className="quest-list-info">
+                  <span className="quest-list-title">{owned ? pet.name : '???'}</span>
+                  <span className="quest-list-type">{owned ? STAGE_LABEL[stage] : `Custa 🪙 ${pet.cost}`}</span>
+                </div>
+                <span className="quest-list-status">{owned ? '✓' : '🔒'}</span>
               </div>
             )
           })}

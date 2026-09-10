@@ -1170,6 +1170,27 @@ a.nickname-generate-btn {
   cursor: default;
 }
 
+/* lab-171 — destaque de "próximo objetivo" no topo do álbum de conquistas. */
+.next-objective-callout {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  background: #fff2d6;
+  color: #8a5a00;
+}
+
+.next-objective-emoji {
+  font-size: 1.6rem;
+}
+
+.next-objective-callout p {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+}
+
 /* Lista de missões */
 
 .quest-list-modal {
