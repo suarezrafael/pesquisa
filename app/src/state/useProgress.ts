@@ -32,6 +32,8 @@ import {
   backfillPetAdoptedAt,
   applyCoopChallengeCompleted,
   type CoopChallengeResult,
+  applyPetDailyChallengeCompleted,
+  type PetDailyChallengeResult,
   syncWeeklyXpSnapshot as applySyncWeeklyXpSnapshot,
 } from './progression'
 
@@ -309,6 +311,19 @@ export function useProgress() {
     return result
   }
 
+  // Desafio educativo leve do pet (lab-174) — mesmo formato funcional de `feedPet`/
+  // `coopChallengeCompleted` acima (protege contra clique/evento duplo antes do re-render).
+  function petDailyChallengeCompleted(nowIso: string): PetDailyChallengeResult {
+    let result!: PetDailyChallengeResult
+    setProgress((prev) => {
+      result = applyPetDailyChallengeCompleted(prev, nowIso)
+      if (!result.rewarded) return prev
+      saveProgress(result.progress)
+      return result.progress
+    })
+    return result
+  }
+
   // Ranking local entre perfis (lab-157) — mesmo gatilho/formato de `touchLastPlayed`, uma vez
   // por sessão (ver `App.tsx`): reseta o snapshot de XP semanal se a semana real mudou desde a
   // última vez, sem mexer em nada se ainda é a mesma semana (ver `syncWeeklyXpSnapshot`).
@@ -347,6 +362,7 @@ export function useProgress() {
     equipPet,
     feedPet,
     coopChallengeCompleted,
+    petDailyChallengeCompleted,
     syncWeeklyXp,
   }
 }

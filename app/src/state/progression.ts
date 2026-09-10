@@ -827,3 +827,35 @@ export function applyCoopChallengeCompleted(progress: Progress, nowIso: string):
     newBadge,
   }
 }
+
+export interface PetDailyChallengeResult {
+  progress: Progress
+  rewarded: boolean
+  coins: number
+}
+
+// Recompensa modesta (mesma ordem de grandeza do menor dia do ciclo de login diário, 5 moedas) —
+// o "desafio educativo leve" pedido em docs/market-metrics-engagement-backlog.md item 6 da ordem
+// sugerida ("rotina diária saudável com pet"): o documento proíbe explicitamente punir ausência
+// (streak punitivo, cobrança pra recuperar sequência), então isto é só um convite com recompensa
+// pequena, nunca uma obrigação — alimentar o pet continua liberado independente de responder.
+const PET_DAILY_CHALLENGE_COINS = 5
+
+// Uma vez por dia real por perfil, mesmo espírito anti-farm de `feedPet`/
+// `applyCoopChallengeCompleted` — sem pet equipado não há "rotina do pet" pra recompensar.
+export function applyPetDailyChallengeCompleted(progress: Progress, nowIso: string): PetDailyChallengeResult {
+  if (!progress.equippedPetId) return { progress, rewarded: false, coins: 0 }
+  const dayGap =
+    progress.lastPetChallengeAt === null ? Infinity : utcDayNumber(nowIso) - utcDayNumber(progress.lastPetChallengeAt)
+  if (!(dayGap >= 1)) return { progress, rewarded: false, coins: 0 }
+
+  return {
+    progress: {
+      ...progress,
+      coins: progress.coins + PET_DAILY_CHALLENGE_COINS,
+      lastPetChallengeAt: nowIso,
+    },
+    rewarded: true,
+    coins: PET_DAILY_CHALLENGE_COINS,
+  }
+}
