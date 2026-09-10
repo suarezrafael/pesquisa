@@ -114,13 +114,20 @@ function FamilyValueProp({ onContinue }: { onContinue: () => void }) {
     trackFamilyLandingViewed()
   }, [])
 
+  // Copilot (PR #47): disparar o evento na transição de estado (não no handler de clique) evita
+  // contar 2x um clique duplo/rápido antes do React remover o botão.
+  useEffect(() => {
+    if (showReportPreview) {
+      trackWeeklyReportPreviewViewed()
+    }
+  }, [showReportPreview])
+
   function handleContinue() {
     trackParentSignupStarted()
     onContinue()
   }
 
   function handleShowReportPreview() {
-    trackWeeklyReportPreviewViewed()
     setShowReportPreview(true)
   }
 
