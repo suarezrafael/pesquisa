@@ -591,7 +591,7 @@ export function unlockPlanetFurnitureReward(progress: Progress, planetId: string
 // Pets adotáveis (lab-155) — ver comentário em `types.ts`/`data/pets.ts`. Adotar usa o MESMO
 // `unlockGeneric` de compra do resto do jogo (chapéu/roupa/etc.) — `PET_CATALOG` já tem o formato
 // `{id, cost}` que a função espera.
-export function adoptPet(progress: Progress, id: string): Progress {
+export function adoptPet(progress: Progress, id: string, nowIso: string): Progress {
   const result = unlockGeneric(progress.coins, progress.unlockedPetIds, PET_CATALOG, id)
   if (!result) return progress
   // Primeiro pet adotado já sai equipado (senão o jogador pagaria moeda e não veria nada de
@@ -602,7 +602,34 @@ export function adoptPet(progress: Progress, id: string): Progress {
     coins: result.coins,
     unlockedPetIds: result.unlockedIds,
     equippedPetId: progress.equippedPetId ?? id,
+    // lab-169 — marca o início da contagem de idade (`petAgeYears`) deste pet; nunca sobrescrita
+    // depois. `unlockGeneric` já recusa readotar um pet que já está em `unlockedPetIds`, mas um
+    // `progress` inconsistente/corrompido (achado do review automático do Copilot) — ex.: o id
+    // sumiu de `unlockedPetIds` só que `petAdoptedAt` ainda tem a data antiga — não pode
+    // "rejuvenescer" o pet só porque `adoptPet` rodou de novo; preserva a data já existente
+    // quando houver.
+    petAdoptedAt: { ...progress.petAdoptedAt, [id]: progress.petAdoptedAt[id] ?? nowIso },
   }
+}
+
+// lab-169 — perfis que já tinham pet adotado ANTES desta funcionalidade existir não têm
+// `petAdoptedAt` pro id deles; chamado uma vez ao carregar o progresso (`useProgress.ts`) pra
+// começar a contar idade a partir de HOJE, em vez de tratar pra sempre como "recém-nascido" (o
+// que nunca aconteceria de verdade, já que a data só existiria se a função rodasse). Devolve o
+// MESMO objeto (sem `...spread`) quando não há nada a preencher — mesma convenção de
+// `equipPet`/`unlockGeneric` acima, pra quem chama poder comparar por referência e decidir se
+// precisa salvar.
+export function backfillPetAdoptedAt(progress: Progress, nowIso: string): Progress {
+  // lab-169 (achado do review automático do Copilot): `id in progress.petAdoptedAt` também
+  // consulta a cadeia de protótipos (ex.: `'toString' in {}` é `true`) — com dados de
+  // `localStorage` corrompidos/id inesperado, isso podia considerar uma chave "existente" sem
+  // ser uma entrada real gravada por `adoptPet`. Checar `=== undefined` direto no valor evita
+  // esse caso.
+  const missing = progress.unlockedPetIds.filter((id) => progress.petAdoptedAt[id] === undefined)
+  if (missing.length === 0) return progress
+  const petAdoptedAt = { ...progress.petAdoptedAt }
+  for (const id of missing) petAdoptedAt[id] = nowIso
+  return { ...progress, petAdoptedAt }
 }
 
 export function equipPet(progress: Progress, id: string | null): Progress {
@@ -610,7 +637,7 @@ export function equipPet(progress: Progress, id: string | null): Progress {
   return { ...progress, equippedPetId: id }
 }
 
-export type PetStage = 'filhote' | 'jovem' | 'adulto'
+export type PetStage = 'filhote' | 'jovem' | 'adulto' | 'idoso'
 
 // Limiares em número de alimentações (não em dias corridos) — de propósito: um jogador que
 // esquece o jogo por uma semana não deveria ver o pet "crescer sozinho" sem cuidado nenhum; só
@@ -625,11 +652,53 @@ export function petStageFor(careCount: number): PetStage {
 }
 
 // Escala visual por estágio (`World3D.tsx` aplica em `root.scaling.setAll`) — filhote bem menor
-// que o modelo "adulto" padrão (escala 1) que os outros bichos do planeta já usam.
+// que o modelo "adulto" padrão (escala 1) que os outros bichos do planeta já usam. "Idoso" usa a
+// mesma escala de adulto (o corpo não encolhe de velho) — a diferença visual de idade é só a cor
+// do pelo (`World3D.tsx`, `rebuildPet`), não o tamanho.
 export function petStageScale(stage: PetStage): number {
-  if (stage === 'adulto') return 1
+  if (stage === 'adulto' || stage === 'idoso') return 1
   if (stage === 'jovem') return 0.8
   return 0.55
+}
+
+// lab-169 (pedido do usuário: "ciclo de vida normal, incrementando os anos por dias" — depois de
+// perguntar como deveria funcionar o "morrer", o usuário escolheu explicitamente: "envelhece mas
+// nunca morre de verdade"). 1 dia real corrido = 1 "ano" do pet, contado a partir da adoção
+// (`petAdoptedAt`) — reaproveita o mesmo `utcDayNumber` (dia UTC) já usado por `feedPet`/
+// `applyDailyLoginReward`, mesmo raciocínio de "dia" do resto do jogo. Pet sem `petAdoptedAt`
+// registrado (não deveria acontecer depois de `backfillPetAdoptedAt` rodar no carregamento, mas
+// defensivo aqui também) conta como recém-adotado (idade 0), nunca erro/`NaN`. lab-169 (achado do
+// review automático do Copilot): uma data corrompida/ISO inválida faz `utcDayNumber` devolver
+// `NaN` (não lança erro) — sem o `Number.isFinite` abaixo, esse `NaN` vazaria pra escala/estágio
+// visual do pet; mesmo cuidado que `applyDailyLoginReward`/`feedPet` já têm com relógio
+// corrompido, só que ali um `NaN` em `dayGap` já falha a comparação `>= 1` sozinho — aqui não há
+// comparação parecida, por isso a checagem explícita.
+export function petAgeYears(progress: Progress, petId: string, nowIso: string): number {
+  const adoptedAtIso = progress.petAdoptedAt[petId]
+  if (!adoptedAtIso) return 0
+  const nowDay = utcDayNumber(nowIso)
+  const adoptedAtDay = utcDayNumber(adoptedAtIso)
+  if (!Number.isFinite(nowDay) || !Number.isFinite(adoptedAtDay)) return 0
+  return Math.max(0, nowDay - adoptedAtDay)
+}
+
+// Idade em que um pet JÁ ADULTO (por cuidado real, `petStageFor`) passa a ser mostrado como
+// "idoso" — só o tempo de convivência decide isto, nunca alimentação (diferente do crescimento
+// filhote→jovem→adulto, que continua exigindo cuidado de propósito, ver comentário em
+// `petStageFor`). ~1 mês real de convivência (30 "anos" a 1 dia = 1 ano) — tempo o bastante pra
+// ser uma conquista de longo prazo, não uma surpresa da primeira semana.
+const PET_STAGE_IDOSO_AT_YEARS = 30
+
+// Combina os dois eixos independentes do ciclo de vida — cuidado (`careStage`, de
+// `petStageFor(petCareCounts[id])`) e tempo de convivência (`ageYears`, de `petAgeYears`) — na
+// única fase mostrada pro jogador. Só promove um pet JÁ adulto pra "idoso"; nunca deixa um
+// filhote/jovem "pular" fase por idade sozinha (isso reintroduziria o crescimento-sem-cuidado que
+// `petStageFor` evita de propósito). O usuário confirmou explicitamente (`AskUserQuestion`) que um
+// pet "idoso" nunca é removido/morre de verdade — fica nesta fase para sempre, sem regressão nem
+// perda, mesma filosofia de nunca punir a criança já aplicada a sequência de login/cuidado de pet.
+export function petLifecycleStage(careStage: PetStage, ageYears: number): PetStage {
+  if (careStage === 'adulto' && ageYears >= PET_STAGE_IDOSO_AT_YEARS) return 'idoso'
+  return careStage
 }
 
 export interface FeedPetResult {

@@ -13,12 +13,15 @@ import {
   applyQuestCompletion,
   applyStreakReset,
   applyTreasureChestFound,
+  backfillPetAdoptedAt,
   badgesEarnedAt,
   equipPet,
   feedPet,
   furnitureQuantity,
   getLevel,
   isQuestUnlocked,
+  petAgeYears,
+  petLifecycleStage,
   petStageFor,
   petStageScale,
   seriesForLevel,
@@ -781,28 +784,38 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
   const petCost = PET_CATALOG[0].cost
   const secondPetId = PET_CATALOG[1].id
 
+  const adoptedAtIso = '2026-09-08T12:00:00.000Z'
+
   it('adoptPet não faz nada sem moeda suficiente', () => {
     const progress = { ...emptyProgress, coins: petCost - 1 }
-    const next = adoptPet(progress, petId)
+    const next = adoptPet(progress, petId, adoptedAtIso)
     expect(next).toBe(progress)
   })
 
   it('adoptPet não faz nada pra um id que não existe no catálogo', () => {
     const progress = { ...emptyProgress, coins: 9999 }
-    const next = adoptPet(progress, 'pet-que-nao-existe')
+    const next = adoptPet(progress, 'pet-que-nao-existe', adoptedAtIso)
     expect(next).toBe(progress)
   })
 
-  it('adoptPet desbloqueia, desconta o custo, e equipa automaticamente o primeiro pet', () => {
-    const next = adoptPet({ ...emptyProgress, coins: petCost }, petId)
+  it('adoptPet desbloqueia, desconta o custo, equipa automaticamente o primeiro pet, e grava a data de adoção', () => {
+    const next = adoptPet({ ...emptyProgress, coins: petCost }, petId, adoptedAtIso)
     expect(next.unlockedPetIds).toEqual([petId])
     expect(next.coins).toBe(0)
     expect(next.equippedPetId).toBe(petId)
+    expect(next.petAdoptedAt[petId]).toBe(adoptedAtIso)
+  })
+
+  it('adoptPet preserva a data de adoção já existente em vez de "rejuvenescer" o pet (progress inconsistente)', () => {
+    const dataAntiga = '2026-01-01T00:00:00.000Z'
+    const progressInconsistente = { ...emptyProgress, coins: 9999, petAdoptedAt: { [petId]: dataAntiga } }
+    const next = adoptPet(progressInconsistente, petId, adoptedAtIso)
+    expect(next.petAdoptedAt[petId]).toBe(dataAntiga)
   })
 
   it('adotar um segundo pet NÃO troca o equipado automaticamente', () => {
     const comPrimeiro = { ...emptyProgress, coins: 9999, unlockedPetIds: [petId], equippedPetId: petId }
-    const next = adoptPet(comPrimeiro, secondPetId)
+    const next = adoptPet(comPrimeiro, secondPetId, adoptedAtIso)
     expect(next.unlockedPetIds).toEqual([petId, secondPetId])
     expect(next.equippedPetId).toBe(petId)
   })
@@ -893,10 +906,57 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
     expect(petStageFor(50)).toBe('adulto')
   })
 
-  it('petStageScale cresce com o estágio', () => {
+  it('petStageScale cresce com o estágio, e "idoso" usa a mesma escala de adulto', () => {
     expect(petStageScale('filhote')).toBeLessThan(petStageScale('jovem'))
     expect(petStageScale('jovem')).toBeLessThan(petStageScale('adulto'))
     expect(petStageScale('adulto')).toBe(1)
+    expect(petStageScale('idoso')).toBe(1)
+  })
+})
+
+describe('petAgeYears/petLifecycleStage/backfillPetAdoptedAt (lab-169, ciclo de vida)', () => {
+  const petId = PET_CATALOG[0].id
+  const secondPetId = PET_CATALOG[1].id
+
+  it('petAgeYears conta 1 "ano" por dia real corrido desde a adoção', () => {
+    const progress = { ...emptyProgress, petAdoptedAt: { [petId]: '2026-09-08T20:00:00.000Z' } }
+    expect(petAgeYears(progress, petId, '2026-09-08T21:00:00.000Z')).toBe(0)
+    expect(petAgeYears(progress, petId, '2026-09-09T00:00:00.000Z')).toBe(1)
+    expect(petAgeYears(progress, petId, '2026-10-08T20:00:00.000Z')).toBe(30)
+  })
+
+  it('petAgeYears devolve 0 pra um pet sem data de adoção registrada (nunca NaN/erro)', () => {
+    expect(petAgeYears(emptyProgress, 'pet-sem-data', '2026-09-08T12:00:00.000Z')).toBe(0)
+  })
+
+  it('petAgeYears devolve 0 (nunca NaN) com uma data de adoção corrompida/ISO inválida', () => {
+    const progress = { ...emptyProgress, petAdoptedAt: { [petId]: 'nao-e-uma-data' } }
+    expect(petAgeYears(progress, petId, '2026-09-08T12:00:00.000Z')).toBe(0)
+  })
+
+  it('petLifecycleStage só promove pra "idoso" quem já é adulto E tem 30+ anos', () => {
+    expect(petLifecycleStage('filhote', 999)).toBe('filhote')
+    expect(petLifecycleStage('jovem', 999)).toBe('jovem')
+    expect(petLifecycleStage('adulto', 29)).toBe('adulto')
+    expect(petLifecycleStage('adulto', 30)).toBe('idoso')
+    expect(petLifecycleStage('adulto', 40)).toBe('idoso')
+  })
+
+  it('backfillPetAdoptedAt preenche só os pets possuídos que ainda não têm data', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedPetIds: [petId, secondPetId],
+      petAdoptedAt: { [petId]: '2026-09-01T00:00:00.000Z' },
+    }
+    const next = backfillPetAdoptedAt(progress, '2026-09-09T00:00:00.000Z')
+    expect(next.petAdoptedAt[petId]).toBe('2026-09-01T00:00:00.000Z')
+    expect(next.petAdoptedAt[secondPetId]).toBe('2026-09-09T00:00:00.000Z')
+  })
+
+  it('backfillPetAdoptedAt não muda nada (mesma referência) quando não há pet faltando', () => {
+    const progress = { ...emptyProgress, unlockedPetIds: [petId], petAdoptedAt: { [petId]: '2026-09-01T00:00:00.000Z' } }
+    const next = backfillPetAdoptedAt(progress, '2026-09-09T00:00:00.000Z')
+    expect(next).toBe(progress)
   })
 })
 
