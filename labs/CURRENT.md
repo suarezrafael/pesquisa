@@ -24,7 +24,13 @@ apontando pra ela; um WebSocket bruto simulou um segundo jogador de verdade no M
 Confirmado passo a passo: jogador remoto aparece na cena 3D; dica só acende com parceiro por
 perto; `E` abre a missão sorteada; responder certo dispara `coop-done` de verdade pelo relé; a
 confirmação do parceiro completa o desafio (toast, moeda 117→127, emblema novo no HUD); tentar de
-novo no MESMO dia não recompensa de novo (anti-farm confirmado). Ver
+novo no MESMO dia não recompensa de novo (anti-farm confirmado). PR #46 teve 3 achados reais do
+Copilot corrigidos antes do merge: janela de conclusão comparava contra `Date.now()` (instante da
+checagem) em vez dos dois eventos relevantes; estado de tentativa anterior não era limpo ao abrir
+um desafio novo com o mesmo parceiro (podia travar pra sempre ou completar sozinho reaproveitando
+confirmação velha); `selfId` era atribuído sem checar tipo. **Confirma deploy em produção**: PR
+#46 mergeado, CI/CD verde nos 3 workers — incluindo `server-cf-relay`, o próprio relé de produção
+—, deploy automático confirmado (`GET /health` 200, app respondendo 200 no Vercel). Ver
 `labs/lab-172-desafio-cooperativo/CONTEXT.md`.
 
 Antes desse: labs/lab-171-album-conquistas/ — álbum central de conquistas e coleções

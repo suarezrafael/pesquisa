@@ -1,7 +1,7 @@
 # Contexto — Laboratório 172 — desafio cooperativo fechado
 
 Preenchido em: 2026-09-10
-Commit inicial → final: d0df086e446bc88635973468c29b2c8927bacc75..(PR aberto, ver seção final)
+Commit inicial → final: d0df086e446bc88635973468c29b2c8927bacc75..538cd51 (PR #46, mergeado)
 
 ## O que foi feito
 
@@ -90,7 +90,10 @@ neste ambiente de desenvolvimento. Aguardar pedido novo do usuário.
 
 ## Estado do repositório ao final
 
-- Branch: a definir no momento do commit.
+- Branch: `lab-172-desafio-cooperativo` (mergeada e apagada). **Confirma deploy em produção**: PR
+  #46 mergeado (3 achados reais do Copilot corrigidos), CI/CD verde nos 3 workers — incluindo
+  `server-cf-relay`, o próprio relé de produção —, deploy automático confirmado (`GET /health`
+  200, app respondendo 200 no Vercel).
 - `npx tsc -b` (app): limpo. `npm run test` (app): 160/160 (8 novos — `applyCoopChallengeCompleted`
   x4, `applyQuestCompletion` preserva badges de outra origem x2, `sendCoopDone`/`getSelfId` sem
   conexão x2). `npm run build` (app): limpo, sem regressão de bundle. `npx tsc --noEmit`/`npm run
