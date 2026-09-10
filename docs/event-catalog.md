@@ -46,6 +46,7 @@ linha nova e imprevista na tabela.
 | `family_landing_viewed` | Tela de proposta de valor exibida em `/familia`, depois do portão de matemática (lab-166) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por exibição (sem limite de sessão) |
 | `parent_signup_started` | Clique em "Entrar / Criar conta" na tela de proposta de valor (lab-166) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
 | `checkout_started` | `POST /checkout` devolve uma URL válida, antes do redirect pro Stripe (lab-166) | `components/FamilyPortal.tsx`, `Dashboard.handleSubscribe` | — | 1x por tentativa de checkout |
+| `weekly_report_preview_viewed` | Clique em "Ver exemplo do relatório semanal" na tela de proposta de valor (lab-173) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
 
 ## Qual métrica do documento cada evento alimenta
 
@@ -66,6 +67,10 @@ decisão").
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de
   `family_accounts` (não é evento, é estado já persistido — ver `weeklyCommercial` abaixo).
+  `weekly_report_preview_viewed` (lab-173) mede interesse específico no benefício de relatório —
+  não faz parte da SEQUÊNCIA obrigatória do funil (pode ou não acontecer entre
+  `family_landing_viewed` e `parent_signup_started`), é lido em paralelo pra saber quantos
+  responsáveis que veem a proposta clicam especificamente pra ver o exemplo do relatório.
 - **`title_play_click_rate`** — `play_click` / total de sessões (`session_start`).
 
 ## O que NÃO é evento de client (mas ainda vira número no funil semanal)

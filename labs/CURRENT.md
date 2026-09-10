@@ -1,6 +1,22 @@
 # Laboratório atual
 
-Último concluído: labs/lab-172-desafio-cooperativo/ — desafio cooperativo fechado
+Último concluído: labs/lab-173-preview-relatorio-semanal/ — preview de relatório semanal antes da
+assinatura (`docs/market-metrics-engagement-backlog.md` §10, item 8; já registrado como "fora de
+escopo" pelo próprio lab-166). `FamilyValueProp` (`components/FamilyPortal.tsx`) ganhou um cartão
+de preview estruturado (mesmo formato do e-mail real, `buildWeeklyProgressEmail`: nível/XP,
+missões, moedas, emblemas, ponto forte/pra praticar mais), recolhido atrás de um botão "👀 Ver
+exemplo do relatório semanal" (antes: uma frase itálica sempre visível). Evento novo
+`weekly_report_preview_viewed` mede clique real. **Achado ao ler o documento com atenção**: o
+texto oficial pede "dados fictícios claramente marcados" (nunca dados reais da criança) — segue
+isso, não a especulação do lab-166 sobre "preview com dados reais". "Tempo de jogo" (citado no
+documento) foi omitido de propósito — o e-mail de verdade não tem esse campo, incluir no preview
+prometeria algo que a entrega real não cumpre. `npx tsc -b`/testes limpos (app 160/160, sem teste
+novo; server-accounts 109/109, 1 novo). `npm run build` sem regressão de bundle. **Verificado ao
+vivo**: fluxo completo confirmado (portão → proposta de valor → clique → cartão com conteúdo
+exato); evento confirmado disparando com payload correto via monkey-patch de `fetch`. Ver
+`labs/lab-173-preview-relatorio-semanal/CONTEXT.md`.
+
+Antes desse: labs/lab-172-desafio-cooperativo/ — desafio cooperativo fechado
 (`docs/market-metrics-engagement-backlog.md` §10, item 7 da ordem sugerida). Perguntado ao
 usuário via `AskUserQuestion` quem pode formar dupla — confirmado: qualquer jogador multiplayer
 por perto (reaproveita o portão parental do multiplayer do lab-152, não restrito a amigos

@@ -131,3 +131,13 @@ export function trackParentSignupStarted(): void {
 export function trackCheckoutStarted(): void {
   trackEvent('checkout_started')
 }
+
+// lab-173 (docs/market-metrics-engagement-backlog.md §10, item 8 da ordem sugerida, "Lab 173 -
+// Preview de relatório semanal antes da assinatura"): diferente do exemplo estático que já ficava
+// sempre visível (lab-166), o preview cheio agora fica recolhido atrás de um botão — só dispara
+// quando o responsável de verdade clica pra abrir, medindo interesse real no benefício mais forte
+// da assinatura antes de pedir cadastro. Sem limite de "uma vez", mesmo padrão de
+// `trackFamilyLandingViewed`/`trackParentSignupStarted` (cada clique é seu próprio evento).
+export function trackWeeklyReportPreviewViewed(): void {
+  trackEvent('weekly_report_preview_viewed')
+}
