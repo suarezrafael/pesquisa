@@ -650,6 +650,15 @@ pra confirmar; confiança pela leitura direta do fluxo de física (`currentPlane
 não muda em `enterHouseInterior`/`exitHouseInterior`, guard idêntico ao já usado em outros lugares
 deste arquivo pra pausar comportamento durante a visita, ex. bloqueio do balcão de compras).
 
+Vigésima rodada do Copilot trouxe 1 achado real corrigido (ortografia, "dreiando"/"dreia" →
+"drenando"/"drena" nos comentários que eu mesmo escrevi na 19ª rodada) — sem mudança de código.
+
+**Vigésima primeira rodada do Copilot: limpa.** Zero comentários novos, zero comentários
+suprimidos — a primeira rodada sem nenhum achado depois de 20 rodadas seguidas com pelo menos um
+achado real cada (a última "rodada limpa" antes desta não existia; toda rodada anterior, mesmo as
+de severidade decrescente, trouxe pelo menos 1 item real corrigido). Considerado o fim do ciclo de
+revisão automática — próximo passo é confirmação de merge com o usuário.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
