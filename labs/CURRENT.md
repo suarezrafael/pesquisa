@@ -10,15 +10,20 @@ especulativa de altura do lab-151 funcionou, fechando uma pendência aberta desd
 precisar de nova mudança de código**. Já os planetas secundários (Marte, `buildMarsHill`) tinham
 um colisor-esfera embutido com só 0,15 de protrusão acima do chão, cuja seção transversal na
 altura do chão (~0,54 de raio) era bem menor que o raio visual real do morro (~1,8-2,0) —
-divergência real (jogador atravessa a encosta visível sem colidir), corrigida trocando por um
-CILINDRO (raio 1,65, mesmo tipo já usado no colisor do foguete de lançamento) que cobre o pé do
-morro sem passar da malha visível. `npx tsc -b`/testes limpos (app 178/178, inalterado). `npm run
-build` sem regressão de bundle. **Verificado ao vivo via Chrome real**: planeta principal
-confirmado limpo (screenshot de 4 ângulos no platô mais íngreme); viagem real de foguete até Marte
-confirmada funcionando ponta a ponta; o fix do colisor de Marte em si NÃO foi verificado
-visualmente ao vivo (`__debugTeleportExact` teve comportamento inesperado de física/gravidade lá,
-não investigado a fundo — confiança vem da geometria real calculada a partir do código, não de
-reprodução visual). Ver `labs/lab-177-relevo-montanhas-visiveis/CONTEXT.md`.
+divergência real (jogador atravessa a encosta visível sem colidir). Uma primeira tentativa trocou
+por um cilindro largo e baixo, mas o review automático do Copilot (PR #52) achou que o TOPO PLANO
+do cilindro era escalável (o avatar pula mais alto que a protrusão escolhida), recriando a mesma
+classe de bug só que coberta pela malha — **correção final**: `PhysicsAggregate` do tipo `MESH`
+direto nas malhas visuais do morro (`main` + `shoulder`), cobrindo a silhueta real por construção,
+mesmo padrão já usado pro planeta principal. `npx tsc -b`/testes limpos (app 178/178, inalterado).
+`npm run build` sem regressão de bundle. **Verificado ao vivo via Chrome real**: planeta principal
+confirmado limpo (screenshot real salvo em `labs/lab-177-.../evidencias/`, 4 ângulos no platô mais
+íngreme); viagem real de foguete até Marte confirmada funcionando pelo menos uma vez; o fix do
+colisor `MESH` de Marte em si NÃO foi verificado visualmente ao vivo em nenhuma tentativa
+(`__debugTeleportExact`/fluxo de viagem tiveram comportamento inconsistente lá, não investigado a
+fundo — confiança vem da geometria real calculada a partir do código e do mesmo padrão `MESH` já
+comprovado no planeta principal, não de reprodução visual). Ver
+`labs/lab-177-relevo-montanhas-visiveis/CONTEXT.md`.
 
 Antes desse: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.
 Origem: `docs/growth-retention-monetization-backlog.md` (PR #50, mergeado), seção 7, "Lab 176",

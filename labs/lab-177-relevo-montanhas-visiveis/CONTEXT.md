@@ -105,7 +105,8 @@ Marte continua sem verificação visual direta (ver "Decisões técnicas").
   si só).
 - Se o usuário relatar de novo "montanha invisível" especificamente em Marte (não no planeta
   principal), o próximo passo é confirmar visualmente com um teste manual real (não automatizado)
-  se o cilindro cobre bem a base do morro.
+  se o colisor `MESH` (`main` + `shoulder`, implementação final — NÃO o cilindro da tentativa 1,
+  revertido) cobre bem a base do morro.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
