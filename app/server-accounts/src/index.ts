@@ -29,6 +29,10 @@ import {
   isTokenRevoked,
   isValidBadgeList,
   isValidEquippedLook,
+  isValidHouseFurnitureIds,
+  isValidHousePlacements,
+  sanitizeHouseFurnitureIds,
+  sanitizeHousePlacements,
   isValidNpsScore,
   isValidProductEventType,
   isValidProgressBackupPayload,
@@ -768,7 +772,14 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   if (limited) return limited
 
   const body = (await request.json().catch(() => null)) as
-    | { playerId?: unknown; equippedLook?: unknown; badges?: unknown }
+    | {
+        playerId?: unknown
+        equippedLook?: unknown
+        badges?: unknown
+        houseFurnitureIds?: unknown
+        housePlacements?: unknown
+        houseVisible?: unknown
+      }
     | null
   // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
   // checar o tipo antes de `.trim()`, um número/objeto no lugar de string lançaria TypeError não
@@ -801,12 +812,42 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     badgesJson = JSON.stringify(body.badges)
   }
 
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — mesmo padrão opcional/coalesce dos dois
+  // campos acima: sincroniza a mobília da casa pra `GET /players/:id/public-profile` poder
+  // devolvê-la pra um amigo visitar.
+  let houseFurnitureIdsJson: string | null = null
+  if (body.houseFurnitureIds !== undefined) {
+    if (!isValidHouseFurnitureIds(body.houseFurnitureIds)) {
+      return Response.json({ error: 'houseFurnitureIds inválido' }, { status: 400 })
+    }
+    houseFurnitureIdsJson = JSON.stringify(body.houseFurnitureIds)
+  }
+
+  let housePlacementsJson: string | null = null
+  if (body.housePlacements !== undefined) {
+    if (!isValidHousePlacements(body.housePlacements)) {
+      return Response.json({ error: 'housePlacements inválido' }, { status: 400 })
+    }
+    housePlacementsJson = JSON.stringify(body.housePlacements)
+  }
+
+  let houseVisible: boolean | null = null
+  if (body.houseVisible !== undefined) {
+    if (typeof body.houseVisible !== 'boolean') {
+      return Response.json({ error: 'houseVisible inválido' }, { status: 400 })
+    }
+    houseVisible = body.houseVisible
+  }
+
   const sql = neon(env.DATABASE_URL)
   const rows = (await sql`
     update player_identities set
       last_seen_at = now(),
       equipped_look = coalesce(${equippedLookJson}::jsonb, equipped_look),
-      badges = coalesce(${badgesJson}::jsonb, badges)
+      badges = coalesce(${badgesJson}::jsonb, badges),
+      house_furniture_ids = coalesce(${houseFurnitureIdsJson}::jsonb, house_furniture_ids),
+      house_placements = coalesce(${housePlacementsJson}::jsonb, house_placements),
+      house_visible = coalesce(${houseVisible}::boolean, house_visible)
     where id = ${playerId} returning id
   `) as { id: string }[]
   if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
@@ -830,19 +871,61 @@ async function handlePlayerPublicProfile(request: Request, env: Env, playerId: s
 
   const sql = neon(env.DATABASE_URL)
   const rows = (await sql`
-    select nickname, avatar_emoji, equipped_look, badges
+    select nickname, avatar_emoji, equipped_look, badges,
+      house_furniture_ids, house_placements, house_visible
     from player_identities
     where id = ${playerId}
-  `) as { nickname: string; avatar_emoji: string; equipped_look: unknown; badges: unknown }[]
+  `) as {
+    nickname: string
+    avatar_emoji: string
+    equipped_look: unknown
+    badges: unknown
+    house_furniture_ids: unknown
+    house_placements: unknown
+    house_visible: boolean
+  }[]
   if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
 
   const row = rows[0]
-  return Response.json({
-    nickname: row.nickname,
-    avatarEmoji: row.avatar_emoji,
-    equippedLook: row.equipped_look ?? null,
-    badges: row.badges ?? [],
-  })
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — `house` só vem preenchido quando o
+  // dono manteve a visibilidade ligada (`house_visible`, controlável em `MyHousePanel.tsx`) E já
+  // sincronizou pelo menos um heartbeat com mobília; qualquer um dos dois faltando devolve `null`
+  // (o client trata como "casa não visitável agora", nunca como erro).
+  // lab-175 (achado do review automático do Copilot no PR #49): sanitiza de novo aqui, no
+  // SERVIDOR, antes de responder — mesmo que o client já filtre `subscriptionOnly` antes de
+  // enviar (`useHeartbeat.ts`), um client modificado ou um heartbeat salvo antes desta correção
+  // não deveria conseguir vazar o status de assinatura do anfitrião pro visitante.
+  // 10ª rodada: a coluna é `jsonb` sem constraint — uma linha legada/corrompida com um valor que
+  // não é array (objeto, string) faria `sanitizeHouseFurnitureIds` (que assume array pra `.filter`)
+  // estourar, devolvendo 500 em vez de um perfil sanitizado. Confere o tipo antes de chamar,
+  // mesmo princípio já aplicado aos guards do lado do client (`resolveHouseSyncSnapshot`).
+  const house =
+    row.house_visible && Array.isArray(row.house_furniture_ids)
+      ? {
+          furnitureIds: sanitizeHouseFurnitureIds(row.house_furniture_ids),
+          placements: sanitizeHousePlacements(
+            typeof row.house_placements === 'object' && row.house_placements !== null && !Array.isArray(row.house_placements)
+              ? (row.house_placements as Record<string, { x: number; z: number; rotY: number }>)
+              : {},
+          ),
+        }
+      : null
+  // lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada): `house` reflete um
+  // estado de privacidade que pode mudar a qualquer momento (`houseVisible`) — sem
+  // `Cache-Control: no-store`, um navegador ou proxy intermediário podia reaproveitar uma resposta
+  // antiga com a casa visível mesmo depois do dono desligar, exatamente a corrida que a
+  // revalidação em `PlayerPublicProfileView.tsx` (clique de "Visitar casa") existe pra fechar —
+  // uma resposta em cache faria essa revalidação nunca bater no servidor de verdade.
+  return Response.json(
+    {
+      nickname: row.nickname,
+      avatarEmoji: row.avatar_emoji,
+      equippedLook: row.equipped_look ?? null,
+      badges: row.badges ?? [],
+      house,
+    },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
 }
 
 async function handleSubscriptionStatus(request: Request, env: Env): Promise<Response> {
@@ -1429,6 +1512,16 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     activationCycleCompleted: weeklyDevices('activation_cycle_completed'),
     questCompleted: weeklyDevices('quest_completed'),
     parentAreaClick: weeklyDevices('parent_area_click'),
+    // lab-175 (achado do review automático do Copilot no PR #49, 5ª rodada) — sem isto,
+    // `house_visited` entrava na allowlist (`PRODUCT_EVENT_TYPES`) e era gravado normalmente, mas
+    // não tinha como ser lido de volta por nenhum endpoint: a métrica "visitas por criança" citada
+    // no documento nunca aparecia em lugar nenhum além de uma consulta manual à tabela.
+    // 8ª rodada: `weeklyDevices` conta DISPOSITIVOS ÚNICOS com >=1 evento na semana (mesma
+    // convenção de todo `weeklyFunnel` acima), não visitas por criança — perde revisitas do mesmo
+    // aparelho e não distingue perfis que compartilham/trocam de aparelho. Limitação já aceita do
+    // resto do funil (nenhum evento carrega identificador de perfil, só device id anônimo), não
+    // uma regressão deste campo; ver nota completa em docs/event-catalog.md.
+    houseVisited: weeklyDevices('house_visited'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

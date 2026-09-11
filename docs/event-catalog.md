@@ -6,9 +6,12 @@ Este documento existe pra resolver o problema citado em
 `docs/market-metrics-engagement-backlog.md` ("Lab 164" no documento, lab-165 real deste
 repositório): **sem eventos padronizados documentados, não dá pra saber se os recursos geram
 engajamento real, nem confirmar que ninguém tratou um evento novo como sinônimo de outro já
-existente.** Ele documenta a taxonomia COMPLETA que já existe hoje — nenhum evento novo foi criado
-neste lab, só a extensão de `GET /admin/metrics` pra ler esses eventos de volta como funil semanal
-(ver `labs/lab-165-catalogo-eventos-dashboard/CONTEXT.md`).
+existente.** Ele documenta a taxonomia COMPLETA que já existe hoje. Na CRIAÇÃO deste documento
+(lab-165), nenhum evento novo foi criado — só a extensão de `GET /admin/metrics` pra ler os eventos
+já existentes de volta como funil semanal (ver
+`labs/lab-165-catalogo-eventos-dashboard/CONTEXT.md`) — mas a tabela abaixo já cresceu várias vezes
+desde então (labs 166, 173, 175...) e deve continuar crescendo a cada evento novo, mantida
+atualizada por quem adicionar o próximo.
 
 ## Como funciona, em uma frase
 
@@ -47,6 +50,7 @@ linha nova e imprevista na tabela.
 | `parent_signup_started` | Clique em "Entrar / Criar conta" na tela de proposta de valor (lab-166) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
 | `checkout_started` | `POST /checkout` devolve uma URL válida, antes do redirect pro Stripe (lab-166) | `components/FamilyPortal.tsx`, `Dashboard.handleSubscribe` | — | 1x por tentativa de checkout |
 | `weekly_report_preview_viewed` | Clique em "Ver exemplo do relatório semanal" na tela de proposta de valor (lab-173) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
+| `house_visited` | Clique em "🏠 Visitar casa" no perfil público de um amigo (lab-175) | `App.tsx`, `handleVisitHouse` | — | 1x por clique |
 
 ## Qual métrica do documento cada evento alimenta
 
@@ -72,6 +76,17 @@ decisão").
   `family_landing_viewed` e `parent_signup_started`), é lido em paralelo pra saber quantos
   responsáveis que veem a proposta clicam especificamente pra ver o exemplo do relatório.
 - **`title_play_click_rate`** — `play_click` / total de sessões (`session_start`).
+- **"Visitas por criança"** (métrica esperada de "Lab 171 - Casa visitável somente leitura",
+  docs/market-metrics-engagement-backlog.md) — aproximada por `house_visited` (lab-175), lido em
+  paralelo (não faz parte de nenhum funil obrigatório) via `weeklyDevices('house_visited')`, igual
+  a todo outro passo de `weeklyFunnel` acima. Isso mede DISPOSITIVOS ÚNICOS que dispararam o evento
+  na semana, não visitas por criança: perde revisitas do mesmo dispositivo, conta dois perfis num
+  aparelho compartilhado como uma visita só, e conta a mesma criança em dois aparelhos como duas
+  (achado do review automático do Copilot no PR #49, 8ª rodada). Igual à limitação já aceita do
+  resto do funil (nenhum evento carrega identificador de perfil, só `getOrCreateDeviceId()` — ver
+  nota de privacidade acima) — não é um bug introduzido por este lab, é a mesma convenção usada em
+  todo `weeklyFunnel`; o nome do campo (`houseVisited`) e desta métrica ficam propositalmente
+  imprecisos por enquanto e não devem ser lidos como contagem exata de visitas por criança.
 
 ## O que NÃO é evento de client (mas ainda vira número no funil semanal)
 

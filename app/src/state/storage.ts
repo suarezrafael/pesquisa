@@ -179,6 +179,8 @@ export const emptyProgress: Progress = {
   lastCoopChallengeAt: null,
   // Desafio educativo leve do pet (lab-174) — ver comentário em `types.ts`.
   lastPetChallengeAt: null,
+  // Casa visitável (lab-175) — ver comentário em `types.ts`.
+  houseVisible: true,
   // Ranking local entre perfis (lab-157) — ver comentário em `types.ts`.
   weeklyXpWeekKey: null,
   weeklyXpSnapshot: 0,

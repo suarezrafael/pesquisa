@@ -8,16 +8,18 @@ import { useFriendRequests, formatLastSeen, type FriendSummaryItem } from '../st
 import { getOrCreateDeviceId } from '../state/storage'
 import { useModalA11y } from '../state/useModalA11y'
 import { PlayerPublicProfileView } from './PlayerPublicProfileView'
+import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
 import type { Profile } from '../types'
 
 interface FriendsPanelProps {
   profile: Profile
   onClose: () => void
+  onVisitHouse: (nickname: string, house: PublicHouseSnapshot) => void
 }
 
 type FriendsTab = 'search' | 'requests' | 'friends'
 
-export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
+export function FriendsPanel({ profile, onClose, onVisitHouse }: FriendsPanelProps) {
   const modalRef = useModalA11y(onClose)
   const { playerId, registering, ensureRegistered, searching, searchError, searchResults, search } =
     usePlayerIdentity()
@@ -67,6 +69,7 @@ export function FriendsPanel({ profile, onClose }: FriendsPanelProps) {
             playerId={viewingFriend.playerId}
             nickname={viewingFriend.nickname}
             onBack={() => setViewingFriend(null)}
+            onVisitHouse={onVisitHouse}
           />
         ) : (
           <>
