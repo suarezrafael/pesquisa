@@ -10172,7 +10172,7 @@ export function World3D({
         // `currentPlanetId` — antes desta checagem, visitar uma casa a partir de um planeta com
         // cronômetro (Mercúrio/Netuno/etc., alcançável de qualquer planeta via "Visitar casa" no
         // painel de Amigos, não só fisicamente perto da casa) deixava este bloco continuar
-        // dreiando o tempo (o avatar está longe do foguete de retorno, fora da sala) e podia
+        // drenando o tempo (o avatar está longe do foguete de retorno, fora da sala) e podia
         // chamar `respawnFromSurvivalTimeout` (teleporta pro planeta principal) enquanto
         // `insideHouseInterior` continuava `true` — estado inconsistente (UI/física da casa ainda
         // ativas, avatar já teleportado pra fora). `!insideHouseInterior` pausa o cronômetro

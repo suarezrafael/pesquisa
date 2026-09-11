@@ -622,7 +622,7 @@ Décima nona rodada do Copilot trouxe 2 achados reais corrigidos (1 de jogabilid
   deixava o cronômetro drenando enquanto o jogador estava dentro da casa, podendo respawnar o
   jogador NO MEIO da visita** — `enterHouseInterior` teleporta o avatar pra
   `HOUSE_INTERIOR_CENTER` mas nunca toca em `currentPlanetId` (fica com o id do planeta de onde o
-  jogador veio); o loop de física que dreia o cronômetro só olha `currentPlanetId`/
+  jogador veio); o loop de física que drena o cronômetro só olha `currentPlanetId`/
   `hasSurvivalTimer`, sem saber que o jogador está `insideHouseInterior`. Antes de "Visitar casa"
   (lab-175) isso não importava — a própria casa só era alcançável fisicamente perto dela, sempre
   no planeta principal, que nunca tem cronômetro; "Visitar casa" é alcançável de QUALQUER planeta
