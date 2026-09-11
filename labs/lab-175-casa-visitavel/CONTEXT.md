@@ -441,6 +441,35 @@ Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178) e `npx ts
 nova — mesmo padrão de confiança das rodadas anteriores pra hardening defensivo (contratos já
 testados, sem caminho novo de UI).
 
+Décima segunda rodada do Copilot trouxe 3 achados reais corrigidos (vazamento de shadow caster,
+os 3 pontos de remoção de mobília da 10ª/11ª rodada tinham o mesmo problema) e 1 achado
+documentado como variante de uma pendência já aceita (não corrigido com código novo):
+
+- **`buildFurniturePiece` registra cada mesh em `shadowGenerator.addShadowCaster`, mas descartar o
+  `TransformNode` (mesmo com `disposeMaterialAndTextures = true`, 10ª/11ª rodada) não remove essas
+  referências da `renderList` do `ShadowGenerator`** — o gerador de sombra continuava percorrendo
+  meshes já descartados a cada render, custo que só cresce (nunca diminui) a cada troca de dono
+  (própria ↔ visita) ou exclusão de mobília. Corrigido com uma função só (`disposeFurnitureNode`)
+  que chama `shadowGenerator.removeShadowCaster` em `getChildMeshes()` ANTES do `.dispose(false,
+  true)`, reaproveitada nos TRÊS pontos que removem uma peça (evita repetir a mesma ordem de
+  operações 3x e esquecer um dos três de novo, como já aconteceu entre a 10ª e a 11ª rodada).
+- **Achado documentado, não corrigido com código nesta rodada**: usar o toggle "Casa privada"
+  ANTES de qualquer registro de `playerId` (só `FriendsPanel` chama `ensureRegistered`) faz
+  `sendImmediateHouseVisibility` retornar sem persistir nada; se o registro acontecer e o jogador
+  fechar o app dentro do mesmo ciclo de 60s antes do próximo heartbeat periódico, o servidor cria a
+  linha com `house_visible` padrão (`true`) em vez do valor já escolhido localmente. Mesma
+  autocorreção da pendência já documentada de heartbeat periódico vs. imediato (o tick periódico já
+  roda desde o mount, independente de quando o registro aconteceu, e lê `playerId`/`houseVisible`
+  frescos a cada 60s) — decisão registrada como pendência (ver seção abaixo) em vez de plumbing
+  nova (enfileirar o toggle até o registro completar) pra fechar uma janela que já se autocorrige.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, sem teste novo — mudança é só
+em `World3D.tsx`, que não tem testes unitários neste projeto, mesmo padrão das rodadas 6/7/10 pra
+mudanças de cena 3D) e `npx tsc --noEmit`/`npm run test` (server-accounts, 131/131, inalterado)
+limpos, `npm run build` limpo. Sem verificação ao vivo nova — confirmado pela leitura direta da
+API real (`ShadowGenerator.removeShadowCaster`/`Node.getChildMeshes`) nos tipos instalados do
+`@babylonjs/core`, mesmo padrão de confiança da 10ª rodada pro fix de material/textura irmão.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -448,6 +477,19 @@ testados, sem caminho novo de UI).
   trânsito no exato momento do toggle); sempre autocorrigido, nunca permanente. Resolver de
   verdade exige numeração/timestamp no heartbeat — mudança maior, mesma categoria da pendência de
   autenticação abaixo.
+  **Variante achada pelo Copilot na 12ª rodada**: se o jogador usa o toggle "Casa privada" ANTES
+  de ter um `playerId` registrado (nunca abriu o painel de Amigos ainda — só `FriendsPanel`
+  chama `ensureRegistered`), `sendImmediateHouseVisibility` não tem playerId pra enviar e retorna
+  sem persistir nada; se o jogador registrar (abrir Amigos) e fechar o app DENTRO do mesmo ciclo de
+  60s antes do próximo tick periódico, o servidor cria a linha com o `house_visible` padrão
+  (`true`), não o valor que o jogador já tinha escolhido localmente. MESMO bound de autocorreção da
+  pendência acima (o próximo heartbeat periódico — que já roda desde o mount de `App.tsx`,
+  independente de quando o registro aconteceu — lê `loadPlayerId()`/`progress.houseVisible` frescos
+  a cada tick e corrige sozinho, no máximo 60s depois do registro, ou na próxima sessão se o
+  jogador fechar antes disso) — não corrigido com código novo nesta rodada porque enfileirar o
+  toggle até o registro completar exigiria plumbing nova (hook em `ensureRegistered`) só pra
+  fechar uma janela que já se autocorrige sozinha, desproporcional ao risco real (mesmo raciocínio
+  já aplicado à pendência de falha de rede silenciosa abaixo).
 
 - **Autenticação/ownership real pro sistema de identidade de jogador anônimo** (busca, amizade,
   heartbeat, perfil público) — risco de baixo impacto hoje (ver achado do Copilot acima), mas

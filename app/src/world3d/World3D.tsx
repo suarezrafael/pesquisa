@@ -7257,14 +7257,20 @@ export function World3D({
       // `houseFurnitureNodes[key]` já existente) assume implicitamente que a chave `${itemId}#${i}`
       // sempre se refere ao MESMO dono — trocar de dono sem isto deixaria peças na posição
       // ANTIGA (do dono errado) sempre que os dois tiverem o mesmo item no mesmo índice.
+      // lab-175 (achado do review automático do Copilot no PR #49, 12ª rodada): descartar o
+      // `TransformNode` de uma peça (`.dispose(false, true)`, 10ª rodada) libera malha/material,
+      // mas `buildFurniturePiece` registrou cada mesh em `shadowGenerator.addShadowCaster` — o
+      // `ShadowGenerator` não some sozinho, e sua `renderList` continua com a referência
+      // descartada, custando um pouco de CPU/memória a cada render de sombra, acumulando a cada
+      // troca de dono. Remove do shadow generator ANTES de descartar, nos TRÊS pontos que removem
+      // uma peça (função única pra não repetir a mesma ordem de operações 3x).
+      function disposeFurnitureNode(node: TransformNode) {
+        for (const mesh of node.getChildMeshes()) shadowGenerator.removeShadowCaster(mesh)
+        node.dispose(false, true)
+      }
       function disposeAllHouseFurnitureNodes() {
         for (const key of Object.keys(houseFurnitureNodes)) {
-          // lab-175 (achado do review automático do Copilot no PR #49, 10ª rodada): `dispose()`
-          // sem argumentos usa `disposeMaterialAndTextures = false` — os meshes somem da cena, mas
-          // o `PBRMaterial` criado em `buildFurniturePiece` pra cada peça fica registrado,
-          // crescendo o uso de heap/GPU a cada troca de dono (própria ↔ visita). `true` na segunda
-          // posição descarta material/textura junto.
-          houseFurnitureNodes[key].dispose(false, true)
+          disposeFurnitureNode(houseFurnitureNodes[key])
           delete houseFurnitureNodes[key]
         }
         for (const key of Object.keys(lastFurnitureQuantity)) delete lastFurnitureQuantity[key]
@@ -7307,8 +7313,9 @@ export function World3D({
                 // 11ª rodada (achado do review automático do Copilot no PR #49): este era o
                 // terceiro caminho de remoção que ainda vazava material/textura — a correção da
                 // 10ª rodada só cobriu `disposeAllHouseFurnitureNodes` e o laço de chave obsoleta
-                // no fim desta função, não este (quantidade DIMINUINDO pro mesmo item).
-                staleNode.dispose(false, true)
+                // no fim desta função, não este (quantidade DIMINUINDO pro mesmo item). 12ª
+                // rodada: usa `disposeFurnitureNode` (remove do shadow generator também).
+                disposeFurnitureNode(staleNode)
                 delete houseFurnitureNodes[staleKey]
               }
             }
@@ -7340,7 +7347,8 @@ export function World3D({
           if (desiredKeys.has(key)) continue
           // 10ª rodada: mesmo vazamento de material/textura de `disposeAllHouseFurnitureNodes`
           // acima, aqui no caminho de remoção incremental (item vendido/assinatura expirada).
-          houseFurnitureNodes[key].dispose(false, true)
+          // 12ª rodada: `disposeFurnitureNode` também remove do shadow generator.
+          disposeFurnitureNode(houseFurnitureNodes[key])
           delete houseFurnitureNodes[key]
         }
       }
