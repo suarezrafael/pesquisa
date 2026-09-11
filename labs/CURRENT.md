@@ -19,8 +19,16 @@ via Chrome real**: 15 ciclos completos de troca de boné (30 cliques) confirmara
 `window.__scene.materials.length`/render list do `ShadowGenerator` permanecendo EXATAMENTE
 estáveis (604 materiais, 1761 na render list) do início ao fim — antes da correção, cada ciclo
 deixaria pelo menos +1 material órfão e +2 referências mortas. Nenhum caso concreto de "duplica"/
-"herda mesh errada" foi reproduzido além do vazamento em si. Ver
-`labs/lab-176-preview-lojinha-avatar/CONTEXT.md`.
+"herda mesh errada" foi reproduzido além do vazamento em si. **PR #51 teve 5 rodadas de review
+automático do Copilot** (3 com achados reais corrigidos — textura `DynamicTexture` compartilhada
+entre jogadores destruída à força em `removeRemotePlayer`/`disposeStudentFigure`
+(`getOrCreatePatternTexture`, cache por `Scene`), o preview da lojinha nunca removendo suas
+próprias malhas do `ShadowGenerator`, e um `PBRMaterial` órfão pra criaturas sem acessório algum
+via `FALLBACK_BONECO_FEATURES`; 1 achado avaliado e corretamente descartado, com justificativa
+verificada na fonte do Babylon.js instalado; 2 rodadas limpas em sequência ao final —
+"Approval recommended"). **Confirma deploy em produção**: PR #51 mergeado (commit `f44974b`),
+CI/CD verde nos 3 workers, app respondendo 200 no Vercel (lab client-side, sem mudança de
+backend). Ver `labs/lab-176-preview-lojinha-avatar/CONTEXT.md`.
 
 Antes desse: labs/lab-175-casa-visitavel/ — casa visitável somente leitura
 (`docs/market-metrics-engagement-backlog.md`, "Lab 171 - Casa visitável somente leitura", o único

@@ -219,3 +219,10 @@ Seguindo a ordem recomendada por `docs/growth-retention-monetization-backlog.md`
   que "Chapéu de Festa" (10 moedas, perfil de teste só tinha 8) aparece com o preço, nunca como
   "Em uso" — nenhum item bloqueado aparece como comprado. Nenhum dado de teste precisou ser
   limpo (mudança é só client-side, sem servidor envolvido).
+- **PR #51 mergeado em `main`** (commit `f44974b`) depois de 5 rodadas de review automático do
+  Copilot (3 com achados reais corrigidos, 1 achado avaliado e corretamente descartado com
+  justificativa verificada na fonte do Babylon.js instalado, 2 rodadas limpas em sequência ao
+  final — "Approval recommended"), confirmado com o usuário via `AskUserQuestion` antes do merge.
+  **Confirma deploy em produção**: CI/CD verde nos 3 workers no push de merge pro `main`, app
+  respondendo 200 em `app-two-flax-92.vercel.app` (lab inteiro client-side, sem mudança de
+  backend, sem migração/deploy de Worker envolvido).
