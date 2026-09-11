@@ -175,6 +175,29 @@ Segunda rodada do Copilot (mesmo PR, depois da primeira leva de correções) tro
   (mudança maior, mesma categoria da pendência de autenticação acima) — fora do escopo proporcional
   pra um único campo booleano.
 
+Terceira rodada do Copilot trouxe 2 achados novos corrigidos + reafirmou 3 já avaliados/documentados
+nas rodadas anteriores (corrida de heartbeat, falha silenciosa de rede — ver pendências abaixo — e
+o mesmo achado de ownership/amizade não verificada em `GET /players/:id/public-profile`, agora
+citando explicitamente que um ex-amigo REMOVIDO também continuaria com acesso — mantida a mesma
+decisão de documentar como limitação arquitetural pré-existente do sistema de identidade anônima
+inteiro, ver `Pendências` acima, não uma regressão nova):
+
+- **`PlayerPublicProfileView.tsx`: clicar "Visitar casa" e sair da tela (Voltar/fechar) ANTES da
+  resposta chegar ainda disparava `onVisitHouse` depois, teleportando o jogador mesmo com a tela
+  já abandonada** — corrigido com uma ref de "montado" (mesmo padrão `cancelled` já usado em
+  `usePlayerPublicProfile.ts`), checada antes de chamar `onVisitHouse`/atualizar estado.
+- **Resposta HTTP com erro (rate limit, falha temporária) durante a revalidação caía na MESMA
+  mensagem de "casa não visitável agora"**, misturando "o dono desligou de propósito" com "algo deu
+  errado, tente de novo" — diferenciado: `!res.ok` mostra `body.error` ou uma mensagem genérica de
+  retry; só `res.ok` com `house: null` mostra a mensagem de "não visitável".
+- **PR desatualizada**: o corpo da PR (`gh pr edit`) tinha os números de teste da primeira versão
+  (169/169, 4 novos / 120/120, 11 novos) — atualizado pros números finais depois das duas rodadas
+  de correção (172/172, 7 novos / 123/123, 14 novos).
+
+Nenhuma verificação ao vivo nova pra estes 2 últimos — mudança pequena e de baixo risco (guarda de
+montagem + diferenciação de mensagem de erro), confiança por revisão de código e pela suíte de
+tipos/testes já limpa.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -185,7 +208,18 @@ Segunda rodada do Copilot (mesmo PR, depois da primeira leva de correções) tro
 
 - **Autenticação/ownership real pro sistema de identidade de jogador anônimo** (busca, amizade,
   heartbeat, perfil público) — risco de baixo impacto hoje (ver achado do Copilot acima), mas
-  cresce conforme mais dados por jogador viram sincronizados. Candidato a lab dedicado futuro.
+  cresce conforme mais dados por jogador viram sincronizados. Inclui especificamente `GET
+  /players/:id/public-profile` não verificar amizade `accepted` (nem sequer remover acesso de um
+  ex-amigo removido) — mesma limitação do sistema inteiro desde o lab-163, reafirmada pelo Copilot
+  na 3ª rodada deste PR. Candidato a lab dedicado futuro.
+- **`sendImmediateHouseVisibility`/`sendHeartbeat` descartam falha de rede ou resposta não-2xx
+  silenciosamente** (mesmo padrão fire-and-forget de todo o resto do heartbeat desde o lab-162,
+  "nunca interrompe o jogo pra criança por causa disto") — se o clique do toggle falhar por rede/
+  rate limit, a UI já mostra o novo estado mas o backend continua com o valor antigo até o próximo
+  tick periódico (60s) tentar de novo com sucesso. Mesmo raciocínio de tolerância a falha do resto
+  do sistema; corrigir exigiria inspecionar a resposta e reverter/avisar a UI, tratamento
+  diferente de todo o resto do heartbeat só pra este campo — desproporcional pro risco (janela
+  de no máximo 60s, sempre autocorrigida).
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

@@ -8,7 +8,7 @@
 // painel só. `AvatarPreview3D` carregado preguiçoso (mesmo motivo de `AvatarShop.tsx`:
 // `@babylonjs/core` é pesado, e o painel de Amigos abre bem mais vezes do que alguém abre um
 // perfil dentro dele).
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { ACHIEVEMENT_CATALOG } from '../data/achievements'
 import { usePlayerPublicProfile, type PlayerPublicProfile } from '../state/usePlayerPublicProfile'
 
@@ -34,6 +34,16 @@ export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHou
   // deixava entrar. Revalida buscando o perfil DE NOVO no clique, em vez de confiar no cache.
   const [revalidating, setRevalidating] = useState(false)
   const [visitError, setVisitError] = useState<string | null>(null)
+  // lab-175 (achado do review automático do Copilot no PR #49, terceira rodada): sem isto,
+  // clicar "Visitar casa" e depois "← Voltar"/fechar o painel ANTES da resposta chegar ainda
+  // disparava `onVisitHouse` (teleportando o jogador pra dentro de casa) mesmo com a tela já
+  // abandonada — mesmo padrão `cancelled` já usado em `usePlayerPublicProfile.ts`.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   async function handleVisitClick() {
     setVisitError(null)
@@ -41,15 +51,22 @@ export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHou
     try {
       const res = await fetch(`${ACCOUNTS_API_URL}/players/${encodeURIComponent(playerId)}/public-profile`)
       const body = (await res.json().catch(() => null)) as (PlayerPublicProfile & { error?: string }) | null
-      if (res.ok && body?.house) {
+      if (!mountedRef.current) return
+      // lab-175 (achado do review automático do Copilot no PR #49, terceira rodada): uma
+      // resposta HTTP com erro (rate limit, falha temporária do servidor) não é o MESMO caso de
+      // "o dono desligou a visibilidade" (`res.ok` com `house: null`) — misturar os dois mostrava
+      // "casa não visitável" pra uma falha só temporária, quando "tente de novo" seria mais certo.
+      if (!res.ok) {
+        setVisitError(body?.error ?? 'Não foi possível confirmar a visita agora — tente de novo.')
+      } else if (body?.house) {
         onVisitHouse(body.nickname, body.house)
       } else {
         setVisitError('🏠 A casa não está mais visitável agora.')
       }
     } catch {
-      setVisitError('Não foi possível confirmar a visita agora — tente de novo.')
+      if (mountedRef.current) setVisitError('Não foi possível confirmar a visita agora — tente de novo.')
     } finally {
-      setRevalidating(false)
+      if (mountedRef.current) setRevalidating(false)
     }
   }
 
