@@ -15,7 +15,7 @@ visitante (não revela assinatura do anfitrião); balcão de compras bloqueado d
 (único caminho pra `MyHousePanel`, garante "visitante não altera nada"); reações genéricas
 (lab-170) funcionaram sem nenhuma mudança de código (já operavam sobre os nós 3D renderizados, não
 sobre `progress`). Evento novo `house_visited` mede "visitas por criança" (métrica citada no
-documento). `npx tsc -b`/testes limpos (app 176/176, 11 novos; server-accounts 129/129, 20 novos).
+documento). `npx tsc -b`/testes limpos (app 177/177, 12 novos; server-accounts 129/129, 20 novos).
 `npm run build` sem regressão de bundle. Migração `0010` aplicada em produção. **Verificado ao
 vivo, ponta a ponta, contra o banco de PRODUÇÃO real** (mesma técnica do lab-172: `wrangler dev`
 local + segundo Vite): dois jogadores de teste registrados, amizade criada via API, mobília

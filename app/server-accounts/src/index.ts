@@ -895,12 +895,18 @@ async function handlePlayerPublicProfile(request: Request, env: Env, playerId: s
   // SERVIDOR, antes de responder — mesmo que o client já filtre `subscriptionOnly` antes de
   // enviar (`useHeartbeat.ts`), um client modificado ou um heartbeat salvo antes desta correção
   // não deveria conseguir vazar o status de assinatura do anfitrião pro visitante.
+  // 10ª rodada: a coluna é `jsonb` sem constraint — uma linha legada/corrompida com um valor que
+  // não é array (objeto, string) faria `sanitizeHouseFurnitureIds` (que assume array pra `.filter`)
+  // estourar, devolvendo 500 em vez de um perfil sanitizado. Confere o tipo antes de chamar,
+  // mesmo princípio já aplicado aos guards do lado do client (`resolveHouseSyncSnapshot`).
   const house =
-    row.house_visible && row.house_furniture_ids !== null
+    row.house_visible && Array.isArray(row.house_furniture_ids)
       ? {
           furnitureIds: sanitizeHouseFurnitureIds(row.house_furniture_ids as string[]),
           placements: sanitizeHousePlacements(
-            (row.house_placements ?? {}) as Record<string, { x: number; z: number; rotY: number }>,
+            typeof row.house_placements === 'object' && row.house_placements !== null && !Array.isArray(row.house_placements)
+              ? (row.house_placements as Record<string, { x: number; z: number; rotY: number }>)
+              : {},
           ),
         }
       : null

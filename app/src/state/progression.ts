@@ -658,7 +658,11 @@ function isValidHousePlacementValueForSync(value: unknown): value is { x: number
 }
 
 export function resolveHouseSyncSnapshot(progress: Progress): HouseSyncSnapshot {
-  const furnitureIds = progress.unlockedFurnitureIds
+  // lab-175 (achado do review automático do Copilot no PR #49, 10ª rodada): mesmo problema já
+  // corrigido pra `housePlacements` (8ª rodada) — `progress` vem de JSON persistido sem validação
+  // (`loadProgress`), então um save corrompido com `unlockedFurnitureIds: null` (ou não-array por
+  // qualquer outro motivo) fazia `.filter()` estourar antes de qualquer heartbeat sair.
+  const furnitureIds = (Array.isArray(progress.unlockedFurnitureIds) ? progress.unlockedFurnitureIds : [])
     .filter((id) => {
       const item = FURNITURE_CATALOG.find((c) => c.id === id)
       return item !== undefined && !item.subscriptionOnly

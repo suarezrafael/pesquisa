@@ -913,6 +913,15 @@ describe('resolveHouseSyncSnapshot (lab-175, achados do review automático do Co
     expect(resolveHouseSyncSnapshot(progressWithNullContainer).placements).toEqual({})
   })
 
+  it('trata unlockedFurnitureIds não-array como lista vazia sem lançar (achado do Copilot na 10ª rodada: .filter() estourava antes de qualquer heartbeat sair)', () => {
+    const progressWithNullFurnitureIds = {
+      ...emptyProgress,
+      unlockedFurnitureIds: null as unknown as string[],
+    }
+    expect(() => resolveHouseSyncSnapshot(progressWithNullFurnitureIds)).not.toThrow()
+    expect(resolveHouseSyncSnapshot(progressWithNullFurnitureIds).furnitureIds).toEqual([])
+  })
+
   it('descarta placement com propriedade extra além de x/z/rotY (achado do Copilot na 9ª rodada: o servidor exige exatamente 3 chaves e rejeitava o heartbeat inteiro)', () => {
     const progress = {
       ...emptyProgress,

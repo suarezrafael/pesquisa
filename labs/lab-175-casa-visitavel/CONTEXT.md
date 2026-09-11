@@ -70,12 +70,16 @@ cartão de prévia 2D).
 
 ## Decisões técnicas tomadas
 
-- **Sincroniza os dados RAW (`unlockedFurnitureIds`/`housePlacements`), não uma versão já
-  resolvida/computada** — o client de quem VISITA reaproveita a mesma lógica de resolução de
-  quantidade/posição (`visitFurnitureQuantity` + o mesmo layout em anel de
-  `refreshHouseFurnitureVisuals`) já usada pra própria casa, evitando duplicar a matemática do
-  layout em dois lugares (dado bruto sincronizado uma vez, lógica de apresentação continua só no
-  client).
+- **Sincroniza `unlockedFurnitureIds`/`housePlacements` já FILTRADOS/validados
+  (`resolveHouseSyncSnapshot`), não uma versão já resolvida/computada de posição final** — o
+  client de quem VISITA reaproveita a mesma lógica de resolução de quantidade/posição
+  (`visitFurnitureQuantity` + o mesmo layout em anel de `refreshHouseFurnitureVisuals`) já usada
+  pra própria casa, evitando duplicar a matemática do layout em dois lugares. "RAW" aqui nunca
+  quis dizer sem sanitização — desde a criação (item `subscriptionOnly` sempre filtrado) e reforçado
+  em rodadas seguintes do Copilot, `resolveHouseSyncSnapshot` remove item pago, descarta chave/valor
+  inválido e corta em 300 entradas ANTES de qualquer heartbeat sair (achado da 10ª rodada: texto
+  antigo dizendo "RAW" sem qualificar podia levar uma mudança futura a reintroduzir o vazamento ou
+  a rejeição de payload que essas correções existem pra evitar).
 - **Item `subscriptionOnly` nunca aparece pra visitante, mesmo com o dono assinante** — decisão
   registrada no `FEATURES.md` antes de codar: mostrar mobília paga do anfitrião revelaria o status
   de assinatura dele pra outra criança, informação que a visita não precisa expor e que o
@@ -367,6 +371,49 @@ Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 176/176) e `npx ts
 nova — os 3 achados são hardening defensivo de contratos já testados (o mesmo formato de chave do
 servidor, o mesmo teto de tamanho da escrita), sem caminho novo de UI envolvido.
 
+Décima rodada do Copilot trouxe 5 achados reais corrigidos (4 crashes/vazamento de recurso + 1
+documentação desatualizada):
+
+- **`resolveHouseSyncSnapshot` (client) fazia `.filter()` em `unlockedFurnitureIds` sem checar se
+  era array** — mesma classe de bug já corrigida pra `housePlacements` na 8ª rodada; um save
+  corrompido com `unlockedFurnitureIds: null` fazia o heartbeat inteiro (periódico E imediato)
+  lançar `TypeError` antes de enviar qualquer campo. Corrigido com `Array.isArray(...) ? ... : []`
+  (testado).
+- **`useHeartbeat.ts` enviava `progressRef.current.houseVisible` direto pro servidor sem validar
+  que era booleano** — um save corrompido com `null`/string nesse campo fazia o servidor recusar o
+  heartbeat PERIÓDICO inteiro (400, "houseVisible inválido"), travando `badges`/`equippedLook`/
+  `last_seen_at` a cada tick de 60s (pior que os achados anteriores, que exigiam mobília/placement
+  específico — este acontece sempre que o save está corrompido). Corrigido normalizando pro
+  default real (`true`, mesmo de `storage.ts`) quando o valor salvo não é booleano.
+- **`GET /players/:id/public-profile` fazia `row.house_furniture_ids as string[]` sem checar se a
+  coluna `jsonb` (sem constraint) realmente continha um array** — uma linha legada/corrompida com
+  objeto/string nesse campo fazia `sanitizeHouseFurnitureIds` (que assume array pra `.filter`)
+  lançar, devolvendo 500 em vez de um perfil sanitizado (ou `house: null`). Corrigido validando
+  `Array.isArray`/formato de objeto antes de chamar as funções de sanitização, mesmo princípio já
+  aplicado aos guards do lado client.
+- **Vazamento de material/textura em `disposeAllHouseFurnitureNodes` e no laço de remoção
+  incremental de `refreshHouseFurnitureVisuals`** — `TransformNode.dispose()` sem argumentos usa
+  `disposeMaterialAndTextures = false`; como `buildFurniturePiece` cria um `PBRMaterial` novo por
+  peça e `disposeAllHouseFurnitureNodes` roda em TODA troca de dono (própria ↔ visita, ou visita A
+  ↔ visita B, não só ao sair do jogo), o material antigo ficava registrado na cena a cada visita,
+  crescendo uso de heap/GPU. Corrigido chamando `.dispose(false, true)` nos dois pontos de remoção
+  (confirmado pela assinatura real de `TransformNode.dispose` nos tipos do `@babylonjs/core`
+  instalado: `dispose(doNotRecurse?, disposeMaterialAndTextures?)`).
+- **Corrigido (documentação)**: `CONTEXT.md` (este arquivo, "Decisões técnicas tomadas") dizia que
+  o heartbeat sincroniza os dados "RAW", o que nunca foi verdade desde a criação (item
+  `subscriptionOnly` sempre foi filtrado) e ficou mais impreciso ainda depois das rodadas 4/7/8/9
+  adicionarem validação de chave, valor e teto de tamanho — reescrito pra descrever o que
+  `resolveHouseSyncSnapshot` realmente faz, pra não induzir uma mudança futura a reintroduzir um
+  vazamento ou rejeição de payload que essas correções existem pra evitar.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 177/177) e `npx tsc --noEmit`/
+`npm run test` (server-accounts, 129/129) limpos, `npm run build` limpo. Sem verificação ao vivo
+nova pro fix de vazamento de material (nenhum teste automatizado de uso de heap/GPU existe neste
+projeto; confiança pela leitura direta da assinatura real de `TransformNode.dispose` nos tipos
+instalados) nem pro guard de `index.ts` (caminho de dado corrompido em produção, impraticável de
+simular sem uma linha real assim no banco) — mesmo padrão de confiança já usado nas rodadas 7/8
+pra hardening defensivo que espelha um contrato já testado.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -407,10 +454,11 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
 ## Estado do repositório ao final
 
 - Branch: `lab-175-casa-visitavel`.
-- `npx tsc -b`/`npm run test` (app): limpo, 176/176 (11 novos: `visitFurnitureQuantity`,
-  `setHouseVisible`, `resolveHouseSyncSnapshot` ×7, incluindo o truncamento em 300 da 4ª rodada, a
+- `npx tsc -b`/`npm run test` (app): limpo, 177/177 (12 novos: `visitFurnitureQuantity`,
+  `setHouseVisible`, `resolveHouseSyncSnapshot` ×8, incluindo o truncamento em 300 da 4ª rodada, a
   validação de valor corrompido/fora do limite da 7ª, o guard de valor nulo/não-objeto + contêiner
-  nulo da 8ª, e a checagem de chaves extras da 9ª). `npm run build`: limpo, sem regressão de bundle.
+  nulo da 8ª, a checagem de chaves extras da 9ª, e o guard de `unlockedFurnitureIds` não-array da
+  10ª). `npm run build`: limpo, sem regressão de bundle.
 - `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 129/129 (20 novos:
   `isValidHouseFurnitureIds`, `isValidHousePlacements` (incluindo os testes de limite de
   coordenada da 4ª e 6ª rodada, com o limite real de `4,8` apertado na 6ª),

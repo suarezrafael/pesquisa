@@ -7259,7 +7259,12 @@ export function World3D({
       // ANTIGA (do dono errado) sempre que os dois tiverem o mesmo item no mesmo índice.
       function disposeAllHouseFurnitureNodes() {
         for (const key of Object.keys(houseFurnitureNodes)) {
-          houseFurnitureNodes[key].dispose()
+          // lab-175 (achado do review automático do Copilot no PR #49, 10ª rodada): `dispose()`
+          // sem argumentos usa `disposeMaterialAndTextures = false` — os meshes somem da cena, mas
+          // o `PBRMaterial` criado em `buildFurniturePiece` pra cada peça fica registrado,
+          // crescendo o uso de heap/GPU a cada troca de dono (própria ↔ visita). `true` na segunda
+          // posição descarta material/textura junto.
+          houseFurnitureNodes[key].dispose(false, true)
           delete houseFurnitureNodes[key]
         }
         for (const key of Object.keys(lastFurnitureQuantity)) delete lastFurnitureQuantity[key]
@@ -7329,7 +7334,9 @@ export function World3D({
 
         for (const key of Object.keys(houseFurnitureNodes)) {
           if (desiredKeys.has(key)) continue
-          houseFurnitureNodes[key].dispose()
+          // 10ª rodada: mesmo vazamento de material/textura de `disposeAllHouseFurnitureNodes`
+          // acima, aqui no caminho de remoção incremental (item vendido/assinatura expirada).
+          houseFurnitureNodes[key].dispose(false, true)
           delete houseFurnitureNodes[key]
         }
       }

@@ -101,7 +101,13 @@ export function useHeartbeat(profile: Profile | null, progress: Progress | null)
         const houseSnapshot = resolveHouseSyncSnapshot(progressRef.current)
         body.houseFurnitureIds = houseSnapshot.furnitureIds
         body.housePlacements = houseSnapshot.placements
-        body.houseVisible = progressRef.current.houseVisible
+        // lab-175 (achado do review automático do Copilot no PR #49, 10ª rodada): `houseVisible`
+        // também vem de JSON persistido sem validação — um save corrompido com `null`/string nesse
+        // campo fazia o servidor recusar o heartbeat INTEIRO (400, "houseVisible inválido"),
+        // travando até `badges`/`equippedLook`/`last_seen_at`. Normaliza pro default real
+        // (`true`, mesmo de `storage.ts`) quando não é booleano, mesmo princípio já aplicado a
+        // `housePlacements`/`unlockedFurnitureIds` em `resolveHouseSyncSnapshot`.
+        body.houseVisible = typeof progressRef.current.houseVisible === 'boolean' ? progressRef.current.houseVisible : true
       }
       sendHeartbeat(body)
     }, HEARTBEAT_INTERVAL_MS)
