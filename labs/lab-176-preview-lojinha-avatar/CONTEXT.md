@@ -165,6 +165,11 @@ esquecida no outro). Corrigido trocando o bloco inteiro por
 178/178, inalterado) e `npm run build` limpos. Sem verificação ao vivo nova — refactor puro
 (comportamento idêntico, só uma fonte de verdade a menos pra divergir).
 
+**Quinta rodada do Copilot: limpa.** Zero comentários novos, zero suprimidos — "Approval
+recommended". Fim do ciclo de revisão automática (5 rodadas: 3 com achados reais corrigidos, 1
+achado avaliado e corretamente descartado com justificativa verificada na fonte do Babylon.js, 2
+rodadas limpas em sequência ao final) — próximo passo é confirmação de merge com o usuário.
+
 ## Pendências / dívidas conhecidas
 
 - Não foi possível testar ao vivo o swap de ÓCULOS (as duas opções disponíveis no perfil de teste
