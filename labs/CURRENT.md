@@ -28,8 +28,21 @@ confirmado na UI real que o botão "Visitar casa" só aparece com dado disponív
 EXATAMENTE a mobília certa na cena 3D, o balcão fica bloqueado durante a visita, a saída funciona,
 e reentrar na própria casa depois mostra de volta só a mobília própria (nós 3D novos, prova de que
 a mobília do anfitrião foi realmente descartada, não só escondida); toggle de visibilidade
-confirmado persistindo. Perfis de teste removidos do banco ao final. Ver
-`labs/lab-175-casa-visitavel/CONTEXT.md`.
+confirmado persistindo. Perfis de teste removidos do banco ao final. **PR #49 teve 20 rodadas
+seguidas de achados reais do review automático do Copilot corrigidos antes do merge** (a 21ª
+veio limpa) — do achado inicial (item `subscriptionOnly` vazando pro visitante, fluxo de "Visitar
+casa" quebrado num caso real) a hardening progressivo de validação/sanitização em profundidade
+(client E servidor, chave/valor/teto de tamanho de `housePlacements`/`houseFurnitureIds`),
+vazamento de material/textura/shadow caster em 3 pontos de remoção de mobília na cena 3D, cache
+stale numa revalidação de privacidade (`cache: 'no-store'`), consolidação de tipo duplicado
+(`PublicHouseSnapshot`), um timer de polling que passou por 3 correções em sequência (desiste
+cedo demais → nunca desiste → dependência instável resetando o teto) até ficar certo, e uma
+interação real com o cronômetro de sobrevivência de planetas extremos nunca antes possível (visitar
+casa é alcançável de qualquer planeta, diferente da própria casa). Detalhe rodada a rodada em
+`labs/lab-175-casa-visitavel/CONTEXT.md`. **Confirma deploy em produção**: PR #49 mergeado
+(commit `b8f9017`), CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health` 200 em
+`missao-aprender-accounts.rafaelvs.workers.dev`, app respondendo 200 em
+`app-two-flax-92.vercel.app`). Ver `labs/lab-175-casa-visitavel/CONTEXT.md`.
 
 **Com este lab, o backlog de código do `docs/market-metrics-engagement-backlog.md` está
 completamente esgotado** — resta só pesquisa com usuário real (§7), fora de escopo de laboratório

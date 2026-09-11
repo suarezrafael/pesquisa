@@ -781,3 +781,10 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
   deslocamento tangencial que evita pousar exatamente na porta), não a ~13 unidades que a versão
   antiga (pousando sempre perto da casa) produziria — prova de que `savedOutsideLocalUp` captura a
   direção de verdade em vez de uma direção fixa.
+- **PR #49 mergeado em `main`** (commit `b8f9017`) depois de 20 rodadas seguidas com pelo menos 1
+  achado real do review automático do Copilot corrigido cada (a 21ª rodada veio limpa — 0
+  comentários novos, 0 suprimidos), confirmado com o usuário via `AskUserQuestion` antes do merge.
+  **Confirma deploy em produção**: CI/CD verde nos 3 workers (`app`/`server-accounts`/
+  `server-cf-relay`) no push de merge pro `main`, `GET /health` 200 em
+  `missao-aprender-accounts.rafaelvs.workers.dev`, app respondendo 200 em
+  `app-two-flax-92.vercel.app`.
