@@ -573,6 +573,24 @@ nova — consolidação de tipo é refactor puro (mesmo formato de dado, só uma
 do teto de tentativas não muda o caminho feliz já testado ao vivo em rodadas anteriores, só o
 comportamento do caso extremo (nunca visto ao vivo nesta sessão) de a ponte nunca ficar pronta.
 
+Décima sétima rodada do Copilot trouxe 1 achado real corrigido — no MEU PRÓPRIO fix da 16ª rodada:
+
+- **Remover o teto de tentativas na 16ª rodada trocou "desiste cedo demais (10s)" por um problema
+  pior: um timer PERMANENTE** — se `setup()` (a função assíncrona que registra
+  `__visitFriendHouse` no fim, depois de Havok/assets carregarem) falhar/lançar DEPOIS de
+  `sceneRef.current` já existir mas ANTES de chegar nessa atribuição, a ponte nunca aparece, e sem
+  teto o `setInterval` de 200ms rodava pelo resto da vida do componente — não só um caso raro
+  inofensivo como eu tinha avaliado na 16ª, e sim um vazamento de verdade (timer que nunca para
+  sozinho). Corrigido voltando a ter um teto, bem mais generoso que os 10s originais: 60s (300
+  tentativas), tempo mais que suficiente pro carregamento normal mais lento já visto nesta sessão;
+  no timeout, libera o pedido (mesmo `onVisitHouseHandled()` de sempre) em vez de reter estado pra
+  sempre. Não há um "erro" de visita específico pra mostrar nesse caso raro — se a cena não montou,
+  o jogo inteiro já está quebrado de formas mais visíveis que essa.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) limpos,
+`npm run build` limpo. Sem verificação ao vivo nova — mesma classe de mudança da 16ª rodada
+(ajuste de constante/comportamento de caso extremo nunca visto ao vivo nesta sessão).
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter

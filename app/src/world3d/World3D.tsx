@@ -2195,20 +2195,31 @@ export function World3D({
   // lab-175 (achado do review automático do Copilot no PR #49, 16ª rodada): a versão anterior
   // desistia depois de 50 tentativas (~10s) e limpava o pedido em silêncio — como `App.tsx` já
   // fechou o painel de Amigos ANTES de enfileirar a visita, um carregamento excepcionalmente
-  // lento (ou uma cena que nunca termina de montar) fazia o clique "sumir" sem nenhum feedback
-  // nem forma de tentar de novo. Continua tentando indefinidamente em vez de desistir — seguro
-  // porque o `return` do efeito já limpa o intervalo no desmonte OU quando `visitHouseRequest`
-  // muda pra outro pedido/`null` (clicar em outro amigo, ou o próprio pedido sendo atendido);
-  // na prática a ponte fica pronta em poucos segundos na esmagadora maioria dos casos, e se a
-  // cena nunca terminar de montar de verdade, o jogo inteiro já estaria quebrado de qualquer
-  // forma — não há um "erro" específico de visita pra mostrar nesse caso.
+  // lento fazia o clique "sumir" sem nenhum feedback nem forma de tentar de novo.
+  //
+  // 17ª rodada: a correção da 16ª (tentar pra sempre, sem teto) trocou "desiste cedo demais" por
+  // um problema pior — se `setup()` (a função assíncrona que registra `__visitFriendHouse` no
+  // FIM, depois de Havok/assets carregarem) falhar/lançar DEPOIS de `sceneRef.current` já existir
+  // mas ANTES de chegar nessa atribuição, a ponte NUNCA aparece, e sem teto o intervalo de 200ms
+  // rodava pelo resto da vida do componente — um timer permanente, não só um caso raro inofensivo.
+  // Volta a ter um teto, bem mais generoso que os 10s originais (60s, tempo mais que suficiente
+  // pro carregamento normal mais lento já visto nesta sessão) — no timeout, libera o pedido
+  // (mesmo `onVisitHouseHandled()` de sempre) em vez de reter estado pra sempre; não há um "erro"
+  // de visita específico pra mostrar nesse caso raro (se a cena não montou, o jogo inteiro já
+  // está quebrado de outras formas mais visíveis que isso).
   useEffect(() => {
     if (!visitHouseRequest) return
     const request = visitHouseRequest
+    let attempts = 0
+    const MAX_ATTEMPTS = 300 // 300 × 200ms = 60s
     const interval = setInterval(() => {
+      attempts += 1
       const bridge = (sceneRef.current as any)?.__visitFriendHouse
       if (typeof bridge === 'function') {
         bridge(request.nickname, request.furnitureIds, request.placements)
+        clearInterval(interval)
+        onVisitHouseHandled()
+      } else if (attempts >= MAX_ATTEMPTS) {
         clearInterval(interval)
         onVisitHouseHandled()
       }
