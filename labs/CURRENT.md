@@ -1,5 +1,17 @@
 # Laboratório atual
 
+**Em andamento: labs/lab-177-relevo-montanhas-visiveis/** — fechar o bug "física permite andar
+sobre montanha invisível". Origem: `docs/growth-retention-monetization-backlog.md`, seção 7,
+"Lab 177", prioridade P0. Investigação prévia (antes de codar) já mapeou que a hipótese do
+backlog ("separação entre mesh visual e colisão física") só vale pra METADE do sistema real: no
+planeta principal, `PLATEAU_CENTERS`/`terrainHeight` alimentam o MESMO mesh usado pela física
+(`PhysicsAggregate` tipo `MESH`) — o bug histórico ali (labs 95/124/151) é puramente de
+renderização (culling/normal degenerada em rampas íngremes), com o lab-151 tendo enviado uma
+redução de altura especulativa NUNCA confirmada ao vivo. Já os planetas secundários (Marte,
+`buildMarsHill`) usam colliders esféricos embutidos dimensionados/posicionados INDEPENDENTES da
+malha visual do morro — divergência real possível, nunca auditada. Ver
+`labs/lab-177-relevo-montanhas-visiveis/FEATURES.md`.
+
 Último concluído: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.
 Origem: `docs/growth-retention-monetization-backlog.md` (PR #50, mergeado), seção 7, "Lab 176",
 prioridade P0 — primeiro item recomendado desse backlog novo, antes de features maiores. Causa
