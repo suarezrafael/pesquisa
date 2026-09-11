@@ -23,6 +23,8 @@ import {
   equipPet,
   feedPet,
   furnitureQuantity,
+  visitFurnitureQuantity,
+  setHouseVisible,
   getLevel,
   isQuestUnlocked,
   petAgeYears,
@@ -801,6 +803,31 @@ describe('furnitureQuantity (lab-138)', () => {
     expect(furnitureQuantity(meteorito, emptyProgress, false)).toBe(0)
     const concedido = { ...emptyProgress, unlockedFurnitureIds: ['meteorito_mercurio'] }
     expect(furnitureQuantity(meteorito, concedido, false)).toBe(1)
+  })
+})
+
+describe('visitFurnitureQuantity (lab-175, casa visitável)', () => {
+  it('conta quantas cópias repetidas de um item normal existem no snapshot do anfitrião', () => {
+    const cama = findFurnitureById('cama')!
+    expect(visitFurnitureQuantity(cama, ['cama', 'tapete', 'cama', 'cama'])).toBe(3)
+  })
+
+  it('item subscriptionOnly sempre conta 0 pra visitante, mesmo se aparecer no snapshot', () => {
+    const camaNave = findFurnitureById('cama_nave')!
+    expect(visitFurnitureQuantity(camaNave, [])).toBe(0)
+    expect(visitFurnitureQuantity(camaNave, ['cama_nave', 'cama_nave'])).toBe(0)
+  })
+
+  it('item de recompensa de planeta conta normalmente (não é subscriptionOnly)', () => {
+    const meteorito = findFurnitureById('meteorito_mercurio')!
+    expect(visitFurnitureQuantity(meteorito, ['meteorito_mercurio'])).toBe(1)
+  })
+})
+
+describe('setHouseVisible (lab-175, casa visitável)', () => {
+  it('liga e desliga a visibilidade da casa', () => {
+    expect(setHouseVisible(emptyProgress, false).houseVisible).toBe(false)
+    expect(setHouseVisible({ ...emptyProgress, houseVisible: false }, true).houseVisible).toBe(true)
   })
 
   // lab-136: posicionamento manual de mobília ("Mover" no MyHousePanel) — testes de regressão pro

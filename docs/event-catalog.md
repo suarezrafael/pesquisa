@@ -47,6 +47,7 @@ linha nova e imprevista na tabela.
 | `parent_signup_started` | Clique em "Entrar / Criar conta" na tela de proposta de valor (lab-166) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
 | `checkout_started` | `POST /checkout` devolve uma URL válida, antes do redirect pro Stripe (lab-166) | `components/FamilyPortal.tsx`, `Dashboard.handleSubscribe` | — | 1x por tentativa de checkout |
 | `weekly_report_preview_viewed` | Clique em "Ver exemplo do relatório semanal" na tela de proposta de valor (lab-173) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
+| `house_visited` | Clique em "🏠 Visitar casa" no perfil público de um amigo (lab-175) | `App.tsx`, `handleVisitHouse` | — | 1x por clique |
 
 ## Qual métrica do documento cada evento alimenta
 
@@ -72,6 +73,9 @@ decisão").
   `family_landing_viewed` e `parent_signup_started`), é lido em paralelo pra saber quantos
   responsáveis que veem a proposta clicam especificamente pra ver o exemplo do relatório.
 - **`title_play_click_rate`** — `play_click` / total de sessões (`session_start`).
+- **"Visitas por criança"** (métrica esperada de "Lab 171 - Casa visitável somente leitura",
+  docs/market-metrics-engagement-backlog.md) — `house_visited` (lab-175), lido em paralelo (não
+  faz parte de nenhum funil obrigatório), mede quantas vezes uma criança visita a casa de um amigo.
 
 ## O que NÃO é evento de client (mas ainda vira número no funil semanal)
 

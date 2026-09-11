@@ -134,4 +134,10 @@ export interface Progress {
   // `weeklyXpEarned` em `state/progression.ts`. `null` = nunca sincronizado (perfil recém-criado).
   weeklyXpWeekKey: string | null
   weeklyXpSnapshot: number
+  // lab-175 ("Lab 171 - Casa visitável somente leitura", docs/market-metrics-engagement-backlog.md)
+  // — controle do DONO sobre um amigo poder visitar a casa (`unlockedFurnitureIds`/
+  // `housePlacements` acima, sincronizados via `POST /players/heartbeat` só quando isto é
+  // `true`). Padrão `true` (mesma lógica de "visível pros amigos por padrão" já usada pelo perfil
+  // público do lab-163, sem toggle) — o jogador pode desligar em `MyHousePanel.tsx`.
+  houseVisible: boolean
 }

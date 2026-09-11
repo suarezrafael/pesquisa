@@ -29,6 +29,8 @@ import {
   isTokenRevoked,
   isValidBadgeList,
   isValidEquippedLook,
+  isValidHouseFurnitureIds,
+  isValidHousePlacements,
   isValidNpsScore,
   isValidProductEventType,
   isValidProgressBackupPayload,
@@ -768,7 +770,14 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   if (limited) return limited
 
   const body = (await request.json().catch(() => null)) as
-    | { playerId?: unknown; equippedLook?: unknown; badges?: unknown }
+    | {
+        playerId?: unknown
+        equippedLook?: unknown
+        badges?: unknown
+        houseFurnitureIds?: unknown
+        housePlacements?: unknown
+        houseVisible?: unknown
+      }
     | null
   // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
   // checar o tipo antes de `.trim()`, um número/objeto no lugar de string lançaria TypeError não
@@ -801,12 +810,42 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     badgesJson = JSON.stringify(body.badges)
   }
 
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — mesmo padrão opcional/coalesce dos dois
+  // campos acima: sincroniza a mobília da casa pra `GET /players/:id/public-profile` poder
+  // devolvê-la pra um amigo visitar.
+  let houseFurnitureIdsJson: string | null = null
+  if (body.houseFurnitureIds !== undefined) {
+    if (!isValidHouseFurnitureIds(body.houseFurnitureIds)) {
+      return Response.json({ error: 'houseFurnitureIds inválido' }, { status: 400 })
+    }
+    houseFurnitureIdsJson = JSON.stringify(body.houseFurnitureIds)
+  }
+
+  let housePlacementsJson: string | null = null
+  if (body.housePlacements !== undefined) {
+    if (!isValidHousePlacements(body.housePlacements)) {
+      return Response.json({ error: 'housePlacements inválido' }, { status: 400 })
+    }
+    housePlacementsJson = JSON.stringify(body.housePlacements)
+  }
+
+  let houseVisible: boolean | null = null
+  if (body.houseVisible !== undefined) {
+    if (typeof body.houseVisible !== 'boolean') {
+      return Response.json({ error: 'houseVisible inválido' }, { status: 400 })
+    }
+    houseVisible = body.houseVisible
+  }
+
   const sql = neon(env.DATABASE_URL)
   const rows = (await sql`
     update player_identities set
       last_seen_at = now(),
       equipped_look = coalesce(${equippedLookJson}::jsonb, equipped_look),
-      badges = coalesce(${badgesJson}::jsonb, badges)
+      badges = coalesce(${badgesJson}::jsonb, badges),
+      house_furniture_ids = coalesce(${houseFurnitureIdsJson}::jsonb, house_furniture_ids),
+      house_placements = coalesce(${housePlacementsJson}::jsonb, house_placements),
+      house_visible = coalesce(${houseVisible}::boolean, house_visible)
     where id = ${playerId} returning id
   `) as { id: string }[]
   if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
@@ -830,18 +869,36 @@ async function handlePlayerPublicProfile(request: Request, env: Env, playerId: s
 
   const sql = neon(env.DATABASE_URL)
   const rows = (await sql`
-    select nickname, avatar_emoji, equipped_look, badges
+    select nickname, avatar_emoji, equipped_look, badges,
+      house_furniture_ids, house_placements, house_visible
     from player_identities
     where id = ${playerId}
-  `) as { nickname: string; avatar_emoji: string; equipped_look: unknown; badges: unknown }[]
+  `) as {
+    nickname: string
+    avatar_emoji: string
+    equipped_look: unknown
+    badges: unknown
+    house_furniture_ids: unknown
+    house_placements: unknown
+    house_visible: boolean
+  }[]
   if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
 
   const row = rows[0]
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — `house` só vem preenchido quando o
+  // dono manteve a visibilidade ligada (`house_visible`, controlável em `MyHousePanel.tsx`) E já
+  // sincronizou pelo menos um heartbeat com mobília; qualquer um dos dois faltando devolve `null`
+  // (o client trata como "casa não visitável agora", nunca como erro).
+  const house =
+    row.house_visible && row.house_furniture_ids !== null
+      ? { furnitureIds: row.house_furniture_ids, placements: row.house_placements ?? {} }
+      : null
   return Response.json({
     nickname: row.nickname,
     avatarEmoji: row.avatar_emoji,
     equippedLook: row.equipped_look ?? null,
     badges: row.badges ?? [],
+    house,
   })
 }
 

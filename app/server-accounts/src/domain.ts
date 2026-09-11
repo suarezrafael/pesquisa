@@ -180,6 +180,9 @@ const PRODUCT_EVENT_TYPES = new Set([
   // lab-173 (docs/market-metrics-engagement-backlog.md §10, item 8) — mede interesse real no
   // preview do relatório semanal, ver app/src/productAnalytics.ts.
   'weekly_report_preview_viewed',
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — mede "visitas por criança" (métrica
+  // esperada citada no documento), ver app/src/productAnalytics.ts.
+  'house_visited',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -494,4 +497,47 @@ export function isValidBadgeList(value: unknown): value is string[] {
     value.length <= BADGE_MAX_COUNT &&
     value.every((badge) => typeof badge === 'string' && badge.length > 0 && badge.length <= BADGE_MAX_LENGTH)
   )
+}
+
+// lab-175 ("Lab 171 - Casa visitável somente leitura") — mobília da casa sincronizada via
+// heartbeat pra um amigo poder visitar (mesmo mecanismo de `equippedLook`/`badges` acima).
+// `houseFurnitureIds` é o array COM REPETIÇÃO de `Progress.unlockedFurnitureIds` (uma entrada por
+// cópia possuída) — tetos generosos (não regra de negócio real), mesmo espírito de
+// `BADGE_MAX_COUNT`/`EQUIPPED_ID_MAX_LENGTH`.
+const HOUSE_FURNITURE_MAX_COUNT = 300
+const HOUSE_FURNITURE_ID_MAX_LENGTH = 60
+
+export function isValidHouseFurnitureIds(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= HOUSE_FURNITURE_MAX_COUNT &&
+    value.every((id) => typeof id === 'string' && id.length > 0 && id.length <= HOUSE_FURNITURE_ID_MAX_LENGTH)
+  )
+}
+
+// Chave no formato `${itemId}#${índice}` (mesmo formato de `Progress.housePlacements` do client,
+// `state/types.ts`) — valida o formato da chave também, não só o valor, pra nunca gravar uma chave
+// arbitrária vinda de um heartbeat malicioso dentro do jsonb.
+const HOUSE_PLACEMENTS_MAX_KEYS = 300
+const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]+#\d+$/
+
+function isValidHousePlacementValue(value: unknown): value is { x: number; z: number; rotY: number } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return (
+    Object.keys(record).length === 3 &&
+    Number.isFinite(record.x) &&
+    Number.isFinite(record.z) &&
+    Number.isFinite(record.rotY)
+  )
+}
+
+export function isValidHousePlacements(
+  value: unknown,
+): value is Record<string, { x: number; z: number; rotY: number }> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record)
+  if (keys.length > HOUSE_PLACEMENTS_MAX_KEYS) return false
+  return keys.every((key) => HOUSE_PLACEMENT_KEY_PATTERN.test(key) && isValidHousePlacementValue(record[key]))
 }

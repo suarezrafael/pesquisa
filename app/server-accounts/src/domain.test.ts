@@ -20,6 +20,8 @@ import {
   isSelfFriendRequest,
   isTokenRevoked,
   isValidBadgeList,
+  isValidHouseFurnitureIds,
+  isValidHousePlacements,
   isValidEquippedLook,
   isValidNpsScore,
   isValidProductEventType,
@@ -231,6 +233,10 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
 
   it('aceita o preview do relatório semanal do lab-173', () => {
     expect(isValidProductEventType('weekly_report_preview_viewed')).toBe(true)
+  })
+
+  it('aceita a visita de casa do lab-175', () => {
+    expect(isValidProductEventType('house_visited')).toBe(true)
   })
 
   it('rejeita um tipo desconhecido — nunca confia em input do client sem checar', () => {
@@ -664,5 +670,64 @@ describe('isValidBadgeList (lab-163)', () => {
   it('rejeita algo que não é array', () => {
     expect(isValidBadgeList('não é lista')).toBe(false)
     expect(isValidBadgeList(null)).toBe(false)
+  })
+})
+
+describe('isValidHouseFurnitureIds (lab-175)', () => {
+  it('aceita uma lista de ids, com repetição (uma cópia por entrada)', () => {
+    expect(isValidHouseFurnitureIds(['sofa', 'sofa', 'cama'])).toBe(true)
+  })
+
+  it('aceita lista vazia (casa ainda sem mobília)', () => {
+    expect(isValidHouseFurnitureIds([])).toBe(true)
+  })
+
+  it('rejeita item vazio ou não-string na lista', () => {
+    expect(isValidHouseFurnitureIds(['sofa', ''])).toBe(false)
+    expect(isValidHouseFurnitureIds(['sofa', 42])).toBe(false)
+  })
+
+  it('rejeita lista com mais de 300 itens (defesa contra payload abusivo)', () => {
+    expect(isValidHouseFurnitureIds(Array.from({ length: 301 }, () => 'sofa'))).toBe(false)
+  })
+
+  it('rejeita algo que não é array', () => {
+    expect(isValidHouseFurnitureIds('não é lista')).toBe(false)
+    expect(isValidHouseFurnitureIds(null)).toBe(false)
+  })
+})
+
+describe('isValidHousePlacements (lab-175)', () => {
+  it('aceita um objeto vazio (nenhuma peça reposicionada manualmente)', () => {
+    expect(isValidHousePlacements({})).toBe(true)
+  })
+
+  it('aceita chaves no formato "${id}#${índice}" com coordenadas numéricas', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: -2.5, rotY: 0 }, 'cama#1': { x: 0, z: 0, rotY: 3.14 } })).toBe(
+      true,
+    )
+  })
+
+  it('rejeita chave fora do formato esperado', () => {
+    expect(isValidHousePlacements({ sofa: { x: 1, z: 2, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#abc': { x: 1, z: 2, rotY: 0 } })).toBe(false)
+  })
+
+  it('rejeita valor com campo faltando, extra ou não-finito', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: 2 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: 2, rotY: 0, extra: 1 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: NaN, z: 2, rotY: 0 } })).toBe(false)
+  })
+
+  it('rejeita mais de 300 chaves (defesa contra payload abusivo)', () => {
+    const big: Record<string, unknown> = {}
+    for (let i = 0; i < 301; i++) big[`sofa#${i}`] = { x: 0, z: 0, rotY: 0 }
+    expect(isValidHousePlacements(big)).toBe(false)
+  })
+
+  it('rejeita algo que não é objeto', () => {
+    expect(isValidHousePlacements('não é objeto')).toBe(false)
+    expect(isValidHousePlacements(null)).toBe(false)
+    expect(isValidHousePlacements([])).toBe(false)
   })
 })

@@ -18,9 +18,13 @@ interface PlayerPublicProfileViewProps {
   playerId: string
   nickname: string
   onBack: () => void
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — chamado com o snapshot de mobília já
+  // carregado (nunca `null`, o botão só aparece quando `profile.house` existe); quem chama fecha
+  // o painel de Amigos e entra na casa 3D com esses dados.
+  onVisitHouse: (nickname: string, house: { furnitureIds: string[]; placements: Record<string, { x: number; z: number; rotY: number }> }) => void
 }
 
-export function PlayerPublicProfileView({ playerId, nickname, onBack }: PlayerPublicProfileViewProps) {
+export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHouse }: PlayerPublicProfileViewProps) {
   const { profile, loading, error } = usePlayerPublicProfile(playerId)
 
   return (
@@ -52,6 +56,21 @@ export function PlayerPublicProfileView({ playerId, nickname, onBack }: PlayerPu
               />
             </Suspense>
           </div>
+
+          {/* lab-175 ("Lab 171 - Casa visitável somente leitura") — só aparece quando o dono
+              manteve a visibilidade ligada e já sincronizou mobília; senão, mensagem neutra (nunca
+              "amigo desativou", que soaria como rejeição pessoal). */}
+          {profile.house ? (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => onVisitHouse(profile.nickname, profile.house!)}
+            >
+              🏠 Visitar casa
+            </button>
+          ) : (
+            <p className="field-hint">🏠 Casa não visitável agora.</p>
+          )}
 
           <h3>Conquistas</h3>
           <div className="quest-list">

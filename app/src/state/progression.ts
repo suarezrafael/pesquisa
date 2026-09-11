@@ -573,6 +573,24 @@ export function furnitureQuantity(item: FurnitureOption, progress: Progress, ent
   return progress.unlockedFurnitureIds.filter((x) => x === item.id).length
 }
 
+// lab-175 ("Lab 171 - Casa visitável somente leitura") — mesma regra de `furnitureQuantity`
+// acima, mas usada quando `World3D.tsx` está mostrando a casa de OUTRO jogador pra um visitante:
+// `furnitureIds` vem de um snapshot alheio (sincronizado via `POST /players/heartbeat`), nunca do
+// `progress` local de quem está visitando. Item `subscriptionOnly` sempre conta 0 pra visitantes,
+// de propósito — mostrar mobília paga do anfitrião revelaria o status de assinatura dele pra outra
+// criança, informação que a visita não precisa expor.
+export function visitFurnitureQuantity(item: FurnitureOption, furnitureIds: string[]): number {
+  if (item.subscriptionOnly) return 0
+  return furnitureIds.filter((x) => x === item.id).length
+}
+
+// Toggle de visibilidade da casa pra visita de amigos (lab-175) — mesmo formato trivial de
+// `equipPet` acima, ainda como função pura de domínio (não direto em `useProgress.ts`) pra manter
+// consistência com o resto do arquivo e ficar testável isoladamente.
+export function setHouseVisible(progress: Progress, visible: boolean): Progress {
+  return { ...progress, houseVisible: visible }
+}
+
 // Posicionamento manual de mobília dentro de casa (lab-136, pedido do usuário: "tem que ter
 // opção... de escolher em que posição da casa deve ficar a peça... o ângulo e posição onde fica o
 // objeto"). Pura escrita de coordenadas já escolhidas pelo jogador na cena 3D — a geometria/

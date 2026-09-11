@@ -12,11 +12,20 @@ export interface PublicEquippedLook {
   equippedGlassesId: string | null
 }
 
+// lab-175 ("Lab 171 - Casa visitável somente leitura") — `null` quando o dono desligou a
+// visibilidade (`MyHousePanel.tsx`) OU nunca sincronizou mobília nenhuma; a UI trata os dois casos
+// do mesmo jeito ("casa não visitável agora"), nunca como erro.
+export interface PublicHouseSnapshot {
+  furnitureIds: string[]
+  placements: Record<string, { x: number; z: number; rotY: number }>
+}
+
 export interface PlayerPublicProfile {
   nickname: string
   avatarEmoji: string
   equippedLook: PublicEquippedLook | null
   badges: string[]
+  house: PublicHouseSnapshot | null
 }
 
 // lab-163, último item do Grupo B do backlog social (labs/lab-158-.../FEATURES.md) — avatar

@@ -141,3 +141,11 @@ export function trackCheckoutStarted(): void {
 export function trackWeeklyReportPreviewViewed(): void {
   trackEvent('weekly_report_preview_viewed')
 }
+
+// lab-175 ("Lab 171 - Casa visitável somente leitura", docs/market-metrics-engagement-backlog.md)
+// — mede "visitas por criança" (métrica esperada citada no documento). Dispara no clique de
+// "Visitar casa" (`App.tsx`, `handleVisitHouse`), não só quando a cena 3D confirma a entrada —
+// mesmo espírito de `trackWeeklyReportPreviewViewed`, o clique já é o sinal de intenção real.
+export function trackHouseVisited(): void {
+  trackEvent('house_visited')
+}

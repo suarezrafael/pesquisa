@@ -77,6 +77,7 @@ import { questTypeColor } from './questVisuals'
 import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
 import {
   furnitureQuantity,
+  visitFurnitureQuantity,
   getLevel,
   isQuestUnlocked,
   petAgeYears,
@@ -200,6 +201,18 @@ interface World3DProps {
   coopAnswerSignalId: string | null
   onCoopAnswerHandled: () => void
   onCoopChallengeCompleted: () => void
+  // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — mesma ponte de
+  // `coopAnswerSignalId`/`placingFurnitureRequestId` acima: `App.tsx` muda `visitHouseRequest`
+  // (nunca reaproveitando o mesmo `id`) quando o jogador clica "Visitar casa" no `FriendsPanel`,
+  // fora deste componente. Entrar na casa do amigo reaproveita a MESMA sala 3D (`houseInteriorRootNode`)
+  // populada com a mobília DELE em vez da local — nunca escreve em `progress`.
+  visitHouseRequest: {
+    id: string
+    nickname: string
+    furnitureIds: string[]
+    placements: Record<string, { x: number; z: number; rotY: number }>
+  } | null
+  onVisitHouseHandled: () => void
 }
 
 const PLANET_RADIUS = 13
@@ -1993,6 +2006,8 @@ export function World3D({
   coopAnswerSignalId,
   onCoopAnswerHandled,
   onCoopChallengeCompleted,
+  visitHouseRequest,
+  onVisitHouseHandled,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
@@ -2171,6 +2186,18 @@ export function World3D({
     ;(sceneRef.current as any)?.__onCoopAnswerCorrect?.()
     onCoopAnswerHandled()
   }, [coopAnswerSignalId, onCoopAnswerHandled])
+
+  // lab-175 — mesma ponte das duas acima: `App.tsx` muda `visitHouseRequest` quando o jogador
+  // clica "Visitar casa" no `FriendsPanel`, fora deste componente.
+  useEffect(() => {
+    if (!visitHouseRequest) return
+    ;(sceneRef.current as any)?.__visitFriendHouse?.(
+      visitHouseRequest.nickname,
+      visitHouseRequest.furnitureIds,
+      visitHouseRequest.placements,
+    )
+    onVisitHouseHandled()
+  }, [visitHouseRequest, onVisitHouseHandled])
 
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()
@@ -2618,6 +2645,17 @@ export function World3D({
     // desafio que não dá pra completar sozinho.
     let coopEnterHintLabel: TextBlock | null = null
     const houseFurnitureNodes: Record<string, TransformNode> = {}
+    // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — snapshot da mobília
+    // de OUTRO jogador, populado só durante uma visita (`__visitFriendHouse`, ver mais abaixo);
+    // `null` = mostrando a própria casa, como sempre. `refreshHouseFurnitureVisuals` lê daqui em
+    // vez de `progressRef.current` quando não-nulo — NUNCA escreve de volta em `progress`,
+    // garantindo que uma visita nunca altera a casa de ninguém (a UI de comprar/mover, só
+    // alcançável pelo balcão interno, também é bloqueada durante a visita, ver loop de física).
+    let visitingHouseSnapshot: {
+      nickname: string
+      furnitureIds: string[]
+      placements: Record<string, { x: number; z: number; rotY: number }>
+    } | null = null
     // Posicionamento manual de mobília (lab-136) — `placingFurnitureId` é a fonte de verdade LIDA
     // pelo loop de física a cada quadro (mesmo padrão de `sittingAtDesk`/`drivingCar` acima: um
     // `let` do closure, não o `useState` React, que só re-renderiza — não muda o valor que o
@@ -3206,7 +3244,10 @@ export function World3D({
             return
           }
           if (Vector3.Distance(avatarMesh.position, houseCounterPos) < HOUSE_TRIGGER_DISTANCE) {
-            onOpenMyHouseRef.current()
+            // lab-175 — visitando a casa de um amigo (`visitingHouseSnapshot`): o balcão não abre
+            // nada, garantindo que a visita nunca vira um jeito de mexer na PRÓPRIA mobília por
+            // engano enquanto está dentro da casa de outra pessoa ("visitante não altera nada").
+            if (!visitingHouseSnapshot) onOpenMyHouseRef.current()
             return
           }
           // lab-170 (pedido do usuário: "ao se aproximar na cama tem que ter como deitar" /
@@ -7182,6 +7223,20 @@ export function World3D({
       // só existe pra detectar quando ela DIMINUI (exclusão, ver comentário lá dentro), nunca lido
       // fora desta função.
       const lastFurnitureQuantity: Record<string, number> = {}
+      // lab-175 — descarta TODAS as peças construídas (não só as que sobram fora de
+      // `desiredKeys`, como o laço no fim de `refreshHouseFurnitureVisuals` já faz): usada só na
+      // TRANSIÇÃO entre "de quem" é a casa mostrada (própria ↔ visita, ou visita A ↔ visita B),
+      // porque a otimização incremental de `refreshHouseFurnitureVisuals` (reaproveitar
+      // `houseFurnitureNodes[key]` já existente) assume implicitamente que a chave `${itemId}#${i}`
+      // sempre se refere ao MESMO dono — trocar de dono sem isto deixaria peças na posição
+      // ANTIGA (do dono errado) sempre que os dois tiverem o mesmo item no mesmo índice.
+      function disposeAllHouseFurnitureNodes() {
+        for (const key of Object.keys(houseFurnitureNodes)) {
+          houseFurnitureNodes[key].dispose()
+          delete houseFurnitureNodes[key]
+        }
+        for (const key of Object.keys(lastFurnitureQuantity)) delete lastFurnitureQuantity[key]
+      }
       function refreshHouseFurnitureVisuals() {
         const roomRoot = houseInteriorRootNode
         if (!roomRoot) return
@@ -7190,12 +7245,18 @@ export function World3D({
         const usableArc = Math.PI * 2 - doorGap * 2
         const startAngle = doorAngle + doorGap
         const ringRadius = 3.0
+        // lab-175 — mostrando a casa de um amigo (`visitingHouseSnapshot` não-nulo): usa o
+        // snapshot sincronizado dele em vez do `progress` local; item `subscriptionOnly` sempre
+        // conta 0 pra visitante (`visitFurnitureQuantity`, `state/progression.ts`).
+        const activePlacements = visitingHouseSnapshot ? visitingHouseSnapshot.placements : progressRef.current.housePlacements
 
         const desiredKeys = new Set<string>()
         FURNITURE_CATALOG.forEach((item, itemIndex) => {
           const visual = FURNITURE_VISUAL_KIND[item.id]
           if (!visual) return
-          const quantity = furnitureQuantity(item, progressRef.current, entitlementActiveRef.current)
+          const quantity = visitingHouseSnapshot
+            ? visitFurnitureQuantity(item, visitingHouseSnapshot.furnitureIds)
+            : furnitureQuantity(item, progressRef.current, entitlementActiveRef.current)
           // lab-170 (bug real: excluir uma cópia do MEIO reindexa `housePlacements` pra manter os
           // índices contíguos — ver `removeFurniture`, `progression.ts` —, mas as cópias JÁ
           // CONSTRUÍDAS na cena abaixo continuam com as chaves/posições ANTIGAS; o laço de
@@ -7225,7 +7286,7 @@ export function World3D({
             piece.parent = roomRoot
             // Posição salva pelo jogador (lab-136, "Mover" no `MyHousePanel`) tem prioridade sobre
             // o layout padrão em anel — só cai no anel se esta cópia nunca foi reposicionada.
-            const saved = progressRef.current.housePlacements[key]
+            const saved = activePlacements[key]
             if (saved) {
               piece.position = new Vector3(saved.x, 0, saved.z)
               piece.rotation.y = saved.rotY
@@ -7246,6 +7307,18 @@ export function World3D({
         }
       }
       ;(scene as any).__refreshHouseFurniture = refreshHouseFurnitureVisuals
+
+      // Casa visitável (lab-175) — ponte React → closure (mesmo padrão de `__refreshHouseFurniture`
+      // acima), chamada por `App.tsx` quando o jogador clica "Visitar casa" no `FriendsPanel`.
+      // Reaproveita a MESMA sala 3D da própria casa (`enterHouseInterior`), só que populada com a
+      // mobília do amigo — nunca cria uma sala nova nem escreve em `progress`.
+      ;(scene as any).__visitFriendHouse = (
+        nickname: string,
+        furnitureIds: string[],
+        placements: Record<string, { x: number; z: number; rotY: number }>,
+      ) => {
+        enterHouseInterior({ nickname, furnitureIds, placements })
+      }
 
       // Construída sob demanda na primeira entrada (mesmo padrão de `buildMarsIfNeeded` etc.) —
       // nenhum jogador que nunca entrar em casa paga o custo de criar esta sala.
@@ -7371,9 +7444,19 @@ export function World3D({
         refreshHouseFurnitureVisuals()
       }
 
-      function enterHouseInterior() {
+      // `visitSnapshot` presente = entrando na casa de OUTRO jogador (lab-175); omitido = entrada
+      // normal na própria casa. Descarta TODAS as peças construídas antes de popular de novo
+      // (`disposeAllHouseFurnitureNodes`, ver comentário lá) — necessário mesmo na entrada normal,
+      // caso a última vez que a sala foi populada tenha sido uma visita.
+      function enterHouseInterior(visitSnapshot?: {
+        nickname: string
+        furnitureIds: string[]
+        placements: Record<string, { x: number; z: number; rotY: number }>
+      }) {
         buildHouseInteriorIfNeeded()
         if (!avatarMesh || !avatarBody) return
+        disposeAllHouseFurnitureNodes()
+        visitingHouseSnapshot = visitSnapshot ?? null
         savedOutsideCenter = currentWorldCenter
         savedOutsideGroundFn = currentGroundBaseFn
         insideHouseInterior = true
@@ -7396,15 +7479,28 @@ export function World3D({
         avatarBody.body.disablePreStep = true
         facing = new Vector3(0, 0, 1)
         refreshHouseFurnitureVisuals()
+        if (visitingHouseSnapshot) {
+          furnitureReactionTimeout = showChatBubbleText(
+            furnitureReactionLabel,
+            `🏠 Você está na casa de ${visitingHouseSnapshot.nickname}!`,
+            furnitureReactionTimeout,
+          )
+        }
       }
 
       function exitHouseInterior() {
         if (!insideHouseInterior) return
         // Sair de casa com uma peça em modo de posicionamento não deveria deixar o modo "preso"
         // (o jogador não teria mais como confirmar/cancelar de dentro do painel) — cancela e
-        // restaura a posição anterior, mesmo efeito de apertar "Cancelar".
+        // restaura a posição anterior, mesmo efeito de apertar "Cancelar". Não deveria acontecer
+        // de qualquer forma durante uma visita (o balcão fica bloqueado, ver loop de física), mas
+        // mantido aqui como defesa (mesmo espírito de `disposeAllHouseFurnitureNodes` na entrada).
         cancelFurniturePlacement()
         insideHouseInterior = false
+        // lab-175 — limpa o snapshot de visita ao sair; a próxima entrada (própria casa ou outra
+        // visita) já descarta e reconstrói tudo de qualquer forma (`enterHouseInterior`), mas
+        // deixar isto pendurado enquanto o jogador está do lado de FORA seria estado inconsistente.
+        visitingHouseSnapshot = null
         // lab-149 (achado do Copilot): se o jogador estava arrastando a câmera livre bem na hora
         // de sair de casa, o arraste ficaria "solto" (o `pointerup` só chega quando o botão do
         // mouse é solto, não quando a casa é deixada) — zera aqui também, além da checagem em

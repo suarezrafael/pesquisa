@@ -42,9 +42,26 @@ export function useHeartbeat(profile: Profile | null, progress: Progress | null)
     const interval = setInterval(() => {
       const playerId = loadPlayerId()
       if (!playerId) return
-      const body: { playerId: string; equippedLook?: unknown; badges?: string[] } = { playerId }
+      const body: {
+        playerId: string
+        equippedLook?: unknown
+        badges?: string[]
+        houseFurnitureIds?: string[]
+        housePlacements?: Record<string, { x: number; z: number; rotY: number }>
+        houseVisible?: boolean
+      } = { playerId }
       if (profileRef.current) body.equippedLook = equippedLookFrom(profileRef.current)
-      if (progressRef.current) body.badges = progressRef.current.badges
+      if (progressRef.current) {
+        body.badges = progressRef.current.badges
+        // lab-175 ("Lab 171 - Casa visitável somente leitura") — envia o RAW
+        // `unlockedFurnitureIds`/`housePlacements` (mesmo formato local, sem transformação): item
+        // `subscriptionOnly` continua na lista se o dono comprou/ganhou, mas o Worker/client de
+        // quem visita sempre trata esse tipo como 0 (`visitFurnitureQuantity`), nunca revelando
+        // status de assinatura pra um amigo.
+        body.houseFurnitureIds = progressRef.current.unlockedFurnitureIds
+        body.housePlacements = progressRef.current.housePlacements
+        body.houseVisible = progressRef.current.houseVisible
+      }
       fetch(`${ACCOUNTS_API_URL}/players/heartbeat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -27,6 +27,10 @@ interface MyHousePanelProps {
   // usuário). Só aparece pra item comum (nunca `subscriptionOnly`/`planetReward`, ver
   // `removeFurniture` em `progression.ts`).
   onRemoveFurniture: (key: string) => void
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — controle do dono sobre um amigo poder
+  // visitar (`Progress.houseVisible`, sincronizado via heartbeat pra
+  // `GET /players/:id/public-profile` devolver ou não a mobília).
+  onToggleHouseVisible: (visible: boolean) => void
   onClose: () => void
 }
 
@@ -36,6 +40,7 @@ export function MyHousePanel({
   onUnlockFurniture,
   onStartPlacing,
   onRemoveFurniture,
+  onToggleHouseVisible,
   onClose,
 }: MyHousePanelProps) {
   const modalRef = useModalA11y(onClose)
@@ -69,6 +74,17 @@ export function MyHousePanel({
           Seu espaço pessoal — grátis pra todo jogador, sempre. Compre móveis com as moedas que
           você já ganhou nas missões.
         </p>
+
+        {/* lab-175 ("Lab 171 - Casa visitável somente leitura") — botão de dois estados (mesmo
+            espírito de botões-toggle já usados no jogo, ex. abas do FriendsPanel) em vez de um
+            checkbox nativo novo, pra ficar visualmente consistente com o resto do painel. */}
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => onToggleHouseVisible(!progress.houseVisible)}
+        >
+          {progress.houseVisible ? '🔓 Amigos podem visitar sua casa' : '🔒 Casa privada (amigos não visitam)'}
+        </button>
 
         <div className="avatar-shop-grid">
           {FURNITURE_CATALOG.map((item) => {
