@@ -9013,7 +9013,15 @@ export function World3D({
         if (rp.chatBubbleTimeout !== null) window.clearTimeout(rp.chatBubbleTimeout)
         guiTexture.removeControl(rp.label)
         guiTexture.removeControl(rp.chatLabel)
-        rp.figure.root.dispose()
+        // lab-176 (achado investigando o bug de vazamento no preview da lojinha, mesma causa raiz):
+        // `dispose()` sem argumentos não libera material/textura, e NUNCA remove as malhas do
+        // corpo (torso, cabeça, mochila, membros, chapéu, óculos, cabelo — todos registrados em
+        // `shadowGenerator` por `buildStudentFigure`/`applyHat`/etc.) da `renderList` do
+        // `ShadowGenerator`. Cada jogador remoto que desconecta vazava o avatar INTEIRO dele pra
+        // sempre a partir desse ponto. `getChildMeshes()` pega todas as malhas descendentes de
+        // `root` antes de descartar com `disposeMaterialAndTextures = true`.
+        for (const mesh of rp.figure.root.getChildMeshes()) shadowGenerator.removeShadowCaster(mesh)
+        rp.figure.root.dispose(false, true)
         remotePlayers.delete(id)
       }
 
