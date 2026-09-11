@@ -160,3 +160,15 @@ Seguindo a ordem recomendada por `docs/growth-retention-monetization-backlog.md`
   confiança vem de matemática de geometria aplicada aos parâmetros reais do código, mais o mesmo
   padrão `PhysicsShapeType.MESH` já em uso comprovado pro planeta principal, não de reprodução
   visual direta.
+- **PR #52 teve 6 rodadas de review automático do Copilot**: rodada 1 com 2 achados reais
+  (cilindro escalável + screenshot ausente, ver "Decisões técnicas" acima) e 1 nit gramatical;
+  rodada 2 com 1 achado real (PR description/`labs/CURRENT.md` desatualizados, ainda descrevendo
+  o cilindro abandonado); rodada 3 com 1 achado real (autocontradição no próprio `CONTEXT.md`);
+  rodada 4 com 0 achados novos (veredito não-verde repetindo pendência já disclosed, sem ação);
+  rodada 5 com 1 achado real (`FEATURES.md`/`labs/CURRENT.md` marcavam item mobile como concluído
+  apesar do próprio `CONTEXT.md` admitir o contrário); rodada 6 com 0 achados novos, só repetindo
+  as duas pendências já documentadas (Marte e mobile) — tratada como não-acionável e o PR seguiu
+  pra merge.
+- **Confirma deploy em produção**: PR #52 mergeado (commit `616269f`), CI/CD verde nos 3 workers
+  (`app`, `server-accounts`, `server-cf-relay` — nenhum dos dois últimos tem mudança real neste
+  lab, client-side puro), app respondendo 200 em `app-two-flax-92.vercel.app`.

@@ -27,7 +27,19 @@ critério de aceite do backlog "mobile low quality ainda mostra leitura mínima 
 verificado visualmente — as ferramentas de automação de navegador desta sessão não expõem
 override de user agent/emulação de dispositivo (`isLowEndDevice` é detectado só por regex de
 `navigator.userAgent`), então não teve como forçar esse branch de forma válida aqui; precisa de um
-dispositivo/emulador de verdade numa sessão futura. Ver
+dispositivo/emulador de verdade numa sessão futura. **PR #52 teve 6 rodadas de review automático
+do Copilot** (rodada 1: achado real — colisor cilíndrico de Marte tinha topo plano escalável e não
+cobria o `shoulder`, corrigido trocando por `PhysicsAggregate` tipo `MESH`; achado real — FEATURES/
+CONTEXT afirmavam screenshot sem nenhuma imagem de verdade anexada, corrigido com captura real;
+rodada 2: achado real — PR description/`CURRENT.md` ainda descreviam o cilindro abandonado em vez
+do `MESH` final, corrigido; rodada 3: achado real — `CONTEXT.md` se autocontradizia dizendo "não
+concluídas: nenhuma" no mesmo parágrafo que admitia o teste mobile pendente, corrigido; rodada 4: 0
+achados novos, veredito não-verde repetindo pendência já disclosed, sem ação; rodada 5: achado real
+— `FEATURES.md`/`CURRENT.md` marcavam o item de verificação mobile como `[x]`/concluído apesar do
+próprio `CONTEXT.md` admitir que não foi testado, corrigido desmarcando e documentando a limitação
+de ferramental; rodada 6: 0 achados novos, só repete as duas pendências já documentadas — Marte e
+mobile). **Confirma deploy em produção**: PR #52 mergeado (commit `616269f`), CI/CD verde nos 3
+workers, app respondendo 200 no Vercel (lab client-side, sem mudança de backend). Ver
 `labs/lab-177-relevo-montanhas-visiveis/CONTEXT.md`.
 
 Antes desse: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.
