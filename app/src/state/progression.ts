@@ -620,6 +620,26 @@ export interface HouseSyncSnapshot {
 // continua funcionando.
 const HOUSE_SYNC_MAX_ENTRIES = 300
 
+// lab-175 (achado do review automático do Copilot no PR #49, 7ª rodada): antes só validava a
+// CHAVE (formato/catálogo) — se um valor salvo localmente estivesse corrompido (não-finito, ou
+// fora do limite real de posicionamento do jogo), o servidor rejeitaria o heartbeat INTEIRO (400,
+// `isValidHousePlacements`), travando `houseFurnitureIds`/`houseVisible`/`badges`/`equippedLook`
+// junto. Mesmo contrato de `HOUSE_PLACEMENT_COORD_MAX`/`HOUSE_PLACEMENT_ROTATION_MAX` do servidor
+// (`domain.ts`) — duplicado de propósito, os dois pacotes não compartilham código.
+const HOUSE_PLACEMENT_COORD_MAX = 4.8
+const HOUSE_PLACEMENT_ROTATION_MAX = 1000
+
+function isValidHousePlacementValueForSync(value: { x: number; z: number; rotY: number }): boolean {
+  return (
+    Number.isFinite(value.x) &&
+    Number.isFinite(value.z) &&
+    Number.isFinite(value.rotY) &&
+    Math.abs(value.x) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs(value.z) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs(value.rotY) <= HOUSE_PLACEMENT_ROTATION_MAX
+  )
+}
+
 export function resolveHouseSyncSnapshot(progress: Progress): HouseSyncSnapshot {
   const furnitureIds = progress.unlockedFurnitureIds
     .filter((id) => {
@@ -632,6 +652,7 @@ export function resolveHouseSyncSnapshot(progress: Progress): HouseSyncSnapshot 
   for (const [key, value] of Object.entries(progress.housePlacements)) {
     if (placementCount >= HOUSE_SYNC_MAX_ENTRIES) break
     if (!HOUSE_PLACEMENT_KEY_PATTERN.test(key)) continue
+    if (!isValidHousePlacementValueForSync(value)) continue
     const item = FURNITURE_CATALOG.find((c) => c.id === key.split('#')[0])
     if (!item || item.subscriptionOnly) continue
     placements[key] = value

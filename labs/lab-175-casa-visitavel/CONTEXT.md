@@ -278,6 +278,36 @@ ownership/amizade foi reafirmado de novo, mesma decisão mantida):
   citava "duas rodadas" reescrito pra nunca mais ficar defasado (aponta pra seção final em vez de
   citar um número fixo).
 
+Sétima rodada do Copilot trouxe 4 achados reais corrigidos (mais o número de teste de
+`labs/CURRENT.md`, atualizado de novo — desta vez pro número final de VERDADE, depois desta
+rodada):
+
+- **`body === null` (resposta 2xx com corpo vazio/JSON inválido) caía na mensagem de "casa não
+  visitável agora" na revalidação de "Visitar casa"**, igual ao caso real "o dono desligou" —
+  mesma falha que `usePlayerPublicProfile.ts` já trata como ERRO de verdade. Corrigido tratando
+  `body === null` junto com `!res.ok`.
+- **`sanitizeHousePlacements` (servidor) só filtrava item `subscriptionOnly`, repassando qualquer
+  chave/valor já salvo** — uma linha gravada ANTES do limite de `4,8` existir (6ª rodada), ou
+  corrompida por qualquer outro motivo, ainda podia chegar ao visitante com coordenada absurda ou
+  formato inválido, apesar do contrato desta rota dizer que a resposta é sempre sanitizada.
+  Reaplica agora o MESMO formato/limite de `isValidHousePlacements` (testado).
+- **`resolveHouseSyncSnapshot` (client) só validava a CHAVE, nunca o VALOR do placement** — com o
+  servidor agora rejeitando coordenada fora de `±4,8` (6ª rodada), um único valor de placement
+  corrompido/antigo no `progress` local passaria a travar o heartbeat INTEIRO (400), impedindo até
+  `badges`/`equippedLook`/`last_seen_at` de sincronizar — mesma classe de bug já corrigida uma vez
+  pra CHAVES na 4ª rodada, mas não pra VALORES. Corrigido validando/descartando o mesmo contrato
+  do servidor antes de enviar (testado).
+- **`exitHouseInterior` ainda usava `PLANET_RADIUS` (13, fixo) pra escalar o deslocamento
+  tangencial de saída, mesmo depois da correção de direção da 6ª rodada** — errado se o mundo
+  salvo for outro planeta com raio bem diferente (Mercúrio, Marte). Corrigido chamando
+  `savedOutsideGroundFn(savedOutsideLocalUp)` (a mesma função já usada pra calcular o chão de
+  verdade) em vez de um raio fixo — sem precisar guardar mais nenhuma variável nova.
+
+Nenhuma verificação ao vivo nova pra esta rodada — as 4 correções são hardening defensivo com
+contrato já espelhado 1:1 do lado que JÁ tinha sido testado ao vivo (o mesmo limite de coordenada
+da 6ª rodada, a mesma checagem de erro-vs-vazio da 3ª, o mesmo cálculo de chão já usado em toda
+entrada normal de planeta) — confiança pela suíte de testes (2 novos) e revisão de código.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -318,13 +348,16 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
 ## Estado do repositório ao final
 
 - Branch: `lab-175-casa-visitavel`.
-- `npx tsc -b`/`npm run test` (app): limpo, 173/173 (8 novos: `visitFurnitureQuantity`,
-  `setHouseVisible`, `resolveHouseSyncSnapshot` ×4, incluindo o teste de truncamento em 300 da
-  4ª rodada). `npm run build`: limpo, sem regressão de bundle.
-- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 126/126 (17 novos:
+- `npx tsc -b`/`npm run test` (app): limpo, 174/174 (9 novos: `visitFurnitureQuantity`,
+  `setHouseVisible`, `resolveHouseSyncSnapshot` ×5, incluindo o truncamento em 300 da 4ª rodada e
+  a validação de valor corrompido da 7ª). `npm run build`: limpo, sem regressão de bundle.
+- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 127/127 (18 novos:
   `isValidHouseFurnitureIds`, `isValidHousePlacements` (incluindo os testes de limite de
   coordenada da 4ª e 6ª rodada, com o limite real de `4,8` apertado na 6ª),
-  `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements`, allowlist do evento).
+  `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements` (incluindo o teste de re-sanitização de
+  formato/valor da 7ª rodada), allowlist do evento). **Este é o número final de verdade — se você
+  encontrar um número diferente em qualquer outro trecho deste documento ou na PR, este aqui é a
+  fonte correta.**
 - **Migração `0010` aplicada em produção** (`npm run migrate`, confirmado via query real).
 - **Verificado ao vivo, ponta a ponta, contra o banco de PRODUÇÃO real**: subiu um `wrangler dev`
   local (porta 8790, apontando pro `DATABASE_URL` real) + um segundo processo Vite (porta 5180,

@@ -580,11 +580,20 @@ export function sanitizeHouseFurnitureIds(furnitureIds: string[]): string[] {
   return furnitureIds.filter((id) => !SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id))
 }
 
+// lab-175 (achado do review automático do Copilot no PR #49, 7ª rodada): antes só filtrava
+// `subscriptionOnly`, repassando qualquer chave/valor já salvo — `isValidHousePlacements`
+// protege ESCRITAS novas (o limite de 4,8 só existe desde a 6ª rodada), mas uma linha salva ANTES
+// dessa validação existir (ou corrompida por qualquer outro motivo) ainda podia chegar ao
+// visitante com coordenadas fora do limite ou um formato inválido, apesar do contrato desta rota
+// dizer que a resposta é sempre sanitizada. Reaplica o MESMO formato/limite de
+// `HOUSE_PLACEMENT_KEY_PATTERN`/`isValidHousePlacementValue` aqui, não só o filtro de item pago.
 export function sanitizeHousePlacements(
   placements: Record<string, { x: number; z: number; rotY: number }>,
 ): Record<string, { x: number; z: number; rotY: number }> {
   const result: Record<string, { x: number; z: number; rotY: number }> = {}
   for (const [key, value] of Object.entries(placements)) {
+    if (!HOUSE_PLACEMENT_KEY_PATTERN.test(key)) continue
+    if (!isValidHousePlacementValue(value)) continue
     const id = key.split('#')[0]
     if (SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id)) continue
     result[key] = value

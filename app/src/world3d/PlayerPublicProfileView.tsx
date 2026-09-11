@@ -63,9 +63,13 @@ export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHou
       // resposta HTTP com erro (rate limit, falha temporária do servidor) não é o MESMO caso de
       // "o dono desligou a visibilidade" (`res.ok` com `house: null`) — misturar os dois mostrava
       // "casa não visitável" pra uma falha só temporária, quando "tente de novo" seria mais certo.
-      if (!res.ok) {
+      //
+      // 7ª rodada: `body === null` (2xx com corpo vazio/JSON inválido — o `.catch` acima) caía no
+      // `body?.house` abaixo, indistinguível de "casa não visitável", quando é o MESMO caso de
+      // falha que `usePlayerPublicProfile.ts` já trata como erro de verdade.
+      if (!res.ok || body === null) {
         setVisitError(body?.error ?? 'Não foi possível confirmar a visita agora — tente de novo.')
-      } else if (body?.house) {
+      } else if (body.house) {
         onVisitHouse(body.nickname, body.house)
       } else {
         setVisitError('🏠 A casa não está mais visitável agora.')

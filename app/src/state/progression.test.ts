@@ -878,6 +878,19 @@ describe('resolveHouseSyncSnapshot (lab-175, achados do review automático do Co
     expect(Object.keys(snapshot.placements)).toHaveLength(300)
   })
 
+  it('descarta valor de placement corrompido/fora do limite real antes de enviar (achado do Copilot na 7ª rodada: um único valor assim travava o heartbeat INTEIRO)', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['cama', 'tapete'],
+      housePlacements: {
+        'cama#0': { x: 1, z: 2, rotY: 0 },
+        'tapete#0': { x: 999, z: 0, rotY: 0 },
+      },
+    }
+    const snapshot = resolveHouseSyncSnapshot(progress)
+    expect(snapshot.placements).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
+  })
+
   // lab-136: posicionamento manual de mobília ("Mover" no MyHousePanel) — testes de regressão pro
   // eixo novo, mesmo espírito dos testes de `unlockFurniture` acima.
   it('setFurniturePlacement grava posição/ângulo novos pra um item ainda sem posição salva', () => {

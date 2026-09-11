@@ -769,4 +769,13 @@ describe('sanitizeHouseFurnitureIds/sanitizeHousePlacements (lab-175, achado do 
     })
     expect(result).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
   })
+
+  it('descarta entrada com chave/valor inválido salva antes desta validação existir (achado do Copilot na 7ª rodada)', () => {
+    const result = sanitizeHousePlacements({
+      'cama#0': { x: 1, z: 2, rotY: 0 },
+      cama: { x: 1, z: 2, rotY: 0 }, // chave sem "#índice", formato legado
+      'tapete#0': { x: 999, z: 0, rotY: 0 }, // fora do limite real de 4,8
+    } as Record<string, { x: number; z: number; rotY: number }>)
+    expect(result).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
+  })
 })

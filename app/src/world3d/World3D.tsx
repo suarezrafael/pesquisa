@@ -7575,7 +7575,17 @@ export function World3D({
         // pra entrar em casa fisicamente perto dela, mas "Visitar casa" é alcançável de Marte/
         // outros planetas; `savedOutsideLocalUp` guarda a direção de VERDADE de onde o jogador
         // veio, capturada na entrada.
-        teleportAvatarTo(savedOutsideCenter, offsetLandingUp(savedOutsideLocalUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
+        //
+        // 7ª rodada: `offsetLandingUp` também usava `PLANET_RADIUS` (13, o planeta principal)
+        // fixo pra escalar o deslocamento tangencial — errado se o mundo salvo for outro planeta
+        // com raio bem diferente (Mercúrio, Marte etc.). `savedOutsideGroundFn(savedOutsideLocalUp)`
+        // já devolve o raio de verdade daquele mundo naquela direção, sem precisar guardar mais
+        // uma variável — é a MESMA função já usada aqui embaixo pra calcular o chão de verdade.
+        teleportAvatarTo(
+          savedOutsideCenter,
+          offsetLandingUp(savedOutsideLocalUp, savedOutsideGroundFn(savedOutsideLocalUp), 2.5),
+          savedOutsideGroundFn,
+        )
       }
 
       // Posicionamento manual de mobília (lab-136, pedido do usuário: "tem que ter opção... de
