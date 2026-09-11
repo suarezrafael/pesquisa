@@ -5278,22 +5278,39 @@ export function World3D({
           hill.position = hillPos
           hill.rotationQuaternion = alignmentQuaternion(localUp).multiply(Quaternion.RotationAxis(Vector3.Up(), i * 1.7))
           hill.freezeWorldMatrix()
-          hill.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
+          const hillMeshes = hill.getChildMeshes()
+          hillMeshes.forEach((m) => m.freezeWorldMatrix())
 
-          // Mesmo colisor-esfera invisível e embutido das rochas acima, só maior — bloqueia
-          // esbarrão lateral sem virar plataforma.
-          const hillColliderDiameter = 2.1
-          const hillColliderRadius = hillColliderDiameter / 2
-          const hillCollider = MeshBuilder.CreateSphere(
-            `marsHillCollider-${i}`,
-            { diameter: hillColliderDiameter },
-            scene,
-          )
-          hillCollider.parent = secondPlanetRoot
-          hillCollider.position = hillPos.add(localUp.scale(MARS_ROCK_COLLIDER_PROTRUSION - hillColliderRadius))
-          hillCollider.isVisible = false
-          hillCollider.computeWorldMatrix(true)
-          new PhysicsAggregate(hillCollider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+          // lab-177 (achado da investigação prévia, `docs/growth-retention-monetization-backlog.md`
+          // Lab 177: "física permite andar sobre montanha invisível"): o colisor-esfera embutido
+          // usado aqui era o MESMO das rochas pequenas acima, só com diâmetro maior — mas o morro
+          // visual (`buildMarsHill`) é uma cúpula bem mais larga na base (raio visual em X/Z de
+          // ~1,8-2,0 no chão, `main` escalado 1,15×0,8×1,05 a partir de uma esfera de raio 1,7)
+          // do que alta (pico a ~1,36 acima do chão). Uma esfera embutida com só 0,15 de
+          // protrusão (`MARS_ROCK_COLLIDER_PROTRUSION`) tem, na altura do chão, uma seção
+          // transversal de só ~0,54 de raio (matemática de esfera: uma "calota" rasa perto do
+          // polo é muito mais estreita que o equador) — bem menor que o pé visível do morro,
+          // deixando um anel entre ~0,54 e ~1,9 de raio onde o jogador atravessa visualmente a
+          // encosta do morro sem colidir.
+          //
+          // 1ª rodada do review automático do Copilot no PR #52 (dois achados reais, os dois
+          // sobre a MESMA tentativa de corrigir isso com um cilindro): (1) um cilindro baixo e
+          // largo tem um TOPO PLANO contínuo — como o avatar pula ~1,2 unidade (bem mais que os
+          // 0,3 de protrusão), ele sobe nesse topo e caminha por cima/dentro da cúpula visual,
+          // recriando a MESMA classe de bug (plataforma invisível), só que desta vez coberta pela
+          // malha em vez de destacada dela; (2) o raio do cilindro não cobria o `shoulder`
+          // (sub-malha deslocada em `(1.1, -0.35, 0.6)`, que alcança ~2,05 no chão, além do
+          // alcance do cilindro). Qualquer forma PRIMITIVA aproximada erra pra um lado — estreita
+          // demais (esfera rasa original) ou larga com topo escalável (cilindro). A única forma
+          // que cobre a SILHUETA real sem nenhuma das duas armadilhas é um colisor `MESH` nas
+          // próprias malhas visuais (`main` + `shoulder`) — exatamente o mesmo padrão já usado pro
+          // planeta principal (`PhysicsAggregate(planet, PhysicsShapeType.MESH, ...)`, mais acima
+          // neste arquivo). Só 4 morros no total (não centenas como as rochas pequenas, que usam
+          // esfera barata DE PROPÓSITO por causa da escala) — o custo de `MESH` aqui é desprezível,
+          // e o resultado é exato por construção, sem precisar aproximar nada.
+          for (const mesh of hillMeshes) {
+            new PhysicsAggregate(mesh, PhysicsShapeType.MESH, { mass: 0 }, scene)
+          }
         }
 
         // Estação alienígena / disco voador (lab-65, pedido do usuário: "uma estação

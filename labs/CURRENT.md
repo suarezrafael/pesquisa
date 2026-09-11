@@ -1,6 +1,48 @@
 # Laboratório atual
 
-Último concluído: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.
+Último concluído: labs/lab-177-relevo-montanhas-visiveis/ — relevo e montanhas visíveis. Origem:
+`docs/growth-retention-monetization-backlog.md`, seção 7, "Lab 177", prioridade P0. Investigação
+prévia (antes de codar) mostrou que a hipótese do backlog ("separação entre mesh visual e colisão
+física") só valia pra METADE do sistema real: no planeta principal, `PLATEAU_CENTERS`/
+`terrainHeight` alimentam o MESMO mesh usado pela física — **reverificado ao vivo no platô mais
+íngreme (índice 11) de 4 ângulos de câmera, sem nenhum artefato de renderização; a redução
+especulativa de altura do lab-151 funcionou, fechando uma pendência aberta desde então, sem
+precisar de nova mudança de código**. Já os planetas secundários (Marte, `buildMarsHill`) tinham
+um colisor-esfera embutido com só 0,15 de protrusão acima do chão, cuja seção transversal na
+altura do chão (~0,54 de raio) era bem menor que o raio visual real do morro (~1,8-2,0) —
+divergência real (jogador atravessa a encosta visível sem colidir). Uma primeira tentativa trocou
+por um cilindro largo e baixo, mas o review automático do Copilot (PR #52) achou que o TOPO PLANO
+do cilindro era escalável (o avatar pula mais alto que a protrusão escolhida), recriando a mesma
+classe de bug só que coberta pela malha — **correção final**: `PhysicsAggregate` do tipo `MESH`
+direto nas malhas visuais do morro (`main` + `shoulder`), cobrindo a silhueta real por construção,
+mesmo padrão já usado pro planeta principal. `npx tsc -b`/testes limpos (app 178/178, inalterado).
+`npm run build` sem regressão de bundle. **Verificado ao vivo via Chrome real**: planeta principal
+confirmado limpo (screenshot real salvo em `labs/lab-177-.../evidencias/`, 4 ângulos no platô mais
+íngreme); viagem real de foguete até Marte confirmada funcionando pelo menos uma vez; o fix do
+colisor `MESH` de Marte em si NÃO foi verificado visualmente ao vivo em nenhuma tentativa
+(`__debugTeleportExact`/fluxo de viagem tiveram comportamento inconsistente lá, não investigado a
+fundo — confiança vem da geometria real calculada a partir do código e do mesmo padrão `MESH` já
+comprovado no planeta principal, não de reprodução visual). **Pendência real, não resolvida**: o
+critério de aceite do backlog "mobile low quality ainda mostra leitura mínima do relevo" não foi
+verificado visualmente — as ferramentas de automação de navegador desta sessão não expõem
+override de user agent/emulação de dispositivo (`isLowEndDevice` é detectado só por regex de
+`navigator.userAgent`), então não teve como forçar esse branch de forma válida aqui; precisa de um
+dispositivo/emulador de verdade numa sessão futura. **PR #52 teve 6 rodadas de review automático
+do Copilot** (rodada 1: achado real — colisor cilíndrico de Marte tinha topo plano escalável e não
+cobria o `shoulder`, corrigido trocando por `PhysicsAggregate` tipo `MESH`; achado real — FEATURES/
+CONTEXT afirmavam screenshot sem nenhuma imagem de verdade anexada, corrigido com captura real;
+rodada 2: achado real — PR description/`CURRENT.md` ainda descreviam o cilindro abandonado em vez
+do `MESH` final, corrigido; rodada 3: achado real — `CONTEXT.md` se autocontradizia dizendo "não
+concluídas: nenhuma" no mesmo parágrafo que admitia o teste mobile pendente, corrigido; rodada 4: 0
+achados novos, veredito não-verde repetindo pendência já disclosed, sem ação; rodada 5: achado real
+— `FEATURES.md`/`CURRENT.md` marcavam o item de verificação mobile como `[x]`/concluído apesar do
+próprio `CONTEXT.md` admitir que não foi testado, corrigido desmarcando e documentando a limitação
+de ferramental; rodada 6: 0 achados novos, só repete as duas pendências já documentadas — Marte e
+mobile). **Confirma deploy em produção**: PR #52 mergeado (commit `616269f`), CI/CD verde nos 3
+workers, app respondendo 200 no Vercel (lab client-side, sem mudança de backend). Ver
+`labs/lab-177-relevo-montanhas-visiveis/CONTEXT.md`.
+
+Antes desse: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.
 Origem: `docs/growth-retention-monetization-backlog.md` (PR #50, mergeado), seção 7, "Lab 176",
 prioridade P0 — primeiro item recomendado desse backlog novo, antes de features maiores. Causa
 raiz achada por leitura do código antes de codar: `applyHat`/`applyGlasses`/`applyHairShape`/
