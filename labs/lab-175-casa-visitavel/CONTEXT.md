@@ -500,6 +500,46 @@ limpos, `npm run build` limpo. Sem verificação ao vivo nova — mudança é re
 redundante, comportamento final idêntico ao já testado ao vivo em rodadas anteriores (a sala
 continua populada corretamente na entrada, só numa passada em vez de duas).
 
+Décima quinta rodada do Copilot trouxe 1 achado CRÍTICO e 3 achados moderados/de precisão, todos
+corrigidos:
+
+- **CRÍTICO: a revalidação de "Visitar casa" (`PlayerPublicProfileView.tsx`, achado da 2ª rodada)
+  usava o modo de cache padrão do navegador** — mesmo com `Cache-Control: no-store` já existindo
+  no servidor desde a 4ª rodada, uma resposta em cache de ANTES desse header existir (ou de
+  qualquer chamada anterior, em navegadores/proxies que ignoram o header) ainda podia satisfazer
+  esse fetch sem tocar o Worker de verdade — a corrida que essa revalidação inteira existe pra
+  fechar ("o dono desliga a casa enquanto o visitante está com o perfil aberto") continuava
+  aberta. Corrigido junto com um segundo achado (duplicação de fetch/DTO entre
+  `usePlayerPublicProfile.ts` e esta view, achado moderado do mesmo review): extraída uma função
+  só, `fetchPlayerPublicProfile` (em `usePlayerPublicProfile.ts`, exportada), com `cache:
+  'no-store'` e o mesmo parse/validação de resposta reaproveitados pelos DOIS lugares — fecha o
+  achado crítico e a duplicação ao mesmo tempo, sem os dois caminhos poderem divergir se o
+  contrato da resposta mudar de novo. A função devolve um resultado discriminado
+  (`reason: 'success' | 'network' | 'bad-response'`) pra cada chamador escolher seu próprio texto
+  de fallback (a tela de carregar perfil e a de confirmar visita já mostravam mensagens
+  DIFERENTES pro mesmo tipo de falha antes desta extração — preservado).
+- **`MyHousePanel.tsx` lia `progress.houseVisible` cru pro rótulo/`aria-pressed`/próximo estado do
+  toggle** — o heartbeat já normaliza um valor corrompido (`null`/string) pro default `true`
+  (achado da 10ª rodada, `useHeartbeat.ts`), mas este painel não, então um save com
+  `houseVisible: null` mostrava "Casa privada" na UI enquanto o servidor continuava com a casa
+  PÚBLICA — divergência real entre o que o dono vê e o que de fato está valendo. Corrigido com o
+  mesmo default (`typeof === 'boolean' ? valor : true`).
+- **Dois comentários novos deste PR (`App.tsx`, `productAnalytics.ts`) ainda diziam que
+  `trackHouseVisited`/`house_visited` "mede" visitas por criança, sem a mesma qualificação já
+  aplicada em `docs/event-catalog.md`/`index.ts`/`labs/CURRENT.md` desde a 8ª/13ª rodada** —
+  corrigidos com a mesma ressalva (dispositivo único, não criança).
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado — sem teste novo;
+`usePlayerPublicProfile.ts`/`PlayerPublicProfileView.tsx` fazem fetch de rede, sem infraestrutura
+de mock neste projeto, mesmo padrão já aceito pra `useHeartbeat.ts` na 10ª rodada) e
+`npx tsc --noEmit`/`npm run test` (server-accounts, 131/131, inalterado — mudança é só client)
+limpos, `npm run build` limpo (um erro de narrowing de TypeScript apareceu na primeira tentativa
+de `npm run build` — `if/else if/else` comparando o campo discriminante não narrowia a última
+peça da união pro compilador, resolvido reescrevendo como `switch` explícito, que narrowia
+corretamente). Sem verificação ao vivo nova pro fix de cache — reproduzir exigiria forçar uma
+resposta HTTP cacheada de propósito no navegador de teste, contrato já coberto pela leitura direta
+da opção `cache: 'no-store'` da Fetch API.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter

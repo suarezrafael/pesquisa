@@ -375,9 +375,11 @@ function GameApp() {
   // Casa visitável (lab-175) — fecha o painel de Amigos (mesmo padrão de `onStartPlacing` do
   // `MyHousePanel.tsx`: fechar o painel antes de agir na cena 3D) e sinaliza `World3D.tsx` com um
   // `id` novo pra garantir que visitar o MESMO amigo de novo ainda dispare a entrada.
-  // `trackHouseVisited` mede "visitas por criança" (métrica citada no documento) — dispara aqui,
-  // não só quando `World3D.tsx` confirma a entrada, porque o clique em si já é o sinal de intenção
-  // real (mesmo espírito de `trackWeeklyReportPreviewViewed`, lab-173).
+  // `trackHouseVisited` aproxima (não mede de verdade — `weeklyFunnel.houseVisited` conta
+  // dispositivo único, não criança; detalhe completo em `docs/event-catalog.md`) a "visitas por
+  // criança" citada no documento — dispara aqui, não só quando `World3D.tsx` confirma a entrada,
+  // porque o clique em si já é o sinal de intenção real (mesmo espírito de
+  // `trackWeeklyReportPreviewViewed`, lab-173).
   function handleVisitHouse(
     nickname: string,
     house: { furnitureIds: string[]; placements: Record<string, { x: number; z: number; rotY: number }> },

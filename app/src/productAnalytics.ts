@@ -143,7 +143,10 @@ export function trackWeeklyReportPreviewViewed(): void {
 }
 
 // lab-175 ("Lab 171 - Casa visitável somente leitura", docs/market-metrics-engagement-backlog.md)
-// — mede "visitas por criança" (métrica esperada citada no documento). Dispara no clique de
+// — aproxima (não mede de verdade — o evento sai uma vez por clique, mas
+// `weeklyFunnel.houseVisited` agrega por `count(distinct device_id)`, perdendo revisita do mesmo
+// aparelho e não distinguindo perfil que compartilha/troca de aparelho; detalhe completo em
+// `docs/event-catalog.md`) a "visitas por criança" citada no documento. Dispara no clique de
 // "Visitar casa" (`App.tsx`, `handleVisitHouse`), não só quando a cena 3D confirma a entrada —
 // mesmo espírito de `trackWeeklyReportPreviewViewed`, o clique já é o sinal de intenção real.
 export function trackHouseVisited(): void {

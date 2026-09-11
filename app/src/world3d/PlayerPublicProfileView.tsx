@@ -10,11 +10,9 @@
 // perfil dentro dele).
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { ACHIEVEMENT_CATALOG } from '../data/achievements'
-import { usePlayerPublicProfile, type PlayerPublicProfile } from '../state/usePlayerPublicProfile'
+import { fetchPlayerPublicProfile, usePlayerPublicProfile } from '../state/usePlayerPublicProfile'
 
 const AvatarPreview3D = lazy(() => import('./AvatarPreview3D').then((m) => ({ default: m.AvatarPreview3D })))
-
-const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 
 interface PlayerPublicProfileViewProps {
   playerId: string
@@ -55,30 +53,29 @@ export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHou
   async function handleVisitClick() {
     setVisitError(null)
     setRevalidating(true)
-    try {
-      const res = await fetch(`${ACCOUNTS_API_URL}/players/${encodeURIComponent(playerId)}/public-profile`)
-      const body = (await res.json().catch(() => null)) as (PlayerPublicProfile & { error?: string }) | null
-      if (!mountedRef.current) return
-      // lab-175 (achado do review automático do Copilot no PR #49, terceira rodada): uma
-      // resposta HTTP com erro (rate limit, falha temporária do servidor) não é o MESMO caso de
-      // "o dono desligou a visibilidade" (`res.ok` com `house: null`) — misturar os dois mostrava
-      // "casa não visitável" pra uma falha só temporária, quando "tente de novo" seria mais certo.
-      //
-      // 7ª rodada: `body === null` (2xx com corpo vazio/JSON inválido — o `.catch` acima) caía no
-      // `body?.house` abaixo, indistinguível de "casa não visitável", quando é o MESMO caso de
-      // falha que `usePlayerPublicProfile.ts` já trata como erro de verdade.
-      if (!res.ok || body === null) {
-        setVisitError(body?.error ?? 'Não foi possível confirmar a visita agora — tente de novo.')
-      } else if (body.house) {
-        onVisitHouse(body.nickname, body.house)
-      } else {
-        setVisitError('🏠 A casa não está mais visitável agora.')
-      }
-    } catch {
-      if (mountedRef.current) setVisitError('Não foi possível confirmar a visita agora — tente de novo.')
-    } finally {
-      if (mountedRef.current) setRevalidating(false)
+    // lab-175 (achado do review automático do Copilot no PR #49, 15ª rodada): reaproveita
+    // `fetchPlayerPublicProfile` (mesmo fetch/DTO/tratamento de erro de `usePlayerPublicProfile`,
+    // incluindo `cache: 'no-store'`) em vez de duplicar a chamada aqui — evita os dois caminhos
+    // divergirem se o contrato da resposta mudar, e fecha de vez a corrida que esta revalidação
+    // existe pra evitar (sem `no-store`, uma resposta em cache do navegador podia satisfazer o
+    // fetch sem tocar o servidor).
+    const result = await fetchPlayerPublicProfile(playerId)
+    if (!mountedRef.current) return
+    // lab-175 (achado do review automático do Copilot no PR #49, terceira rodada): uma
+    // resposta HTTP com erro (rate limit, falha temporária do servidor) não é o MESMO caso de
+    // "o dono desligou a visibilidade" (`res.ok` com `house: null`) — misturar os dois mostrava
+    // "casa não visitável" pra uma falha só temporária, quando "tente de novo" seria mais certo.
+    //
+    // 7ª rodada: `body === null` (2xx com corpo vazio/JSON inválido) caía indistinguível de "casa
+    // não visitável" — `fetchPlayerPublicProfile` já trata isso como `reason: 'bad-response'`.
+    if (result.reason !== 'success') {
+      setVisitError(result.serverMessage ?? 'Não foi possível confirmar a visita agora — tente de novo.')
+    } else if (result.profile.house) {
+      onVisitHouse(result.profile.nickname, result.profile.house)
+    } else {
+      setVisitError('🏠 A casa não está mais visitável agora.')
     }
+    if (mountedRef.current) setRevalidating(false)
   }
 
   return (
