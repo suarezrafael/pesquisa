@@ -364,6 +364,18 @@ function disposeMeshGroup(meshes: Mesh[], shadowGenerator: ShadowGenerator, disp
 // pra descarte de figura INTEIRA (diferente de `disposeMeshGroup`, que descarta só um GRUPO de
 // peças dentro de uma figura que continua viva) — usada por `AvatarPreview3D.tsx`.
 export function disposeStudentFigure(figure: StudentFigure, shadowGenerator: ShadowGenerator): void {
+  // Achado do review automático do Copilot no PR #51 (2ª rodada): mesmo risco já corrigido em
+  // `removeRemotePlayer` (`World3D.tsx`) — `shirtMat`/`pantsMat`/`shoeMat`/`backpackMat` podem
+  // apontar pra uma `DynamicTexture` cacheada por `Scene` (`getOrCreatePatternTexture`). O cache
+  // guarda a MESMA instância pra qualquer figura futura que use o mesmo `style` NESTA cena — como
+  // o preview reconstrói a figura a cada troca (na MESMA cena, reaproveitando o cache entre
+  // trocas), descartar a textura à força aqui quebraria a PRÓXIMA vez que o mesmo estilo for
+  // pedido nesta sessão de preview (o cache continuaria devolvendo a instância já descartada).
+  // Solta a referência antes do dispose recursivo, sem descartar a textura em si.
+  figure.shirtMat.albedoTexture = null
+  figure.pantsMat.albedoTexture = null
+  figure.shoeMat.albedoTexture = null
+  figure.backpackMat.albedoTexture = null
   for (const mesh of figure.root.getChildMeshes()) shadowGenerator.removeShadowCaster(mesh)
   figure.root.dispose(false, true)
 }

@@ -112,6 +112,38 @@ antes/depois: todos permaneceram EXATAMENTE estáveis (11 materiais, 23 malhas, 
 ao vivo (mesma pendência já registrada abaixo, exigiria uma segunda sessão simulando desconexão de
 jogador remoto).
 
+Segunda rodada do Copilot no PR #51 trouxe 1 achado real corrigido e 1 achado avaliado como
+INCORRETO (não implementado, com justificativa):
+
+- **`disposeStudentFigure` (novo nesta mesma rodada anterior) tinha o MESMO risco de textura
+  compartilhada já corrigido em `removeRemotePlayer`, só que ainda não replicado aqui** —
+  `shirtMat`/`pantsMat`/`shoeMat`/`backpackMat` podem apontar pra uma `DynamicTexture` cacheada
+  por `Scene` (`getOrCreatePatternTexture`); como o PREVIEW reconstrói a figura na MESMA cena a
+  cada troca (reaproveitando o cache entre as trocas), `root.dispose(false, true)` sem soltar essa
+  referência antes destruía a textura e quebrava a PRÓXIMA vez que o mesmo `style` fosse pedido
+  NESTA sessão de preview (o cache continuaria devolvendo a instância já descartada). Corrigido
+  com o mesmo padrão de `removeRemotePlayer`: `albedoTexture = null` nos 4 materiais antes do
+  dispose recursivo.
+- **Achado avaliado e NÃO implementado**: o review sugeriu que o cleanup do efeito de montagem em
+  `AvatarPreview3D.tsx` (roda quando o componente desmonta — a lojinha é renderizada
+  condicionalmente em `App.tsx`, `{showShop && <AvatarShop ... />}`, então fechar a loja desmonta
+  `AvatarPreview3D` de verdade) deveria chamar `disposeStudentFigure`/`scene.dispose()`
+  explicitamente antes de `engine.dispose()`, alegando que sem isso "reabrir a loja repetidamente
+  pode reter a cena, meshes, materiais e recursos WebGL". Verificado na FONTE do Babylon.js
+  instalado (`node_modules/@babylonjs/core/Engines/abstractEngine.pure.js`, método `dispose()`):
+  `AbstractEngine.dispose()` já contém `while (this.scenes.length) { this.scenes[0].dispose(); }`
+  ANTES de liberar o contexto WebGL — ou seja, `engine.dispose()` (já chamado no cleanup) SEMPRE
+  dispõe toda cena associada a ele, incluindo todos os meshes/materiais/luzes/shadow generators
+  dela, e depois o contexto WebGL inteiro é descartado (invalidando qualquer buffer/textura de
+  GPU que sobrasse de qualquer forma). Não há vazamento real nesse ponto — o achado partiu de uma
+  premissa incorreta sobre o comportamento de `engine.dispose()`. Documentado aqui em vez de
+  simplesmente ignorado, mesmo padrão de transparência já usado neste projeto pra achados
+  descartados.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) e `npm run build`
+limpos. Sem verificação ao vivo nova — mudança é idêntica em espírito e local à já verificada na
+1ª rodada (`removeRemotePlayer`), mesmo padrão de confiança.
+
 ## Pendências / dívidas conhecidas
 
 - Não foi possível testar ao vivo o swap de ÓCULOS (as duas opções disponíveis no perfil de teste
