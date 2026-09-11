@@ -27,6 +27,10 @@ interface MyHousePanelProps {
   // usuário). Só aparece pra item comum (nunca `subscriptionOnly`/`planetReward`, ver
   // `removeFurniture` em `progression.ts`).
   onRemoveFurniture: (key: string) => void
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — controle do dono sobre um amigo poder
+  // visitar (`Progress.houseVisible`, sincronizado via heartbeat pra
+  // `GET /players/:id/public-profile` devolver ou não a mobília).
+  onToggleHouseVisible: (visible: boolean) => void
   onClose: () => void
 }
 
@@ -36,12 +40,19 @@ export function MyHousePanel({
   onUnlockFurniture,
   onStartPlacing,
   onRemoveFurniture,
+  onToggleHouseVisible,
   onClose,
 }: MyHousePanelProps) {
   const modalRef = useModalA11y(onClose)
   // Confirmação de dois cliques (mesmo padrão de "Remover" amigo, `FriendsPanel.tsx`, lab-160) —
   // evita apagar um móvel comprado sem querer, sem precisar de um modal novo.
   const [confirmingRemoveKey, setConfirmingRemoveKey] = useState<string | null>(null)
+  // lab-175 (achado do review automático do Copilot no PR #49, 15ª rodada): `progress` vem de
+  // JSON persistido sem validação (`loadProgress`) — um save corrompido com `houseVisible: null`
+  // fazia este botão mostrar "Casa privada" enquanto o heartbeat (que já normaliza pro mesmo
+  // default `true`, `useHeartbeat.ts`, achado da 10ª rodada) mantinha a casa PÚBLICA, uma
+  // divergência real entre o que a UI mostra e o que o servidor de fato aplica. Mesmo default.
+  const houseVisible = typeof progress.houseVisible === 'boolean' ? progress.houseVisible : true
 
   function handleRemoveClick(key: string) {
     if (confirmingRemoveKey === key) {
@@ -69,6 +80,18 @@ export function MyHousePanel({
           Seu espaço pessoal — grátis pra todo jogador, sempre. Compre móveis com as moedas que
           você já ganhou nas missões.
         </p>
+
+        {/* lab-175 ("Lab 171 - Casa visitável somente leitura") — botão de dois estados (mesmo
+            espírito de botões-toggle já usados no jogo, ex. abas do FriendsPanel) em vez de um
+            checkbox nativo novo, pra ficar visualmente consistente com o resto do painel. */}
+        <button
+          type="button"
+          className="secondary-button"
+          aria-pressed={houseVisible}
+          onClick={() => onToggleHouseVisible(!houseVisible)}
+        >
+          {houseVisible ? '🔓 Amigos podem visitar sua casa' : '🔒 Casa privada (amigos não visitam)'}
+        </button>
 
         <div className="avatar-shop-grid">
           {FURNITURE_CATALOG.map((item) => {

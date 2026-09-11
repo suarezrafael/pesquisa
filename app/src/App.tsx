@@ -18,8 +18,9 @@ import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
-import { useHeartbeat } from './state/useHeartbeat'
-import { trackFirstLearningChallenge } from './productAnalytics'
+import { useHeartbeat, sendImmediateHouseVisibility } from './state/useHeartbeat'
+import type { PublicHouseSnapshot } from './state/usePlayerPublicProfile'
+import { trackFirstLearningChallenge, trackHouseVisited } from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
 import { findPlanetQuestById } from './data/planetQuests'
@@ -115,6 +116,7 @@ function GameApp() {
     feedPet,
     coopChallengeCompleted,
     petDailyChallengeCompleted,
+    toggleHouseVisible,
     syncWeeklyXp,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
@@ -127,6 +129,11 @@ function GameApp() {
   const [activeCoopQuest, setActiveCoopQuest] = useState<Quest | null>(null)
   const [coopAnswerSignalId, setCoopAnswerSignalId] = useState<string | null>(null)
   const [coopReward, setCoopReward] = useState<{ coins: number; newBadge: boolean } | null>(null)
+  // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — mesma ponte de
+  // `coopAnswerSignalId`/`placingFurnitureRequestId` acima: o clique em "Visitar casa" acontece
+  // dentro do `FriendsPanel`, fora deste componente e do `World3D.tsx`; `id` novo a cada clique
+  // garante que visitar o MESMO amigo duas vezes seguidas ainda dispare o efeito.
+  const [visitHouseRequest, setVisitHouseRequest] = useState<({ id: string; nickname: string } & PublicHouseSnapshot) | null>(null)
   const [reward, setReward] = useState<{
     quest: Quest
     newBadges: string[]
@@ -361,6 +368,24 @@ function GameApp() {
     if (result.rewarded) setCoopReward({ coins: result.coins, newBadge: result.newBadge })
   }
 
+  // Casa visitável (lab-175) — fecha o painel de Amigos (mesmo padrão de `onStartPlacing` do
+  // `MyHousePanel.tsx`: fechar o painel antes de agir na cena 3D) e sinaliza `World3D.tsx` com um
+  // `id` novo pra garantir que visitar o MESMO amigo de novo ainda dispare a entrada.
+  // `trackHouseVisited` aproxima (não mede de verdade — `weeklyFunnel.houseVisited` conta
+  // dispositivo único, não criança; detalhe completo em `docs/event-catalog.md`) a "visitas por
+  // criança" citada no documento — dispara aqui, não só quando `World3D.tsx` confirma a entrada,
+  // porque o clique em si já é o sinal de intenção real (mesmo espírito de
+  // `trackWeeklyReportPreviewViewed`, lab-173).
+  function handleVisitHouse(nickname: string, house: PublicHouseSnapshot) {
+    setShowFriends(false)
+    trackHouseVisited()
+    setVisitHouseRequest({ id: crypto.randomUUID(), nickname, ...house })
+  }
+
+  function handleVisitHouseHandled() {
+    setVisitHouseRequest(null)
+  }
+
   // Brinde de Marte (lab-94) — `unlockMarsReward()` já é idempotente (não faz nada se o jogador já
   // tiver o item); o aviso só aparece quando realmente concedeu algo novo, não a cada visita em
   // que o planeta é limpado de novo.
@@ -417,6 +442,8 @@ function GameApp() {
           coopAnswerSignalId={coopAnswerSignalId}
           onCoopAnswerHandled={handleCoopAnswerHandled}
           onCoopChallengeCompleted={handleCoopChallengeCompleted}
+          visitHouseRequest={visitHouseRequest}
+          onVisitHouseHandled={handleVisitHouseHandled}
           onSwitchProfile={() => {
             clearActiveProfile()
             window.location.reload()
@@ -509,6 +536,15 @@ function GameApp() {
             setPendingPlacementId(id)
           }}
           onRemoveFurniture={removeFurniture}
+          onToggleHouseVisible={(visible) => {
+            toggleHouseVisible(visible)
+            // lab-175 (achado do review automático do Copilot no PR #49) — não espera o próximo
+            // tick do heartbeat (até 60s): desligar a visibilidade precisa valer imediatamente.
+            // Envia o `progress` (snapshot completo, não só o booleano) — segunda rodada do
+            // Copilot no mesmo PR: mandar só `houseVisible` deixava a mobília presa no valor do
+            // último tick periódico até o próximo rodar.
+            sendImmediateHouseVisibility(visible, progress)
+          }}
           onClose={() => setShowMyHouse(false)}
         />
       )}
@@ -524,7 +560,9 @@ function GameApp() {
         />
       )}
 
-      {showFriends && <FriendsPanel profile={profile} onClose={() => setShowFriends(false)} />}
+      {showFriends && (
+        <FriendsPanel profile={profile} onClose={() => setShowFriends(false)} onVisitHouse={handleVisitHouse} />
+      )}
 
       {showMarsReward && <MarsRewardToast onContinue={() => setShowMarsReward(false)} />}
 

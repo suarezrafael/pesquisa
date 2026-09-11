@@ -573,6 +573,125 @@ export function furnitureQuantity(item: FurnitureOption, progress: Progress, ent
   return progress.unlockedFurnitureIds.filter((x) => x === item.id).length
 }
 
+// lab-175 ("Lab 171 - Casa visitável somente leitura") — mesma regra de `furnitureQuantity`
+// acima, mas usada quando `World3D.tsx` está mostrando a casa de OUTRO jogador pra um visitante:
+// `furnitureIds` vem de um snapshot alheio (sincronizado via `POST /players/heartbeat`), nunca do
+// `progress` local de quem está visitando. Item `subscriptionOnly` sempre conta 0 pra visitantes,
+// de propósito — mostrar mobília paga do anfitrião revelaria o status de assinatura dele pra outra
+// criança, informação que a visita não precisa expor.
+export function visitFurnitureQuantity(item: FurnitureOption, furnitureIds: string[]): number {
+  if (item.subscriptionOnly) return 0
+  return furnitureIds.filter((x) => x === item.id).length
+}
+
+// Toggle de visibilidade da casa pra visita de amigos (lab-175) — mesmo formato trivial de
+// `equipPet` acima, ainda como função pura de domínio (não direto em `useProgress.ts`) pra manter
+// consistência com o resto do arquivo e ficar testável isoladamente.
+export function setHouseVisible(progress: Progress, visible: boolean): Progress {
+  return { ...progress, houseVisible: visible }
+}
+
+// lab-175 (achados do review automático do Copilot no PR #49): o que `useHeartbeat.ts` ENVIA pro
+// backend passa por aqui primeiro, nunca `progress.unlockedFurnitureIds`/`housePlacements` crus.
+// Dois problemas reais corrigidos:
+// 1. Item `subscriptionOnly` nunca deveria sair do aparelho do dono — filtrar só no client que
+//    RENDERIZA a visita (`visitFurnitureQuantity`) deixava a resposta de
+//    `GET /players/:id/public-profile` exposta a quem inspecionasse a rede, revelando o status de
+//    assinatura do anfitrião mesmo sem ver a casa de verdade (o backend agora filtra de novo
+//    também, `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements` em `domain.ts` — defesa em
+//    profundidade, não só um dos dois lados).
+// 2. `housePlacements` pode conter chaves de ANTES do lab-136 (posição salva por id puro, sem
+//    `#índice`) em saves muito antigos nunca mais tocados — `isValidHousePlacements` (backend)
+//    rejeita a chave inteira nesse formato, e sem filtrar aqui um ÚNICO save assim faria o
+//    heartbeat INTEIRO devolver 400, impedindo até `houseFurnitureIds`/`houseVisible` sincronizar.
+// lab-175 (achado do review automático do Copilot no PR #49, 11ª rodada): mesmo teto de tamanho
+// aplicado ao espelho do servidor (`domain.ts`) — sem limite, um id/índice absurdamente longo
+// (nunca produzido pelo próprio jogo, só por um client modificado) passava por este filtro do
+// client mas era rejeitado pelo servidor de qualquer forma, então alinhar os dois evita mandar um
+// heartbeat que o servidor já sabe que vai recusar.
+const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]{1,60}#\d{1,6}$/
+
+export interface HouseSyncSnapshot {
+  furnitureIds: string[]
+  placements: Record<string, { x: number; z: number; rotY: number }>
+}
+
+// lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada): o servidor recusa o
+// heartbeat INTEIRO (400) se `houseFurnitureIds`/`housePlacements` passarem de 300 entradas
+// (`HOUSE_FURNITURE_MAX_COUNT`/`HOUSE_PLACEMENTS_MAX_KEYS`, `domain.ts`) — sem um teto
+// equivalente aqui, um jogador com uma casa muito decorada (nada no client impede comprar mais de
+// 300 cópias) travaria até `badges`/`equippedLook`/`last_seen_at` de sincronizar, não só a casa.
+// Trunca em vez de rejeitar: a visita fica incompleta nesse caso raro, mas o resto do heartbeat
+// continua funcionando.
+const HOUSE_SYNC_MAX_ENTRIES = 300
+
+// lab-175 (achado do review automático do Copilot no PR #49, 7ª rodada): antes só validava a
+// CHAVE (formato/catálogo) — se um valor salvo localmente estivesse corrompido (não-finito, ou
+// fora do limite real de posicionamento do jogo), o servidor rejeitaria o heartbeat INTEIRO (400,
+// `isValidHousePlacements`), travando `houseFurnitureIds`/`houseVisible`/`badges`/`equippedLook`
+// junto. Mesmo contrato de `HOUSE_PLACEMENT_COORD_MAX`/`HOUSE_PLACEMENT_ROTATION_MAX` do servidor
+// (`domain.ts`) — duplicado de propósito, os dois pacotes não compartilham código.
+const HOUSE_PLACEMENT_COORD_MAX = 4.8
+const HOUSE_PLACEMENT_ROTATION_MAX = 1000
+
+// lab-175 (achado do review automático do Copilot no PR #49, 8ª rodada): recebia
+// `{x,z,rotY}` já tipado, mas o valor vem de JSON persistido sem validação (`loadProgress`,
+// `storage.ts`) — um save corrompido com `housePlacements: { "cama#0": null }` fazia
+// `value.x` estourar (TypeError) ANTES do filtro de posição rodar, derrubando o heartbeat
+// inteiro (mesma classe de bug que a 7ª rodada corrigiu para valores fora do limite, só que
+// aqui o valor nem é um objeto). Aceita `unknown` e confere objeto/não-array antes de ler os
+// campos, igual ao guard do validador do servidor (`isValidHousePlacementValue`, `domain.ts`).
+function isValidHousePlacementValueForSync(value: unknown): value is { x: number; z: number; rotY: number } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    // lab-175 (achado do review automático do Copilot no PR #49, 9ª rodada): faltava a checagem de
+    // EXATAMENTE 3 chaves que o validador do servidor já exige (`isValidHousePlacementValue`,
+    // `domain.ts`) — um placement salvo localmente com uma propriedade extra (ex.: um campo
+    // `legacy` de uma versão antiga do save) passava por aqui mas era rejeitado pelo servidor,
+    // derrubando o heartbeat INTEIRO (400) — mesma classe de bug já corrigida pra "valor não é
+    // objeto" (8ª rodada) e "campo fora do limite" (7ª rodada), agora pra "chaves extras".
+    Object.keys(value).length === 3 &&
+    Number.isFinite((value as { x: unknown }).x) &&
+    Number.isFinite((value as { z: unknown }).z) &&
+    Number.isFinite((value as { rotY: unknown }).rotY) &&
+    Math.abs((value as { x: number }).x) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs((value as { z: number }).z) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs((value as { rotY: number }).rotY) <= HOUSE_PLACEMENT_ROTATION_MAX
+  )
+}
+
+export function resolveHouseSyncSnapshot(progress: Progress): HouseSyncSnapshot {
+  // lab-175 (achado do review automático do Copilot no PR #49, 10ª rodada): mesmo problema já
+  // corrigido pra `housePlacements` (8ª rodada) — `progress` vem de JSON persistido sem validação
+  // (`loadProgress`), então um save corrompido com `unlockedFurnitureIds: null` (ou não-array por
+  // qualquer outro motivo) fazia `.filter()` estourar antes de qualquer heartbeat sair.
+  const furnitureIds = (Array.isArray(progress.unlockedFurnitureIds) ? progress.unlockedFurnitureIds : [])
+    .filter((id) => {
+      const item = FURNITURE_CATALOG.find((c) => c.id === id)
+      return item !== undefined && !item.subscriptionOnly
+    })
+    .slice(0, HOUSE_SYNC_MAX_ENTRIES)
+  const placements: Record<string, { x: number; z: number; rotY: number }> = {}
+  let placementCount = 0
+  // lab-175 (achado do review automático do Copilot no PR #49, 8ª rodada): o próprio contêiner
+  // também vem de JSON persistido sem validação — um save antigo/corrompido com
+  // `housePlacements: null` faria `Object.entries` estourar antes de qualquer entrada ser
+  // filtrada. `?? {}` trata esse caso como "nenhuma peça posicionada" em vez de derrubar o
+  // heartbeat inteiro.
+  for (const [key, value] of Object.entries(progress.housePlacements ?? {})) {
+    if (placementCount >= HOUSE_SYNC_MAX_ENTRIES) break
+    if (!HOUSE_PLACEMENT_KEY_PATTERN.test(key)) continue
+    if (!isValidHousePlacementValueForSync(value)) continue
+    const item = FURNITURE_CATALOG.find((c) => c.id === key.split('#')[0])
+    if (!item || item.subscriptionOnly) continue
+    placements[key] = value
+    placementCount += 1
+  }
+  return { furnitureIds, placements }
+}
+
 // Posicionamento manual de mobília dentro de casa (lab-136, pedido do usuário: "tem que ter
 // opção... de escolher em que posição da casa deve ficar a peça... o ângulo e posição onde fica o
 // objeto"). Pura escrita de coordenadas já escolhidas pelo jogador na cena 3D — a geometria/

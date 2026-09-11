@@ -27,6 +27,7 @@ import {
   applyCoinsCollected,
   adoptPet as applyAdoptPet,
   equipPet as applyEquipPet,
+  setHouseVisible as applySetHouseVisible,
   feedPet as applyFeedPet,
   type FeedPetResult,
   backfillPetAdoptedAt,
@@ -276,6 +277,15 @@ export function useProgress() {
     })
   }
 
+  // Casa visitável (lab-175) — mesmo formato trivial de `equipPet` acima.
+  function toggleHouseVisible(visible: boolean): void {
+    setProgress((prev) => {
+      const next = applySetHouseVisible(prev, visible)
+      saveProgress(next)
+      return next
+    })
+  }
+
   // Alimentar o pet ativo — mesmo formato de `claimDailyLogin` (devolve o resultado inteiro, não
   // só um booleano, porque o chamador precisa saber se o estágio mudou pra mostrar um aviso).
   // lab-155 (achado real do review automático do Copilot no PR #26): diferente do resto deste
@@ -363,6 +373,7 @@ export function useProgress() {
     feedPet,
     coopChallengeCompleted,
     petDailyChallengeCompleted,
+    toggleHouseVisible,
     syncWeeklyXp,
   }
 }

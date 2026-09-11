@@ -20,6 +20,10 @@ import {
   isSelfFriendRequest,
   isTokenRevoked,
   isValidBadgeList,
+  isValidHouseFurnitureIds,
+  isValidHousePlacements,
+  sanitizeHouseFurnitureIds,
+  sanitizeHousePlacements,
   isValidEquippedLook,
   isValidNpsScore,
   isValidProductEventType,
@@ -231,6 +235,10 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
 
   it('aceita o preview do relatório semanal do lab-173', () => {
     expect(isValidProductEventType('weekly_report_preview_viewed')).toBe(true)
+  })
+
+  it('aceita a visita de casa do lab-175', () => {
+    expect(isValidProductEventType('house_visited')).toBe(true)
   })
 
   it('rejeita um tipo desconhecido — nunca confia em input do client sem checar', () => {
@@ -664,5 +672,134 @@ describe('isValidBadgeList (lab-163)', () => {
   it('rejeita algo que não é array', () => {
     expect(isValidBadgeList('não é lista')).toBe(false)
     expect(isValidBadgeList(null)).toBe(false)
+  })
+})
+
+describe('isValidHouseFurnitureIds (lab-175)', () => {
+  it('aceita uma lista de ids, com repetição (uma cópia por entrada)', () => {
+    expect(isValidHouseFurnitureIds(['sofa', 'sofa', 'cama'])).toBe(true)
+  })
+
+  it('aceita lista vazia (casa ainda sem mobília)', () => {
+    expect(isValidHouseFurnitureIds([])).toBe(true)
+  })
+
+  it('rejeita item vazio ou não-string na lista', () => {
+    expect(isValidHouseFurnitureIds(['sofa', ''])).toBe(false)
+    expect(isValidHouseFurnitureIds(['sofa', 42])).toBe(false)
+  })
+
+  it('rejeita lista com mais de 300 itens (defesa contra payload abusivo)', () => {
+    expect(isValidHouseFurnitureIds(Array.from({ length: 301 }, () => 'sofa'))).toBe(false)
+  })
+
+  it('rejeita algo que não é array', () => {
+    expect(isValidHouseFurnitureIds('não é lista')).toBe(false)
+    expect(isValidHouseFurnitureIds(null)).toBe(false)
+  })
+})
+
+describe('isValidHousePlacements (lab-175)', () => {
+  it('aceita um objeto vazio (nenhuma peça reposicionada manualmente)', () => {
+    expect(isValidHousePlacements({})).toBe(true)
+  })
+
+  it('aceita chaves no formato "${id}#${índice}" com coordenadas numéricas', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: -2.5, rotY: 0 }, 'cama#1': { x: 0, z: 0, rotY: 3.14 } })).toBe(
+      true,
+    )
+  })
+
+  it('rejeita chave fora do formato esperado', () => {
+    expect(isValidHousePlacements({ sofa: { x: 1, z: 2, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#abc': { x: 1, z: 2, rotY: 0 } })).toBe(false)
+  })
+
+  it('rejeita valor com campo faltando, extra ou não-finito', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: 2 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: 2, rotY: 0, extra: 1 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: NaN, z: 2, rotY: 0 } })).toBe(false)
+  })
+
+  it('rejeita coordenada finita mas absurdamente fora dos limites da sala (achado do Copilot na 4ª rodada)', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1e308, z: 2, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: -1e10, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: 2, rotY: 1e10 } })).toBe(false)
+  })
+
+  it('rejeita x/z fora do limite real de posicionamento do próprio jogo (achado do Copilot na 6ª rodada: 4,8 = 5,5 de meia-sala menos a margem de 0,7)', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 19, z: -19, rotY: 900 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: 4.9, z: 0, rotY: 0 } })).toBe(false)
+  })
+
+  it('aceita x/z dentro do limite real de posicionamento do próprio jogo (4,8)', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 4.8, z: -4.8, rotY: 900 } })).toBe(true)
+  })
+
+  it('rejeita mais de 300 chaves (defesa contra payload abusivo)', () => {
+    const big: Record<string, unknown> = {}
+    for (let i = 0; i < 301; i++) big[`sofa#${i}`] = { x: 0, z: 0, rotY: 0 }
+    expect(isValidHousePlacements(big)).toBe(false)
+  })
+
+  it('rejeita chave com id/índice absurdamente longo (achado do Copilot na 11ª rodada: nem o id nem o índice tinham teto de tamanho)', () => {
+    expect(isValidHousePlacements({ [`${'a'.repeat(61)}#0`]: { x: 0, z: 0, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ [`sofa#${'1'.repeat(7)}`]: { x: 0, z: 0, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ [`${'a'.repeat(60)}#999999`]: { x: 0, z: 0, rotY: 0 } })).toBe(true)
+  })
+
+  it('rejeita algo que não é objeto', () => {
+    expect(isValidHousePlacements('não é objeto')).toBe(false)
+    expect(isValidHousePlacements(null)).toBe(false)
+    expect(isValidHousePlacements([])).toBe(false)
+  })
+})
+
+describe('sanitizeHouseFurnitureIds/sanitizeHousePlacements (lab-175, achado do Copilot no PR #49)', () => {
+  it('remove ids de item subscriptionOnly, preservando os demais (com repetição)', () => {
+    expect(sanitizeHouseFurnitureIds(['cama', 'cama_nave', 'cama', 'tapete'])).toEqual([
+      'cama',
+      'cama',
+      'tapete',
+    ])
+  })
+
+  it('não remove nada quando não há item subscriptionOnly', () => {
+    expect(sanitizeHouseFurnitureIds(['cama', 'tapete'])).toEqual(['cama', 'tapete'])
+  })
+
+  it('remove placements cuja chave referencia um item subscriptionOnly', () => {
+    const result = sanitizeHousePlacements({
+      'cama#0': { x: 1, z: 2, rotY: 0 },
+      'cama_nave#0': { x: 3, z: 4, rotY: 1 },
+    })
+    expect(result).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
+  })
+
+  it('descarta entrada com chave/valor inválido salva antes desta validação existir (achado do Copilot na 7ª rodada)', () => {
+    const result = sanitizeHousePlacements({
+      'cama#0': { x: 1, z: 2, rotY: 0 },
+      cama: { x: 1, z: 2, rotY: 0 }, // chave sem "#índice", formato legado
+      'tapete#0': { x: 999, z: 0, rotY: 0 }, // fora do limite real de 4,8
+    } as Record<string, { x: number; z: number; rotY: number }>)
+    expect(result).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
+  })
+
+  it('corta em 300 ids na LEITURA, não só na escrita (achado do Copilot na 9ª rodada: uma linha antiga sem esse teto materializava a resposta pública inteira)', () => {
+    const result = sanitizeHouseFurnitureIds(Array.from({ length: 305 }, () => 'cama'))
+    expect(result).toHaveLength(300)
+  })
+
+  it('descarta elemento não-string/vazio/absurdamente longo na LEITURA (achado do Copilot na 11ª rodada: um elemento corrompido dentro do array passava intacto)', () => {
+    const result = sanitizeHouseFurnitureIds(['cama', null, 42, '', 'a'.repeat(61), 'tapete'] as unknown[])
+    expect(result).toEqual(['cama', 'tapete'])
+  })
+
+  it('corta em 300 placements aceitos na LEITURA, não só na escrita (achado do Copilot na 9ª rodada)', () => {
+    const manyPlacements = Object.fromEntries(
+      Array.from({ length: 305 }, (_, i) => [`cama#${i}`, { x: 0, z: 0, rotY: 0 }]),
+    )
+    const result = sanitizeHousePlacements(manyPlacements)
+    expect(Object.keys(result)).toHaveLength(300)
   })
 })

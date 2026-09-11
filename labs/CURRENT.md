@@ -1,6 +1,54 @@
 # Laboratório atual
 
-Último concluído: labs/lab-174-desafio-educativo-pet/ — desafio educativo leve na rotina diária
+Último concluído: labs/lab-175-casa-visitavel/ — casa visitável somente leitura
+(`docs/market-metrics-engagement-backlog.md`, "Lab 171 - Casa visitável somente leitura", o único
+item do backlog que ainda era código puro). Confirmado com o usuário via `AskUserQuestion`: cena
+3D completa (reentrar na MESMA sala já usada pra própria casa, populada com a mobília do amigo),
+não um cartão de prévia 2D. Mobília (`unlockedFurnitureIds`/`housePlacements`, 100% locais até
+aqui) sincronizada pro backend via piggyback em `POST /players/heartbeat` (migração `0010`:
+`house_furniture_ids`/`house_placements`/`house_visible` em `player_identities`), devolvida por
+`GET /players/:id/public-profile` só quando o dono mantém `houseVisible` ligado (toggle novo em
+`MyHousePanel.tsx`). `PlayerPublicProfileView.tsx` ganha "🏠 Visitar casa"; `World3D.tsx`
+(`enterHouseInterior` com snapshot opcional + `disposeAllHouseFurnitureNodes` novo) reaproveita a
+MESMA sala 3D populada com os dados do amigo — item `subscriptionOnly` nunca aparece pra
+visitante (não revela assinatura do anfitrião); balcão de compras bloqueado durante a visita
+(único caminho pra `MyHousePanel`, garante "visitante não altera nada"); reações genéricas
+(lab-170) funcionaram sem nenhuma mudança de código (já operavam sobre os nós 3D renderizados, não
+sobre `progress`). Evento novo `house_visited`, exposto como `weeklyFunnel.houseVisited`
+(`count(distinct device_id)`, igual a todo outro passo do funil) — aproxima, mas NÃO mede de
+verdade, a "visitas por criança" citada no documento (perde revisita do mesmo aparelho, não
+distingue perfil que compartilha/troca de aparelho; detalhe completo em
+`docs/event-catalog.md`). `npx tsc -b`/testes limpos (app 178/178, 13 novos; server-accounts
+131/131, 22 novos).
+`npm run build` sem regressão de bundle. Migração `0010` aplicada em produção. **Verificado ao
+vivo, ponta a ponta, contra o banco de PRODUÇÃO real** (mesma técnica do lab-172: `wrangler dev`
+local + segundo Vite): dois jogadores de teste registrados, amizade criada via API, mobília
+sincronizada (incluindo um item `subscriptionOnly` de propósito, confirmado excluído da visita);
+confirmado na UI real que o botão "Visitar casa" só aparece com dado disponível, a visita renderiza
+EXATAMENTE a mobília certa na cena 3D, o balcão fica bloqueado durante a visita, a saída funciona,
+e reentrar na própria casa depois mostra de volta só a mobília própria (nós 3D novos, prova de que
+a mobília do anfitrião foi realmente descartada, não só escondida); toggle de visibilidade
+confirmado persistindo. Perfis de teste removidos do banco ao final. **PR #49 teve 20 rodadas
+seguidas de achados reais do review automático do Copilot corrigidos antes do merge** (a 21ª
+veio limpa) — do achado inicial (item `subscriptionOnly` vazando pro visitante, fluxo de "Visitar
+casa" quebrado num caso real) a hardening progressivo de validação/sanitização em profundidade
+(client E servidor, chave/valor/teto de tamanho de `housePlacements`/`houseFurnitureIds`),
+vazamento de material/textura/shadow caster em 3 pontos de remoção de mobília na cena 3D, cache
+stale numa revalidação de privacidade (`cache: 'no-store'`), consolidação de tipo duplicado
+(`PublicHouseSnapshot`), um timer de polling que passou por 3 correções em sequência (desiste
+cedo demais → nunca desiste → dependência instável resetando o teto) até ficar certo, e uma
+interação real com o cronômetro de sobrevivência de planetas extremos nunca antes possível (visitar
+casa é alcançável de qualquer planeta, diferente da própria casa). Detalhe rodada a rodada em
+`labs/lab-175-casa-visitavel/CONTEXT.md`. **Confirma deploy em produção**: PR #49 mergeado
+(commit `b8f9017`), CI/CD verde nos 3 workers, deploy automático confirmado (`GET /health` 200 em
+`missao-aprender-accounts.rafaelvs.workers.dev`, app respondendo 200 em
+`app-two-flax-92.vercel.app`). Ver `labs/lab-175-casa-visitavel/CONTEXT.md`.
+
+**Com este lab, o backlog de código do `docs/market-metrics-engagement-backlog.md` está
+completamente esgotado** — resta só pesquisa com usuário real (§7), fora de escopo de laboratório
+de código. Aguardando novo pedido do usuário.
+
+Antes desse: labs/lab-174-desafio-educativo-pet/ — desafio educativo leve na rotina diária
 do pet (`docs/market-metrics-engagement-backlog.md` §10, item 6). Confirmado com o usuário via
 `AskUserQuestion` que todo o resto do backlog top-8 já estava completo (checado item a item nesta
 sessão, inclusive "vitrine ética de assinatura" — já coberta pelos labs 166/173) e que o único

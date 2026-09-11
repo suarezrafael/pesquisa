@@ -180,6 +180,11 @@ const PRODUCT_EVENT_TYPES = new Set([
   // lab-173 (docs/market-metrics-engagement-backlog.md §10, item 8) — mede interesse real no
   // preview do relatório semanal, ver app/src/productAnalytics.ts.
   'weekly_report_preview_viewed',
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — aproxima (não mede de verdade —
+  // `weeklyFunnel.houseVisited`, index.ts, agrega por dispositivo único, não por criança;
+  // detalhe completo em docs/event-catalog.md) a "visitas por criança" citada no documento, ver
+  // app/src/productAnalytics.ts.
+  'house_visited',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -494,4 +499,133 @@ export function isValidBadgeList(value: unknown): value is string[] {
     value.length <= BADGE_MAX_COUNT &&
     value.every((badge) => typeof badge === 'string' && badge.length > 0 && badge.length <= BADGE_MAX_LENGTH)
   )
+}
+
+// lab-175 ("Lab 171 - Casa visitável somente leitura") — mobília da casa sincronizada via
+// heartbeat pra um amigo poder visitar (mesmo mecanismo de `equippedLook`/`badges` acima).
+// `houseFurnitureIds` é o array COM REPETIÇÃO de `Progress.unlockedFurnitureIds` (uma entrada por
+// cópia possuída) — tetos generosos (não regra de negócio real), mesmo espírito de
+// `BADGE_MAX_COUNT`/`EQUIPPED_ID_MAX_LENGTH`.
+const HOUSE_FURNITURE_MAX_COUNT = 300
+const HOUSE_FURNITURE_ID_MAX_LENGTH = 60
+
+export function isValidHouseFurnitureIds(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= HOUSE_FURNITURE_MAX_COUNT &&
+    value.every((id) => typeof id === 'string' && id.length > 0 && id.length <= HOUSE_FURNITURE_ID_MAX_LENGTH)
+  )
+}
+
+// Chave no formato `${itemId}#${índice}` (mesmo formato de `Progress.housePlacements` do client,
+// `state/types.ts`) — valida o formato da chave também, não só o valor, pra nunca gravar uma chave
+// arbitrária vinda de um heartbeat malicioso dentro do jsonb.
+const HOUSE_PLACEMENTS_MAX_KEYS = 300
+// lab-175 (achado do review automático do Copilot no PR #49, 11ª rodada): nem `[a-z0-9_]+` nem
+// `\d+` tinham teto de tamanho — um client malicioso podia mandar até 300 chaves com id/índice
+// enormes (megabytes de texto cada), inflando o jsonb gravado e a resposta de `public-profile`,
+// ao contrário do limite já aplicado a `HOUSE_FURNITURE_ID_MAX_LENGTH` pro campo irmão. Limita a
+// parte do id ao mesmo teto de `houseFurnitureIds` e o índice a 6 dígitos (até 999999 cópias do
+// mesmo item — bem acima do teto real de `HOUSE_FURNITURE_MAX_COUNT`, só pra nunca rejeitar um
+// índice legítimo).
+const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]{1,60}#\d{1,6}$/
+
+// lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada, apertado na 6ª): `x`/`z`
+// vão direto pra `piece.position` na cena do VISITANTE (`World3D.tsx`, `refreshHouseFurnitureVisuals`)
+// — uma margem "generosa" (±20 na 4ª rodada) ainda deixava a peça claramente FORA da sala real
+// (`HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN` = 5.5 - 0.7 = 4.8, o mesmo limite que
+// `World3D.tsx` já usa pra travar o modo de posicionamento interativo, "Mover" no
+// `MyHousePanel.tsx`). Usa o MESMO valor aqui: qualquer posição que o próprio jogo permite salvar
+// de verdade já passa; qualquer coisa além disso só pode vir de um client modificado.
+// `rotY` continua com margem generosa (é cíclico/ângulo, gira livre sem trava enquanto o jogador
+// segura ◀ ▶ — não tem um "limite real" curto pra copiar) — só descarta magnitudes tão grandes
+// que arriscam problemas de precisão de ponto flutuante.
+const HOUSE_PLACEMENT_COORD_MAX = 4.8
+const HOUSE_PLACEMENT_ROTATION_MAX = 1000
+
+function isValidHousePlacementValue(value: unknown): value is { x: number; z: number; rotY: number } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return (
+    Object.keys(record).length === 3 &&
+    Number.isFinite(record.x) &&
+    Number.isFinite(record.z) &&
+    Number.isFinite(record.rotY) &&
+    Math.abs(record.x as number) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs(record.z as number) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs(record.rotY as number) <= HOUSE_PLACEMENT_ROTATION_MAX
+  )
+}
+
+export function isValidHousePlacements(
+  value: unknown,
+): value is Record<string, { x: number; z: number; rotY: number }> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record)
+  if (keys.length > HOUSE_PLACEMENTS_MAX_KEYS) return false
+  return keys.every((key) => HOUSE_PLACEMENT_KEY_PATTERN.test(key) && isValidHousePlacementValue(record[key]))
+}
+
+// lab-175 (achado do review automático do Copilot no PR #49): o client já filtra item
+// `subscriptionOnly` antes de ENVIAR (`useHeartbeat.ts`, `resolveHouseSyncSnapshot`), mas
+// `GET /players/:id/public-profile` devolvia `house_furniture_ids`/`house_placements` crus —
+// um client modificado (ou um heartbeat antigo já salvo antes desta correção) podia deixar um id
+// pago vazar pro visitante, revelando o status de assinatura do anfitrião. Filtra de novo aqui,
+// no SERVIDOR, antes de responder — defesa em profundidade, não depende só do client se comportar.
+// Lista pequena e duplicada de propósito (mesmo espírito de `EQUIPPED_LOOK_KEYS`): o catálogo de
+// verdade mora em `app/src/data/furniture.ts` (client), que este Worker nunca importa; atualizar
+// os dois lados junto se um item `subscriptionOnly` novo for adicionado ao catálogo.
+const SUBSCRIPTION_ONLY_FURNITURE_IDS = new Set([
+  'cama_nave',
+  'luminaria_planeta',
+  'tapete_estrelas',
+  'grama_florida',
+  'banco_madeira',
+  'borboletas_animadas',
+])
+
+// lab-175 (achado do review automático do Copilot no PR #49, 9ª rodada): `isValidHouseFurnitureIds`
+// só deixa GRAVAR até `HOUSE_FURNITURE_MAX_COUNT` ids, mas esta função de LEITURA (usada por
+// `GET /players/:id/public-profile`) devolvia a lista inteira de uma linha antiga/corrompida com
+// mais itens que isso salvos antes do limite de escrita existir — a resposta pública ficava sem o
+// teto de tamanho que o contrato promete. Corta no mesmo limite depois de filtrar item pago.
+// 11ª rodada: a coluna jsonb não tem constraint, e o chamador (`index.ts`) só confere
+// `Array.isArray` no CONTÊINER — um elemento individual `null`/objeto/string absurdamente longa
+// dentro do array passava intacto, violando o contrato público de `string[]`. Aceita `unknown[]`
+// e filtra também o tipo/tamanho de cada elemento, mesmo formato de `isValidHouseFurnitureIds`.
+export function sanitizeHouseFurnitureIds(furnitureIds: unknown[]): string[] {
+  return furnitureIds
+    .filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= HOUSE_FURNITURE_ID_MAX_LENGTH)
+    .filter((id) => !SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id))
+    .slice(0, HOUSE_FURNITURE_MAX_COUNT)
+}
+
+// lab-175 (achado do review automático do Copilot no PR #49, 7ª rodada): antes só filtrava
+// `subscriptionOnly`, repassando qualquer chave/valor já salvo — `isValidHousePlacements`
+// protege ESCRITAS novas (o limite de 4,8 só existe desde a 6ª rodada), mas uma linha salva ANTES
+// dessa validação existir (ou corrompida por qualquer outro motivo) ainda podia chegar ao
+// visitante com coordenadas fora do limite ou um formato inválido, apesar do contrato desta rota
+// dizer que a resposta é sempre sanitizada. Reaplica o MESMO formato/limite de
+// `HOUSE_PLACEMENT_KEY_PATTERN`/`isValidHousePlacementValue` aqui, não só o filtro de item pago.
+// lab-175 (achado do review automático do Copilot no PR #49, 9ª rodada): mesma falta de teto de
+// tamanho da 8ª rodada, agora pro validador de ESCRITA (`isValidHousePlacements` limita a
+// `HOUSE_PLACEMENTS_MAX_KEYS`) vs. esta sanitização de LEITURA — uma linha antiga/corrompida com
+// mais entradas válidas que o limite ainda materializava a resposta pública inteira. Para de
+// aceitar depois do mesmo limite.
+export function sanitizeHousePlacements(
+  placements: Record<string, { x: number; z: number; rotY: number }>,
+): Record<string, { x: number; z: number; rotY: number }> {
+  const result: Record<string, { x: number; z: number; rotY: number }> = {}
+  let acceptedCount = 0
+  for (const [key, value] of Object.entries(placements)) {
+    if (acceptedCount >= HOUSE_PLACEMENTS_MAX_KEYS) break
+    if (!HOUSE_PLACEMENT_KEY_PATTERN.test(key)) continue
+    if (!isValidHousePlacementValue(value)) continue
+    const id = key.split('#')[0]
+    if (SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id)) continue
+    result[key] = value
+    acceptedCount += 1
+  }
+  return result
 }

@@ -77,6 +77,7 @@ import { questTypeColor } from './questVisuals'
 import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
 import {
   furnitureQuantity,
+  visitFurnitureQuantity,
   getLevel,
   isQuestUnlocked,
   petAgeYears,
@@ -88,6 +89,7 @@ import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storag
 import { trackFirstControl } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
+import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { TouchActionButton } from './TouchActionButton'
@@ -200,6 +202,13 @@ interface World3DProps {
   coopAnswerSignalId: string | null
   onCoopAnswerHandled: () => void
   onCoopChallengeCompleted: () => void
+  // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — mesma ponte de
+  // `coopAnswerSignalId`/`placingFurnitureRequestId` acima: `App.tsx` muda `visitHouseRequest`
+  // (nunca reaproveitando o mesmo `id`) quando o jogador clica "Visitar casa" no `FriendsPanel`,
+  // fora deste componente. Entrar na casa do amigo reaproveita a MESMA sala 3D (`houseInteriorRootNode`)
+  // populada com a mobília DELE em vez da local — nunca escreve em `progress`.
+  visitHouseRequest: ({ id: string; nickname: string } & PublicHouseSnapshot) | null
+  onVisitHouseHandled: () => void
 }
 
 const PLANET_RADIUS = 13
@@ -1993,6 +2002,8 @@ export function World3D({
   coopAnswerSignalId,
   onCoopAnswerHandled,
   onCoopChallengeCompleted,
+  visitHouseRequest,
+  onVisitHouseHandled,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
@@ -2037,6 +2048,15 @@ export function World3D({
   const onFurniturePlacedRef = useRef(onFurniturePlaced)
   const onOpenCoopChallengeRef = useRef(onOpenCoopChallenge)
   const onCoopChallengeCompletedRef = useRef(onCoopChallengeCompleted)
+  // lab-175 (achado do review automático do Copilot no PR #49, 18ª rodada): `App.tsx` define
+  // `handleVisitHouseHandled` como função comum (sem `useCallback`), então sua identidade muda a
+  // CADA render do pai — como o efeito de polling abaixo tinha `onVisitHouseHandled` na lista de
+  // dependências, qualquer re-render do pai enquanto a ponte ainda não existe reiniciava o
+  // intervalo com `attempts = 0`, podendo resetar o teto de 60s indefinidamente (o mesmo timer
+  // permanente que a 17ª rodada tentou fechar). Mesmo padrão de "ref sempre atual" já usado pra
+  // todo outro callback deste componente (`onFurniturePlacedRef` etc., acima) — o efeito só
+  // depende de `visitHouseRequest`, nunca reinicia por causa de um re-render do pai.
+  const onVisitHouseHandledRef = useRef(onVisitHouseHandled)
   // lab-136: espelha o item sendo posicionado pra fora do loop de física (Confirmar/Cancelar são
   // botões React normais, não Babylon GUI — mesmo raciocínio de `survivalPlanetId`/
   // `survivalTimeRef` acima: o closure do loop precisa de um valor ATUAL a cada quadro (por isso
@@ -2150,6 +2170,7 @@ export function World3D({
   onFurniturePlacedRef.current = onFurniturePlaced
   onOpenCoopChallengeRef.current = onOpenCoopChallenge
   onCoopChallengeCompletedRef.current = onCoopChallengeCompleted
+  onVisitHouseHandledRef.current = onVisitHouseHandled
 
   // lab-136: entra no modo de posicionamento de mobília sempre que `App.tsx` pede um id novo
   // (clique em "Mover" no `MyHousePanel`, que fica fora deste componente) — mesmo padrão de
@@ -2171,6 +2192,56 @@ export function World3D({
     ;(sceneRef.current as any)?.__onCoopAnswerCorrect?.()
     onCoopAnswerHandled()
   }, [coopAnswerSignalId, onCoopAnswerHandled])
+
+  // lab-175 — mesma ponte das duas acima: `App.tsx` muda `visitHouseRequest` quando o jogador
+  // clica "Visitar casa" no `FriendsPanel`, fora deste componente.
+  //
+  // lab-175 (achado do review automático do Copilot no PR #49): `sceneRef.current` já existe bem
+  // antes de `__visitFriendHouse` ser atribuído (só acontece no FIM do `setup()` assíncrono, depois
+  // de Havok/assets carregarem) — o painel de Amigos já é alcançável nesse meio-tempo (o `Suspense`
+  // em `App.tsx` só cobre o carregamento do MÓDULO `World3D`, não da cena 3D em si). Clicar
+  // "Visitar casa" logo nos primeiros instantes do jogo, antes da ponte existir, descartava o
+  // pedido silenciosamente (`?.()` virava no-op e `onVisitHouseHandled()` limpava mesmo assim).
+  // lab-175 (achado do review automático do Copilot no PR #49, 16ª rodada): a versão anterior
+  // desistia depois de 50 tentativas (~10s) e limpava o pedido em silêncio — como `App.tsx` já
+  // fechou o painel de Amigos ANTES de enfileirar a visita, um carregamento excepcionalmente
+  // lento fazia o clique "sumir" sem nenhum feedback nem forma de tentar de novo.
+  //
+  // 17ª rodada: a correção da 16ª (tentar pra sempre, sem teto) trocou "desiste cedo demais" por
+  // um problema pior — se `setup()` (a função assíncrona que registra `__visitFriendHouse` no
+  // FIM, depois de Havok/assets carregarem) falhar/lançar DEPOIS de `sceneRef.current` já existir
+  // mas ANTES de chegar nessa atribuição, a ponte NUNCA aparece, e sem teto o intervalo de 200ms
+  // rodava pelo resto da vida do componente — um timer permanente, não só um caso raro inofensivo.
+  // Volta a ter um teto, bem mais generoso que os 10s originais (60s, tempo mais que suficiente
+  // pro carregamento normal mais lento já visto nesta sessão) — no timeout, libera o pedido
+  // (mesmo `onVisitHouseHandled()` de sempre) em vez de reter estado pra sempre; não há um "erro"
+  // de visita específico pra mostrar nesse caso raro (se a cena não montou, o jogo inteiro já
+  // está quebrado de outras formas mais visíveis que isso).
+  // 18ª rodada: `onVisitHouseHandled` saiu da lista de dependências (lê sempre
+  // `onVisitHouseHandledRef.current` em vez do parâmetro direto) — com ela na lista, a identidade
+  // instável de `handleVisitHouseHandled` (função comum em `App.tsx`, sem `useCallback`) fazia
+  // QUALQUER re-render do pai reiniciar este efeito enquanto a ponte ainda não existe, zerando
+  // `attempts` de novo a cada vez e podendo resetar o teto de 60s indefinidamente — o mesmo timer
+  // permanente que o teto da 17ª rodada tentou fechar, só que por um caminho diferente.
+  useEffect(() => {
+    if (!visitHouseRequest) return
+    const request = visitHouseRequest
+    let attempts = 0
+    const MAX_ATTEMPTS = 300 // 300 × 200ms = 60s
+    const interval = setInterval(() => {
+      attempts += 1
+      const bridge = (sceneRef.current as any)?.__visitFriendHouse
+      if (typeof bridge === 'function') {
+        bridge(request.nickname, request.furnitureIds, request.placements)
+        clearInterval(interval)
+        onVisitHouseHandledRef.current()
+      } else if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(interval)
+        onVisitHouseHandledRef.current()
+      }
+    }, 200)
+    return () => clearInterval(interval)
+  }, [visitHouseRequest])
 
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()
@@ -2608,6 +2679,15 @@ export function World3D({
     // comentário acima), então "fora" é sempre onde o jogador estava exatamente antes de entrar.
     let savedOutsideCenter = Vector3.Zero()
     let savedOutsideGroundFn: (localUp: Vector3) => number = currentGroundBaseFn
+    // lab-175 (achado do review automático do Copilot no PR #49, 6ª rodada): antes desta direção
+    // existir, `exitHouseInterior` sempre pousava perto de `houseUp` (a posição fixa da casa no
+    // planeta principal) — inofensivo enquanto só dava pra entrar em casa fisicamente perto dela
+    // (sempre no planeta principal), mas "Visitar casa" (a ponte nova) é alcançável de QUALQUER
+    // lugar, incluindo Marte/outros planetas — `savedOutsideCenter` já virava o centro certo
+    // (Marte), mas a direção de pouso continuava fixa no planeta principal, uma combinação
+    // inconsistente. Guarda a direção local de verdade (relativa ao centro de fora) no momento da
+    // entrada, usada no lugar de `houseUp` na saída.
+    let savedOutsideLocalUp = Vector3.Up()
     let houseDoorInsidePos = Vector3.Zero()
     let houseInteriorSpawnPos = Vector3.Zero()
     let houseCounterPos = Vector3.Zero()
@@ -2618,6 +2698,13 @@ export function World3D({
     // desafio que não dá pra completar sozinho.
     let coopEnterHintLabel: TextBlock | null = null
     const houseFurnitureNodes: Record<string, TransformNode> = {}
+    // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — snapshot da mobília
+    // de OUTRO jogador, populado só durante uma visita (`__visitFriendHouse`, ver mais abaixo);
+    // `null` = mostrando a própria casa, como sempre. `refreshHouseFurnitureVisuals` lê daqui em
+    // vez de `progressRef.current` quando não-nulo — NUNCA escreve de volta em `progress`,
+    // garantindo que uma visita nunca altera a casa de ninguém (a UI de comprar/mover, só
+    // alcançável pelo balcão interno, também é bloqueada durante a visita, ver loop de física).
+    let visitingHouseSnapshot: ({ nickname: string } & PublicHouseSnapshot) | null = null
     // Posicionamento manual de mobília (lab-136) — `placingFurnitureId` é a fonte de verdade LIDA
     // pelo loop de física a cada quadro (mesmo padrão de `sittingAtDesk`/`drivingCar` acima: um
     // `let` do closure, não o `useState` React, que só re-renderiza — não muda o valor que o
@@ -3206,7 +3293,10 @@ export function World3D({
             return
           }
           if (Vector3.Distance(avatarMesh.position, houseCounterPos) < HOUSE_TRIGGER_DISTANCE) {
-            onOpenMyHouseRef.current()
+            // lab-175 — visitando a casa de um amigo (`visitingHouseSnapshot`): o balcão não abre
+            // nada, garantindo que a visita nunca vira um jeito de mexer na PRÓPRIA mobília por
+            // engano enquanto está dentro da casa de outra pessoa ("visitante não altera nada").
+            if (!visitingHouseSnapshot) onOpenMyHouseRef.current()
             return
           }
           // lab-170 (pedido do usuário: "ao se aproximar na cama tem que ter como deitar" /
@@ -7182,6 +7272,31 @@ export function World3D({
       // só existe pra detectar quando ela DIMINUI (exclusão, ver comentário lá dentro), nunca lido
       // fora desta função.
       const lastFurnitureQuantity: Record<string, number> = {}
+      // lab-175 — descarta TODAS as peças construídas (não só as que sobram fora de
+      // `desiredKeys`, como o laço no fim de `refreshHouseFurnitureVisuals` já faz): usada só na
+      // TRANSIÇÃO entre "de quem" é a casa mostrada (própria ↔ visita, ou visita A ↔ visita B),
+      // porque a otimização incremental de `refreshHouseFurnitureVisuals` (reaproveitar
+      // `houseFurnitureNodes[key]` já existente) assume implicitamente que a chave `${itemId}#${i}`
+      // sempre se refere ao MESMO dono — trocar de dono sem isto deixaria peças na posição
+      // ANTIGA (do dono errado) sempre que os dois tiverem o mesmo item no mesmo índice.
+      // lab-175 (achado do review automático do Copilot no PR #49, 12ª rodada): descartar o
+      // `TransformNode` de uma peça (`.dispose(false, true)`, 10ª rodada) libera malha/material,
+      // mas `buildFurniturePiece` registrou cada mesh em `shadowGenerator.addShadowCaster` — o
+      // `ShadowGenerator` não some sozinho, e sua `renderList` continua com a referência
+      // descartada, custando um pouco de CPU/memória a cada render de sombra, acumulando a cada
+      // troca de dono. Remove do shadow generator ANTES de descartar, nos TRÊS pontos que removem
+      // uma peça (função única pra não repetir a mesma ordem de operações 3x).
+      function disposeFurnitureNode(node: TransformNode) {
+        for (const mesh of node.getChildMeshes()) shadowGenerator.removeShadowCaster(mesh)
+        node.dispose(false, true)
+      }
+      function disposeAllHouseFurnitureNodes() {
+        for (const key of Object.keys(houseFurnitureNodes)) {
+          disposeFurnitureNode(houseFurnitureNodes[key])
+          delete houseFurnitureNodes[key]
+        }
+        for (const key of Object.keys(lastFurnitureQuantity)) delete lastFurnitureQuantity[key]
+      }
       function refreshHouseFurnitureVisuals() {
         const roomRoot = houseInteriorRootNode
         if (!roomRoot) return
@@ -7190,12 +7305,18 @@ export function World3D({
         const usableArc = Math.PI * 2 - doorGap * 2
         const startAngle = doorAngle + doorGap
         const ringRadius = 3.0
+        // lab-175 — mostrando a casa de um amigo (`visitingHouseSnapshot` não-nulo): usa o
+        // snapshot sincronizado dele em vez do `progress` local; item `subscriptionOnly` sempre
+        // conta 0 pra visitante (`visitFurnitureQuantity`, `state/progression.ts`).
+        const activePlacements = visitingHouseSnapshot ? visitingHouseSnapshot.placements : progressRef.current.housePlacements
 
         const desiredKeys = new Set<string>()
         FURNITURE_CATALOG.forEach((item, itemIndex) => {
           const visual = FURNITURE_VISUAL_KIND[item.id]
           if (!visual) return
-          const quantity = furnitureQuantity(item, progressRef.current, entitlementActiveRef.current)
+          const quantity = visitingHouseSnapshot
+            ? visitFurnitureQuantity(item, visitingHouseSnapshot.furnitureIds)
+            : furnitureQuantity(item, progressRef.current, entitlementActiveRef.current)
           // lab-170 (bug real: excluir uma cópia do MEIO reindexa `housePlacements` pra manter os
           // índices contíguos — ver `removeFurniture`, `progression.ts` —, mas as cópias JÁ
           // CONSTRUÍDAS na cena abaixo continuam com as chaves/posições ANTIGAS; o laço de
@@ -7211,7 +7332,12 @@ export function World3D({
               const staleKey = `${item.id}#${i}`
               const staleNode = houseFurnitureNodes[staleKey]
               if (staleNode) {
-                staleNode.dispose()
+                // 11ª rodada (achado do review automático do Copilot no PR #49): este era o
+                // terceiro caminho de remoção que ainda vazava material/textura — a correção da
+                // 10ª rodada só cobriu `disposeAllHouseFurnitureNodes` e o laço de chave obsoleta
+                // no fim desta função, não este (quantidade DIMINUINDO pro mesmo item). 12ª
+                // rodada: usa `disposeFurnitureNode` (remove do shadow generator também).
+                disposeFurnitureNode(staleNode)
                 delete houseFurnitureNodes[staleKey]
               }
             }
@@ -7225,7 +7351,7 @@ export function World3D({
             piece.parent = roomRoot
             // Posição salva pelo jogador (lab-136, "Mover" no `MyHousePanel`) tem prioridade sobre
             // o layout padrão em anel — só cai no anel se esta cópia nunca foi reposicionada.
-            const saved = progressRef.current.housePlacements[key]
+            const saved = activePlacements[key]
             if (saved) {
               piece.position = new Vector3(saved.x, 0, saved.z)
               piece.rotation.y = saved.rotY
@@ -7241,11 +7367,22 @@ export function World3D({
 
         for (const key of Object.keys(houseFurnitureNodes)) {
           if (desiredKeys.has(key)) continue
-          houseFurnitureNodes[key].dispose()
+          // 10ª rodada: mesmo vazamento de material/textura de `disposeAllHouseFurnitureNodes`
+          // acima, aqui no caminho de remoção incremental (item vendido/assinatura expirada).
+          // 12ª rodada: `disposeFurnitureNode` também remove do shadow generator.
+          disposeFurnitureNode(houseFurnitureNodes[key])
           delete houseFurnitureNodes[key]
         }
       }
       ;(scene as any).__refreshHouseFurniture = refreshHouseFurnitureVisuals
+
+      // Casa visitável (lab-175) — ponte React → closure (mesmo padrão de `__refreshHouseFurniture`
+      // acima), chamada por `App.tsx` quando o jogador clica "Visitar casa" no `FriendsPanel`.
+      // Reaproveita a MESMA sala 3D da própria casa (`enterHouseInterior`), só que populada com a
+      // mobília do amigo — nunca cria uma sala nova nem escreve em `progress`.
+      ;(scene as any).__visitFriendHouse = (nickname: string, furnitureIds: string[], placements: PublicHouseSnapshot['placements']) => {
+        enterHouseInterior({ nickname, furnitureIds, placements })
+      }
 
       // Construída sob demanda na primeira entrada (mesmo padrão de `buildMarsIfNeeded` etc.) —
       // nenhum jogador que nunca entrar em casa paga o custo de criar esta sala.
@@ -7368,14 +7505,60 @@ export function World3D({
         // (lab-138: uma peça por CÓPIA possuída, não mais uma por tipo de item; ver comentário na
         // declaração dela), reservando um corredor livre na direção da porta (evita qualquer peça
         // bloqueando a passagem).
-        refreshHouseFurnitureVisuals()
+        // lab-175 (achado do review automático do Copilot no PR #49, 14ª rodada): chamar aqui era
+        // redundante e caro — o único chamador (`enterHouseInterior`) SEMPRE roda
+        // `disposeAllHouseFurnitureNodes()` + `refreshHouseFurnitureVisuals()` de novo logo depois
+        // (pra aplicar `visitingHouseSnapshot`, ainda não decidido neste ponto). Na primeira
+        // entrada de sempre numa casa decorada, isso construía/registrava até 300 peças aqui só
+        // pra descartar tudo imediatamente e reconstruir de novo — removido, sem perda de
+        // comportamento (a sala continua populada, só que numa passada só).
       }
 
-      function enterHouseInterior() {
+      // `visitSnapshot` presente = entrando na casa de OUTRO jogador (lab-175); omitido = entrada
+      // normal na própria casa. Descarta TODAS as peças construídas antes de popular de novo
+      // (`disposeAllHouseFurnitureNodes`, ver comentário lá) — necessário mesmo na entrada normal,
+      // caso a última vez que a sala foi populada tenha sido uma visita.
+      function enterHouseInterior(visitSnapshot?: { nickname: string } & PublicHouseSnapshot) {
         buildHouseInteriorIfNeeded()
         if (!avatarMesh || !avatarBody) return
-        savedOutsideCenter = currentWorldCenter
-        savedOutsideGroundFn = currentGroundBaseFn
+        // lab-175 (achado do review automático do Copilot no PR #49, 6ª rodada): o painel de
+        // Amigos (e o botão "Visitar casa") continua acessível dirigindo o carro ou pilotando o
+        // foguete — diferente da entrada normal (E perto da porta), que já passa pelo ramo de
+        // "sair do carro" de `handleInteractPress` ANTES de chegar aqui, esta ponte nova pula
+        // direto pra `enterHouseInterior` sem passar por esse ramo. Sem este bloqueio, o avatar
+        // seria teleportado pra dentro de casa ainda "dirigindo" (`studentFigure` continua
+        // parentada no veículo, que continua se movendo no quadro seguinte). Foguete em pleno voo
+        // já não tem "sair" de propósito (mesma regra do lab-59); carro simplesmente pede pra
+        // sair primeiro — mais simples e mais seguro que tentar desparentar/reposicionar o
+        // veículo no meio da troca de mundo.
+        if (drivingCar || drivingRocket) {
+          furnitureReactionTimeout = showChatBubbleText(
+            furnitureReactionLabel,
+            '🚗 Saia do carro ou do foguete antes de visitar uma casa.',
+            furnitureReactionTimeout,
+          )
+          return
+        }
+        // lab-175 (achados do review automático do Copilot no PR #49): dois problemas reais no
+        // caso de pular direto de UMA casa (própria ou visita anterior) pra OUTRA sem sair antes
+        // (ex.: clicar "Visitar casa" no painel de Amigos enquanto já está dentro de casa) —
+        // 1. `savedOutsideCenter`/`savedOutsideGroundFn` só podem ser capturados a partir do
+        //    mundo de FORA de verdade; capturá-los de novo aqui enquanto já `insideHouseInterior`
+        //    sobrescreveria com o centro da sala atual, e `exitHouseInterior` da PRÓXIMA casa
+        //    devolveria o jogador pra dentro de uma sala em vez do planeta principal.
+        // 2. Deitado numa cama ou no meio de "colocar mobília" da casa ANTERIOR: a figura/peça
+        //    fantasma ainda apontam pra nós que `disposeAllHouseFurnitureNodes` está prestes a
+        //    destruir — sair da interação primeiro (mesmo que `exitHouseInterior` já faz) evita
+        //    referência a nó descartado e um "Confirmar" tardio gravando posição errada.
+        if (!insideHouseInterior) {
+          savedOutsideCenter = currentWorldCenter
+          savedOutsideGroundFn = currentGroundBaseFn
+          savedOutsideLocalUp = avatarMesh.position.subtract(currentWorldCenter).normalize()
+        }
+        if (restingInBedKey) getUpFromBed()
+        cancelFurniturePlacement()
+        disposeAllHouseFurnitureNodes()
+        visitingHouseSnapshot = visitSnapshot ?? null
         insideHouseInterior = true
         // lab-138: câmera livre (arrastar/roda do mouse) começa do mesmo ângulo/distância padrão
         // a cada entrada — não carrega o giro/zoom de uma visita anterior, mesmo espírito de
@@ -7396,15 +7579,28 @@ export function World3D({
         avatarBody.body.disablePreStep = true
         facing = new Vector3(0, 0, 1)
         refreshHouseFurnitureVisuals()
+        if (visitingHouseSnapshot) {
+          furnitureReactionTimeout = showChatBubbleText(
+            furnitureReactionLabel,
+            `🏠 Você está na casa de ${visitingHouseSnapshot.nickname}!`,
+            furnitureReactionTimeout,
+          )
+        }
       }
 
       function exitHouseInterior() {
         if (!insideHouseInterior) return
         // Sair de casa com uma peça em modo de posicionamento não deveria deixar o modo "preso"
         // (o jogador não teria mais como confirmar/cancelar de dentro do painel) — cancela e
-        // restaura a posição anterior, mesmo efeito de apertar "Cancelar".
+        // restaura a posição anterior, mesmo efeito de apertar "Cancelar". Não deveria acontecer
+        // de qualquer forma durante uma visita (o balcão fica bloqueado, ver loop de física), mas
+        // mantido aqui como defesa (mesmo espírito de `disposeAllHouseFurnitureNodes` na entrada).
         cancelFurniturePlacement()
         insideHouseInterior = false
+        // lab-175 — limpa o snapshot de visita ao sair; a próxima entrada (própria casa ou outra
+        // visita) já descarta e reconstrói tudo de qualquer forma (`enterHouseInterior`), mas
+        // deixar isto pendurado enquanto o jogador está do lado de FORA seria estado inconsistente.
+        visitingHouseSnapshot = null
         // lab-149 (achado do Copilot): se o jogador estava arrastando a câmera livre bem na hora
         // de sair de casa, o arraste ficaria "solto" (o `pointerup` só chega quando o botão do
         // mouse é solto, não quando a casa é deixada) — zera aqui também, além da checagem em
@@ -7413,7 +7609,22 @@ export function World3D({
         cameraDragPointerId = null
         currentWorldCenter = savedOutsideCenter
         currentGroundBaseFn = savedOutsideGroundFn
-        teleportAvatarTo(savedOutsideCenter, offsetLandingUp(houseUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
+        // lab-175 (achado do review automático do Copilot no PR #49, 6ª rodada): usava `houseUp`
+        // fixo aqui (a posição fixa da casa no planeta principal) — inofensivo enquanto só dava
+        // pra entrar em casa fisicamente perto dela, mas "Visitar casa" é alcançável de Marte/
+        // outros planetas; `savedOutsideLocalUp` guarda a direção de VERDADE de onde o jogador
+        // veio, capturada na entrada.
+        //
+        // 7ª rodada: `offsetLandingUp` também usava `PLANET_RADIUS` (13, o planeta principal)
+        // fixo pra escalar o deslocamento tangencial — errado se o mundo salvo for outro planeta
+        // com raio bem diferente (Mercúrio, Marte etc.). `savedOutsideGroundFn(savedOutsideLocalUp)`
+        // já devolve o raio de verdade daquele mundo naquela direção, sem precisar guardar mais
+        // uma variável — é a MESMA função já usada aqui embaixo pra calcular o chão de verdade.
+        teleportAvatarTo(
+          savedOutsideCenter,
+          offsetLandingUp(savedOutsideLocalUp, savedOutsideGroundFn(savedOutsideLocalUp), 2.5),
+          savedOutsideGroundFn,
+        )
       }
 
       // Posicionamento manual de mobília (lab-136, pedido do usuário: "tem que ter opção... de
@@ -9956,7 +10167,18 @@ export function World3D({
         // foguete de volta; `Math.ceil` + só atualizar o display quando o inteiro muda evita
         // re-renderizar 60×/segundo (o de Marte só atualiza em eventos discretos de dano, este
         // dreia continuamente, então precisa desse cuidado extra).
-        if (avatarMesh && currentPlanetId && DESTINATION_PLANETS[currentPlanetId]?.hasSurvivalTimer) {
+        // lab-175 (achado do review automático do Copilot no PR #49, 19ª rodada): "Visitar casa"
+        // (e a própria casa) teleporta o avatar pra `HOUSE_INTERIOR_CENTER` sem tocar em
+        // `currentPlanetId` — antes desta checagem, visitar uma casa a partir de um planeta com
+        // cronômetro (Mercúrio/Netuno/etc., alcançável de qualquer planeta via "Visitar casa" no
+        // painel de Amigos, não só fisicamente perto da casa) deixava este bloco continuar
+        // drenando o tempo (o avatar está longe do foguete de retorno, fora da sala) e podia
+        // chamar `respawnFromSurvivalTimeout` (teleporta pro planeta principal) enquanto
+        // `insideHouseInterior` continuava `true` — estado inconsistente (UI/física da casa ainda
+        // ativas, avatar já teleportado pra fora). `!insideHouseInterior` pausa o cronômetro
+        // enquanto dentro de qualquer casa, retomando de onde parou ao sair (nada mais muda
+        // `currentPlanetId`/`survivalTimeRef` durante a visita).
+        if (!insideHouseInterior && avatarMesh && currentPlanetId && DESTINATION_PLANETS[currentPlanetId]?.hasSurvivalTimer) {
           const returnRocket = returnRockets.get(currentPlanetId)
           const distToRocket = returnRocket
             ? Vector3.Distance(avatarMesh.position, returnRocket.root.getAbsolutePosition())
