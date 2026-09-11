@@ -334,15 +334,18 @@ export function buildStudentFigure(
 // `applyHat`/`applyGlasses`/`applyBonecoFeatures` criam um `PBRMaterial` NOVO a cada chamada
 // (compartilhado por todas as peças do grupo); sem descartar o material antigo, cada troca de
 // cosmético deixava um material extra e uma referência de shadow caster morta acumulando pra
-// sempre na cena — tanto no preview pequeno da lojinha (`AvatarPreview3D.tsx`, que reconstrói a
-// figura inteira a cada troca, mascarando o efeito) quanto, de forma bem mais visível, no avatar
-// AO VIVO do jogador e de jogadores remotos (`World3D.tsx`, `__setPlayerHat`/`__setPlayerGlasses`/
-// `applyRemoteAppearance`, que trocam só a peça sem reconstruir a figura — cada troca real durante
-// uma sessão soma o vazamento). Mesma classe de bug já corrigida pra mobília de casa no
-// lab-175 (`disposeFurnitureNode`, `World3D.tsx`). `disposeMaterial=false` é usado só por
-// `applyHairShape`, que reaproveita `figure.hairMat` entre chamadas (persistente, nunca recriado)
-// em vez de um material novo — descartar aqui destruiria o material que a PRÓXIMA chamada ainda
-// vai usar.
+// sempre na cena — no avatar AO VIVO do jogador e de jogadores remotos (`World3D.tsx`,
+// `__setPlayerHat`/`__setPlayerGlasses`/`applyRemoteAppearance`, que trocam só a peça sem
+// reconstruir a figura — cada troca real durante uma sessão soma o vazamento), e (achado do
+// review automático do Copilot no PR #51: o comentário original desta função errava ao dizer que
+// o preview pequeno da lojinha "mascarava o efeito" — isso só vale pro MATERIAL, porque
+// `AvatarPreview3D.tsx` reconstrói a figura inteira a cada troca com `disposeStudentFigure`
+// abaixo; o SHADOW CASTER nunca foi coberto por isso, já que `dispose()` nunca mexe no
+// `ShadowGenerator` independente dos argumentos — ver `disposeStudentFigure`) também no preview.
+// Mesma classe de bug já corrigida pra mobília de casa no lab-175 (`disposeFurnitureNode`,
+// `World3D.tsx`). `disposeMaterial=false` é usado só por `applyHairShape`, que reaproveita
+// `figure.hairMat` entre chamadas (persistente, nunca recriado) em vez de um material novo —
+// descartar aqui destruiria o material que a PRÓXIMA chamada ainda vai usar.
 function disposeMeshGroup(meshes: Mesh[], shadowGenerator: ShadowGenerator, disposeMaterial: boolean): void {
   const sharedMaterial = disposeMaterial ? meshes[0]?.material : null
   for (const mesh of meshes) {
@@ -350,6 +353,19 @@ function disposeMeshGroup(meshes: Mesh[], shadowGenerator: ShadowGenerator, disp
     mesh.dispose()
   }
   sharedMaterial?.dispose()
+}
+
+// lab-176 (achado do review automático do Copilot no PR #51): `AvatarPreview3D.tsx` reconstrói a
+// figura INTEIRA a cada troca de cosmético (`figureRef.current?.root.dispose(false, true)`) — isso
+// já libera material/textura recursivamente, mas NUNCA removia as malhas do corpo da `renderList`
+// do `ShadowGenerator` do preview (Babylon nunca faz isso sozinho, `dispose()` não sabe nada sobre
+// shadow generators). Como esse rebuild roda em TODA troca (bem mais frequente que qualquer troca
+// no avatar ao vivo), a `renderList` do preview acumulava referências mortas rapidamente. Função só
+// pra descarte de figura INTEIRA (diferente de `disposeMeshGroup`, que descarta só um GRUPO de
+// peças dentro de uma figura que continua viva) — usada por `AvatarPreview3D.tsx`.
+export function disposeStudentFigure(figure: StudentFigure, shadowGenerator: ShadowGenerator): void {
+  for (const mesh of figure.root.getChildMeshes()) shadowGenerator.removeShadowCaster(mesh)
+  figure.root.dispose(false, true)
 }
 
 // Descarta as peças antigas (se houver — troca de avatar em cena já com a cena montada) e monta
@@ -365,11 +381,20 @@ export function applyBonecoFeatures(
   disposeMeshGroup(figure.accessories, shadowGenerator, true)
   figure.accessories = []
 
-  const accentMat = new PBRMaterial('bonecoAccentMat', scene)
-  accentMat.albedoColor = new Color3(...features.accentColorRgb)
-  accentMat.roughness = 0.75
+  // lab-176 (achado do review automático do Copilot no PR #51): uma criatura com
+  // `earStyle: 'none'`/`tailStyle: 'none'`/`special: 'none'` não passa por `add()` nenhuma vez —
+  // criar o material ANTES de saber se alguma peça vai realmente usá-lo deixava um
+  // `bonecoAccentMat` órfão (nunca atribuído a nenhuma malha, então nunca capturado por
+  // `disposeMeshGroup` na PRÓXIMA chamada) a cada troca pra uma criatura sem acessórios. Criado
+  // sob demanda, só na primeira peça de verdade.
+  let accentMat: PBRMaterial | null = null
 
   function add(mesh: Mesh) {
+    if (!accentMat) {
+      accentMat = new PBRMaterial('bonecoAccentMat', scene)
+      accentMat.albedoColor = new Color3(...features.accentColorRgb)
+      accentMat.roughness = 0.75
+    }
     mesh.material = accentMat
     mesh.parent = figure.root
     shadowGenerator.addShadowCaster(mesh)

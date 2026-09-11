@@ -32,6 +32,7 @@ import {
   avatarColorFromEmoji,
   bonecoFeaturesFromEmoji,
   buildStudentFigure,
+  disposeStudentFigure,
   type StudentFigure,
 } from './studentFigure'
 
@@ -173,7 +174,12 @@ export function AvatarPreview3D({
     const shadowGenerator = shadowGeneratorRef.current
     if (!scene || !shadowGenerator) return
 
-    figureRef.current?.root.dispose(false, true)
+    // lab-176 (achado do review automático do Copilot no PR #51): `root.dispose(false, true)`
+    // sozinho já libera material/textura recursivamente, mas nunca removia as malhas do corpo da
+    // `renderList` do `ShadowGenerator` deste preview — como este efeito roda em TODA troca de
+    // cosmético, essa render list acumulava referências mortas rapidamente. `disposeStudentFigure`
+    // faz as duas coisas.
+    if (figureRef.current) disposeStudentFigure(figureRef.current, shadowGenerator)
 
     const figure = buildStudentFigure(scene, avatarColorFromEmoji(avatarEmoji), shadowGenerator)
     applyBonecoFeatures(figure, bonecoFeaturesFromEmoji(avatarEmoji), scene, shadowGenerator)

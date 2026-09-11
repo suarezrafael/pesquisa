@@ -15,15 +15,17 @@ Commit inicial → final: 7e552183693c7645f5eb41e80bca8604f7be3606..HEAD (ver `g
   NOVO a cada chamada, então cada troca de cosmético deixava um material extra e uma referência de
   shadow caster morta acumulando pra sempre na cena — mesma classe de bug já corrigida pra mobília
   de casa no lab-175 (`disposeFurnitureNode`, `World3D.tsx`).
-- **Onde isso realmente doía**: o preview PEQUENO da lojinha (`AvatarPreview3D.tsx`) mascara o
-  próprio bug, porque reconstrói a figura INTEIRA a cada troca (`figureRef.current?.root.dispose(false,
-  true)`, que já limpa tudo recursivamente antes de chamar `applyHat` etc. num boneco recém-criado
-  sem nada pra descartar). O vazamento de verdade acontece no AVATAR AO VIVO do próprio jogador e
-  de jogadores remotos (`World3D.tsx`, pontes `__setPlayerHat`/`__setPlayerGlasses`/
-  `__setPlayerHairShape`/`__setAvatarShirtColor` e a função `applyRemoteAppearance`), que trocam só
-  a peça no boneco já em cena, sem reconstruir tudo — cada troca real durante uma sessão (inclusive
-  toda vez que o jogador clica um item na lojinha, já que a lojinha atualiza o avatar ao vivo por
-  trás do próprio painel) soma o vazamento.
+- **Onde isso realmente doía**: o preview PEQUENO da lojinha (`AvatarPreview3D.tsx`) mascarava a
+  METADE do bug — reconstrói a figura INTEIRA a cada troca (`figureRef.current?.root.dispose(false,
+  true)`, que já limpa MATERIAL recursivamente antes de chamar `applyHat` etc. num boneco
+  recém-criado sem nada pra descartar), mas isso nunca tocava o `ShadowGenerator` (achado da 1ª
+  rodada do Copilot, ver abaixo — `dispose()` nunca soube nada sobre shadow generators,
+  independente dos argumentos). O vazamento de MATERIAL de verdade acontece no AVATAR AO VIVO do
+  próprio jogador e de jogadores remotos (`World3D.tsx`, pontes `__setPlayerHat`/
+  `__setPlayerGlasses`/`__setPlayerHairShape`/`__setAvatarShirtColor` e a função
+  `applyRemoteAppearance`), que trocam só a peça no boneco já em cena, sem reconstruir tudo — cada
+  troca real durante uma sessão (inclusive toda vez que o jogador clica um item na lojinha, já que
+  a lojinha atualiza o avatar ao vivo por trás do próprio painel) soma o vazamento.
 - **Correção**: nova função `disposeMeshGroup(meshes, shadowGenerator, disposeMaterial)` em
   `studentFigure.ts`, reaproveitada pelos 4 pontos — remove cada malha do `shadowGenerator`
   (`removeShadowCaster`) antes de descartar, e descarta o material COMPARTILHADO uma vez só (não
@@ -68,6 +70,47 @@ Commit inicial → final: 7e552183693c7645f5eb41e80bca8604f7be3606..HEAD (ver `g
   trocas) — não reproduzida aqui por limite de tempo de uma sessão de teste automatizada, mas a
   causa (vazamento ilimitado de material + shadow caster) é real e mensurável independente de
   precisar chegar a "travar" de verdade pra ser um bug.
+
+Primeira rodada do Copilot no PR #51 trouxe 3 achados reais corrigidos:
+
+- **`removeRemotePlayer` com `disposeMaterialAndTextures = true` podia destruir uma textura
+  COMPARTILHADA entre jogadores** — `shirtMat`/`pantsMat`/`shoeMat`/`backpackMat` podem apontar
+  pra uma `DynamicTexture` cacheada por `Scene` (`getOrCreatePatternTexture`, uma textura por
+  `style` reaproveitada por QUALQUER figura que equipe o mesmo item, pra não redesenhar o canvas
+  do zero pra cada jogador). Forçar o descarte recursivo de texturas no root inteiro de um jogador
+  remoto que desconecta destruiria essa textura mesmo que o jogador LOCAL ou outro remoto ainda a
+  estivesse usando — o cache continuaria devolvendo a instância já descartada pra sempre.
+  Corrigido soltando a referência (`albedoTexture = null`, sem descartar a textura em si) nos 4
+  materiais de roupa ANTES do dispose recursivo — a textura compartilhada sobrevive intacta, só a
+  malha/material específicos deste jogador são liberados.
+- **O preview da lojinha (`AvatarPreview3D.tsx`) nunca removia as malhas do corpo do
+  `ShadowGenerator` do PRÓPRIO preview antes de descartar a figura inteira** — a correção original
+  deste lab cobriu os 4 pontos de troca de PEÇA (`disposeMeshGroup`), mas o rebuild completo da
+  figura no preview (`root.dispose(false, true)`, roda em TODA troca, mais frequente que qualquer
+  troca no avatar ao vivo) nunca foi coberto por isso — `dispose()` nunca soube nada sobre shadow
+  generators, com ou sem `disposeMaterialAndTextures`. Corrigido com uma função nova,
+  `disposeStudentFigure` (exportada de `studentFigure.ts`), que remove `root.getChildMeshes()` do
+  shadow generator antes do dispose recursivo — usada só por `AvatarPreview3D.tsx` (descarte de
+  figura INTEIRA, diferente de `disposeMeshGroup`, que descarta um GRUPO de peças numa figura que
+  continua viva).
+- **`applyBonecoFeatures` criava `bonecoAccentMat` incondicionalmente, mesmo quando nenhuma peça
+  ia usá-lo** — uma criatura com `earStyle`/`tailStyle`/`special` todos `'none'` (alcançável de
+  verdade: `FALLBACK_BONECO_FEATURES`, usado quando `avatarEmoji` não bate com nenhum avatar do
+  catálogo) nunca chama `add()`, então o material era criado e imediatamente órfão — nem atribuído
+  a nenhuma malha, nem capturável por `disposeMeshGroup` na PRÓXIMA chamada (que só pega
+  `figure.accessories[0]?.material`, vazio nesse caso). Corrigido criando o material sob demanda,
+  dentro de `add()`, só quando a primeira peça de verdade precisar dele.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) e `npm run build`
+limpos. **Reverificado ao vivo** (novo `npm run dev`, outro perfil de teste real já existente no
+ambiente, 200 moedas): 10 trocas de CRIATURA (não só chapéu desta vez) entre avatares com
+combinações de feature diferentes (incluindo `Sapo`, `special: 'eyes'`) na aba Avatares — medido
+`window.__avatarPreviewScene.materials.length`/`meshes.length` e a render list do
+`ShadowGenerator` do PREVIEW (não mais só o da cena principal, que já tinha sido verificado antes)
+antes/depois: todos permaneceram EXATAMENTE estáveis (11 materiais, 23 malhas, 22 na render list)
+— confirma os achados 2 e 3 desta rodada. O achado 1 (`removeRemotePlayer`) não foi reverificado
+ao vivo (mesma pendência já registrada abaixo, exigiria uma segunda sessão simulando desconexão de
+jogador remoto).
 
 ## Pendências / dívidas conhecidas
 
