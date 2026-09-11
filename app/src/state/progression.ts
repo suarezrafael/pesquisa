@@ -641,6 +641,13 @@ function isValidHousePlacementValueForSync(value: unknown): value is { x: number
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
+    // lab-175 (achado do review automático do Copilot no PR #49, 9ª rodada): faltava a checagem de
+    // EXATAMENTE 3 chaves que o validador do servidor já exige (`isValidHousePlacementValue`,
+    // `domain.ts`) — um placement salvo localmente com uma propriedade extra (ex.: um campo
+    // `legacy` de uma versão antiga do save) passava por aqui mas era rejeitado pelo servidor,
+    // derrubando o heartbeat INTEIRO (400) — mesma classe de bug já corrigida pra "valor não é
+    // objeto" (8ª rodada) e "campo fora do limite" (7ª rodada), agora pra "chaves extras".
+    Object.keys(value).length === 3 &&
     Number.isFinite((value as { x: unknown }).x) &&
     Number.isFinite((value as { z: unknown }).z) &&
     Number.isFinite((value as { rotY: unknown }).rotY) &&

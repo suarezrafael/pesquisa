@@ -576,8 +576,13 @@ const SUBSCRIPTION_ONLY_FURNITURE_IDS = new Set([
   'borboletas_animadas',
 ])
 
+// lab-175 (achado do review automático do Copilot no PR #49, 9ª rodada): `isValidHouseFurnitureIds`
+// só deixa GRAVAR até `HOUSE_FURNITURE_MAX_COUNT` ids, mas esta função de LEITURA (usada por
+// `GET /players/:id/public-profile`) devolvia a lista inteira de uma linha antiga/corrompida com
+// mais itens que isso salvos antes do limite de escrita existir — a resposta pública ficava sem o
+// teto de tamanho que o contrato promete. Corta no mesmo limite depois de filtrar item pago.
 export function sanitizeHouseFurnitureIds(furnitureIds: string[]): string[] {
-  return furnitureIds.filter((id) => !SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id))
+  return furnitureIds.filter((id) => !SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id)).slice(0, HOUSE_FURNITURE_MAX_COUNT)
 }
 
 // lab-175 (achado do review automático do Copilot no PR #49, 7ª rodada): antes só filtrava
@@ -587,16 +592,24 @@ export function sanitizeHouseFurnitureIds(furnitureIds: string[]): string[] {
 // visitante com coordenadas fora do limite ou um formato inválido, apesar do contrato desta rota
 // dizer que a resposta é sempre sanitizada. Reaplica o MESMO formato/limite de
 // `HOUSE_PLACEMENT_KEY_PATTERN`/`isValidHousePlacementValue` aqui, não só o filtro de item pago.
+// lab-175 (achado do review automático do Copilot no PR #49, 9ª rodada): mesma falta de teto de
+// tamanho da 8ª rodada, agora pro validador de ESCRITA (`isValidHousePlacements` limita a
+// `HOUSE_PLACEMENTS_MAX_KEYS`) vs. esta sanitização de LEITURA — uma linha antiga/corrompida com
+// mais entradas válidas que o limite ainda materializava a resposta pública inteira. Para de
+// aceitar depois do mesmo limite.
 export function sanitizeHousePlacements(
   placements: Record<string, { x: number; z: number; rotY: number }>,
 ): Record<string, { x: number; z: number; rotY: number }> {
   const result: Record<string, { x: number; z: number; rotY: number }> = {}
+  let acceptedCount = 0
   for (const [key, value] of Object.entries(placements)) {
+    if (acceptedCount >= HOUSE_PLACEMENTS_MAX_KEYS) break
     if (!HOUSE_PLACEMENT_KEY_PATTERN.test(key)) continue
     if (!isValidHousePlacementValue(value)) continue
     const id = key.split('#')[0]
     if (SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id)) continue
     result[key] = value
+    acceptedCount += 1
   }
   return result
 }

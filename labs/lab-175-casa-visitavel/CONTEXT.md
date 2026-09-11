@@ -340,6 +340,33 @@ Verificação desta rodada: `npx tsc -b`/`npm run test` (app) e `npx tsc --noEmi
 um caminho de dado corrompido/legado que não ocorre em nenhum fluxo normal já testado ao vivo nas
 rodadas anteriores, e as mudanças de métrica são só texto/comentário.
 
+Nona rodada do Copilot trouxe 3 achados reais corrigidos (mais a descrição da PR, desatualizada
+desde a 1ª rodada):
+
+- **`isValidHousePlacementValueForSync` (client) checava os CAMPOS mas não o número exato de
+  chaves** — o validador do servidor (`isValidHousePlacementValue`, `domain.ts`) exige EXATAMENTE
+  3 chaves (`x`/`z`/`rotY`); um placement salvo localmente com uma propriedade extra (ex.:
+  `legacy: true` de uma versão antiga do save) passava pelo filtro do client mas era rejeitado pelo
+  servidor, derrubando o heartbeat INTEIRO (400) — mesma classe de bug já corrigida pra "valor não
+  é objeto" (8ª rodada) e "campo fora do limite" (7ª rodada), agora faltando só a checagem de
+  contagem de chaves. Corrigido com `Object.keys(value).length === 3` (testado).
+- **`sanitizeHouseFurnitureIds`/`sanitizeHousePlacements` (servidor, usadas na LEITURA por
+  `GET /players/:id/public-profile`) não aplicavam o teto de 300 entradas** — os validadores de
+  ESCRITA (`isValidHouseFurnitureIds`/`isValidHousePlacements`) impedem gravar mais que isso, mas
+  uma linha salva ANTES desses limites existirem (ou corrompida) podia ter mais de 300 itens/
+  placements válidos, e a sanitização de leitura devolvia tudo — a resposta pública ficava sem o
+  teto de tamanho que o contrato promete. Corrigido cortando em `HOUSE_FURNITURE_MAX_COUNT`/
+  `HOUSE_PLACEMENTS_MAX_KEYS` também na leitura (testado, 300 de 305 aceitos em ambos os casos).
+- **Descrição da PR (não é código)**: o "Test plan" original ainda citava os números da 1ª rodada
+  (173/173 app, 125/125 server-accounts) mesmo depois de rodadas seguintes terem adicionado mais
+  testes — corrigido pra apontar pra este documento como fonte de verdade em vez de repetir um
+  número que ficaria defasado de novo a cada rodada.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 176/176) e `npx tsc --noEmit`/
+`npm run test` (server-accounts, 129/129) limpos, `npm run build` limpo. Sem verificação ao vivo
+nova — os 3 achados são hardening defensivo de contratos já testados (o mesmo formato de chave do
+servidor, o mesmo teto de tamanho da escrita), sem caminho novo de UI envolvido.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -380,17 +407,17 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
 ## Estado do repositório ao final
 
 - Branch: `lab-175-casa-visitavel`.
-- `npx tsc -b`/`npm run test` (app): limpo, 175/175 (10 novos: `visitFurnitureQuantity`,
-  `setHouseVisible`, `resolveHouseSyncSnapshot` ×6, incluindo o truncamento em 300 da 4ª rodada, a
-  validação de valor corrompido/fora do limite da 7ª, e o guard de valor nulo/não-objeto +
-  contêiner nulo da 8ª). `npm run build`: limpo, sem regressão de bundle.
-- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 127/127 (18 novos:
+- `npx tsc -b`/`npm run test` (app): limpo, 176/176 (11 novos: `visitFurnitureQuantity`,
+  `setHouseVisible`, `resolveHouseSyncSnapshot` ×7, incluindo o truncamento em 300 da 4ª rodada, a
+  validação de valor corrompido/fora do limite da 7ª, o guard de valor nulo/não-objeto + contêiner
+  nulo da 8ª, e a checagem de chaves extras da 9ª). `npm run build`: limpo, sem regressão de bundle.
+- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 129/129 (20 novos:
   `isValidHouseFurnitureIds`, `isValidHousePlacements` (incluindo os testes de limite de
   coordenada da 4ª e 6ª rodada, com o limite real de `4,8` apertado na 6ª),
   `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements` (incluindo o teste de re-sanitização de
-  formato/valor da 7ª rodada), allowlist do evento). **Este é o número final de verdade — se você
-  encontrar um número diferente em qualquer outro trecho deste documento ou na PR, este aqui é a
-  fonte correta.**
+  formato/valor da 7ª rodada e o teto de 300 na leitura da 9ª), allowlist do evento). **Este é o
+  número final de verdade — se você encontrar um número diferente em qualquer outro trecho deste
+  documento ou na PR, este aqui é a fonte correta.**
 - **Migração `0010` aplicada em produção** (`npm run migrate`, confirmado via query real).
 - **Verificado ao vivo, ponta a ponta, contra o banco de PRODUÇÃO real**: subiu um `wrangler dev`
   local (porta 8790, apontando pro `DATABASE_URL` real) + um segundo processo Vite (porta 5180,

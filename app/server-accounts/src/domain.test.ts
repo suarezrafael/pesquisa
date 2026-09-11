@@ -778,4 +778,17 @@ describe('sanitizeHouseFurnitureIds/sanitizeHousePlacements (lab-175, achado do 
     } as Record<string, { x: number; z: number; rotY: number }>)
     expect(result).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
   })
+
+  it('corta em 300 ids na LEITURA, não só na escrita (achado do Copilot na 9ª rodada: uma linha antiga sem esse teto materializava a resposta pública inteira)', () => {
+    const result = sanitizeHouseFurnitureIds(Array.from({ length: 305 }, () => 'cama'))
+    expect(result).toHaveLength(300)
+  })
+
+  it('corta em 300 placements aceitos na LEITURA, não só na escrita (achado do Copilot na 9ª rodada)', () => {
+    const manyPlacements = Object.fromEntries(
+      Array.from({ length: 305 }, (_, i) => [`cama#${i}`, { x: 0, z: 0, rotY: 0 }]),
+    )
+    const result = sanitizeHousePlacements(manyPlacements)
+    expect(Object.keys(result)).toHaveLength(300)
+  })
 })
