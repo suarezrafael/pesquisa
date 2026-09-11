@@ -5280,20 +5280,36 @@ export function World3D({
           hill.freezeWorldMatrix()
           hill.getChildMeshes().forEach((m) => m.freezeWorldMatrix())
 
-          // Mesmo colisor-esfera invisível e embutido das rochas acima, só maior — bloqueia
-          // esbarrão lateral sem virar plataforma.
-          const hillColliderDiameter = 2.1
-          const hillColliderRadius = hillColliderDiameter / 2
-          const hillCollider = MeshBuilder.CreateSphere(
+          // lab-177 (achado da investigação prévia, `docs/growth-retention-monetization-backlog.md`
+          // Lab 177: "física permite andar sobre montanha invisível"): o colisor-esfera embutido
+          // usado aqui era o MESMO das rochas pequenas acima, só com diâmetro maior — mas o morro
+          // visual (`buildMarsHill`) é uma cúpula bem mais larga na base (raio visual em X/Z de
+          // ~1,8-2,0 no chão, `main` escalado 1,15×0,8×1,05 a partir de uma esfera de raio 1,7)
+          // do que ALTA (pico a ~1,36 acima do chão). Uma esfera embutida com só 0,15 de
+          // protrusão (`MARS_ROCK_COLLIDER_PROTRUSION`) tem, na altura do chão, uma seção
+          // transversal de só ~0,54 de raio (matemática de esfera: uma "calota" rasa perto do
+          // polo é muito mais estreita que o equador) — bem menor que o pé visível do morro,
+          // deixando um anel entre ~0,54 e ~1,9 de raio onde o jogador atravessa visualmente a
+          // encosta do morro sem colidir. Trocado por um CILINDRO baixo e largo: a base larga
+          // cobre o pé do morro (sem passar do raio visual, pra nunca sobrar parede fantasma além
+          // da malha — melhor cobrir de menos que mais), e a altura baixa (protrusão de 0,3 acima
+          // do chão, longe do pico de 1,36) preserva a intenção original de "esbarrão lateral, não
+          // vira plataforma escalável" — só a LARGURA da base estava errada, não a lógica de
+          // "colisor baixo e embutido" em si.
+          const hillColliderRadius = 1.65
+          const hillColliderHeight = 2.0
+          const hillColliderProtrusion = 0.3
+          const hillCollider = MeshBuilder.CreateCylinder(
             `marsHillCollider-${i}`,
-            { diameter: hillColliderDiameter },
+            { diameter: hillColliderRadius * 2, height: hillColliderHeight },
             scene,
           )
           hillCollider.parent = secondPlanetRoot
-          hillCollider.position = hillPos.add(localUp.scale(MARS_ROCK_COLLIDER_PROTRUSION - hillColliderRadius))
+          hillCollider.position = hillPos.add(localUp.scale(hillColliderProtrusion - hillColliderHeight / 2))
+          hillCollider.rotationQuaternion = alignmentQuaternion(localUp)
           hillCollider.isVisible = false
           hillCollider.computeWorldMatrix(true)
-          new PhysicsAggregate(hillCollider, PhysicsShapeType.SPHERE, { mass: 0 }, scene)
+          new PhysicsAggregate(hillCollider, PhysicsShapeType.CYLINDER, { mass: 0 }, scene)
         }
 
         // Estação alienígena / disco voador (lab-65, pedido do usuário: "uma estação

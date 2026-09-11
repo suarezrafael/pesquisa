@@ -1,18 +1,26 @@
 # Laboratório atual
 
-**Em andamento: labs/lab-177-relevo-montanhas-visiveis/** — fechar o bug "física permite andar
-sobre montanha invisível". Origem: `docs/growth-retention-monetization-backlog.md`, seção 7,
-"Lab 177", prioridade P0. Investigação prévia (antes de codar) já mapeou que a hipótese do
-backlog ("separação entre mesh visual e colisão física") só vale pra METADE do sistema real: no
-planeta principal, `PLATEAU_CENTERS`/`terrainHeight` alimentam o MESMO mesh usado pela física
-(`PhysicsAggregate` tipo `MESH`) — o bug histórico ali (labs 95/124/151) é puramente de
-renderização (culling/normal degenerada em rampas íngremes), com o lab-151 tendo enviado uma
-redução de altura especulativa NUNCA confirmada ao vivo. Já os planetas secundários (Marte,
-`buildMarsHill`) usam colliders esféricos embutidos dimensionados/posicionados INDEPENDENTES da
-malha visual do morro — divergência real possível, nunca auditada. Ver
-`labs/lab-177-relevo-montanhas-visiveis/FEATURES.md`.
+Último concluído: labs/lab-177-relevo-montanhas-visiveis/ — relevo e montanhas visíveis. Origem:
+`docs/growth-retention-monetization-backlog.md`, seção 7, "Lab 177", prioridade P0. Investigação
+prévia (antes de codar) mostrou que a hipótese do backlog ("separação entre mesh visual e colisão
+física") só valia pra METADE do sistema real: no planeta principal, `PLATEAU_CENTERS`/
+`terrainHeight` alimentam o MESMO mesh usado pela física — **reverificado ao vivo no platô mais
+íngreme (índice 11) de 4 ângulos de câmera, sem nenhum artefato de renderização; a redução
+especulativa de altura do lab-151 funcionou, fechando uma pendência aberta desde então, sem
+precisar de nova mudança de código**. Já os planetas secundários (Marte, `buildMarsHill`) tinham
+um colisor-esfera embutido com só 0,15 de protrusão acima do chão, cuja seção transversal na
+altura do chão (~0,54 de raio) era bem menor que o raio visual real do morro (~1,8-2,0) —
+divergência real (jogador atravessa a encosta visível sem colidir), corrigida trocando por um
+CILINDRO (raio 1,65, mesmo tipo já usado no colisor do foguete de lançamento) que cobre o pé do
+morro sem passar da malha visível. `npx tsc -b`/testes limpos (app 178/178, inalterado). `npm run
+build` sem regressão de bundle. **Verificado ao vivo via Chrome real**: planeta principal
+confirmado limpo (screenshot de 4 ângulos no platô mais íngreme); viagem real de foguete até Marte
+confirmada funcionando ponta a ponta; o fix do colisor de Marte em si NÃO foi verificado
+visualmente ao vivo (`__debugTeleportExact` teve comportamento inesperado de física/gravidade lá,
+não investigado a fundo — confiança vem da geometria real calculada a partir do código, não de
+reprodução visual). Ver `labs/lab-177-relevo-montanhas-visiveis/CONTEXT.md`.
 
-Último concluído: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.
+Antes desse: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.
 Origem: `docs/growth-retention-monetization-backlog.md` (PR #50, mergeado), seção 7, "Lab 176",
 prioridade P0 — primeiro item recomendado desse backlog novo, antes de features maiores. Causa
 raiz achada por leitura do código antes de codar: `applyHat`/`applyGlasses`/`applyHairShape`/

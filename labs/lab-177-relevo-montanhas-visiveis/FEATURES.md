@@ -1,8 +1,8 @@
 # Laboratório 177 — Relevo e montanhas visíveis
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-11
-Fim: -
+Fim: 2026-09-11
 Commit inicial: 2317efb68a8a19525385afddad57b38aab30b341
 
 ## Objetivo do laboratório
@@ -37,20 +37,20 @@ só é verdade em METADE do sistema real):
 
 ## Funcionalidades planejadas
 
-- [ ] Reverificar ao vivo, num navegador real, se a redução de altura do lab-151 resolveu o
+- [x] Reverificar ao vivo, num navegador real, se a redução de altura do lab-151 resolveu o
       artefato de renderização nas rampas mais íngremes do planeta principal (testar
       especificamente o platô com a maior inclinação restante) — se ainda houver falha visual,
       diagnosticar a causa de verdade (inspecionar winding/normal real via `window.__scene`, não
       só reler o código) e corrigir. (referência: docs/growth-retention-monetization-backlog.md,
       Lab 177; labs/lab-151-.../CONTEXT.md, pendência registrada)
-- [ ] Auditar os colliders de morro dos planetas secundários (`buildMarsHill` e equivalentes de
+- [x] Auditar os colliders de morro dos planetas secundários (`buildMarsHill` e equivalentes de
       outros planetas, se existirem) comparando dimensão/posição do collider contra a malha visual
       — corrigir qualquer divergência real encontrada (collider menor deixando o jogador afundar
       visualmente, ou maior deixando-o flutuar/andar no "ar" antes de tocar o morro visível).
       (referência: achado da investigação prévia acima, nunca auditado antes)
-- [ ] Screenshot de verificação (desktop e, se possível, viewport mobile) entra no `CONTEXT.md`
+- [x] Screenshot de verificação (desktop e, se possível, viewport mobile) entra no `CONTEXT.md`
       deste lab — critério de aceite explícito do backlog.
-- [ ] Confirmar que a qualidade mobile/low-end (`isLowEndDevice`) não introduz nenhuma divergência
+- [x] Confirmar que a qualidade mobile/low-end (`isLowEndDevice`) não introduz nenhuma divergência
       nova (achado da investigação prévia: hoje ela só reduz contagem de props/rochas decorativas
       e tamanho de shadow map, nunca desliga a malha de terreno nem o `PhysicsAggregate` — só
       reconfirmar que continua assim depois de qualquer mudança feita aqui).
