@@ -117,9 +117,20 @@ testado, uma contradição real. O critério de aceite do backlog é explícito 
 ainda mostra leitura mínima do relevo") e não foi verificado de fato nesta sessão — só CONFIRMADO
 POR LEITURA DE CÓDIGO que `isLowEndDevice` não desliga a malha de terreno nem o `PhysicsAggregate`
 em nenhum branch (reduz só contagem de props/rochas decorativas e tamanho de shadow map), o que dá
-confiança razoável mas não é o mesmo que ver a tela de verdade. Fica como item pendente pro
-próximo lab que tocar terreno/qualidade mobile, ou pra uma sessão futura com acesso a um viewport
-mobile real (emulado ou dispositivo de verdade).
+confiança razoável mas não é o mesmo que ver a tela de verdade. **Achado real da 4ª/5ª rodada do
+mesmo review**: mesmo documentando a limitação, `FEATURES.md`/`labs/CURRENT.md` ainda declaravam
+o laboratório "concluído" sem qualificar esse critério específico como pendente — corrigido
+desmarcando o item correspondente em `FEATURES.md` (`[ ]`, não `[x]`). Investigado se dava pra
+fazer a verificação de qualquer jeito nesta sessão: `isLowEndDevice` é detectado só por regex de
+`navigator.userAgent` (`World3D.tsx` ~2326), e as ferramentas de automação de navegador
+disponíveis (`mcp__claude-in-chrome__*`) não expõem override de user agent nem emulação de
+dispositivo — só `resize_window` (muda viewport, não `navigator.userAgent`) — então não existe um
+jeito VÁLIDO de forçar esse branch nesta sessão sem gambiarra (e uma gambiarra tipo sobrescrever
+`navigator.userAgent` via `Object.defineProperty` depois que a página já carregou não serviria,
+já que `isLowEndDevice` é um `const` avaliado uma vez só na montagem da cena, antes de qualquer
+JS injetado depois ter chance de rodar). Fica como pendência real pro próximo lab que tocar
+terreno/qualidade mobile, ou pra uma sessão futura com acesso a um dispositivo/emulador de
+verdade (ou a uma ferramenta de automação com suporte a emulação de dispositivo).
 
 ## O que o próximo laboratório deve desenvolver
 

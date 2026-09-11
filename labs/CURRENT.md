@@ -22,7 +22,12 @@ confirmado limpo (screenshot real salvo em `labs/lab-177-.../evidencias/`, 4 ân
 colisor `MESH` de Marte em si NÃO foi verificado visualmente ao vivo em nenhuma tentativa
 (`__debugTeleportExact`/fluxo de viagem tiveram comportamento inconsistente lá, não investigado a
 fundo — confiança vem da geometria real calculada a partir do código e do mesmo padrão `MESH` já
-comprovado no planeta principal, não de reprodução visual). Ver
+comprovado no planeta principal, não de reprodução visual). **Pendência real, não resolvida**: o
+critério de aceite do backlog "mobile low quality ainda mostra leitura mínima do relevo" não foi
+verificado visualmente — as ferramentas de automação de navegador desta sessão não expõem
+override de user agent/emulação de dispositivo (`isLowEndDevice` é detectado só por regex de
+`navigator.userAgent`), então não teve como forçar esse branch de forma válida aqui; precisa de um
+dispositivo/emulador de verdade numa sessão futura. Ver
 `labs/lab-177-relevo-montanhas-visiveis/CONTEXT.md`.
 
 Antes desse: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.

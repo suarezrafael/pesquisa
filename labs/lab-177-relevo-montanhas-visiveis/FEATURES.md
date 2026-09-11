@@ -54,10 +54,18 @@ só é verdade em METADE do sistema real):
       screenshots sem incluir/linkar nenhuma imagem de verdade — corrigido, arquivo real em
       `labs/lab-177-relevo-montanhas-visiveis/evidencias/planeta-principal-plato-11.jpg`, só
       desktop — viewport mobile não testado nesta sessão)
-- [x] Confirmar que a qualidade mobile/low-end (`isLowEndDevice`) não introduz nenhuma divergência
-      nova (achado da investigação prévia: hoje ela só reduz contagem de props/rochas decorativas
-      e tamanho de shadow map, nunca desliga a malha de terreno nem o `PhysicsAggregate` — só
-      reconfirmar que continua assim depois de qualquer mudança feita aqui).
+- [ ] **Pendente — não concluído** (achado real da 4ª/5ª rodada do review automático do Copilot
+      no PR #52): confirmar visualmente, num viewport/dispositivo mobile real, que a qualidade
+      `isLowEndDevice` continua mostrando leitura mínima do relevo — critério de aceite explícito
+      do backlog ("mobile low quality ainda mostra leitura mínima do relevo"). A leitura do código
+      (`isLowEndDevice` só reduz contagem de props/rochas decorativas e tamanho de shadow map,
+      nunca desliga a malha de terreno nem o `PhysicsAggregate`) dá confiança razoável, mas não é
+      o mesmo que confirmar visualmente. `isLowEndDevice` é detectado só por regex de
+      `navigator.userAgent` (`World3D.tsx` ~2326) — as ferramentas de automação de navegador
+      disponíveis nesta sessão (`mcp__claude-in-chrome__*`) não expõem override de user agent nem
+      emulação de dispositivo (só redimensionam a janela, o que não muda `navigator.userAgent`),
+      então essa verificação específica não foi possível de fazer de forma válida aqui — fica como
+      pendência real pro próximo lab/sessão com acesso a um dispositivo/emulador de verdade.
 
 ## Fora de escopo (explicitamente adiado)
 
