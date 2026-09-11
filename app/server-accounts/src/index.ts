@@ -902,7 +902,7 @@ async function handlePlayerPublicProfile(request: Request, env: Env, playerId: s
   const house =
     row.house_visible && Array.isArray(row.house_furniture_ids)
       ? {
-          furnitureIds: sanitizeHouseFurnitureIds(row.house_furniture_ids as string[]),
+          furnitureIds: sanitizeHouseFurnitureIds(row.house_furniture_ids),
           placements: sanitizeHousePlacements(
             typeof row.house_placements === 'object' && row.house_placements !== null && !Array.isArray(row.house_placements)
               ? (row.house_placements as Record<string, { x: number; z: number; rotY: number }>)

@@ -7304,7 +7304,11 @@ export function World3D({
               const staleKey = `${item.id}#${i}`
               const staleNode = houseFurnitureNodes[staleKey]
               if (staleNode) {
-                staleNode.dispose()
+                // 11ª rodada (achado do review automático do Copilot no PR #49): este era o
+                // terceiro caminho de remoção que ainda vazava material/textura — a correção da
+                // 10ª rodada só cobriu `disposeAllHouseFurnitureNodes` e o laço de chave obsoleta
+                // no fim desta função, não este (quantidade DIMINUINDO pro mesmo item).
+                staleNode.dispose(false, true)
                 delete houseFurnitureNodes[staleKey]
               }
             }

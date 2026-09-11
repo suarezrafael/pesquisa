@@ -854,6 +854,20 @@ describe('resolveHouseSyncSnapshot (lab-175, achados do review automático do Co
     expect(snapshot.placements).toEqual({})
   })
 
+  it('descarta chave com id/índice absurdamente longo (achado do Copilot na 11ª rodada: o servidor tem o mesmo teto e rejeitava o heartbeat inteiro)', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['cama'],
+      housePlacements: {
+        'cama#0': { x: 1, z: 2, rotY: 0 },
+        [`${'a'.repeat(61)}#0`]: { x: 1, z: 2, rotY: 0 },
+        [`cama#${'1'.repeat(7)}`]: { x: 1, z: 2, rotY: 0 },
+      },
+    }
+    const snapshot = resolveHouseSyncSnapshot(progress)
+    expect(snapshot.placements).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
+  })
+
   it('não afeta nada quando não há item subscriptionOnly nem chave legada', () => {
     const progress = {
       ...emptyProgress,

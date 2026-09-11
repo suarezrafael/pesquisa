@@ -519,7 +519,14 @@ export function isValidHouseFurnitureIds(value: unknown): value is string[] {
 // `state/types.ts`) — valida o formato da chave também, não só o valor, pra nunca gravar uma chave
 // arbitrária vinda de um heartbeat malicioso dentro do jsonb.
 const HOUSE_PLACEMENTS_MAX_KEYS = 300
-const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]+#\d+$/
+// lab-175 (achado do review automático do Copilot no PR #49, 11ª rodada): nem `[a-z0-9_]+` nem
+// `\d+` tinham teto de tamanho — um client malicioso podia mandar até 300 chaves com id/índice
+// enormes (megabytes de texto cada), inflando o jsonb gravado e a resposta de `public-profile`,
+// ao contrário do limite já aplicado a `HOUSE_FURNITURE_ID_MAX_LENGTH` pro campo irmão. Limita a
+// parte do id ao mesmo teto de `houseFurnitureIds` e o índice a 6 dígitos (até 999999 cópias do
+// mesmo item — bem acima do teto real de `HOUSE_FURNITURE_MAX_COUNT`, só pra nunca rejeitar um
+// índice legítimo).
+const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]{1,60}#\d{1,6}$/
 
 // lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada, apertado na 6ª): `x`/`z`
 // vão direto pra `piece.position` na cena do VISITANTE (`World3D.tsx`, `refreshHouseFurnitureVisuals`)
@@ -581,8 +588,15 @@ const SUBSCRIPTION_ONLY_FURNITURE_IDS = new Set([
 // `GET /players/:id/public-profile`) devolvia a lista inteira de uma linha antiga/corrompida com
 // mais itens que isso salvos antes do limite de escrita existir — a resposta pública ficava sem o
 // teto de tamanho que o contrato promete. Corta no mesmo limite depois de filtrar item pago.
-export function sanitizeHouseFurnitureIds(furnitureIds: string[]): string[] {
-  return furnitureIds.filter((id) => !SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id)).slice(0, HOUSE_FURNITURE_MAX_COUNT)
+// 11ª rodada: a coluna jsonb não tem constraint, e o chamador (`index.ts`) só confere
+// `Array.isArray` no CONTÊINER — um elemento individual `null`/objeto/string absurdamente longa
+// dentro do array passava intacto, violando o contrato público de `string[]`. Aceita `unknown[]`
+// e filtra também o tipo/tamanho de cada elemento, mesmo formato de `isValidHouseFurnitureIds`.
+export function sanitizeHouseFurnitureIds(furnitureIds: unknown[]): string[] {
+  return furnitureIds
+    .filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= HOUSE_FURNITURE_ID_MAX_LENGTH)
+    .filter((id) => !SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id))
+    .slice(0, HOUSE_FURNITURE_MAX_COUNT)
 }
 
 // lab-175 (achado do review automático do Copilot no PR #49, 7ª rodada): antes só filtrava

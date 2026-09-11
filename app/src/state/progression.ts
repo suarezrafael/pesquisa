@@ -604,7 +604,12 @@ export function setHouseVisible(progress: Progress, visible: boolean): Progress 
 //    `#índice`) em saves muito antigos nunca mais tocados — `isValidHousePlacements` (backend)
 //    rejeita a chave inteira nesse formato, e sem filtrar aqui um ÚNICO save assim faria o
 //    heartbeat INTEIRO devolver 400, impedindo até `houseFurnitureIds`/`houseVisible` sincronizar.
-const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]+#\d+$/
+// lab-175 (achado do review automático do Copilot no PR #49, 11ª rodada): mesmo teto de tamanho
+// aplicado ao espelho do servidor (`domain.ts`) — sem limite, um id/índice absurdamente longo
+// (nunca produzido pelo próprio jogo, só por um client modificado) passava por este filtro do
+// client mas era rejeitado pelo servidor de qualquer forma, então alinhar os dois evita mandar um
+// heartbeat que o servidor já sabe que vai recusar.
+const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]{1,60}#\d{1,6}$/
 
 export interface HouseSyncSnapshot {
   furnitureIds: string[]

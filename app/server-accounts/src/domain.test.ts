@@ -742,6 +742,12 @@ describe('isValidHousePlacements (lab-175)', () => {
     expect(isValidHousePlacements(big)).toBe(false)
   })
 
+  it('rejeita chave com id/índice absurdamente longo (achado do Copilot na 11ª rodada: nem o id nem o índice tinham teto de tamanho)', () => {
+    expect(isValidHousePlacements({ [`${'a'.repeat(61)}#0`]: { x: 0, z: 0, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ [`sofa#${'1'.repeat(7)}`]: { x: 0, z: 0, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ [`${'a'.repeat(60)}#999999`]: { x: 0, z: 0, rotY: 0 } })).toBe(true)
+  })
+
   it('rejeita algo que não é objeto', () => {
     expect(isValidHousePlacements('não é objeto')).toBe(false)
     expect(isValidHousePlacements(null)).toBe(false)
@@ -782,6 +788,11 @@ describe('sanitizeHouseFurnitureIds/sanitizeHousePlacements (lab-175, achado do 
   it('corta em 300 ids na LEITURA, não só na escrita (achado do Copilot na 9ª rodada: uma linha antiga sem esse teto materializava a resposta pública inteira)', () => {
     const result = sanitizeHouseFurnitureIds(Array.from({ length: 305 }, () => 'cama'))
     expect(result).toHaveLength(300)
+  })
+
+  it('descarta elemento não-string/vazio/absurdamente longo na LEITURA (achado do Copilot na 11ª rodada: um elemento corrompido dentro do array passava intacto)', () => {
+    const result = sanitizeHouseFurnitureIds(['cama', null, 42, '', 'a'.repeat(61), 'tapete'] as unknown[])
+    expect(result).toEqual(['cama', 'tapete'])
   })
 
   it('corta em 300 placements aceitos na LEITURA, não só na escrita (achado do Copilot na 9ª rodada)', () => {

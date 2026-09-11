@@ -414,6 +414,33 @@ instalados) nem pro guard de `index.ts` (caminho de dado corrompido em produçã
 simular sem uma linha real assim no banco) — mesmo padrão de confiança já usado nas rodadas 7/8
 pra hardening defensivo que espelha um contrato já testado.
 
+Décima primeira rodada do Copilot trouxe 3 achados reais corrigidos:
+
+- **`HOUSE_PLACEMENT_KEY_PATTERN` (`${id}#${índice}`) não tinha teto de tamanho em nenhuma das
+  duas partes** (`[a-z0-9_]+#\d+`, ambos ilimitados) — um client malicioso podia mandar até 300
+  chaves com id/índice absurdamente longos, inflando o jsonb gravado e a resposta de
+  `public-profile`, ao contrário do limite já existente pro campo irmão
+  (`HOUSE_FURNITURE_ID_MAX_LENGTH`). Corrigido limitando a parte do id ao mesmo teto (60) e o
+  índice a 6 dígitos (até 999999, bem acima do teto real de 300 cópias) — nos dois lados
+  (`domain.ts` no servidor, espelho em `progression.ts` no client, testado nos dois).
+- **`sanitizeHouseFurnitureIds` (leitura) só filtrava item pago e cortava em 300, mas nunca
+  validava TIPO/tamanho de cada elemento individual** — a coluna jsonb não tem constraint, e desde
+  a 10ª rodada o chamador só confere que o CONTÊINER é array (`Array.isArray`), não os elementos
+  dentro dele; um `null`/objeto/string absurdamente longa dentro do array passava intacto pro
+  contrato público que promete `string[]`. Corrigido aceitando `unknown[]` e filtrando tipo/
+  tamanho de cada elemento (mesmo formato de `isValidHouseFurnitureIds`) antes de remover item
+  pago (testado).
+- **Terceiro caminho de remoção de mobília ainda vazava material/textura** — a correção da 10ª
+  rodada cobriu `disposeAllHouseFurnitureNodes` e o laço de chave obsoleta no fim de
+  `refreshHouseFurnitureVisuals`, mas existe um TERCEIRO ponto (quantidade DIMINUINDO pro mesmo
+  item, lab-170) que também chama `.dispose()` sem descartar material/textura. Corrigido com o
+  mesmo `.dispose(false, true)`.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178) e `npx tsc --noEmit`/
+`npm run test` (server-accounts, 131/131) limpos, `npm run build` limpo. Sem verificação ao vivo
+nova — mesmo padrão de confiança das rodadas anteriores pra hardening defensivo (contratos já
+testados, sem caminho novo de UI).
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -454,18 +481,19 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
 ## Estado do repositório ao final
 
 - Branch: `lab-175-casa-visitavel`.
-- `npx tsc -b`/`npm run test` (app): limpo, 177/177 (12 novos: `visitFurnitureQuantity`,
-  `setHouseVisible`, `resolveHouseSyncSnapshot` ×8, incluindo o truncamento em 300 da 4ª rodada, a
+- `npx tsc -b`/`npm run test` (app): limpo, 178/178 (13 novos: `visitFurnitureQuantity`,
+  `setHouseVisible`, `resolveHouseSyncSnapshot` ×9, incluindo o truncamento em 300 da 4ª rodada, a
   validação de valor corrompido/fora do limite da 7ª, o guard de valor nulo/não-objeto + contêiner
-  nulo da 8ª, a checagem de chaves extras da 9ª, e o guard de `unlockedFurnitureIds` não-array da
-  10ª). `npm run build`: limpo, sem regressão de bundle.
-- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 129/129 (20 novos:
+  nulo da 8ª, a checagem de chaves extras da 9ª, o guard de `unlockedFurnitureIds` não-array da
+  10ª, e o teto de tamanho de chave da 11ª). `npm run build`: limpo, sem regressão de bundle.
+- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 131/131 (22 novos:
   `isValidHouseFurnitureIds`, `isValidHousePlacements` (incluindo os testes de limite de
-  coordenada da 4ª e 6ª rodada, com o limite real de `4,8` apertado na 6ª),
-  `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements` (incluindo o teste de re-sanitização de
-  formato/valor da 7ª rodada e o teto de 300 na leitura da 9ª), allowlist do evento). **Este é o
-  número final de verdade — se você encontrar um número diferente em qualquer outro trecho deste
-  documento ou na PR, este aqui é a fonte correta.**
+  coordenada da 4ª e 6ª rodada, com o limite real de `4,8` apertado na 6ª, e o teto de tamanho de
+  chave da 11ª), `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements` (incluindo o teste de
+  re-sanitização de formato/valor da 7ª rodada, o teto de 300 na leitura da 9ª, e a validação de
+  elemento individual da 11ª), allowlist do evento). **Este é o número final de verdade — se você
+  encontrar um número diferente em qualquer outro trecho deste documento ou na PR, este aqui é a
+  fonte correta.**
 - **Migração `0010` aplicada em produção** (`npm run migrate`, confirmado via query real).
 - **Verificado ao vivo, ponta a ponta, contra o banco de PRODUÇÃO real**: subiu um `wrangler dev`
   local (porta 8790, apontando pro `DATABASE_URL` real) + um segundo processo Vite (porta 5180,
