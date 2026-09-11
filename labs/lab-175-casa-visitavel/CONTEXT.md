@@ -481,6 +481,25 @@ Décima terceira rodada do Copilot trouxe 1 achado real corrigido (só documenta
 Nenhuma mudança de código nesta rodada — `npx tsc -b`/`npm run test`/`npm run build` continuam no
 mesmo estado (178/178 app, 131/131 server-accounts) da 12ª rodada.
 
+Décima quarta rodada do Copilot trouxe 1 achado real corrigido (ineficiência, não crash/vazamento):
+
+- **`buildHouseInteriorIfNeeded()` chamava `refreshHouseFurnitureVisuals()` no fim de construir a
+  sala (linha ~7490), mas o ÚNICO chamador (`enterHouseInterior`) sempre roda
+  `disposeAllHouseFurnitureNodes()` + `refreshHouseFurnitureVisuals()` de novo logo depois (pra
+  aplicar `visitingHouseSnapshot`, ainda não decidido no momento da construção da sala)** — na
+  PRIMEIRA entrada de sempre numa casa decorada (`houseInteriorBuilt` ainda `false`), isso
+  construía/registrava até 300 peças, descartava tudo imediatamente, e reconstruía de novo — só
+  ocorre uma vez por sessão (a sala só é construída uma vez, guardada por `houseInteriorBuilt`),
+  mas ainda um desperdício real de CPU/GPU sem propósito. Corrigido removendo a chamada redundante
+  — sem perda de comportamento, já que `enterHouseInterior` sempre popula a sala de qualquer forma.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado — mudança é só
+remover uma chamada redundante em `World3D.tsx`, sem teste unitário nesta função, mesmo padrão das
+rodadas 6/7/10/12) e `npx tsc --noEmit`/`npm run test` (server-accounts, 131/131, inalterado)
+limpos, `npm run build` limpo. Sem verificação ao vivo nova — mudança é remoção de trabalho
+redundante, comportamento final idêntico ao já testado ao vivo em rodadas anteriores (a sala
+continua populada corretamente na entrada, só numa passada em vez de duas).
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter

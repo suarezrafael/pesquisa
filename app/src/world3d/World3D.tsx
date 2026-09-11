@@ -7487,7 +7487,13 @@ export function World3D({
         // (lab-138: uma peça por CÓPIA possuída, não mais uma por tipo de item; ver comentário na
         // declaração dela), reservando um corredor livre na direção da porta (evita qualquer peça
         // bloqueando a passagem).
-        refreshHouseFurnitureVisuals()
+        // lab-175 (achado do review automático do Copilot no PR #49, 14ª rodada): chamar aqui era
+        // redundante e caro — o único chamador (`enterHouseInterior`) SEMPRE roda
+        // `disposeAllHouseFurnitureNodes()` + `refreshHouseFurnitureVisuals()` de novo logo depois
+        // (pra aplicar `visitingHouseSnapshot`, ainda não decidido neste ponto). Na primeira
+        // entrada de sempre numa casa decorada, isso construía/registrava até 300 peças aqui só
+        // pra descartar tudo imediatamente e reconstruir de novo — removido, sem perda de
+        // comportamento (a sala continua populada, só que numa passada só).
       }
 
       // `visitSnapshot` presente = entrando na casa de OUTRO jogador (lab-175); omitido = entrada
