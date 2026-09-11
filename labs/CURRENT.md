@@ -1,5 +1,15 @@
 # Laboratório atual
 
+**Em andamento: labs/lab-176-preview-lojinha-avatar/** — corrigir o preview 3D da lojinha
+(`AvatarShop.tsx`/`AvatarPreview3D.tsx`) que buga ao trocar cosméticos repetidamente. Origem:
+`docs/growth-retention-monetization-backlog.md` (PR #50, mergeado), seção 7, "Lab 176 - Lojinha
+com preview de avatar estável", prioridade P0 — primeiro item recomendado desse backlog novo,
+antes de features maiores. Achado já ao ler o código antes de codar: `applyHat`/`applyGlasses`/
+`applyHairShape`/`applyBonecoFeatures` (`studentFigure.ts`) descartam mesh com `.dispose()` sem
+argumentos (nem material/textura, nem remoção do `ShadowGenerator`) — mesma classe de vazamento já
+corrigida no lab-175 pra mobília de casa (`disposeFurnitureNode`). Ver
+`labs/lab-176-preview-lojinha-avatar/FEATURES.md`.
+
 Último concluído: labs/lab-175-casa-visitavel/ — casa visitável somente leitura
 (`docs/market-metrics-engagement-backlog.md`, "Lab 171 - Casa visitável somente leitura", o único
 item do backlog que ainda era código puro). Confirmado com o usuário via `AskUserQuestion`: cena
