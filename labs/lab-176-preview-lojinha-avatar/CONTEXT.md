@@ -154,6 +154,17 @@ limpos. Sem verificação ao vivo nova — mudança é idêntica em espírito e 
 ficado desatualizada já na 1ª rodada e não foi corrigida a tempo — `AvatarPreview3D.tsx` passou a
 mudar naquela mesma rodada). Nenhuma mudança de código nesta rodada.
 
+**Quarta rodada do Copilot: "Approval recommended"** — 1 achado real de duplicação corrigido:
+`removeRemotePlayer` (`World3D.tsx`) reimplementava, linha por linha, a MESMA lógica de
+`disposeStudentFigure` (`studentFigure.ts`, incluindo a proteção de textura compartilhada da 2ª
+rodada) em vez de reaproveitar o helper já exportado — risco real de os dois caminhos divergirem
+se um recurso compartilhado novo precisar do mesmo tratamento no futuro (exatamente o que já
+aconteceu entre a 1ª e a 2ª rodada, quando a proteção de textura foi adicionada num lugar e
+esquecida no outro). Corrigido trocando o bloco inteiro por
+`disposeStudentFigure(rp.figure, shadowGenerator)`. Verificação: `npx tsc -b`/`npm run test` (app,
+178/178, inalterado) e `npm run build` limpos. Sem verificação ao vivo nova — refactor puro
+(comportamento idêntico, só uma fonte de verdade a menos pra divergir).
+
 ## Pendências / dívidas conhecidas
 
 - Não foi possível testar ao vivo o swap de ÓCULOS (as duas opções disponíveis no perfil de teste

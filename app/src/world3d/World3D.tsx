@@ -71,6 +71,7 @@ import {
   avatarColorFromEmoji,
   bonecoFeaturesFromEmoji,
   buildStudentFigure,
+  disposeStudentFigure,
   type StudentFigure,
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
@@ -9018,24 +9019,13 @@ export function World3D({
         // corpo (torso, cabeça, mochila, membros, chapéu, óculos, cabelo — todos registrados em
         // `shadowGenerator` por `buildStudentFigure`/`applyHat`/etc.) da `renderList` do
         // `ShadowGenerator`. Cada jogador remoto que desconecta vazava o avatar INTEIRO dele pra
-        // sempre a partir desse ponto.
-        //
-        // Achado do review automático do Copilot no PR #51: `shirtMat`/`pantsMat`/`shoeMat`/
-        // `backpackMat` podem apontar pra uma `DynamicTexture` COMPARTILHADA entre TODOS os
-        // jogadores da cena (`getOrCreatePatternTexture`, cache por `Scene` — um item com `style`
-        // padronizado, ex. "listrado", reaproveita a MESMA textura pra qualquer jogador que o
-        // equipar). Descartar o root inteiro com `disposeMaterialAndTextures = true` sem cuidado
-        // destruiria essa textura mesmo que o jogador LOCAL ou outro jogador remoto ainda esteja
-        // usando o mesmo item — o cache continuaria devolvendo a instância já descartada pra
-        // sempre. Solta a referência (`albedoTexture = null`, sem descartar a textura em si, que
-        // não é propriedade exclusiva deste jogador) ANTES do dispose recursivo, pros únicos 4
-        // materiais que `applyClothingLook` pode ter apontado pra ela.
-        rp.figure.shirtMat.albedoTexture = null
-        rp.figure.pantsMat.albedoTexture = null
-        rp.figure.shoeMat.albedoTexture = null
-        rp.figure.backpackMat.albedoTexture = null
-        for (const mesh of rp.figure.root.getChildMeshes()) shadowGenerator.removeShadowCaster(mesh)
-        rp.figure.root.dispose(false, true)
+        // sempre a partir desse ponto. `disposeStudentFigure` (`studentFigure.ts`) já cobre isso
+        // (achado do review automático do Copilot no PR #51, 4ª rodada: este bloco duplicava a
+        // mesma lógica — incluindo a proteção de `shirtMat`/`pantsMat`/`shoeMat`/`backpackMat`
+        // contra destruir uma `DynamicTexture` COMPARTILHADA entre jogadores,
+        // `getOrCreatePatternTexture` — já implementada nesse helper único, reaproveitado aqui em
+        // vez de duplicada, pra não divergir se um recurso compartilhado novo aparecer no futuro).
+        disposeStudentFigure(rp.figure, shadowGenerator)
         remotePlayers.delete(id)
       }
 
