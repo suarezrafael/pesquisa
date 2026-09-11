@@ -81,6 +81,7 @@ export function MyHousePanel({
         <button
           type="button"
           className="secondary-button"
+          aria-pressed={progress.houseVisible}
           onClick={() => onToggleHouseVisible(!progress.houseVisible)}
         >
           {progress.houseVisible ? '🔓 Amigos podem visitar sua casa' : '🔒 Casa privada (amigos não visitam)'}

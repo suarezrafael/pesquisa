@@ -45,10 +45,23 @@ function sendHeartbeat(body: HeartbeatBody): void {
 // Como a promessa feita ao dono é "você controla quem visita AGORA", desligar a visibilidade
 // precisa valer imediatamente — chamado direto de `App.tsx` no clique do toggle, sem esperar o
 // tick periódico (que continua rodando normalmente pros outros campos).
-export function sendImmediateHouseVisibility(visible: boolean): void {
+//
+// Segunda rodada do Copilot no mesmo PR: enviar SÓ `houseVisible` aqui deixava
+// `houseFurnitureIds`/`housePlacements` presos no valor do ÚLTIMO tick periódico (`coalesce` no
+// servidor preserva o que não veio no corpo) — se o dono mudasse a decoração enquanto a casa
+// estava privada e reativasse a visibilidade antes do próximo tick, os amigos veriam a decoração
+// ANTIGA por até 60s. Corrigido enviando o snapshot completo (mesmo formato do tick periódico),
+// não só o booleano — recebe `progress` inteiro, não só o novo valor de `houseVisible`.
+export function sendImmediateHouseVisibility(visible: boolean, progress: Progress): void {
   const playerId = loadPlayerId()
   if (!playerId) return
-  sendHeartbeat({ playerId, houseVisible: visible })
+  const houseSnapshot = resolveHouseSyncSnapshot(progress)
+  sendHeartbeat({
+    playerId,
+    houseFurnitureIds: houseSnapshot.furnitureIds,
+    housePlacements: houseSnapshot.placements,
+    houseVisible: visible,
+  })
 }
 
 // lab-162, Grupo B do backlog social (labs/lab-158-.../FEATURES.md) — mantém `last_seen_at`

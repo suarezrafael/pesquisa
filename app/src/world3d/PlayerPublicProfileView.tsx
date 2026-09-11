@@ -8,11 +8,13 @@
 // painel só. `AvatarPreview3D` carregado preguiçoso (mesmo motivo de `AvatarShop.tsx`:
 // `@babylonjs/core` é pesado, e o painel de Amigos abre bem mais vezes do que alguém abre um
 // perfil dentro dele).
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { ACHIEVEMENT_CATALOG } from '../data/achievements'
-import { usePlayerPublicProfile } from '../state/usePlayerPublicProfile'
+import { usePlayerPublicProfile, type PlayerPublicProfile } from '../state/usePlayerPublicProfile'
 
 const AvatarPreview3D = lazy(() => import('./AvatarPreview3D').then((m) => ({ default: m.AvatarPreview3D })))
+
+const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 
 interface PlayerPublicProfileViewProps {
   playerId: string
@@ -26,6 +28,30 @@ interface PlayerPublicProfileViewProps {
 
 export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHouse }: PlayerPublicProfileViewProps) {
   const { profile, loading, error } = usePlayerPublicProfile(playerId)
+  // lab-175 (achado do review automático do Copilot no PR #49, segunda rodada): `profile.house`
+  // fica preso no instante em que este painel abriu — se o dono desligar a visibilidade ENQUANTO
+  // o visitante está com este perfil aberto, o botão continuava usando o snapshot velho e ainda
+  // deixava entrar. Revalida buscando o perfil DE NOVO no clique, em vez de confiar no cache.
+  const [revalidating, setRevalidating] = useState(false)
+  const [visitError, setVisitError] = useState<string | null>(null)
+
+  async function handleVisitClick() {
+    setVisitError(null)
+    setRevalidating(true)
+    try {
+      const res = await fetch(`${ACCOUNTS_API_URL}/players/${encodeURIComponent(playerId)}/public-profile`)
+      const body = (await res.json().catch(() => null)) as (PlayerPublicProfile & { error?: string }) | null
+      if (res.ok && body?.house) {
+        onVisitHouse(body.nickname, body.house)
+      } else {
+        setVisitError('🏠 A casa não está mais visitável agora.')
+      }
+    } catch {
+      setVisitError('Não foi possível confirmar a visita agora — tente de novo.')
+    } finally {
+      setRevalidating(false)
+    }
+  }
 
   return (
     <>
@@ -61,16 +87,13 @@ export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHou
               manteve a visibilidade ligada e já sincronizou mobília; senão, mensagem neutra (nunca
               "amigo desativou", que soaria como rejeição pessoal). */}
           {profile.house ? (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => onVisitHouse(profile.nickname, profile.house!)}
-            >
-              🏠 Visitar casa
+            <button type="button" className="secondary-button" onClick={handleVisitClick} disabled={revalidating}>
+              {revalidating ? 'Verificando…' : '🏠 Visitar casa'}
             </button>
           ) : (
             <p className="field-hint">🏠 Casa não visitável agora.</p>
           )}
+          {visitError && <p className="field-hint">{visitError}</p>}
 
           <h3>Conquistas</h3>
           <div className="quest-list">

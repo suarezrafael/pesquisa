@@ -140,7 +140,48 @@ Rodada com 5 achados reais (mais 1 avaliado e documentado, não corrigido nesta 
   fora do escopo deste laboratório de "casa visitável". Candidato a lab dedicado se a superfície de
   risco social crescer o bastante pra justificar.
 
+Segunda rodada do Copilot (mesmo PR, depois da primeira leva de correções) trouxe mais 6 achados:
+
+- **Toggle de visibilidade imediato (correção da rodada 1) enviava só `houseVisible`, deixando
+  `houseFurnitureIds`/`housePlacements` presos no valor do ÚLTIMO tick periódico** — se o dono
+  mudasse a decoração enquanto a casa estava privada e reativasse a visibilidade antes do próximo
+  tick (até 60s), os amigos veriam a decoração ANTIGA. `sendImmediateHouseVisibility` agora recebe
+  o `progress` inteiro e envia o snapshot completo (`resolveHouseSyncSnapshot`), não só o
+  booleano. Verificado ao vivo: heartbeat imediato confirmado carregando `houseFurnitureIds`
+  correto junto com `houseVisible`, refletido na hora na API.
+- **CRÍTICO: perfil público de um amigo era carregado uma vez só ao abrir a view e reaproveitado
+  no clique de "Visitar casa"** — se o dono desligasse a visibilidade ENQUANTO o visitante já
+  estava com o perfil aberto (mesmo com o heartbeat imediato da correção acima), o botão ainda
+  usava o snapshot velho e deixava entrar. `PlayerPublicProfileView.tsx` agora busca o perfil DE
+  NOVO no clique (`handleVisitClick`), só chama `onVisitHouse` se `house` ainda existir na resposta
+  fresca; senão mostra "🏠 A casa não está mais visitável agora." Verificado ao vivo reproduzindo
+  o cenário exato: perfil do amigo aberto, casa tornada privada por uma chamada direta à API
+  simulando o dono, clique em "Visitar casa" confirmado bloqueado com a mensagem certa — e
+  confirmado que a cena 3D nunca populou com a mobília do amigo (só a peça própria continuou lá).
+- **Corrigido (menor)**: botão de toggle sem `aria-pressed` (acessibilidade, leitor de tela não
+  anunciava o estado); comentário da migração `0010` dizia que o Worker "nunca interpreta" o
+  conteúdo, desatualizado depois da sanitização server-side da rodada 1; comentário em `types.ts`
+  dava a entender que a mobília só sincroniza quando `houseVisible` é `true` (na verdade sincroniza
+  todo tick, é só a LEITURA pública que depende disso); números de teste desatualizados em
+  `labs/CURRENT.md` (169/169→172/172 app, 120/120→123/123 server-accounts).
+- **Avaliado e documentado, NÃO corrigido**: corrida entre o heartbeat periódico (60s) e o
+  heartbeat imediato do toggle — se um heartbeat periódico com o `houseVisible` ANTIGO já estiver
+  em trânsito quando o toggle dispara o imediato, e chegar depois, o `UPDATE ... coalesce` sem
+  versionamento pode reverter o valor até o próximo tick. Mitigado (não eliminado) pela correção
+  acima: o heartbeat imediato agora carrega um snapshot completo e atual, então mesmo se
+  sobrescrito por um heartbeat antigo em trânsito, o efeito prático fica limitado a `houseVisible`
+  reverter por até mais um ciclo de 60s — sempre autocorrigido no próximo tick real, nunca
+  permanente. Resolver de verdade exigiria numeração/timestamp de requisição no heartbeat inteiro
+  (mudança maior, mesma categoria da pendência de autenticação acima) — fora do escopo proporcional
+  pra um único campo booleano.
+
 ## Pendências / dívidas conhecidas
+
+- **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
+  `houseVisible` por até mais um ciclo de 60s em uma janela bem estreita (heartbeat periódico já em
+  trânsito no exato momento do toggle); sempre autocorrigido, nunca permanente. Resolver de
+  verdade exige numeração/timestamp no heartbeat — mudança maior, mesma categoria da pendência de
+  autenticação abaixo.
 
 - **Autenticação/ownership real pro sistema de identidade de jogador anônimo** (busca, amizade,
   heartbeat, perfil público) — risco de baixo impacto hoje (ver achado do Copilot acima), mas

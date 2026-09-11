@@ -545,7 +545,10 @@ function GameApp() {
             toggleHouseVisible(visible)
             // lab-175 (achado do review automático do Copilot no PR #49) — não espera o próximo
             // tick do heartbeat (até 60s): desligar a visibilidade precisa valer imediatamente.
-            sendImmediateHouseVisibility(visible)
+            // Envia o `progress` (snapshot completo, não só o booleano) — segunda rodada do
+            // Copilot no mesmo PR: mandar só `houseVisible` deixava a mobília presa no valor do
+            // último tick periódico até o próximo rodar.
+            sendImmediateHouseVisibility(visible, progress)
           }}
           onClose={() => setShowMyHouse(false)}
         />
