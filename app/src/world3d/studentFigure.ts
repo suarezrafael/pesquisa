@@ -327,6 +327,59 @@ export function buildStudentFigure(
 
 // Peças 3D que dão a cada avatar do catálogo (src/data/avatars.ts) uma forma de verdade — não só
 // uma cor de camisa (pedido do usuário: "bonecos 3d pra trocar não só de avatar", lab-13).
+// lab-176 (bug real reportado pelo usuário: "preview quebra ao trocar boné/chapéu" na lojinha —
+// causa raiz era vazamento de recurso a cada troca, não corrupção visual pontual): `mesh.dispose()`
+// sozinho não libera o material (a menos que `disposeMaterialAndTextures` seja `true`) nem remove
+// a malha da `renderList` do `ShadowGenerator` — Babylon nunca faz isso sozinho ao descartar um nó.
+// `applyHat`/`applyGlasses`/`applyBonecoFeatures` criam um `PBRMaterial` NOVO a cada chamada
+// (compartilhado por todas as peças do grupo); sem descartar o material antigo, cada troca de
+// cosmético deixava um material extra e uma referência de shadow caster morta acumulando pra
+// sempre na cena — no avatar AO VIVO do jogador e de jogadores remotos (`World3D.tsx`,
+// `__setPlayerHat`/`__setPlayerGlasses`/`applyRemoteAppearance`, que trocam só a peça sem
+// reconstruir a figura — cada troca real durante uma sessão soma o vazamento), e (achado do
+// review automático do Copilot no PR #51: o comentário original desta função errava ao dizer que
+// o preview pequeno da lojinha "mascarava o efeito" — isso só vale pro MATERIAL, porque
+// `AvatarPreview3D.tsx` reconstrói a figura inteira a cada troca com `disposeStudentFigure`
+// abaixo; o SHADOW CASTER nunca foi coberto por isso, já que `dispose()` nunca mexe no
+// `ShadowGenerator` independente dos argumentos — ver `disposeStudentFigure`) também no preview.
+// Mesma classe de bug já corrigida pra mobília de casa no lab-175 (`disposeFurnitureNode`,
+// `World3D.tsx`). `disposeMaterial=false` é usado só por `applyHairShape`, que reaproveita
+// `figure.hairMat` entre chamadas (persistente, nunca recriado) em vez de um material novo —
+// descartar aqui destruiria o material que a PRÓXIMA chamada ainda vai usar.
+function disposeMeshGroup(meshes: Mesh[], shadowGenerator: ShadowGenerator, disposeMaterial: boolean): void {
+  const sharedMaterial = disposeMaterial ? meshes[0]?.material : null
+  for (const mesh of meshes) {
+    shadowGenerator.removeShadowCaster(mesh)
+    mesh.dispose()
+  }
+  sharedMaterial?.dispose()
+}
+
+// lab-176 (achado do review automático do Copilot no PR #51): `AvatarPreview3D.tsx` reconstrói a
+// figura INTEIRA a cada troca de cosmético (`figureRef.current?.root.dispose(false, true)`) — isso
+// já libera material/textura recursivamente, mas NUNCA removia as malhas do corpo da `renderList`
+// do `ShadowGenerator` do preview (Babylon nunca faz isso sozinho, `dispose()` não sabe nada sobre
+// shadow generators). Como esse rebuild roda em TODA troca (bem mais frequente que qualquer troca
+// no avatar ao vivo), a `renderList` do preview acumulava referências mortas rapidamente. Função só
+// pra descarte de figura INTEIRA (diferente de `disposeMeshGroup`, que descarta só um GRUPO de
+// peças dentro de uma figura que continua viva) — usada por `AvatarPreview3D.tsx`.
+export function disposeStudentFigure(figure: StudentFigure, shadowGenerator: ShadowGenerator): void {
+  // Achado do review automático do Copilot no PR #51 (2ª rodada): mesmo risco já corrigido em
+  // `removeRemotePlayer` (`World3D.tsx`) — `shirtMat`/`pantsMat`/`shoeMat`/`backpackMat` podem
+  // apontar pra uma `DynamicTexture` cacheada por `Scene` (`getOrCreatePatternTexture`). O cache
+  // guarda a MESMA instância pra qualquer figura futura que use o mesmo `style` NESTA cena — como
+  // o preview reconstrói a figura a cada troca (na MESMA cena, reaproveitando o cache entre
+  // trocas), descartar a textura à força aqui quebraria a PRÓXIMA vez que o mesmo estilo for
+  // pedido nesta sessão de preview (o cache continuaria devolvendo a instância já descartada).
+  // Solta a referência antes do dispose recursivo, sem descartar a textura em si.
+  figure.shirtMat.albedoTexture = null
+  figure.pantsMat.albedoTexture = null
+  figure.shoeMat.albedoTexture = null
+  figure.backpackMat.albedoTexture = null
+  for (const mesh of figure.root.getChildMeshes()) shadowGenerator.removeShadowCaster(mesh)
+  figure.root.dispose(false, true)
+}
+
 // Descarta as peças antigas (se houver — troca de avatar em cena já com a cena montada) e monta
 // as novas a partir de `features`, tudo parentado em `figure.root` (mesmo padrão da mochila/
 // cabelo: offset absoluto, não aninhado na cabeça) reaproveitando primitivas simples, sem asset
@@ -337,14 +390,23 @@ export function applyBonecoFeatures(
   scene: Scene,
   shadowGenerator: ShadowGenerator,
 ): void {
-  for (const mesh of figure.accessories) mesh.dispose()
+  disposeMeshGroup(figure.accessories, shadowGenerator, true)
   figure.accessories = []
 
-  const accentMat = new PBRMaterial('bonecoAccentMat', scene)
-  accentMat.albedoColor = new Color3(...features.accentColorRgb)
-  accentMat.roughness = 0.75
+  // lab-176 (achado do review automático do Copilot no PR #51): uma criatura com
+  // `earStyle: 'none'`/`tailStyle: 'none'`/`special: 'none'` não passa por `add()` nenhuma vez —
+  // criar o material ANTES de saber se alguma peça vai realmente usá-lo deixava um
+  // `bonecoAccentMat` órfão (nunca atribuído a nenhuma malha, então nunca capturado por
+  // `disposeMeshGroup` na PRÓXIMA chamada) a cada troca pra uma criatura sem acessórios. Criado
+  // sob demanda, só na primeira peça de verdade.
+  let accentMat: PBRMaterial | null = null
 
   function add(mesh: Mesh) {
+    if (!accentMat) {
+      accentMat = new PBRMaterial('bonecoAccentMat', scene)
+      accentMat.albedoColor = new Color3(...features.accentColorRgb)
+      accentMat.roughness = 0.75
+    }
     mesh.material = accentMat
     mesh.parent = figure.root
     shadowGenerator.addShadowCaster(mesh)
@@ -479,7 +541,7 @@ export function applyHat(
   scene: Scene,
   shadowGenerator: ShadowGenerator,
 ): void {
-  for (const mesh of figure.hatMeshes) mesh.dispose()
+  disposeMeshGroup(figure.hatMeshes, shadowGenerator, true)
   figure.hatMeshes = []
   if (!hat) return
 
@@ -587,7 +649,7 @@ export function applyGlasses(
   scene: Scene,
   shadowGenerator: ShadowGenerator,
 ): void {
-  for (const mesh of figure.glassesMeshes) mesh.dispose()
+  disposeMeshGroup(figure.glassesMeshes, shadowGenerator, true)
   figure.glassesMeshes = []
   if (!glasses) return
 
@@ -663,7 +725,7 @@ export function applyGlasses(
 // `figure.hairMat` (não um material novo por chamada) já que cor de cabelo não é um eixo de
 // customização pedido — só o formato muda.
 export function applyHairShape(figure: StudentFigure, shape: HairShape, scene: Scene, shadowGenerator: ShadowGenerator): void {
-  for (const mesh of figure.hairMeshes) mesh.dispose()
+  disposeMeshGroup(figure.hairMeshes, shadowGenerator, false)
   figure.hairMeshes = []
 
   function add(mesh: Mesh) {

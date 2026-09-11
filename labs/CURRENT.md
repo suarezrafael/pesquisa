@@ -1,6 +1,36 @@
 # Laboratório atual
 
-Último concluído: labs/lab-175-casa-visitavel/ — casa visitável somente leitura
+Último concluído: labs/lab-176-preview-lojinha-avatar/ — lojinha com preview de avatar estável.
+Origem: `docs/growth-retention-monetization-backlog.md` (PR #50, mergeado), seção 7, "Lab 176",
+prioridade P0 — primeiro item recomendado desse backlog novo, antes de features maiores. Causa
+raiz achada por leitura do código antes de codar: `applyHat`/`applyGlasses`/`applyHairShape`/
+`applyBonecoFeatures` (`studentFigure.ts`) descartavam mesh com `.dispose()` sem argumentos (nem
+material/textura, nem remoção do `ShadowGenerator`) — mesma classe de vazamento já corrigida no
+lab-175 pra mobília de casa (`disposeFurnitureNode`). O preview PEQUENO da lojinha
+(`AvatarPreview3D.tsx`) mascarava o bug (reconstrói a figura inteira a cada troca); o vazamento de
+verdade acontecia no avatar AO VIVO do jogador e de jogadores remotos (`World3D.tsx`,
+`__setPlayerHat`/`__setPlayerGlasses`/`applyRemoteAppearance`), que trocam só a peça sem
+reconstruir tudo. Nova função `disposeMeshGroup` (`studentFigure.ts`) reaproveitada nos 4 pontos.
+**Achado adicional investigando o mesmo bug**: `removeRemotePlayer` (`World3D.tsx`) descartava a
+figura INTEIRA de um jogador remoto desconectado sem limpar material/shadow caster de NENHUMA
+malha do corpo — corrigido junto. `npx tsc -b`/testes limpos (app 178/178, inalterado — sem lógica
+de domínio isolável nesta correção). `npm run build` sem regressão de bundle. **Verificado ao vivo
+via Chrome real**: 15 ciclos completos de troca de boné (30 cliques) confirmaram
+`window.__scene.materials.length`/render list do `ShadowGenerator` permanecendo EXATAMENTE
+estáveis (604 materiais, 1761 na render list) do início ao fim — antes da correção, cada ciclo
+deixaria pelo menos +1 material órfão e +2 referências mortas. Nenhum caso concreto de "duplica"/
+"herda mesh errada" foi reproduzido além do vazamento em si. **PR #51 teve 5 rodadas de review
+automático do Copilot** (3 com achados reais corrigidos — textura `DynamicTexture` compartilhada
+entre jogadores destruída à força em `removeRemotePlayer`/`disposeStudentFigure`
+(`getOrCreatePatternTexture`, cache por `Scene`), o preview da lojinha nunca removendo suas
+próprias malhas do `ShadowGenerator`, e um `PBRMaterial` órfão pra criaturas sem acessório algum
+via `FALLBACK_BONECO_FEATURES`; 1 achado avaliado e corretamente descartado, com justificativa
+verificada na fonte do Babylon.js instalado; 2 rodadas limpas em sequência ao final —
+"Approval recommended"). **Confirma deploy em produção**: PR #51 mergeado (commit `f44974b`),
+CI/CD verde nos 3 workers, app respondendo 200 no Vercel (lab client-side, sem mudança de
+backend). Ver `labs/lab-176-preview-lojinha-avatar/CONTEXT.md`.
+
+Antes desse: labs/lab-175-casa-visitavel/ — casa visitável somente leitura
 (`docs/market-metrics-engagement-backlog.md`, "Lab 171 - Casa visitável somente leitura", o único
 item do backlog que ainda era código puro). Confirmado com o usuário via `AskUserQuestion`: cena
 3D completa (reentrar na MESMA sala já usada pra própria casa, populada com a mobília do amigo),
