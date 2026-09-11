@@ -591,6 +591,41 @@ export function setHouseVisible(progress: Progress, visible: boolean): Progress 
   return { ...progress, houseVisible: visible }
 }
 
+// lab-175 (achados do review automático do Copilot no PR #49): o que `useHeartbeat.ts` ENVIA pro
+// backend passa por aqui primeiro, nunca `progress.unlockedFurnitureIds`/`housePlacements` crus.
+// Dois problemas reais corrigidos:
+// 1. Item `subscriptionOnly` nunca deveria sair do aparelho do dono — filtrar só no client que
+//    RENDERIZA a visita (`visitFurnitureQuantity`) deixava a resposta de
+//    `GET /players/:id/public-profile` exposta a quem inspecionasse a rede, revelando o status de
+//    assinatura do anfitrião mesmo sem ver a casa de verdade (o backend agora filtra de novo
+//    também, `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements` em `domain.ts` — defesa em
+//    profundidade, não só um dos dois lados).
+// 2. `housePlacements` pode conter chaves de ANTES do lab-136 (posição salva por id puro, sem
+//    `#índice`) em saves muito antigos nunca mais tocados — `isValidHousePlacements` (backend)
+//    rejeita a chave inteira nesse formato, e sem filtrar aqui um ÚNICO save assim faria o
+//    heartbeat INTEIRO devolver 400, impedindo até `houseFurnitureIds`/`houseVisible` sincronizar.
+const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]+#\d+$/
+
+export interface HouseSyncSnapshot {
+  furnitureIds: string[]
+  placements: Record<string, { x: number; z: number; rotY: number }>
+}
+
+export function resolveHouseSyncSnapshot(progress: Progress): HouseSyncSnapshot {
+  const furnitureIds = progress.unlockedFurnitureIds.filter((id) => {
+    const item = FURNITURE_CATALOG.find((c) => c.id === id)
+    return item !== undefined && !item.subscriptionOnly
+  })
+  const placements: Record<string, { x: number; z: number; rotY: number }> = {}
+  for (const [key, value] of Object.entries(progress.housePlacements)) {
+    if (!HOUSE_PLACEMENT_KEY_PATTERN.test(key)) continue
+    const item = FURNITURE_CATALOG.find((c) => c.id === key.split('#')[0])
+    if (!item || item.subscriptionOnly) continue
+    placements[key] = value
+  }
+  return { furnitureIds, placements }
+}
+
 // Posicionamento manual de mobília dentro de casa (lab-136, pedido do usuário: "tem que ter
 // opção... de escolher em que posição da casa deve ficar a peça... o ângulo e posição onde fica o
 // objeto"). Pura escrita de coordenadas já escolhidas pelo jogador na cena 3D — a geometria/

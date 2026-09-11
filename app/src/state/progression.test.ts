@@ -25,6 +25,7 @@ import {
   furnitureQuantity,
   visitFurnitureQuantity,
   setHouseVisible,
+  resolveHouseSyncSnapshot,
   getLevel,
   isQuestUnlocked,
   petAgeYears,
@@ -828,6 +829,40 @@ describe('setHouseVisible (lab-175, casa visitável)', () => {
   it('liga e desliga a visibilidade da casa', () => {
     expect(setHouseVisible(emptyProgress, false).houseVisible).toBe(false)
     expect(setHouseVisible({ ...emptyProgress, houseVisible: false }, true).houseVisible).toBe(true)
+  })
+})
+
+describe('resolveHouseSyncSnapshot (lab-175, achados do review automático do Copilot no PR #49)', () => {
+  it('remove item subscriptionOnly da lista e dos placements, preservando o resto', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['cama', 'cama_nave', 'tapete'],
+      housePlacements: { 'cama#0': { x: 1, z: 2, rotY: 0 }, 'cama_nave#0': { x: 3, z: 4, rotY: 1 } },
+    }
+    const snapshot = resolveHouseSyncSnapshot(progress)
+    expect(snapshot.furnitureIds).toEqual(['cama', 'tapete'])
+    expect(snapshot.placements).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
+  })
+
+  it('descarta uma chave de housePlacements sem o sufixo "#índice" (save legado de antes do lab-136)', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['cama'],
+      housePlacements: { cama: { x: 1, z: 2, rotY: 0 } },
+    }
+    const snapshot = resolveHouseSyncSnapshot(progress)
+    expect(snapshot.placements).toEqual({})
+  })
+
+  it('não afeta nada quando não há item subscriptionOnly nem chave legada', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['cama', 'tapete'],
+      housePlacements: { 'cama#0': { x: 1, z: 2, rotY: 0 } },
+    }
+    const snapshot = resolveHouseSyncSnapshot(progress)
+    expect(snapshot.furnitureIds).toEqual(['cama', 'tapete'])
+    expect(snapshot.placements).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
   })
 
   // lab-136: posicionamento manual de mobília ("Mover" no MyHousePanel) — testes de regressão pro

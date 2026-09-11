@@ -31,6 +31,8 @@ import {
   isValidEquippedLook,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
+  sanitizeHouseFurnitureIds,
+  sanitizeHousePlacements,
   isValidNpsScore,
   isValidProductEventType,
   isValidProgressBackupPayload,
@@ -889,9 +891,18 @@ async function handlePlayerPublicProfile(request: Request, env: Env, playerId: s
   // dono manteve a visibilidade ligada (`house_visible`, controlável em `MyHousePanel.tsx`) E já
   // sincronizou pelo menos um heartbeat com mobília; qualquer um dos dois faltando devolve `null`
   // (o client trata como "casa não visitável agora", nunca como erro).
+  // lab-175 (achado do review automático do Copilot no PR #49): sanitiza de novo aqui, no
+  // SERVIDOR, antes de responder — mesmo que o client já filtre `subscriptionOnly` antes de
+  // enviar (`useHeartbeat.ts`), um client modificado ou um heartbeat salvo antes desta correção
+  // não deveria conseguir vazar o status de assinatura do anfitrião pro visitante.
   const house =
     row.house_visible && row.house_furniture_ids !== null
-      ? { furnitureIds: row.house_furniture_ids, placements: row.house_placements ?? {} }
+      ? {
+          furnitureIds: sanitizeHouseFurnitureIds(row.house_furniture_ids as string[]),
+          placements: sanitizeHousePlacements(
+            (row.house_placements ?? {}) as Record<string, { x: number; z: number; rotY: number }>,
+          ),
+        }
       : null
   return Response.json({
     nickname: row.nickname,

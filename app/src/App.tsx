@@ -18,7 +18,7 @@ import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
-import { useHeartbeat } from './state/useHeartbeat'
+import { useHeartbeat, sendImmediateHouseVisibility } from './state/useHeartbeat'
 import { trackFirstLearningChallenge, trackHouseVisited } from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
@@ -541,7 +541,12 @@ function GameApp() {
             setPendingPlacementId(id)
           }}
           onRemoveFurniture={removeFurniture}
-          onToggleHouseVisible={toggleHouseVisible}
+          onToggleHouseVisible={(visible) => {
+            toggleHouseVisible(visible)
+            // lab-175 (achado do review automático do Copilot no PR #49) — não espera o próximo
+            // tick do heartbeat (até 60s): desligar a visibilidade precisa valer imediatamente.
+            sendImmediateHouseVisibility(visible)
+          }}
           onClose={() => setShowMyHouse(false)}
         />
       )}

@@ -86,13 +86,65 @@ cartão de prévia 2D).
   custo de performance desprezível (reconstruir procedural, poucas dezenas de peças no máximo, só
   ao entrar/visitar, nunca por quadro).
 
-## Achados do review automático do Copilot (PR aberto — preencher após a rodada)
+## Achados do review automático do Copilot (PR #49, corrigidos antes do merge)
 
-(placeholder — atualizado após a revisão)
+Rodada com 5 achados reais (mais 1 avaliado e documentado, não corrigido nesta PR):
+
+- **Mobília `subscriptionOnly` vazava pro visitante via `GET /players/:id/public-profile`** — só
+  era filtrada no CLIENT que renderiza a visita (`visitFurnitureQuantity`); a resposta HTTP crua
+  ainda continha `cama_nave`/etc., inspecionável via rede. Corrigido em DOIS lugares: (1)
+  `resolveHouseSyncSnapshot` novo (`progression.ts`, testado) filtra ANTES de enviar no heartbeat
+  — item pago nunca sai do aparelho do dono; (2) `sanitizeHouseFurnitureIds`/
+  `sanitizeHousePlacements` novos (`domain.ts`, testados) filtram de novo no SERVIDOR antes de
+  responder — defesa em profundidade, não depende só do client se comportar (um client modificado
+  ou um heartbeat salvo antes desta correção não vaza o status de assinatura do anfitrião).
+- **`housePlacements` com chave legada (sem `#índice`, formato de antes do lab-136) fazia o
+  heartbeat INTEIRO ser recusado (400)** — um único save muito antigo nunca mais tocado impedia
+  até `houseFurnitureIds`/`houseVisible` sincronizarem. `resolveHouseSyncSnapshot` descarta
+  qualquer chave fora do formato esperado antes de enviar, em vez de deixar o objeto inteiro falhar
+  a validação.
+- **Toggle de visibilidade só valia no próximo tick do heartbeat (até 60s depois), ou nunca, se o
+  jogador fechasse o jogo antes** — contradizia a promessa "você controla quem visita". Nova função
+  `sendImmediateHouseVisibility` (`useHeartbeat.ts`) dispara um heartbeat imediato só com
+  `houseVisible` no clique do toggle, sem esperar o tick periódico. Verificado ao vivo: `house:
+  null` confirmado na resposta da API IMEDIATAMENTE após o clique, sem esperar 60s.
+- **Visitar uma casa enquanto já dentro de OUTRA (própria ou visita anterior) corrompia a posição
+  de retorno** — `enterHouseInterior` sempre recapturava `savedOutsideCenter =
+  currentWorldCenter`, mas se já `insideHouseInterior`, `currentWorldCenter` já era o centro da
+  SALA (não o mundo de fora); sair da casa NOVA devolvia o jogador pra dentro de uma sala em vez do
+  planeta principal. Corrigido só capturando `savedOutsideCenter`/`savedOutsideGroundFn` quando
+  ainda NÃO está dentro de nenhuma casa. Mesmo bloco também passou a chamar `getUpFromBed()`/
+  `cancelFurniturePlacement()` antes de descartar os nós antigos — evita a figura ou uma peça
+  fantasma ficarem presas a um nó já destruído. Verificado ao vivo: entrou na própria casa, visitou
+  um amigo SEM sair antes (mobília trocou corretamente pra do amigo), saiu pela porta e confirmou
+  a posição de volta batendo com o planeta principal de verdade (magnitude ~12,8, igual ao raio do
+  planeta), não com o centro da sala (que teria magnitude ~211).
+- **Pedido de visita podia ser descartado silenciosamente se clicado antes da cena 3D terminar de
+  carregar** — `sceneRef.current` existe bem antes de `__visitFriendHouse` ser atribuído (só no
+  fim do `setup()` assíncrono); o painel de Amigos já é alcançável nesse meio-tempo. Corrigido: o
+  `useEffect` que consome `visitHouseRequest` agora tenta de novo a cada 200ms por até ~10s antes
+  de desistir, em vez de checar uma vez só e descartar o pedido.
+- **Avaliado e documentado, NÃO corrigido nesta PR: `POST /players/heartbeat` não verifica que
+  quem chama controla de fato o `playerId` enviado** — qualquer um que descubra o UUID (opaco, não
+  é credencial) pode sobrescrever `houseFurnitureIds`/`housePlacements`/`houseVisible` de outro
+  jogador. Este é o MESMO modelo de confiança já usado por `equippedLook`/`badges` desde o
+  lab-162/163 e por `POST /players/friend-request` desde o lab-160 (nenhum dos dois verifica
+  ownership hoje) — decisão de arquitetura já tomada e aceita pra todo o sistema de identidade de
+  jogador anônimo, não uma regressão introduzida por este lab. O blast radius já é pequeno por
+  design: `visitFurnitureQuantity`/`FURNITURE_CATALOG.forEach` só constroem mobília de ids REAIS
+  do catálogo fechado (confirmado ao vivo: ids inventados como `"sofa"` são silenciosamente
+  ignorados, nunca geram erro nem mobília arbitrária) — o pior caso é um griefer mostrar uma
+  combinação ERRADA de móveis aprovados na casa de um amigo, sempre auto-corrigido no próximo
+  heartbeat real do dono (60s). Corrigir de verdade exigiria introduzir autenticação real pra TODO
+  o sistema de identidade de jogador anônimo (busca, amizade, perfil público) — iniciativa maior,
+  fora do escopo deste laboratório de "casa visitável". Candidato a lab dedicado se a superfície de
+  risco social crescer o bastante pra justificar.
 
 ## Pendências / dívidas conhecidas
 
-Nenhuma nova.
+- **Autenticação/ownership real pro sistema de identidade de jogador anônimo** (busca, amizade,
+  heartbeat, perfil público) — risco de baixo impacto hoje (ver achado do Copilot acima), mas
+  cresce conforme mais dados por jogador viram sincronizados. Candidato a lab dedicado futuro.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
@@ -111,10 +163,12 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
 ## Estado do repositório ao final
 
 - Branch: `lab-175-casa-visitavel`.
-- `npx tsc -b`/`npm run test` (app): limpo, 169/169 (4 novos: `visitFurnitureQuantity`,
-  `setHouseVisible`). `npm run build`: limpo, sem regressão de bundle.
-- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 120/120 (11 novos:
-  `isValidHouseFurnitureIds`, `isValidHousePlacements`, allowlist do evento).
+- `npx tsc -b`/`npm run test` (app): limpo, 172/172 (7 novos: `visitFurnitureQuantity`,
+  `setHouseVisible`, `resolveHouseSyncSnapshot` ×3). `npm run build`: limpo, sem regressão de
+  bundle.
+- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 123/123 (14 novos:
+  `isValidHouseFurnitureIds`, `isValidHousePlacements`, `sanitizeHouseFurnitureIds`/
+  `sanitizeHousePlacements`, allowlist do evento).
 - **Migração `0010` aplicada em produção** (`npm run migrate`, confirmado via query real).
 - **Verificado ao vivo, ponta a ponta, contra o banco de PRODUÇÃO real**: subiu um `wrangler dev`
   local (porta 8790, apontando pro `DATABASE_URL` real) + um segundo processo Vite (porta 5180,
@@ -144,3 +198,15 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
   precisou limpar um número grande de processos `wrangler dev`/`vite` órfãos de dev servers
   anteriores desta sessão que ainda ocupavam portas (8788), atrapalhando a primeira tentativa de
   subir um servidor de teste limpo.
+- **Reverificado ao vivo depois dos achados do Copilot** (novo `wrangler dev`/Vite, novos
+  jogadores de teste, dados removidos ao final): `GET /players/:id/public-profile` confirmado
+  filtrando `cama_nave` mesmo com um heartbeat BRUTO forçando o item de propósito (bypass direto
+  da API, simulando um client modificado) — prova de que a sanitização server-side funciona
+  independente do client; clique no toggle de visibilidade confirmado disparando um heartbeat
+  IMEDIATO (`window.fetch` monkey-patch capturou `{playerId, houseVisible:false}` no exato clique)
+  e `house: null` confirmado na API sem esperar o tick de 60s; entrou na própria casa, visitou um
+  amigo SEM sair antes (cenário exato do achado), confirmou a mobília trocando corretamente pra do
+  amigo, saiu pela porta e confirmou a posição final batendo com o planeta principal de verdade
+  (magnitude do vetor posição ~12,8, igual ao raio real do planeta) — não com o centro da sala
+  (que teria ~211), provando que `savedOutsideCenter` não foi mais corrompido pela visita
+  encadeada.

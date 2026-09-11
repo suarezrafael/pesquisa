@@ -541,3 +541,37 @@ export function isValidHousePlacements(
   if (keys.length > HOUSE_PLACEMENTS_MAX_KEYS) return false
   return keys.every((key) => HOUSE_PLACEMENT_KEY_PATTERN.test(key) && isValidHousePlacementValue(record[key]))
 }
+
+// lab-175 (achado do review automático do Copilot no PR #49): o client já filtra item
+// `subscriptionOnly` antes de ENVIAR (`useHeartbeat.ts`, `resolveHouseSyncSnapshot`), mas
+// `GET /players/:id/public-profile` devolvia `house_furniture_ids`/`house_placements` crus —
+// um client modificado (ou um heartbeat antigo já salvo antes desta correção) podia deixar um id
+// pago vazar pro visitante, revelando o status de assinatura do anfitrião. Filtra de novo aqui,
+// no SERVIDOR, antes de responder — defesa em profundidade, não depende só do client se comportar.
+// Lista pequena e duplicada de propósito (mesmo espírito de `EQUIPPED_LOOK_KEYS`): o catálogo de
+// verdade mora em `app/src/data/furniture.ts` (client), que este Worker nunca importa; atualizar
+// os dois lados junto se um item `subscriptionOnly` novo for adicionado ao catálogo.
+const SUBSCRIPTION_ONLY_FURNITURE_IDS = new Set([
+  'cama_nave',
+  'luminaria_planeta',
+  'tapete_estrelas',
+  'grama_florida',
+  'banco_madeira',
+  'borboletas_animadas',
+])
+
+export function sanitizeHouseFurnitureIds(furnitureIds: string[]): string[] {
+  return furnitureIds.filter((id) => !SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id))
+}
+
+export function sanitizeHousePlacements(
+  placements: Record<string, { x: number; z: number; rotY: number }>,
+): Record<string, { x: number; z: number; rotY: number }> {
+  const result: Record<string, { x: number; z: number; rotY: number }> = {}
+  for (const [key, value] of Object.entries(placements)) {
+    const id = key.split('#')[0]
+    if (SUBSCRIPTION_ONLY_FURNITURE_IDS.has(id)) continue
+    result[key] = value
+  }
+  return result
+}

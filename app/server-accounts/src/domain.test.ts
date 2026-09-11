@@ -22,6 +22,8 @@ import {
   isValidBadgeList,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
+  sanitizeHouseFurnitureIds,
+  sanitizeHousePlacements,
   isValidEquippedLook,
   isValidNpsScore,
   isValidProductEventType,
@@ -729,5 +731,27 @@ describe('isValidHousePlacements (lab-175)', () => {
     expect(isValidHousePlacements('não é objeto')).toBe(false)
     expect(isValidHousePlacements(null)).toBe(false)
     expect(isValidHousePlacements([])).toBe(false)
+  })
+})
+
+describe('sanitizeHouseFurnitureIds/sanitizeHousePlacements (lab-175, achado do Copilot no PR #49)', () => {
+  it('remove ids de item subscriptionOnly, preservando os demais (com repetição)', () => {
+    expect(sanitizeHouseFurnitureIds(['cama', 'cama_nave', 'cama', 'tapete'])).toEqual([
+      'cama',
+      'cama',
+      'tapete',
+    ])
+  })
+
+  it('não remove nada quando não há item subscriptionOnly', () => {
+    expect(sanitizeHouseFurnitureIds(['cama', 'tapete'])).toEqual(['cama', 'tapete'])
+  })
+
+  it('remove placements cuja chave referencia um item subscriptionOnly', () => {
+    const result = sanitizeHousePlacements({
+      'cama#0': { x: 1, z: 2, rotY: 0 },
+      'cama_nave#0': { x: 3, z: 4, rotY: 1 },
+    })
+    expect(result).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
   })
 })

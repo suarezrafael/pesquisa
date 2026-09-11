@@ -2189,14 +2189,32 @@ export function World3D({
 
   // lab-175 — mesma ponte das duas acima: `App.tsx` muda `visitHouseRequest` quando o jogador
   // clica "Visitar casa" no `FriendsPanel`, fora deste componente.
+  //
+  // lab-175 (achado do review automático do Copilot no PR #49): `sceneRef.current` já existe bem
+  // antes de `__visitFriendHouse` ser atribuído (só acontece no FIM do `setup()` assíncrono, depois
+  // de Havok/assets carregarem) — o painel de Amigos já é alcançável nesse meio-tempo (o `Suspense`
+  // em `App.tsx` só cobre o carregamento do MÓDULO `World3D`, não da cena 3D em si). Clicar
+  // "Visitar casa" logo nos primeiros instantes do jogo, antes da ponte existir, descartava o
+  // pedido silenciosamente (`?.()` virava no-op e `onVisitHouseHandled()` limpava mesmo assim).
+  // Tenta de novo por até ~10s (bem mais que o tempo normal de carregamento) antes de desistir.
   useEffect(() => {
     if (!visitHouseRequest) return
-    ;(sceneRef.current as any)?.__visitFriendHouse?.(
-      visitHouseRequest.nickname,
-      visitHouseRequest.furnitureIds,
-      visitHouseRequest.placements,
-    )
-    onVisitHouseHandled()
+    const request = visitHouseRequest
+    let attempts = 0
+    const MAX_ATTEMPTS = 50
+    const interval = setInterval(() => {
+      attempts += 1
+      const bridge = (sceneRef.current as any)?.__visitFriendHouse
+      if (typeof bridge === 'function') {
+        bridge(request.nickname, request.furnitureIds, request.placements)
+        clearInterval(interval)
+        onVisitHouseHandled()
+      } else if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(interval)
+        onVisitHouseHandled()
+      }
+    }, 200)
+    return () => clearInterval(interval)
   }, [visitHouseRequest, onVisitHouseHandled])
 
   useEffect(() => {
@@ -7455,10 +7473,25 @@ export function World3D({
       }) {
         buildHouseInteriorIfNeeded()
         if (!avatarMesh || !avatarBody) return
+        // lab-175 (achados do review automático do Copilot no PR #49): dois problemas reais no
+        // caso de pular direto de UMA casa (própria ou visita anterior) pra OUTRA sem sair antes
+        // (ex.: clicar "Visitar casa" no painel de Amigos enquanto já está dentro de casa) —
+        // 1. `savedOutsideCenter`/`savedOutsideGroundFn` só podem ser capturados a partir do
+        //    mundo de FORA de verdade; capturá-los de novo aqui enquanto já `insideHouseInterior`
+        //    sobrescreveria com o centro da sala atual, e `exitHouseInterior` da PRÓXIMA casa
+        //    devolveria o jogador pra dentro de uma sala em vez do planeta principal.
+        // 2. Deitado numa cama ou no meio de "colocar mobília" da casa ANTERIOR: a figura/peça
+        //    fantasma ainda apontam pra nós que `disposeAllHouseFurnitureNodes` está prestes a
+        //    destruir — sair da interação primeiro (mesmo que `exitHouseInterior` já faz) evita
+        //    referência a nó descartado e um "Confirmar" tardio gravando posição errada.
+        if (!insideHouseInterior) {
+          savedOutsideCenter = currentWorldCenter
+          savedOutsideGroundFn = currentGroundBaseFn
+        }
+        if (restingInBedKey) getUpFromBed()
+        cancelFurniturePlacement()
         disposeAllHouseFurnitureNodes()
         visitingHouseSnapshot = visitSnapshot ?? null
-        savedOutsideCenter = currentWorldCenter
-        savedOutsideGroundFn = currentGroundBaseFn
         insideHouseInterior = true
         // lab-138: câmera livre (arrastar/roda do mouse) começa do mesmo ângulo/distância padrão
         // a cada entrada — não carrega o giro/zoom de uma visita anterior, mesmo espírito de
