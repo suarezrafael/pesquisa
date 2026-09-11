@@ -2048,6 +2048,15 @@ export function World3D({
   const onFurniturePlacedRef = useRef(onFurniturePlaced)
   const onOpenCoopChallengeRef = useRef(onOpenCoopChallenge)
   const onCoopChallengeCompletedRef = useRef(onCoopChallengeCompleted)
+  // lab-175 (achado do review automático do Copilot no PR #49, 18ª rodada): `App.tsx` define
+  // `handleVisitHouseHandled` como função comum (sem `useCallback`), então sua identidade muda a
+  // CADA render do pai — como o efeito de polling abaixo tinha `onVisitHouseHandled` na lista de
+  // dependências, qualquer re-render do pai enquanto a ponte ainda não existe reiniciava o
+  // intervalo com `attempts = 0`, podendo resetar o teto de 60s indefinidamente (o mesmo timer
+  // permanente que a 17ª rodada tentou fechar). Mesmo padrão de "ref sempre atual" já usado pra
+  // todo outro callback deste componente (`onFurniturePlacedRef` etc., acima) — o efeito só
+  // depende de `visitHouseRequest`, nunca reinicia por causa de um re-render do pai.
+  const onVisitHouseHandledRef = useRef(onVisitHouseHandled)
   // lab-136: espelha o item sendo posicionado pra fora do loop de física (Confirmar/Cancelar são
   // botões React normais, não Babylon GUI — mesmo raciocínio de `survivalPlanetId`/
   // `survivalTimeRef` acima: o closure do loop precisa de um valor ATUAL a cada quadro (por isso
@@ -2161,6 +2170,7 @@ export function World3D({
   onFurniturePlacedRef.current = onFurniturePlaced
   onOpenCoopChallengeRef.current = onOpenCoopChallenge
   onCoopChallengeCompletedRef.current = onCoopChallengeCompleted
+  onVisitHouseHandledRef.current = onVisitHouseHandled
 
   // lab-136: entra no modo de posicionamento de mobília sempre que `App.tsx` pede um id novo
   // (clique em "Mover" no `MyHousePanel`, que fica fora deste componente) — mesmo padrão de
@@ -2207,6 +2217,12 @@ export function World3D({
   // (mesmo `onVisitHouseHandled()` de sempre) em vez de reter estado pra sempre; não há um "erro"
   // de visita específico pra mostrar nesse caso raro (se a cena não montou, o jogo inteiro já
   // está quebrado de outras formas mais visíveis que isso).
+  // 18ª rodada: `onVisitHouseHandled` saiu da lista de dependências (lê sempre
+  // `onVisitHouseHandledRef.current` em vez do parâmetro direto) — com ela na lista, a identidade
+  // instável de `handleVisitHouseHandled` (função comum em `App.tsx`, sem `useCallback`) fazia
+  // QUALQUER re-render do pai reiniciar este efeito enquanto a ponte ainda não existe, zerando
+  // `attempts` de novo a cada vez e podendo resetar o teto de 60s indefinidamente — o mesmo timer
+  // permanente que o teto da 17ª rodada tentou fechar, só que por um caminho diferente.
   useEffect(() => {
     if (!visitHouseRequest) return
     const request = visitHouseRequest
@@ -2218,14 +2234,14 @@ export function World3D({
       if (typeof bridge === 'function') {
         bridge(request.nickname, request.furnitureIds, request.placements)
         clearInterval(interval)
-        onVisitHouseHandled()
+        onVisitHouseHandledRef.current()
       } else if (attempts >= MAX_ATTEMPTS) {
         clearInterval(interval)
-        onVisitHouseHandled()
+        onVisitHouseHandledRef.current()
       }
     }, 200)
     return () => clearInterval(interval)
-  }, [visitHouseRequest, onVisitHouseHandled])
+  }, [visitHouseRequest])
 
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPortals?.()

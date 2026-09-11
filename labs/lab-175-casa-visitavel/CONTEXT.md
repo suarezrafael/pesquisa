@@ -591,6 +591,30 @@ Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterad
 `npm run build` limpo. Sem verificação ao vivo nova — mesma classe de mudança da 16ª rodada
 (ajuste de constante/comportamento de caso extremo nunca visto ao vivo nesta sessão).
 
+Décima oitava rodada do Copilot trouxe 1 achado real corrigido — de novo no MEU PRÓPRIO fix, desta
+vez o teto reintroduzido na 17ª rodada:
+
+- **O teto de 60s da 17ª rodada podia ser resetado indefinidamente por um bug de dependência do
+  React** — o efeito de polling tinha `onVisitHouseHandled` na lista de dependências, mas
+  `App.tsx` define `handleVisitHouseHandled` como função comum (sem `useCallback`), então sua
+  IDENTIDADE muda a cada render do componente pai. Qualquer re-render do pai enquanto a ponte
+  ainda não existe (`attempts` ainda não chegou em 300) reiniciava o efeito inteiro, zerando
+  `attempts` de novo — em teoria, uma sequência de re-renders do pai mais frequente que 200ms
+  podia impedir o teto de ser alcançado pra sempre, o MESMO timer permanente que a 17ª rodada
+  tentou fechar, só que por uma porta diferente (bug de dependência em vez de ausência de teto).
+  Corrigido com o mesmo padrão de "ref sempre atualizada" já usado por TODO outro callback deste
+  componente (`onFurniturePlacedRef`, `onCoopChallengeCompletedRef` etc., já existentes) —
+  `onVisitHouseHandledRef.current = onVisitHouseHandled` atualizado a cada render no corpo do
+  componente (não dentro de um efeito), lido de dentro do `setInterval` em vez do parâmetro
+  direto; o efeito de polling agora só depende de `visitHouseRequest`, nunca reinicia por causa de
+  um re-render do pai não relacionado.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) limpos,
+`npm run build` limpo. Sem verificação ao vivo nova — mesma classe de mudança das rodadas 16/17
+(ajuste de padrão de callback num caso extremo nunca visto ao vivo nesta sessão; o padrão de ref
+em si já é usado extensivamente e testado ao vivo por TODO outro callback deste componente desde
+labs anteriores, só a aplicação a este callback específico é nova).
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
