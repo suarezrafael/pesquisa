@@ -1506,6 +1506,11 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     activationCycleCompleted: weeklyDevices('activation_cycle_completed'),
     questCompleted: weeklyDevices('quest_completed'),
     parentAreaClick: weeklyDevices('parent_area_click'),
+    // lab-175 (achado do review automático do Copilot no PR #49, 5ª rodada) — sem isto,
+    // `house_visited` entrava na allowlist (`PRODUCT_EVENT_TYPES`) e era gravado normalmente, mas
+    // não tinha como ser lido de volta por nenhum endpoint: a métrica "visitas por criança" citada
+    // no documento nunca aparecia em lugar nenhum além de uma consulta manual à tabela.
+    houseVisited: weeklyDevices('house_visited'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

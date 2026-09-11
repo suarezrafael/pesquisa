@@ -222,6 +222,21 @@ novo — mesma decisão de documentar, ver `Pendências`):
   reaproveitar uma resposta com a casa visível mesmo depois do dono desligar, furando exatamente a
   revalidação da rodada 2/3. Header adicionado na resposta.
 
+Quinta rodada do Copilot trouxe 1 achado real corrigido (mais o de ownership/amizade reafirmado de
+novo pela 3ª vez — mesma decisão, ver `Pendências`; e os números de teste de `labs/CURRENT.md`
+desatualizados de novo, corrigidos):
+
+- **`house_visited` entrava na allowlist (`PRODUCT_EVENT_TYPES`) e era gravado normalmente, mas
+  não aparecia em NENHUM endpoint de leitura** — `weeklyFunnel` (`GET /admin/metrics`) é um objeto
+  de formato FIXO, um campo por tipo de evento; a métrica "visitas por criança" citada no
+  documento nunca teria como ser consultada, só via query manual na tabela `product_events`.
+  Corrigido adicionando `houseVisited: weeklyDevices('house_visited')` ao `weeklyFunnel`.
+  **Observação pra um lab futuro** (fora do escopo deste PR, não introduzida por ele): o mesmo
+  buraco já existe pros eventos de conversão adulta do lab-166/173 (`family_landing_viewed`,
+  `parent_signup_started`, `checkout_started`, `weekly_report_preview_viewed`) — nenhum deles
+  aparece em `weeklyFunnel`/`weeklyCommercial` hoje, mesma limitação pré-existente, não corrigida
+  aqui por estar fora do escopo de "casa visitável".
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
