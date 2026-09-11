@@ -6,9 +6,12 @@ Este documento existe pra resolver o problema citado em
 `docs/market-metrics-engagement-backlog.md` ("Lab 164" no documento, lab-165 real deste
 repositório): **sem eventos padronizados documentados, não dá pra saber se os recursos geram
 engajamento real, nem confirmar que ninguém tratou um evento novo como sinônimo de outro já
-existente.** Ele documenta a taxonomia COMPLETA que já existe hoje — nenhum evento novo foi criado
-neste lab, só a extensão de `GET /admin/metrics` pra ler esses eventos de volta como funil semanal
-(ver `labs/lab-165-catalogo-eventos-dashboard/CONTEXT.md`).
+existente.** Ele documenta a taxonomia COMPLETA que já existe hoje. Na CRIAÇÃO deste documento
+(lab-165), nenhum evento novo foi criado — só a extensão de `GET /admin/metrics` pra ler os eventos
+já existentes de volta como funil semanal (ver
+`labs/lab-165-catalogo-eventos-dashboard/CONTEXT.md`) — mas a tabela abaixo já cresceu várias vezes
+desde então (labs 166, 173, 175...) e deve continuar crescendo a cada evento novo, mantida
+atualizada por quem adicionar o próximo.
 
 ## Como funciona, em uma frase
 

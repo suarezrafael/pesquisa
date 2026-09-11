@@ -521,13 +521,17 @@ export function isValidHouseFurnitureIds(value: unknown): value is string[] {
 const HOUSE_PLACEMENTS_MAX_KEYS = 300
 const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]+#\d+$/
 
-// lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada): `Number.isFinite` sozinho
-// só exclui `NaN`/`Infinity`, mas ainda aceita valores absurdos (`1e308`) que um client modificado
-// podia mandar — a sala real tem `HOUSE_ROOM_HALF_SIZE = 5.5` (`World3D.tsx`); uma margem generosa
-// (bem além de qualquer posição alcançável de verdade dentro da sala) barra coordenadas fora de
-// qualquer escala plausível sem engessar o layout real. `rotY` é cíclico (ângulo), mas ainda limita
-// pra descartar magnitudes tão grandes que arriscam problemas de precisão de ponto flutuante.
-const HOUSE_PLACEMENT_COORD_MAX = 20
+// lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada, apertado na 6ª): `x`/`z`
+// vão direto pra `piece.position` na cena do VISITANTE (`World3D.tsx`, `refreshHouseFurnitureVisuals`)
+// — uma margem "generosa" (±20 na 4ª rodada) ainda deixava a peça claramente FORA da sala real
+// (`HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN` = 5.5 - 0.7 = 4.8, o mesmo limite que
+// `World3D.tsx` já usa pra travar o modo de posicionamento interativo, "Mover" no
+// `MyHousePanel.tsx`). Usa o MESMO valor aqui: qualquer posição que o próprio jogo permite salvar
+// de verdade já passa; qualquer coisa além disso só pode vir de um client modificado.
+// `rotY` continua com margem generosa (é cíclico/ângulo, gira livre sem trava enquanto o jogador
+// segura ◀ ▶ — não tem um "limite real" curto pra copiar) — só descarta magnitudes tão grandes
+// que arriscam problemas de precisão de ponto flutuante.
+const HOUSE_PLACEMENT_COORD_MAX = 4.8
 const HOUSE_PLACEMENT_ROTATION_MAX = 1000
 
 function isValidHousePlacementValue(value: unknown): value is { x: number; z: number; rotY: number } {

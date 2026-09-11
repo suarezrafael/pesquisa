@@ -27,8 +27,12 @@ cartão de prévia 2D).
 
 - **`Progress.houseVisible`** (padrão `true`) — toggle em `MyHousePanel.tsx` ("🔓 Amigos podem
   visitar sua casa" / "🔒 Casa privada"), função pura `setHouseVisible` (`progression.ts`).
-- **`useHeartbeat.ts`** envia `houseFurnitureIds`/`housePlacements`/`houseVisible` (RAW, sem
-  transformação) a cada tick, junto com `equippedLook`/`badges` já existentes.
+- **`useHeartbeat.ts`** envia `houseFurnitureIds`/`housePlacements`/`houseVisible` a cada tick,
+  junto com `equippedLook`/`badges` já existentes — **nota**: esta descrição inicial dizia "RAW,
+  sem transformação", mas isso ficou desatualizado já nas rodadas de correção do Copilot abaixo:
+  `resolveHouseSyncSnapshot` (`progression.ts`) filtra item `subscriptionOnly`, descarta chave
+  fora do formato esperado e trunca em 300 entradas ANTES de enviar — o dado que sai do aparelho
+  já é um snapshot sanitizado, não o `progress` cru.
 - **`visitFurnitureQuantity`** (`progression.ts`, testada) — mesma regra de `furnitureQuantity`,
   mas item `subscriptionOnly` sempre conta 0 pra visitante (nunca revela status de assinatura do
   anfitrião).
@@ -191,8 +195,11 @@ inteiro, ver `Pendências` acima, não uma regressão nova):
   errado, tente de novo" — diferenciado: `!res.ok` mostra `body.error` ou uma mensagem genérica de
   retry; só `res.ok` com `house: null` mostra a mensagem de "não visitável".
 - **PR desatualizada**: o corpo da PR (`gh pr edit`) tinha os números de teste da primeira versão
-  (169/169, 4 novos / 120/120, 11 novos) — atualizado pros números finais depois das duas rodadas
-  de correção (172/172, 7 novos / 123/123, 14 novos).
+  (169/169, 4 novos / 120/120, 11 novos) — atualizado nesta rodada, mas os números de teste finais
+  mudam de novo em rodadas SEGUINTES conforme mais correções acrescentam testes (ver o número final
+  de verdade na seção "Estado do repositório ao final" no fim deste documento, sempre a fonte
+  correta — o corpo da PR e este trecho específico só registram o estado NAQUELE momento da
+  revisão, não são atualizados retroativamente a cada rodada posterior).
 
 Nenhuma verificação ao vivo nova pra estes 2 últimos — mudança pequena e de baixo risco (guarda de
 montagem + diferenciação de mensagem de erro), confiança por revisão de código e pela suíte de
@@ -237,6 +244,40 @@ desatualizados de novo, corrigidos):
   aparece em `weeklyFunnel`/`weeklyCommercial` hoje, mesma limitação pré-existente, não corrigida
   aqui por estar fora do escopo de "casa visitável".
 
+Sexta rodada do Copilot trouxe 3 achados reais corrigidos + 3 melhorias de documentação (o de
+ownership/amizade foi reafirmado de novo, mesma decisão mantida):
+
+- **Visitar casa dirigindo o carro ou pilotando o foguete deixava os dois "ativos" ao mesmo tempo**
+  — a entrada normal (E perto da porta) já passa pelo ramo de "sair do carro" de
+  `handleInteractPress` antes de chegar em `enterHouseInterior`, mas "Visitar casa" (a ponte nova)
+  pula direto pra lá, sem passar por esse ramo. Corrigido bloqueando a visita nesses dois casos
+  (mensagem "🚗 Saia do carro ou do foguete antes de visitar uma casa.") — mais simples e mais
+  seguro que tentar desparentar/reposicionar o veículo no meio da troca de mundo. Foguete em pleno
+  voo já não tinha "sair" de propósito (regra do lab-59); agora carro segue a mesma lógica pra esta
+  ação específica.
+- **Margem de `±20` da 4ª rodada ainda deixava uma peça visivelmente FORA da sala real** (a sala
+  tem só `4,8` de alcance real — `HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN` = 5,5 - 0,7,
+  o mesmo limite que `World3D.tsx` já usa pra travar o modo de posicionamento interativo, "Mover").
+  Apertado o limite de `x`/`z` pra `4,8`, o mesmo valor real do jogo — nunca rejeita uma posição
+  legítima, só as que só um client modificado conseguiria produzir (testado).
+- **Sair de uma visita iniciada de Marte/outro planeta devolvia o jogador perto da casa no planeta
+  PRINCIPAL, não de onde ele realmente veio** — `exitHouseInterior` sempre pousava numa direção
+  fixa (`houseUp`), inofensivo enquanto só dava pra entrar em casa fisicamente perto dela (sempre
+  no planeta principal), mas "Visitar casa" é alcançável de qualquer planeta. Nova variável
+  `savedOutsideLocalUp` captura a direção de VERDADE de onde o jogador estava na entrada, usada na
+  saída no lugar de `houseUp`. Verificado ao vivo: teletransportado pra uma posição aleatória no
+  planeta principal (longe da casa), visitou uma casa fake, saiu pela porta, e a posição final
+  ficou a ~2,5 unidades da posição ORIGINAL (a distância esperada do pequeno deslocamento
+  tangencial pra não pousar exatamente na porta) — não a ~13 unidades de distância que a posição
+  fixa antiga (perto da casa) produziria.
+- **Corrigido (documentação)**: introdução de `docs/event-catalog.md` esclarecida (a frase "nenhum
+  evento novo foi criado" descrevia só a CRIAÇÃO do documento no lab-165, não uma promessa de que a
+  tabela nunca cresceria — já cresceu várias vezes desde então); comentário em `CONTEXT.md` (este
+  arquivo) que dizia "RAW, sem transformação" pra descrever o que `useHeartbeat.ts` envia,
+  desatualizado depois de `resolveHouseSyncSnapshot` passar a sanitizar antes de enviar; texto que
+  citava "duas rodadas" reescrito pra nunca mais ficar defasado (aponta pra seção final em vez de
+  citar um número fixo).
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -280,10 +321,10 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
 - `npx tsc -b`/`npm run test` (app): limpo, 173/173 (8 novos: `visitFurnitureQuantity`,
   `setHouseVisible`, `resolveHouseSyncSnapshot` ×4, incluindo o teste de truncamento em 300 da
   4ª rodada). `npm run build`: limpo, sem regressão de bundle.
-- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 125/125 (16 novos:
-  `isValidHouseFurnitureIds`, `isValidHousePlacements` (incluindo os 2 testes de limite de
-  coordenada da 4ª rodada), `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements`, allowlist do
-  evento).
+- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 126/126 (17 novos:
+  `isValidHouseFurnitureIds`, `isValidHousePlacements` (incluindo os testes de limite de
+  coordenada da 4ª e 6ª rodada, com o limite real de `4,8` apertado na 6ª),
+  `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements`, allowlist do evento).
 - **Migração `0010` aplicada em produção** (`npm run migrate`, confirmado via query real).
 - **Verificado ao vivo, ponta a ponta, contra o banco de PRODUÇÃO real**: subiu um `wrangler dev`
   local (porta 8790, apontando pro `DATABASE_URL` real) + um segundo processo Vite (porta 5180,
@@ -331,3 +372,12 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
   cena 3D com a mobília certa do amigo (`furniture-plant-...`), provando que a correção do
   `mountedRef` realmente resolve o travamento em dev descrito pelo achado (sem ela, esse clique
   cairia silenciosamente no `if (!mountedRef.current) return`, nunca chamando `onVisitHouse`).
+- **Reverificado ao vivo depois da 6ª rodada** (só o fix de posição de saída, o de bloqueio de
+  veículo foi confirmado por revisão de código — o guard é um `if` simples de baixo risco, e
+  entrar num carro de verdade via automação exigiria mais tempo do que o achado justifica):
+  teletransportado pra uma posição ARBITRÁRIA no planeta principal (longe da casa de propósito),
+  visitou uma casa (dados fictícios via `__visitFriendHouse`), saiu pela porta — posição final
+  confirmada a ~2,5 unidades da posição ORIGINAL (a distância exata esperada do pequeno
+  deslocamento tangencial que evita pousar exatamente na porta), não a ~13 unidades que a versão
+  antiga (pousando sempre perto da casa) produziria — prova de que `savedOutsideLocalUp` captura a
+  direção de verdade em vez de uma direção fixa.

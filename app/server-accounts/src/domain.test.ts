@@ -727,8 +727,13 @@ describe('isValidHousePlacements (lab-175)', () => {
     expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: 2, rotY: 1e10 } })).toBe(false)
   })
 
-  it('aceita coordenadas dentro de uma margem generosa além da sala real (5.5 de meia-largura)', () => {
-    expect(isValidHousePlacements({ 'sofa#0': { x: 19, z: -19, rotY: 900 } })).toBe(true)
+  it('rejeita x/z fora do limite real de posicionamento do próprio jogo (achado do Copilot na 6ª rodada: 4,8 = 5,5 de meia-sala menos a margem de 0,7)', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 19, z: -19, rotY: 900 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: 4.9, z: 0, rotY: 0 } })).toBe(false)
+  })
+
+  it('aceita x/z dentro do limite real de posicionamento do próprio jogo (4,8)', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 4.8, z: -4.8, rotY: 900 } })).toBe(true)
   })
 
   it('rejeita mais de 300 chaves (defesa contra payload abusivo)', () => {

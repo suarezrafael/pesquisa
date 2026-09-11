@@ -2653,6 +2653,15 @@ export function World3D({
     // comentário acima), então "fora" é sempre onde o jogador estava exatamente antes de entrar.
     let savedOutsideCenter = Vector3.Zero()
     let savedOutsideGroundFn: (localUp: Vector3) => number = currentGroundBaseFn
+    // lab-175 (achado do review automático do Copilot no PR #49, 6ª rodada): antes desta direção
+    // existir, `exitHouseInterior` sempre pousava perto de `houseUp` (a posição fixa da casa no
+    // planeta principal) — inofensivo enquanto só dava pra entrar em casa fisicamente perto dela
+    // (sempre no planeta principal), mas "Visitar casa" (a ponte nova) é alcançável de QUALQUER
+    // lugar, incluindo Marte/outros planetas — `savedOutsideCenter` já virava o centro certo
+    // (Marte), mas a direção de pouso continuava fixa no planeta principal, uma combinação
+    // inconsistente. Guarda a direção local de verdade (relativa ao centro de fora) no momento da
+    // entrada, usada no lugar de `houseUp` na saída.
+    let savedOutsideLocalUp = Vector3.Up()
     let houseDoorInsidePos = Vector3.Zero()
     let houseInteriorSpawnPos = Vector3.Zero()
     let houseCounterPos = Vector3.Zero()
@@ -7473,6 +7482,24 @@ export function World3D({
       }) {
         buildHouseInteriorIfNeeded()
         if (!avatarMesh || !avatarBody) return
+        // lab-175 (achado do review automático do Copilot no PR #49, 6ª rodada): o painel de
+        // Amigos (e o botão "Visitar casa") continua acessível dirigindo o carro ou pilotando o
+        // foguete — diferente da entrada normal (E perto da porta), que já passa pelo ramo de
+        // "sair do carro" de `handleInteractPress` ANTES de chegar aqui, esta ponte nova pula
+        // direto pra `enterHouseInterior` sem passar por esse ramo. Sem este bloqueio, o avatar
+        // seria teleportado pra dentro de casa ainda "dirigindo" (`studentFigure` continua
+        // parentada no veículo, que continua se movendo no quadro seguinte). Foguete em pleno voo
+        // já não tem "sair" de propósito (mesma regra do lab-59); carro simplesmente pede pra
+        // sair primeiro — mais simples e mais seguro que tentar desparentar/reposicionar o
+        // veículo no meio da troca de mundo.
+        if (drivingCar || drivingRocket) {
+          furnitureReactionTimeout = showChatBubbleText(
+            furnitureReactionLabel,
+            '🚗 Saia do carro ou do foguete antes de visitar uma casa.',
+            furnitureReactionTimeout,
+          )
+          return
+        }
         // lab-175 (achados do review automático do Copilot no PR #49): dois problemas reais no
         // caso de pular direto de UMA casa (própria ou visita anterior) pra OUTRA sem sair antes
         // (ex.: clicar "Visitar casa" no painel de Amigos enquanto já está dentro de casa) —
@@ -7487,6 +7514,7 @@ export function World3D({
         if (!insideHouseInterior) {
           savedOutsideCenter = currentWorldCenter
           savedOutsideGroundFn = currentGroundBaseFn
+          savedOutsideLocalUp = avatarMesh.position.subtract(currentWorldCenter).normalize()
         }
         if (restingInBedKey) getUpFromBed()
         cancelFurniturePlacement()
@@ -7542,7 +7570,12 @@ export function World3D({
         cameraDragPointerId = null
         currentWorldCenter = savedOutsideCenter
         currentGroundBaseFn = savedOutsideGroundFn
-        teleportAvatarTo(savedOutsideCenter, offsetLandingUp(houseUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
+        // lab-175 (achado do review automático do Copilot no PR #49, 6ª rodada): usava `houseUp`
+        // fixo aqui (a posição fixa da casa no planeta principal) — inofensivo enquanto só dava
+        // pra entrar em casa fisicamente perto dela, mas "Visitar casa" é alcançável de Marte/
+        // outros planetas; `savedOutsideLocalUp` guarda a direção de VERDADE de onde o jogador
+        // veio, capturada na entrada.
+        teleportAvatarTo(savedOutsideCenter, offsetLandingUp(savedOutsideLocalUp, PLANET_RADIUS, 2.5), savedOutsideGroundFn)
       }
 
       // Posicionamento manual de mobília (lab-136, pedido do usuário: "tem que ter opção... de
