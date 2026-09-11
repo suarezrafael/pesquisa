@@ -308,6 +308,38 @@ contrato já espelhado 1:1 do lado que JÁ tinha sido testado ao vivo (o mesmo l
 da 6ª rodada, a mesma checagem de erro-vs-vazio da 3ª, o mesmo cálculo de chão já usado em toda
 entrada normal de planeta) — confiança pela suíte de testes (2 novos) e revisão de código.
 
+Oitava rodada do Copilot trouxe 1 achado real corrigido (crash) e 2 achados de precisão de
+métrica/documentação (não são bug de código, corrigidos por clareza):
+
+- **`resolveHouseSyncSnapshot` (client) validava os CAMPOS do valor de um placement (`x`/`z`/
+  `rotY` fora do limite, 7ª rodada) mas nunca checava se o valor em si era um objeto** — um save
+  local corrompido com `housePlacements: { "cama#0": null }` (ou string/array no lugar do objeto)
+  fazia `value.x` estourar (`TypeError`) ANTES do filtro rodar, quebrando o heartbeat inteiro (mesma
+  classe de bug da 7ª rodada, mas pra "valor nem é objeto" em vez de "objeto com campo fora do
+  limite"). Corrigido com guard de tipo (`typeof === 'object' && !== null && !Array.isArray`) antes
+  de ler os campos, igual ao guard já usado do lado do servidor (`isValidHousePlacementValue`,
+  `domain.ts`) — testado (`housePlacements` com valor `null`/string/array misturado a um valor
+  válido: só o válido sobrevive, sem lançar).
+- **O mesmo achado também apontou o contêiner `progress.housePlacements` em si** — vem de JSON
+  persistido sem validação (`loadProgress`, `storage.ts`), então um save com `housePlacements: null`
+  faria `Object.entries` estourar antes de qualquer filtro. Corrigido com `?? {}` — testado
+  (`housePlacements: null` não lança, resolve pra `placements: {}`).
+- **Achado de precisão (não é bug de código introduzido por este lab)**: o campo `houseVisited` de
+  `weeklyFunnel` usa `weeklyDevices('house_visited')` — a MESMA convenção de todo outro passo do
+  funil (`playClick`, `questCompleted`, etc., todos por `count(distinct device_id)`). O documento
+  descrevia a métrica como "visitas por criança", mas o que é medido de verdade é dispositivos
+  únicos com pelo menos 1 clique na semana: perde revisitas do mesmo aparelho, e não distingue
+  perfis que compartilham/trocam de aparelho (perfis não têm identificador próprio nos eventos, só
+  `getOrCreateDeviceId()` — mesma limitação de privacidade já aceita do resto do funil, não uma
+  regressão nova). Corrigido só a DOCUMENTAÇÃO (`docs/event-catalog.md` e um comentário em
+  `index.ts` perto de `houseVisited`) pra descrever com precisão o que o número mede, em vez de
+  mudar o cálculo em si (mudaria a convenção do `weeklyFunnel` inteiro, fora do escopo deste lab).
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app) e `npx tsc --noEmit`/`npm run test`
+(server-accounts) limpos, `npm run build` limpo. Sem verificação ao vivo nova — o crash corrigido é
+um caminho de dado corrompido/legado que não ocorre em nenhum fluxo normal já testado ao vivo nas
+rodadas anteriores, e as mudanças de métrica são só texto/comentário.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -348,9 +380,10 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
 ## Estado do repositório ao final
 
 - Branch: `lab-175-casa-visitavel`.
-- `npx tsc -b`/`npm run test` (app): limpo, 174/174 (9 novos: `visitFurnitureQuantity`,
-  `setHouseVisible`, `resolveHouseSyncSnapshot` ×5, incluindo o truncamento em 300 da 4ª rodada e
-  a validação de valor corrompido da 7ª). `npm run build`: limpo, sem regressão de bundle.
+- `npx tsc -b`/`npm run test` (app): limpo, 175/175 (10 novos: `visitFurnitureQuantity`,
+  `setHouseVisible`, `resolveHouseSyncSnapshot` ×6, incluindo o truncamento em 300 da 4ª rodada, a
+  validação de valor corrompido/fora do limite da 7ª, e o guard de valor nulo/não-objeto +
+  contêiner nulo da 8ª). `npm run build`: limpo, sem regressão de bundle.
 - `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 127/127 (18 novos:
   `isValidHouseFurnitureIds`, `isValidHousePlacements` (incluindo os testes de limite de
   coordenada da 4ª e 6ª rodada, com o limite real de `4,8` apertado na 6ª),

@@ -1510,6 +1510,11 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // `house_visited` entrava na allowlist (`PRODUCT_EVENT_TYPES`) e era gravado normalmente, mas
     // não tinha como ser lido de volta por nenhum endpoint: a métrica "visitas por criança" citada
     // no documento nunca aparecia em lugar nenhum além de uma consulta manual à tabela.
+    // 8ª rodada: `weeklyDevices` conta DISPOSITIVOS ÚNICOS com >=1 evento na semana (mesma
+    // convenção de todo `weeklyFunnel` acima), não visitas por criança — perde revisitas do mesmo
+    // aparelho e não distingue perfis que compartilham/trocam de aparelho. Limitação já aceita do
+    // resto do funil (nenhum evento carrega identificador de perfil, só device id anônimo), não
+    // uma regressão deste campo; ver nota completa em docs/event-catalog.md.
     houseVisited: weeklyDevices('house_visited'),
   }
 

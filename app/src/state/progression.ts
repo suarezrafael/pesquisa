@@ -629,14 +629,24 @@ const HOUSE_SYNC_MAX_ENTRIES = 300
 const HOUSE_PLACEMENT_COORD_MAX = 4.8
 const HOUSE_PLACEMENT_ROTATION_MAX = 1000
 
-function isValidHousePlacementValueForSync(value: { x: number; z: number; rotY: number }): boolean {
+// lab-175 (achado do review automático do Copilot no PR #49, 8ª rodada): recebia
+// `{x,z,rotY}` já tipado, mas o valor vem de JSON persistido sem validação (`loadProgress`,
+// `storage.ts`) — um save corrompido com `housePlacements: { "cama#0": null }` fazia
+// `value.x` estourar (TypeError) ANTES do filtro de posição rodar, derrubando o heartbeat
+// inteiro (mesma classe de bug que a 7ª rodada corrigiu para valores fora do limite, só que
+// aqui o valor nem é um objeto). Aceita `unknown` e confere objeto/não-array antes de ler os
+// campos, igual ao guard do validador do servidor (`isValidHousePlacementValue`, `domain.ts`).
+function isValidHousePlacementValueForSync(value: unknown): value is { x: number; z: number; rotY: number } {
   return (
-    Number.isFinite(value.x) &&
-    Number.isFinite(value.z) &&
-    Number.isFinite(value.rotY) &&
-    Math.abs(value.x) <= HOUSE_PLACEMENT_COORD_MAX &&
-    Math.abs(value.z) <= HOUSE_PLACEMENT_COORD_MAX &&
-    Math.abs(value.rotY) <= HOUSE_PLACEMENT_ROTATION_MAX
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Number.isFinite((value as { x: unknown }).x) &&
+    Number.isFinite((value as { z: unknown }).z) &&
+    Number.isFinite((value as { rotY: unknown }).rotY) &&
+    Math.abs((value as { x: number }).x) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs((value as { z: number }).z) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs((value as { rotY: number }).rotY) <= HOUSE_PLACEMENT_ROTATION_MAX
   )
 }
 
@@ -649,7 +659,12 @@ export function resolveHouseSyncSnapshot(progress: Progress): HouseSyncSnapshot 
     .slice(0, HOUSE_SYNC_MAX_ENTRIES)
   const placements: Record<string, { x: number; z: number; rotY: number }> = {}
   let placementCount = 0
-  for (const [key, value] of Object.entries(progress.housePlacements)) {
+  // lab-175 (achado do review automático do Copilot no PR #49, 8ª rodada): o próprio contêiner
+  // também vem de JSON persistido sem validação — um save antigo/corrompido com
+  // `housePlacements: null` faria `Object.entries` estourar antes de qualquer entrada ser
+  // filtrada. `?? {}` trata esse caso como "nenhuma peça posicionada" em vez de derrubar o
+  // heartbeat inteiro.
+  for (const [key, value] of Object.entries(progress.housePlacements ?? {})) {
     if (placementCount >= HOUSE_SYNC_MAX_ENTRIES) break
     if (!HOUSE_PLACEMENT_KEY_PATTERN.test(key)) continue
     if (!isValidHousePlacementValueForSync(value)) continue

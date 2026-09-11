@@ -77,8 +77,16 @@ decisão").
   responsáveis que veem a proposta clicam especificamente pra ver o exemplo do relatório.
 - **`title_play_click_rate`** — `play_click` / total de sessões (`session_start`).
 - **"Visitas por criança"** (métrica esperada de "Lab 171 - Casa visitável somente leitura",
-  docs/market-metrics-engagement-backlog.md) — `house_visited` (lab-175), lido em paralelo (não
-  faz parte de nenhum funil obrigatório), mede quantas vezes uma criança visita a casa de um amigo.
+  docs/market-metrics-engagement-backlog.md) — aproximada por `house_visited` (lab-175), lido em
+  paralelo (não faz parte de nenhum funil obrigatório) via `weeklyDevices('house_visited')`, igual
+  a todo outro passo de `weeklyFunnel` acima. Isso mede DISPOSITIVOS ÚNICOS que dispararam o evento
+  na semana, não visitas por criança: perde revisitas do mesmo dispositivo, conta dois perfis num
+  aparelho compartilhado como uma visita só, e conta a mesma criança em dois aparelhos como duas
+  (achado do review automático do Copilot no PR #49, 8ª rodada). Igual à limitação já aceita do
+  resto do funil (nenhum evento carrega identificador de perfil, só `getOrCreateDeviceId()` — ver
+  nota de privacidade acima) — não é um bug introduzido por este lab, é a mesma convenção usada em
+  todo `weeklyFunnel`; o nome do campo (`houseVisited`) e desta métrica ficam propositalmente
+  imprecisos por enquanto e não devem ser lidos como contagem exata de visitas por criança.
 
 ## O que NÃO é evento de client (mas ainda vira número no funil semanal)
 

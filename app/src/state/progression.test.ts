@@ -891,6 +891,28 @@ describe('resolveHouseSyncSnapshot (lab-175, achados do review automático do Co
     expect(snapshot.placements).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
   })
 
+  it('descarta valor de placement nulo/não-objeto e contêiner nulo sem lançar (achado do Copilot na 8ª rodada: value.x estourava antes do filtro)', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: ['cama'],
+      housePlacements: {
+        'cama#0': { x: 1, z: 2, rotY: 0 },
+        'tapete#0': null,
+        'grama#0': 'corrompido',
+        'banco#0': [1, 2, 3],
+      } as unknown as Record<string, { x: number; z: number; rotY: number }>,
+    }
+    const snapshot = resolveHouseSyncSnapshot(progress)
+    expect(snapshot.placements).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
+
+    const progressWithNullContainer = {
+      ...emptyProgress,
+      housePlacements: null as unknown as Record<string, { x: number; z: number; rotY: number }>,
+    }
+    expect(() => resolveHouseSyncSnapshot(progressWithNullContainer)).not.toThrow()
+    expect(resolveHouseSyncSnapshot(progressWithNullContainer).placements).toEqual({})
+  })
+
   // lab-136: posicionamento manual de mobília ("Mover" no MyHousePanel) — testes de regressão pro
   // eixo novo, mesmo espírito dos testes de `unlockFurniture` acima.
   it('setFurniturePlacement grava posição/ângulo novos pra um item ainda sem posição salva', () => {
