@@ -10167,7 +10167,18 @@ export function World3D({
         // foguete de volta; `Math.ceil` + só atualizar o display quando o inteiro muda evita
         // re-renderizar 60×/segundo (o de Marte só atualiza em eventos discretos de dano, este
         // dreia continuamente, então precisa desse cuidado extra).
-        if (avatarMesh && currentPlanetId && DESTINATION_PLANETS[currentPlanetId]?.hasSurvivalTimer) {
+        // lab-175 (achado do review automático do Copilot no PR #49, 19ª rodada): "Visitar casa"
+        // (e a própria casa) teleporta o avatar pra `HOUSE_INTERIOR_CENTER` sem tocar em
+        // `currentPlanetId` — antes desta checagem, visitar uma casa a partir de um planeta com
+        // cronômetro (Mercúrio/Netuno/etc., alcançável de qualquer planeta via "Visitar casa" no
+        // painel de Amigos, não só fisicamente perto da casa) deixava este bloco continuar
+        // dreiando o tempo (o avatar está longe do foguete de retorno, fora da sala) e podia
+        // chamar `respawnFromSurvivalTimeout` (teleporta pro planeta principal) enquanto
+        // `insideHouseInterior` continuava `true` — estado inconsistente (UI/física da casa ainda
+        // ativas, avatar já teleportado pra fora). `!insideHouseInterior` pausa o cronômetro
+        // enquanto dentro de qualquer casa, retomando de onde parou ao sair (nada mais muda
+        // `currentPlanetId`/`survivalTimeRef` durante a visita).
+        if (!insideHouseInterior && avatarMesh && currentPlanetId && DESTINATION_PLANETS[currentPlanetId]?.hasSurvivalTimer) {
           const returnRocket = returnRockets.get(currentPlanetId)
           const distToRocket = returnRocket
             ? Vector3.Distance(avatarMesh.position, returnRocket.root.getAbsolutePosition())

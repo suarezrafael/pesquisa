@@ -615,6 +615,41 @@ Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterad
 em si já é usado extensivamente e testado ao vivo por TODO outro callback deste componente desde
 labs anteriores, só a aplicação a este callback específico é nova).
 
+Décima nona rodada do Copilot trouxe 2 achados reais corrigidos (1 de jogabilidade genuíno, novo
+— não no meu próprio fix desta vez —, 1 de documentação):
+
+- **Visitar uma casa a partir de um planeta com cronômetro de sobrevivência (Mercúrio/Netuno/etc.)
+  deixava o cronômetro drenando enquanto o jogador estava dentro da casa, podendo respawnar o
+  jogador NO MEIO da visita** — `enterHouseInterior` teleporta o avatar pra
+  `HOUSE_INTERIOR_CENTER` mas nunca toca em `currentPlanetId` (fica com o id do planeta de onde o
+  jogador veio); o loop de física que dreia o cronômetro só olha `currentPlanetId`/
+  `hasSurvivalTimer`, sem saber que o jogador está `insideHouseInterior`. Antes de "Visitar casa"
+  (lab-175) isso não importava — a própria casa só era alcançável fisicamente perto dela, sempre
+  no planeta principal, que nunca tem cronômetro; "Visitar casa" é alcançável de QUALQUER planeta
+  pelo painel de Amigos, expondo o problema pela primeira vez. Sem correção, ficar tempo demais
+  numa visita origem-Mercúrio/Netuno chamaria `respawnFromSurvivalTimeout` (teleporta pro planeta
+  principal) enquanto `insideHouseInterior` continuava `true` — estado inconsistente (UI/física da
+  casa ainda ativas, avatar já teleportado pra fora). Corrigido pausando o dreno do cronômetro
+  (`!insideHouseInterior` a mais na condição do bloco de física) enquanto dentro de QUALQUER casa
+  (própria ou visita) — retoma de onde parou ao sair, sem precisar zerar/salvar nada a mais
+  (`currentPlanetId`/`survivalTimeRef` não mudam durante a visita).
+- **Comentário na migração `0010` descrevia `house_visible` como controle de "permissão de ver"**
+  — soa como um controle de ACESSO/autorização, mas a rota (`GET /players/:id/public-profile`)
+  continua sem autenticar quem pergunta nem checar amizade aceita (limitação arquitetural
+  pré-existente desde o lab-160/163, já reafirmada várias vezes pelo Copilot neste PR);
+  `house_visible` é só uma preferência de EXIBIÇÃO do dono, não um controle de acesso — qualquer
+  um com o `playerId` (não é credencial) recebe a mesma resposta que um amigo receberia. Reescrito
+  pra não sugerir uma proteção que não existe (a migração já foi aplicada em produção — só o
+  comentário mudou, sem re-rodar nada).
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado — sem teste novo;
+o cenário exige um planeta com cronômetro real + física de sobrevivência, sem infraestrutura de
+teste pra isso neste projeto) limpos, `npm run build` limpo. Sem verificação ao vivo nova — exigiria
+viajar de foguete até Mercúrio/Netuno, visitar uma casa, e esperar o cronômetro (minutos reais) só
+pra confirmar; confiança pela leitura direta do fluxo de física (`currentPlanetId` comprovadamente
+não muda em `enterHouseInterior`/`exitHouseInterior`, guard idêntico ao já usado em outros lugares
+deste arquivo pra pausar comportamento durante a visita, ex. bloqueio do balcão de compras).
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
