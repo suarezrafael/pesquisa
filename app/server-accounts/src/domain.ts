@@ -180,8 +180,10 @@ const PRODUCT_EVENT_TYPES = new Set([
   // lab-173 (docs/market-metrics-engagement-backlog.md §10, item 8) — mede interesse real no
   // preview do relatório semanal, ver app/src/productAnalytics.ts.
   'weekly_report_preview_viewed',
-  // lab-175 ("Lab 171 - Casa visitável somente leitura") — mede "visitas por criança" (métrica
-  // esperada citada no documento), ver app/src/productAnalytics.ts.
+  // lab-175 ("Lab 171 - Casa visitável somente leitura") — aproxima (não mede de verdade —
+  // `weeklyFunnel.houseVisited`, index.ts, agrega por dispositivo único, não por criança;
+  // detalhe completo em docs/event-catalog.md) a "visitas por criança" citada no documento, ver
+  // app/src/productAnalytics.ts.
   'house_visited',
 ])
 

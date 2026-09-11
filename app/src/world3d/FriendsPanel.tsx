@@ -8,12 +8,13 @@ import { useFriendRequests, formatLastSeen, type FriendSummaryItem } from '../st
 import { getOrCreateDeviceId } from '../state/storage'
 import { useModalA11y } from '../state/useModalA11y'
 import { PlayerPublicProfileView } from './PlayerPublicProfileView'
+import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
 import type { Profile } from '../types'
 
 interface FriendsPanelProps {
   profile: Profile
   onClose: () => void
-  onVisitHouse: (nickname: string, house: { furnitureIds: string[]; placements: Record<string, { x: number; z: number; rotY: number }> }) => void
+  onVisitHouse: (nickname: string, house: PublicHouseSnapshot) => void
 }
 
 type FriendsTab = 'search' | 'requests' | 'friends'

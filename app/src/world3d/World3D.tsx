@@ -89,6 +89,7 @@ import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storag
 import { trackFirstControl } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
+import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { TouchActionButton } from './TouchActionButton'
@@ -206,12 +207,7 @@ interface World3DProps {
   // (nunca reaproveitando o mesmo `id`) quando o jogador clica "Visitar casa" no `FriendsPanel`,
   // fora deste componente. Entrar na casa do amigo reaproveita a MESMA sala 3D (`houseInteriorRootNode`)
   // populada com a mobília DELE em vez da local — nunca escreve em `progress`.
-  visitHouseRequest: {
-    id: string
-    nickname: string
-    furnitureIds: string[]
-    placements: Record<string, { x: number; z: number; rotY: number }>
-  } | null
+  visitHouseRequest: ({ id: string; nickname: string } & PublicHouseSnapshot) | null
   onVisitHouseHandled: () => void
 }
 
@@ -2196,20 +2192,23 @@ export function World3D({
   // em `App.tsx` só cobre o carregamento do MÓDULO `World3D`, não da cena 3D em si). Clicar
   // "Visitar casa" logo nos primeiros instantes do jogo, antes da ponte existir, descartava o
   // pedido silenciosamente (`?.()` virava no-op e `onVisitHouseHandled()` limpava mesmo assim).
-  // Tenta de novo por até ~10s (bem mais que o tempo normal de carregamento) antes de desistir.
+  // lab-175 (achado do review automático do Copilot no PR #49, 16ª rodada): a versão anterior
+  // desistia depois de 50 tentativas (~10s) e limpava o pedido em silêncio — como `App.tsx` já
+  // fechou o painel de Amigos ANTES de enfileirar a visita, um carregamento excepcionalmente
+  // lento (ou uma cena que nunca termina de montar) fazia o clique "sumir" sem nenhum feedback
+  // nem forma de tentar de novo. Continua tentando indefinidamente em vez de desistir — seguro
+  // porque o `return` do efeito já limpa o intervalo no desmonte OU quando `visitHouseRequest`
+  // muda pra outro pedido/`null` (clicar em outro amigo, ou o próprio pedido sendo atendido);
+  // na prática a ponte fica pronta em poucos segundos na esmagadora maioria dos casos, e se a
+  // cena nunca terminar de montar de verdade, o jogo inteiro já estaria quebrado de qualquer
+  // forma — não há um "erro" específico de visita pra mostrar nesse caso.
   useEffect(() => {
     if (!visitHouseRequest) return
     const request = visitHouseRequest
-    let attempts = 0
-    const MAX_ATTEMPTS = 50
     const interval = setInterval(() => {
-      attempts += 1
       const bridge = (sceneRef.current as any)?.__visitFriendHouse
       if (typeof bridge === 'function') {
         bridge(request.nickname, request.furnitureIds, request.placements)
-        clearInterval(interval)
-        onVisitHouseHandled()
-      } else if (attempts >= MAX_ATTEMPTS) {
         clearInterval(interval)
         onVisitHouseHandled()
       }
@@ -2678,11 +2677,7 @@ export function World3D({
     // vez de `progressRef.current` quando não-nulo — NUNCA escreve de volta em `progress`,
     // garantindo que uma visita nunca altera a casa de ninguém (a UI de comprar/mover, só
     // alcançável pelo balcão interno, também é bloqueada durante a visita, ver loop de física).
-    let visitingHouseSnapshot: {
-      nickname: string
-      furnitureIds: string[]
-      placements: Record<string, { x: number; z: number; rotY: number }>
-    } | null = null
+    let visitingHouseSnapshot: ({ nickname: string } & PublicHouseSnapshot) | null = null
     // Posicionamento manual de mobília (lab-136) — `placingFurnitureId` é a fonte de verdade LIDA
     // pelo loop de física a cada quadro (mesmo padrão de `sittingAtDesk`/`drivingCar` acima: um
     // `let` do closure, não o `useState` React, que só re-renderiza — não muda o valor que o
@@ -7358,11 +7353,7 @@ export function World3D({
       // acima), chamada por `App.tsx` quando o jogador clica "Visitar casa" no `FriendsPanel`.
       // Reaproveita a MESMA sala 3D da própria casa (`enterHouseInterior`), só que populada com a
       // mobília do amigo — nunca cria uma sala nova nem escreve em `progress`.
-      ;(scene as any).__visitFriendHouse = (
-        nickname: string,
-        furnitureIds: string[],
-        placements: Record<string, { x: number; z: number; rotY: number }>,
-      ) => {
+      ;(scene as any).__visitFriendHouse = (nickname: string, furnitureIds: string[], placements: PublicHouseSnapshot['placements']) => {
         enterHouseInterior({ nickname, furnitureIds, placements })
       }
 
@@ -7500,11 +7491,7 @@ export function World3D({
       // normal na própria casa. Descarta TODAS as peças construídas antes de popular de novo
       // (`disposeAllHouseFurnitureNodes`, ver comentário lá) — necessário mesmo na entrada normal,
       // caso a última vez que a sala foi populada tenha sido uma visita.
-      function enterHouseInterior(visitSnapshot?: {
-        nickname: string
-        furnitureIds: string[]
-        placements: Record<string, { x: number; z: number; rotY: number }>
-      }) {
+      function enterHouseInterior(visitSnapshot?: { nickname: string } & PublicHouseSnapshot) {
         buildHouseInteriorIfNeeded()
         if (!avatarMesh || !avatarBody) return
         // lab-175 (achado do review automático do Copilot no PR #49, 6ª rodada): o painel de

@@ -540,6 +540,39 @@ corretamente). Sem verificação ao vivo nova pro fix de cache — reproduzir ex
 resposta HTTP cacheada de propósito no navegador de teste, contrato já coberto pela leitura direta
 da opção `cache: 'no-store'` da Fetch API.
 
+Décima sexta rodada do Copilot trouxe 4 achados reais corrigidos (nenhum crash/vazamento — 1 de
+robustez de UX, 1 de arquitetura/duplicação de tipo, 2 de precisão de métrica):
+
+- **A ponte `visitHouseRequest → __visitFriendHouse` desistia depois de 50 tentativas (~10s) e
+  limpava o pedido em silêncio** — como `App.tsx` já fecha o painel de Amigos ANTES de
+  enfileirar a visita, um carregamento excepcionalmente lento (ou uma cena que nunca termina de
+  montar) fazia o clique em "Visitar casa" sumir sem nenhum feedback nem forma óbvia de tentar de
+  novo. Corrigido removendo o teto de tentativas — o polling continua até a ponte ficar pronta OU
+  `visitHouseRequest` mudar (outro pedido/`null`) OU o componente desmontar, todos já limpando o
+  intervalo pelo `return` do efeito; seguro porque o único jeito de a ponte NUNCA aparecer é a
+  cena 3D ter falhado em montar de verdade, cenário em que o jogo inteiro já estaria quebrado e
+  não haveria um "erro de visita" específico útil pra mostrar.
+- **`visitHouseRequest`/`visitingHouseSnapshot`/`enterHouseInterior`/`__visitFriendHouse` (todos
+  em `World3D.tsx`) redefiniam a MESMA estrutura `{furnitureIds, placements}` como literal
+  anônimo, e `App.tsx`/`FriendsPanel.tsx`/`PlayerPublicProfileView.tsx` repetiam de novo — o
+  formato já existe como `PublicHouseSnapshot` (`usePlayerPublicProfile.ts`), e a regra MUST de
+  `docs/prompts/03-arquitetura-sistema.md` (formatos centrais da API devem ter um único tipo)
+  pedia consolidar. Corrigido importando `PublicHouseSnapshot` nos 4 arquivos e reaproveitando em
+  todo lugar (`{ id: string; nickname: string } & PublicHouseSnapshot` onde precisa de campos
+  extras) — evita os pontos divergirem se o contrato da resposta pública mudar de novo.
+- **Comentário em `domain.ts` (allowlist de eventos) e linha em `FEATURES.md` deste lab ainda
+  diziam que `house_visited` "mede" visitas por criança, sem a mesma qualificação já aplicada em
+  `docs/event-catalog.md`/`index.ts`/`App.tsx`/`productAnalytics.ts`/`labs/CURRENT.md` nas rodadas
+  8/13/15** — corrigidos com a mesma ressalva.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado — mudança de tipo/
+polling sem teste unitário, mesmo padrão de mudanças de `World3D.tsx`/hooks de rede já aceito nas
+rodadas anteriores) e `npx tsc --noEmit`/`npm run test` (server-accounts, 131/131, inalterado —
+mudança é só um comentário em `domain.ts`) limpos, `npm run build` limpo. Sem verificação ao vivo
+nova — consolidação de tipo é refactor puro (mesmo formato de dado, só uma fonte só) e a remoção
+do teto de tentativas não muda o caminho feliz já testado ao vivo em rodadas anteriores, só o
+comportamento do caso extremo (nunca visto ao vivo nesta sessão) de a ponte nunca ficar pronta.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter

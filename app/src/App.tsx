@@ -19,6 +19,7 @@ import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { useHeartbeat, sendImmediateHouseVisibility } from './state/useHeartbeat'
+import type { PublicHouseSnapshot } from './state/usePlayerPublicProfile'
 import { trackFirstLearningChallenge, trackHouseVisited } from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
@@ -132,12 +133,7 @@ function GameApp() {
   // `coopAnswerSignalId`/`placingFurnitureRequestId` acima: o clique em "Visitar casa" acontece
   // dentro do `FriendsPanel`, fora deste componente e do `World3D.tsx`; `id` novo a cada clique
   // garante que visitar o MESMO amigo duas vezes seguidas ainda dispare o efeito.
-  const [visitHouseRequest, setVisitHouseRequest] = useState<{
-    id: string
-    nickname: string
-    furnitureIds: string[]
-    placements: Record<string, { x: number; z: number; rotY: number }>
-  } | null>(null)
+  const [visitHouseRequest, setVisitHouseRequest] = useState<({ id: string; nickname: string } & PublicHouseSnapshot) | null>(null)
   const [reward, setReward] = useState<{
     quest: Quest
     newBadges: string[]
@@ -380,10 +376,7 @@ function GameApp() {
   // criança" citada no documento — dispara aqui, não só quando `World3D.tsx` confirma a entrada,
   // porque o clique em si já é o sinal de intenção real (mesmo espírito de
   // `trackWeeklyReportPreviewViewed`, lab-173).
-  function handleVisitHouse(
-    nickname: string,
-    house: { furnitureIds: string[]; placements: Record<string, { x: number; z: number; rotY: number }> },
-  ) {
+  function handleVisitHouse(nickname: string, house: PublicHouseSnapshot) {
     setShowFriends(false)
     trackHouseVisited()
     setVisitHouseRequest({ id: crypto.randomUUID(), nickname, ...house })

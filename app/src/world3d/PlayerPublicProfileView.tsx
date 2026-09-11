@@ -10,7 +10,7 @@
 // perfil dentro dele).
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { ACHIEVEMENT_CATALOG } from '../data/achievements'
-import { fetchPlayerPublicProfile, usePlayerPublicProfile } from '../state/usePlayerPublicProfile'
+import { fetchPlayerPublicProfile, usePlayerPublicProfile, type PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
 
 const AvatarPreview3D = lazy(() => import('./AvatarPreview3D').then((m) => ({ default: m.AvatarPreview3D })))
 
@@ -21,7 +21,7 @@ interface PlayerPublicProfileViewProps {
   // lab-175 ("Lab 171 - Casa visitável somente leitura") — chamado com o snapshot de mobília já
   // carregado (nunca `null`, o botão só aparece quando `profile.house` existe); quem chama fecha
   // o painel de Amigos e entra na casa 3D com esses dados.
-  onVisitHouse: (nickname: string, house: { furnitureIds: string[]; placements: Record<string, { x: number; z: number; rotY: number }> }) => void
+  onVisitHouse: (nickname: string, house: PublicHouseSnapshot) => void
 }
 
 export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHouse }: PlayerPublicProfileViewProps) {

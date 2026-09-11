@@ -53,8 +53,9 @@ completa.**
       `subscriptionOnly` nunca aparecem pra visitantes (`visitFurnitureQuantity`, novo em
       `progression.ts`, testado); bloqueia o balcão de compras durante a visita; mensagem de boas-
       vindas ("🏠 Você está na casa de {nome}!") reaproveitando o balão de reação já existente.
-- [x] Evento novo `house_visited` (`productAnalytics.ts` + allowlist do backend) — métrica "visitas
-      por criança" citada no documento.
+- [x] Evento novo `house_visited` (`productAnalytics.ts` + allowlist do backend) — aproxima (não
+      mede de verdade — o endpoint agregado conta dispositivo único, não criança; detalhe completo
+      em `docs/event-catalog.md`) a métrica "visitas por criança" citada no documento.
 
 ## Fora de escopo (explicitamente citado no documento)
 
