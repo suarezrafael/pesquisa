@@ -110,10 +110,16 @@ Marte continua sem verificação visual direta (ver "Decisões técnicas").
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
-Nenhuma — todos os itens do `FEATURES.md` foram concluídos (o item de verificação mobile não pôde
-ser testado num viewport mobile real nesta sessão — mesma limitação de ambiente já documentada em
-labs anteriores; a mudança em si não introduz nada específico de mobile/desktop, os dois usam o
-mesmo colisor).
+**Verificação visual num viewport mobile real, especificamente em qualidade `isLowEndDevice`
+(baixa)** — achado real do review automático do Copilot na 3ª rodada do PR #52: a versão anterior
+deste documento declarava "nenhuma pendência" e ao mesmo tempo admitia que o mobile não tinha sido
+testado, uma contradição real. O critério de aceite do backlog é explícito ("mobile low quality
+ainda mostra leitura mínima do relevo") e não foi verificado de fato nesta sessão — só CONFIRMADO
+POR LEITURA DE CÓDIGO que `isLowEndDevice` não desliga a malha de terreno nem o `PhysicsAggregate`
+em nenhum branch (reduz só contagem de props/rochas decorativas e tamanho de shadow map), o que dá
+confiança razoável mas não é o mesmo que ver a tela de verdade. Fica como item pendente pro
+próximo lab que tocar terreno/qualidade mobile, ou pra uma sessão futura com acesso a um viewport
+mobile real (emulado ou dispositivo de verdade).
 
 ## O que o próximo laboratório deve desenvolver
 
