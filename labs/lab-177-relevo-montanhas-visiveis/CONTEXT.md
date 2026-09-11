@@ -18,23 +18,22 @@ Commit inicial → final: 2317efb68a8a19525385afddad57b38aab30b341..HEAD (ver `g
   redução especulativa de altura do lab-151 funcionou (ou o defeito original era mesmo específico
   de GPU/driver do usuário e não reproduz neste ambiente) — nenhuma mudança de código foi
   necessária no planeta principal.**
-- **Planetas secundários — achado real, corrigido.** Auditoria geométrica de `buildMarsHill`
-  (`World3D.tsx`) contra seu colisor: o morro visual (`main`, esfera `diameter:3.4, slice:0.55`
-  escalada `(1.15, 0.8, 1.05)`) tem pico a ~1,36 unidades acima do chão e um raio de base visível
-  (na altura do chão) de ~1,8-2,0 unidades — mas o colisor era uma ESFERA pequena (`diameter: 2.1`)
-  embutida com só 0,15 de protrusão acima do chão (`MARS_ROCK_COLLIDER_PROTRUSION`), cuja seção
-  transversal NA ALTURA DO CHÃO é de só ~0,54 de raio (matemática de esfera: uma calota rasa perto
-  do polo é muito mais estreita que o equador). Isso deixa um anel real entre ~0,54 e ~1,9 de raio
-  onde o jogador atravessa visualmente a encosta do morro sem colidir — um caso concreto,
-  computado a partir da geometria real do código (não suposição), da mesma classe de bug do
-  backlog ("física e visual divergem"), só que na direção oposta ao "andar sobre o invisível"
-  (aqui é "atravessar o visível"). **Corrigido**: colisor trocado de esfera pra CILINDRO
-  (`PhysicsShapeType.CYLINDER`, mesmo tipo já usado no colisor do próprio foguete de lançamento,
-  `World3D.tsx` ~5042) — raio 1,65 (cobre o pé do morro sem passar da malha visível, escolhido
-  deliberadamente menor que o raio visual real pra nunca sobrar "parede fantasma" além do morro) e
-  altura 2,0 com só 0,3 de protrusão acima do chão (bem abaixo do pico de 1,36) — preserva a
-  intenção original do comentário ("esbarrão lateral, nunca vira plataforma escalável"), só
-  corrige a LARGURA da base, que estava errada.
+- **Planetas secundários — achado real, corrigido (e corrigido de novo na 1ª rodada de review,
+  ver abaixo).** Auditoria geométrica de `buildMarsHill` (`World3D.tsx`) contra seu colisor: o
+  morro visual (`main`, esfera `diameter:3.4, slice:0.55` escalada `(1.15, 0.8, 1.05)`) tem pico a
+  ~1,36 unidades acima do chão e um raio de base visível (na altura do chão) de ~1,8-2,0 unidades
+  — mas o colisor era uma ESFERA pequena (`diameter: 2.1`) embutida com só 0,15 de protrusão acima
+  do chão (`MARS_ROCK_COLLIDER_PROTRUSION`), cuja seção transversal NA ALTURA DO CHÃO é de só
+  ~0,54 de raio (matemática de esfera: uma calota rasa perto do polo é muito mais estreita que o
+  equador). Isso deixa um anel real entre ~0,54 e ~1,9 de raio onde o jogador atravessa
+  visualmente a encosta do morro sem colidir — um caso concreto, computado a partir da geometria
+  real do código (não suposição), da mesma classe de bug do backlog ("física e visual divergem"),
+  só que na direção oposta ao "andar sobre o invisível" (aqui é "atravessar o visível").
+  **Tentativa 1 (revertida)**: colisor trocado de esfera pra CILINDRO (raio 1,65, altura 2,0,
+  protrusão 0,3). **Correção final, depois do achado real da 1ª rodada de review** (ver seção
+  própria abaixo): um `PhysicsAggregate` do tipo `MESH` diretamente nas malhas visuais do morro
+  (`main` + `shoulder`) — cobre a silhueta real por construção, sem nenhuma aproximação primitiva
+  errar pra um lado ou pro outro.
 
 ## Decisões técnicas tomadas
 
@@ -44,26 +43,58 @@ Commit inicial → final: 2317efb68a8a19525385afddad57b38aab30b341..HEAD (ver `g
   "nenhuma mudança necessária, verificado ao vivo" é mais valioso pro próximo lab do que inventar
   uma correção especulativa nova em cima de uma já especulativa (lab-151) sem evidência de que o
   problema ainda existe.
-- **Cilindro em vez de esfera maior pro colisor do morro** — uma esfera maior com a MESMA
-  protrusão rasa teria uma seção transversal no chão ainda estreita (matemática de calota esférica
-  — só um cilindro dá raio de base constante independente da altura de protrusão escolhida). Mesmo
-  tipo de forma (`PhysicsShapeType.CYLINDER`) já usado no colisor do foguete de lançamento no MESMO
-  arquivo — não introduz um padrão novo, reaproveita um já validado.
-- **Raio do colisor (1,65) escolhido menor que o raio visual real (~1,8-2,0)** — de propósito:
-  cobrir de menos deixa uma margem estreita nas bordas onde ainda dá pra atravessar (mesmo
-  problema, bem reduzido), mas cobrir de MAIS criaria uma parede invisível além da malha visível
-  (o oposto do bug relatado — "colisão onde não tem nada pra ver"). Dado que este morro é
-  decoração ("relevo ocasional", comentário original), a prioridade foi eliminar o grosso da
-  divergência sem arriscar um novo tipo de bug pra compensar.
-- **Não foi possível verificar ao vivo o fix de Marte** — viajou de foguete até Marte com sucesso
-  (fluxo real: teleporte até o foguete, `E`, escolher "Marte", aguardar a animação), mas
-  `window.__debugTeleportExact` perto de um morro produziu resultados inconsistentes com o cálculo
-  geométrico esperado (avatar terminando a uma distância do centro de Marte bem diferente da
-  pretendida, sugerindo que a gravidade/física de Marte se comporta de forma diferente do planeta
-  principal pra posições fora do fluxo normal de pouso — não investigado a fundo, foge do escopo
-  deste lab). Confiança no fix vem da leitura direta da geometria real do mesh (`buildMarsHill`) e
-  dos parâmetros do colisor antigo, mais o precedente do MESMO tipo de colisor (`CYLINDER`) já
-  funcionando no foguete de lançamento no mesmo arquivo — não de reprodução ao vivo.
+- **Colisor `MESH` nas próprias malhas visuais do morro, não uma forma primitiva aproximada** —
+  a primeira tentativa (cilindro largo e baixo) parecia razoável mas tinha dois problemas reais
+  achados pelo review automático do Copilot (ver seção própria abaixo): um cilindro sempre tem
+  TOPO PLANO (climável, já que o avatar pula bem mais alto que a protrusão escolhida) e nunca cobre
+  perfeitamente uma silhueta assimétrica (o `shoulder` do morro, deslocado do centro). Qualquer
+  forma primitiva (esfera, cilindro, cápsula) erra pra um lado — estreita demais ou larga com um
+  topo/geometria que não existe na malha visual de verdade. Um colisor `MESH` direto nas malhas
+  reais (`main` + `shoulder`) resolve os dois problemas ao mesmo tempo, por construção — mesmo
+  padrão já usado pro planeta principal (`PhysicsAggregate(planet, PhysicsShapeType.MESH, ...)`).
+  Custo desprezível (só 4 morros no total, malhas de baixa poligonagem — 12 segmentos).
+- **Não foi possível verificar ao vivo o fix de Marte, em NENHUMA das duas tentativas** — viajou
+  de foguete até Marte com sucesso pelo menos uma vez (fluxo real: teleporte até o foguete, `E`,
+  escolher "Marte", aguardar a animação), mas `window.__debugTeleportExact` perto de um morro
+  produziu resultados inconsistentes com o cálculo geométrico esperado (avatar terminando a uma
+  distância do centro de Marte bem diferente da pretendida). Na 2ª tentativa (depois do fix de
+  `MESH`), o clique em "Viajar" no menu do foguete não pareceu completar a viagem de verdade (o
+  avatar continuou próximo do raio do planeta PRINCIPAL mesmo depois de esperar), e rótulos de GUI
+  vinculados a objetos de Marte (`linkWithMesh`) apareceram na tela mesmo assim — achado incidental
+  interessante: como todo o jogo roda numa ÚNICA `Scene` do Babylon (planeta principal e Marte só
+  ficam fisicamente longe um do outro no mesmo espaço, não são cenas separadas), rótulos de GUI
+  vinculados a mesh não têm corte por distância — projetam na tela sempre que o mesh vinculado está
+  na direção da câmera, mesmo a dezenas de unidades de distância, o que pode confundir quem está
+  tentando confirmar "cheguei no planeta certo?" só pelo que aparece na tela. Não investigado a
+  fundo (foge do escopo deste lab) — documentado aqui caso ajude o próximo lab que mexer em Marte
+  ou em texto de GUI vinculado a mesh. Confiança no fix final vem da leitura direta da geometria
+  real do mesh (`buildMarsHill`) e do mesmo padrão `PhysicsShapeType.MESH` já usado (e funcionando)
+  pro planeta principal — não de reprodução ao vivo.
+
+Primeira rodada do review automático do Copilot no PR #52 trouxe 3 achados reais corrigidos e 1
+achado de documentação (este próprio arquivo):
+
+- **O cilindro colisor (tentativa 1) tinha um topo plano contínuo, escalável** — o avatar pula
+  ~1,2 unidade, bem mais que os 0,3 de protrusão escolhidos; ele conseguia subir no topo do
+  cilindro e caminhar por cima/dentro da cúpula visual, recriando a MESMA classe de bug do
+  backlog (plataforma invisível), só que desta vez coberta pela malha do morro em vez de destacada
+  dela. Corrigido trocando a abordagem inteira por colisor `MESH` (ver "Decisões técnicas" acima).
+- **O cilindro também não cobria o `shoulder`** (sub-malha do morro deslocada em
+  `(1.1, -0.35, 0.6)`, alcançando ~2,05 de raio no chão, além do alcance do cilindro de 1,65) —
+  resolvido junto pela mesma troca pra `MESH` (cobre `main` E `shoulder`, cada um com seu próprio
+  `PhysicsAggregate`).
+- **Erro de concordância gramatical** num comentário (`"do que ALTA"` → `"do que alta"`) —
+  corrigido.
+- **Screenshot de verificação citado mas não incluído/linkado** — o `CONTEXT.md` original
+  afirmava ter tirado screenshots de verificação (critério de aceite explícito do backlog,
+  `FEATURES.md`), mas nenhuma imagem foi de fato salva/commitada. Corrigido: capturado de novo
+  (mesmo platô, mesmo teste) com a imagem salva em disco desta vez, e commitada em
+  `labs/lab-177-relevo-montanhas-visiveis/evidencias/planeta-principal-plato-11.jpg` (ver seção
+  final).
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) e `npm run build`
+limpos. Nova verificação ao vivo pro planeta principal (screenshot real desta vez, ver abaixo);
+Marte continua sem verificação visual direta (ver "Decisões técnicas").
 
 ## Pendências / dívidas conhecidas
 
@@ -101,7 +132,13 @@ Seguindo a ordem recomendada por `docs/growth-retention-monetization-backlog.md`
 - **Verificado ao vivo, num navegador real** (Chrome via automação, `npm run dev` local, perfil de
   teste já existente no ambiente): planeta principal confirmado limpo no platô mais íngreme
   (índice 11 de `PLATEAU_CENTERS`) de 4 ângulos de câmera diferentes — sem culling/malha faltando
-  em nenhum. Viagem real de foguete até Marte confirmada funcionando (UI completa: caminhar até o
-  foguete, `E`, escolher destino, animação de voo). Fix do colisor do morro de Marte NÃO verificado
-  visualmente ao vivo (ver "Decisões técnicas" acima) — confiança vem de matemática de geometria
-  aplicada aos parâmetros reais do código, não de reprodução visual direta.
+  em nenhum. Screenshot real salvo em
+  `labs/lab-177-relevo-montanhas-visiveis/evidencias/planeta-principal-plato-11.jpg` (ângulo
+  grazing quase horizontal, o mais propenso a expor culling/normal degenerada segundo a hipótese
+  histórica do bug — mostra a cúpula do platô renderizada sólida, sombreada, sem nenhum artefato).
+  Viagem real de foguete até Marte confirmada funcionando pelo menos uma vez (UI completa: caminhar
+  até o foguete, `E`, escolher destino, animação de voo). Fix do colisor do morro de Marte NÃO
+  verificado visualmente ao vivo em nenhuma das duas tentativas (ver "Decisões técnicas" acima) —
+  confiança vem de matemática de geometria aplicada aos parâmetros reais do código, mais o mesmo
+  padrão `PhysicsShapeType.MESH` já em uso comprovado pro planeta principal, não de reprodução
+  visual direta.

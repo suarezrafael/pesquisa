@@ -49,7 +49,11 @@ só é verdade em METADE do sistema real):
       visualmente, ou maior deixando-o flutuar/andar no "ar" antes de tocar o morro visível).
       (referência: achado da investigação prévia acima, nunca auditado antes)
 - [x] Screenshot de verificação (desktop e, se possível, viewport mobile) entra no `CONTEXT.md`
-      deste lab — critério de aceite explícito do backlog.
+      deste lab — critério de aceite explícito do backlog. (achado real da 1ª rodada do review
+      automático do Copilot no PR #52: a primeira versão deste `CONTEXT.md` afirmava ter feito
+      screenshots sem incluir/linkar nenhuma imagem de verdade — corrigido, arquivo real em
+      `labs/lab-177-relevo-montanhas-visiveis/evidencias/planeta-principal-plato-11.jpg`, só
+      desktop — viewport mobile não testado nesta sessão)
 - [x] Confirmar que a qualidade mobile/low-end (`isLowEndDevice`) não introduz nenhuma divergência
       nova (achado da investigação prévia: hoje ela só reduz contagem de props/rochas decorativas
       e tamanho de shadow map, nunca desliga a malha de terreno nem o `PhysicsAggregate` — só
