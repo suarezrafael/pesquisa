@@ -14,8 +14,12 @@ MESMA sala 3D populada com os dados do amigo — item `subscriptionOnly` nunca a
 visitante (não revela assinatura do anfitrião); balcão de compras bloqueado durante a visita
 (único caminho pra `MyHousePanel`, garante "visitante não altera nada"); reações genéricas
 (lab-170) funcionaram sem nenhuma mudança de código (já operavam sobre os nós 3D renderizados, não
-sobre `progress`). Evento novo `house_visited` mede "visitas por criança" (métrica citada no
-documento). `npx tsc -b`/testes limpos (app 178/178, 13 novos; server-accounts 131/131, 22 novos).
+sobre `progress`). Evento novo `house_visited`, exposto como `weeklyFunnel.houseVisited`
+(`count(distinct device_id)`, igual a todo outro passo do funil) — aproxima, mas NÃO mede de
+verdade, a "visitas por criança" citada no documento (perde revisita do mesmo aparelho, não
+distingue perfil que compartilha/troca de aparelho; detalhe completo em
+`docs/event-catalog.md`). `npx tsc -b`/testes limpos (app 178/178, 13 novos; server-accounts
+131/131, 22 novos).
 `npm run build` sem regressão de bundle. Migração `0010` aplicada em produção. **Verificado ao
 vivo, ponta a ponta, contra o banco de PRODUÇÃO real** (mesma técnica do lab-172: `wrangler dev`
 local + segundo Vite): dois jogadores de teste registrados, amizade criada via API, mobília

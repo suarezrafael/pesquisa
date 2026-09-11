@@ -470,6 +470,17 @@ limpos, `npm run build` limpo. Sem verificação ao vivo nova — confirmado pel
 API real (`ShadowGenerator.removeShadowCaster`/`Node.getChildMeshes`) nos tipos instalados do
 `@babylonjs/core`, mesmo padrão de confiança da 10ª rodada pro fix de material/textura irmão.
 
+Décima terceira rodada do Copilot trouxe 1 achado real corrigido (só documentação):
+
+- **`labs/CURRENT.md` ainda descrevia `house_visited` como medindo "visitas por criança" sem
+  qualificação** — a mesma imprecisão já corrigida em `docs/event-catalog.md` na 8ª rodada
+  (`weeklyDevices`/`count(distinct device_id)` mede dispositivo único, não criança) nunca foi
+  replicada neste arquivo, que é o primeiro lido por uma sessão nova. Corrigido com a mesma
+  qualificação, apontando pro `event-catalog.md` pro detalhe completo.
+
+Nenhuma mudança de código nesta rodada — `npx tsc -b`/`npm run test`/`npm run build` continuam no
+mesmo estado (178/178 app, 131/131 server-accounts) da 12ª rodada.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
