@@ -41,9 +41,14 @@ Commit inicial → final: 7e552183693c7645f5eb41e80bca8604f7be3606..HEAD (ver `g
   vazava o avatar INTEIRO dele pra sempre a partir desse ponto. Corrigido com
   `root.getChildMeshes().forEach(mesh => shadowGenerator.removeShadowCaster(mesh))` antes de
   `root.dispose(false, true)`.
-- Nenhuma mudança em `AvatarShop.tsx`/`AvatarPreview3D.tsx` foi necessária — a causa raiz mora
-  inteiramente em `studentFigure.ts` (compartilhado por lojinha e mundo 3D) e no ponto de
-  desconexão de jogador remoto em `World3D.tsx`.
+- **Correção inicial** (antes das rodadas de review abaixo): nenhuma mudança em `AvatarShop.tsx`/
+  `AvatarPreview3D.tsx` foi necessária — a causa raiz mora inteiramente em `studentFigure.ts`
+  (compartilhado por lojinha e mundo 3D) e no ponto de desconexão de jogador remoto em
+  `World3D.tsx`. **Isso deixou de valer já na 1ª rodada de review do Copilot** (achado do
+  review automático do Copilot no PR #51, 3ª rodada — esta frase tinha ficado desatualizada e não
+  foi corrigida a tempo): `AvatarPreview3D.tsx` PASSOU a mudar na 1ª rodada, pra importar e chamar
+  `disposeStudentFigure` a cada rebuild do preview (ver achados da 1ª/2ª rodada, seção própria mais
+  abaixo). `AvatarShop.tsx` continua intocado do início ao fim deste lab.
 
 ## Decisões técnicas tomadas
 
@@ -143,6 +148,11 @@ INCORRETO (não implementado, com justificativa):
 Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) e `npm run build`
 limpos. Sem verificação ao vivo nova — mudança é idêntica em espírito e local à já verificada na
 1ª rodada (`removeRemotePlayer`), mesmo padrão de confiança.
+
+**Terceira rodada do Copilot: "Approval recommended"** — 1 achado real de documentação corrigido
+(a frase "nenhuma mudança em `AvatarPreview3D.tsx` foi necessária", em "O que foi feito", tinha
+ficado desatualizada já na 1ª rodada e não foi corrigida a tempo — `AvatarPreview3D.tsx` passou a
+mudar naquela mesma rodada). Nenhuma mudança de código nesta rodada.
 
 ## Pendências / dívidas conhecidas
 
