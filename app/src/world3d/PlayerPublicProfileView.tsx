@@ -38,8 +38,15 @@ export function PlayerPublicProfileView({ playerId, nickname, onBack, onVisitHou
   // clicar "Visitar casa" e depois "← Voltar"/fechar o painel ANTES da resposta chegar ainda
   // disparava `onVisitHouse` (teleportando o jogador pra dentro de casa) mesmo com a tela já
   // abandonada — mesmo padrão `cancelled` já usado em `usePlayerPublicProfile.ts`.
+  //
+  // Achado do Copilot na 4ª rodada: `useRef(true)` só roda uma vez, no primeiro render — em
+  // `<StrictMode>` (`main.tsx`), o React monta, desmonta (roda esta limpeza, `current = false`) e
+  // remonta de propósito em dev; sem reafirmar `current = true` na PRÓPRIA montagem do efeito, o
+  // ref ficava travado em `false` pra sempre depois desse ciclo, quebrando `handleVisitClick` em
+  // dev mesmo com o componente genuinamente montado.
   const mountedRef = useRef(true)
   useEffect(() => {
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
     }

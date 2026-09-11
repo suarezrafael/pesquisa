@@ -721,6 +721,16 @@ describe('isValidHousePlacements (lab-175)', () => {
     expect(isValidHousePlacements({ 'sofa#0': { x: NaN, z: 2, rotY: 0 } })).toBe(false)
   })
 
+  it('rejeita coordenada finita mas absurdamente fora dos limites da sala (achado do Copilot na 4ª rodada)', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1e308, z: 2, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: -1e10, rotY: 0 } })).toBe(false)
+    expect(isValidHousePlacements({ 'sofa#0': { x: 1, z: 2, rotY: 1e10 } })).toBe(false)
+  })
+
+  it('aceita coordenadas dentro de uma margem generosa além da sala real (5.5 de meia-largura)', () => {
+    expect(isValidHousePlacements({ 'sofa#0': { x: 19, z: -19, rotY: 900 } })).toBe(true)
+  })
+
   it('rejeita mais de 300 chaves (defesa contra payload abusivo)', () => {
     const big: Record<string, unknown> = {}
     for (let i = 0; i < 301; i++) big[`sofa#${i}`] = { x: 0, z: 0, rotY: 0 }

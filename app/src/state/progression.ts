@@ -611,17 +611,31 @@ export interface HouseSyncSnapshot {
   placements: Record<string, { x: number; z: number; rotY: number }>
 }
 
+// lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada): o servidor recusa o
+// heartbeat INTEIRO (400) se `houseFurnitureIds`/`housePlacements` passarem de 300 entradas
+// (`HOUSE_FURNITURE_MAX_COUNT`/`HOUSE_PLACEMENTS_MAX_KEYS`, `domain.ts`) — sem um teto
+// equivalente aqui, um jogador com uma casa muito decorada (nada no client impede comprar mais de
+// 300 cópias) travaria até `badges`/`equippedLook`/`last_seen_at` de sincronizar, não só a casa.
+// Trunca em vez de rejeitar: a visita fica incompleta nesse caso raro, mas o resto do heartbeat
+// continua funcionando.
+const HOUSE_SYNC_MAX_ENTRIES = 300
+
 export function resolveHouseSyncSnapshot(progress: Progress): HouseSyncSnapshot {
-  const furnitureIds = progress.unlockedFurnitureIds.filter((id) => {
-    const item = FURNITURE_CATALOG.find((c) => c.id === id)
-    return item !== undefined && !item.subscriptionOnly
-  })
+  const furnitureIds = progress.unlockedFurnitureIds
+    .filter((id) => {
+      const item = FURNITURE_CATALOG.find((c) => c.id === id)
+      return item !== undefined && !item.subscriptionOnly
+    })
+    .slice(0, HOUSE_SYNC_MAX_ENTRIES)
   const placements: Record<string, { x: number; z: number; rotY: number }> = {}
+  let placementCount = 0
   for (const [key, value] of Object.entries(progress.housePlacements)) {
+    if (placementCount >= HOUSE_SYNC_MAX_ENTRIES) break
     if (!HOUSE_PLACEMENT_KEY_PATTERN.test(key)) continue
     const item = FURNITURE_CATALOG.find((c) => c.id === key.split('#')[0])
     if (!item || item.subscriptionOnly) continue
     placements[key] = value
+    placementCount += 1
   }
   return { furnitureIds, placements }
 }

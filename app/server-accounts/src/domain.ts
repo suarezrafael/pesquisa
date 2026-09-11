@@ -521,6 +521,15 @@ export function isValidHouseFurnitureIds(value: unknown): value is string[] {
 const HOUSE_PLACEMENTS_MAX_KEYS = 300
 const HOUSE_PLACEMENT_KEY_PATTERN = /^[a-z0-9_]+#\d+$/
 
+// lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada): `Number.isFinite` sozinho
+// só exclui `NaN`/`Infinity`, mas ainda aceita valores absurdos (`1e308`) que um client modificado
+// podia mandar — a sala real tem `HOUSE_ROOM_HALF_SIZE = 5.5` (`World3D.tsx`); uma margem generosa
+// (bem além de qualquer posição alcançável de verdade dentro da sala) barra coordenadas fora de
+// qualquer escala plausível sem engessar o layout real. `rotY` é cíclico (ângulo), mas ainda limita
+// pra descartar magnitudes tão grandes que arriscam problemas de precisão de ponto flutuante.
+const HOUSE_PLACEMENT_COORD_MAX = 20
+const HOUSE_PLACEMENT_ROTATION_MAX = 1000
+
 function isValidHousePlacementValue(value: unknown): value is { x: number; z: number; rotY: number } {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
@@ -528,7 +537,10 @@ function isValidHousePlacementValue(value: unknown): value is { x: number; z: nu
     Object.keys(record).length === 3 &&
     Number.isFinite(record.x) &&
     Number.isFinite(record.z) &&
-    Number.isFinite(record.rotY)
+    Number.isFinite(record.rotY) &&
+    Math.abs(record.x as number) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs(record.z as number) <= HOUSE_PLACEMENT_COORD_MAX &&
+    Math.abs(record.rotY as number) <= HOUSE_PLACEMENT_ROTATION_MAX
   )
 }
 

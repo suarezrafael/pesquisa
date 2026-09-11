@@ -865,6 +865,19 @@ describe('resolveHouseSyncSnapshot (lab-175, achados do review automático do Co
     expect(snapshot.placements).toEqual({ 'cama#0': { x: 1, z: 2, rotY: 0 } })
   })
 
+  it('trunca em 300 entradas em vez de mandar tudo (achado do Copilot na 4ª rodada: o servidor recusa o heartbeat inteiro acima disso)', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedFurnitureIds: Array.from({ length: 301 }, () => 'cama'),
+      housePlacements: Object.fromEntries(
+        Array.from({ length: 301 }, (_, i) => [`cama#${i}`, { x: 0, z: 0, rotY: 0 }]),
+      ),
+    }
+    const snapshot = resolveHouseSyncSnapshot(progress)
+    expect(snapshot.furnitureIds).toHaveLength(300)
+    expect(Object.keys(snapshot.placements)).toHaveLength(300)
+  })
+
   // lab-136: posicionamento manual de mobília ("Mover" no MyHousePanel) — testes de regressão pro
   // eixo novo, mesmo espírito dos testes de `unlockFurniture` acima.
   it('setFurniturePlacement grava posição/ângulo novos pra um item ainda sem posição salva', () => {

@@ -198,6 +198,30 @@ Nenhuma verificação ao vivo nova pra estes 2 últimos — mudança pequena e d
 montagem + diferenciação de mensagem de erro), confiança por revisão de código e pela suíte de
 tipos/testes já limpa.
 
+Quarta rodada do Copilot trouxe 4 achados corrigidos (o de ownership/amizade foi reafirmado de
+novo — mesma decisão de documentar, ver `Pendências`):
+
+- **`mountedRef` (correção da rodada 3) travava em `false` pra sempre depois do ciclo de
+  desmontagem/remontagem proposital do `<StrictMode>` em dev** (`main.tsx`) — `useRef(true)` só
+  roda uma vez, no primeiro render; a limpeza do efeito zera pra `false`, mas nada reafirmava
+  `true` na montagem seguinte. Corrigido setando `mountedRef.current = true` no CORPO do efeito,
+  não só `false` na limpeza. Só afeta `npm run dev` (StrictMode não roda em produção) — mas
+  quebrava justamente a ferramenta de teste local usada pra verificar este mesmo lab. Verificado
+  ao vivo: clique real em "Visitar casa" (depois do ciclo de StrictMode já ter acontecido no mount
+  do componente) confirmado populando a cena 3D com a mobília certa do amigo.
+- **Teto de 300 entradas do servidor (`isValidHouseFurnitureIds`/`isValidHousePlacements`) não
+  tinha equivalente no client** — uma casa com mais de 300 cópias de mobília (nada impede comprar
+  tantas) faria o heartbeat inteiro ser recusado (400), travando até `badges`/`equippedLook`/
+  `last_seen_at` de sincronizar, não só a casa. `resolveHouseSyncSnapshot` agora trunca em 300 em
+  vez de mandar tudo (testado).
+- **Coordenadas de `housePlacements` só checavam `Number.isFinite`**, aceitando valores absurdos
+  tipo `1e308` que passariam direto pro Babylon do visitante (`World3D.tsx`), sem qualquer relação
+  com o tamanho real da sala (`HOUSE_ROOM_HALF_SIZE = 5.5`). Adicionado limite de amplitude
+  generoso (`±20` posição, `±1000` rotação) em `isValidHousePlacementValue` (testado).
+- **`GET /players/:id/public-profile` sem `Cache-Control: no-store`** — um navegador/proxy podia
+  reaproveitar uma resposta com a casa visível mesmo depois do dono desligar, furando exatamente a
+  revalidação da rodada 2/3. Header adicionado na resposta.
+
 ## Pendências / dívidas conhecidas
 
 - **Corrida entre heartbeat periódico e imediato sem versionamento** — pode reverter
@@ -238,12 +262,13 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
 ## Estado do repositório ao final
 
 - Branch: `lab-175-casa-visitavel`.
-- `npx tsc -b`/`npm run test` (app): limpo, 172/172 (7 novos: `visitFurnitureQuantity`,
-  `setHouseVisible`, `resolveHouseSyncSnapshot` ×3). `npm run build`: limpo, sem regressão de
-  bundle.
-- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 123/123 (14 novos:
-  `isValidHouseFurnitureIds`, `isValidHousePlacements`, `sanitizeHouseFurnitureIds`/
-  `sanitizeHousePlacements`, allowlist do evento).
+- `npx tsc -b`/`npm run test` (app): limpo, 173/173 (8 novos: `visitFurnitureQuantity`,
+  `setHouseVisible`, `resolveHouseSyncSnapshot` ×4, incluindo o teste de truncamento em 300 da
+  4ª rodada). `npm run build`: limpo, sem regressão de bundle.
+- `npx tsc --noEmit`/`npm run test` (server-accounts): limpo, 125/125 (16 novos:
+  `isValidHouseFurnitureIds`, `isValidHousePlacements` (incluindo os 2 testes de limite de
+  coordenada da 4ª rodada), `sanitizeHouseFurnitureIds`/`sanitizeHousePlacements`, allowlist do
+  evento).
 - **Migração `0010` aplicada em produção** (`npm run migrate`, confirmado via query real).
 - **Verificado ao vivo, ponta a ponta, contra o banco de PRODUÇÃO real**: subiu um `wrangler dev`
   local (porta 8790, apontando pro `DATABASE_URL` real) + um segundo processo Vite (porta 5180,
@@ -285,3 +310,9 @@ evidência, e isso está fora do escopo de um laboratório de código. Aguardar 
   (magnitude do vetor posição ~12,8, igual ao raio real do planeta) — não com o centro da sala
   (que teria ~211), provando que `savedOutsideCenter` não foi mais corrompido pela visita
   encadeada.
+- **Reverificado ao vivo de novo depois da 4ª rodada** (novo `wrangler dev`/Vite, novos jogadores
+  de teste, dados removidos ao final): fluxo completo real repetido do zero (perfil recém-carregado,
+  ciclo de `<StrictMode>` já ocorrido no mount) — clique em "Visitar casa" confirmado populando a
+  cena 3D com a mobília certa do amigo (`furniture-plant-...`), provando que a correção do
+  `mountedRef` realmente resolve o travamento em dev descrito pelo achado (sem ela, esse clique
+  cairia silenciosamente no `if (!mountedRef.current) return`, nunca chamando `onVisitHouse`).

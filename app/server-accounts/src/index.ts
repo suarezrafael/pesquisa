@@ -904,13 +904,22 @@ async function handlePlayerPublicProfile(request: Request, env: Env, playerId: s
           ),
         }
       : null
-  return Response.json({
-    nickname: row.nickname,
-    avatarEmoji: row.avatar_emoji,
-    equippedLook: row.equipped_look ?? null,
-    badges: row.badges ?? [],
-    house,
-  })
+  // lab-175 (achado do review automático do Copilot no PR #49, 4ª rodada): `house` reflete um
+  // estado de privacidade que pode mudar a qualquer momento (`houseVisible`) — sem
+  // `Cache-Control: no-store`, um navegador ou proxy intermediário podia reaproveitar uma resposta
+  // antiga com a casa visível mesmo depois do dono desligar, exatamente a corrida que a
+  // revalidação em `PlayerPublicProfileView.tsx` (clique de "Visitar casa") existe pra fechar —
+  // uma resposta em cache faria essa revalidação nunca bater no servidor de verdade.
+  return Response.json(
+    {
+      nickname: row.nickname,
+      avatarEmoji: row.avatar_emoji,
+      equippedLook: row.equipped_look ?? null,
+      badges: row.badges ?? [],
+      house,
+    },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
 }
 
 async function handleSubscriptionStatus(request: Request, env: Env): Promise<Response> {
