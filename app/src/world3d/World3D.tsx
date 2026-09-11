@@ -71,6 +71,7 @@ import {
   avatarColorFromEmoji,
   bonecoFeaturesFromEmoji,
   buildStudentFigure,
+  disposeStudentFigure,
   type StudentFigure,
 } from './studentFigure'
 import { questTypeColor } from './questVisuals'
@@ -9013,7 +9014,18 @@ export function World3D({
         if (rp.chatBubbleTimeout !== null) window.clearTimeout(rp.chatBubbleTimeout)
         guiTexture.removeControl(rp.label)
         guiTexture.removeControl(rp.chatLabel)
-        rp.figure.root.dispose()
+        // lab-176 (achado investigando o bug de vazamento no preview da lojinha, mesma causa raiz):
+        // `dispose()` sem argumentos não libera material/textura, e NUNCA remove as malhas do
+        // corpo (torso, cabeça, mochila, membros, chapéu, óculos, cabelo — todos registrados em
+        // `shadowGenerator` por `buildStudentFigure`/`applyHat`/etc.) da `renderList` do
+        // `ShadowGenerator`. Cada jogador remoto que desconecta vazava o avatar INTEIRO dele pra
+        // sempre a partir desse ponto. `disposeStudentFigure` (`studentFigure.ts`) já cobre isso
+        // (achado do review automático do Copilot no PR #51, 4ª rodada: este bloco duplicava a
+        // mesma lógica — incluindo a proteção de `shirtMat`/`pantsMat`/`shoeMat`/`backpackMat`
+        // contra destruir uma `DynamicTexture` COMPARTILHADA entre jogadores,
+        // `getOrCreatePatternTexture` — já implementada nesse helper único, reaproveitado aqui em
+        // vez de duplicada, pra não divergir se um recurso compartilhado novo aparecer no futuro).
+        disposeStudentFigure(rp.figure, shadowGenerator)
         remotePlayers.delete(id)
       }
 
