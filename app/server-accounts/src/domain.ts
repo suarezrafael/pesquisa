@@ -190,6 +190,9 @@ const PRODUCT_EVENT_TYPES = new Set([
   'camera_recenter_used',
   'cosmetic_equipped',
   'planet_travel_completed',
+  // lab-179 ("Planetas interativos v1") — evento único pra qualquer interação dentro de um
+  // planeta-destino, ver app/src/productAnalytics.ts (`trackPlanetInteractionCompleted`).
+  'planet_interaction_completed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -259,6 +262,16 @@ const DESTINATION_PLANET_IDS = new Set([
 
 export function isValidDestinationPlanetId(planetId: unknown): planetId is string {
   return typeof planetId === 'string' && DESTINATION_PLANET_IDS.has(planetId)
+}
+
+// lab-179 ("Planetas interativos v1") — categorias fixas de interação dentro de um planeta,
+// mesmo espírito de `COSMETIC_SLOTS` acima: `planet_interaction_completed` usa um evento genérico
+// com `kind` em vez de um tipo por interação (ver `trackPlanetInteractionCompleted`,
+// `productAnalytics.ts`), então `kind` precisa da mesma validação de allowlist fixa.
+const PLANET_INTERACTION_KINDS = new Set(['collectible', 'actionable_object', 'educational_quiz', 'visual_secret'])
+
+export function isValidPlanetInteractionKind(kind: unknown): kind is string {
+  return typeof kind === 'string' && PLANET_INTERACTION_KINDS.has(kind)
 }
 
 // lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de

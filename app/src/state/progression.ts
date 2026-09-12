@@ -13,6 +13,7 @@ import { GLASSES_CATALOG } from '../data/glasses'
 import { FURNITURE_CATALOG, findFurnitureRewardForPlanet, type FurnitureOption } from '../data/furniture'
 import { findPlanetIdForQuest, isPlanetFullyCompleted } from '../data/planetQuests'
 import { findTreasureChestById } from '../data/treasureChests'
+import { findPlanetSecretById } from '../data/planetSecrets'
 import { findPostcardByPlanetId } from '../data/postcards'
 import { getCurrentWeeklyEvent, isoWeekKey, type WeeklyEvent } from '../data/weeklyEvents'
 import { PET_CATALOG } from '../data/pets'
@@ -387,6 +388,29 @@ export function applyTreasureChestFound(progress: Progress, chestId: string): Tr
       ...progress,
       foundTreasureChestIds: [...progress.foundTreasureChestIds, chestId],
       coins: progress.coins + chest.coinReward,
+    },
+    granted: true,
+  }
+}
+
+export interface PlanetSecretResult {
+  progress: Progress
+  granted: boolean
+}
+
+// Segredo visual escondido (lab-179, "Planetas interativos v1") — mesmo padrão de
+// `applyTreasureChestFound` acima: concessão de graça, idempotente (devolve `granted: false` se o
+// segredo já tiver sido achado ANTES, permanente entre sessões), disparada por proximidade real em
+// `World3D.tsx`, nunca por compra.
+export function applyPlanetSecretFound(progress: Progress, secretId: string): PlanetSecretResult {
+  if (progress.foundPlanetSecretIds.includes(secretId)) return { progress, granted: false }
+  const secret = findPlanetSecretById(secretId)
+  if (!secret) return { progress, granted: false }
+  return {
+    progress: {
+      ...progress,
+      foundPlanetSecretIds: [...progress.foundPlanetSecretIds, secretId],
+      coins: progress.coins + secret.coinReward,
     },
     granted: true,
   }

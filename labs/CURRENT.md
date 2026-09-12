@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-179-planetas-interativos/ — planetas interativos v1. Origem:
+`docs/growth-retention-monetization-backlog.md`, "Lab 179", prioridade P1 — próximo item
+recomendado no `CONTEXT.md` do lab-185. Investigação prévia (ver `FEATURES.md` do lab) achou que
+6 dos 7 planetas-destino já têm 3 interações reais (cartão-postal colecionável, baú de tesouro,
+escolinha de astronomia) — só falta instrumentar com eventos; Marte precisa de 1 interação nova
+pra chegar a 3. Ver `labs/lab-179-planetas-interativos/FEATURES.md` para o plano completo.
+
 Último concluído: labs/lab-185-medicao-coortes/ — medição de coortes de retenção e qualidade.
 Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 185", prioridade P0/P1 — confirmado
 com o usuário via `AskUserQuestion` como o próximo lab (em vez de pular pro Lab 179) depois de

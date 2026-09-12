@@ -54,6 +54,7 @@ import { findGlassesById } from '../data/glasses'
 import { FURNITURE_CATALOG, findFurnitureById } from '../data/furniture'
 import { findPetById } from '../data/pets'
 import { findTreasureChestById } from '../data/treasureChests'
+import { findPlanetSecretById } from '../data/planetSecrets'
 import { findPostcardByPlanetId } from '../data/postcards'
 import {
   findColorOption,
@@ -88,7 +89,7 @@ import {
   petStageScale,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
-import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted } from '../productAnalytics'
+import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted, trackPlanetInteractionCompleted } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
@@ -172,6 +173,9 @@ interface World3DProps {
   // proximidade real; `App.tsx` repassa direto pra `useProgress().foundTreasureChest`, que já é
   // idempotente sozinho (não precisa de checagem extra aqui).
   onFindTreasureChest: (chestId: string) => void
+  // lab-179 ("Planetas interativos v1") — mesmo formato/padrão de `onFindTreasureChest` acima
+  // (achado por proximidade real, idempotente sozinho no lado do `useProgress`).
+  onFindPlanetSecret: (secretId: string) => void
   // lab-141 (cartão-postal colecionável) — chamado ao pousar de verdade num planeta-destino
   // (`landRocket`); `App.tsx` repassa direto pra `useProgress().collectPostcard`. Diferente de
   // `onFindTreasureChest` acima, devolve `boolean` (se concedeu um cartão NOVO) — pousar num
@@ -1993,6 +1997,7 @@ export function World3D({
   onOpenMyHouse,
   onUnlockMarsReward,
   onFindTreasureChest,
+  onFindPlanetSecret,
   onCollectPostcard,
   onCollectCoin,
   onSwitchProfile,
@@ -2048,6 +2053,7 @@ export function World3D({
   const onOpenMyHouseRef = useRef(onOpenMyHouse)
   const onUnlockMarsRewardRef = useRef(onUnlockMarsReward)
   const onFindTreasureChestRef = useRef(onFindTreasureChest)
+  const onFindPlanetSecretRef = useRef(onFindPlanetSecret)
   const onCollectPostcardRef = useRef(onCollectPostcard)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onOpenShopRef = useRef(onOpenShop)
@@ -2102,6 +2108,8 @@ export function World3D({
   // acima (some sozinho depois de alguns segundos), mas sem barra/estado de "zona" nenhum: é só um
   // achado pontual de exploração.
   const [treasureFoundMessage, setTreasureFoundMessage] = useState<string | null>(null)
+  // Segredo visual escondido (lab-179) — mesmo padrão de `treasureFoundMessage` acima.
+  const [planetSecretFoundMessage, setPlanetSecretFoundMessage] = useState<string | null>(null)
   // Cartão-postal colecionável (lab-141) — mesmo padrão de aviso transitório de
   // `treasureFoundMessage` acima (some sozinho depois de alguns segundos).
   const [postcardFoundMessage, setPostcardFoundMessage] = useState<string | null>(null)
@@ -2170,6 +2178,7 @@ export function World3D({
   onOpenMyHouseRef.current = onOpenMyHouse
   onUnlockMarsRewardRef.current = onUnlockMarsReward
   onFindTreasureChestRef.current = onFindTreasureChest
+  onFindPlanetSecretRef.current = onFindPlanetSecret
   onCollectPostcardRef.current = onCollectPostcard
   onCollectCoinRef.current = onCollectCoin
   onOpenShopRef.current = onOpenShop
@@ -4456,6 +4465,10 @@ export function World3D({
       // precisar buscar o mesh de novo.
       const treasureChestMarkers: { chestId: string; worldPos: Vector3; pivot: TransformNode; label: TextBlock }[] = []
 
+      // Segredos visuais escondidos (lab-179, "Planetas interativos v1") — mesmo formato de
+      // `treasureChestMarkers` acima.
+      const planetSecretMarkers: { secretId: string; worldPos: Vector3; pivot: TransformNode }[] = []
+
       // Constrói UM baú de tesouro escondido (lab-131) — visual distinto das moedas comuns/pote de
       // Marte (baú de madeira com fivela dourada), sempre construído mas `setEnabled(false)` de
       // saída se `chestId` já estiver em `foundTreasureChestIds` (achado numa sessão anterior) —
@@ -4518,6 +4531,67 @@ export function World3D({
           worldPos: planetRoot.position.add(localUp.scale(radius)),
           pivot: base,
           label,
+        })
+      }
+
+      // Constrói UM segredo visual escondido (lab-179, "Planetas interativos v1", categoria
+      // "segredo visual" do backlog) — diferente do baú (marcador de texto sempre visível de
+      // longe, "vitrine" de recompensa), o segredo não tem NENHUM texto/label chamativo antes de
+      // achado — só o próprio modelo 3D discreto (sonda quebrada, cores foscas, sem brilho
+      // metálico como o baú/pote de moedas) recompensa quem realmente explora o planeta inteiro.
+      // Mesmo padrão "constrói sempre, esconde condicionalmente" de `buildTreasureChest` acima.
+      function buildPlanetSecret(secretId: string, planetRoot: TransformNode, radius: number, localUp: Vector3, nameSuffix: string) {
+        const base = new TransformNode(`planetSecret-${nameSuffix}`, scene)
+        base.position = localUp.scale(radius)
+        base.rotationQuaternion = alignmentQuaternion(localUp)
+        base.parent = planetRoot
+
+        const hullMat = new PBRMaterial(`planetSecretHullMat-${nameSuffix}`, scene)
+        hullMat.albedoColor = new Color3(0.35, 0.37, 0.4)
+        hullMat.roughness = 0.9
+        const hull = MeshBuilder.CreateCylinder(`planetSecretHull-${nameSuffix}`, { height: 0.6, diameterTop: 0.18, diameterBottom: 0.32, tessellation: 10 }, scene)
+        hull.rotation.z = Math.PI / 2.4
+        hull.position = new Vector3(0, 0.22, 0)
+        hull.material = hullMat
+        hull.parent = base
+        shadowGenerator.addShadowCaster(hull)
+
+        const dishMat = new PBRMaterial(`planetSecretDishMat-${nameSuffix}`, scene)
+        dishMat.albedoColor = new Color3(0.55, 0.55, 0.58)
+        dishMat.roughness = 0.6
+        dishMat.metallic = 0.3
+        // Cilindro baixo, não `CreateDisc` — mesmo motivo já documentado na lagoa (`pond`, mais
+        // acima neste arquivo): o disco nasce "de pé" (normal no eixo Z), então giraria em torno
+        // do próprio eixo sem nunca ficar de fato "deitado"/tombado como uma antena. O cilindro já
+        // nasce com a face plana no eixo Y — só precisa de uma rotação em X/Z pra tombar.
+        const dish = MeshBuilder.CreateCylinder(`planetSecretDish-${nameSuffix}`, { diameter: 0.44, height: 0.05, tessellation: 16 }, scene)
+        dish.position = new Vector3(0.32, 0.34, 0)
+        dish.rotation.z = Math.PI / 2.5
+        dish.material = dishMat
+        dish.parent = base
+        shadowGenerator.addShadowCaster(dish)
+
+        const panelMat = new PBRMaterial(`planetSecretPanelMat-${nameSuffix}`, scene)
+        panelMat.albedoColor = new Color3(0.15, 0.22, 0.3)
+        panelMat.roughness = 0.5
+        const panel = MeshBuilder.CreateBox(`planetSecretPanel-${nameSuffix}`, { width: 0.04, height: 0.4, depth: 0.16 }, scene)
+        panel.position = new Vector3(-0.24, 0.16, 0)
+        panel.rotation.z = 0.4
+        panel.material = panelMat
+        panel.parent = base
+        shadowGenerator.addShadowCaster(panel)
+
+        // Sem label 3D nenhum de propósito — diferente do baú (texto sempre visível de longe,
+        // "vitrine" de recompensa), o segredo não tem NENHUM marcador chamativo antes OU depois
+        // de achado; o feedback de "achou" vem só do banner transitório na UI
+        // (`planetSecretFoundMessage`), não de algo flutuando no mundo 3D pra sempre.
+        const alreadyFound = progressRef.current.foundPlanetSecretIds.includes(secretId)
+        base.setEnabled(!alreadyFound)
+
+        planetSecretMarkers.push({
+          secretId,
+          worldPos: planetRoot.position.add(localUp.scale(radius)),
+          pivot: base,
         })
       }
 
@@ -5560,6 +5634,16 @@ export function World3D({
         marsCoinPotPivot = potPivot
         marsCoinPotWorldPos = secondPlanetRoot.position.add(potPos)
         marsCoinPotLabelRef = potLabel
+
+        // Segredo visual escondido de Marte (lab-179, "Planetas interativos v1") — Marte é o
+        // único planeta-destino sem baú de tesouro (`treasureChests.ts` já tem sua própria
+        // recompensa via pote de moedas acima) e sem escolinha (`planetQuests.ts` não cobre
+        // Marte), então precisava de uma 3ª interação pra bater o "pelo menos 3" do backlog.
+        // Deslocado -1.2 rad da direção da estação (lado OPOSTO ao pote de moedas, que fica a
+        // +0.75 rad) — bem mais longe da ação principal, coerente com "segredo" de verdade (o
+        // pote/baú têm texto sempre visível de longe; este não).
+        const secretDir = Vector3.TransformCoordinates(MARS_UFO_DIR, Matrix.RotationAxis(potAxis, -1.2)).normalize()
+        buildPlanetSecret('segredo-marte-sonda', secondPlanetRoot, SECOND_PLANET_RADIUS, secretDir, 'marte')
 
         // Foguete de volta.
         const returnRocketRoot = buildRocket(scene, shadowGenerator)
@@ -10229,6 +10313,21 @@ export function World3D({
               }
             }
 
+            // Segredos visuais escondidos (lab-179) — mesmo padrão de idempotência/histerese do
+            // baú de tesouro acima (achado único e permanente, `pivot.isEnabled()` já basta como
+            // guarda).
+            for (const secret of planetSecretMarkers) {
+              if (!secret.pivot.isEnabled()) continue
+              if (Vector3.Distance(pos, secret.worldPos) < TREASURE_CHEST_TRIGGER_DISTANCE) {
+                secret.pivot.setEnabled(false)
+                onFindPlanetSecretRef.current(secret.secretId)
+                playCoinCollect()
+                const reward = findPlanetSecretById(secret.secretId)?.coinReward ?? 0
+                setPlanetSecretFoundMessage(`✨ Segredo encontrado! +${reward} moedas!`)
+                window.setTimeout(() => setPlanetSecretFoundMessage(null), 4000)
+              }
+            }
+
             // Carteira de estudos (lab-93) — mesmo padrão de gatilho do quiz acima, mas só um
             // objeto (sem laço). Congela a pose "sentado" nos pivôs do boneco (mesmos valores da
             // pose usada ao dirigir o carro, ver comentário lá) e abre o catálogo de conquistas.
@@ -10280,6 +10379,15 @@ export function World3D({
                 if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = false
                 for (let i = 0; i < MARS_COIN_POT_REWARD; i++) onCollectCoinRef.current()
                 playCoinCollect()
+                // lab-179 (achado do review automático do Copilot, PR #56): sem isto, Marte só
+                // mandava 2 das 3 interações prometidas (`collectible`/`visual_secret`, nunca
+                // `actionable_object`) — o pote é a 2ª interação de Marte (mesmo papel do baú de
+                // tesouro nos outros 6 planetas), só que reseta a cada visita (não é permanente
+                // como o baú/segredo, por isso chamado direto aqui, sem passar por `useProgress`/
+                // `Progress` — não precisa de estado novo pra idempotência entre sessões, só
+                // não disparar mais de uma vez por visita, o que `marsCoinPotCollected` já garante
+                // sozinho). Nunca instrumenta moedas comuns — só este pote específico.
+                trackPlanetInteractionCompleted('marte', 'actionable_object')
               }
             }
 
@@ -11374,6 +11482,7 @@ export function World3D({
       )}
       {survivalDeathMessage && <p className="mars-death-message">{survivalDeathMessage}</p>}
       {treasureFoundMessage && <p className="mars-death-message">{treasureFoundMessage}</p>}
+      {planetSecretFoundMessage && <p className="mars-death-message">{planetSecretFoundMessage}</p>}
       {postcardFoundMessage && <p className="mars-death-message">{postcardFoundMessage}</p>}
       {bagOpen && (
         <WeaponBagPanel

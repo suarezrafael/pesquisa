@@ -108,6 +108,7 @@ function GameApp() {
     removeFurniture,
     unlockMarsReward,
     foundTreasureChest,
+    foundPlanetSecret,
     resetStreak,
     claimDailyLogin,
     collectPostcard,
@@ -433,6 +434,7 @@ function GameApp() {
           onOpenFriends={() => setShowFriends(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
           onFindTreasureChest={foundTreasureChest}
+          onFindPlanetSecret={foundPlanetSecret}
           onCollectPostcard={collectPostcard}
           onCollectCoin={collectCoin}
           placingFurnitureRequestId={pendingPlacementId}

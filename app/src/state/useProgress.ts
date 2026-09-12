@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import type { Progress, Quest } from '../types'
-import { trackFirstReward, trackQuestCompleted } from '../productAnalytics'
+import { trackFirstReward, trackPlanetInteractionCompleted, trackQuestCompleted } from '../productAnalytics'
 import { loadProgress, saveProgress } from './storage'
+import { findTreasureChestById } from '../data/treasureChests'
+import { findPlanetSecretById } from '../data/planetSecrets'
+import { findPlanetIdForQuest } from '../data/planetQuests'
 import {
   applyCoinCollected,
   applyQuestCompletion,
   applyPlanetQuestCompletion,
+  applyPlanetSecretFound,
   type CompletionResult,
   unlockAvatar as applyAvatarUnlock,
   unlockHat as applyHatUnlock,
@@ -81,9 +85,19 @@ export function useProgress() {
   // Escolinhas de astronomia dos planetas do Sistema Solar (lab-115) — mesmo formato de
   // `completeQuest`, mas isolado (ver `applyPlanetQuestCompletion` em `progression.ts`).
   function completePlanetQuest(quest: Quest, entitlementActive = false): CompletionResult {
+    // lab-179: mesmo guard de idempotência de `completeQuest` acima — só dispara o evento de
+    // analytics numa conclusão GENUÍNA (a escolinha SÓ chega aqui com a resposta certa, ver
+    // `QuestModal.tsx`), nunca numa reprise da mesma pergunta já respondida antes.
+    const wasAlreadyCompleted = progress.completedPlanetQuestIds.includes(quest.id)
     const result = applyPlanetQuestCompletion(progress, quest, undefined, entitlementActive)
     setProgress(result.progress)
     saveProgress(result.progress)
+    if (!wasAlreadyCompleted) {
+      const planetId = findPlanetIdForQuest(quest.id)
+      // lab-179: escolinha = categoria "desafio educativo" do backlog (o critério de aceite
+      // "pelo menos uma interação conecta a desafio educativo curto").
+      if (planetId) trackPlanetInteractionCompleted(planetId, 'educational_quiz')
+    }
     return result
   }
 
@@ -219,6 +233,22 @@ export function useProgress() {
     if (result.granted) {
       setProgress(result.progress)
       saveProgress(result.progress)
+      // lab-179: baú = categoria "objeto acionável" do backlog.
+      const planetId = findTreasureChestById(chestId)?.planetId
+      if (planetId) trackPlanetInteractionCompleted(planetId, 'actionable_object')
+    }
+    return result.granted
+  }
+
+  // Segredo visual escondido (lab-179, "Planetas interativos v1") — mesmo formato de
+  // `foundTreasureChest`/`unlockMarsReward` acima.
+  function foundPlanetSecret(secretId: string): boolean {
+    const result = applyPlanetSecretFound(progress, secretId)
+    if (result.granted) {
+      setProgress(result.progress)
+      saveProgress(result.progress)
+      const planetId = findPlanetSecretById(secretId)?.planetId
+      if (planetId) trackPlanetInteractionCompleted(planetId, 'visual_secret')
     }
     return result.granted
   }
@@ -256,6 +286,8 @@ export function useProgress() {
     if (result.granted) {
       setProgress(result.progress)
       saveProgress(result.progress)
+      // lab-179: cartão-postal = categoria "colecionável" do backlog.
+      trackPlanetInteractionCompleted(planetId, 'collectible')
     }
     return result.granted
   }
@@ -365,6 +397,7 @@ export function useProgress() {
     removeFurniture,
     unlockMarsReward,
     foundTreasureChest,
+    foundPlanetSecret,
     resetStreak,
     claimDailyLogin,
     collectPostcard,
