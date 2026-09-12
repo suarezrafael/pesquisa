@@ -1,6 +1,52 @@
 # Laboratório atual
 
-Último concluído: labs/lab-177-relevo-montanhas-visiveis/ — relevo e montanhas visíveis. Origem:
+Último concluído: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
+Origem: `docs/growth-retention-monetization-backlog.md`, seção 7/12, "Lab 178", prioridade P0,
+próximo item da ordem recomendada após o lab-177. Investigação prévia (antes de codar) achou que
+boa parte do escopo do backlog já estava implementada por labs anteriores (giro por arrasto mouse/
+touch, split direita=câmera/esquerda=movimento no mobile, botões ◀ ▶, suavização) — 4 gaps reais
+fechados: **zoom por scroll/pinch fora de casa** (`outdoorCameraZoomRef` novo, mesmo conceito do
+zoom de casa já existente, aplicado nas 3 câmeras externas — a pé, carro, foguete; pinch de 2 dedos
+via `Map` de ponteiros nos mesmos ouvintes do giro de 1 dedo só); **botão de recentralizar** (⟲,
+zera giro/zoom acumulados, suavização de sempre evita corte brusco); **anti-clipping de câmera**
+(`avoidCameraClipping`, raycast físico do alvo até a posição desejada, mesmo padrão de
+`havokPlugin.raycast` já usado por `terrainGroundRadial` — aproxima a câmera se algo bloquear o
+caminho; excluído de dentro de casa de propósito, que já resolve o mesmo problema com paredes
+translúcidas desde o lab-136/138); **`aria-label`/tooltip** nos botões ◀ ▶ e no novo botão de
+recentralizar (`TouchActionButton` ganhou prop `description`). `npx tsc -b`/testes limpos (app
+178/178, inalterado — mudança é só geometria/input de câmera, sem lógica de domínio isolável).
+`npm run build` sem regressão de bundle. **Verificado ao vivo via Chrome real**: zoom convergindo
+EXATAMENTE pros limites calculados; giro por arrasto sem regressão; recentralizar voltando à
+posição EXATA pré-giro/zoom; `aria-label` confirmado via árvore de acessibilidade; mecanismo de
+anti-clipping (raycast `hasHit`/`hitDistance` contra o colisor `planet`) confirmado correto
+isoladamente — reprodução visual exata do instante de correção numa rampa específica não foi 100%
+isolada por um artefato do ambiente de teste (bombeamento manual de quadros pra contornar aba em
+segundo plano acelerou também a física de queda do avatar), documentado em detalhe no
+`CONTEXT.md`. **Pendência real, não resolvida**: pinch de 2 dedos e teste geral em viewport mobile
+real não verificados ao vivo — as ferramentas de automação desta sessão não emulam multi-touch/
+dispositivo (mesma classe de limitação do lab-177 pra `isLowEndDevice`). **PR #54 teve 12 rodadas
+de review automático do Copilot** — a maioria com achados reais e sucessivos na mesma lógica de
+anti-clipping/suavização de câmera (câmera brigando com a do veículo, câmera em cima do avatar,
+câmera atravessando o obstáculo, sobreposição no início do raio, suavização atravessando parede
+mesmo com destino seguro, raycast redundante) — 5 divergências reais na mesma função ao longo das
+rodadas 2-5 e 7 levaram a uma pausa e confirmação explícita do usuário via `AskUserQuestion` (7ª
+rodada: continuar corrigindo, confirmado) antes de seguir corrigindo. Uma sugestão de estilo (tirar
+"lab-178"/"PR #54"/rodada dos comentários de código) foi REJEITADA na 6ª rodada citando 24
+ocorrências pré-existentes da mesma convenção em labs anteriores como justificativa — na 10ª
+rodada essa rejeição foi revertida depois de checar `docs/prompts/04-manutencao-clean-code.md` de
+verdade e achar uma regra `[MUST]` explícita contra exatamente esse padrão; todos os comentários
+NOVOS deste lab foram reescritos (as 24 ocorrências pré-existentes de outros labs ficaram de fora,
+por escopo). Rodadas 11/12 vieram limpas (12ª só repetiu um trade-off de performance já aceito na
+8ª). **Confirma deploy em produção**: PR #54 mergeado (commit `56aba96`), CI/CD verde em
+`server-accounts`/`server-cf-relay`; o job `app` mostrou falha no passo de deploy do Vercel (`Error:
+fetch failed` contra uma URL de preview, DEPOIS do build terminar com sucesso — "built in 4.34s"
+aparece no log antes do erro), mas a produção real (`app-two-flax-92.vercel.app`) já está servindo
+o bundle novo (hash `index-dkgu0EZg.js` idêntico ao gerado nesse mesmo build), responde 200 —
+confirmado que o deploy de fato aconteceu, o "vermelho" no CI é uma falha transitória de rede numa
+checagem pós-deploy, não uma falha de deploy de verdade. Ver
+`labs/lab-178-camera-roblox-like/CONTEXT.md`.
+
+Antes desse: labs/lab-177-relevo-montanhas-visiveis/ — relevo e montanhas visíveis. Origem:
 `docs/growth-retention-monetization-backlog.md`, seção 7, "Lab 177", prioridade P0. Investigação
 prévia (antes de codar) mostrou que a hipótese do backlog ("separação entre mesh visual e colisão
 física") só valia pra METADE do sistema real: no planeta principal, `PLATEAU_CENTERS`/
