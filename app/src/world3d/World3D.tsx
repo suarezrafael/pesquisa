@@ -3689,8 +3689,20 @@ export function World3D({
         // própria cápsula do personagem, o mesmo problema que o anti-clipping deveria evitar.
         // Piso mínimo em `AVATAR_RADIUS` (mais uma folga pequena) garante a câmera sempre pelo
         // menos do lado de fora do próprio personagem, mesmo encostado na parede mais próxima.
+        //
+        // 3ª rodada (achado real): um `Math.max(minClearance, hitDistance - margin)` cru podia
+        // levar `safeDistance` pra ALÉM do próprio ponto de colisão quando o obstáculo está mais
+        // perto que `minClearance` (ex.: `hitDistance = 0,2`, `margin = 0,3` → `-0,1`; piso de
+        // `0,75` vencia e colocava a câmera a 0,75 do alvo — mais longe que os 0,2 do obstáculo,
+        // ou seja, do OUTRO LADO dele). `Math.min(..., hitDistance)` trava um teto duro no próprio
+        // ponto de colisão (nunca além da superfície de verdade, mesmo abrindo mão da margem
+        // inteira num aperto extremo) — resolve o conflito priorizando não atravessar o obstáculo
+        // que acabamos de detectar, o problema mais imediato dos dois.
         const minClearance = Math.min(AVATAR_RADIUS + 0.2, fullDistance)
-        const safeDistance = Math.max(minClearance, cameraObstructionResult.hitDistance - margin)
+        const safeDistance = Math.min(
+          Math.max(minClearance, cameraObstructionResult.hitDistance - margin),
+          cameraObstructionResult.hitDistance,
+        )
         if (safeDistance >= fullDistance) return desired
         return Vector3.Lerp(target, desired, safeDistance / fullDistance)
       }
@@ -9845,9 +9857,19 @@ export function World3D({
             desiredCamPos =
               drivingCar || drivingRocket ? rawOutdoorCamPos : avoidCameraClipping(pos, rawOutdoorCamPos, body)
           }
-          camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
-          camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
-          camera.setTarget(pos)
+          // Achado real do review automático do Copilot (PR #54, 3ª rodada): dirigindo/pilotando,
+          // este `Lerp` continuava puxando `camera.position` uma fração (8%) em direção à posição
+          // CRUA (não corrigida) da câmera a pé, todo quadro, ANTES do bloco do carro/foguete mais
+          // abaixo aplicar seu próprio `Lerp` (12%/10%) em cima do resultado já contaminado — os
+          // dois puxões brigando pra sempre podiam deixar a câmera num equilíbrio nunca 100%
+          // correto (dentro de parede/terreno em vez da posição corrigida do veículo). A câmera do
+          // carro/foguete já é dona exclusiva de `camera.position` enquanto ativa (ver blocos
+          // abaixo), então só atualiza aqui quando for esta mesma a câmera que vale.
+          if (!drivingCar && !drivingRocket) {
+            camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
+            camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
+            camera.setTarget(pos)
+          }
 
           // Desvanece a parede que estiver entre a câmera e o jogador (lab-136, pedido do
           // usuário: "as paredes precisam ficar transparentes... a câmera não via conseguir

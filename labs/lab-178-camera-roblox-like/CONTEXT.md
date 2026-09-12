@@ -39,9 +39,15 @@ encontrados:
   (perto de `terrainGroundRadial`, reaproveitando o mesmo padrão de `havokPlugin.raycast`) — raycast
   do alvo até a posição DESEJADA da câmera; se algo bloquear no meio do caminho, aproxima a câmera
   até 0,3 unidade antes do ponto de colisão (`Vector3.Lerp(target, desired, safeDistance/fullDistance)`).
-  Aplicada nos mesmos 4 lugares do zoom (a pé com `ignoreBody` pro colisor do próprio avatar; carro
-  e foguete sem `ignoreBody`, já que nenhum dos dois tem colisor físico próprio — andam por
-  trajeto/curva fixa, não por simulação).
+  Aplicada nos mesmos 4 lugares do zoom, todos passando `avatarBody?.body` como `ignoreBody` —
+  achado real do review automático do Copilot (rodada 1): mesmo carro/foguete não tendo colisor
+  físico PRÓPRIO (andam por trajeto/curva fixa), o colisor do AVATAR fica congelado exatamente
+  onde o jogador embarcou (só a figura visual é reparentada no veículo), então um raycast logo
+  depois de embarcar podia acertar essa cápsula abandonada. A câmera do foguete além disso só roda
+  o anti-clipping no CRUZEIRO (`!inLaunchHold && !inLandingFlip`) — perto da plataforma de
+  lançamento, o raycast quase sempre acertava primeiro o colisor ESTÁTICO da própria plataforma
+  (usado só pra detectar "jogador perto, mostrar dica de embarcar"), e a API do Havok só aceita um
+  `ignoreBody` por chamada (já ocupado pelo avatar).
 - **Acessibilidade mínima dos botões de câmera**: `TouchActionButton` ganhou uma prop opcional
   `description`, que vira `aria-label` (nome acessível pra leitor de tela) E `title` (tooltip
   nativo pra mouse) ao mesmo tempo. Aplicada nos botões ◀ ▶ existentes ("Girar câmera pra
@@ -68,11 +74,15 @@ encontrados:
   só** — ver "O que foi feito" acima. Decisão tomada durante a implementação, não estava no
   `FEATURES.md` original; documentada aqui porque é a única divergência real entre o plano e o
   código.
-- **`ignoreBody` só no caso a pé** — carro e foguete não têm `PhysicsAggregate` próprio (andam por
-  `positionOnLoopPath`/progresso ao longo de uma curva, não por simulação física), então não há
-  risco de a câmera se autoconfundir com o próprio veículo como "obstrução" — confirmado lendo o
-  código antes de decidir (`grep` por `PhysicsAggregate` perto de `drivingCar`/`flyingRocket` não
-  achou nenhum, só o collider ESTÁTICO do foguete pousado, que é outro objeto).
+- **`ignoreBody` nos 3 modos, não só a pé** — decisão original (antes da 1ª rodada de review) era
+  "só a pé, carro/foguete não têm colisor próprio" — real, mas incompleto: embora carro/foguete não
+  tenham `PhysicsAggregate` PRÓPRIO (`positionOnLoopPath`/progresso ao longo de curva, não
+  simulação), o colisor do AVATAR continua existindo e FICA PARADO (congelado) exatamente onde o
+  jogador embarcou, já que só a figura visual é reparentada no veículo. Corrigido na 1ª rodada de
+  review pra passar `ignoreBody` nos 3 lugares. **Nota de correção da própria documentação**:
+  achado real da 3ª rodada de review — esta seção (e o resumo em "O que foi feito") ainda
+  descreviam a decisão ORIGINAL, desatualizada depois da correção da 1ª rodada; corrigidas juntas
+  aqui pra bater com o código de verdade.
 - **Reset de `pinchPointers`/`pinchStartDistance` em `enterHouseInterior`/`exitHouseInterior`** —
   mesmo espírito defensivo do reset já existente de `cameraYawOffsetRef`/`cameraDragging` nesses
   dois pontos (lab-149): uma pinça em andamento bem na hora de entrar/sair de casa não deveria
