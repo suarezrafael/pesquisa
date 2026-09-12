@@ -9828,7 +9828,14 @@ export function World3D({
             const zoomedDist = camDist * outdoorCameraZoomRef.current
             const zoomedHeight = camHeight * outdoorCameraZoomRef.current
             const rawOutdoorCamPos = pos.subtract(camFacing.scale(zoomedDist)).add(localUp.scale(zoomedHeight))
-            desiredCamPos = avoidCameraClipping(pos, rawOutdoorCamPos, body)
+            // Achado real do review automático do Copilot (PR #54, 1ª rodada): este bloco roda em
+            // QUALQUER modo (câmera/multiplayer/ranking/portais "continuam rodando normalmente em
+            // qualquer caso", comentário no fim do `if` de movimento acima) — dirigindo carro ou
+            // pilotando foguete, o resultado é sobrescrito pelas câmeras específicas mais abaixo de
+            // qualquer forma, então o raycast físico aqui seria trabalho descartado todo quadro
+            // (custo real em mobile). Só computa de verdade quando esta É a câmera que vale.
+            desiredCamPos =
+              drivingCar || drivingRocket ? rawOutdoorCamPos : avoidCameraClipping(pos, rawOutdoorCamPos, body)
           }
           camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
@@ -10640,13 +10647,16 @@ export function World3D({
             Vector3.Forward(),
             drivingCar.root.computeWorldMatrix(true),
           ).normalize()
-          // lab-178: mesmo zoom (scroll/pinça) usado a pé — carro não tem colisor físico próprio
-          // (anda por trajeto fixo, `positionOnLoopPath`), então `avoidCameraClipping` não precisa
-          // de `ignoreBody` aqui.
+          // lab-178: mesmo zoom (scroll/pinça) usado a pé — carro em si não tem colisor físico
+          // próprio (anda por trajeto fixo, `positionOnLoopPath`), mas o COLISOR DO AVATAR fica
+          // parado (congelado, sem gravidade/velocidade nova) bem onde o jogador embarcou —
+          // achado real do review automático do Copilot (PR #54, 1ª rodada): sem `ignoreBody`, o
+          // raycast podia acertar essa cápsula abandonada logo depois de embarcar (carro ainda
+          // perto do ponto de embarque) e encurtar a câmera como se fosse um obstáculo de verdade.
           const rawCarCamPos = drivingCar.root.position
             .subtract(carFwdNow.scale(CAMERA_DISTANCE * outdoorCameraZoomRef.current))
             .add(carUpNow.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
-          const desiredCarCamPos = avoidCameraClipping(drivingCar.root.position, rawCarCamPos)
+          const desiredCarCamPos = avoidCameraClipping(drivingCar.root.position, rawCarCamPos, body)
           camera.position = Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
           camera.upVector = Vector3.Lerp(camera.upVector, carUpNow, 0.15).normalize()
           camera.setTarget(drivingCar.root.position)
@@ -10753,9 +10763,22 @@ export function World3D({
               .add(shipUp.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
             desiredShipCamUp = shipUp
           }
-          // lab-178: mesmo zoom e anti-clipping da câmera a pé/carro — nave também não tem
-          // colisor físico próprio (voa por curva fixa), sem `ignoreBody` necessário.
-          desiredShipCamPos = avoidCameraClipping(shipPos, desiredShipCamPos)
+          // lab-178: mesmo zoom da câmera a pé/carro. Anti-clipping só no CRUZEIRO
+          // (`!inLaunchHold && !inLandingFlip`) — achados reais do review automático do Copilot
+          // (PR #54, 1ª rodada): (1) a nave não tem colisor físico próprio, mas o AVATAR fica com
+          // seu colisor congelado bem onde embarcou (mesmo caso do carro acima) — `ignoreBody:
+          // body` cobre isso; (2) perto da plataforma (decolagem/pouso), `shipPos` começa a poucas
+          // unidades do `rocketCollider` (cilindro ESTÁTICO usado só pra detectar "jogador perto,
+          // mostrar dica de embarcar", raio 1,3/altura 3 a partir de 1,4 acima do chão) — um
+          // raycast dali quase sempre acerta esse MESMO cilindro primeiro, encurtando o zoom como
+          // se fosse terreno de verdade. Pular o raycast nessas duas pontas evita o falso-positivo
+          // sem precisar de um 2º `ignoreBody` (a API do Havok só aceita um corpo por chamada) —
+          // a câmera "de lado" dessas duas fases (lab-116, ver comentário acima) já foi desenhada
+          // especificamente pra nunca apontar pra dentro do planeta, então não depende do
+          // anti-clipping pra ficar correta.
+          if (!inLaunchHold && !inLandingFlip) {
+            desiredShipCamPos = avoidCameraClipping(shipPos, desiredShipCamPos, body)
+          }
           camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
           camera.upVector = Vector3.Lerp(camera.upVector, desiredShipCamUp, 0.15).normalize()
           camera.setTarget(shipPos)

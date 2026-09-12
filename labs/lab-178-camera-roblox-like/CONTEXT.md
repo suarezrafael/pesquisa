@@ -83,6 +83,37 @@ encontrados:
   precisa do mesmo tratamento de limpeza que soltar o dedo normalmente — gap pré-existente que só
   importava de verdade a partir desta mudança.
 
+## Review automático do Copilot (PR #54)
+
+**1ª rodada** — 4 achados reais, todos sobre o raycast novo de anti-clipping interagindo mal com
+a física dos veículos (nenhum achado de documentação/nit desta vez):
+
+- **Raycast a pé rodava mesmo dirigindo/pilotando, trabalho descartado** — o bloco de câmera a pé
+  roda em QUALQUER modo (só a posição final é sobrescrita pelas câmeras de carro/foguete mais
+  abaixo, se for o caso — comentário já existente no código: "câmera/multiplayer/ranking/portais
+  continuam rodando normalmente em qualquer caso"). Sem guarda, o raycast físico rodava a cada
+  quadro mesmo com o resultado sendo jogado fora, custo real em mobile. Corrigido: só chama
+  `avoidCameraClipping` quando esta É a câmera que vale (`!drivingCar && !drivingRocket`).
+- **Câmera do carro podia acertar o colisor do AVATAR abandonado** — ao entrar no carro, só a
+  figura VISUAL é reparentada nele; o colisor físico do avatar (`body`) fica congelado (sem
+  gravidade/velocidade nova) exatamente onde o jogador embarcou. Sem `ignoreBody`, um raycast logo
+  depois de embarcar (carro ainda perto do ponto de embarque) podia acertar essa cápsula
+  abandonada e encurtar a câmera como se fosse terreno de verdade. Corrigido: `ignoreBody: body`.
+- **Câmera do foguete tinha o mesmo problema do avatar abandonado** — mesma causa raiz do achado
+  acima, aplicada ao embarque no foguete. Corrigido: `ignoreBody: body`.
+- **Câmera do foguete também podia acertar o colisor ESTÁTICO da plataforma de lançamento** —
+  `rocketCollider` (cilindro raio 1,3/altura 3, começando 1,4 unidade acima do chão, usado só pra
+  detectar "jogador perto, mostrar dica de embarcar") fica a poucas unidades de `shipPos` bem nas
+  duas pontas de repouso (decolando/pousando) — um raycast dali quase sempre acertava esse MESMO
+  cilindro primeiro. Como a API do Havok só aceita UM `ignoreBody` por chamada (já ocupado pelo
+  avatar), a correção foi pular o anti-clipping inteiro nessas duas pontas
+  (`inLaunchHold`/`inLandingFlip`) — a câmera "de lado" usada ali (lab-116) já foi desenhada
+  especificamente pra nunca apontar pra dentro do planeta, então não dependia do anti-clipping pra
+  ficar correta; ele só roda de verdade no CRUZEIRO (longe de qualquer planeta), onde faz sentido.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) e `npm run build`
+limpos.
+
 ## Pendências / dívidas conhecidas
 
 - **Pinch de 2 dedos verificado só por revisão de código/matemática, não ao vivo** — as ferramentas
