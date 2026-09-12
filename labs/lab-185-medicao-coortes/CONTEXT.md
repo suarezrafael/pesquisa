@@ -280,6 +280,41 @@ Verificação desta rodada: contagem re-conferida com o comando real (`awk` isol
 `isValidProductEventType` = 10, batendo com `npm run test` 141/141 (baseline 131 + 10). `npx tsc
 --noEmit` limpo (mudança é só em 4 arquivos de documentação/handoff, nenhum código).
 
+**6ª rodada** — 2 achados reais, um deles o mais substancial de todas as rodadas:
+
+- **`occurredAt` é 100% controlado por um client anônimo e não autenticado, sem NENHUMA validação
+  de plausibilidade** — `handleTrackEvent` só confere que é uma string; esse mesmo campo alimenta
+  `min(occurred_at)` = `day0` de TODO cálculo de retenção, incluindo os dois novos deste lab
+  (`newDevicesToday`/`cohortComparison`). Um client malicioso podia criar um `device_id` novo e
+  mandar um `occurredAt` de anos atrás pra forjar entrada/retorno numa coorte antiga, inflando D0/
+  D1/D7 e a comparação antes/depois à vontade — o tipo de achado que fica mais valioso de explorar
+  justamente PORQUE este lab deu mais visibilidade/uso a `day0`. Também não é totalmente novo (D1/
+  D7 já confiavam em `occurredAt` desde o lab-99), mas nenhum lab anterior tinha mexido nisso.
+  Considerei 2 abordagens: (a) coluna `received_at` nova (carimbo do servidor, ignora o que o
+  client alega) — exigiria migração e trocar toda a base de cálculo de retenção/funil semanal por
+  uma coluna diferente, escopo bem maior; (b) janela de plausibilidade (recusar o evento se
+  `occurredAt` estiver fora de um intervalo pequeno ao redor de "agora") — bem mais barata. Escolhi
+  (b) depois de confirmar em `productAnalytics.ts` que `trackEvent` SEMPRE manda
+  `new Date().toISOString()` no instante exato da chamada (sem fila offline, sem reenvio tardio por
+  design) — um client honesto nunca precisa de uma janela ampla, só o suficiente pra cobrir relógio
+  de aparelho desconfigurado. Implementado: `isPlausibleOccurredAt` (`domain.ts`, nova função pura,
+  6 casos de teste) com janela de 48h pra trás / 10min pra frente; `handleTrackEvent` recusa o
+  evento inteiro (400) fora dessa janela, antes até da checagem de tipo de evento. Fecha o exploit
+  descrito (fabricar `day0` de anos atrás) sem reescrever a base de cálculo já existente.
+- **Contagem de testes "após as 4 rodadas" no `CONTEXT.md` contradizia a própria 5ª rodada
+  documentada mais abaixo** — mesmo efeito chicote das rodadas anteriores (corrigir a contagem num
+  lugar sem sincronizar outro). Corrigido removendo o número de rodadas fixo (trocado por "várias
+  rodadas", sem contagem — a mesma lição já aplicada ao `CURRENT.md` na rodada anterior, agora
+  aplicada aqui também) e atualizando os números pro estado realmente final (147/147, 16 novos, com
+  a subconta de `isPlausibleOccurredAt` incluída).
+
+Verificação desta rodada: `npx tsc --noEmit` limpo; `npm run test` 147/147 (6 novos:
+`isPlausibleOccurredAt`). Reverificado ao vivo contra produção (`wrangler dev` porta 8795, banco
+real): `occurredAt` de 2020 e de 2030 confirmados devolvendo 400 e NUNCA virando linha na tabela
+(lido de volta do banco antes de apagar); um evento com `occurredAt` real (agora) continua 204 e
+grava normalmente; `GET /admin/metrics` continua respondendo normalmente depois da mudança
+(`newDevicesToday`/`totalDevices` bateram com o esperado).
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
@@ -316,13 +351,14 @@ lab deixou medindo só a chegada), sem texto livre/UGC.
 
 - Branch: `lab-185-medicao-coortes`.
 - `npx tsc -b` (app) e `npx tsc --noEmit` (server-accounts): limpos. `npm run test` (estado FINAL,
-  após as 4 rodadas de review do Copilot na PR #55 — número conferido contra `git diff` do
-  `domain.test.ts` inteiro, achado da 4ª rodada: contagem "de cabeça" tinha ficado errada em mais
-  de um lugar): app 178/178 (inalterado, mudança client-side é só uma condição a mais antes de uma
-  chamada já existente, sem lógica nova isolável); server-accounts 141/141, 10 testes novos desde o
-  início do lab (baseline 131) — 1 em `isValidProductEventType` (allowlist aceita os 3 eventos
-  novos), 5 em `isValidIsoDateOnly` (data real/bissexta, formato/calendário inválido, anos de 2
-  dígitos, ano 0000), 2 em `isValidCosmeticSlot`, 2 em `isValidDestinationPlanetId`.
+  após as várias rodadas de review automático do Copilot na PR #55 — número sempre conferido
+  programaticamente contra `git diff` do `domain.test.ts` inteiro, nunca de cabeça, depois de mais
+  de uma rodada pegando esse tipo de erro de contagem): app 178/178 (inalterado, mudança
+  client-side é só uma condição a mais antes de uma chamada já existente, sem lógica nova
+  isolável); server-accounts 147/147, 16 testes novos desde o início do lab (baseline 131) — 1 em
+  `isValidProductEventType` (allowlist aceita os 3 eventos novos), 5 em `isValidIsoDateOnly` (data
+  real/bissexta, formato/calendário inválido, anos de 2 dígitos, ano 0000), 2 em
+  `isValidCosmeticSlot`, 2 em `isValidDestinationPlanetId`, 6 em `isPlausibleOccurredAt`.
   `npm run build` (app): limpo, sem regressão de bundle.
 - Nenhuma migração de banco — `product_events` já tinha tudo necessário.
 - **Verificado ao vivo contra produção** (`wrangler dev` local, porta 8790, banco de PRODUÇÃO

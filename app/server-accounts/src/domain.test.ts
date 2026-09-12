@@ -16,6 +16,7 @@ import {
   isNicknameAllowed,
   isOnlineNow,
   isPairingCodeUsable,
+  isPlausibleOccurredAt,
   isPlausibleSessionDuration,
   isSelfFriendRequest,
   isTokenRevoked,
@@ -283,6 +284,38 @@ describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {
     expect(isPlausibleSessionDuration(Number.NaN)).toBe(false)
     expect(isPlausibleSessionDuration('1000')).toBe(false)
     expect(isPlausibleSessionDuration(undefined)).toBe(false)
+  })
+})
+
+describe('isPlausibleOccurredAt (lab-185, 6ª rodada do review da PR #55)', () => {
+  const AGORA = new Date('2026-09-12T12:00:00.000Z').getTime()
+
+  it('aceita um timestamp bem no instante atual', () => {
+    expect(isPlausibleOccurredAt('2026-09-12T12:00:00.000Z', AGORA)).toBe(true)
+  })
+
+  it('aceita alguns minutos de desvio de relógio pra trás ou pra frente', () => {
+    expect(isPlausibleOccurredAt('2026-09-12T11:55:00.000Z', AGORA)).toBe(true)
+    expect(isPlausibleOccurredAt('2026-09-12T12:05:00.000Z', AGORA)).toBe(true)
+  })
+
+  it('recusa um timestamp retroativo fabricado (ex.: forjar day0 de anos atrás numa coorte)', () => {
+    expect(isPlausibleOccurredAt('2020-01-01T00:00:00.000Z', AGORA)).toBe(false)
+    expect(isPlausibleOccurredAt('2026-09-01T00:00:00.000Z', AGORA)).toBe(false) // 11 dias atrás
+  })
+
+  it('recusa um timestamp no futuro além da folga de relógio', () => {
+    expect(isPlausibleOccurredAt('2026-09-13T00:00:00.000Z', AGORA)).toBe(false)
+  })
+
+  it('aceita bem no limite das janelas de 48h pra trás e 10min pra frente', () => {
+    expect(isPlausibleOccurredAt('2026-09-10T12:00:00.000Z', AGORA)).toBe(true) // exatos 48h atrás
+    expect(isPlausibleOccurredAt('2026-09-12T12:10:00.000Z', AGORA)).toBe(true) // exatos 10min à frente
+  })
+
+  it('recusa timestamp malformado ou vazio', () => {
+    expect(isPlausibleOccurredAt('', AGORA)).toBe(false)
+    expect(isPlausibleOccurredAt('não é uma data', AGORA)).toBe(false)
   })
 })
 

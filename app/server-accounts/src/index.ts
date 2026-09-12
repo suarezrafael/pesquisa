@@ -24,6 +24,7 @@ import {
   isEventNewerThan,
   isNicknameAllowed,
   isOnlineNow,
+  isPlausibleOccurredAt,
   isPlausibleSessionDuration,
   isSelfFriendRequest,
   isTokenRevoked,
@@ -436,6 +437,11 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     return new Response(null, { status: 400 })
   }
   if (!isValidProductEventType(type)) return new Response(null, { status: 400 })
+  // achado do review automático do Copilot (6ª rodada, PR #55): sem isto, qualquer client podia
+  // mandar um `occurredAt` retroativo e fabricar `day0`/entrada-retorno de coorte em
+  // `newDevicesToday`/`cohortComparison` (ambos novos deste lab, derivados de
+  // `min(occurred_at)` por dispositivo). Ver comentário de `isPlausibleOccurredAt` em `domain.ts`.
+  if (!isPlausibleOccurredAt(occurredAt)) return new Response(null, { status: 400 })
 
   // `cosmetic_equipped`/`planet_travel_completed` (lab-185): diferente de `session_end` (onde o
   // evento "sessão terminou" é um sinal válido mesmo com uma duração implausível — por isso só o

@@ -207,6 +207,27 @@ export function isPlausibleSessionDuration(durationMs: unknown): durationMs is n
   return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0 && durationMs <= MAX_PLAUSIBLE_SESSION_DURATION_MS
 }
 
+// lab-185 (achado do review automático do Copilot na PR #55, 6ª rodada): `occurredAt` em
+// `POST /events` vem de um client anônimo e não autenticado, sem checagem nenhuma além de "é uma
+// string" — e as métricas novas deste lab (`newDevicesToday`/`cohortComparison`, ambas derivadas
+// de `min(occurred_at)` por dispositivo) tornam mais valioso fabricar um `occurredAt` retroativo
+// pra forjar entrada/retorno numa coorte antiga. `trackEvent` (`productAnalytics.ts`) sempre manda
+// `new Date().toISOString()` no exato instante da chamada — não existe fila offline nem reenvio
+// tardio por design — então um client honesto NUNCA manda um valor fora de uma janela pequena ao
+// redor de "agora" (o suficiente pra cobrir relógio de aparelho desconfigurado/fuso horário
+// errado, não pra cobrir um ano inteiro de história forjada). Resolvido com uma janela de
+// plausibilidade (recusa o evento inteiro, 400) em vez de uma coluna `received_at` nova + migração
+// — mais barato e já fecha o exploit descrito (fabricar um `device_id` com `day0` de anos atrás),
+// sem reescrever toda a base de cálculo de retenção que já existe desde o lab-99.
+const MAX_OCCURRED_AT_PAST_MS = 48 * 60 * 60 * 1000
+const MAX_OCCURRED_AT_FUTURE_MS = 10 * 60 * 1000
+
+export function isPlausibleOccurredAt(occurredAt: string, nowMs: number = Date.now()): boolean {
+  const parsed = Date.parse(occurredAt)
+  if (Number.isNaN(parsed)) return false
+  return parsed >= nowMs - MAX_OCCURRED_AT_PAST_MS && parsed <= nowMs + MAX_OCCURRED_AT_FUTURE_MS
+}
+
 // lab-185 (review do Copilot na PR #55) — `cosmetic_equipped`/`planet_travel_completed` também
 // mandam `meta` com um valor string, mas de um conjunto FIXO conhecido no código-fonte (nunca
 // texto livre digitado por ninguém, ver docs/event-catalog.md); mesmo espírito de
