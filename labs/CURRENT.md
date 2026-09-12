@@ -1,5 +1,10 @@
 # Laboratório atual
 
+Em andamento: labs/lab-180-missoes-ambientais/ — missões ambientais de aprendizagem (ponte/lógica,
+posto de abastecimento do foguete/matemática, placa/leitura). Origem:
+`docs/growth-retention-monetization-backlog.md`, "Lab 180", próximo item recomendado após o
+lab-179. Ver `labs/lab-180-missoes-ambientais/FEATURES.md`.
+
 Último concluído: labs/lab-179-planetas-interativos/ — planetas interativos v1. Origem:
 `docs/growth-retention-monetization-backlog.md`, "Lab 179", prioridade P1 — próximo item
 recomendado no `CONTEXT.md` do lab-185. Investigação prévia achou que 6 dos 7 planetas-destino
