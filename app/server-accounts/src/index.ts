@@ -28,6 +28,9 @@ import {
   isSelfFriendRequest,
   isTokenRevoked,
   isValidBadgeList,
+  isValidCosmeticSlot,
+  isValidDestinationPlanetId,
+  isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
@@ -434,14 +437,48 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   }
   if (!isValidProductEventType(type)) return new Response(null, { status: 400 })
 
-  // `session_end` é o único tipo com um campo de `meta` que a gente realmente confia pra cálculo
-  // (duração) — os outros podem mandar `meta` livre, mas ele só é gravado como está (nunca lido de
-  // volta em cálculo nenhum), então não precisa de validação própria.
+  // `cosmetic_equipped`/`planet_travel_completed` (lab-185): diferente de `session_end` (onde o
+  // evento "sessão terminou" é um sinal válido mesmo com uma duração implausível — por isso só o
+  // campo suspeito é descartado, não o evento inteiro), o ÚNICO sinal que esses dois eventos
+  // carregam É o slot/planeta. Achado do review automático do Copilot (4ª rodada): gravar o evento
+  // mesmo com `meta: null` ainda incrementava `weeklyFunnel.cosmeticEquipped`/`planetTravelCompleted`
+  // (`weeklyDevices` conta por `event_type`, sem olhar `meta`) — um payload malformado inflava a
+  // métrica exatamente do jeito que a validação deveria impedir. Nenhum client oficial manda esses
+  // dois tipos sem um valor válido (`trackCosmeticEquipped`/`trackPlanetTravelCompleted` em
+  // `productAnalytics.ts` sempre passam um), então recusar o evento inteiro (400) só afeta payload
+  // malformado/malicioso, nunca telemetria real.
+  const metaObjForValidation = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {}
+  if (type === 'cosmetic_equipped' && !isValidCosmeticSlot(metaObjForValidation.slot)) {
+    return new Response(null, { status: 400 })
+  }
+  if (type === 'planet_travel_completed' && !isValidDestinationPlanetId(metaObjForValidation.toPlanetId)) {
+    return new Response(null, { status: 400 })
+  }
+
+  // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
+  // errado — os outros tipos LEGADOS (documentados em `docs/event-catalog.md` com `meta` livre ou
+  // um `questId`) podem mandar `meta` livre, mas ele só é gravado como está (nunca lido de volta em
+  // cálculo nenhum), então não precisa de validação própria.
   let safeMeta: unknown = null
   if (meta && typeof meta === 'object') {
     const metaObj = meta as Record<string, unknown>
-    if (type === 'session_end' && !isPlausibleSessionDuration(metaObj.durationMs)) {
-      safeMeta = null // descarta um durationMs implausível em vez de recusar o evento inteiro
+    if (type === 'session_end') {
+      safeMeta = isPlausibleSessionDuration(metaObj.durationMs) ? metaObj : null
+      // descarta um durationMs implausível em vez de recusar o evento inteiro
+    } else if (type === 'cosmetic_equipped') {
+      // já validado acima — só a chave permitida sobrevive, nenhuma chave extra não documentada
+      // (ex.: `{ slot: 'hat', note: '<texto livre>' }') é gravada.
+      safeMeta = { slot: metaObj.slot }
+    } else if (type === 'planet_travel_completed') {
+      safeMeta = { toPlanetId: metaObj.toPlanetId }
+    } else if (type === 'camera_recenter_used') {
+      // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
+      // (`docs/event-catalog.md`) não documenta NENHUM campo de `meta` — sem este branch, caía no
+      // `else` genérico abaixo (pensado pra eventos LEGADOS de antes deste lab) e gravava qualquer
+      // objeto que o client mandasse, incluindo dado potencialmente identificável, apesar da
+      // allowlist de propriedades por evento. `camera_recenter_used` é um evento NOVO deste lab —
+      // não tem motivo pra herdar a tolerância dos eventos antigos.
+      safeMeta = null
     } else {
       safeMeta = metaObj
     }
@@ -1415,6 +1452,20 @@ async function handleSubmitNps(request: Request, env: Env): Promise<Response> {
 // partir de `product_events` (nenhuma tabela de agregado pré-computado ainda; volume baixo o
 // bastante hoje pra isso não importar). Protegido por segredo compartilhado no header (não é dado
 // de família nenhuma específica, mas ainda é métrica de negócio agregada — não fica público).
+// lab-185 — mesmo cálculo de "fração que retornou" usado em `d1Retention`/`d7Retention` desde
+// sempre, extraído aqui só porque a comparação de coorte antes/depois (`cohortSplitDate`) precisa
+// do MESMO cálculo aplicado duas vezes (antes/depois) em vez de uma.
+type RetentionBucket = { eligibleDevices: number; returnedDevices: number; percent: number | null }
+function buildRetentionBucket(eligibleRaw: string, returnedRaw: string): RetentionBucket {
+  const eligible = Number(eligibleRaw)
+  const returned = Number(returnedRaw)
+  return {
+    eligibleDevices: eligible,
+    returnedDevices: returned,
+    percent: eligible > 0 ? Math.round((returned / eligible) * 10000) / 100 : null,
+  }
+}
+
 async function handleAdminMetrics(request: Request, env: Env): Promise<Response> {
   const secret = request.headers.get('x-admin-secret')
   if (!secret || secret !== env.ADMIN_METRICS_SECRET) {
@@ -1423,36 +1474,154 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
 
   const sql = neon(env.DATABASE_URL)
 
+  // lab-185 (critério de aceite "a saída permite comparar coortes antes/depois"): valida ANTES de
+  // rodar qualquer query — `URLSearchParams.get()` devolve `''` (string vazia) pra
+  // `?cohortSplitDate=` sem valor, que passaria de graça por um teste de truthiness (achado real
+  // do review automático do Copilot); comparar contra `null` explicitamente garante que todo
+  // valor fornecido, incluindo vazio, passa pela validação de verdade.
+  const cohortSplitDateParam = new URL(request.url).searchParams.get('cohortSplitDate')
+  if (cohortSplitDateParam !== null && !isValidIsoDateOnly(cohortSplitDateParam)) {
+    return Response.json({ error: 'cohortSplitDate inválida, use YYYY-MM-DD' }, { status: 400 })
+  }
+
   // D1/D7 retention: de todo dispositivo cujo PRIMEIRO evento foi há pelo menos 1 (ou 7) dias,
   // qual fração teve QUALQUER evento novo exatamente 1 (ou 7) dias depois desse primeiro dia.
-  const [retention] = (await sql`
-    with first_seen as (
-      select device_id, min(occurred_at)::date as day0
-      from product_events
-      group by device_id
-    ),
-    d1_eligible as (
-      select device_id, day0 from first_seen where day0 <= current_date - 1
-    ),
-    d1_returned as (
-      select distinct fs.device_id
-      from d1_eligible fs
-      join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 1
-    ),
-    d7_eligible as (
-      select device_id, day0 from first_seen where day0 <= current_date - 7
-    ),
-    d7_returned as (
-      select distinct fs.device_id
-      from d7_eligible fs
-      join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 7
-    )
-    select
-      (select count(*) from d1_eligible) as d1_eligible,
-      (select count(*) from d1_returned) as d1_returned,
-      (select count(*) from d7_eligible) as d7_eligible,
-      (select count(*) from d7_returned) as d7_returned
-  `) as { d1_eligible: string; d1_returned: string; d7_eligible: string; d7_returned: string }[]
+  // `day0`/retorno usam `received_at` (carimbo do SERVIDOR, `default now()` desde
+  // `migrations/0001_baseline.sql`), nunca `occurred_at` (alegado pelo client) — achado do review
+  // automático do Copilot, 7ª rodada: usar `occurred_at` deixava um client anônimo fabricar
+  // entrada/retorno de coorte só mandando timestamps arbitrários, sem nenhuma conta em tempo real
+  // precisar acontecer de verdade. O join usa uma faixa semiaberta (`received_at >= day0 + N and
+  // received_at < day0 + N + 1`) em vez de `received_at::date = day0 + N` (achado da 11ª rodada) —
+  // aplicar `::date` na coluna INDEXADA impede o Postgres de usar `idx_product_events_device_received`
+  // como uma faixa de verdade (só filtra por `device_id`, depois varre o histórico inteiro daquele
+  // dispositivo pra calcular `::date` linha a linha); a faixa semiaberta deixa as DUAS colunas do
+  // índice composto serem usadas.
+  // Achado real do review automático do Copilot (1ª rodada): rodar esta CTE duas vezes (uma pra
+  // retenção global, outra pra comparação de coorte) dobra o agrupamento/joins sobre
+  // `product_events` a cada relatório com `cohortSplitDate`. 3ª rodada: mas SEMPRE calcular os 8
+  // campos `before_*`/`after_*` (mesmo sem `cohortSplitDate`, quando viram `filter (where day0 <
+  // NULL::date)`, sempre 0) desperdiça leituras extra nas CTEs no caminho comum (sem coorte). As
+  // duas exigências não são incompatíveis: o texto da query muda por request (só um dos dois
+  // textos roda, nunca os dois), então a CTE nunca é avaliada duas vezes PRA UM MESMO request, e o
+  // caminho sem coorte (o mais frequente) não paga o custo dos campos extra que nem vai ler.
+  // As duas queries abaixo repetem as mesmas 5 CTEs de propósito — o driver (`@neondatabase/serverless`,
+  // tagged template) não aceita compor um fragmento de SQL cru dentro de outro `sql\`...\``, então a
+  // única forma de ter DOIS textos de query possíveis (com/sem os campos de coorte) é escrever os
+  // dois por completo. Cada request ainda roda só UM deles.
+  type BaseRetentionRow = {
+    d1_eligible: string
+    d1_returned: string
+    d7_eligible: string
+    d7_returned: string
+    new_today: string
+  }
+  type SplitRetentionRow = BaseRetentionRow & {
+    before_d1_eligible: string
+    before_d1_returned: string
+    before_d7_eligible: string
+    before_d7_returned: string
+    after_d1_eligible: string
+    after_d1_returned: string
+    after_d7_eligible: string
+    after_d7_returned: string
+  }
+
+  let retention: BaseRetentionRow
+  let splitRetention: SplitRetentionRow | null = null
+
+  if (cohortSplitDateParam === null) {
+    const [row] = (await sql`
+      with first_seen as (
+        select device_id, min(received_at)::date as day0
+        from product_events
+        group by device_id
+      ),
+      d1_eligible as (
+        select device_id, day0 from first_seen where day0 <= current_date - 1
+      ),
+      d1_returned as (
+        select distinct fs.device_id, fs.day0
+        from d1_eligible fs
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at >= fs.day0 + 1 and pe.received_at < fs.day0 + 2
+      ),
+      d7_eligible as (
+        select device_id, day0 from first_seen where day0 <= current_date - 7
+      ),
+      d7_returned as (
+        select distinct fs.device_id, fs.day0
+        from d7_eligible fs
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at >= fs.day0 + 7 and pe.received_at < fs.day0 + 8
+      )
+      select
+        (select count(*) from d1_eligible) as d1_eligible,
+        (select count(*) from d1_returned) as d1_returned,
+        (select count(*) from d7_eligible) as d7_eligible,
+        (select count(*) from d7_returned) as d7_returned,
+        -- lab-185: "D0" que faltava, dispositivos NOVOS hoje (totalDevices mais abaixo é o
+        -- acumulado desde sempre, um número diferente)
+        (select count(*) from first_seen where day0 = current_date) as new_today
+    `) as BaseRetentionRow[]
+    retention = row
+  } else {
+    const [row] = (await sql`
+      with first_seen as (
+        select device_id, min(received_at)::date as day0
+        from product_events
+        group by device_id
+      ),
+      d1_eligible as (
+        select device_id, day0 from first_seen where day0 <= current_date - 1
+      ),
+      d1_returned as (
+        select distinct fs.device_id, fs.day0
+        from d1_eligible fs
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at >= fs.day0 + 1 and pe.received_at < fs.day0 + 2
+      ),
+      d7_eligible as (
+        select device_id, day0 from first_seen where day0 <= current_date - 7
+      ),
+      d7_returned as (
+        select distinct fs.device_id, fs.day0
+        from d7_eligible fs
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at >= fs.day0 + 7 and pe.received_at < fs.day0 + 8
+      )
+      select
+        (select count(*) from d1_eligible) as d1_eligible,
+        (select count(*) from d1_returned) as d1_returned,
+        (select count(*) from d7_eligible) as d7_eligible,
+        (select count(*) from d7_returned) as d7_returned,
+        (select count(*) from first_seen where day0 = current_date) as new_today,
+        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_eligible) as before_d1_eligible,
+        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_returned) as before_d1_returned,
+        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d7_eligible) as before_d7_eligible,
+        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d7_returned) as before_d7_returned,
+        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d1_eligible) as after_d1_eligible,
+        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d1_returned) as after_d1_returned,
+        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d7_eligible) as after_d7_eligible,
+        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d7_returned) as after_d7_returned
+    `) as SplitRetentionRow[]
+    retention = row
+    splitRetention = row
+  }
+
+  const cohortComparison: {
+    splitDate: string
+    before: { d1: RetentionBucket; d7: RetentionBucket }
+    after: { d1: RetentionBucket; d7: RetentionBucket }
+  } | null =
+    cohortSplitDateParam === null || splitRetention === null
+      ? null
+      : {
+          splitDate: cohortSplitDateParam,
+          before: {
+            d1: buildRetentionBucket(splitRetention.before_d1_eligible, splitRetention.before_d1_returned),
+            d7: buildRetentionBucket(splitRetention.before_d7_eligible, splitRetention.before_d7_returned),
+          },
+          after: {
+            d1: buildRetentionBucket(splitRetention.after_d1_eligible, splitRetention.after_d1_returned),
+            d7: buildRetentionBucket(splitRetention.after_d7_eligible, splitRetention.after_d7_returned),
+          },
+        }
 
   const [session] = (await sql`
     select avg((meta->>'durationMs')::numeric) as avg_duration_ms, count(*) as sample_size
@@ -1483,10 +1652,8 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
   `) as { score: number }[]
   const nps = calculateNpsScore(npsRows.map((row) => row.score))
 
-  const d1Eligible = Number(retention.d1_eligible)
-  const d1Returned = Number(retention.d1_returned)
-  const d7Eligible = Number(retention.d7_eligible)
-  const d7Returned = Number(retention.d7_returned)
+  const d1Retention = buildRetentionBucket(retention.d1_eligible, retention.d1_returned)
+  const d7Retention = buildRetentionBucket(retention.d7_eligible, retention.d7_returned)
 
   // lab-165 (docs/market-metrics-engagement-backlog.md, "Lab 164" no documento) — funil SEMANAL
   // (últimos 7 dias), diferente de tudo acima (que é média/total acumulado desde o início do
@@ -1498,7 +1665,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
   const weeklyEventCountRows = (await sql`
     select event_type, count(distinct device_id)::int as devices
     from product_events
-    where occurred_at >= now() - interval '7 days'
+    where received_at >= now() - interval '7 days'
     group by event_type
   `) as { event_type: string; devices: number }[]
   const weeklyEventDevices = new Map(weeklyEventCountRows.map((row) => [row.event_type, row.devices]))
@@ -1522,6 +1689,17 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // resto do funil (nenhum evento carrega identificador de perfil, só device id anônimo), não
     // uma regressão deste campo; ver nota completa em docs/event-catalog.md.
     houseVisited: weeklyDevices('house_visited'),
+    // lab-185 — mesma convenção/limitação do resto do funil (dispositivos únicos, não crianças).
+    // `cameraRecenterUsed` em particular mede ALCANCE (quantos dispositivos clicaram o botão ⟲
+    // pelo menos uma vez na semana), não FREQUÊNCIA — um dispositivo que clica 1x ou 50x conta
+    // igual. O backlog original do Lab 178 queria "menor uso repetido de recentralizar" (sinal de
+    // frequência, não de alcance); decisão do review da PR #55 foi documentar essa imprecisão em
+    // vez de somar uma métrica de contagem nova (exigiria uma query adicional só pra isso, e o
+    // sinal de alcance já é suficiente pra saber SE a câmera tá sendo usada, que é o que falta
+    // hoje — refinar pra frequência fica pro dia em que isso virar decisão de verdade).
+    cameraRecenterUsed: weeklyDevices('camera_recenter_used'),
+    cosmeticEquipped: weeklyDevices('cosmetic_equipped'),
+    planetTravelCompleted: weeklyDevices('planet_travel_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,
@@ -1550,16 +1728,12 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
 
   return Response.json({
     totalDevices: Number(devices.total_devices),
-    d1Retention: {
-      eligibleDevices: d1Eligible,
-      returnedDevices: d1Returned,
-      percent: d1Eligible > 0 ? Math.round((d1Returned / d1Eligible) * 10000) / 100 : null,
-    },
-    d7Retention: {
-      eligibleDevices: d7Eligible,
-      returnedDevices: d7Returned,
-      percent: d7Eligible > 0 ? Math.round((d7Returned / d7Eligible) * 10000) / 100 : null,
-    },
+    newDevicesToday: Number(retention.new_today),
+    d1Retention,
+    d7Retention,
+    // lab-185: só aparece quando `?cohortSplitDate=` foi passado — não muda o formato pra quem já
+    // consome este endpoint sem o parâmetro.
+    ...(cohortComparison ? { cohortComparison } : {}),
     avgSessionDurationMs: session.avg_duration_ms ? Math.round(Number(session.avg_duration_ms)) : null,
     sessionSampleSize: Number(session.sample_size),
     avgQuestsCompletedPerDevice: quests.avg_quests_per_device
@@ -1576,6 +1750,27 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     weeklyCommercial: {
       newFamilies: weeklyCommercialRow.new_families,
     },
+    // lab-185 (critério de aceite "guardrails aparecem no relatório") — repete no PRÓPRIO JSON as
+    // limitações já documentadas em `docs/event-catalog.md`, pra quem só olha a resposta da API
+    // (sem abrir o catálogo) não interpretar os números como mais precisos do que são.
+    guardrails: [
+      'Agregação é por dispositivo (device_id anônimo em localStorage), não por criança — um' +
+        ' aparelho COMPARTILHADO entre irmãos conta como UM dispositivo só (subconta crianças' +
+        ' distintas); trocar de aparelho ou reinstalar o jogo cria um dispositivo NOVO (superconta' +
+        ' a mesma criança). Nenhum evento carrega nome, e-mail ou identificador de perfil.',
+      'Amostras pequenas (eligibleDevices/sampleSize baixos) produzem percentuais instáveis —' +
+        ' evite tirar conclusão de uma coorte com poucas dezenas de dispositivos.',
+      // achado do review automático do Copilot (8ª rodada, PR #55) — `newDevicesToday`/alcance
+      // semanal não são resistentes a abuso: `device_id` é gerado e escolhido pelo próprio client,
+      // sem autenticação nenhuma, então nada IMPEDE um script de criar um UUID novo a cada
+      // requisição (só o rate limit por IP em `/events` limita a VELOCIDADE disso, não a
+      // possibilidade). Repetido aqui pra quem só consome a API não tratar D0/alcance como um
+      // número necessariamente livre de dispositivos sintéticos.
+      '`newDevicesToday` e o alcance semanal do weeklyFunnel não são resistentes a abuso —' +
+        ' device_id é escolhido pelo próprio client sem autenticação, então nada impede gerar' +
+        ' um UUID novo por requisição pra inflar essas contagens (o rate limit por IP em' +
+        ' /events limita a velocidade do abuso, não a possibilidade dele).',
+    ],
   })
 }
 

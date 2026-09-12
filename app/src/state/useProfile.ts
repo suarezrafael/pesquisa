@@ -1,6 +1,29 @@
 import { useState } from 'react'
 import type { Profile } from '../types'
 import { createProfileSlot, loadProfile, saveProfile } from './storage'
+import { trackCosmeticEquipped } from '../productAnalytics'
+import {
+  BACKPACK_COLOR_CATALOG,
+  HAIR_SHAPE_CATALOG,
+  PANTS_COLOR_CATALOG,
+  SHIRT_COLOR_CATALOG,
+  SHOE_COLOR_CATALOG,
+  type ColorOption,
+  type HairShapeOption,
+} from '../data/customization'
+
+// lab-185 (achado do review do Copilot na PR #55): `ColorSection`/`HairShapeSection`
+// (`world3d/AvatarShop.tsx`) tratam `id === null` E "o próprio item padrão do catálogo (cost 0,
+// não-assinatura)" como visualmente equivalentes a "usar o padrão" — então um jogador que troca
+// pra outra cor e depois VOLTA pro padrão chama `equip*Color(idDoItemPadrao)`, não
+// `equip*Color(null)`. Sem checar isso aqui, esse retorno ao padrão contava como "equipou um
+// cosmético novo", contradizendo a decisão já documentada de só contar escolhas de verdade.
+function isCatalogDefault(catalog: Array<ColorOption | HairShapeOption>, id: string): boolean {
+  const option = catalog.find((opt) => opt.id === id)
+  if (!option) return false
+  const subscriptionOnly = 'subscriptionOnly' in option && option.subscriptionOnly
+  return option.cost === 0 && !subscriptionOnly
+}
 
 export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile())
@@ -42,6 +65,9 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    // lab-185: só ao equipar um item de verdade, não ao voltar pro padrão (`null`) — o sinal de
+    // engajamento é "escolheu um cosmético", não "removeu um".
+    if (hatId) trackCosmeticEquipped('hat')
   }
 
   // Personalização de cores/cabelo (lab-73) — mesmo formato do `equipHat` acima, um por eixo
@@ -54,6 +80,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id && !isCatalogDefault(SHIRT_COLOR_CATALOG, id)) trackCosmeticEquipped('shirtColor')
   }
 
   function equipPantsColor(id: string | null) {
@@ -63,6 +90,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id && !isCatalogDefault(PANTS_COLOR_CATALOG, id)) trackCosmeticEquipped('pantsColor')
   }
 
   function equipShoeColor(id: string | null) {
@@ -72,6 +100,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id && !isCatalogDefault(SHOE_COLOR_CATALOG, id)) trackCosmeticEquipped('shoeColor')
   }
 
   function equipBackpackColor(id: string | null) {
@@ -81,6 +110,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id && !isCatalogDefault(BACKPACK_COLOR_CATALOG, id)) trackCosmeticEquipped('backpackColor')
   }
 
   function equipHairShape(id: string | null) {
@@ -90,6 +120,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id && !isCatalogDefault(HAIR_SHAPE_CATALOG, id)) trackCosmeticEquipped('hairShape')
   }
 
   function equipGlasses(id: string | null) {
@@ -99,6 +130,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id) trackCosmeticEquipped('glasses')
   }
 
   return {

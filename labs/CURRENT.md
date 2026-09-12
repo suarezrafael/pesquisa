@@ -1,6 +1,56 @@
 # Laboratório atual
 
-Último concluído: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
+Último concluído: labs/lab-185-medicao-coortes/ — medição de coortes de retenção e qualidade.
+Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 185", prioridade P0/P1 — confirmado
+com o usuário via `AskUserQuestion` como o próximo lab (em vez de pular pro Lab 179) depois de
+checar que câmera (lab-178), lojinha (lab-176) e planetas não tinham nenhum evento de analytics.
+Investigação prévia achou que D1/D7 retenção já existia (`handleAdminMetrics`) mas sem D0 exposto e
+sem comparação de coorte antes/depois — o núcleo genuinamente novo deste lab. **3 eventos novos**
+(`camera_recenter_used`, `cosmetic_equipped`, `planet_travel_completed`) na allowlist
+`PRODUCT_EVENT_TYPES` + trackers em `productAnalytics.ts`, disparados em `World3D.tsx`
+(`handleRecenterCamera`/`landRocket`) e `useProfile.ts` (7 funções `equip*`, dentro do hook, não da
+UI). `docs/event-catalog.md` ganhou as 3 linhas + seção nova "Nível de agregação" consolidando a
+limitação device_id-only. `GET /admin/metrics` ganhou `newDevicesToday` (D0, reaproveita a MESMA
+CTE de D1/D7, sem round-trip extra), `cohortComparison` via `?cohortSplitDate=YYYY-MM-DD`
+(before/after usando `count(*) filter (where ...)` na mesma CTE, sem migração — só aparece quando o
+parâmetro é passado), `weeklyFunnel` com as 3 chaves novas, e `guardrails: string[]` no próprio
+JSON. Nova função pura testada: `isValidIsoDateOnly` (`domain.ts`, checa calendário real, não só
+regex — "30 de fevereiro" falha). `npx tsc -b`/`--noEmit` limpos; testes (estado final, após
+múltiplas rodadas de review automático do Copilot na PR #55 — ver "Review automático do Copilot"
+no `CONTEXT.md` do lab pra histórico completo): app 178/178 (inalterado), server-accounts 141/141
+(10 novos: 1 em `isValidProductEventType`, 5 em `isValidIsoDateOnly`, 2 em `isValidCosmeticSlot`, 2
+em `isValidDestinationPlanetId` — uma 6ª função, `isPlausibleOccurredAt`, chegou a existir entre as
+rodadas 6-10 do review e foi REMOVIDA na 11ª, ver `CONTEXT.md` do lab). `npm run build` sem
+regressão. **Verificado ao vivo contra
+produção** (`wrangler dev` local porta 8790, banco real, só leitura): `?cohortSplitDate=2026-09-01`
+devolveu before(76)+after(47)=123, EXATAMENTE igual a `totalDevices`; data malformada confirmada
+devolvendo 400. **Verificado ao vivo num navegador real**: os 3 eventos novos capturados via
+monkey-patch de `window.fetch` — `camera_recenter_used` no clique do ⟲; `cosmetic_equipped`
+(`meta.slot: "hat"`) equipando um boné de verdade na lojinha; `planet_travel_completed`
+(`meta.toPlanetId: "marte"`) numa viagem de foguete completa (embarque → decolagem → pouso,
+cartão-postal de Marte confirmado na tela). O escopo original não precisava de migração nenhuma,
+mas o review da PR #55 acabou adicionando 3: `0011_product_events_received_at_index.sql` (índices
+em `received_at`, necessários depois de trocar a base de cálculo de retenção pra essa coluna, 8ª
+rodada), `0012_drop_orphan_appearance_columns.sql` (limpeza de um incidente operacional não
+relacionado a este lab — ver `CONTEXT.md` do lab, 8ª-11ª rodadas, pro histórico completo) e
+`0013_drop_unused_occurred_at_indexes.sql` (índices de `occurred_at` mortos depois da troca pra
+`received_at`, 11ª rodada). Todas já aplicadas em produção. Ver
+`labs/lab-185-medicao-coortes/CONTEXT.md`.
+
+**Merge confirmado**: PR #55 mesclada em `main` no commit `3359c5c` (2026-09-12, squash), depois de
+14 rodadas de review automático do Copilot — todos os achados reais corrigidos e verificados ao
+vivo contra produção a cada rodada (histórico completo no `CONTEXT.md` do lab), incluindo 2
+incidentes operacionais descobertos e corrigidos no processo (um `git stash pop` acidental que
+vazou um arquivo de migração de outra sessão, e a limpeza resultante). CI de `main` verde nos 3
+workflows (`app`, `server-accounts`, `server-cf-relay`) e deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200) — `GET /admin/metrics`
+confirmado ao vivo com as 3 chaves novas de `weeklyFunnel` e os 3 `guardrails` presentes; schema
+final de `product_events`/`player_identities` conferido direto no banco batendo com o esperado
+(índices de `received_at` presentes, índices mortos de `occurred_at` removidos, colunas órfãs de
+`player_identities` removidas).
+
+Antes desse: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
 Origem: `docs/growth-retention-monetization-backlog.md`, seção 7/12, "Lab 178", prioridade P0,
 próximo item da ordem recomendada após o lab-177. Investigação prévia (antes de codar) achou que
 boa parte do escopo do backlog já estava implementada por labs anteriores (giro por arrasto mouse/

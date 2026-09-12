@@ -20,11 +20,14 @@ import {
   isSelfFriendRequest,
   isTokenRevoked,
   isValidBadgeList,
+  isValidCosmeticSlot,
+  isValidDestinationPlanetId,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
   sanitizeHouseFurnitureIds,
   sanitizeHousePlacements,
   isValidEquippedLook,
+  isValidIsoDateOnly,
   isValidNpsScore,
   isValidProductEventType,
   isValidProgressBackupPayload,
@@ -250,6 +253,12 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
     expect(isValidProductEventType('play_click')).toBe(true)
     expect(isValidProductEventType('parent_area_click')).toBe(true)
   })
+
+  it('aceita os eventos de câmera, lojinha e planetas do lab-185', () => {
+    expect(isValidProductEventType('camera_recenter_used')).toBe(true)
+    expect(isValidProductEventType('cosmetic_equipped')).toBe(true)
+    expect(isValidProductEventType('planet_travel_completed')).toBe(true)
+  })
 })
 
 describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {
@@ -276,6 +285,7 @@ describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {
     expect(isPlausibleSessionDuration(undefined)).toBe(false)
   })
 })
+
 
 describe('isValidNpsScore — lab-103', () => {
   it('aceita inteiros de 0 a 10', () => {
@@ -560,6 +570,79 @@ describe('isValidUuid (lab-159)', () => {
     expect(isValidUuid('')).toBe(false)
     expect(isValidUuid('não sou um uuid')).toBe(false)
     expect(isValidUuid('9b1deb4d-3b7d-4bad-9bdd')).toBe(false)
+  })
+})
+
+describe('isValidIsoDateOnly (lab-185)', () => {
+  it('aceita uma data YYYY-MM-DD real', () => {
+    expect(isValidIsoDateOnly('2026-02-14')).toBe(true)
+    expect(isValidIsoDateOnly('2024-02-29')).toBe(true) // ano bissexto
+  })
+
+  it('recusa formato errado, string vazia ou texto arbitrário', () => {
+    expect(isValidIsoDateOnly('')).toBe(false)
+    expect(isValidIsoDateOnly('não sou uma data')).toBe(false)
+    expect(isValidIsoDateOnly('2026-9-9')).toBe(false) // sem zero à esquerda
+    expect(isValidIsoDateOnly('2026-09-09T00:00:00Z')).toBe(false) // com hora
+  })
+
+  it('recusa data que não existe no calendário mesmo com formato certo', () => {
+    expect(isValidIsoDateOnly('2026-02-30')).toBe(false)
+    expect(isValidIsoDateOnly('2026-13-01')).toBe(false)
+    expect(isValidIsoDateOnly('2023-02-29')).toBe(false) // 2023 não é bissexto
+  })
+
+  it('não confunde ano de 2 dígitos com o comportamento legado do Date.UTC (achado do Copilot, 2ª rodada da PR #55)', () => {
+    // `Date.UTC(50, 0, 1)` interpretaria 50 como 1950 se a implementação passasse o ano direto
+    // pro `Date.UTC` — o ano de verdade tem que ser lido de volta como 50, não 1950.
+    expect(isValidIsoDateOnly('0050-01-01')).toBe(true)
+    expect(isValidIsoDateOnly('0099-12-31')).toBe(true)
+  })
+
+  it('recusa ano 0000, que o Postgres não aceita como ::date (achado do Copilot, 3ª rodada da PR #55)', () => {
+    // JS aceita ano 0 numa `Date` de boa (`getUTCFullYear()` devolve 0), mas
+    // `select '0000-01-01'::date` no Postgres lança "date/time field value out of range" —
+    // confirmado direto contra o banco de produção antes de escrever este teste.
+    expect(isValidIsoDateOnly('0000-01-01')).toBe(false)
+    expect(isValidIsoDateOnly('0000-12-31')).toBe(false)
+  })
+})
+
+describe('isValidCosmeticSlot (lab-185, 2ª rodada do review da PR #55)', () => {
+  it('aceita os 7 slots conhecidos', () => {
+    expect(isValidCosmeticSlot('hat')).toBe(true)
+    expect(isValidCosmeticSlot('shirtColor')).toBe(true)
+    expect(isValidCosmeticSlot('pantsColor')).toBe(true)
+    expect(isValidCosmeticSlot('shoeColor')).toBe(true)
+    expect(isValidCosmeticSlot('backpackColor')).toBe(true)
+    expect(isValidCosmeticSlot('hairShape')).toBe(true)
+    expect(isValidCosmeticSlot('glasses')).toBe(true)
+  })
+
+  it('recusa slot fora do conjunto conhecido', () => {
+    expect(isValidCosmeticSlot('qualquer_coisa')).toBe(false)
+    expect(isValidCosmeticSlot('')).toBe(false)
+    expect(isValidCosmeticSlot(123)).toBe(false)
+    expect(isValidCosmeticSlot(null)).toBe(false)
+  })
+})
+
+describe('isValidDestinationPlanetId (lab-185, 2ª rodada do review da PR #55)', () => {
+  it('aceita os 7 planetas-destino conhecidos', () => {
+    expect(isValidDestinationPlanetId('marte')).toBe(true)
+    expect(isValidDestinationPlanetId('mercurio')).toBe(true)
+    expect(isValidDestinationPlanetId('venus')).toBe(true)
+    expect(isValidDestinationPlanetId('jupiter')).toBe(true)
+    expect(isValidDestinationPlanetId('saturno')).toBe(true)
+    expect(isValidDestinationPlanetId('urano')).toBe(true)
+    expect(isValidDestinationPlanetId('netuno')).toBe(true)
+  })
+
+  it('recusa planeta fora do conjunto conhecido', () => {
+    expect(isValidDestinationPlanetId('terra')).toBe(false)
+    expect(isValidDestinationPlanetId('')).toBe(false)
+    expect(isValidDestinationPlanetId(123)).toBe(false)
+    expect(isValidDestinationPlanetId(undefined)).toBe(false)
   })
 })
 
