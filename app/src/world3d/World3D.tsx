@@ -10656,7 +10656,7 @@ export function World3D({
           const rawCarCamPos = drivingCar.root.position
             .subtract(carFwdNow.scale(CAMERA_DISTANCE * outdoorCameraZoomRef.current))
             .add(carUpNow.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
-          const desiredCarCamPos = avoidCameraClipping(drivingCar.root.position, rawCarCamPos, body)
+          const desiredCarCamPos = avoidCameraClipping(drivingCar.root.position, rawCarCamPos, avatarBody?.body)
           camera.position = Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
           camera.upVector = Vector3.Lerp(camera.upVector, carUpNow, 0.15).normalize()
           camera.setTarget(drivingCar.root.position)
@@ -10777,7 +10777,7 @@ export function World3D({
           // especificamente pra nunca apontar pra dentro do planeta, então não depende do
           // anti-clipping pra ficar correta.
           if (!inLaunchHold && !inLandingFlip) {
-            desiredShipCamPos = avoidCameraClipping(shipPos, desiredShipCamPos, body)
+            desiredShipCamPos = avoidCameraClipping(shipPos, desiredShipCamPos, avatarBody?.body)
           }
           camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
           camera.upVector = Vector3.Lerp(camera.upVector, desiredShipCamUp, 0.15).normalize()
