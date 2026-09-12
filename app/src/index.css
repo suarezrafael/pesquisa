@@ -691,6 +691,13 @@ a.nickname-generate-btn {
      cantinho arredondado agradável em qualquer altura, sem depender de quantas linhas o conteúdo
      ocupa. */
   border-radius: 20px;
+  /* Achado do review automático do Copilot (PR #58): o raio fixo acima sozinho reduz o problema
+     mas não o CONTÉM de verdade — `border-radius` só pinta o fundo/borda; os filhos de
+     `.hub-header-info` continuam livres pra renderizar nos cantos (agora com fundo transparente,
+     já que não há mais cápsula) se o conteúdo crescer mais alto que o previsto. `overflow: hidden`
+     garante que nada renderize fora do retângulo lógico da caixa — defesa em profundidade pro
+     mesmo cenário (nome muito longo, texto de nível maior que o esperado). */
+  overflow: hidden;
   padding: clamp(0.2rem, 1.6vmin, 0.5rem) clamp(0.35rem, 2.6vmin, 0.9rem);
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
   /* lab-70, pedido do usuário: "o painel que mostra o avatar o nome e as moedas é muito largo,
@@ -933,9 +940,15 @@ a.nickname-generate-btn {
   /* Pedido do usuário (lab-180, fora do fluxo normal de lab, junto do bug do painel de FPS):
      botões virtuais "mais transparentes" no celular — mantém o TAMANHO (piso de toque confiável,
      não mexido) e só reduz a opacidade do preenchimento/borda, pra ocupar menos atenção visual
-     sem arriscar dificultar o toque. */
+     sem arriscar dificultar o toque.
+     Achado do review automático do Copilot (PR #58): branco a 0.18/0.4 sozinho, sem nenhuma
+     sombra, não garante contraste nenhum contra um céu/terreno CLARO (fundo 3D variável, não uma
+     cor de tela fixa) — o controle podia ficar quase invisível bem na cena mais comum do jogo.
+     `box-shadow` escura por fora garante uma silhueta visível contra QUALQUER fundo (claro ou
+     escuro), mesmo com o preenchimento translúcido continuando discreto. */
   background: rgba(255, 255, 255, 0.18);
-  border: 2px solid rgba(255, 255, 255, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.3);
   touch-action: none;
 }
 
@@ -998,9 +1011,13 @@ a.nickname-generate-btn {
   justify-content: center;
   border-radius: 50%;
   /* Mesmo pedido de transparência do `.joystick-base` acima (lab-180, fora do fluxo normal de
-     lab) — tamanho intocado, só a opacidade do preenchimento/borda reduzida. */
+     lab) — tamanho intocado, só a opacidade do preenchimento/borda reduzida. Mesmo achado do
+     review automático do Copilot (PR #58) sobre contraste contra fundo 3D claro/escuro variável
+     — `box-shadow` escura garante uma silhueta visível em qualquer cena, o `text-shadow` do
+     emoji abaixo já ajudava só o ÍCONE, não o contorno do círculo em si. */
   background: rgba(255, 255, 255, 0.18);
-  border: 2px solid rgba(255, 255, 255, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.3);
   color: white;
   font-weight: 700;
   /* lab-150 (achado do Copilot, PRs #2/#5): agora é um <button> de verdade, não um <div> — reseta
