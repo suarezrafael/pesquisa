@@ -112,7 +112,31 @@ a física dos veículos (nenhum achado de documentação/nit desta vez):
   ficar correta; ele só roda de verdade no CRUZEIRO (longe de qualquer planeta), onde faz sentido.
 
 Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) e `npm run build`
-limpos.
+limpos. **Achado real do CI, não do Copilot, entre as rodadas 1 e 2**: um `npx tsc -b` local deu
+falso-positivo (saída limpa) mesmo com um erro de verdade no código — `body` referenciado fora do
+`if (avatarBody && avatarMesh) {...}` que o declara (o fix de `ignoreBody` do carro/foguete usava
+esse nome, só válido dentro do ciclo de caminhada) — só o `npm run build` do CI (com cache limpo)
+pegou o `error TS2304: Cannot find name 'body'` de verdade. Corrigido trocando por `avatarBody?.body`
+(variável de escopo mais amplo, já acessível nos dois blocos). **Lição registrada**: depois desse
+achado, toda verificação de `tsc`/build nesta sessão passou a LER o conteúdo da saída de verdade
+(procurando texto `error`), não só confiar no código de saída do processo — o código de saída
+sozinho não bastou pra pegar esse caso.
+
+**2ª rodada** — 1 achado real (câmera podia ficar literalmente em cima do próprio personagem):
+
+- **`safeDistance` podia zerar e colocar a câmera EM CIMA do alvo** — `hitDistance` é medido a
+  partir do ALVO (avatar/carro/nave), não da câmera; se o obstáculo estivesse mais perto que a
+  margem de 0,3 (jogador quase encostado numa parede/rocha), `Math.max(0, hitDistance - margin)`
+  zerava pra 0, e `Vector3.Lerp(target, desired, 0)` colocava a câmera EXATAMENTE na posição do
+  alvo — a própria cápsula do personagem, o mesmo problema de clipping que a função deveria evitar,
+  só que pro lado oposto (câmera dentro do PERSONAGEM em vez de dentro do TERRENO). Corrigido com
+  um piso mínimo de `AVATAR_RADIUS + 0,2` (limitado por `fullDistance`, pra nunca ficar mais longe
+  que a distância desejada original) — a câmera nunca fica mais perto do alvo do que isso, mesmo
+  com o obstáculo colado.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterado) e `npm run build`
+limpos — desta vez com leitura real do conteúdo da saída (não só código de saída), pela lição
+registrada acima.
 
 ## Pendências / dívidas conhecidas
 

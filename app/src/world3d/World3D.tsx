@@ -3682,7 +3682,15 @@ export function World3D({
         havokPlugin.raycast(target, desired, cameraObstructionResult, ignoreBody ? { ignoreBody } : undefined)
         if (!cameraObstructionResult.hasHit) return desired
         const margin = 0.3 // afasta um pouco da parede/rocha em vez de encostar a lente nela
-        const safeDistance = Math.max(0, cameraObstructionResult.hitDistance - margin)
+        // Achado real do review automático do Copilot (PR #54, 2ª rodada): `hitDistance` é medido
+        // a partir do ALVO — se o obstáculo estiver mais perto que `margin` (jogador quase
+        // encostado numa parede/rocha), `hitDistance - margin` vira negativo, o `Math.max(0, ...)`
+        // zera pra 0, e `Vector3.Lerp(target, desired, 0)` deixa a câmera EM CIMA do alvo — a
+        // própria cápsula do personagem, o mesmo problema que o anti-clipping deveria evitar.
+        // Piso mínimo em `AVATAR_RADIUS` (mais uma folga pequena) garante a câmera sempre pelo
+        // menos do lado de fora do próprio personagem, mesmo encostado na parede mais próxima.
+        const minClearance = Math.min(AVATAR_RADIUS + 0.2, fullDistance)
+        const safeDistance = Math.max(minClearance, cameraObstructionResult.hitDistance - margin)
         if (safeDistance >= fullDistance) return desired
         return Vector3.Lerp(target, desired, safeDistance / fullDistance)
       }
