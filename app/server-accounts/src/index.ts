@@ -24,7 +24,6 @@ import {
   isEventNewerThan,
   isNicknameAllowed,
   isOnlineNow,
-  isPlausibleOccurredAt,
   isPlausibleSessionDuration,
   isSelfFriendRequest,
   isTokenRevoked,
@@ -437,12 +436,6 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     return new Response(null, { status: 400 })
   }
   if (!isValidProductEventType(type)) return new Response(null, { status: 400 })
-  // Sanidade sobre o `occurredAt` que o CLIENT alega — `handleAdminMetrics` abaixo usa
-  // `received_at` (coluna do servidor, não este campo) pra D0/D1/D7/coorte/janela semanal, então
-  // isto não protege métrica nenhuma diretamente; é só pra não gravar um valor absurdo (ex.: ano
-  // 3000) num campo que ainda é exibido/gravado como veio do client. Ver comentário completo de
-  // `isPlausibleOccurredAt` em `domain.ts` (achado do review automático do Copilot, 6ª/7ª rodadas).
-  if (!isPlausibleOccurredAt(occurredAt)) return new Response(null, { status: 400 })
 
   // `cosmetic_equipped`/`planet_travel_completed` (lab-185): diferente de `session_end` (onde o
   // evento "sessão terminou" é um sinal válido mesmo com uma duração implausível — por isso só o
@@ -1488,7 +1481,12 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
   // `migrations/0001_baseline.sql`), nunca `occurred_at` (alegado pelo client) — achado do review
   // automático do Copilot, 7ª rodada: usar `occurred_at` deixava um client anônimo fabricar
   // entrada/retorno de coorte só mandando timestamps arbitrários, sem nenhuma conta em tempo real
-  // precisar acontecer de verdade.
+  // precisar acontecer de verdade. O join usa uma faixa semiaberta (`received_at >= day0 + N and
+  // received_at < day0 + N + 1`) em vez de `received_at::date = day0 + N` (achado da 11ª rodada) —
+  // aplicar `::date` na coluna INDEXADA impede o Postgres de usar `idx_product_events_device_received`
+  // como uma faixa de verdade (só filtra por `device_id`, depois varre o histórico inteiro daquele
+  // dispositivo pra calcular `::date` linha a linha); a faixa semiaberta deixa as DUAS colunas do
+  // índice composto serem usadas.
   // Achado real do review automático do Copilot (1ª rodada): rodar esta CTE duas vezes (uma pra
   // retenção global, outra pra comparação de coorte) dobra o agrupamento/joins sobre
   // `product_events` a cada relatório com `cohortSplitDate`. 3ª rodada: mas SEMPRE calcular os 8
@@ -1535,7 +1533,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       d1_returned as (
         select distinct fs.device_id, fs.day0
         from d1_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.received_at::date = fs.day0 + 1
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at >= fs.day0 + 1 and pe.received_at < fs.day0 + 2
       ),
       d7_eligible as (
         select device_id, day0 from first_seen where day0 <= current_date - 7
@@ -1543,7 +1541,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       d7_returned as (
         select distinct fs.device_id, fs.day0
         from d7_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.received_at::date = fs.day0 + 7
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at >= fs.day0 + 7 and pe.received_at < fs.day0 + 8
       )
       select
         (select count(*) from d1_eligible) as d1_eligible,
@@ -1568,7 +1566,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       d1_returned as (
         select distinct fs.device_id, fs.day0
         from d1_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.received_at::date = fs.day0 + 1
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at >= fs.day0 + 1 and pe.received_at < fs.day0 + 2
       ),
       d7_eligible as (
         select device_id, day0 from first_seen where day0 <= current_date - 7
@@ -1576,7 +1574,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       d7_returned as (
         select distinct fs.device_id, fs.day0
         from d7_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.received_at::date = fs.day0 + 7
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at >= fs.day0 + 7 and pe.received_at < fs.day0 + 8
       )
       select
         (select count(*) from d1_eligible) as d1_eligible,

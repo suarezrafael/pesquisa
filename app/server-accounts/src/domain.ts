@@ -213,20 +213,18 @@ export function isPlausibleSessionDuration(durationMs: unknown): durationMs is n
 // `handleAdminMetrics` (`index.ts`), toda a base de cálculo de D0/D1/D7/`cohortComparison`/janela
 // semanal do `weeklyFunnel` de `occurred_at` pra `received_at` — coluna que JÁ EXISTIA desde
 // `migrations/0001_baseline.sql` (`default now()`, preenchida pelo Postgres no INSERT, nunca vem
-// do client; a 1ª versão deste comentário dizia por engano que precisaria de uma coluna/migração
-// nova). `isPlausibleOccurredAt` abaixo é só uma segunda camada de sanidade sobre o `occurred_at`
-// que o client ALEGA (ainda gravado, só não mais usado em nenhum cálculo de retenção/funil) —
-// recusa um valor absurdamente fora de "agora" (relógio de aparelho muito errado), mas não é mais
-// a defesa que protege a integridade das métricas de coorte.
-const MAX_OCCURRED_AT_PAST_MS = 48 * 60 * 60 * 1000
-const MAX_OCCURRED_AT_FUTURE_MS = 10 * 60 * 1000
-
-export function isPlausibleOccurredAt(occurredAt: string, nowMs: number = Date.now()): boolean {
-  const parsed = Date.parse(occurredAt)
-  if (Number.isNaN(parsed)) return false
-  return parsed >= nowMs - MAX_OCCURRED_AT_PAST_MS && parsed <= nowMs + MAX_OCCURRED_AT_FUTURE_MS
-}
-
+// do client). A 6ª rodada tinha ADICIONADO uma checagem de plausibilidade (`isPlausibleOccurredAt`,
+// janela de 48h passado/10min futuro) que recusava o evento inteiro (400) fora dessa janela — a
+// 11ª rodada REMOVEU essa checagem de vez: depois da troca pra `received_at`, ela não protegia
+// métrica nenhuma (só o campo decorativo `occurred_at`, nunca mais lido em cálculo nenhum), mas
+// ainda descartava eventos de aparelhos LEGÍTIMOS com relógio desconfigurado (comum o bastante —
+// fuso horário errado sozinho já estoura 10min de folga no futuro) — o client engole o 400
+// silenciosamente (`fetch(...).catch(() => {})`), então isso causava SUBCONTAGEM sistemática sem
+// nenhum ganho de segurança em troca. `occurredAt` voltou a só precisar ser uma string (checagem
+// já feita mais acima em `handleTrackEvent`) — qualquer valor implausível ainda é inofensivo (não
+// alimenta nenhum cálculo), e um valor genuinamente malformado (não parseável como data) já falha
+// sozinho na inserção `timestamptz not null` e é tratado pelo mesmo catch-e-loga que já cobre
+// `device_id` inválido, sem precisar de validação própria nova.
 // lab-185 (review do Copilot na PR #55) — `cosmetic_equipped`/`planet_travel_completed` também
 // mandam `meta` com um valor string, mas de um conjunto FIXO conhecido no código-fonte (nunca
 // texto livre digitado por ninguém, ver docs/event-catalog.md); mesmo espírito de

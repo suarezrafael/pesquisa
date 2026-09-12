@@ -13,23 +13,26 @@
 -- Contra o banco de PRODUÇÃO deste projeto, já conferimos manualmente que as 7 colunas estavam
 -- 100% `NULL` antes de rodar esta migração ali. Mas isso não vale pra QUALQUER outro ambiente que
 -- rode este arquivo (clone novo, staging, disaster-recovery do zero) — daí a precondição abaixo
--- (achado do review automático do Copilot, PR #55, 9ª/10ª rodadas), com 2 camadas de segurança:
+-- (achado do review automático do Copilot, PR #55, 9ª/10ª/11ª rodadas), com 3 camadas de
+-- segurança:
 --
--- 1) `lock table ... in access exclusive mode` ANTES de checar qualquer coisa — mesmo modo de
---    lock que `alter table ... drop column` já pediria de qualquer forma no final desta mesma
---    transação, só que pedido mais cedo. Isso bloqueia QUALQUER outro leitor/escritor na tabela
---    (inclusive um `insert`/`update` concorrente) até este `commit`/`rollback` — sem isso, um
---    escritor concorrente podia gravar um valor nas colunas DEPOIS da checagem de "tá tudo nulo" e
---    ANTES do `drop column` pegar o lock exclusivo sozinho, e a migração dropava esse valor recém
---    escrito sem nunca ter visto ele (achado da 10ª rodada).
--- 2) A checagem de quantas das 7 colunas existem trata os 3 estados possíveis EXPLICITAMENTE — 0
---    (nenhuma existe, ambiente nunca teve o acidente, ex.: todo clone novo desta branch — não faz
---    nada), 7 (todas existem, checa se alguma tem valor não-nulo antes de dropar), e qualquer outro
---    número de 1 a 6 (schema parcial/inesperado — aborta com mensagem clara em vez de deixar o
---    `execute` da checagem de dados bater num erro genérico de "coluna não existe" pra uma coluna
---    que faltou, achado também da 10ª rodada).
-lock table player_identities in access exclusive mode;
-
+-- 1) PRÉ-checagem SEM lock nenhum — todo clone novo desta branch (o caso mais comum, já que o
+--    arquivo que criava as 7 colunas nunca foi commitado) sai daqui sem nunca ter pedido lock
+--    nenhum em `player_identities`, uma tabela viva do recurso social (achado da 11ª rodada: pedir
+--    `access exclusive` ANTES de saber se há algo a fazer bloqueava leitura/escrita da tabela
+--    social durante todo deploy, mesmo quando a migração é um no-op).
+-- 2) Só se a pré-checagem achar 1+ coluna é que pegamos `lock table ... in access exclusive mode`
+--    e RE-checamos sob o lock (fecha a janela de corrida entre a pré-checagem sem lock e a
+--    aquisição do lock — outra transação podia ter mudado o schema nesse meio-tempo).
+-- 3) A checagem final trata os 3 estados possíveis explicitamente — 0 (nada a fazer), 7 (checa
+--    dado antes de dropar), ou 1-6 (schema parcial/inesperado — aborta com mensagem clara em vez
+--    de um erro genérico de "coluna não existe").
+--
+-- O `lock table`/`alter table` dentro do bloco `do $$ ... $$` funcionam direto em PL/pgSQL sem
+-- precisar de `execute` (confirmado rodando os dois isoladamente numa transação com rollback antes
+-- de escrever esta versão) — só a checagem de DADO usa `execute` porque referencia nomes de coluna
+-- que podem não existir dependendo do ambiente (não dá pra escrever a query direto sem que o
+-- parser falhe cedo demais num ambiente onde as colunas nem existem).
 do $$
 declare
   colunas_existentes int;
@@ -45,8 +48,27 @@ begin
     );
 
   if colunas_existentes = 0 then
-    -- Ambiente onde a 0007 errada nunca foi aplicada (todo clone novo desta branch) — nada a
-    -- dropar, nada a checar.
+    -- Pré-checagem SEM lock: ambiente onde a 0007 errada nunca foi aplicada (todo clone novo
+    -- desta branch). Nada a dropar, nunca precisou bloquear a tabela.
+    return;
+  end if;
+
+  -- Só pega o lock (e só bloqueia leitura/escrita de `player_identities`) quando a pré-checagem
+  -- já indicou que há algo a investigar.
+  lock table player_identities in access exclusive mode;
+
+  -- Re-checa sob o lock — fecha a janela entre a pré-checagem (sem lock) e agora.
+  select count(*) into colunas_existentes
+  from information_schema.columns
+  where table_name = 'player_identities'
+    and column_name in (
+      'equipped_hat_id', 'equipped_glasses_id', 'equipped_shirt_color_id',
+      'equipped_pants_color_id', 'equipped_shoe_color_id', 'equipped_backpack_color_id',
+      'equipped_hair_shape_id'
+    );
+
+  if colunas_existentes = 0 then
+    -- Outra transação já resolveu isso entre a pré-checagem e o lock — nada a fazer.
     return;
   elsif colunas_existentes < 7 then
     raise exception 'Migração 0012 abortada: esperava 0 ou 7 das 7 colunas órfãs em player_identities, encontrou %. Schema parcial/inesperado — investigue manualmente antes de rodar esta migração, não assuma que é seguro completar o drop.', colunas_existentes;
@@ -66,13 +88,13 @@ begin
   if linhas_com_dado > 0 then
     raise exception 'Migração 0012 abortada: % linha(s) de player_identities têm valor não-nulo numa das 7 colunas órfãs que este arquivo tentaria dropar — investigue antes de prosseguir, não assuma que o estado de outra aplicação desta migração ainda vale aqui.', linhas_com_dado;
   end if;
-end $$;
 
-alter table player_identities
-  drop column if exists equipped_hat_id,
-  drop column if exists equipped_glasses_id,
-  drop column if exists equipped_shirt_color_id,
-  drop column if exists equipped_pants_color_id,
-  drop column if exists equipped_shoe_color_id,
-  drop column if exists equipped_backpack_color_id,
-  drop column if exists equipped_hair_shape_id;
+  alter table player_identities
+    drop column if exists equipped_hat_id,
+    drop column if exists equipped_glasses_id,
+    drop column if exists equipped_shirt_color_id,
+    drop column if exists equipped_pants_color_id,
+    drop column if exists equipped_shoe_color_id,
+    drop column if exists equipped_backpack_color_id,
+    drop column if exists equipped_hair_shape_id;
+end $$;

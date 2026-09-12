@@ -472,6 +472,59 @@ continua rodando limpo no estado atual do banco (0 colunas, `lock table` não im
 ninguém mais estava escrevendo na tabela durante o teste, e o `return` antecipado é atingido antes
 de qualquer checagem de dado).
 
+**11ª rodada** — 4 achados reais, o mais importante uma REVERSÃO completa de uma decisão anterior
+(round 6) depois de confirmar que ela parou de fazer sentido:
+
+- **`isPlausibleOccurredAt` (6ª/7ª rodadas) causava subcontagem sistemática de aparelhos legítimos
+  sem proteger métrica nenhuma** — depois da 7ª rodada trocar `day0`/D1/D7/`cohortComparison`/funil
+  semanal pra `received_at`, essa checagem só protegia `occurred_at`, um campo que NUNCA mais é lido
+  em cálculo nenhum (confirmado por grep: só aparece no `INSERT`). Mas a checagem continuava
+  RECUSANDO O EVENTO INTEIRO (400) se o relógio do aparelho estivesse a mais de 10min no futuro ou
+  48h no passado — um desvio de relógio real e comum (fuso horário errado sozinho já estoura 10min),
+  e o client engole o 400 silenciosamente (`fetch(...).catch(() => {})`), então isso descartava
+  telemetria de verdade sem ganho de segurança nenhum em troca. Decisão: REMOVER a função inteira
+  (não só ajustar a janela) — `occurredAt` volta a só precisar ser uma string; um valor
+  genuinamente malformado (não parseável como data) já falha sozinho ao inserir numa coluna
+  `timestamptz not null` (confirmado ao vivo: `'não sou uma data'` gera
+  "invalid input syntax for type timestamp with time zone", capturado pelo mesmo catch-e-loga que
+  já cobre `device_id` inválido) — não precisa de validação própria. Removidos: a função e as 2
+  constantes em `domain.ts`, a chamada em `index.ts`, o import dos dois arquivos, e os 6 testes em
+  `domain.test.ts` (141/141 de volta, era 147/147).
+- **O `join` de D1/D7 usava `pe.received_at::date = fs.day0 + N`, impedindo o índice composto de
+  servir como faixa** — aplicar `::date` numa coluna INDEXADA faz o Postgres não conseguir usar
+  aquela coluna como uma faixa de busca no índice (só filtra por `device_id`, o prefixo do índice
+  composto, e varre o resto do histórico daquele dispositivo calculando `::date` linha a linha).
+  Corrigido pra uma faixa semiaberta (`received_at >= day0 + N and received_at < day0 + N + 1`) —
+  usa as DUAS colunas do índice `idx_product_events_device_received`. Confirmado com `EXPLAIN
+  ANALYZE` que a condição agora aparece como uma faixa de verdade no plano (a tabela ainda é
+  pequena o bastante — 702 linhas — pro Postgres preferir sequential scan de qualquer jeito, o que
+  é a escolha CERTA nesse tamanho; o ganho aparece quando a tabela crescer, e antes desta correção
+  NUNCA apareceria não importa o tamanho).
+- **Os índices antigos de `occurred_at` (`idx_product_events_occurred_at`,
+  `idx_product_events_device_occurred`) ficaram 100% mortos** depois da troca pra `received_at` —
+  confirmado por grep, `occurred_at` só aparece mais no `INSERT`. Numa tabela de telemetria de alto
+  volume de escrita, manter índices mortos custa atualização deles em TODO insert sem ganho de
+  leitura nenhum. Corrigido com `migrations/0013_drop_unused_occurred_at_indexes.sql` — dropa só
+  esses dois, não `idx_product_events_type_occurred` (o prefixo `event_type` sozinho ainda serve
+  pra filtros só por tipo, não é totalmente morto).
+- **A precondição de `0012` ainda pegava o lock `access exclusive` ANTES de checar se havia algo a
+  fazer** — mesmo num clone novo (onde a checagem sempre dá 0 colunas, um no-op), a migração
+  bloqueava toda leitura/escrita de `player_identities` (tabela viva do recurso social) enquanto
+  rodava a checagem. Corrigido com um padrão de pré-checagem SEM lock (sai cedo se 0 colunas, nunca
+  bloqueando nada) seguida de lock + RE-checagem só quando a pré-checagem já indicou que há algo a
+  investigar (fecha a janela de corrida entre a pré-checagem e o lock).
+
+Verificação desta rodada: `npx tsc --noEmit` limpo; `npm run test` 141/141 (6 REMOVIDOS —
+`isPlausibleOccurredAt` — voltando ao número de antes da 6ª rodada). Reverificado ao vivo contra
+produção (`wrangler dev` porta 8798, banco real): `session_start` com relógio 11min adiantado
+(passaria da janela antiga) confirmado 204 agora (seria 400 antes); `cosmetic_equipped` com slot
+válido/inválido continuam 204/400 como antes (a remoção não afetou essa validação, só a de
+`occurredAt`); `pg_indexes` confirmou os 2 índices velhos sumidos e os 2 novos presentes;
+`migrations/0012_...sql` (versão com pré-checagem sem lock) rodado inteiro dentro de uma transação
+com `rollback` — continua limpo; `GET /admin/metrics?cohortSplitDate=2026-09-01` devolveu
+exatamente os mesmos números de sempre (76/47/123), confirmando que a faixa semiaberta não muda
+resultado nenhum, só a eficiência da query em escala.
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
@@ -522,19 +575,22 @@ lab deixou medindo só a chegada), sem texto livre/UGC.
 - `npx tsc -b` (app) e `npx tsc --noEmit` (server-accounts): limpos. `npm run test` (estado FINAL,
   após as várias rodadas de review automático do Copilot na PR #55 — número sempre conferido
   programaticamente contra `git diff` do `domain.test.ts` inteiro, nunca de cabeça, depois de mais
-  de uma rodada pegando esse tipo de erro de contagem): app 178/178 (inalterado, mudança
-  client-side é só uma condição a mais antes de uma chamada já existente, sem lógica nova
-  isolável); server-accounts 147/147, 16 testes novos desde o início do lab (baseline 131) — 1 em
-  `isValidProductEventType` (allowlist aceita os 3 eventos novos), 5 em `isValidIsoDateOnly` (data
-  real/bissexta, formato/calendário inválido, anos de 2 dígitos, ano 0000), 2 em
-  `isValidCosmeticSlot`, 2 em `isValidDestinationPlanetId`, 6 em `isPlausibleOccurredAt`.
+  de uma rodada pegando esse tipo de erro de contagem — inclusive esta MESMA contagem, que teve
+  16 testes num certo ponto, incluindo `isPlausibleOccurredAt`, removida na 11ª rodada junto com a
+  função que testava): app 178/178 (inalterado, mudança client-side é só uma condição a mais antes
+  de uma chamada já existente, sem lógica nova isolável); server-accounts 141/141, 10 testes novos
+  desde o início do lab (baseline 131) — 1 em `isValidProductEventType` (allowlist aceita os 3
+  eventos novos), 5 em `isValidIsoDateOnly` (data real/bissexta, formato/calendário inválido, anos
+  de 2 dígitos, ano 0000), 2 em `isValidCosmeticSlot`, 2 em `isValidDestinationPlanetId`.
   `npm run build` (app): limpo, sem regressão de bundle.
-- **2 migrações novas, ambas adicionadas pelo review da PR #55 (não fazem parte do escopo original
+- **3 migrações novas, todas adicionadas pelo review da PR #55 (não fazem parte do escopo original
   planejado, que de fato não precisava de nenhuma — `product_events` já tinha as colunas
   necessárias)**: `0011_product_events_received_at_index.sql` (2 índices em `received_at`, 8ª
-  rodada) e `0012_drop_orphan_appearance_columns.sql` (limpeza de um incidente operacional não
-  relacionado a este lab — ver "Review automático do Copilot" 8ª rodada abaixo para o histórico
-  completo). Ambas aplicadas em produção via `npm run migrate` e verificadas.
+  rodada), `0012_drop_orphan_appearance_columns.sql` (limpeza de um incidente operacional não
+  relacionado a este lab, 8ª/9ª/10ª/11ª rodadas — ver "Review automático do Copilot" abaixo pro
+  histórico completo) e `0013_drop_unused_occurred_at_indexes.sql` (índices de `occurred_at` que
+  ficaram mortos depois da troca pra `received_at`, 11ª rodada). Todas aplicadas em produção via
+  `npm run migrate` e verificadas.
 - **Verificado ao vivo contra produção** (`wrangler dev` local, porta 8790, banco de PRODUÇÃO
   real, só leitura): `GET /admin/metrics` respondeu com `newDevicesToday`/`weeklyFunnel` (3 chaves
   novas, todas 0 — nenhum evento novo em produção ainda, esperado) e `guardrails`;

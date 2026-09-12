@@ -20,12 +20,14 @@ exportadas abaixo) via `POST /events` pro Worker (`app/server-accounts/src/index
 `handleTrackEvent`), gravado na tabela `product_events` (`device_id`, `event_type`, `occurred_at`,
 `meta` opcional, `received_at`), e só é aceito se o tipo estiver na allowlist `PRODUCT_EVENT_TYPES`
 (`app/server-accounts/src/domain.ts`) — um tipo desconhecido é recusado com 400, nunca vira uma
-linha nova e imprevista na tabela. `occurred_at` é o instante que o CLIENT alega (validado só
-quanto à plausibilidade, `isPlausibleOccurredAt`, lab-185 6ª rodada do review da PR #55 — janela
-ASSIMÉTRICA, recusa o evento se `occurred_at` estiver mais de 48h no PASSADO ou mais de 10min no
-FUTURO em relação a "agora", achado de precisão da 9ª rodada); `received_at` é preenchido pelo
-SERVIDOR
-(`default now()`, coluna já existente desde `migrations/0001_baseline.sql`, nunca vem do client) —
+linha nova e imprevista na tabela. `occurred_at` é o instante que o CLIENT alega — só precisa ser
+uma string (nenhuma checagem de plausibilidade desde a 11ª rodada do review da PR #55: uma versão
+anterior recusava o evento fora de uma janela de ~48h/10min ao redor de "agora", mas depois de
+`received_at` assumir toda a base de cálculo de retenção/funil essa checagem não protegia métrica
+nenhuma e ainda descartava silenciosamente eventos de aparelhos legítimos com relógio
+desconfigurado — subcontagem sem ganho de segurança em troca, revertida). `received_at` é
+preenchido pelo SERVIDOR (`default now()`, coluna já existente desde `migrations/0001_baseline.sql`,
+nunca vem do client) —
 D0/D1/D7, `cohortComparison` e a janela "últimos 7 dias" do `weeklyFunnel` usam `received_at`, não
 `occurred_at`, justamente pra não depender de um relógio que o client controla (achado do review da
 PR #55, 7ª rodada).

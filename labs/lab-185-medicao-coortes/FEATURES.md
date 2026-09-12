@@ -52,12 +52,14 @@ descrição do backlog):
 - **Nenhuma migração nova é necessária pro escopo planejado abaixo** — `product_events` já tem
   `device_id`/`occurred_at`/`meta`, suficiente pra tudo planejado (eventos novos via allowlist só,
   comparação antes/depois via parâmetro de consulta sobre dados já existentes). **Atualização
-  (8ª rodada do review da PR #55, depois de codar)**: essa previsão só valia pro escopo ORIGINAL —
-  o review acabou pedindo 2 migrações que não existiam neste plano: `0011_product_events_received_at_index.sql`
-  (índices em `received_at`, depois de trocar a base de cálculo de retenção pra essa coluna) e
-  `0012_drop_orphan_appearance_columns.sql` (limpeza de um incidente operacional não relacionado a
-  este lab, ver `CONTEXT.md`). Registrado aqui pra não deixar esta seção de investigação prévia
-  parecendo a previsão que realmente se confirmou.
+  (8ª-11ª rodadas do review da PR #55, depois de codar)**: essa previsão só valia pro escopo
+  ORIGINAL — o review acabou pedindo 3 migrações que não existiam neste plano:
+  `0011_product_events_received_at_index.sql` (índices em `received_at`, depois de trocar a base de
+  cálculo de retenção pra essa coluna), `0012_drop_orphan_appearance_columns.sql` (limpeza de um
+  incidente operacional não relacionado a este lab) e `0013_drop_unused_occurred_at_indexes.sql`
+  (remove os índices de `occurred_at` que ficaram mortos depois da troca pra `received_at`) — ver
+  `CONTEXT.md`. Registrado aqui pra não deixar esta seção de investigação prévia parecendo a
+  previsão que realmente se confirmou.
 
 ## Funcionalidades planejadas
 
