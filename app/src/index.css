@@ -1024,6 +1024,18 @@ a.nickname-generate-btn {
   transform: translateY(calc(-50% + 34px));
 }
 
+/* lab-178 (backlog "câmera Roblox-like fácil", botão de recentralizar) — mesma coluna horizontal
+   do grupo pular/correr (`right: 6.8rem`), mas centralizado na altura da tela, longe de qualquer
+   outro grupo de botões (topo do HUD, pular/correr embaixo, giro de câmera à direita). */
+.touch-action-recenter {
+  top: 50%;
+  right: 6.8rem;
+  width: 56px;
+  height: 56px;
+  font-size: 1.4rem;
+  transform: translateY(-50%);
+}
+
 /* Ação da tecla E por toque (lab-58, pedido do usuário: "se você estiver no celular precisa de
    um pequeno botão transparente de função de ação da tecla E") — cobre entrar/sair do carro e
    embarcar/desembarcar do foguete. Acima do botão de pular, longe do grupo de câmera no meio da

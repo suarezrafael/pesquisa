@@ -1,8 +1,8 @@
 # Laboratório 178 — Câmera Roblox-like fácil
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-11
-Fim: -
+Fim: 2026-09-11
 Commit inicial: 43a197544720c7ee8b253e50cc314b1edb8437b8
 
 ## Objetivo do laboratório
@@ -50,29 +50,45 @@ então este lab foca só no que falta de verdade:
 
 ## Funcionalidades planejadas
 
-- [ ] Zoom por scroll (desktop) e pinch (touch) na câmera de 3ª pessoa do lado de FORA de casa —
+- [x] Zoom por scroll (desktop) e pinch (touch) na câmera de 3ª pessoa do lado de FORA de casa —
       a pé, dirigindo carro e pilotando o foguete (todos reaproveitam `CAMERA_DISTANCE`/
       `CAMERA_HEIGHT`). Mesmo padrão de clamp min/max já usado dentro de casa
       (`houseCameraZoomRef`), com seus próprios limites (perto o bastante pra ver o avatar de
       corpo inteiro, longe o bastante pra dar visão espacial sem sair de proporção com o mundo).
-      (referência: `docs/growth-retention-monetization-backlog.md`, Lab 178, "zoom por
-      scroll/pinch")
-- [ ] Botão de recentralizar câmera (HUD, mesmo padrão visual/acessível de `TouchActionButton`) —
-      anima o giro acumulado (`cameraYawOffsetRef`, e pitch/zoom quando dentro de casa) de volta
-      ao padrão suavemente, sem corte brusco. (referência: backlog, Lab 178, "botão de
+      Scroll verificado ao vivo (distância exata nos limites min/max); pinch de 2 dedos verificado
+      só por revisão de código/matemática, não ao vivo (ver `CONTEXT.md`, ferramental sem suporte
+      a multi-touch sintético). (referência: `docs/growth-retention-monetization-backlog.md`,
+      Lab 178, "zoom por scroll/pinch")
+- [x] Botão de recentralizar câmera (HUD, mesmo padrão visual/acessível de `TouchActionButton`) —
+      zera o giro acumulado (`cameraYawOffsetRef`) e o zoom (`outdoorCameraZoomRef`/
+      `houseCameraZoomRef`+`houseCameraPitchOffsetRef` quando dentro de casa) de volta ao padrão;
+      a suavização de sempre (`Vector3.Lerp` no loop de física) já evita o corte brusco, sem
+      precisar de animação própria. Verificado ao vivo: posição da câmera após recentralizar bateu
+      EXATAMENTE com a posição padrão pré-giro/zoom. (referência: backlog, Lab 178, "botão de
       recentralizar")
-- [ ] Evitar a câmera clipando pra dentro de terreno/montanha/parede — raycast físico
+- [x] Evitar a câmera clipando pra dentro de terreno/montanha/parede — raycast físico
       (`havokPlugin.raycast`, mesmo padrão já usado em `terrainGroundRadial`) do alvo até a
       posição desejada da câmera; se bloqueado, aproximar a câmera ao longo do mesmo raio até
-      pouco antes do ponto de colisão. Testar especificamente numa rampa íngreme do planeta
-      principal e num morro de Marte (lab-177) — os casos mais prováveis de expor o problema.
-      (referência: backlog, Lab 178, "colisão/evitar clipping"; critério de aceite explícito
-      "câmera não entra dentro do planeta/personagem")
-- [ ] `aria-label`/`title` mínimos nos botões de câmera existentes (◀ ▶) e no botão de
+      pouco antes do ponto de colisão. Mecanismo (hit/no-hit/`hitDistance` contra o colisor
+      `planet`) confirmado ao vivo isoladamente; reprodução visual completa do exato instante de
+      correção na rampa mais íngreme não foi isolada de forma limpa (ver `CONTEXT.md`, interferência
+      entre o bombeamento manual de quadros — necessário pela aba em segundo plano — e a física de
+      queda do próprio avatar). (referência: backlog, Lab 178, "colisão/evitar clipping"; critério
+      de aceite explícito "câmera não entra dentro do planeta/personagem")
+- [x] `aria-label`/`title` mínimos nos botões de câmera existentes (◀ ▶) e no botão de
       recentralizar novo — nome acessível descritivo pra leitor de tela + tooltip nativo pra
-      mouse em desktop. (referência: backlog, Lab 178, "tooltips mínimos quando necessário")
-- [ ] Teste manual documentado em desktop E viewport mobile (screenshot/evidência no
-      `CONTEXT.md` deste lab) — critério de aceite explícito do backlog.
+      mouse em desktop. Confirmado ao vivo via árvore de acessibilidade: "Girar câmera pra
+      esquerda"/"Girar câmera pra direita"/"Recentralizar câmera". (referência: backlog, Lab 178,
+      "tooltips mínimos quando necessário")
+- [ ] **Pendente — não concluído** (mesma limitação de ferramental já documentada no lab-177):
+      teste manual em viewport MOBILE de verdade (pinch de 2 dedos, toque real). As ferramentas de
+      automação de navegador desta sessão (`mcp__claude-in-chrome__*`) não emulam multi-touch nem
+      dispositivo — dá pra disparar `PointerEvent`s sintéticos individuais (usado pra validar a
+      matemática do zoom/giro), mas não um gesto de pinça real de usuário em um viewport mobile
+      real. Desktop (scroll, arrasto, botões, recentralizar) foi testado ao vivo com evidência real
+      em `evidencias/`. Fica como pendência real pro próximo lab/sessão com acesso a um
+      dispositivo/emulador de verdade. (referência: backlog, Lab 178, critério de aceite "teste
+      manual em desktop e viewport mobile documentado")
 
 ## Fora de escopo (explicitamente adiado)
 

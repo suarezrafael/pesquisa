@@ -1,15 +1,33 @@
 # Laboratório atual
 
-**Em andamento: labs/lab-178-camera-roblox-like/** — câmera em 3ª pessoa Roblox-like fácil.
+Último concluído: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
 Origem: `docs/growth-retention-monetization-backlog.md`, seção 7/12, "Lab 178", prioridade P0,
 próximo item da ordem recomendada após o lab-177. Investigação prévia (antes de codar) achou que
-boa parte do escopo do backlog já está implementada por labs anteriores (giro por arrasto mouse/
-touch, split direita=câmera/esquerda=movimento no mobile, botões ◀ ▶, suavização) — gaps reais
-identificados: zoom (scroll/pinch) só existe dentro de casa, não do lado de fora; não existe botão
-de recentralizar; não existe nenhuma colisão/anti-clipping de câmera contra terreno/parede; botões
-de toque não têm `aria-label`/tooltip. Ver `labs/lab-178-camera-roblox-like/FEATURES.md`.
+boa parte do escopo do backlog já estava implementada por labs anteriores (giro por arrasto mouse/
+touch, split direita=câmera/esquerda=movimento no mobile, botões ◀ ▶, suavização) — 4 gaps reais
+fechados: **zoom por scroll/pinch fora de casa** (`outdoorCameraZoomRef` novo, mesmo conceito do
+zoom de casa já existente, aplicado nas 3 câmeras externas — a pé, carro, foguete; pinch de 2 dedos
+via `Map` de ponteiros nos mesmos ouvintes do giro de 1 dedo só); **botão de recentralizar** (⟲,
+zera giro/zoom acumulados, suavização de sempre evita corte brusco); **anti-clipping de câmera**
+(`avoidCameraClipping`, raycast físico do alvo até a posição desejada, mesmo padrão de
+`havokPlugin.raycast` já usado por `terrainGroundRadial` — aproxima a câmera se algo bloquear o
+caminho; excluído de dentro de casa de propósito, que já resolve o mesmo problema com paredes
+translúcidas desde o lab-136/138); **`aria-label`/tooltip** nos botões ◀ ▶ e no novo botão de
+recentralizar (`TouchActionButton` ganhou prop `description`). `npx tsc -b`/testes limpos (app
+178/178, inalterado — mudança é só geometria/input de câmera, sem lógica de domínio isolável).
+`npm run build` sem regressão de bundle. **Verificado ao vivo via Chrome real**: zoom convergindo
+EXATAMENTE pros limites calculados; giro por arrasto sem regressão; recentralizar voltando à
+posição EXATA pré-giro/zoom; `aria-label` confirmado via árvore de acessibilidade; mecanismo de
+anti-clipping (raycast `hasHit`/`hitDistance` contra o colisor `planet`) confirmado correto
+isoladamente — reprodução visual exata do instante de correção numa rampa específica não foi 100%
+isolada por um artefato do ambiente de teste (bombeamento manual de quadros pra contornar aba em
+segundo plano acelerou também a física de queda do avatar), documentado em detalhe no
+`CONTEXT.md`. **Pendência real, não resolvida**: pinch de 2 dedos e teste geral em viewport mobile
+real não verificados ao vivo — as ferramentas de automação desta sessão não emulam multi-touch/
+dispositivo (mesma classe de limitação do lab-177 pra `isLowEndDevice`). Ver
+`labs/lab-178-camera-roblox-like/CONTEXT.md`.
 
-Último concluído: labs/lab-177-relevo-montanhas-visiveis/ — relevo e montanhas visíveis. Origem:
+Antes desse: labs/lab-177-relevo-montanhas-visiveis/ — relevo e montanhas visíveis. Origem:
 `docs/growth-retention-monetization-backlog.md`, seção 7, "Lab 177", prioridade P0. Investigação
 prévia (antes de codar) mostrou que a hipótese do backlog ("separação entre mesh visual e colisão
 física") só valia pra METADE do sistema real: no planeta principal, `PLATEAU_CENTERS`/

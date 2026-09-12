@@ -19,6 +19,7 @@ import {
   ParticleSystem,
   PBRMaterial,
   PhysicsAggregate,
+  PhysicsBody,
   PhysicsMotionType,
   PhysicsRaycastResult,
   PhysicsShapeType,
@@ -2032,6 +2033,11 @@ export function World3D({
   // o zoom (`houseCameraZoomRef`) que não existiam antes.
   const houseCameraPitchOffsetRef = useRef(0)
   const houseCameraZoomRef = useRef(1)
+  // lab-178 (backlog "câmera Roblox-like fácil", zoom por scroll/pinch): mesmo conceito do zoom
+  // de casa acima, mas cobrindo o resto do jogo (a pé, carro, foguete) — ref separado porque a
+  // distância/limites padrão lá fora são bem diferentes (`CAMERA_DISTANCE = 9`, não ~2 como
+  // dentro de casa).
+  const outdoorCameraZoomRef = useRef(1)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
   const entitlementActiveRef = useRef(entitlementActive)
@@ -2458,10 +2464,39 @@ export function World3D({
     // fora através da parede da sala). 1.4 mantém distância confortável sem sair da sala na
     // maioria dos ângulos.
     const HOUSE_CAMERA_ZOOM_MAX = 1.4
+    // lab-178 (backlog "câmera Roblox-like fácil", zoom por scroll/pinch): mesmos limites em
+    // espírito, mas calibrados pra distância padrão bem maior de fora de casa (`CAMERA_DISTANCE
+    // = 9`, não ~2).
+    const OUTDOOR_CAMERA_ZOOM_SENSITIVITY = 0.0015
+    const OUTDOOR_CAMERA_ZOOM_MIN = 0.6 // bem mais perto do avatar/veículo
+    const OUTDOOR_CAMERA_ZOOM_MAX = 1.8 // bem mais longe, sem perder o alvo de vista
+
+    // lab-178: pinça de 2 dedos pra zoom, independente do arraste de giro de 1 dedo só acima (que
+    // só rastreia UM ponteiro por vez). Mapa próprio porque uma pinça de verdade normalmente
+    // começa com um dedo em cada metade da tela — restringir à metade direita (como o giro de 1
+    // dedo faz do lado de fora) inviabilizaria a maioria das pinças reais. Não conflita com o
+    // `TouchJoystick` de movimento: ele é um elemento HTML separado por cima do canvas, então um
+    // toque que começa nele nunca dispara o `pointerdown` do `<canvas>` registrado abaixo.
+    const pinchPointers = new Map<number, { x: number; y: number }>()
+    let pinchStartDistance = 0
+    let pinchStartZoom = 1
 
     function onCameraPointerDown(e: PointerEvent) {
       if (e.button !== 0) return
+      if (pinchPointers.size < 2 && !pinchPointers.has(e.pointerId)) {
+        pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        if (pinchPointers.size === 2) {
+          const [p1, p2] = Array.from(pinchPointers.values())
+          pinchStartDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+          pinchStartZoom = insideHouseInterior ? houseCameraZoomRef.current : outdoorCameraZoomRef.current
+          // 2º dedo virou pinça — cancela um giro de 1 dedo já em andamento, os dois gestos não
+          // fazem sentido ao mesmo tempo.
+          cameraDragging = false
+          cameraDragPointerId = null
+        }
+      }
       if (cameraDragPointerId !== null) return // já tem um dedo/ponteiro girando a câmera — ignora um segundo
+      if (pinchPointers.size >= 2) return // pinça em andamento — não inicia giro de 1 dedo só
       if (insideHouseInterior) {
         outdoorDrag = false
       } else {
@@ -2476,6 +2511,20 @@ export function World3D({
       cameraDragLastY = e.clientY
     }
     function onCameraPointerMove(e: PointerEvent) {
+      if (pinchPointers.has(e.pointerId)) {
+        pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        if (pinchPointers.size === 2 && pinchStartDistance > 0) {
+          const [p1, p2] = Array.from(pinchPointers.values())
+          const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+          const scale = distance / pinchStartDistance
+          const zoomRef = insideHouseInterior ? houseCameraZoomRef : outdoorCameraZoomRef
+          const zoomMin = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MIN : OUTDOOR_CAMERA_ZOOM_MIN
+          const zoomMax = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MAX : OUTDOOR_CAMERA_ZOOM_MAX
+          // Afastar os dedos (`scale > 1`) aproxima a câmera (divide, não multiplica) — mesma
+          // convenção de "pinça pra dentro" já esperada de fotos/mapas em qualquer app de toque.
+          zoomRef.current = Math.max(zoomMin, Math.min(zoomMax, pinchStartZoom / scale))
+        }
+      }
       // lab-149 (achado do review automático do Copilot): se o jogador começasse a arrastar dentro
       // de casa e saísse (`exitHouseInterior`) ANTES de soltar o botão, este handler continuava
       // alterando yaw/pitch fora de casa (o `pointerup` está no `window`, então o arraste "solto"
@@ -2501,22 +2550,44 @@ export function World3D({
       }
     }
     function onCameraPointerUp(e: PointerEvent) {
+      pinchPointers.delete(e.pointerId)
+      if (pinchPointers.size < 2) pinchStartDistance = 0
       if (e.pointerId !== cameraDragPointerId) return // outro dedo/ponteiro soltando — não é o que gira a câmera
       cameraDragging = false
       cameraDragPointerId = null
     }
-    function onHouseCameraWheel(e: WheelEvent) {
-      if (!insideHouseInterior) return
+    function onCameraWheel(e: WheelEvent) {
+      // lab-178: antes só funcionava dentro de casa (`insideHouseInterior`) — agora cobre também
+      // o resto do jogo (a pé, carro, foguete), cada um com seu próprio ref/limites de zoom.
       e.preventDefault()
-      houseCameraZoomRef.current = Math.max(
-        HOUSE_CAMERA_ZOOM_MIN,
-        Math.min(HOUSE_CAMERA_ZOOM_MAX, houseCameraZoomRef.current + e.deltaY * HOUSE_CAMERA_ZOOM_SENSITIVITY),
-      )
+      const zoomRef = insideHouseInterior ? houseCameraZoomRef : outdoorCameraZoomRef
+      const sensitivity = insideHouseInterior ? HOUSE_CAMERA_ZOOM_SENSITIVITY : OUTDOOR_CAMERA_ZOOM_SENSITIVITY
+      const zoomMin = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MIN : OUTDOOR_CAMERA_ZOOM_MIN
+      const zoomMax = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MAX : OUTDOOR_CAMERA_ZOOM_MAX
+      zoomRef.current = Math.max(zoomMin, Math.min(zoomMax, zoomRef.current + e.deltaY * sensitivity))
     }
     canvas.addEventListener('pointerdown', onCameraPointerDown)
     window.addEventListener('pointermove', onCameraPointerMove)
     window.addEventListener('pointerup', onCameraPointerUp)
-    canvas.addEventListener('wheel', onHouseCameraWheel, { passive: false })
+    window.addEventListener('pointercancel', onCameraPointerUp)
+    canvas.addEventListener('wheel', onCameraWheel, { passive: false })
+
+    // lab-178 (backlog "câmera Roblox-like fácil", botão de recentralizar): zera o giro
+    // acumulado e o zoom (dentro ou fora de casa) de volta ao padrão. Não anima "na mão" — a
+    // suavização de sempre (`Vector3.Lerp(camera.position, desiredCamPos, ...)` no loop de
+    // física) já desliza a câmera até a nova posição-alvo a partir do próximo quadro, mesmo
+    // efeito sem corte brusco que `enterHouseInterior`/`exitHouseInterior` já produzem ao
+    // resetar os mesmos refs. Exposta em `scene` (mesmo padrão de `__handleInteractPress`) pra
+    // o botão React do HUD conseguir chamar sem precisar de outro ref consumido quadro a quadro.
+    function recenterCamera() {
+      cameraYawOffsetRef.current = 0
+      outdoorCameraZoomRef.current = 1
+      if (insideHouseInterior) {
+        houseCameraPitchOffsetRef.current = 0
+        houseCameraZoomRef.current = 1
+      }
+    }
+    ;(scene as any).__recenterCamera = recenterCamera
 
     const pipeline = new DefaultRenderingPipeline('quality', true, scene, [camera])
     pipeline.samples = isLowEndDevice ? 1 : 4
@@ -3590,6 +3661,30 @@ export function World3D({
           from = terrainRaycastResult.hitPointWorld.subtract(rayDir.scale(0.01))
         }
         return PLANET_RADIUS + formulaHeight
+      }
+
+      // lab-178 (backlog "câmera Roblox-like fácil", critério de aceite "câmera não entra dentro
+      // do planeta/personagem"): a câmera de 3ª pessoa sempre foi um offset fixo atrás/acima do
+      // alvo, sem checar se esse ponto cai dentro de terreno/parede/rocha — inofensivo em chão
+      // plano, mas com o relevo mais alto do planeta principal e os morros de planetas secundários
+      // (lab-177) a câmera podia acabar por dentro da malha em ângulos de rampa íngreme. Raycast
+      // físico real do ALVO até a posição DESEJADA da câmera (mesmo padrão de
+      // `havokPlugin.raycast` já usado por `terrainGroundRadial` acima e pelo raycast de chão do
+      // pulo) — se algo bloquear no meio do caminho, aproxima a câmera até pouco antes do ponto de
+      // colisão em vez de deixá-la atravessar. `ignoreBody` evita que o próprio colisor do alvo
+      // (ex.: o corpo do avatar) conte como "bloqueio" a distância ~0 do início do raio.
+      const cameraObstructionResult = new PhysicsRaycastResult()
+      function avoidCameraClipping(target: Vector3, desired: Vector3, ignoreBody?: PhysicsBody): Vector3 {
+        if (!havokPlugin) return desired
+        const fullDistance = Vector3.Distance(target, desired)
+        if (fullDistance < 0.0001) return desired
+        cameraObstructionResult.reset()
+        havokPlugin.raycast(target, desired, cameraObstructionResult, ignoreBody ? { ignoreBody } : undefined)
+        if (!cameraObstructionResult.hasHit) return desired
+        const margin = 0.3 // afasta um pouco da parede/rocha em vez de encostar a lente nela
+        const safeDistance = Math.max(0, cameraObstructionResult.hitDistance - margin)
+        if (safeDistance >= fullDistance) return desired
+        return Vector3.Lerp(target, desired, safeDistance / fullDistance)
       }
 
       // lab-95 (causa raiz real do bug de escolinhas enterradas — confirmado com medição direta
@@ -7584,6 +7679,11 @@ export function World3D({
         cameraYawOffsetRef.current = 0
         houseCameraPitchOffsetRef.current = 0
         houseCameraZoomRef.current = 1
+        // lab-178: uma pinça de zoom em andamento bem na hora de entrar em casa não deveria
+        // continuar valendo pro zoom de dentro (limites/sensação bem diferentes) — mesmo espírito
+        // do reset de yaw/pitch/zoom acima.
+        pinchPointers.clear()
+        pinchStartDistance = 0
         currentWorldCenter = HOUSE_INTERIOR_CENTER
         currentGroundBaseFn = () => HOUSE_INTERIOR_RADIUS
         // Teleporte físico seguro (mesmo padrão de `teleportAvatarTo`/saída do carro) — posição
@@ -7625,6 +7725,10 @@ export function World3D({
         // `onCameraPointerMove`.
         cameraDragging = false
         cameraDragPointerId = null
+        // lab-178: mesmo espírito da linha acima — uma pinça de zoom em andamento na hora de sair
+        // de casa não deveria continuar valendo pro zoom de fora.
+        pinchPointers.clear()
+        pinchStartDistance = 0
         currentWorldCenter = savedOutsideCenter
         currentGroundBaseFn = savedOutsideGroundFn
         // lab-175 (achado do review automático do Copilot no PR #49, 6ª rodada): usava `houseUp`
@@ -9717,7 +9821,14 @@ export function World3D({
             const sphericalOffset = camFacing.scale(horizontalOffset).add(localUp.scale(verticalOffset))
             desiredCamPos = pos.add(sphericalOffset)
           } else {
-            desiredCamPos = pos.subtract(camFacing.scale(camDist)).add(localUp.scale(camHeight))
+            // lab-178: zoom (scroll/pinça) escala distância E altura juntas, na mesma proporção —
+            // um dolly de verdade, não uma distorção de ângulo. `avoidCameraClipping` (raycast
+            // físico do jogador até esse ponto) evita a câmera atravessando terreno/rocha —
+            // ignora o próprio colisor do jogador (`body`) pra não se confundir com ele mesmo.
+            const zoomedDist = camDist * outdoorCameraZoomRef.current
+            const zoomedHeight = camHeight * outdoorCameraZoomRef.current
+            const rawOutdoorCamPos = pos.subtract(camFacing.scale(zoomedDist)).add(localUp.scale(zoomedHeight))
+            desiredCamPos = avoidCameraClipping(pos, rawOutdoorCamPos, body)
           }
           camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
           camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
@@ -10529,7 +10640,13 @@ export function World3D({
             Vector3.Forward(),
             drivingCar.root.computeWorldMatrix(true),
           ).normalize()
-          const desiredCarCamPos = drivingCar.root.position.subtract(carFwdNow.scale(CAMERA_DISTANCE)).add(carUpNow.scale(CAMERA_HEIGHT))
+          // lab-178: mesmo zoom (scroll/pinça) usado a pé — carro não tem colisor físico próprio
+          // (anda por trajeto fixo, `positionOnLoopPath`), então `avoidCameraClipping` não precisa
+          // de `ignoreBody` aqui.
+          const rawCarCamPos = drivingCar.root.position
+            .subtract(carFwdNow.scale(CAMERA_DISTANCE * outdoorCameraZoomRef.current))
+            .add(carUpNow.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
+          const desiredCarCamPos = avoidCameraClipping(drivingCar.root.position, rawCarCamPos)
           camera.position = Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
           camera.upVector = Vector3.Lerp(camera.upVector, carUpNow, 0.15).normalize()
           camera.setTarget(drivingCar.root.position)
@@ -10621,7 +10738,9 @@ export function World3D({
             let tangent = facing.subtract(planetUp.scale(Vector3.Dot(facing, planetUp)))
             if (tangent.lengthSquared() < 0.0001) tangent = Vector3.Cross(planetUp, Vector3.Right())
             tangent.normalize()
-            desiredShipCamPos = shipPos.subtract(tangent.scale(CAMERA_DISTANCE)).add(planetUp.scale(CAMERA_HEIGHT))
+            desiredShipCamPos = shipPos
+              .subtract(tangent.scale(CAMERA_DISTANCE * outdoorCameraZoomRef.current))
+              .add(planetUp.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
             desiredShipCamUp = planetUp
           } else {
             flyingRocket.computeWorldMatrix(true)
@@ -10629,9 +10748,14 @@ export function World3D({
             let upReference = Vector3.Up()
             if (Math.abs(Vector3.Dot(shipNoseDir, upReference)) > 0.9) upReference = Vector3.Right()
             const shipUp = upReference.subtract(shipNoseDir.scale(Vector3.Dot(upReference, shipNoseDir))).normalize()
-            desiredShipCamPos = shipPos.subtract(shipNoseDir.scale(CAMERA_DISTANCE)).add(shipUp.scale(CAMERA_HEIGHT))
+            desiredShipCamPos = shipPos
+              .subtract(shipNoseDir.scale(CAMERA_DISTANCE * outdoorCameraZoomRef.current))
+              .add(shipUp.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
             desiredShipCamUp = shipUp
           }
+          // lab-178: mesmo zoom e anti-clipping da câmera a pé/carro — nave também não tem
+          // colisor físico próprio (voa por curva fixa), sem `ignoreBody` necessário.
+          desiredShipCamPos = avoidCameraClipping(shipPos, desiredShipCamPos)
           camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
           camera.upVector = Vector3.Lerp(camera.upVector, desiredShipCamUp, 0.15).normalize()
           camera.setTarget(shipPos)
@@ -10924,7 +11048,8 @@ export function World3D({
       canvas.removeEventListener('pointerdown', onCameraPointerDown)
       window.removeEventListener('pointermove', onCameraPointerMove)
       window.removeEventListener('pointerup', onCameraPointerUp)
-      canvas.removeEventListener('wheel', onHouseCameraWheel)
+      window.removeEventListener('pointercancel', onCameraPointerUp)
+      canvas.removeEventListener('wheel', onCameraWheel)
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
       sceneRef.current = null
@@ -10964,6 +11089,13 @@ export function World3D({
 
   function handleCameraRotateRightRelease() {
     cameraRotateRightRef.current = false
+  }
+
+  // lab-178 (backlog "câmera Roblox-like fácil", botão de recentralizar) — mesmo padrão de ponte
+  // de `handleTouchInteractPress`: só repassa pra função exposta no closure de `setup()`, que tem
+  // acesso direto aos refs de giro/zoom da câmera e ao estado de dentro/fora de casa.
+  function handleRecenterCamera() {
+    ;(sceneRef.current as any)?.__recenterCamera?.()
   }
 
   // Botão de toque genérico pra ação da tecla E (lab-58, pedido do usuário: "se você estiver no
@@ -11101,6 +11233,7 @@ export function World3D({
       <TouchActionButton
         className="touch-action-cam-left"
         label="◀"
+        description="Girar câmera pra esquerda"
         onPress={handleCameraRotateLeftPress}
         onRelease={handleCameraRotateLeftRelease}
         inert={hudInert}
@@ -11108,8 +11241,16 @@ export function World3D({
       <TouchActionButton
         className="touch-action-cam-right"
         label="▶"
+        description="Girar câmera pra direita"
         onPress={handleCameraRotateRightPress}
         onRelease={handleCameraRotateRightRelease}
+        inert={hudInert}
+      />
+      <TouchActionButton
+        className="touch-action-recenter"
+        label="⟲"
+        description="Recentralizar câmera"
+        onPress={handleRecenterCamera}
         inert={hudInert}
       />
       <TouchActionButton className="touch-action-interact" label="E" onPress={handleTouchInteractPress} inert={hudInert} />
