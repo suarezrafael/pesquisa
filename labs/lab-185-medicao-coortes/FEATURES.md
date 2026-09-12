@@ -98,10 +98,12 @@ descrição do backlog):
       criança-based; nenhum dado pessoal infantil coletado; amostras pequenas produzem percentuais
       instáveis. (referência: backlog, Lab 185, critério de aceite "guardrails aparecem no
       relatório")
-- [x] Teste automatizado da função pura nova: `isValidIsoDateOnly` (`domain.ts`) ganhou 3 casos de
-      teste em `domain.test.ts` (data real incl. ano bissexto, formato errado/vazio/com hora, data
-      inexistente no calendário tipo 30 de fevereiro) — a query SQL em si continua não testável
-      por unidade, mesmo padrão do resto de `handleAdminMetrics` (I/O puro, sem lógica isolável).
+- [x] Teste automatizado da função pura nova: `isValidIsoDateOnly` (`domain.ts`) ganhou 4 blocos de
+      teste em `domain.test.ts` (data real incl. ano bissexto; formato errado/vazio/com hora; data
+      inexistente no calendário tipo 30 de fevereiro; anos de 2 dígitos e ano 0000, os 2 últimos
+      adicionados nas rodadas 2 e 3 do review automático da PR #55) — a query SQL em si continua
+      não testável por unidade, mesmo padrão do resto de `handleAdminMetrics` (I/O puro, sem lógica
+      isolável).
 - [x] Verificado ao vivo contra produção (mesmo padrão de todo lab anterior que mexeu em
       `server-accounts`): `wrangler dev` local (porta 8790) contra o banco de PRODUÇÃO real, só
       leitura — `newDevicesToday`/`weeklyFunnel` com as 3 chaves novas responderam corretamente;

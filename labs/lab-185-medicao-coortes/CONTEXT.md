@@ -162,6 +162,56 @@ antes de apagá-las; `GET /admin/metrics` sem parâmetro e com `?cohortSplitDate
 continuam respondendo exatamente como antes (guardrails com o texto corrigido, cohort comparison
 com a mesma soma exata de antes); data malformada/vazia confirmadas devolvendo 400.
 
+**3ª rodada** — "Comments generated: 3" no resumo + 5 achados nos "Suppressed comments" (8 no
+total) — todos verificados antes de corrigir, 8 reais:
+
+- **`isValidIsoDateOnly` aceitava ano `0000`, que o Postgres recusa como `::date`** — JS aceita ano
+  0 numa `Date` de boa (`getUTCFullYear()` devolve 0 sem erro), então `'0000-01-01'` passava na
+  validação e só quebrava depois, na query, com um erro de SQL feio em vez do 400 documentado.
+  Confirmado direto contra o banco de produção (`select '0000-01-01'::date` → "date/time field
+  value out of range") antes de corrigir. Corrigido com uma checagem explícita `year === 0` antes
+  da reconstrução via `Date`/`setUTCFullYear`. 2 casos de teste novos.
+- **Os 8 campos `before_*`/`after_*` da query de retenção rodavam SEMPRE**, mesmo sem
+  `cohortSplitDate` (viravam `filter (where day0 < NULL::date)`, sempre 0, mas ainda liam as CTEs
+  de novo) — desperdício no caminho mais comum (relatório sem coorte). Esse achado parecia
+  contradizer o da 1ª rodada ("não rode a CTE duas vezes"), mas não são incompatíveis: a correção é
+  ter DOIS textos de query possíveis (um simples, um com os campos de coorte), escolhidos por
+  `if (cohortSplitDateParam === null)`, com cada request rodando exatamente UM deles — nunca dois
+  round-trips pro mesmo request, e o caminho sem coorte não paga mais pelos campos que nem vai ler.
+- **`safeMeta` gravava o objeto `meta` INTEIRO mesmo com `slot`/`toPlanetId` válidos** — um payload
+  tipo `{ slot: 'hat', note: '<script>...' }` passava a validação (que só olhava `slot`) e gravava
+  a chave `note` extra e não documentada junto. Corrigido construindo um objeto novo só com a
+  chave permitida (`{ slot: metaObj.slot }`/`{ toPlanetId: metaObj.toPlanetId }`) em vez de
+  reaproveitar `metaObj` inteiro — verificado ao vivo lendo a linha de volta do banco (só `slot`
+  sobrou, `note` sumiu).
+- **Doc de privacidade generalizava demais "ENFORÇADA no servidor"** — o parágrafo da 2ª rodada
+  dava a entender que TODO `meta` documentado como "conjunto fixo" é validado no servidor, mas
+  `questId` de `quest_completed` nunca teve validação nenhuma (confirmado grepando `handleTrackEvent`
+  por `questId` — zero ocorrências). Corrigido pra escopar a palavra "ENFORÇADA" só aos 3 campos que
+  realmente são validados (`durationMs`, `slot`, `toPlanetId`) e declarar `questId`/demais `meta`
+  como dívida conhecida, não garantia.
+- **Bullet de "Câmera" no catálogo repetia a confusão reach-vs-frequência** que já tinha sido
+  corrigida só no comentário de código (`index.ts`), não no doc — `docs/event-catalog.md` ainda
+  dizia "uso repetido do botão ⟲" como se `weeklyFunnel.cameraRecenterUsed` medisse frequência.
+  Corrigido pra explicar a mesma limitação (alcance, não frequência) também no catálogo.
+- **`FEATURES.md` ainda contava "3 casos de teste" pra `isValidIsoDateOnly`**, defasado depois dos
+  casos adicionados nas rodadas 2 e 3 (já eram 4 blocos de teste). Corrigido.
+- **`labs/CURRENT.md` e a própria seção "Estado do repositório ao final" deste `CONTEXT.md`
+  citavam `server-accounts 134/134 (3 novos)`**, o número da 1ª rodada — defasado depois dos testes
+  adicionados nas rodadas 2 e 3 (141/141 no final). Como `CURRENT.md` é o handoff que o próximo
+  laboratório lê primeiro, um número velho podia levar a um diagnóstico errado do estado dos
+  testes. Ambos corrigidos pro número final.
+
+Verificação desta rodada: `npx tsc --noEmit` (server-accounts) limpo; `npm run test`
+(server-accounts) 141/141 (1 novo: ano 0000). Reverificado ao vivo contra produção (`wrangler dev`
+porta 8793, banco real): `'0000-01-01'::date` confirmado quebrando no Postgres (motivo do achado);
+`?cohortSplitDate=0000-01-01` agora devolve 400 em vez de deixar a query estourar; `POST /events`
+com `meta: { slot: 'hat', note: '<script>evil</script>' }` gravou só `{ slot: 'hat' }` (confirmado
+lendo a linha de volta do banco antes de apagá-la); `GET /admin/metrics` sem parâmetro e com
+`?cohortSplitDate=2026-09-01` devolveram exatamente os mesmos números de antes da refatoração da
+query (76/47/123 de novo), confirmando que os dois textos de query (com/sem coorte) continuam
+equivalentes ao antigo query único nos dois casos.
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
@@ -173,6 +223,13 @@ com a mesma soma exata de antes); data malformada/vazia confirmadas devolvendo 4
 - **Lab 179 (Planetas interativos v1) vai precisar de eventos PRÓPRIOS de interação** —
   `planet_travel_completed` mede só a CHEGADA, não o que a criança faz depois de chegar (NPC,
   mini-puzzle, coletável) — registrado explicitamente como fora de escopo deste lab.
+- **`questId` de `quest_completed` (e o `meta` de todo evento fora de `session_end`/
+  `cosmetic_equipped`/`planet_travel_completed`) não tem validação de conteúdo no servidor**
+  (achado da 3ª rodada do review da PR #55) — gravado como o client mandar, sem checar contra o
+  catálogo público de missões. Pré-existente desde antes deste lab (não introduzido aqui), mas
+  ficou mais visível pelo contraste com os 3 campos que este lab passou a validar de verdade.
+  Resolver isso de vez exigiria uma allowlist de `questId`s conhecidos (parecida com
+  `isValidCosmeticSlot`/`isValidDestinationPlanetId`) — não fica em escopo aqui.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
@@ -190,10 +247,12 @@ lab deixou medindo só a chegada), sem texto livre/UGC.
 ## Estado do repositório ao final
 
 - Branch: `lab-185-medicao-coortes`.
-- `npx tsc -b` (app) e `npx tsc --noEmit` (server-accounts): limpos. `npm run test`: app 178/178
-  (inalterado, mudança client-side é só chamada de tracker, sem lógica nova testável isolada);
-  server-accounts 134/134 (3 novos, `isValidIsoDateOnly`). `npm run build` (app): limpo, sem
-  regressão de bundle.
+- `npx tsc -b` (app) e `npx tsc --noEmit` (server-accounts): limpos. `npm run test` (estado FINAL,
+  após as 3 rodadas de review do Copilot na PR #55): app 178/178 (inalterado, mudança client-side é
+  só uma condição a mais antes de uma chamada já existente, sem lógica nova isolável);
+  server-accounts 141/141 (9 novos: `isValidIsoDateOnly` ganhou 4 blocos de teste ao todo — data
+  real, formato/calendário inválido, anos de 2 dígitos, ano 0000 — mais `isValidCosmeticSlot`/
+  `isValidDestinationPlanetId`, 4 casos). `npm run build` (app): limpo, sem regressão de bundle.
 - Nenhuma migração de banco — `product_events` já tinha tudo necessário.
 - **Verificado ao vivo contra produção** (`wrangler dev` local, porta 8790, banco de PRODUÇÃO
   real, só leitura): `GET /admin/metrics` respondeu com `newDevicesToday`/`weeklyFunnel` (3 chaves

@@ -597,6 +597,14 @@ describe('isValidIsoDateOnly (lab-185)', () => {
     expect(isValidIsoDateOnly('0050-01-01')).toBe(true)
     expect(isValidIsoDateOnly('0099-12-31')).toBe(true)
   })
+
+  it('recusa ano 0000, que o Postgres não aceita como ::date (achado do Copilot, 3ª rodada da PR #55)', () => {
+    // JS aceita ano 0 numa `Date` de boa (`getUTCFullYear()` devolve 0), mas
+    // `select '0000-01-01'::date` no Postgres lança "date/time field value out of range" —
+    // confirmado direto contra o banco de produção antes de escrever este teste.
+    expect(isValidIsoDateOnly('0000-01-01')).toBe(false)
+    expect(isValidIsoDateOnly('0000-12-31')).toBe(false)
+  })
 })
 
 describe('isValidCosmeticSlot (lab-185, 2ª rodada do review da PR #55)', () => {

@@ -29,14 +29,17 @@ linha nova e imprevista na tabela.
 - Nenhum evento carrega nome real, e-mail, resposta de quest, conteúdo de chat, ou qualquer outro
   dado de identificação da criança. `meta` (quando existe) só carrega números (duração/tempo em ms),
   um id de missão do catálogo público (`questId`), ou uma string de um conjunto FIXO e pequeno
-  definido no próprio código-fonte — nunca texto livre digitado por ninguém (ex.: `slot` de
-  `cosmetic_equipped`, um entre 7 valores possíveis; `toPlanetId` de `planet_travel_completed`, um
-  entre os poucos ids de planeta-destino do catálogo, lab-185). Essa garantia é ENFORÇADA no
-  servidor, não só uma convenção do client: `handleTrackEvent` (`server-accounts/src/index.ts`)
-  valida `slot`/`toPlanetId` contra o mesmo allowlist antes de gravar — um valor fora do conjunto
-  conhecido faz o evento ser gravado com `meta: null` em vez do valor recebido (mesmo tratamento já
-  dado a um `durationMs` implausível em `session_end` desde o lab-99), nunca recusado por completo
-  (achado do review da PR #55, 2ª rodada).
+  definido no próprio código-fonte (ex.: `slot` de `cosmetic_equipped`, um entre 7 valores
+  possíveis; `toPlanetId` de `planet_travel_completed`, um entre os poucos ids de planeta-destino
+  do catálogo, lab-185) — nenhum client oficial manda texto livre digitado por ninguém nesses
+  campos, mas nem todo `meta` é validado no SERVIDOR (achado do review da PR #55, 3ª rodada:
+  atenção pra não generalizar demais essa garantia). O que É de fato ENFORÇADO em
+  `handleTrackEvent` (`server-accounts/src/index.ts`) hoje: `durationMs` de `session_end` (desde o
+  lab-99) e `slot`/`toPlanetId` dos 2 eventos do lab-185 — um valor fora do allowlist esperado grava
+  o evento com `meta: null` em vez do valor recebido, nunca recusa o evento inteiro. `questId` de
+  `quest_completed` e o `meta` dos demais tipos NÃO passam por validação de conteúdo nenhuma — são
+  gravados como o client mandar (defesa em profundidade de "nunca confiar só no client" ainda não
+  se aplica a esses campos; documentado aqui como dívida conhecida, não como garantia).
 - `POST /events` nunca falha o jogo pra criança: toda chamada é `fetch(...).catch(() => {})`
   (`trackEvent`) — se a rede cair ou o Worker estiver fora, o evento simplesmente não é gravado,
   sem interromper nem re-tentar de um jeito visível.
@@ -101,9 +104,12 @@ decisão").
   antes/depois** (lab-185, critério de aceite do documento): `?cohortSplitDate=YYYY-MM-DD` em
   `GET /admin/metrics` recalcula d1/d7 separado pra dispositivos com primeiro evento antes vs. a
   partir dessa data — usar a data de merge/deploy de um lab pra comparar retenção antes/depois dele.
-- **Câmera** (lab-178, medido a partir do lab-185) — `camera_recenter_used` (uso repetido do botão
-  ⟲ é, per se, o sinal de "câmera não está intuitiva" que o próprio lab-178 já citava como métrica
-  esperada e nunca instrumentou). Lido semanalmente por `weeklyFunnel.cameraRecenterUsed`.
+- **Câmera** (lab-178, medido a partir do lab-185) — `camera_recenter_used` (clicar o botão ⟲ é,
+  per se, o sinal de "câmera não está intuitiva" que o próprio lab-178 já citava como métrica
+  esperada e nunca instrumentou). Lido semanalmente por `weeklyFunnel.cameraRecenterUsed`, que mede
+  ALCANCE — dispositivos únicos com pelo menos 1 clique na semana (`count(distinct device_id)`) —
+  não FREQUÊNCIA: um dispositivo com 1 clique e um com 50 contam igual (achado do review da PR #55,
+  3ª rodada; ver comentário em `index.ts` junto de `weeklyFunnel.cameraRecenterUsed`).
 - **Loja/cosméticos** (lab-176, medido a partir do lab-185) — `cosmetic_equipped` mede engajamento
   com o loop de customização (não distingue item grátis de pago — ver `AvatarShop.tsx` pra saber
   quais itens custam moeda). Lido semanalmente por `weeklyFunnel.cosmeticEquipped`.

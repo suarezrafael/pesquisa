@@ -458,6 +458,11 @@ const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 export function isValidIsoDateOnly(value: string): boolean {
   if (!ISO_DATE_ONLY_PATTERN.test(value)) return false
   const [year, month, day] = value.split('-').map(Number)
+  // Ano 0000 passa no regex e no `Date`/`setUTCFullYear` (JS aceita ano 0 de boa), mas o Postgres
+  // recusa `'0000-01-01'::date` ("date/time field value out of range") — achado real do review
+  // automático do Copilot, 3ª rodada: sem esta checagem, uma data assim passava na validação aqui
+  // e ainda assim quebrava a query com um erro de SQL feio em vez do 400 documentado.
+  if (year === 0) return false
   // `Date.UTC(year, ...)` interpreta anos 0-99 como deslocamento a partir de 1900 (comportamento
   // legado herdado do construtor `Date`) — "0050-01-01" viraria 1950 silenciosamente se
   // passássemos `year` direto pro `Date.UTC`. `setUTCFullYear` não tem essa interpretação especial
