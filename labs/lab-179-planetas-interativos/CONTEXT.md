@@ -159,3 +159,19 @@ leitura, abrir portas por padrões), reaproveitando dados existentes de quest/ha
   completou limpo) e revisão manual cuidadosa do código novo em `World3D.tsx` — achou e corrigiu um
   bug real de orientação: `MeshBuilder.CreateDisc` nasce "de pé" (normal no eixo Z), trocado por um
   cilindro baixo, mesmo padrão já usado pra lagoa/pote de moedas neste arquivo.
+
+## Merge e deploy em produção
+
+PR #56 mesclada em `main` (squash) no commit `fcb2d5b`, em 2026-09-12, depois de 3 rodadas de
+review automático do Copilot — todas documentadas acima, todos os achados reais corrigidos e
+re-verificados ao vivo contra produção a cada rodada.
+
+CI de `main` confirmado verde nos 3 workflows (`app`, `server-accounts`, `server-cf-relay`).
+Deploy de produção confirmado ao vivo: Vercel (`https://app-two-flax-92.vercel.app`, `GET` → 200) e
+o Worker `server-accounts` (`https://missao-aprender-accounts.rafaelvs.workers.dev/health` → 200).
+`GET /admin/metrics` em produção confirmado respondendo com `weeklyFunnel.planetInteractionCompleted`
+(0 — nenhum evento novo disparado em produção ainda, esperado) e os 4 `guardrails` (agregação por
+device, amostra pequena, `device_id` sintético, e o novo — `planetInteractionCompleted` mede
+alcance, não sessão).
+
+Nenhuma migração de banco — `product_events` já tinha tudo necessário, mesmo padrão do lab-185.
