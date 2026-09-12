@@ -32,7 +32,9 @@ descrição do backlog):
   isso de verdade (ex.: amarrar eventos a `player_identities`, lab-159) seria uma mudança de
   arquitetura bem maior que "catálogo + eventos novos + saída de métricas", fora de escopo deste
   lab — a decisão aqui é DOCUMENTAR a limitação com clareza (já parcialmente feito), não resolvê-la.
-- **`PRODUCT_EVENT_TYPES` (13 tipos hoje) não tem NADA de câmera, loja/lojinha, ou planetas** —
+- **`PRODUCT_EVENT_TYPES` (14 tipos hoje, incluindo `house_visited` do lab-175 — achado real do
+  review automático do Copilot, a contagem original deste documento esquecia esse último) não tem
+  NADA de câmera, loja/lojinha, ou planetas** —
   confirma a premissa do backlog. Lab-178 (câmera) e lab-176 (lojinha) foram implementados com
   zero telemetria; `boardRocket`/`landRocket` (viagem entre planetas, `World3D.tsx`) idem.
 - **D1/D7 retenção JÁ EXISTE** (`handleAdminMetrics`, `index.ts:1426-1461` calcula,

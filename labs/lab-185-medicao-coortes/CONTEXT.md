@@ -65,6 +65,40 @@ itens planejados:
   data inválida) ou, pior, o Postgres podia interpretar de um jeito inesperado dependendo do modo —
   melhor recusar com 400 e mensagem clara antes de chegar na query.
 
+## Review automático do Copilot (PR #55)
+
+**1ª rodada** — 3 achados reais:
+
+- **`?cohortSplitDate=` vazio (sem valor) escapava da validação** — `URLSearchParams.get()`
+  devolve `''` (string vazia) pra `?cohortSplitDate=` sem valor depois do `=`; o teste de
+  truthiness original (`if (cohortSplitDateParam) {...}`) tratava isso como "parâmetro ausente" em
+  vez de "parâmetro fornecido mas inválido", devolvendo métricas globais em silêncio em vez do 400
+  documentado. Corrigido comparando explicitamente contra `null`.
+- **A CTE de retenção rodava duas vezes quando `cohortSplitDate` era passado** — uma vez pra
+  retenção global (`d1Retention`/`d7Retention`/`newDevicesToday`), outra quase idêntica só pra
+  comparação de coorte, dobrando o agrupamento/joins sobre `product_events` a cada relatório com
+  coorte. Corrigido fundindo em UMA query só: valida `cohortSplitDate` (se fornecido) ANTES de
+  rodar qualquer consulta, e a query única sempre calcula os campos `before_*`/`after_*` (baratos,
+  `count(*) filter (where ...)` sobre CTEs já materializadas) — só são LIDOS de volta quando o
+  parâmetro existe de verdade.
+- **`isValidProductEventType` sem cobertura pros 3 eventos novos** — os testes cobriam
+  `isValidIsoDateOnly` (a função nova), mas não confirmavam que `camera_recenter_used`/
+  `cosmetic_equipped`/`planet_travel_completed` são aceitos pela allowlist — um typo no nome do
+  evento (cliente e servidor usando o MESMO literal string, sem tipo compartilhado) passaria
+  batido pela suíte, silenciosamente zerando a métrica nova pra sempre. 3 assertions novas
+  adicionadas.
+- **2 nits de documentação**: `FEATURES.md` contava 13 tipos de evento pré-existentes, mas eram 14
+  (esquecia `house_visited`, lab-175); `docs/event-catalog.md` ainda dizia que `meta` só carrega
+  números/`questId`, desatualizado depois dos 2 eventos novos com `meta` string (`slot`,
+  `toPlanetId`) — corrigido pra deixar claro que são valores de um conjunto FIXO do código-fonte,
+  nunca texto livre.
+
+Verificação desta rodada: `npx tsc --noEmit` (server-accounts) limpo; `npm run test`
+(server-accounts) 135/135 (1 novo). Reverificado ao vivo contra produção (`wrangler dev` porta
+8791, banco real, só leitura): `?cohortSplitDate=` (vazio) confirmado devolvendo 400; sem o
+parâmetro, `cohortComparison` confirmado ausente da resposta; `?cohortSplitDate=2026-09-01`
+confirmado continuando a funcionar depois da fusão das duas queries em uma.
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de

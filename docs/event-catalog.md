@@ -27,8 +27,11 @@ linha nova e imprevista na tabela.
 - `device_id` é um `crypto.randomUUID()` gerado e guardado só no `localStorage` do aparelho
   (`getOrCreateDeviceId`, `state/storage.ts`) — sem NENHUM vínculo com nome/apelido/e-mail/família.
 - Nenhum evento carrega nome real, e-mail, resposta de quest, conteúdo de chat, ou qualquer outro
-  dado de identificação da criança. `meta` (quando existe) só carrega números (duração/tempo em ms)
-  ou um id de missão do catálogo público (`questId`) — nunca texto livre.
+  dado de identificação da criança. `meta` (quando existe) só carrega números (duração/tempo em ms),
+  um id de missão do catálogo público (`questId`), ou uma string de um conjunto FIXO e pequeno
+  definido no próprio código-fonte — nunca texto livre digitado por ninguém (ex.: `slot` de
+  `cosmetic_equipped`, um entre 7 valores possíveis; `toPlanetId` de `planet_travel_completed`, um
+  entre os poucos ids de planeta-destino do catálogo, lab-185).
 - `POST /events` nunca falha o jogo pra criança: toda chamada é `fetch(...).catch(() => {})`
   (`trackEvent`) — se a rede cair ou o Worker estiver fora, o evento simplesmente não é gravado,
   sem interromper nem re-tentar de um jeito visível.

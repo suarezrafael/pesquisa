@@ -251,6 +251,12 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
     expect(isValidProductEventType('play_click')).toBe(true)
     expect(isValidProductEventType('parent_area_click')).toBe(true)
   })
+
+  it('aceita os eventos de câmera, lojinha e planetas do lab-185', () => {
+    expect(isValidProductEventType('camera_recenter_used')).toBe(true)
+    expect(isValidProductEventType('cosmetic_equipped')).toBe(true)
+    expect(isValidProductEventType('planet_travel_completed')).toBe(true)
+  })
 })
 
 describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {

@@ -1438,8 +1438,23 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
 
   const sql = neon(env.DATABASE_URL)
 
+  // lab-185 (critério de aceite "a saída permite comparar coortes antes/depois"): valida ANTES de
+  // rodar qualquer query — `URLSearchParams.get()` devolve `''` (string vazia) pra
+  // `?cohortSplitDate=` sem valor, que passaria de graça por um teste de truthiness (achado real
+  // do review automático do Copilot); comparar contra `null` explicitamente garante que todo
+  // valor fornecido, incluindo vazio, passa pela validação de verdade.
+  const cohortSplitDateParam = new URL(request.url).searchParams.get('cohortSplitDate')
+  if (cohortSplitDateParam !== null && !isValidIsoDateOnly(cohortSplitDateParam)) {
+    return Response.json({ error: 'cohortSplitDate inválida, use YYYY-MM-DD' }, { status: 400 })
+  }
+
   // D1/D7 retention: de todo dispositivo cujo PRIMEIRO evento foi há pelo menos 1 (ou 7) dias,
   // qual fração teve QUALQUER evento novo exatamente 1 (ou 7) dias depois desse primeiro dia.
+  // Achado real do review automático do Copilot: rodar esta CTE duas vezes (uma pra retenção
+  // global, outra pra comparação de coorte) dobra o agrupamento/joins sobre `product_events` a
+  // cada relatório com `cohortSplitDate`. Uma query SÓ, sempre — os campos `before_*`/`after_*`
+  // só existem/são lidos quando `cohortSplitDateParam` não é `null` (a mesma condição decide se
+  // interpolar a comparação de coorte no SQL e se ler essas colunas de volta).
   const [retention] = (await sql`
     with first_seen as (
       select device_id, min(occurred_at)::date as day0
@@ -1450,7 +1465,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       select device_id, day0 from first_seen where day0 <= current_date - 1
     ),
     d1_returned as (
-      select distinct fs.device_id
+      select distinct fs.device_id, fs.day0
       from d1_eligible fs
       join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 1
     ),
@@ -1458,7 +1473,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       select device_id, day0 from first_seen where day0 <= current_date - 7
     ),
     d7_returned as (
-      select distinct fs.device_id
+      select distinct fs.device_id, fs.day0
       from d7_eligible fs
       join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 7
     )
@@ -1469,77 +1484,49 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       (select count(*) from d7_returned) as d7_returned,
       -- lab-185: "D0" que faltava, dispositivos NOVOS hoje (totalDevices mais abaixo e' o
       -- acumulado desde sempre, um numero diferente)
-      (select count(*) from first_seen where day0 = current_date) as new_today
-  `) as { d1_eligible: string; d1_returned: string; d7_eligible: string; d7_returned: string; new_today: string }[]
+      (select count(*) from first_seen where day0 = current_date) as new_today,
+      (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_eligible) as before_d1_eligible,
+      (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_returned) as before_d1_returned,
+      (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d7_eligible) as before_d7_eligible,
+      (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d7_returned) as before_d7_returned,
+      (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d1_eligible) as after_d1_eligible,
+      (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d1_returned) as after_d1_returned,
+      (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d7_eligible) as after_d7_eligible,
+      (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d7_returned) as after_d7_returned
+  `) as {
+    d1_eligible: string
+    d1_returned: string
+    d7_eligible: string
+    d7_returned: string
+    new_today: string
+    before_d1_eligible: string
+    before_d1_returned: string
+    before_d7_eligible: string
+    before_d7_returned: string
+    after_d1_eligible: string
+    after_d1_returned: string
+    after_d7_eligible: string
+    after_d7_returned: string
+  }[]
 
-  // lab-185 (critério de aceite "a saída permite comparar coortes antes/depois"): quando
-  // `?cohortSplitDate=YYYY-MM-DD` vem na query string, recalcula a MESMA lógica de D1/D7 acima,
-  // só que separada em dois grupos por `day0` (dia do primeiro evento) — antes vs. a partir dessa
-  // data. Reaproveita a mesma CTE (`first_seen`/`d*_eligible`/`d*_returned`), só troca o `select`
-  // final por `filter (where ...)` pra devolver os dois grupos numa única ida ao banco.
-  const cohortSplitDateParam = new URL(request.url).searchParams.get('cohortSplitDate')
-  let cohortComparison: {
+  const cohortComparison: {
     splitDate: string
     before: { d1: RetentionBucket; d7: RetentionBucket }
     after: { d1: RetentionBucket; d7: RetentionBucket }
-  } | null = null
-  if (cohortSplitDateParam) {
-    if (!isValidIsoDateOnly(cohortSplitDateParam)) {
-      return Response.json({ error: 'cohortSplitDate inválida, use YYYY-MM-DD' }, { status: 400 })
-    }
-    const [cohortRow] = (await sql`
-      with first_seen as (
-        select device_id, min(occurred_at)::date as day0
-        from product_events
-        group by device_id
-      ),
-      d1_eligible as (
-        select device_id, day0 from first_seen where day0 <= current_date - 1
-      ),
-      d1_returned as (
-        select distinct fs.device_id, fs.day0
-        from d1_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 1
-      ),
-      d7_eligible as (
-        select device_id, day0 from first_seen where day0 <= current_date - 7
-      ),
-      d7_returned as (
-        select distinct fs.device_id, fs.day0
-        from d7_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 7
-      )
-      select
-        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_eligible) as before_d1_eligible,
-        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_returned) as before_d1_returned,
-        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d7_eligible) as before_d7_eligible,
-        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d7_returned) as before_d7_returned,
-        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d1_eligible) as after_d1_eligible,
-        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d1_returned) as after_d1_returned,
-        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d7_eligible) as after_d7_eligible,
-        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d7_returned) as after_d7_returned
-    `) as {
-      before_d1_eligible: string
-      before_d1_returned: string
-      before_d7_eligible: string
-      before_d7_returned: string
-      after_d1_eligible: string
-      after_d1_returned: string
-      after_d7_eligible: string
-      after_d7_returned: string
-    }[]
-    cohortComparison = {
-      splitDate: cohortSplitDateParam,
-      before: {
-        d1: buildRetentionBucket(cohortRow.before_d1_eligible, cohortRow.before_d1_returned),
-        d7: buildRetentionBucket(cohortRow.before_d7_eligible, cohortRow.before_d7_returned),
-      },
-      after: {
-        d1: buildRetentionBucket(cohortRow.after_d1_eligible, cohortRow.after_d1_returned),
-        d7: buildRetentionBucket(cohortRow.after_d7_eligible, cohortRow.after_d7_returned),
-      },
-    }
-  }
+  } | null =
+    cohortSplitDateParam === null
+      ? null
+      : {
+          splitDate: cohortSplitDateParam,
+          before: {
+            d1: buildRetentionBucket(retention.before_d1_eligible, retention.before_d1_returned),
+            d7: buildRetentionBucket(retention.before_d7_eligible, retention.before_d7_returned),
+          },
+          after: {
+            d1: buildRetentionBucket(retention.after_d1_eligible, retention.after_d1_returned),
+            d7: buildRetentionBucket(retention.after_d7_eligible, retention.after_d7_returned),
+          },
+        }
 
   const [session] = (await sql`
     select avg((meta->>'durationMs')::numeric) as avg_duration_ms, count(*) as sample_size
