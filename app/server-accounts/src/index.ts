@@ -30,6 +30,7 @@ import {
   isValidBadgeList,
   isValidCosmeticSlot,
   isValidDestinationPlanetId,
+  isValidPlanetInteractionKind,
   isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
@@ -454,6 +455,15 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   if (type === 'planet_travel_completed' && !isValidDestinationPlanetId(metaObjForValidation.toPlanetId)) {
     return new Response(null, { status: 400 })
   }
+  // lab-179 ("Planetas interativos v1") — mesmo raciocínio acima: `planet_interaction_completed`
+  // não tem sinal nenhum sem `planetId`/`kind` válidos (é literalmente do que a métrica é feita),
+  // então recusa o evento inteiro em vez de gravar com `meta: null`.
+  if (
+    type === 'planet_interaction_completed' &&
+    (!isValidDestinationPlanetId(metaObjForValidation.planetId) || !isValidPlanetInteractionKind(metaObjForValidation.kind))
+  ) {
+    return new Response(null, { status: 400 })
+  }
 
   // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
   // errado — os outros tipos LEGADOS (documentados em `docs/event-catalog.md` com `meta` livre ou
@@ -471,6 +481,9 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       safeMeta = { slot: metaObj.slot }
     } else if (type === 'planet_travel_completed') {
       safeMeta = { toPlanetId: metaObj.toPlanetId }
+    } else if (type === 'planet_interaction_completed') {
+      // já validado acima — só as 2 chaves permitidas sobrevivem.
+      safeMeta = { planetId: metaObj.planetId, kind: metaObj.kind }
     } else if (type === 'camera_recenter_used') {
       // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
       // (`docs/event-catalog.md`) não documenta NENHUM campo de `meta` — sem este branch, caía no
@@ -1700,6 +1713,10 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     cameraRecenterUsed: weeklyDevices('camera_recenter_used'),
     cosmeticEquipped: weeklyDevices('cosmetic_equipped'),
     planetTravelCompleted: weeklyDevices('planet_travel_completed'),
+    // lab-179 — mesma convenção do resto do funil (dispositivos únicos, não crianças); conta
+    // qualquer TIPO de interação (`kind` em `meta`), não uma interação específica — o backlog
+    // pede a métrica agregada (`planet_interactions_per_session`), não um contador por tipo.
+    planetInteractionCompleted: weeklyDevices('planet_interaction_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

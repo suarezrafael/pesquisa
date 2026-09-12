@@ -61,35 +61,54 @@ mais infraestrutura de interação já existe do que o backlog sugere**, o gap r
 
 ## Funcionalidades planejadas
 
-- [ ] Evento novo `planet_interaction_completed` na allowlist `PRODUCT_EVENT_TYPES`
+- [x] Evento novo `planet_interaction_completed` na allowlist `PRODUCT_EVENT_TYPES`
       (`app/server-accounts/src/domain.ts`) + tracker fino `trackPlanetInteractionCompleted(planetId, kind)`
       em `productAnalytics.ts`, mesmo padrão de `trackPlanetTravelCompleted`. Validação
-      server-side de `kind` (allowlist fixa) e `planetId` (reaproveita `isValidDestinationPlanetId`
-      já existente do lab-185) em `handleTrackEvent`, mesmo padrão de `isValidCosmeticSlot`.
+      server-side de `kind` (allowlist fixa, `isValidPlanetInteractionKind`) e `planetId`
+      (reaproveita `isValidDestinationPlanetId` já existente do lab-185) em `handleTrackEvent`,
+      mesmo padrão de `isValidCosmeticSlot` (recusa o evento inteiro com 400 se inválido, em vez de
+      gravar com `meta: null`, pelo mesmo motivo do lab-185: o campo É o sinal inteiro).
       (referência: backlog, Lab 179, "instrumentar eventos"; "eventos não coletam PII")
-- [ ] Instrumentar as 3 interações já existentes nos 6 planetas que já as têm: disparar
-      `trackPlanetInteractionCompleted` nos call sites de `applyPostcardCollected` (`kind: 'collectible'`),
-      `applyTreasureChestFound` (`kind: 'actionable_object'`) e `applyPlanetQuestCompletion`
-      (`kind: 'educational_quiz'`) — em `useProgress.ts`/`App.tsx`, mesmo lugar onde
-      `trackQuestCompleted` já é chamado hoje pra missões do planeta principal.
+- [x] Instrumentadas as 3 interações já existentes nos 6 planetas que já as têm: `foundTreasureChest`
+      (`kind: 'actionable_object'`), `collectPostcard` (`kind: 'collectible'`) e `completePlanetQuest`
+      (`kind: 'educational_quiz'`, só na conclusão GENUÍNA, mesmo guard de idempotência de
+      `completeQuest`) — todas em `state/useProgress.ts`.
       (referência: backlog, Lab 179, "cada planeta tem objetivo/descoberta clara"; "pelo menos uma
       interação conecta a desafio educativo curto")
-- [ ] Nova interação pra Marte fechar o "≥3" (categoria a definir na implementação: mini-puzzle
-      ambiental ou segredo visual, evitando NPC por já ter uma decisão de performance registrada
-      contra isso) — sem texto livre, com feedback audiovisual claro, instrumentada com o mesmo
-      evento genérico (`kind` próprio).
+- [x] Nova interação pra Marte fechar o "≥3": segredo visual (`data/planetSecrets.ts`,
+      `applyPlanetSecretFound` em `progression.ts`, `foundPlanetSecretIds` novo em `Progress`) — uma
+      sonda espacial quebrada escondida bem longe da estação alienígena/pote de moedas
+      (`buildPlanetSecret`/`onFindPlanetSecret`, `World3D.tsx`), achada por proximidade real, sem
+      marcador chamativo antes (diferente do baú). Categoria "segredo visual" escolhida em vez de
+      NPC porque o código já registra uma decisão de performance anterior contra NPCs em planetas.
       (referência: backlog, Lab 179, "pelo menos 3 interações por planeta existente")
-- [ ] `GET /admin/metrics` ganha uma chave nova em `weeklyFunnel` (`planetInteractionCompleted`),
-      mesmo padrão `weeklyDevices(tipo)` das chaves já existentes — dá visibilidade agregada sem
-      esperar o backlog pedir uma query de coorte dedicada.
+- [x] `GET /admin/metrics` ganha uma chave nova em `weeklyFunnel` (`planetInteractionCompleted`),
+      mesmo padrão `weeklyDevices(tipo)` das chaves já existentes.
       (referência: backlog, Lab 179, "Métricas esperadas: planet_interactions_per_session")
-- [ ] `docs/event-catalog.md` atualizado com o evento novo, incluindo a allowlist de `kind`.
-- [ ] Teste automatizado das novas funções puras de validação em `domain.test.ts` (mesmo padrão de
-      `isValidCosmeticSlot`).
-- [ ] Verificado ao vivo num navegador real: cada uma das 3 interações já existentes disparando o
-      evento genérico com o `kind` certo (postcard, baú, escolinha) em pelo menos um planeta; a
-      interação nova de Marte funcionando e disparando seu próprio `kind`. Verificado ao vivo contra
-      produção (leitura) confirmando o evento aceito pela allowlist.
+- [x] `docs/event-catalog.md` atualizado com o evento novo, incluindo a allowlist de `kind`, e a
+      seção "Qual métrica alimenta" atualizada explicando o que já existia vs. o que é novo.
+- [x] Teste automatizado das novas funções puras: `isValidPlanetInteractionKind`/allowlist de
+      evento (`domain.test.ts`, server-accounts) e `applyPlanetSecretFound` (`progression.test.ts`,
+      app) — mesmo padrão de `isValidCosmeticSlot`/`applyTreasureChestFound`.
+- [x] `npx tsc -b`/`--noEmit` (app e server-accounts) limpos; `npm run test` limpo nos dois; `npm run
+      build` (app) limpo, sem regressão de bundle (`studentFigure` continua no mesmo tamanho de
+      sempre, pré-existente, não relacionado a este lab).
+- [~] Verificado ao vivo num navegador real — **bloqueado por um problema de ambiente desta sessão**,
+      não do código deste lab: `npm run dev` trava indefinidamente em "Carregando o mundo 3D…", sem
+      erro nenhum no console. Isolado com 2 testes independentes antes de desistir: (1) reproduzido
+      IDENTICAMENTE com todas as mudanças deste lab stashadas (baseline limpo) — prova que não é bug
+      deste lab; (2) mesmo com o cache de dependências do Vite (`node_modules/.vite`) limpo do zero,
+      o próprio passo `[optimizer] bundling dependencies...` do Vite trava, ANTES de qualquer código
+      deste app rodar — um problema no próprio dev server desta sessão, não no código. Compensado
+      com: `npm run build` (produção, pipeline de bundling INTEIRAMENTE diferente do dev server)
+      completou limpo; verificação ao vivo contra produção (leitura, `wrangler dev`) confirmando a
+      validação server-side funcionando corretamente (ver abaixo); revisão manual cuidadosa do
+      código novo em `World3D.tsx` (achou e corrigiu um bug real de orientação: `MeshBuilder.CreateDisc`
+      nasce "de pé", trocado por um cilindro baixo, mesmo padrão já usado pra lagoa/moedas neste
+      arquivo). Verificado ao vivo contra produção (leitura): `planet_interaction_completed` com
+      `planetId`/`kind` válidos aceito (204, gravado corretamente); com `kind`/`planetId` inválido
+      recusado (400, nunca vira linha); `weeklyFunnel.planetInteractionCompleted` responde
+      corretamente.
 
 ## Fora de escopo (explicitamente adiado)
 

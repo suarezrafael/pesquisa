@@ -15,6 +15,7 @@ import {
   applyQuestCompletion,
   applyStreakReset,
   applyTreasureChestFound,
+  applyPlanetSecretFound,
   backfillPetAdoptedAt,
   badgesEarnedAt,
   BADGE_ALL_DONE,
@@ -491,6 +492,29 @@ describe('applyTreasureChestFound — baús de tesouro escondidos (lab-131)', ()
 
   it('não faz nada (nem quebra) pra um chestId inexistente', () => {
     const result = applyTreasureChestFound(emptyProgress, 'bau-inexistente')
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(emptyProgress)
+  })
+})
+
+describe('applyPlanetSecretFound — segredos visuais escondidos (lab-179)', () => {
+  it('credita a moeda do segredo e marca como achado na primeira vez', () => {
+    const result = applyPlanetSecretFound(emptyProgress, 'segredo-marte-sonda')
+    expect(result.granted).toBe(true)
+    expect(result.progress.coins).toBe(15)
+    expect(result.progress.foundPlanetSecretIds).toEqual(['segredo-marte-sonda'])
+  })
+
+  it('é idempotente — não credita de novo se o segredo já tiver sido achado', () => {
+    const first = applyPlanetSecretFound(emptyProgress, 'segredo-marte-sonda')
+    const second = applyPlanetSecretFound(first.progress, 'segredo-marte-sonda')
+    expect(second.granted).toBe(false)
+    expect(second.progress).toBe(first.progress)
+    expect(second.progress.coins).toBe(15)
+  })
+
+  it('não faz nada (nem quebra) pra um secretId inexistente', () => {
+    const result = applyPlanetSecretFound(emptyProgress, 'segredo-inexistente')
     expect(result.granted).toBe(false)
     expect(result.progress).toBe(emptyProgress)
   })

@@ -53,9 +53,10 @@ PR #55, 7ª rodada).
   `session_end` funciona assim): `durationMs` de `session_end` (desde o lab-99) — um valor
   implausível grava o evento com `meta: null` em vez do valor recebido, nunca recusa o evento
   inteiro (a sessão terminou é um sinal válido mesmo com duração suspeita); já `slot`/`toPlanetId`
-  dos 2 eventos do lab-185 — um valor fora do allowlist esperado RECUSA o evento inteiro (400,
-  nunca chega a gravar linha nenhuma), porque pra esses dois o slot/planeta É o sinal inteiro, não
-  um detalhe descartável. `questId` de `quest_completed` e o `meta` dos demais tipos NÃO passam por
+  dos 2 eventos do lab-185, e `planetId`/`kind` de `planet_interaction_completed` (lab-179) — um
+  valor fora do allowlist esperado RECUSA o evento inteiro (400, nunca chega a gravar linha
+  nenhuma), porque pra esses o campo É o sinal inteiro, não um detalhe descartável. `questId` de
+  `quest_completed` e o `meta` dos demais tipos NÃO passam por
   validação de conteúdo nenhuma — são gravados como o client mandar (defesa em profundidade de
   "nunca confiar só no client" ainda não
   se aplica a esses campos; documentado aqui como dívida conhecida, não como garantia).
@@ -84,6 +85,7 @@ PR #55, 7ª rodada).
 | `camera_recenter_used` | Clique no botão ⟲ de recentralizar câmera (lab-178) | `world3d/World3D.tsx`, `handleRecenterCamera` | — | 1x por clique |
 | `cosmetic_equipped` | Equipar boné/óculos/cor de roupa-calça-sapato-mochila/estilo de cabelo na lojinha (nunca ao voltar pro padrão — `id === null` pra boné/óculos, ou o próprio item padrão do catálogo, custo 0 e não-exclusivo-assinante, pros eixos de cor/cabelo) (lab-185, 2ª rodada do review da PR #55) | `state/useProfile.ts`, `equipHat`/`equipShirtColor`/`equipPantsColor`/`equipShoeColor`/`equipBackpackColor`/`equipHairShape`/`equipGlasses` | `slot` (`"hat"`, `"shirtColor"`, `"pantsColor"`, `"shoeColor"`, `"backpackColor"`, `"hairShape"`, `"glasses"`) | 1x por equipar |
 | `planet_travel_completed` | Pouso bem-sucedido num planeta-destino ao final de uma viagem de foguete — só na chegada de verdade, não ao desistir no meio e voltar pra origem (lab-185) | `world3d/World3D.tsx`, `landRocket` | `toPlanetId` | 1x por chegada |
+| `planet_interaction_completed` | Qualquer interação dentro de um planeta-destino — 1 evento genérico pra 4 categorias, não 1 evento por tipo (lab-179, "Planetas interativos v1"): cartão-postal colecionado, baú de tesouro achado, escolinha de astronomia respondida certo, ou segredo visual achado | `state/useProgress.ts`, `collectPostcard`/`foundTreasureChest`/`completePlanetQuest`/`foundPlanetSecret` | `planetId` (um dos 7 planetas-destino) e `kind` (`"collectible"`, `"actionable_object"`, `"educational_quiz"`, `"visual_secret"`) | 1x por interação genuína |
 
 ## Nível de agregação (lab-185)
 
@@ -139,11 +141,15 @@ decisão").
 - **Loja/cosméticos** (lab-176, medido a partir do lab-185) — `cosmetic_equipped` mede engajamento
   com o loop de customização (não distingue item grátis de pago — ver `AvatarShop.tsx` pra saber
   quais itens custam moeda). Lido semanalmente por `weeklyFunnel.cosmeticEquipped`.
-- **Planetas** (medido a partir do lab-185, base pro Lab 179 - Planetas interativos v1) —
+- **Planetas** (chegada medida a partir do lab-185, interação a partir do lab-179) —
   `planet_travel_completed` mede exploração (chegadas reais, não tentativas desistidas no meio do
-  caminho). Lido semanalmente por `weeklyFunnel.planetTravelCompleted`; o Lab 179 deve adicionar
-  eventos próprios de INTERAÇÃO dentro de cada planeta (NPC, mini-puzzle, colecionável), que este
-  lab não cobre.
+  caminho). `planet_interaction_completed` (lab-179, "Planetas interativos v1") mede o que a
+  criança faz DEPOIS de chegar: investigação prévia do lab-179 achou que cartão-postal
+  (`postcards.ts`, categoria "colecionável"), baú de tesouro (`treasureChests.ts`, "objeto
+  acionável") e escolinha de astronomia (`planetQuests.ts`, "desafio educativo") já existiam em 6
+  dos 7 planetas, só sem instrumentação; Marte (único sem baú/escolinha) ganhou uma interação nova
+  ("segredo visual", `planetSecrets.ts`) pra chegar a 3. Lidos semanalmente por
+  `weeklyFunnel.planetTravelCompleted`/`weeklyFunnel.planetInteractionCompleted`.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de
