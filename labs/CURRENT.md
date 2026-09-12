@@ -1,5 +1,14 @@
 # Laboratório atual
 
+**Em andamento: labs/lab-178-camera-roblox-like/** — câmera em 3ª pessoa Roblox-like fácil.
+Origem: `docs/growth-retention-monetization-backlog.md`, seção 7/12, "Lab 178", prioridade P0,
+próximo item da ordem recomendada após o lab-177. Investigação prévia (antes de codar) achou que
+boa parte do escopo do backlog já está implementada por labs anteriores (giro por arrasto mouse/
+touch, split direita=câmera/esquerda=movimento no mobile, botões ◀ ▶, suavização) — gaps reais
+identificados: zoom (scroll/pinch) só existe dentro de casa, não do lado de fora; não existe botão
+de recentralizar; não existe nenhuma colisão/anti-clipping de câmera contra terreno/parede; botões
+de toque não têm `aria-label`/tooltip. Ver `labs/lab-178-camera-roblox-like/FEATURES.md`.
+
 Último concluído: labs/lab-177-relevo-montanhas-visiveis/ — relevo e montanhas visíveis. Origem:
 `docs/growth-retention-monetization-backlog.md`, seção 7, "Lab 177", prioridade P0. Investigação
 prévia (antes de codar) mostrou que a hipótese do backlog ("separação entre mesh visual e colisão
