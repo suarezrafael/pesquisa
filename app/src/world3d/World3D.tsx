@@ -2586,6 +2586,12 @@ export function World3D({
         houseCameraPitchOffsetRef.current = 0
         houseCameraZoomRef.current = 1
       }
+      // Achado real do review automático do Copilot (PR #54, 5ª rodada): sem isto, segurar ◀/▶
+      // (possível em multitoque, um dedo em cada botão) enquanto aperta ⟲ deixava o giro contínuo
+      // já em andamento voltar a acumular no quadro seguinte — a câmera "recentralizava" e saía do
+      // centro de novo imediatamente, nunca ficando de fato parada.
+      cameraRotateLeftRef.current = false
+      cameraRotateRightRef.current = false
     }
     ;(scene as any).__recenterCamera = recenterCamera
 
@@ -3674,13 +3680,26 @@ export function World3D({
       // colisão em vez de deixá-la atravessar. `ignoreBody` evita que o próprio colisor do alvo
       // (ex.: o corpo do avatar) conte como "bloqueio" a distância ~0 do início do raio.
       const cameraObstructionResult = new PhysicsRaycastResult()
+      // 5ª rodada (achado real do review automático do Copilot, PR #54): `avoidCameraClipping`
+      // corrige o PONTO final, mas os chamadores ainda suavizavam com `Vector3.Lerp(camera.
+      // position, ..., fator)` a partir da posição da câmera do quadro ANTERIOR — se essa posição
+      // antiga estivesse do lado de FORA de uma parede/rocha (ex.: giro/recentralização brusca) e
+      // o novo ponto seguro estiver do lado de DENTRO, o CAMINHO da interpolação atravessa o
+      // obstáculo por vários quadros, mesmo o destino final sendo seguro. Este flag (resetado a
+      // cada chamada, lido pelos chamadores logo em seguida) avisa quando ESTE quadro teve
+      // obstrução de verdade — nesse caso, os chamadores pulam a suavização e vão direto pro ponto
+      // seguro (sem caminho pra atravessar nada), voltando a suavizar normalmente assim que o
+      // caminho ficar livre de novo.
+      let lastCameraClipWasObstructed = false
       function avoidCameraClipping(target: Vector3, desired: Vector3, ignoreBody?: PhysicsBody): Vector3 {
+        lastCameraClipWasObstructed = false
         if (!havokPlugin) return desired
         const fullDistance = Vector3.Distance(target, desired)
         if (fullDistance < 0.0001) return desired
         cameraObstructionResult.reset()
         havokPlugin.raycast(target, desired, cameraObstructionResult, ignoreBody ? { ignoreBody } : undefined)
         if (!cameraObstructionResult.hasHit) return desired
+        lastCameraClipWasObstructed = true
         const margin = 0.3 // afasta um pouco da parede/rocha em vez de encostar a lente nela
         // Achado real do review automático do Copilot (PR #54, 2ª rodada): `hitDistance` é medido
         // a partir do ALVO — se o obstáculo estiver mais perto que `margin` (jogador quase
@@ -3715,7 +3734,10 @@ export function World3D({
         const idealDistance = Math.max(minClearance, cameraObstructionResult.hitDistance - margin)
         const obstacleFloor = Math.max(cameraObstructionResult.hitDistance, MIN_TARGET_CLEARANCE)
         const safeDistance = Math.min(idealDistance, obstacleFloor)
-        if (safeDistance >= fullDistance) return desired
+        if (safeDistance >= fullDistance) {
+          lastCameraClipWasObstructed = false // achou algo, mas longe o bastante pra não precisar corrigir nada
+          return desired
+        }
         return Vector3.Lerp(target, desired, safeDistance / fullDistance)
       }
 
@@ -9852,6 +9874,11 @@ export function World3D({
             const horizontalOffset = -Math.cos(pitch) * radius
             const sphericalOffset = camFacing.scale(horizontalOffset).add(localUp.scale(verticalOffset))
             desiredCamPos = pos.add(sphericalOffset)
+            // Dentro de casa não chama `avoidCameraClipping` (paredes translúcidas resolvem o
+            // mesmo problema, ver comentário mais abaixo) — zera a flag pra não ler um valor
+            // preso de um quadro anterior fora de casa (achado real do review automático do
+            // Copilot, PR #54, 5ª rodada, ver `lastCameraClipWasObstructed` acima).
+            lastCameraClipWasObstructed = false
           } else {
             // lab-178: zoom (scroll/pinça) escala distância E altura juntas, na mesma proporção —
             // um dolly de verdade, não uma distorção de ângulo. `avoidCameraClipping` (raycast
@@ -9878,7 +9905,17 @@ export function World3D({
           // carro/foguete já é dona exclusiva de `camera.position` enquanto ativa (ver blocos
           // abaixo), então só atualiza aqui quando for esta mesma a câmera que vale.
           if (!drivingCar && !drivingRocket) {
-            camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)
+            // Achado real do review automático do Copilot (PR #54, 5ª rodada): `avoidCameraClipping`
+            // corrige o PONTO final, mas suavizar com `Lerp` a partir da posição da câmera do
+            // quadro ANTERIOR podia atravessar a mesma parede/rocha no CAMINHO da interpolação
+            // (ex.: giro brusco — a posição antiga fica de um lado da parede, a nova do outro),
+            // mesmo o destino sendo seguro. Quando este quadro teve obstrução de verdade, pula a
+            // suavização e vai direto pro ponto seguro — sem trajeto reto entre os dois pontos,
+            // não tem como atravessar nada no meio do caminho. Volta a suavizar normalmente assim
+            // que o caminho ficar livre de novo (`lastCameraClipWasObstructed` volta a `false`).
+            camera.position = lastCameraClipWasObstructed
+              ? desiredCamPos
+              : Vector3.Lerp(camera.position, desiredCamPos, 0.08)
             camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
             camera.setTarget(pos)
           }
@@ -10699,7 +10736,11 @@ export function World3D({
             .subtract(carFwdNow.scale(CAMERA_DISTANCE * outdoorCameraZoomRef.current))
             .add(carUpNow.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
           const desiredCarCamPos = avoidCameraClipping(drivingCar.root.position, rawCarCamPos, avatarBody?.body)
-          camera.position = Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
+          // lab-178 (5ª rodada de review, mesmo achado da câmera a pé acima): pula a suavização
+          // quando há obstrução de verdade, pra não atravessar nada no CAMINHO da interpolação.
+          camera.position = lastCameraClipWasObstructed
+            ? desiredCarCamPos
+            : Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
           camera.upVector = Vector3.Lerp(camera.upVector, carUpNow, 0.15).normalize()
           camera.setTarget(drivingCar.root.position)
         }
@@ -10820,8 +10861,18 @@ export function World3D({
           // anti-clipping pra ficar correta.
           if (!inLaunchHold && !inLandingFlip) {
             desiredShipCamPos = avoidCameraClipping(shipPos, desiredShipCamPos, avatarBody?.body)
+          } else {
+            // Nas pontas de repouso o anti-clipping nem roda (ver comentário acima) — zera a flag
+            // pra não ler um valor preso de uma chamada anterior no cruzeiro (mesmo cuidado do
+            // ramo de dentro de casa acima).
+            lastCameraClipWasObstructed = false
           }
-          camera.position = Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
+          // lab-178 (5ª rodada de review, mesmo achado da câmera a pé/carro acima): pula a
+          // suavização quando há obstrução de verdade, pra não atravessar nada no CAMINHO da
+          // interpolação.
+          camera.position = lastCameraClipWasObstructed
+            ? desiredShipCamPos
+            : Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
           camera.upVector = Vector3.Lerp(camera.upVector, desiredShipCamUp, 0.15).normalize()
           camera.setTarget(shipPos)
 

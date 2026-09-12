@@ -191,6 +191,32 @@ conteúdo da saída.
 Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
 conteúdo da saída.
 
+**5ª rodada** — 4 achados reais (3 do mesmo problema em pontos diferentes, 1 independente):
+
+- **A suavização (`Vector3.Lerp`) podia atravessar o obstáculo mesmo com o PONTO final já
+  corrigido** — `avoidCameraClipping` garante que o DESTINO da câmera é seguro, mas os 3 pontos
+  que chamam a função continuavam suavizando com `Vector3.Lerp(camera.position, destino, fator)`
+  a partir da posição da câmera do QUADRO ANTERIOR. Se essa posição antiga estivesse do lado de
+  FORA de uma parede/rocha (ex.: giro brusco, recentralização, virada de veículo) e o novo destino
+  seguro estiver do lado de DENTRO, o CAMINHO reto da interpolação atravessa o obstáculo por
+  vários quadros antes de convergir — a câmera de verdade ainda clipava, mesmo o destino sendo
+  sempre correto. Corrigido nos 3 pontos (a pé, carro, foguete): uma flag nova
+  (`lastCameraClipWasObstructed`, resetada no início de cada chamada de `avoidCameraClipping` e
+  setada só quando uma correção de verdade acontece) avisa os chamadores pra pular a suavização e
+  ir DIRETO pro ponto seguro nesse quadro — sem trajeto reto entre dois pontos, não tem caminho
+  pra atravessar nada. Cuidado extra: a flag precisa ser explicitamente zerada nos 2 lugares onde
+  `avoidCameraClipping` NÃO é chamada mas a leitura ainda acontece (dentro de casa; foguete nas
+  pontas de repouso decolagem/pouso) — senão um valor `true` de um quadro anterior noutro contexto
+  ficaria "preso" e disparava um corte brusco sem motivo.
+- **`recenterCamera` não limpava o giro contínuo em andamento** — segurar ◀ ou ▶ (possível em
+  multitoque, um dedo em cada botão) enquanto aperta ⟲ deixava `cameraRotateLeftRef`/
+  `cameraRotateRightRef` ligados, e o quadro seguinte voltava a acumular giro em cima do
+  `cameraYawOffsetRef` recém-zerado — a câmera "recentralizava" e saía do centro de novo na hora,
+  nunca ficando parada de verdade. Corrigido zerando os dois refs dentro de `recenterCamera`.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
+conteúdo da saída.
+
 ## Pendências / dívidas conhecidas
 
 - **Pinch de 2 dedos verificado só por revisão de código/matemática, não ao vivo** — as ferramentas
