@@ -253,6 +253,42 @@ conteúdo da saída.
 Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
 conteúdo da saída.
 
+**7ª rodada** — 3 achados reais (1 mais profundo que os anteriores; pausa e confirmação do
+usuário antes de corrigi-lo, ver abaixo):
+
+- **`enterHouseInterior` não resetava o arrasto de 1 dedo em andamento** — resetava a pinça
+  (achado próprio deste lab), mas não `cameraDragging`/`cameraDragPointerId`, que
+  `exitHouseInterior` já reseta desde o lab-149. Entrar em casa com um arrasto de fora ativo (ex.:
+  apertar E pra entrar com o botão do mouse ainda pressionado) deixava esse estado preso,
+  aplicando giro de FORA (semântica errada) já dentro da sala no próximo `pointermove`. Corrigido
+  espelhando o mesmo reset que a saída já faz.
+- **`CONTEXT.md` impreciso**: dizia "aplicada nos MESMOS 4 lugares... todos passando
+  `avatarBody?.body`" — na verdade são só 3 chamadas ATIVAS por vez (o foguete nunca chama durante
+  decolagem/pouso) e a câmera a pé usa o alias local `body`, não `avatarBody?.body` diretamente.
+  Corrigido pra bater com o código de verdade.
+- **Achado mais profundo — `avoidCameraClipping` só valida o segmento DESTE quadro, não o
+  trajeto de suavização de verdade**: o raycast checa alvo→destino atual, mas o `Lerp` nos 3
+  chamadores interpola a partir da posição da câmera do quadro ANTERIOR. Numa virada brusca
+  (recentralizar, giro rápido, trocar de veículo), essa posição antiga pode estar do lado ERRADO
+  de uma parede/rocha em relação ao NOVO destino, mesmo esse destino sendo seguro — o trajeto reto
+  da interpolação atravessa o obstáculo por vários quadros sem que `lastCameraClipWasObstructed`
+  perceba (ele só sabe sobre o segmento alvo→destino, não sobre posição-antiga→destino). Esta é a
+  5ª divergência real encontrada na mesma lógica de anti-clipping/suavização ao longo das rodadas
+  2-5 e agora 7 — **antes de corrigir mais uma vez, o usuário foi consultado via
+  `AskUserQuestion`** sobre continuar corrigindo, aceitar o estado atual como limitação conhecida,
+  ou repensar a abordagem do zero. Resposta: **continuar corrigindo**. Corrigido com uma nova
+  função `isPathObstructed(from, to, ignoreBody?)` (raycast simples, só "tem algo no caminho ou
+  não", sem a matemática de distância segura de `avoidCameraClipping`) chamada com a posição ATUAL
+  da câmera e o destino calculado deste quadro nos 3 pontos — se o TRAJETO estiver bloqueado
+  (mesmo com o destino em si seguro), pula a suavização igual ao caso de obstrução no destino.
+  Escopo dos 3 chamadores: câmera a pé (excluído de dentro de casa, mesmo motivo de sempre — a
+  solução de lá já é outra); carro (sempre, não tem colisor próprio pra confundir); foguete (só no
+  cruzeiro, mesmo motivo de excluir o anti-clipping do destino nas pontas de repouso — colisor
+  estático da plataforma perto demais).
+
+Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
+conteúdo da saída.
+
 ## Pendências / dívidas conhecidas
 
 - **Pinch de 2 dedos verificado só por revisão de código/matemática, não ao vivo** — as ferramentas

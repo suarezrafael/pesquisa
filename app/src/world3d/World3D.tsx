@@ -3750,6 +3750,25 @@ export function World3D({
         return Vector3.Lerp(target, desired, safeDistance / fullDistance)
       }
 
+      // 7ª rodada (achado real do review automático do Copilot, PR #54): `avoidCameraClipping`
+      // só valida o segmento ALVO→destino DESTE quadro — mas a suavização nos chamadores
+      // interpola a partir da posição da câmera do quadro ANTERIOR, não do alvo. Numa virada
+      // brusca (recentralizar, giro rápido, trocar de veículo), a posição antiga pode ficar do
+      // lado ERRADO de uma parede/rocha em relação ao novo destino, mesmo esse destino sendo
+      // seguro — a interpolação em linha reta entre os dois pontos atravessa o obstáculo por
+      // vários quadros. Raycast simples (sem a matemática de distância segura de
+      // `avoidCameraClipping` — aqui só interessa "tem algo no caminho ou não") do ponto ATUAL da
+      // câmera até o novo destino; os chamadores usam isso pra decidir se pulam a suavização e
+      // saltam direto pro destino nesse quadro específico.
+      const pathObstructionResult = new PhysicsRaycastResult()
+      function isPathObstructed(from: Vector3, to: Vector3, ignoreBody?: PhysicsBody): boolean {
+        if (!havokPlugin) return false
+        if (Vector3.DistanceSquared(from, to) < 0.0001) return false
+        pathObstructionResult.reset()
+        havokPlugin.raycast(from, to, pathObstructionResult, ignoreBody ? { ignoreBody } : undefined)
+        return pathObstructionResult.hasHit
+      }
+
       // lab-95 (causa raiz real do bug de escolinhas enterradas — confirmado com medição direta
       // ao vivo): `settleMeshOnTerrain` some as ALL child meshes, incluindo o telhado (beiral
       // largo, `diameterBottom: 2.1`, chega a ~1,05m do centro — bem além da pegada das paredes)
@@ -9929,9 +9948,18 @@ export function World3D({
             // suavização e vai direto pro ponto seguro — sem trajeto reto entre os dois pontos,
             // não tem como atravessar nada no meio do caminho. Volta a suavizar normalmente assim
             // que o caminho ficar livre de novo (`lastCameraClipWasObstructed` volta a `false`).
-            camera.position = lastCameraClipWasObstructed
-              ? desiredCamPos
-              : Vector3.Lerp(camera.position, desiredCamPos, 0.08)
+            //
+            // 7ª rodada (achado real): o raycast de `avoidCameraClipping` só valida ALVO→destino
+            // DESTE quadro — a posição ANTIGA da câmera (ponto de partida do `Lerp`) pode estar do
+            // lado errado de uma parede numa virada brusca mesmo com o destino seguro, atravessando
+            // no meio do caminho sem que `lastCameraClipWasObstructed` perceba. `isPathObstructed`
+            // checa o trajeto de verdade (posição atual → destino) antes de decidir suavizar.
+            // Fora de dentro de casa, de propósito — lá a solução já é outra (parede translúcida).
+            const pathObstructed = !insideHouseInterior && isPathObstructed(camera.position, desiredCamPos, body)
+            camera.position =
+              lastCameraClipWasObstructed || pathObstructed
+                ? desiredCamPos
+                : Vector3.Lerp(camera.position, desiredCamPos, 0.08)
             camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
             camera.setTarget(pos)
           }
@@ -10752,11 +10780,14 @@ export function World3D({
             .subtract(carFwdNow.scale(CAMERA_DISTANCE * outdoorCameraZoomRef.current))
             .add(carUpNow.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
           const desiredCarCamPos = avoidCameraClipping(drivingCar.root.position, rawCarCamPos, avatarBody?.body)
-          // lab-178 (5ª rodada de review, mesmo achado da câmera a pé acima): pula a suavização
-          // quando há obstrução de verdade, pra não atravessar nada no CAMINHO da interpolação.
-          camera.position = lastCameraClipWasObstructed
-            ? desiredCarCamPos
-            : Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
+          // lab-178 (5ª/7ª rodadas de review, mesmo achado da câmera a pé acima): pula a
+          // suavização quando há obstrução no destino OU no trajeto da posição antiga até lá, pra
+          // não atravessar nada no CAMINHO da interpolação.
+          const carPathObstructed = isPathObstructed(camera.position, desiredCarCamPos, avatarBody?.body)
+          camera.position =
+            lastCameraClipWasObstructed || carPathObstructed
+              ? desiredCarCamPos
+              : Vector3.Lerp(camera.position, desiredCarCamPos, 0.12)
           camera.upVector = Vector3.Lerp(camera.upVector, carUpNow, 0.15).normalize()
           camera.setTarget(drivingCar.root.position)
         }
@@ -10883,12 +10914,16 @@ export function World3D({
             // ramo de dentro de casa acima).
             lastCameraClipWasObstructed = false
           }
-          // lab-178 (5ª rodada de review, mesmo achado da câmera a pé/carro acima): pula a
-          // suavização quando há obstrução de verdade, pra não atravessar nada no CAMINHO da
-          // interpolação.
-          camera.position = lastCameraClipWasObstructed
-            ? desiredShipCamPos
-            : Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
+          // lab-178 (5ª/7ª rodadas de review, mesmo achado da câmera a pé/carro acima): pula a
+          // suavização quando há obstrução no destino OU no trajeto — só checa o trajeto no
+          // CRUZEIRO, pela mesma razão de excluir o anti-clipping do destino nas pontas de
+          // repouso (colisor estático da plataforma perto demais, ver comentário acima).
+          const shipPathObstructed =
+            !inLaunchHold && !inLandingFlip && isPathObstructed(camera.position, desiredShipCamPos, avatarBody?.body)
+          camera.position =
+            lastCameraClipWasObstructed || shipPathObstructed
+              ? desiredShipCamPos
+              : Vector3.Lerp(camera.position, desiredShipCamPos, 0.1)
           camera.upVector = Vector3.Lerp(camera.upVector, desiredShipCamUp, 0.15).normalize()
           camera.setTarget(shipPos)
 
