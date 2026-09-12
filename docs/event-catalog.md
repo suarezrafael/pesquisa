@@ -85,7 +85,7 @@ PR #55, 7ª rodada).
 | `camera_recenter_used` | Clique no botão ⟲ de recentralizar câmera (lab-178) | `world3d/World3D.tsx`, `handleRecenterCamera` | — | 1x por clique |
 | `cosmetic_equipped` | Equipar boné/óculos/cor de roupa-calça-sapato-mochila/estilo de cabelo na lojinha (nunca ao voltar pro padrão — `id === null` pra boné/óculos, ou o próprio item padrão do catálogo, custo 0 e não-exclusivo-assinante, pros eixos de cor/cabelo) (lab-185, 2ª rodada do review da PR #55) | `state/useProfile.ts`, `equipHat`/`equipShirtColor`/`equipPantsColor`/`equipShoeColor`/`equipBackpackColor`/`equipHairShape`/`equipGlasses` | `slot` (`"hat"`, `"shirtColor"`, `"pantsColor"`, `"shoeColor"`, `"backpackColor"`, `"hairShape"`, `"glasses"`) | 1x por equipar |
 | `planet_travel_completed` | Pouso bem-sucedido num planeta-destino ao final de uma viagem de foguete — só na chegada de verdade, não ao desistir no meio e voltar pra origem (lab-185) | `world3d/World3D.tsx`, `landRocket` | `toPlanetId` | 1x por chegada |
-| `planet_interaction_completed` | Qualquer interação dentro de um planeta-destino — 1 evento genérico pra 4 categorias, não 1 evento por tipo (lab-179, "Planetas interativos v1"): cartão-postal colecionado, baú de tesouro achado, escolinha de astronomia respondida certo, ou segredo visual achado | `state/useProgress.ts`, `collectPostcard`/`foundTreasureChest`/`completePlanetQuest`/`foundPlanetSecret` | `planetId` (um dos 7 planetas-destino) e `kind` (`"collectible"`, `"actionable_object"`, `"educational_quiz"`, `"visual_secret"`) | 1x por interação genuína |
+| `planet_interaction_completed` | Qualquer interação dentro de um planeta-destino — 1 evento genérico pra 4 categorias, não 1 evento por tipo (lab-179, "Planetas interativos v1"): cartão-postal colecionado, baú de tesouro achado, escolinha de astronomia respondida certo, segredo visual achado, ou pote de moedas de Marte revelado | `state/useProgress.ts` (`collectPostcard`/`foundTreasureChest`/`completePlanetQuest`/`foundPlanetSecret`) e `world3d/World3D.tsx` (pote de moedas de Marte, disparado direto no gatilho de proximidade — não passa por `useProgress`, já que reseta a cada visita) | `planetId` (um dos 7 planetas-destino) e `kind` (`"collectible"`, `"actionable_object"`, `"educational_quiz"`, `"visual_secret"`) | 1x por interação genuína |
 
 ## Nível de agregação (lab-185)
 
@@ -150,10 +150,11 @@ decisão").
   desta nota dizia "o que a criança faz DEPOIS de chegar", categoria errada pro cartão-postal).
   Investigação prévia do lab-179 achou que cartão-postal, baú de tesouro (`treasureChests.ts`,
   "objeto acionável") e escolinha de astronomia (`planetQuests.ts`, "desafio educativo") já
-  existiam em 6 dos 7 planetas, só sem instrumentação; Marte (único sem baú/escolinha) ganhou uma
-  interação nova ("segredo visual", `planetSecrets.ts`) pra chegar a 3, e o pote de moedas
-  já existente (revelado ao vencer o combate, categoria "objeto acionável" — achado da 1ª rodada do
-  review: tinha ficado sem instrumentar) fechou a 3ª interação real de Marte. `weeklyFunnel.planetInteractionCompleted`
+  existiam em 6 dos 7 planetas, só sem instrumentação; Marte (único sem baú/escolinha) tinha só 2
+  interações reais — cartão-postal (1ª) e o pote de moedas já existente (2ª, revelado ao vencer o
+  combate, categoria "objeto acionável" — achado da 1ª rodada do review: tinha ficado sem
+  instrumentar) — e ganhou o segredo visual novo (`planetSecrets.ts`) como a 3ª, fechando o "pelo
+  menos 3" do backlog. `weeklyFunnel.planetInteractionCompleted`
   mede ALCANCE (dispositivos únicos com pelo menos 1 interação na semana, mesma convenção do resto
   do `weeklyFunnel`) — NÃO é literalmente `planet_interactions_per_session` como o backlog nomeia
   (uma métrica por SESSÃO exigiria agrupar por sessão, que este endpoint não faz hoje; achado da

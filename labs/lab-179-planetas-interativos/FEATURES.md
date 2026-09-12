@@ -1,8 +1,8 @@
 # Laboratório 179 — Planetas interativos v1
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-12
-Fim: -
+Fim: 2026-09-12
 Commit inicial: 3d7d825aa76b3ea38dcb653b9f1031bf2ac94de5
 
 ## Objetivo do laboratório

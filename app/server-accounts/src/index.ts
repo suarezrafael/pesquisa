@@ -1791,6 +1791,14 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
         ' device_id é escolhido pelo próprio client sem autenticação, então nada impede gerar' +
         ' um UUID novo por requisição pra inflar essas contagens (o rate limit por IP em' +
         ' /events limita a velocidade do abuso, não a possibilidade dele).',
+      // achado do review automático do Copilot (2ª rodada, PR #56) — a limitação já estava
+      // documentada em comentário de código, mas isso não ajuda quem só consome a resposta da API
+      // sem ler o código-fonte (o próprio motivo de `guardrails` existir). Repetida aqui.
+      '`weeklyFunnel.planetInteractionCompleted` mede ALCANCE semanal (dispositivos únicos com' +
+        ' pelo menos 1 interação na semana), não uma contagem por SESSÃO — um dispositivo com 1' +
+        ' interação e um com 50 contam igual, e não é literalmente a métrica' +
+        ' "planet_interactions_per_session" citada no backlog (nenhum evento carrega id de sessão' +
+        ' hoje pra permitir esse agrupamento).',
     ],
   })
 }

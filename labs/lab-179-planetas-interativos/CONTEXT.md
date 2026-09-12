@@ -89,6 +89,31 @@ vivo contra produção (`wrangler dev` porta 8802, banco real, só leitura): `pl
 com `planetId: 'marte'`/`kind: 'actionable_object'` aceito (204) e gravado corretamente (confirmado
 lendo a linha de volta do banco antes de apagá-la).
 
+**2ª rodada** — 4 achados reais:
+
+- **Comentário de código não é visível pra quem só consome a API** — a limitação de
+  `planetInteractionCompleted` (mede alcance, não sessão) documentada na 1ª rodada só existia como
+  comentário em `index.ts`, invisível pra quem lê a resposta JSON sem abrir o código-fonte —
+  exatamente o motivo de `guardrails: string[]` existir. Corrigido adicionando um 4º guardrail no
+  próprio JSON de resposta.
+- **Ordem das interações de Marte descrita errado em `event-catalog.md`** — o texto dizia que o
+  segredo visual "chega a 3" e depois que o pote de moedas "fecha a 3ª interação", contradição
+  óbvia (os dois não podem ser o 3º). Corrigido pra ordem real: cartão-postal (1ª), pote de moedas
+  pré-existente (2ª), segredo visual novo (3ª, o que fecha o "pelo menos 3" do backlog).
+- **Tabela de eventos não listava `World3D.tsx` como fonte** — a coluna "Arquivo de origem" de
+  `planet_interaction_completed` só citava `state/useProgress.ts`, mas o pote de moedas de Marte
+  dispara o evento direto em `World3D.tsx` (achado da 1ª rodada), sem passar por `useProgress`.
+  Corrigido pra listar os dois arquivos.
+- **`FEATURES.md` ainda dizia "Status: em andamento"/"Fim: -"** mesmo com `CONTEXT.md` já
+  preenchido como final e todos os itens marcados `[x]` — estado inconsistente. Corrigido pra
+  "Status: concluído"/"Fim: 2026-09-12", mesmo padrão do lab-185 (que já fixava isso no primeiro
+  commit de implementação, não só no merge final).
+
+Verificação desta rodada: `npx tsc --noEmit` (server-accounts) limpo; `npm run test` 144/144
+(sem teste novo — string de guardrail e texto de documentação). Reverificado ao vivo contra
+produção (`wrangler dev` porta 8803, banco real, só leitura): `GET /admin/metrics` confirmado
+respondendo com o 4º guardrail novo.
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança** (herdada do lab-185) — os eventos novos deste lab
