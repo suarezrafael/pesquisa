@@ -681,7 +681,16 @@ a.nickname-generate-btn {
 .hud-overlay .hub-header {
   pointer-events: none;
   background: rgba(255, 255, 255, 0.82);
-  border-radius: 999px;
+  /* Bug real relatado pelo usuário com screenshot (lab-180, fora do fluxo normal de lab): um
+     `border-radius: 999px` (cápsula "perfeita", raio = metade da menor dimensão) só fica bonito
+     quando a altura da caixa é previsível — nesta tela, `.hub-header-info` empilha nome + barra de
+     XP + "Nível X · série" dentro da largura estreita de `max-width` abaixo; numa tela de celular
+     estreita o bastante, esse texto quebra em mais linhas do que num desktop, a caixa fica mais
+     ALTA, e a cápsula acompanha essa altura nova — o texto (sem `overflow: hidden` aqui) não é
+     cortado, só passa a ficar visualmente por FORA do fundo arredondado. Um raio fixo continua um
+     cantinho arredondado agradável em qualquer altura, sem depender de quantas linhas o conteúdo
+     ocupa. */
+  border-radius: 20px;
   padding: clamp(0.2rem, 1.6vmin, 0.5rem) clamp(0.35rem, 2.6vmin, 0.9rem);
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
   /* lab-70, pedido do usuário: "o painel que mostra o avatar o nome e as moedas é muito largo,
@@ -704,11 +713,14 @@ a.nickname-generate-btn {
 .help-button {
   pointer-events: auto;
   flex-shrink: 0;
+  /* Tamanho INTOCADO (piso de 44px de toque, auditoria WCAG AA acima) — pedido do usuário (lab-180,
+     fora do fluxo normal de lab) de "botões menores no celular" foi atendido só via transparência
+     (0.82 → 0.62), nunca encolhendo abaixo do piso de acessibilidade já validado. */
   width: clamp(2.75rem, 6.5vmin, 3.2rem);
   height: clamp(2.75rem, 6.5vmin, 3.2rem);
   border-radius: 50%;
   border: none;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.62);
   color: var(--ink);
   font-weight: 800;
   /* lab-120: proporcional ao novo tamanho maior do botão (mesma razão ~0,48× de antes) — senão o
@@ -918,8 +930,12 @@ a.nickname-generate-btn {
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  /* Pedido do usuário (lab-180, fora do fluxo normal de lab, junto do bug do painel de FPS):
+     botões virtuais "mais transparentes" no celular — mantém o TAMANHO (piso de toque confiável,
+     não mexido) e só reduz a opacidade do preenchimento/borda, pra ocupar menos atenção visual
+     sem arriscar dificultar o toque. */
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.4);
   touch-action: none;
 }
 
@@ -939,14 +955,22 @@ a.nickname-generate-btn {
      efeito rodar, nunca mais a fonte de verdade. */
   top: 3.6rem;
   right: 0.75rem;
-  max-width: min(60vw, 320px);
+  max-width: min(52vw, 300px);
   white-space: normal;
   text-align: right;
-  background: rgba(0, 0, 0, 0.55);
+  /* Bug real relatado pelo usuário com screenshot (lab-180, fora do fluxo normal de lab): "o
+     painel de FPS ocupa muito espaço" no celular — `font-size`/`padding` fixos não encolhiam com
+     a tela (mesmo problema já resolvido no resto do HUD via `clamp(mín, vmin, máx)`, labs 57-59/
+     120), então numa tela estreita esse texto (5 campos, já quebrado em várias linhas) dominava
+     boa parte da área jogável. `vmin` acompanha o lado mais apertado da tela, encolhendo em
+     qualquer orientação; mais transparente também (0.55 → 0.4), no mesmo espírito do pedido do
+     usuário pros botões de toque abaixo.
+  */
+  background: rgba(0, 0, 0, 0.4);
   color: #7CFC9A;
   font-family: monospace;
-  font-size: 0.7rem;
-  padding: 0.25rem 0.5rem;
+  font-size: clamp(0.5rem, 1.7vmin, 0.7rem);
+  padding: clamp(0.15rem, 0.6vmin, 0.25rem) clamp(0.3rem, 1vmin, 0.5rem);
   border-radius: 6px;
   pointer-events: none;
 }
@@ -973,8 +997,10 @@ a.nickname-generate-btn {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  /* Mesmo pedido de transparência do `.joystick-base` acima (lab-180, fora do fluxo normal de
+     lab) — tamanho intocado, só a opacidade do preenchimento/borda reduzida. */
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.4);
   color: white;
   font-weight: 700;
   /* lab-150 (achado do Copilot, PRs #2/#5): agora é um <button> de verdade, não um <div> — reseta
