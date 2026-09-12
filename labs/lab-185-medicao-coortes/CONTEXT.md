@@ -444,6 +444,34 @@ puro e texto de documentação). Reverificado ao vivo contra produção: `migrat
 rodado inteiro dentro de uma transação com `rollback` (nunca comitado) pra confirmar que o novo
 bloco de precondição não quebra nada no estado atual do banco.
 
+**10ª rodada** — 2 achados reais, os dois na PRÓPRIA precondição que a 9ª rodada tinha acabado de
+adicionar (a defesa ainda tinha 2 brechas):
+
+- **A checagem de "tá tudo nulo" não tinha lock nenhum contra escrita concorrente** — entre o
+  `select count(*)` (dados) e o `alter table ... drop column` pegar seu próprio lock exclusivo
+  sozinho no final, uma transação concorrente podia fazer um `insert`/`update` escrevendo um valor
+  novo numa das 7 colunas — a migração dropava esse valor recém-escrito sem NUNCA ter visto ele,
+  porque a checagem já tinha rodado antes dele existir. Corrigido com
+  `lock table player_identities in access exclusive mode` logo no INÍCIO do arquivo (antes de
+  qualquer checagem) — o mesmo modo de lock que o `drop column` já ia pedir de qualquer jeito no
+  final, só que pedido mais cedo, bloqueando QUALQUER leitor/escritor concorrente até o fim da
+  transação inteira (checagem + drop acontecem sob o mesmo lock, sem brecha no meio).
+- **A checagem só tratava 2 dos 3 estados possíveis (0 colunas / 7 colunas), não o terceiro
+  (schema parcial, 1-6 colunas)** — teoricamente impossível NA HISTÓRIA REAL deste incidente (a
+  migração que criava as 7 colunas era uma única instrução atômica, nunca aplicaria só parte
+  delas), mas o arquivo, tomado isoladamente, não devia confiar nisso: se `colunas_existentes`
+  desse 1-6, o `execute` da checagem de dados ia bater num erro genérico do Postgres ("coluna não
+  existe") pra uma das colunas faltando, em vez de uma mensagem clara explicando o problema.
+  Corrigido com um `elsif colunas_existentes < 7` explícito que aborta com uma mensagem específica
+  ANTES de tentar ler qualquer coluna.
+
+Verificação desta rodada: `npx tsc --noEmit` limpo; `npm run test` 147/147 (sem teste novo).
+Reverificado ao vivo contra produção: `migrations/0012_...sql` (versão com o lock e os 3 estados
+explícitos) rodado inteiro dentro de uma transação com `rollback` (nunca comitado) — confirmado que
+continua rodando limpo no estado atual do banco (0 colunas, `lock table` não impede nada porque
+ninguém mais estava escrevendo na tabela durante o teste, e o `return` antecipado é atingido antes
+de qualquer checagem de dado).
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de

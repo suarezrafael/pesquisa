@@ -10,22 +10,26 @@
 -- em produção antes) usa uma única coluna `equipped_look jsonb`, não colunas separadas por eixo.
 -- Confirmado por busca em todo `src/`: zero referências a qualquer um desses 7 nomes de coluna.
 --
--- Contra o banco de PRODUÇÃO deste projeto, já conferimos manualmente (`information_schema` +
--- leitura direta da tabela) que as 7 colunas estavam 100% `NULL` antes de rodar esta migração ali —
--- nenhum código nunca escreveu nelas desde que a 0007 errada foi aplicada minutos antes. Mas essa
--- verificação manual não vale pra QUALQUER outro ambiente que rode este arquivo (um clone novo, um
--- ambiente de staging, uma restauração de disaster-recovery que reaplica tudo do zero) — achado do
--- review automático do Copilot (PR #55, 9ª rodada): um `drop column if exists` cego não prova que
--- não há dado nem consumidor externo nesses campos em OUTRO lugar.
+-- Contra o banco de PRODUÇÃO deste projeto, já conferimos manualmente que as 7 colunas estavam
+-- 100% `NULL` antes de rodar esta migração ali. Mas isso não vale pra QUALQUER outro ambiente que
+-- rode este arquivo (clone novo, staging, disaster-recovery do zero) — daí a precondição abaixo
+-- (achado do review automático do Copilot, PR #55, 9ª/10ª rodadas), com 2 camadas de segurança:
 --
--- O arquivo `0007_player_appearance.sql` que criava essas 7 colunas NUNCA foi commitado nesta
--- branch (era só um arquivo solto local) — então num clone novo/CI/ambiente que nunca teve esse
--- acidente, as colunas simplesmente NÃO EXISTEM, e o bloco abaixo precisa reconhecer isso sem
--- quebrar (checar `information_schema.columns` antes de tentar ler as colunas, em vez de assumir
--- que elas existem). Só quando TODAS as 7 existem é que checamos se alguma tem valor não-nulo —
--- nesse caso a migração inteira aborta (dentro da mesma transação de `migrate.mjs`, nada fica pela
--- metade) em vez de confiar cegamente que o estado observado numa única aplicação vale em todo
--- lugar.
+-- 1) `lock table ... in access exclusive mode` ANTES de checar qualquer coisa — mesmo modo de
+--    lock que `alter table ... drop column` já pediria de qualquer forma no final desta mesma
+--    transação, só que pedido mais cedo. Isso bloqueia QUALQUER outro leitor/escritor na tabela
+--    (inclusive um `insert`/`update` concorrente) até este `commit`/`rollback` — sem isso, um
+--    escritor concorrente podia gravar um valor nas colunas DEPOIS da checagem de "tá tudo nulo" e
+--    ANTES do `drop column` pegar o lock exclusivo sozinho, e a migração dropava esse valor recém
+--    escrito sem nunca ter visto ele (achado da 10ª rodada).
+-- 2) A checagem de quantas das 7 colunas existem trata os 3 estados possíveis EXPLICITAMENTE — 0
+--    (nenhuma existe, ambiente nunca teve o acidente, ex.: todo clone novo desta branch — não faz
+--    nada), 7 (todas existem, checa se alguma tem valor não-nulo antes de dropar), e qualquer outro
+--    número de 1 a 6 (schema parcial/inesperado — aborta com mensagem clara em vez de deixar o
+--    `execute` da checagem de dados bater num erro genérico de "coluna não existe" pra uma coluna
+--    que faltou, achado também da 10ª rodada).
+lock table player_identities in access exclusive mode;
+
 do $$
 declare
   colunas_existentes int;
@@ -44,6 +48,8 @@ begin
     -- Ambiente onde a 0007 errada nunca foi aplicada (todo clone novo desta branch) — nada a
     -- dropar, nada a checar.
     return;
+  elsif colunas_existentes < 7 then
+    raise exception 'Migração 0012 abortada: esperava 0 ou 7 das 7 colunas órfãs em player_identities, encontrou %. Schema parcial/inesperado — investigue manualmente antes de rodar esta migração, não assuma que é seguro completar o drop.', colunas_existentes;
   end if;
 
   execute '
