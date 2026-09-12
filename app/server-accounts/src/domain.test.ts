@@ -265,6 +265,16 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
   it('aceita o evento de interação de planeta do lab-179', () => {
     expect(isValidProductEventType('planet_interaction_completed')).toBe(true)
   })
+
+  // Achado do review automático do Copilot (PR #59): os testes de `isValidLearningChallengeKind`
+  // cobriam só o `kind`, nunca confirmavam que os 2 tipos de evento do lab-180 de fato entraram
+  // no allowlist — uma remoção acidental ali faria `POST /events` devolver 400 pros dois
+  // silenciosamente, com os testes de `kind` continuando verdes (eles não passam por
+  // `isValidProductEventType`).
+  it('aceita os 2 eventos de missão ambiental do lab-180', () => {
+    expect(isValidProductEventType('learning_challenge_started')).toBe(true)
+    expect(isValidProductEventType('learning_challenge_completed')).toBe(true)
+  })
 })
 
 describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {

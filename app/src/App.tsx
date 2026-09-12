@@ -294,8 +294,16 @@ function GameApp() {
   // Missões ambientais (lab-180) — `World3D.tsx` já sorteou a missão do tipo certo pro landmark;
   // aqui só abre o modal e dispara `learning_challenge_started` (nomes exatos do documento,
   // ver `productAnalytics.ts`).
+  //
+  // Achado do review automático do Copilot (PR #59): esta também é uma abertura de missão — uma
+  // criança que começa a sessão por um landmark em vez de uma escolinha (`handleSelectQuest`)
+  // nunca disparava `trackFirstLearningChallenge()`, ficando de fora do funil de ativação de 10
+  // minutos (lab-164). `trackFirstLearningChallenge` já é idempotente (só dispara uma vez por
+  // sessão), então chamar aqui também é seguro mesmo se a criança já tiver aberto uma escolinha
+  // antes.
   function handleOpenEnvironmentalChallenge(quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque') {
     setActiveEnvironmentalChallenge({ quest, kind })
+    trackFirstLearningChallenge()
     trackLearningChallengeStarted(kind)
   }
 

@@ -1,9 +1,12 @@
 # Laboratório atual
 
-Em andamento: labs/lab-180-missoes-ambientais/ — missões ambientais de aprendizagem (ponte/lógica,
-posto de abastecimento do foguete/matemática, placa/leitura). Origem:
-`docs/growth-retention-monetization-backlog.md`, "Lab 180", próximo item recomendado após o
-lab-179. Ver `labs/lab-180-missoes-ambientais/FEATURES.md`.
+Implementação concluída, aguardando merge: labs/lab-180-missoes-ambientais/ — missões ambientais
+de aprendizagem (ponte/lógica, posto de abastecimento do foguete/matemática, placa/leitura).
+Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 180", próximo item recomendado após
+o lab-179. Código implementado e verificado ao vivo (ver `labs/lab-180-missoes-ambientais/CONTEXT.md`
+pro detalhe completo); PR #59 aberta contra `main`, CI verde, 1 rodada de review automático do
+Copilot já com achados corrigidos — falta confirmar rodada limpa, mesclar e confirmar deploy antes
+de virar "Último concluído" abaixo.
 
 Último concluído: labs/lab-179-planetas-interativos/ — planetas interativos v1. Origem:
 `docs/growth-retention-monetization-backlog.md`, "Lab 179", prioridade P1 — próximo item
