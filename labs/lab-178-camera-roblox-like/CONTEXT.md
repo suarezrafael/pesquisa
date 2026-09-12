@@ -64,8 +64,11 @@ encontrados:
   zoom`) — um dolly de verdade (câmera se aproxima/afasta ao longo do mesmo eixo visual), não uma
   distorção de ângulo. Mesmo espírito do zoom de casa, que escala o RAIO esférico completo
   (`baseRadius * houseCameraZoomRef.current`) preservando o ângulo de pitch.
-- **`avoidCameraClipping` como função pura e reaproveitável, não uma correção específica de cada
-  modo** — qualquer uma das 3 câmeras externas (a pé, carro, foguete) podia clipar em algum tipo de
+- **`avoidCameraClipping` como helper reaproveitável, não uma correção específica de cada modo**
+  (achado real do review automático do Copilot, PR #54, 9ª rodada: chamá-la de "função pura" era
+  impreciso — ela lê `havokPlugin` do escopo externo e muda `lastCameraClipWasObstructed` como
+  efeito colateral, então não é pura no sentido estrito; corrigido pra "helper reaproveitável")
+  — qualquer uma das 3 câmeras externas (a pé, carro, foguete) podia clipar em algum tipo de
   geometria (terreno do planeta principal, morro de planeta secundário) e reimplementar a mesma
   lógica 3 vezes seria a mesma classe de duplicação já corrigida no lab-176 (`disposeMeshGroup`)
   e no lab-177 (`PhysicsShapeType.MESH` reaproveitado em vez de aproximações separadas por caso).
