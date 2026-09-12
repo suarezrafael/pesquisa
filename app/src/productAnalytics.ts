@@ -174,3 +174,15 @@ export function trackCosmeticEquipped(slot: string): void {
 export function trackPlanetTravelCompleted(toPlanetId: string): void {
   trackEvent('planet_travel_completed', { toPlanetId })
 }
+
+// lab-179 ("Planetas interativos v1") — UM evento genérico pra qualquer interação dentro de um
+// planeta-destino, em vez de um evento por tipo (diferente do padrão do lab-185): a métrica
+// esperada pelo backlog (`planet_interactions_per_session`) já é uma contagem AGREGADA por tipo,
+// e um evento só com `kind` em `meta` deixa contar "quantos TIPOS distintos de interação uma
+// criança já fez num planeta" com uma query simples (`count(distinct meta->>'kind')`) — que é
+// literalmente o critério de aceite do backlog ("pelo menos 3 interações por planeta"). `kind` é
+// um valor de um conjunto FIXO no código-fonte (nunca texto livre), validado no servidor
+// (`isValidPlanetInteractionKind`, `domain.ts`) mesmo espírito de `slot`/`toPlanetId` do lab-185.
+export function trackPlanetInteractionCompleted(planetId: string, kind: string): void {
+  trackEvent('planet_interaction_completed', { planetId, kind })
+}

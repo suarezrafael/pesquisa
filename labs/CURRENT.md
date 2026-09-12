@@ -1,6 +1,27 @@
 # Laboratório atual
 
-Último concluído: labs/lab-185-medicao-coortes/ — medição de coortes de retenção e qualidade.
+Último concluído: labs/lab-179-planetas-interativos/ — planetas interativos v1. Origem:
+`docs/growth-retention-monetization-backlog.md`, "Lab 179", prioridade P1 — próximo item
+recomendado no `CONTEXT.md` do lab-185. Investigação prévia achou que 6 dos 7 planetas-destino
+já tinham 3 interações reais (cartão-postal colecionável, baú de tesouro, escolinha de astronomia)
+sem NENHUMA instrumentada; Marte (único sem baú/escolinha) ganhou um segredo visual novo (sonda
+espacial escondida) pra chegar a 3. Evento genérico `planet_interaction_completed`
+(`meta: { planetId, kind }`) em vez de 1 evento por tipo — `kind` allowlist:
+`collectible`/`actionable_object`/`educational_quiz`/`visual_secret`. `weeklyFunnel.planetInteractionCompleted`
+em `GET /admin/metrics`. `npx tsc -b`/`--noEmit` limpos; testes: app 181/181 (3 novos,
+`applyPlanetSecretFound`), server-accounts 144/144 (3 novos, `isValidPlanetInteractionKind` +
+allowlist). `npm run build` limpo. **Merge confirmado**: PR #56 mesclada em `main` no commit
+`fcb2d5b` (2026-09-12, squash), depois de 3 rodadas de review automático do Copilot — todos os
+achados reais corrigidos e verificados ao vivo contra produção. Verificação num navegador real
+ficou bloqueada por um problema de ambiente desta sessão (Vite dev optimizer travando mesmo no
+baseline sem as mudanças deste lab, ver `CONTEXT.md` do lab pro diagnóstico completo) — compensado
+com `npm run build` limpo e revisão manual cuidadosa do código 3D novo (achou e corrigiu um bug
+real de orientação, `MeshBuilder.CreateDisc`). CI de `main` verde nos 3 workflows; deploy de
+produção confirmado (Vercel + Worker `server-accounts`) — `GET /admin/metrics` respondeu com
+`weeklyFunnel.planetInteractionCompleted` e os 4 guardrails presentes. Ver
+`labs/lab-179-planetas-interativos/CONTEXT.md`.
+
+Antes desse: labs/lab-185-medicao-coortes/ — medição de coortes de retenção e qualidade.
 Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 185", prioridade P0/P1 — confirmado
 com o usuário via `AskUserQuestion` como o próximo lab (em vez de pular pro Lab 179) depois de
 checar que câmera (lab-178), lojinha (lab-176) e planetas não tinham nenhum evento de analytics.

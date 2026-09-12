@@ -22,6 +22,7 @@ import {
   isValidBadgeList,
   isValidCosmeticSlot,
   isValidDestinationPlanetId,
+  isValidPlanetInteractionKind,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
   sanitizeHouseFurnitureIds,
@@ -258,6 +259,10 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
     expect(isValidProductEventType('camera_recenter_used')).toBe(true)
     expect(isValidProductEventType('cosmetic_equipped')).toBe(true)
     expect(isValidProductEventType('planet_travel_completed')).toBe(true)
+  })
+
+  it('aceita o evento de interação de planeta do lab-179', () => {
+    expect(isValidProductEventType('planet_interaction_completed')).toBe(true)
   })
 })
 
@@ -643,6 +648,22 @@ describe('isValidDestinationPlanetId (lab-185, 2ª rodada do review da PR #55)',
     expect(isValidDestinationPlanetId('')).toBe(false)
     expect(isValidDestinationPlanetId(123)).toBe(false)
     expect(isValidDestinationPlanetId(undefined)).toBe(false)
+  })
+})
+
+describe('isValidPlanetInteractionKind (lab-179, "Planetas interativos v1")', () => {
+  it('aceita as 4 categorias de interação conhecidas', () => {
+    expect(isValidPlanetInteractionKind('collectible')).toBe(true)
+    expect(isValidPlanetInteractionKind('actionable_object')).toBe(true)
+    expect(isValidPlanetInteractionKind('educational_quiz')).toBe(true)
+    expect(isValidPlanetInteractionKind('visual_secret')).toBe(true)
+  })
+
+  it('recusa categoria fora do conjunto conhecido', () => {
+    expect(isValidPlanetInteractionKind('npc_dialogue')).toBe(false)
+    expect(isValidPlanetInteractionKind('')).toBe(false)
+    expect(isValidPlanetInteractionKind(123)).toBe(false)
+    expect(isValidPlanetInteractionKind(null)).toBe(false)
   })
 })
 

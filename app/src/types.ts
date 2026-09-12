@@ -69,6 +69,14 @@ export interface Progress {
   // que resetam a cada sessão, e do pote de moedas de Marte, que reseta a cada visita): é uma
   // descoberta rara e permanente, não um bônus repetível por visita.
   foundTreasureChestIds: string[]
+  // Segredos visuais escondidos por planeta (lab-179, "Planetas interativos v1") — mesmo espírito
+  // de `foundTreasureChestIds` (descoberta rara e PERMANENTE, não repetível), categoria distinta
+  // do backlog ("segredo visual"): sem moeda embutida no ato de achar por si só sendo obrigatória
+  // (`data/planetSecrets.ts` decide caso a caso), só a descoberta em si já conta como a interação.
+  // v1 só popula pra `marte` (único planeta sem baú/escolinha, precisava de uma 3ª interação), mas
+  // o array é por id (não um boolean fixo) pra não precisar de outra migração de tipo se um lab
+  // futuro adicionar segredos a mais planetas.
+  foundPlanetSecretIds: string[]
   // Combo de respostas certas seguidas (lab-132, pedido do usuário: "combo de respostas certas
   // seguidas") — cresce a cada resposta certa GENUÍNA de missão real (principal ou de planeta;
   // nunca quiz surpresa, que não é idempotente por id e seria fácil de farmar), zera ao fechar

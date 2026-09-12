@@ -30,6 +30,7 @@ import {
   isValidBadgeList,
   isValidCosmeticSlot,
   isValidDestinationPlanetId,
+  isValidPlanetInteractionKind,
   isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
@@ -454,6 +455,15 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   if (type === 'planet_travel_completed' && !isValidDestinationPlanetId(metaObjForValidation.toPlanetId)) {
     return new Response(null, { status: 400 })
   }
+  // lab-179 ("Planetas interativos v1") — mesmo raciocínio acima: `planet_interaction_completed`
+  // não tem sinal nenhum sem `planetId`/`kind` válidos (é literalmente do que a métrica é feita),
+  // então recusa o evento inteiro em vez de gravar com `meta: null`.
+  if (
+    type === 'planet_interaction_completed' &&
+    (!isValidDestinationPlanetId(metaObjForValidation.planetId) || !isValidPlanetInteractionKind(metaObjForValidation.kind))
+  ) {
+    return new Response(null, { status: 400 })
+  }
 
   // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
   // errado — os outros tipos LEGADOS (documentados em `docs/event-catalog.md` com `meta` livre ou
@@ -471,6 +481,9 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       safeMeta = { slot: metaObj.slot }
     } else if (type === 'planet_travel_completed') {
       safeMeta = { toPlanetId: metaObj.toPlanetId }
+    } else if (type === 'planet_interaction_completed') {
+      // já validado acima — só as 2 chaves permitidas sobrevivem.
+      safeMeta = { planetId: metaObj.planetId, kind: metaObj.kind }
     } else if (type === 'camera_recenter_used') {
       // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
       // (`docs/event-catalog.md`) não documenta NENHUM campo de `meta` — sem este branch, caía no
@@ -1700,6 +1713,14 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     cameraRecenterUsed: weeklyDevices('camera_recenter_used'),
     cosmeticEquipped: weeklyDevices('cosmetic_equipped'),
     planetTravelCompleted: weeklyDevices('planet_travel_completed'),
+    // lab-179 — mesma convenção do resto do funil: `weeklyDevices` conta dispositivos ÚNICOS com
+    // pelo menos 1 interação na semana (`count(distinct device_id)`) — mede ALCANCE, não FREQUÊNCIA
+    // nem SESSÃO. Achado do review automático da PR #56, 1ª rodada: isso NÃO é literalmente
+    // `planet_interactions_per_session` (o nome da métrica no backlog) — uma métrica por sessão
+    // exigiria agrupar por sessão, que este endpoint não faz hoje (nenhum evento carrega um id de
+    // sessão). Mesmo espírito de `cameraRecenterUsed` (lab-185): documentar a limitação em vez de
+    // construir uma métrica de sessão nova só pra este campo.
+    planetInteractionCompleted: weeklyDevices('planet_interaction_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,
@@ -1770,6 +1791,14 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
         ' device_id é escolhido pelo próprio client sem autenticação, então nada impede gerar' +
         ' um UUID novo por requisição pra inflar essas contagens (o rate limit por IP em' +
         ' /events limita a velocidade do abuso, não a possibilidade dele).',
+      // achado do review automático do Copilot (2ª rodada, PR #56) — a limitação já estava
+      // documentada em comentário de código, mas isso não ajuda quem só consome a resposta da API
+      // sem ler o código-fonte (o próprio motivo de `guardrails` existir). Repetida aqui.
+      '`weeklyFunnel.planetInteractionCompleted` mede ALCANCE semanal (dispositivos únicos com' +
+        ' pelo menos 1 interação na semana), não uma contagem por SESSÃO — um dispositivo com 1' +
+        ' interação e um com 50 contam igual, e não é literalmente a métrica' +
+        ' "planet_interactions_per_session" citada no backlog (nenhum evento carrega id de sessão' +
+        ' hoje pra permitir esse agrupamento).',
     ],
   })
 }
