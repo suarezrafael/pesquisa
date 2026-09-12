@@ -18,9 +18,15 @@ atualizada por quem adicionar o próximo.
 Todo evento é enviado por `app/src/productAnalytics.ts` (`trackEvent`, chamado pelas funções
 exportadas abaixo) via `POST /events` pro Worker (`app/server-accounts/src/index.ts`,
 `handleTrackEvent`), gravado na tabela `product_events` (`device_id`, `event_type`, `occurred_at`,
-`meta` opcional), e só é aceito se o tipo estiver na allowlist `PRODUCT_EVENT_TYPES`
+`meta` opcional, `received_at`), e só é aceito se o tipo estiver na allowlist `PRODUCT_EVENT_TYPES`
 (`app/server-accounts/src/domain.ts`) — um tipo desconhecido é recusado com 400, nunca vira uma
-linha nova e imprevista na tabela.
+linha nova e imprevista na tabela. `occurred_at` é o instante que o CLIENT alega (validado só
+quanto à plausibilidade, `isPlausibleOccurredAt`, lab-185 6ª rodada do review da PR #55 — recusa o
+evento se estiver fora de ~48h de "agora"); `received_at` é preenchido pelo SERVIDOR
+(`default now()`, coluna já existente desde `migrations/0001_baseline.sql`, nunca vem do client) —
+D0/D1/D7, `cohortComparison` e a janela "últimos 7 dias" do `weeklyFunnel` usam `received_at`, não
+`occurred_at`, justamente pra não depender de um relógio que o client controla (achado do review da
+PR #55, 7ª rodada).
 
 ## Garantia de privacidade (vale pra TODOS os eventos abaixo, sem exceção)
 
@@ -75,9 +81,16 @@ linha nova e imprevista na tabela.
 
 Todo evento deste catálogo agrega por **`device_id`** (aparelho), nunca por perfil/criança —
 consolidando aqui uma limitação que já aparecia espalhada em notas por evento (ex.: `house_visited`
-abaixo). Não existe hoje um conceito de "perfil anônimo" agregável separado do aparelho: mesmo
-`player_identities` (lab-159, usado pro social) é opcional e não está amarrado a nenhum evento de
-`product_events`. Consequências práticas de ler qualquer número deste documento:
+abaixo). Não existe hoje um conceito de "perfil anônimo" agregável separado do aparelho, e nenhum
+CÓDIGO deste Worker faz join nenhum entre eventos e identidade. Mas atenção — isso é diferente de
+dizer que os dois são impossíveis de correlacionar: `player_identities` (lab-159, migração 0005,
+usada pro social) guarda o MESMO `device_id` de `product_events` na própria tabela, então um
+administrador com acesso direto ao banco PODE, em tese, fazer esse join manualmente (achado do
+review da PR #55, 7ª rodada — a versão anterior deste parágrafo dizia "sem NENHUM vínculo", uma
+garantia de privacidade incorreta). Nenhum endpoint do Worker expõe esse cruzamento hoje — é uma
+limitação de acesso ao banco (mesmo modelo de confiança do resto deste Worker: quem tem
+`DATABASE_URL` de produção já pode ler qualquer tabela), não uma garantia de anonimato
+matemática. Consequências práticas de ler qualquer número deste documento:
 
 - Um aparelho compartilhado por dois perfis (irmãos no mesmo tablet, lab-108) conta como **um único
   dispositivo**, mesmo que sejam duas crianças diferentes.

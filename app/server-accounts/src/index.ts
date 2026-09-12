@@ -437,10 +437,11 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     return new Response(null, { status: 400 })
   }
   if (!isValidProductEventType(type)) return new Response(null, { status: 400 })
-  // achado do review automático do Copilot (6ª rodada, PR #55): sem isto, qualquer client podia
-  // mandar um `occurredAt` retroativo e fabricar `day0`/entrada-retorno de coorte em
-  // `newDevicesToday`/`cohortComparison` (ambos novos deste lab, derivados de
-  // `min(occurred_at)` por dispositivo). Ver comentário de `isPlausibleOccurredAt` em `domain.ts`.
+  // Sanidade sobre o `occurredAt` que o CLIENT alega — `handleAdminMetrics` abaixo usa
+  // `received_at` (coluna do servidor, não este campo) pra D0/D1/D7/coorte/janela semanal, então
+  // isto não protege métrica nenhuma diretamente; é só pra não gravar um valor absurdo (ex.: ano
+  // 3000) num campo que ainda é exibido/gravado como veio do client. Ver comentário completo de
+  // `isPlausibleOccurredAt` em `domain.ts` (achado do review automático do Copilot, 6ª/7ª rodadas).
   if (!isPlausibleOccurredAt(occurredAt)) return new Response(null, { status: 400 })
 
   // `cosmetic_equipped`/`planet_travel_completed` (lab-185): diferente de `session_end` (onde o
@@ -1483,6 +1484,11 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
 
   // D1/D7 retention: de todo dispositivo cujo PRIMEIRO evento foi há pelo menos 1 (ou 7) dias,
   // qual fração teve QUALQUER evento novo exatamente 1 (ou 7) dias depois desse primeiro dia.
+  // `day0`/retorno usam `received_at` (carimbo do SERVIDOR, `default now()` desde
+  // `migrations/0001_baseline.sql`), nunca `occurred_at` (alegado pelo client) — achado do review
+  // automático do Copilot, 7ª rodada: usar `occurred_at` deixava um client anônimo fabricar
+  // entrada/retorno de coorte só mandando timestamps arbitrários, sem nenhuma conta em tempo real
+  // precisar acontecer de verdade.
   // Achado real do review automático do Copilot (1ª rodada): rodar esta CTE duas vezes (uma pra
   // retenção global, outra pra comparação de coorte) dobra o agrupamento/joins sobre
   // `product_events` a cada relatório com `cohortSplitDate`. 3ª rodada: mas SEMPRE calcular os 8
@@ -1519,7 +1525,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
   if (cohortSplitDateParam === null) {
     const [row] = (await sql`
       with first_seen as (
-        select device_id, min(occurred_at)::date as day0
+        select device_id, min(received_at)::date as day0
         from product_events
         group by device_id
       ),
@@ -1529,7 +1535,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       d1_returned as (
         select distinct fs.device_id, fs.day0
         from d1_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 1
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at::date = fs.day0 + 1
       ),
       d7_eligible as (
         select device_id, day0 from first_seen where day0 <= current_date - 7
@@ -1537,7 +1543,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       d7_returned as (
         select distinct fs.device_id, fs.day0
         from d7_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 7
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at::date = fs.day0 + 7
       )
       select
         (select count(*) from d1_eligible) as d1_eligible,
@@ -1552,7 +1558,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
   } else {
     const [row] = (await sql`
       with first_seen as (
-        select device_id, min(occurred_at)::date as day0
+        select device_id, min(received_at)::date as day0
         from product_events
         group by device_id
       ),
@@ -1562,7 +1568,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       d1_returned as (
         select distinct fs.device_id, fs.day0
         from d1_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 1
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at::date = fs.day0 + 1
       ),
       d7_eligible as (
         select device_id, day0 from first_seen where day0 <= current_date - 7
@@ -1570,7 +1576,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       d7_returned as (
         select distinct fs.device_id, fs.day0
         from d7_eligible fs
-        join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 7
+        join product_events pe on pe.device_id = fs.device_id and pe.received_at::date = fs.day0 + 7
       )
       select
         (select count(*) from d1_eligible) as d1_eligible,
@@ -1652,7 +1658,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
   const weeklyEventCountRows = (await sql`
     select event_type, count(distinct device_id)::int as devices
     from product_events
-    where occurred_at >= now() - interval '7 days'
+    where received_at >= now() - interval '7 days'
     group by event_type
   `) as { event_type: string; devices: number }[]
   const weeklyEventDevices = new Map(weeklyEventCountRows.map((row) => [row.event_type, row.devices]))

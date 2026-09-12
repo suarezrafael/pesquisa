@@ -315,12 +315,74 @@ real): `occurredAt` de 2020 e de 2030 confirmados devolvendo 400 e NUNCA virando
 grava normalmente; `GET /admin/metrics` continua respondendo normalmente depois da mudança
 (`newDevicesToday`/`totalDevices` bateram com o esperado).
 
+**7ª rodada** — a mais substancial de todas: a "solução" da 6ª rodada (janela de plausibilidade)
+tinha ficado incompleta, mais 5 achados de documentação — 6 reais no total:
+
+- **A janela de 48h da 6ª rodada não fechava o exploit de verdade** — um client ainda podia mandar
+  um evento com `occurredAt` de "ontem" (dentro da janela de 48h, aceito) pra um `device_id` NOVO, e
+  logo em seguida outro evento com `occurredAt` de "agora" — como `day0` vinha de
+  `min(occurred_at)`, isso fabricava `day0 = ontem` pro dispositivo, e o segundo evento contava
+  IMEDIATAMENTE como "retorno D1", sem a criança ter voltado de verdade (os dois eventos aconteceram
+  segundos um do outro). Pior ainda: **`product_events.received_at` (carimbo do SERVIDOR,
+  `default now()`) já existia desde `migrations/0001_baseline.sql` — a justificativa da 6ª rodada
+  pra não usá-lo ("exigiria migração") estava simplesmente ERRADA**, um achado de raiz que também
+  invalidava parte do raciocínio anterior. Corrigido de vez: `handleAdminMetrics` agora usa
+  `received_at`, não `occurred_at`, pra `day0`/D1/D7/`cohortComparison`/janela semanal do
+  `weeklyFunnel` — como `received_at` é sempre o instante REAL em que o servidor recebeu a
+  requisição, os dois eventos do exemplo acima teriam `received_at` idênticos (segundos um do
+  outro), então `day0` seria HOJE pros dois, nunca "ontem" — fecha o exploit de verdade, sem
+  depender de nenhuma janela de plausibilidade. Confirmado ao vivo (ver abaixo) reproduzindo
+  exatamente esse cenário: `occurred_at` mentindo "ontem", `received_at` mostrando a hora real.
+  `isPlausibleOccurredAt` (6ª rodada) continua existindo como uma segunda camada de sanidade sobre o
+  campo que o client alega (não mais a defesa principal) — reescrevi os comentários em `domain.ts`/
+  `index.ts` pra deixar claro qual campo faz o quê agora.
+- **Abuso residual: `device_id` continua sem autenticação nenhuma** — mesmo com `received_at`,
+  nada impede gerar UUIDs novos à vontade pra inflar `newDevicesToday`/alcance. O revisor
+  corretamente separou isso como um problema DIFERENTE (Sybil/anti-abuso, não fabricação de
+  timestamp) — decidido documentar como pendência aceita (ver seção abaixo) em vez de construir
+  prova-de-dispositivo-real, desproporcional pro volume/risco atual.
+- **`docs/event-catalog.md` dizia que `player_identities` "não está amarrado a nenhum evento" —
+  garantia de privacidade incorreta**: a migração 0005 grava o MESMO `device_id` de
+  `product_events` em `player_identities`, então um admin com acesso ao banco PODE, em tese, fazer
+  join e correlacionar um apelido com o histórico de eventos anônimos — nenhum CÓDIGO faz esse join
+  hoje, mas a garantia documentada era sobre os DADOS, não sobre o código. Corrigido pra distinguir
+  "nenhum endpoint expõe isso" de "impossível de correlacionar" (a segunda afirmação era falsa).
+- **`docs/event-catalog.md` não documentava a existência/papel de `received_at`** — a linha que
+  descreve as colunas de `product_events` só citava `occurred_at`. Corrigido, explicando a
+  distinção client-alega vs. servidor-carimba e qual métrica usa qual campo agora.
+- **Descrição da PR e `CONTEXT.md` ainda citavam `141/141`/10 novos**, defasado desde a 6ª rodada
+  (que já tinha ficado sem sincronizar a descrição da PR de novo — a mesma lição da 5ª rodada não
+  tinha "pegado" na 6ª). Corrigido pra 147/147, 16 novos, e a descrição da PR atualizada de novo.
+
+Verificação desta rodada: `npx tsc --noEmit` limpo; `npm run test` 147/147 (sem teste novo — a
+mudança é só qual coluna a query usa, I/O puro). Reverificado ao vivo contra produção (`wrangler
+dev` porta 8796, banco real): reproduzido o cenário exato do achado (evento 1 com `occurredAt` de
+~20h atrás, evento 2 com `occurredAt` de agora, mesmo `device_id`) — confirmado lendo a tabela de
+volta que `received_at` dos dois ficou a menos de 1 segundo de diferença (a hora REAL em que os
+dois chegaram), enquanto `occurred_at` continuava mostrando a mentira de "ontem" — ou seja, `day0`
+calculado a partir de `received_at` dá HOJE pros dois eventos, não mais "ontem" como daria com
+`occurred_at`; `GET /admin/metrics` sem parâmetro e com `?cohortSplitDate=2026-09-01` devolveram
+exatamente os mesmos números de sempre (76/47/123), confirmando que a troca de coluna não muda
+nada pra tráfego real (onde `occurred_at` e `received_at` já são essencialmente o mesmo instante).
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
   escopo (ver "Fora de escopo" no `FEATURES.md`): resolver isso amarrando eventos a
   `player_identities` é uma mudança de arquitetura maior, não um catálogo/instrumentação. Impacto
   prático: os 3 eventos novos deste lab herdam a MESMA imprecisão já aceita pro resto do funil.
+- **`device_id` é gerado e escolhido inteiramente pelo client, sem autenticação nenhuma** (achado
+  da 7ª rodada do review da PR #55) — mesmo depois de trocar a base de cálculo pra `received_at`
+  (fecha a fabricação de `day0`/retorno com timestamp forjado), nada impede um script malicioso de
+  gerar um UUID novo a cada requisição e inflar `newDevicesToday`/alcance semanal com dispositivos
+  sintéticos que nunca existiram de verdade — o `EVENTS_LIMITER` (rate limit por IP) limita a
+  VELOCIDADE desse abuso, não a possibilidade dele. Resolver isso de verdade exigiria algum tipo de
+  prova de dispositivo real (proof-of-work, atestação, ou exigir uma sessão autenticada antes de
+  contar um device novo) — desproporcional pro volume/risco atual deste jogo (`GET /admin/metrics`
+  já é protegido por segredo e lido manualmente, não alimenta nenhuma decisão automática/financeira
+  hoje). Mesma categoria de limitação estrutural do item anterior (agregação imprecisa por
+  natureza do modelo anônimo) — documentado, não resolvido, coerente com a decisão de escopo já
+  tomada pra "agregação por device" acima.
 - **`activated_at` de assinatura continua sem coluna própria** (pendência do lab-165, não deste
   lab) — `weeklyCommercial` não tem "assinaturas ativadas na semana" por esse motivo, inalterado.
 - **Lab 179 (Planetas interativos v1) vai precisar de eventos PRÓPRIOS de interação** —

@@ -207,18 +207,17 @@ export function isPlausibleSessionDuration(durationMs: unknown): durationMs is n
   return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0 && durationMs <= MAX_PLAUSIBLE_SESSION_DURATION_MS
 }
 
-// lab-185 (achado do review automático do Copilot na PR #55, 6ª rodada): `occurredAt` em
+// lab-185 (achado do review automático do Copilot na PR #55, 6ª/7ª rodadas): `occurredAt` em
 // `POST /events` vem de um client anônimo e não autenticado, sem checagem nenhuma além de "é uma
-// string" — e as métricas novas deste lab (`newDevicesToday`/`cohortComparison`, ambas derivadas
-// de `min(occurred_at)` por dispositivo) tornam mais valioso fabricar um `occurredAt` retroativo
-// pra forjar entrada/retorno numa coorte antiga. `trackEvent` (`productAnalytics.ts`) sempre manda
-// `new Date().toISOString()` no exato instante da chamada — não existe fila offline nem reenvio
-// tardio por design — então um client honesto NUNCA manda um valor fora de uma janela pequena ao
-// redor de "agora" (o suficiente pra cobrir relógio de aparelho desconfigurado/fuso horário
-// errado, não pra cobrir um ano inteiro de história forjada). Resolvido com uma janela de
-// plausibilidade (recusa o evento inteiro, 400) em vez de uma coluna `received_at` nova + migração
-// — mais barato e já fecha o exploit descrito (fabricar um `device_id` com `day0` de anos atrás),
-// sem reescrever toda a base de cálculo de retenção que já existe desde o lab-99.
+// string". A correção DE VERDADE pro risco de fabricar `day0`/retorno de coorte foi trocar, em
+// `handleAdminMetrics` (`index.ts`), toda a base de cálculo de D0/D1/D7/`cohortComparison`/janela
+// semanal do `weeklyFunnel` de `occurred_at` pra `received_at` — coluna que JÁ EXISTIA desde
+// `migrations/0001_baseline.sql` (`default now()`, preenchida pelo Postgres no INSERT, nunca vem
+// do client; a 1ª versão deste comentário dizia por engano que precisaria de uma coluna/migração
+// nova). `isPlausibleOccurredAt` abaixo é só uma segunda camada de sanidade sobre o `occurred_at`
+// que o client ALEGA (ainda gravado, só não mais usado em nenhum cálculo de retenção/funil) —
+// recusa um valor absurdamente fora de "agora" (relógio de aparelho muito errado), mas não é mais
+// a defesa que protege a integridade das métricas de coorte.
 const MAX_OCCURRED_AT_PAST_MS = 48 * 60 * 60 * 1000
 const MAX_OCCURRED_AT_FUTURE_MS = 10 * 60 * 1000
 
