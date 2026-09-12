@@ -18,17 +18,47 @@ atualizada por quem adicionar o próximo.
 Todo evento é enviado por `app/src/productAnalytics.ts` (`trackEvent`, chamado pelas funções
 exportadas abaixo) via `POST /events` pro Worker (`app/server-accounts/src/index.ts`,
 `handleTrackEvent`), gravado na tabela `product_events` (`device_id`, `event_type`, `occurred_at`,
-`meta` opcional), e só é aceito se o tipo estiver na allowlist `PRODUCT_EVENT_TYPES`
+`meta` opcional, `received_at`), e só é aceito se o tipo estiver na allowlist `PRODUCT_EVENT_TYPES`
 (`app/server-accounts/src/domain.ts`) — um tipo desconhecido é recusado com 400, nunca vira uma
-linha nova e imprevista na tabela.
+linha nova e imprevista na tabela. `occurred_at` é o instante que o CLIENT alega — só precisa ser
+uma string (nenhuma checagem de plausibilidade desde a 11ª rodada do review da PR #55: uma versão
+anterior recusava o evento fora de uma janela de ~48h/10min ao redor de "agora", mas depois de
+`received_at` assumir toda a base de cálculo de retenção/funil essa checagem não protegia métrica
+nenhuma e ainda descartava silenciosamente eventos de aparelhos legítimos com relógio
+desconfigurado — subcontagem sem ganho de segurança em troca, revertida). `received_at` é
+preenchido pelo SERVIDOR (`default now()`, coluna já existente desde `migrations/0001_baseline.sql`,
+nunca vem do client) —
+D0/D1/D7, `cohortComparison` e a janela "últimos 7 dias" do `weeklyFunnel` usam `received_at`, não
+`occurred_at`, justamente pra não depender de um relógio que o client controla (achado do review da
+PR #55, 7ª rodada).
 
 ## Garantia de privacidade (vale pra TODOS os eventos abaixo, sem exceção)
 
 - `device_id` é um `crypto.randomUUID()` gerado e guardado só no `localStorage` do aparelho
-  (`getOrCreateDeviceId`, `state/storage.ts`) — sem NENHUM vínculo com nome/apelido/e-mail/família.
+  (`getOrCreateDeviceId`, `state/storage.ts`) — nenhum PAYLOAD/ENDPOINT deste Worker devolve nome,
+  apelido, e-mail ou família junto de um evento ou de um `device_id`. Isso é diferente de dizer que
+  os dois são impossíveis de correlacionar por quem tem acesso direto ao banco — ver a nota sobre
+  `player_identities` na seção "Nível de agregação" abaixo (achado do review da PR #55, 8ª rodada:
+  a versão anterior desta frase dizia "sem NENHUM vínculo", contradizendo essa mesma nota).
 - Nenhum evento carrega nome real, e-mail, resposta de quest, conteúdo de chat, ou qualquer outro
-  dado de identificação da criança. `meta` (quando existe) só carrega números (duração/tempo em ms)
-  ou um id de missão do catálogo público (`questId`) — nunca texto livre.
+  dado de identificação da criança. `meta` (quando existe) só carrega números (duração/tempo em ms),
+  um id de missão do catálogo público (`questId`), ou uma string de um conjunto FIXO e pequeno
+  definido no próprio código-fonte (ex.: `slot` de `cosmetic_equipped`, um entre 7 valores
+  possíveis; `toPlanetId` de `planet_travel_completed`, um entre os poucos ids de planeta-destino
+  do catálogo, lab-185) — nenhum client oficial manda texto livre digitado por ninguém nesses
+  campos, mas nem todo `meta` é validado no SERVIDOR (achado do review da PR #55, 3ª rodada:
+  atenção pra não generalizar demais essa garantia). O que É de fato ENFORÇADO em
+  `handleTrackEvent` (`server-accounts/src/index.ts`) hoje, com tratamento DIFERENTE por campo
+  (achado da 4ª rodada — a 3ª rodada documentou os dois com o mesmo comportamento, mas só
+  `session_end` funciona assim): `durationMs` de `session_end` (desde o lab-99) — um valor
+  implausível grava o evento com `meta: null` em vez do valor recebido, nunca recusa o evento
+  inteiro (a sessão terminou é um sinal válido mesmo com duração suspeita); já `slot`/`toPlanetId`
+  dos 2 eventos do lab-185 — um valor fora do allowlist esperado RECUSA o evento inteiro (400,
+  nunca chega a gravar linha nenhuma), porque pra esses dois o slot/planeta É o sinal inteiro, não
+  um detalhe descartável. `questId` de `quest_completed` e o `meta` dos demais tipos NÃO passam por
+  validação de conteúdo nenhuma — são gravados como o client mandar (defesa em profundidade de
+  "nunca confiar só no client" ainda não
+  se aplica a esses campos; documentado aqui como dívida conhecida, não como garantia).
 - `POST /events` nunca falha o jogo pra criança: toda chamada é `fetch(...).catch(() => {})`
   (`trackEvent`) — se a rede cair ou o Worker estiver fora, o evento simplesmente não é gravado,
   sem interromper nem re-tentar de um jeito visível.
@@ -51,6 +81,34 @@ linha nova e imprevista na tabela.
 | `checkout_started` | `POST /checkout` devolve uma URL válida, antes do redirect pro Stripe (lab-166) | `components/FamilyPortal.tsx`, `Dashboard.handleSubscribe` | — | 1x por tentativa de checkout |
 | `weekly_report_preview_viewed` | Clique em "Ver exemplo do relatório semanal" na tela de proposta de valor (lab-173) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
 | `house_visited` | Clique em "🏠 Visitar casa" no perfil público de um amigo (lab-175) | `App.tsx`, `handleVisitHouse` | — | 1x por clique |
+| `camera_recenter_used` | Clique no botão ⟲ de recentralizar câmera (lab-178) | `world3d/World3D.tsx`, `handleRecenterCamera` | — | 1x por clique |
+| `cosmetic_equipped` | Equipar boné/óculos/cor de roupa-calça-sapato-mochila/estilo de cabelo na lojinha (nunca ao voltar pro padrão — `id === null` pra boné/óculos, ou o próprio item padrão do catálogo, custo 0 e não-exclusivo-assinante, pros eixos de cor/cabelo) (lab-185, 2ª rodada do review da PR #55) | `state/useProfile.ts`, `equipHat`/`equipShirtColor`/`equipPantsColor`/`equipShoeColor`/`equipBackpackColor`/`equipHairShape`/`equipGlasses` | `slot` (`"hat"`, `"shirtColor"`, `"pantsColor"`, `"shoeColor"`, `"backpackColor"`, `"hairShape"`, `"glasses"`) | 1x por equipar |
+| `planet_travel_completed` | Pouso bem-sucedido num planeta-destino ao final de uma viagem de foguete — só na chegada de verdade, não ao desistir no meio e voltar pra origem (lab-185) | `world3d/World3D.tsx`, `landRocket` | `toPlanetId` | 1x por chegada |
+
+## Nível de agregação (lab-185)
+
+Todo evento deste catálogo agrega por **`device_id`** (aparelho), nunca por perfil/criança —
+consolidando aqui uma limitação que já aparecia espalhada em notas por evento (ex.: `house_visited`
+abaixo). Não existe hoje um conceito de "perfil anônimo" agregável separado do aparelho, e nenhum
+CÓDIGO deste Worker faz join nenhum entre eventos e identidade. Mas atenção — isso é diferente de
+dizer que os dois são impossíveis de correlacionar: `player_identities` (lab-159, migração 0005,
+usada pro social) guarda o MESMO `device_id` de `product_events` na própria tabela, então um
+administrador com acesso direto ao banco PODE, em tese, fazer esse join manualmente (achado do
+review da PR #55, 7ª rodada — a versão anterior deste parágrafo dizia "sem NENHUM vínculo", uma
+garantia de privacidade incorreta). Nenhum endpoint do Worker expõe esse cruzamento hoje — é uma
+limitação de acesso ao banco (mesmo modelo de confiança do resto deste Worker: quem tem
+`DATABASE_URL` de produção já pode ler qualquer tabela), não uma garantia de anonimato
+matemática. Consequências práticas de ler qualquer número deste documento:
+
+- Um aparelho compartilhado por dois perfis (irmãos no mesmo tablet, lab-108) conta como **um único
+  dispositivo**, mesmo que sejam duas crianças diferentes.
+- O mesmo perfil jogando em dois aparelhos (tablet + celular) conta como **dois dispositivos**,
+  mesmo sendo uma criança só.
+- Desinstalar/reinstalar o jogo (ou limpar `localStorage`) gera um `device_id` novo — a mesma
+  criança "reaparece" como um dispositivo novo pro sistema.
+- Resolver isso de verdade (amarrar eventos a um perfil estável, não ao aparelho) é uma mudança de
+  arquitetura maior que este catálogo — fora de escopo de qualquer lab de instrumentação até aqui;
+  candidato a lab futuro se a imprecisão virar um problema real de decisão.
 
 ## Qual métrica do documento cada evento alimenta
 
@@ -65,8 +123,27 @@ decisão").
   `time_to_first_control` → `time_to_first_learning_challenge` → `time_to_first_reward` →
   `activation_cycle_completed`, nessa ordem, formam o funil. Lido semanalmente por
   `GET /admin/metrics` → `weeklyFunnel` (lab-165).
-- **Retenção infantil** (D1/D7) — já calculada desde o lab-99 a partir de QUALQUER evento
+- **Retenção infantil** (D0/D1/D7) — já calculada desde o lab-99 a partir de QUALQUER evento
   (`handleAdminMetrics`, `d1Retention`/`d7Retention`), não depende de nenhum evento específico.
+  `newDevicesToday` (D0, lab-185) fecha a lacuna que faltava: dispositivos cujo PRIMEIRO evento é
+  hoje — diferente de `totalDevices`, que é o acumulado desde sempre. **Comparação de coorte
+  antes/depois** (lab-185, critério de aceite do documento): `?cohortSplitDate=YYYY-MM-DD` em
+  `GET /admin/metrics` recalcula d1/d7 separado pra dispositivos com primeiro evento antes vs. a
+  partir dessa data — usar a data de merge/deploy de um lab pra comparar retenção antes/depois dele.
+- **Câmera** (lab-178, medido a partir do lab-185) — `camera_recenter_used` (clicar o botão ⟲ é,
+  per se, o sinal de "câmera não está intuitiva" que o próprio lab-178 já citava como métrica
+  esperada e nunca instrumentou). Lido semanalmente por `weeklyFunnel.cameraRecenterUsed`, que mede
+  ALCANCE — dispositivos únicos com pelo menos 1 clique na semana (`count(distinct device_id)`) —
+  não FREQUÊNCIA: um dispositivo com 1 clique e um com 50 contam igual (achado do review da PR #55,
+  3ª rodada; ver comentário em `index.ts` junto de `weeklyFunnel.cameraRecenterUsed`).
+- **Loja/cosméticos** (lab-176, medido a partir do lab-185) — `cosmetic_equipped` mede engajamento
+  com o loop de customização (não distingue item grátis de pago — ver `AvatarShop.tsx` pra saber
+  quais itens custam moeda). Lido semanalmente por `weeklyFunnel.cosmeticEquipped`.
+- **Planetas** (medido a partir do lab-185, base pro Lab 179 - Planetas interativos v1) —
+  `planet_travel_completed` mede exploração (chegadas reais, não tentativas desistidas no meio do
+  caminho). Lido semanalmente por `weeklyFunnel.planetTravelCompleted`; o Lab 179 deve adicionar
+  eventos próprios de INTERAÇÃO dentro de cada planeta (NPC, mini-puzzle, colecionável), que este
+  lab não cobre.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de

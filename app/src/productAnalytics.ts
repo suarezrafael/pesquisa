@@ -152,3 +152,25 @@ export function trackWeeklyReportPreviewViewed(): void {
 export function trackHouseVisited(): void {
   trackEvent('house_visited')
 }
+
+// lab-185 (docs/growth-retention-monetization-backlog.md, "Lab 185"): câmera, lojinha e planetas
+// não tinham nenhum evento próprio — os 3 abaixo fecham essa lacuna, mesmo padrão de
+// `trackHouseVisited` (cada ocorrência é seu próprio evento, sem limite de "uma vez").
+
+// Botão ⟲ do lab-178 — é literalmente a métrica que aquele lab já prometia medir ("menor uso
+// repetido de recenter", ver seção "Lab 178" do backlog) e nunca instrumentou.
+export function trackCameraRecenterUsed(): void {
+  trackEvent('camera_recenter_used')
+}
+
+// Disparado ao equipar boné/óculos/cor/estilo de cabelo na lojinha (`useProfile.ts`) — sinal de
+// engajamento com o loop de customização, independente de o item ser cosmético grátis ou pago.
+export function trackCosmeticEquipped(slot: string): void {
+  trackEvent('cosmetic_equipped', { slot })
+}
+
+// Disparado na chegada bem-sucedida a um planeta (`landRocket`, `World3D.tsx`) — base pra medir
+// exploração antes do Lab 179 adicionar interações dentro de cada planeta.
+export function trackPlanetTravelCompleted(toPlanetId: string): void {
+  trackEvent('planet_travel_completed', { toPlanetId })
+}

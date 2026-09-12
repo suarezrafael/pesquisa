@@ -185,6 +185,11 @@ const PRODUCT_EVENT_TYPES = new Set([
   // detalhe completo em docs/event-catalog.md) a "visitas por criança" citada no documento, ver
   // app/src/productAnalytics.ts.
   'house_visited',
+  // lab-185 ("Lab 185 - Medição de coortes") — câmera, lojinha e planetas não tinham nenhum
+  // evento próprio, ver app/src/productAnalytics.ts.
+  'camera_recenter_used',
+  'cosmetic_equipped',
+  'planet_travel_completed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -200,6 +205,60 @@ const MAX_PLAUSIBLE_SESSION_DURATION_MS = 4 * 60 * 60 * 1000
 
 export function isPlausibleSessionDuration(durationMs: unknown): durationMs is number {
   return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0 && durationMs <= MAX_PLAUSIBLE_SESSION_DURATION_MS
+}
+
+// lab-185 (achado do review automático do Copilot na PR #55, 6ª/7ª rodadas): `occurredAt` em
+// `POST /events` vem de um client anônimo e não autenticado, sem checagem nenhuma além de "é uma
+// string". A correção DE VERDADE pro risco de fabricar `day0`/retorno de coorte foi trocar, em
+// `handleAdminMetrics` (`index.ts`), toda a base de cálculo de D0/D1/D7/`cohortComparison`/janela
+// semanal do `weeklyFunnel` de `occurred_at` pra `received_at` — coluna que JÁ EXISTIA desde
+// `migrations/0001_baseline.sql` (`default now()`, preenchida pelo Postgres no INSERT, nunca vem
+// do client). A 6ª rodada tinha ADICIONADO uma checagem de plausibilidade (`isPlausibleOccurredAt`,
+// janela de 48h passado/10min futuro) que recusava o evento inteiro (400) fora dessa janela — a
+// 11ª rodada REMOVEU essa checagem de vez: depois da troca pra `received_at`, ela não protegia
+// métrica nenhuma (só o campo decorativo `occurred_at`, nunca mais lido em cálculo nenhum), mas
+// ainda descartava eventos de aparelhos LEGÍTIMOS com relógio desconfigurado (comum o bastante —
+// fuso horário errado sozinho já estoura 10min de folga no futuro) — o client engole o 400
+// silenciosamente (`fetch(...).catch(() => {})`), então isso causava SUBCONTAGEM sistemática sem
+// nenhum ganho de segurança em troca. `occurredAt` voltou a só precisar ser uma string (checagem
+// já feita mais acima em `handleTrackEvent`) — qualquer valor implausível ainda é inofensivo (não
+// alimenta nenhum cálculo), e um valor genuinamente malformado (não parseável como data) já falha
+// sozinho na inserção `timestamptz not null` e é tratado pelo mesmo catch-e-loga que já cobre
+// `device_id` inválido, sem precisar de validação própria nova.
+// lab-185 (review do Copilot na PR #55) — `cosmetic_equipped`/`planet_travel_completed` também
+// mandam `meta` com um valor string, mas de um conjunto FIXO conhecido no código-fonte (nunca
+// texto livre digitado por ninguém, ver docs/event-catalog.md); mesmo espírito de
+// `isPlausibleSessionDuration` acima: valida o único campo que a gente documenta como "conjunto
+// fechado" antes de gravar, em vez de confiar cegamente no que o client mandou.
+const COSMETIC_SLOTS = new Set([
+  'hat',
+  'shirtColor',
+  'pantsColor',
+  'shoeColor',
+  'backpackColor',
+  'hairShape',
+  'glasses',
+])
+
+export function isValidCosmeticSlot(slot: unknown): slot is string {
+  return typeof slot === 'string' && COSMETIC_SLOTS.has(slot)
+}
+
+// Mesmos 7 planetas de `DESTINATION_PLANETS` (app/src/world3d/World3D.tsx) — duplicado aqui de
+// propósito (mesmo motivo de `PRODUCT_EVENT_TYPES` não importar nada do client): o Worker roda
+// isolado do bundle do jogo, sem import cross-projeto viável.
+const DESTINATION_PLANET_IDS = new Set([
+  'marte',
+  'mercurio',
+  'venus',
+  'jupiter',
+  'saturno',
+  'urano',
+  'netuno',
+])
+
+export function isValidDestinationPlanetId(planetId: unknown): planetId is string {
+  return typeof planetId === 'string' && DESTINATION_PLANET_IDS.has(planetId)
 }
 
 // lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de
@@ -405,6 +464,33 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 export function isValidUuid(value: string): boolean {
   return UUID_PATTERN.test(value)
+}
+
+// lab-185 (comparação de coorte antes/depois em `GET /admin/metrics`, `?cohortSplitDate=`) — só
+// `YYYY-MM-DD` (sem hora/fuso, a query compara contra uma coluna `date`). O regex sozinho aceita
+// "2026-02-30"; o `Date.UTC` + re-serialização confere que a data existe de verdade (meses/dias
+// fora do calendário viram outro dia quando o JS "normaliza", daí a comparação de string bater
+// diferente do que foi digitado).
+const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+export function isValidIsoDateOnly(value: string): boolean {
+  if (!ISO_DATE_ONLY_PATTERN.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  // Ano 0000 passa no regex e no `Date`/`setUTCFullYear` (JS aceita ano 0 de boa), mas o Postgres
+  // recusa `'0000-01-01'::date` ("date/time field value out of range") — achado real do review
+  // automático do Copilot, 3ª rodada: sem esta checagem, uma data assim passava na validação aqui
+  // e ainda assim quebrava a query com um erro de SQL feio em vez do 400 documentado.
+  if (year === 0) return false
+  // `Date.UTC(year, ...)` interpreta anos 0-99 como deslocamento a partir de 1900 (comportamento
+  // legado herdado do construtor `Date`) — "0050-01-01" viraria 1950 silenciosamente se
+  // passássemos `year` direto pro `Date.UTC`. `setUTCFullYear` não tem essa interpretação especial
+  // pra nenhum ano, então construímos a data primeiro (com um ano qualquer de 4 dígitos) e só
+  // depois setamos o ano de verdade.
+  const asUtc = new Date(Date.UTC(2000, month - 1, day))
+  asUtc.setUTCFullYear(year)
+  return (
+    asUtc.getUTCFullYear() === year && asUtc.getUTCMonth() === month - 1 && asUtc.getUTCDate() === day
+  )
 }
 
 // lab-160 — um jogador não pode pedir amizade pra si mesmo (o `playerId` guardado localmente é

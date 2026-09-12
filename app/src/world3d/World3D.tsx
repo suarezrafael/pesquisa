@@ -88,7 +88,7 @@ import {
   petStageScale,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
-import { trackFirstControl } from '../productAnalytics'
+import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
@@ -3075,6 +3075,9 @@ export function World3D({
           currentWorldCenter = planet.center
           currentGroundBaseFn = () => planet.radius
           teleportAvatarTo(planet.center, offsetLandingUp(planet.landingUp, planet.radius, 1.8), currentGroundBaseFn)
+          // lab-185: só na chegada de verdade ao destino — desistir no meio do caminho e pousar
+          // de volta na origem (`!arrivedAtDestination`) não é uma "viagem completada".
+          if (arrivedAtDestination) trackPlanetTravelCompleted(arrivedPlanetId)
 
           // Cartão-postal colecionável (lab-141) — concedido na PRIMEIRA chegada de verdade a
           // qualquer planeta-destino (idempotente, `useProgress().collectPostcard` não faz nada
@@ -11258,7 +11261,16 @@ export function World3D({
   // closure de `setup()`, que tem acesso direto aos refs de giro/zoom da câmera e ao estado de
   // dentro/fora de casa.
   function handleRecenterCamera() {
-    ;(sceneRef.current as any)?.__recenterCamera?.()
+    // lab-185 (achado do review automático do Copilot, PR #55, 12ª rodada): `sceneRef.current` é
+    // setado cedo, mas `__recenterCamera` só é registrado depois, dentro do `setup()` assíncrono
+    // (carregamento de assets) — um toque no botão nessa janela virava um no-op silencioso que
+    // MESMO ASSIM registrava `camera_recenter_used`, um falso-positivo. Só dispara o evento quando
+    // a ponte realmente existe e foi chamada de verdade.
+    const recenter = (sceneRef.current as any)?.__recenterCamera
+    if (typeof recenter === 'function') {
+      recenter()
+      trackCameraRecenterUsed()
+    }
   }
 
   // Botão de toque genérico pra ação da tecla E (lab-58, pedido do usuário: "se você estiver no
