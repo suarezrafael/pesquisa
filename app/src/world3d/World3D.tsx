@@ -7747,6 +7747,13 @@ export function World3D({
         // do reset de yaw/pitch/zoom acima.
         pinchPointers.clear()
         pinchStartDistance = 0
+        // Achado real do review automático do Copilot (PR #54, 7ª rodada): faltava o MESMO reset
+        // de arrasto de 1 dedo que `exitHouseInterior` já faz (lab-149) — entrar em casa com um
+        // arrasto de fora em andamento (ex.: apertar E pra entrar com o botão do mouse ainda
+        // pressionado) deixava `cameraDragging`/`outdoorDrag` presos, e o próximo `pointermove`
+        // aplicava giro de FORA (semântica errada) já dentro da sala.
+        cameraDragging = false
+        cameraDragPointerId = null
         currentWorldCenter = HOUSE_INTERIOR_CENTER
         currentGroundBaseFn = () => HOUSE_INTERIOR_RADIUS
         // Teleporte físico seguro (mesmo padrão de `teleportAvatarTo`/saída do carro) — posição

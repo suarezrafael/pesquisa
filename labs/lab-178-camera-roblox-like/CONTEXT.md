@@ -39,12 +39,17 @@ encontrados:
   (perto de `terrainGroundRadial`, reaproveitando o mesmo padrão de `havokPlugin.raycast`) — raycast
   do alvo até a posição DESEJADA da câmera; se algo bloquear no meio do caminho, aproxima a câmera
   até 0,3 unidade antes do ponto de colisão (`Vector3.Lerp(target, desired, safeDistance/fullDistance)`).
-  Aplicada nos mesmos 4 lugares do zoom, todos passando `avatarBody?.body` como `ignoreBody` —
-  achado real do review automático do Copilot (rodada 1): mesmo carro/foguete não tendo colisor
-  físico PRÓPRIO (andam por trajeto/curva fixa), o colisor do AVATAR fica congelado exatamente
-  onde o jogador embarcou (só a figura visual é reparentada no veículo), então um raycast logo
-  depois de embarcar podia acertar essa cápsula abandonada. A câmera do foguete além disso só roda
-  o anti-clipping no CRUZEIRO (`!inLaunchHold && !inLandingFlip`) — perto da plataforma de
+  Aplicada em 3 dos 4 lugares do zoom, todos passando o colisor do avatar como `ignoreBody`
+  (câmera a pé usa o alias local `body`; carro passa `avatarBody?.body` diretamente) — achado real
+  do review automático do Copilot (rodada 1): mesmo carro/foguete não tendo colisor físico PRÓPRIO
+  (andam por trajeto/curva fixa), o colisor do AVATAR fica congelado exatamente onde o jogador
+  embarcou (só a figura visual é reparentada no veículo), então um raycast logo depois de embarcar
+  podia acertar essa cápsula abandonada. **Correção da 7ª rodada de review**: esta frase antes
+  dizia "aplicada nos MESMOS 4 lugares... todos passando `avatarBody?.body`", o que não bate com o
+  código de verdade — o foguete só roda o anti-clipping no CRUZEIRO (`!inLaunchHold &&
+  !inLandingFlip`), NUNCA nas duas pontas de repouso (decolagem/pouso), então só há 3 chamadas
+  ativas por vez, não 4 uniformes. A câmera do foguete só roda o anti-clipping no CRUZEIRO — perto
+  da plataforma de
   lançamento, o raycast quase sempre acertava primeiro o colisor ESTÁTICO da própria plataforma
   (usado só pra detectar "jogador perto, mostrar dica de embarcar"), e a API do Havok só aceita um
   `ignoreBody` por chamada (já ocupado pelo avatar).
