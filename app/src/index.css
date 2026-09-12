@@ -1024,9 +1024,9 @@ a.nickname-generate-btn {
   transform: translateY(calc(-50% + 34px));
 }
 
-/* lab-178 (backlog "câmera Roblox-like fácil", botão de recentralizar) — mesma coluna horizontal
-   do grupo pular/correr (`right: 6.8rem`), mas centralizado na altura da tela, longe de qualquer
-   outro grupo de botões (topo do HUD, pular/correr embaixo, giro de câmera à direita). */
+/* Botão de recentralizar câmera: mesma coluna horizontal do grupo pular/correr
+   (`right: 6.8rem`), mas centralizado na altura da tela, longe de qualquer outro grupo de
+   botões (topo do HUD, pular/correr embaixo, giro de câmera à direita). */
 .touch-action-recenter {
   top: 50%;
   right: 6.8rem;

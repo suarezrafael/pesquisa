@@ -11,11 +11,10 @@ interface TouchActionButtonProps {
   // sem repassar `inert` até aqui, um toque neles continuava movendo/pulando o personagem por
   // baixo de qualquer modal aberto, inclusive o portão parental.
   inert?: boolean
-  // lab-178 (backlog "câmera Roblox-like fácil", "tooltips mínimos quando necessário"): o `label`
-  // visual (emoji/glifo, ex.: "◀") não é um nome acessível descritivo pra leitor de tela nem vira
-  // tooltip nativo pra mouse em desktop — `description`, quando informada, vira `aria-label`
-  // (nome acessível) E `title` (tooltip nativo ao pairar o mouse) de uma vez só. Opcional: botões
-  // cujo `label` já é autodescritivo (ex.: "E" de interagir) podem continuar sem.
+  // O `label` visual (emoji/glifo, ex.: "◀") não é um nome acessível descritivo pra leitor de
+  // tela nem vira tooltip nativo pra mouse em desktop — `description`, quando informada, vira
+  // `aria-label` (nome acessível) E `title` (tooltip nativo ao pairar o mouse) de uma vez só.
+  // Opcional: botões cujo `label` já é autodescritivo (ex.: "E" de interagir) podem continuar sem.
   description?: string
 }
 

@@ -2033,10 +2033,9 @@ export function World3D({
   // o zoom (`houseCameraZoomRef`) que não existiam antes.
   const houseCameraPitchOffsetRef = useRef(0)
   const houseCameraZoomRef = useRef(1)
-  // lab-178 (backlog "câmera Roblox-like fácil", zoom por scroll/pinch): mesmo conceito do zoom
-  // de casa acima, mas cobrindo o resto do jogo (a pé, carro, foguete) — ref separado porque a
-  // distância/limites padrão lá fora são bem diferentes (`CAMERA_DISTANCE = 9`, não ~2 como
-  // dentro de casa).
+  // Mesmo conceito do zoom de casa acima, mas cobrindo o resto do jogo (a pé, carro, foguete) —
+  // ref separado porque a distância/limites padrão lá fora são bem diferentes (`CAMERA_DISTANCE
+  // = 9`, não ~2 como dentro de casa).
   const outdoorCameraZoomRef = useRef(1)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
@@ -2464,14 +2463,13 @@ export function World3D({
     // fora através da parede da sala). 1.4 mantém distância confortável sem sair da sala na
     // maioria dos ângulos.
     const HOUSE_CAMERA_ZOOM_MAX = 1.4
-    // lab-178 (backlog "câmera Roblox-like fácil", zoom por scroll/pinch): mesmos limites em
-    // espírito, mas calibrados pra distância padrão bem maior de fora de casa (`CAMERA_DISTANCE
-    // = 9`, não ~2).
+    // Mesmos limites em espírito dos de casa acima, mas calibrados pra distância padrão bem maior
+    // de fora de casa (`CAMERA_DISTANCE = 9`, não ~2).
     const OUTDOOR_CAMERA_ZOOM_SENSITIVITY = 0.0015
     const OUTDOOR_CAMERA_ZOOM_MIN = 0.6 // bem mais perto do avatar/veículo
     const OUTDOOR_CAMERA_ZOOM_MAX = 1.8 // bem mais longe, sem perder o alvo de vista
 
-    // lab-178: pinça de 2 dedos pra zoom, independente do arraste de giro de 1 dedo só acima (que
+    // Pinça de 2 dedos pra zoom, independente do arraste de giro de 1 dedo só acima (que
     // só rastreia UM ponteiro por vez). Mapa próprio porque uma pinça de verdade normalmente
     // começa com um dedo em cada metade da tela — restringir à metade direita (como o giro de 1
     // dedo faz do lado de fora) inviabilizaria a maioria das pinças reais. Não conflita com o
@@ -2557,8 +2555,8 @@ export function World3D({
       cameraDragPointerId = null
     }
     function onCameraWheel(e: WheelEvent) {
-      // lab-178: antes só funcionava dentro de casa (`insideHouseInterior`) — agora cobre também
-      // o resto do jogo (a pé, carro, foguete), cada um com seu próprio ref/limites de zoom.
+      // Cobre tanto dentro quanto fora de casa (`insideHouseInterior`), cada um com seu próprio
+      // ref/limites de zoom.
       e.preventDefault()
       const zoomRef = insideHouseInterior ? houseCameraZoomRef : outdoorCameraZoomRef
       const sensitivity = insideHouseInterior ? HOUSE_CAMERA_ZOOM_SENSITIVITY : OUTDOOR_CAMERA_ZOOM_SENSITIVITY
@@ -2572,10 +2570,9 @@ export function World3D({
     window.addEventListener('pointercancel', onCameraPointerUp)
     canvas.addEventListener('wheel', onCameraWheel, { passive: false })
 
-    // lab-178 (backlog "câmera Roblox-like fácil", botão de recentralizar): zera o giro
-    // acumulado e o zoom (dentro ou fora de casa) de volta ao padrão. Não anima "na mão" — a
-    // suavização de sempre (`Vector3.Lerp(camera.position, desiredCamPos, ...)` no loop de
-    // física) já desliza a câmera até a nova posição-alvo a partir do próximo quadro, mesmo
+    // Zera o giro acumulado e o zoom (dentro ou fora de casa) de volta ao padrão. Não anima "na
+    // mão" — a suavização de sempre (`Vector3.Lerp(camera.position, desiredCamPos, ...)` no loop
+    // de física) já desliza a câmera até a nova posição-alvo a partir do próximo quadro, mesmo
     // efeito sem corte brusco que `enterHouseInterior`/`exitHouseInterior` já produzem ao
     // resetar os mesmos refs. Exposta em `scene` (mesmo padrão de `__handleInteractPress`) pra
     // o botão React do HUD conseguir chamar sem precisar de outro ref consumido quadro a quadro.
@@ -2586,17 +2583,15 @@ export function World3D({
         houseCameraPitchOffsetRef.current = 0
         houseCameraZoomRef.current = 1
       }
-      // Achado real do review automático do Copilot (PR #54, 5ª rodada): sem isto, segurar ◀/▶
-      // (possível em multitoque, um dedo em cada botão) enquanto aperta ⟲ deixava o giro contínuo
-      // já em andamento voltar a acumular no quadro seguinte — a câmera "recentralizava" e saía do
-      // centro de novo imediatamente, nunca ficando de fato parada.
+      // Sem isto, segurar ◀/▶ (possível em multitoque, um dedo em cada botão) enquanto aperta ⟲
+      // deixava o giro contínuo já em andamento voltar a acumular no quadro seguinte — a câmera
+      // "recentralizava" e saía do centro de novo imediatamente, nunca ficando de fato parada.
       cameraRotateLeftRef.current = false
       cameraRotateRightRef.current = false
-      // Achado real do review automático do Copilot (PR #54, 6ª rodada): mesma ideia, mas pro
-      // arrasto/pinça de ponteiro em andamento — sem cancelar `cameraDragging`/`pinchPointers`, o
-      // próximo `pointermove` do dedo que já estava arrastando (ou dos dois dedos de uma pinça)
-      // continuava alterando yaw/zoom em cima dos valores recém-zerados, e a câmera saía do
-      // centro de novo antes do jogador soltar o dedo.
+      // Mesma ideia, mas pro arrasto/pinça de ponteiro em andamento — sem cancelar
+      // `cameraDragging`/`pinchPointers`, o próximo `pointermove` do dedo que já estava
+      // arrastando (ou dos dois dedos de uma pinça) continuava alterando yaw/zoom em cima dos
+      // valores recém-zerados, e a câmera saía do centro de novo antes do jogador soltar o dedo.
       cameraDragging = false
       cameraDragPointerId = null
       pinchPointers.clear()
@@ -3678,21 +3673,20 @@ export function World3D({
         return PLANET_RADIUS + formulaHeight
       }
 
-      // lab-178 (backlog "câmera Roblox-like fácil", critério de aceite "câmera não entra dentro
-      // do planeta/personagem"): a câmera de 3ª pessoa sempre foi um offset fixo atrás/acima do
-      // alvo, sem checar se esse ponto cai dentro de terreno/parede/rocha — inofensivo em chão
-      // plano, mas com o relevo mais alto do planeta principal e os morros de planetas secundários
-      // (lab-177) a câmera podia acabar por dentro da malha em ângulos de rampa íngreme. Raycast
-      // físico real do ALVO até a posição DESEJADA da câmera (mesmo padrão de
-      // `havokPlugin.raycast` já usado por `terrainGroundRadial` acima e pelo raycast de chão do
-      // pulo) — se algo bloquear no meio do caminho, aproxima a câmera até pouco antes do ponto de
-      // colisão em vez de deixá-la atravessar. `ignoreBody` evita que o próprio colisor do alvo
-      // (ex.: o corpo do avatar) conte como "bloqueio" a distância ~0 do início do raio.
+      // A câmera de 3ª pessoa sempre foi um offset fixo atrás/acima do alvo, sem checar se esse
+      // ponto cai dentro de terreno/parede/rocha — inofensivo em chão plano, mas com o relevo
+      // mais alto do planeta principal e os morros de planetas secundários (lab-177) a câmera
+      // podia acabar por dentro da malha em ângulos de rampa íngreme. Raycast físico real do ALVO
+      // até a posição DESEJADA da câmera (mesmo padrão de `havokPlugin.raycast` já usado por
+      // `terrainGroundRadial` acima e pelo raycast de chão do pulo) — se algo bloquear no meio do
+      // caminho, aproxima a câmera até pouco antes do ponto de colisão em vez de deixá-la
+      // atravessar. `ignoreBody` evita que o próprio colisor do alvo (ex.: o corpo do avatar)
+      // conte como "bloqueio" a distância ~0 do início do raio.
       const cameraObstructionResult = new PhysicsRaycastResult()
-      // 5ª rodada (achado real do review automático do Copilot, PR #54): `avoidCameraClipping`
-      // corrige o PONTO final, mas os chamadores ainda suavizavam com `Vector3.Lerp(camera.
-      // position, ..., fator)` a partir da posição da câmera do quadro ANTERIOR — se essa posição
-      // antiga estivesse do lado de FORA de uma parede/rocha (ex.: giro/recentralização brusca) e
+      // `avoidCameraClipping` corrige o PONTO final, mas os chamadores ainda suavizavam com
+      // `Vector3.Lerp(camera.position, ..., fator)` a partir da posição da câmera do quadro
+      // ANTERIOR — se essa posição antiga estivesse do lado de FORA de uma parede/rocha (ex.:
+      // giro/recentralização brusca) e
       // o novo ponto seguro estiver do lado de DENTRO, o CAMINHO da interpolação atravessa o
       // obstáculo por vários quadros, mesmo o destino final sendo seguro. Este flag (resetado a
       // cada chamada, lido pelos chamadores logo em seguida) avisa quando ESTE quadro teve
@@ -3710,34 +3704,26 @@ export function World3D({
         if (!cameraObstructionResult.hasHit) return desired
         lastCameraClipWasObstructed = true
         const margin = 0.3 // afasta um pouco da parede/rocha em vez de encostar a lente nela
-        // Achado real do review automático do Copilot (PR #54, 2ª rodada): `hitDistance` é medido
-        // a partir do ALVO — se o obstáculo estiver mais perto que `margin` (jogador quase
-        // encostado numa parede/rocha), `hitDistance - margin` vira negativo, o `Math.max(0, ...)`
-        // zera pra 0, e `Vector3.Lerp(target, desired, 0)` deixa a câmera EM CIMA do alvo — a
-        // própria cápsula do personagem, o mesmo problema que o anti-clipping deveria evitar.
-        // Piso mínimo em `AVATAR_RADIUS` (mais uma folga pequena) garante a câmera sempre pelo
-        // menos do lado de fora do próprio personagem, mesmo encostado na parede mais próxima.
-        //
-        // 3ª rodada (achado real): um `Math.max(minClearance, hitDistance - margin)` cru podia
-        // levar `safeDistance` pra ALÉM do próprio ponto de colisão quando o obstáculo está mais
-        // perto que `minClearance` (ex.: `hitDistance = 0,2`, `margin = 0,3` → `-0,1`; piso de
-        // `0,75` vencia e colocava a câmera a 0,75 do alvo — mais longe que os 0,2 do obstáculo,
-        // ou seja, do OUTRO LADO dele). `Math.min(..., hitDistance)` trava um teto duro no próprio
-        // ponto de colisão (nunca além da superfície de verdade, mesmo abrindo mão da margem
-        // inteira num aperto extremo) — resolve o conflito priorizando não atravessar o obstáculo
-        // que acabamos de detectar, o problema mais imediato dos dois.
-        //
-        // 4ª rodada (achado real): o teto em `hitDistance` da 3ª rodada TRAVA de volta no bug da
-        // 2ª — quando o próprio raio já começa sobreposto a um colisor (`hitDistance` perto de 0,
-        // ex.: personagem colado/atravessado numa parede), `Math.min(minClearance, hitDistance)`
-        // devolve `hitDistance` de novo, podendo chegar a 0 e recriar a câmera EM CIMA do alvo.
-        // As duas exigências (nunca mais perto que `minClearance` do alvo, nunca mais longe que o
-        // obstáculo) são matematicamente incompatíveis quando o obstáculo está mais perto que
-        // `minClearance` — não dá pra satisfazer as duas ao mesmo tempo. Prioriza NUNCA deixar a
-        // distância degenerar a zero (o problema visual mais grave, câmera literalmente colada no
-        // personagem) usando um piso bem menor (`MIN_TARGET_CLEARANCE`, não o raio inteiro do
-        // avatar) só pro caso limite de sobreposição — aceita uma sobreposição mínima e inevitável
-        // com o obstáculo nesse cenário raro/de fronteira, em vez de zerar.
+        // `hitDistance` é medido a partir do ALVO — se o obstáculo estiver mais perto que
+        // `margin` (jogador quase encostado numa parede/rocha), `hitDistance - margin` vira
+        // negativo. Um piso ingênuo (`Math.max(0, ...)`) zeraria e deixaria a câmera EM CIMA do
+        // alvo — a própria cápsula do personagem, o mesmo problema que o anti-clipping deveria
+        // evitar. Um piso simples em `minClearance` (baseado em `AVATAR_RADIUS`) sozinho também
+        // não basta: quando o obstáculo está mais perto que esse piso, `Math.max(minClearance,
+        // hitDistance - margin)` pode devolver um valor MAIOR que o próprio `hitDistance` (ex.:
+        // `hitDistance = 0,2`, `margin = 0,3` → `-0,1`; piso de `0,75` vence e coloca a câmera a
+        // 0,75 do alvo — mais longe que os 0,2 do obstáculo, ou seja, do OUTRO LADO dele). Um
+        // teto duro em `hitDistance` sozinho (nunca além da superfície de colisão) resolve isso,
+        // mas reintroduz o primeiro problema quando o próprio raio já começa sobreposto a um
+        // colisor (`hitDistance` perto de 0) — o teto devolve `hitDistance` de novo, podendo
+        // chegar a 0. As duas exigências (nunca mais perto que `minClearance` do alvo, nunca mais
+        // longe que o obstáculo) são matematicamente incompatíveis quando o obstáculo está mais
+        // perto que `minClearance` — não dá pra satisfazer as duas ao mesmo tempo. A combinação
+        // abaixo prioriza NUNCA deixar a distância degenerar a zero (o problema visual mais
+        // grave, câmera literalmente colada no personagem) usando um piso bem menor
+        // (`MIN_TARGET_CLEARANCE`, não o raio inteiro do avatar) só pro caso limite de
+        // sobreposição — aceita uma sobreposição mínima e inevitável com o obstáculo nesse
+        // cenário raro/de fronteira, em vez de zerar.
         const MIN_TARGET_CLEARANCE = 0.15
         const minClearance = Math.min(AVATAR_RADIUS + 0.2, fullDistance)
         const idealDistance = Math.max(minClearance, cameraObstructionResult.hitDistance - margin)
@@ -3750,10 +3736,10 @@ export function World3D({
         return Vector3.Lerp(target, desired, safeDistance / fullDistance)
       }
 
-      // 7ª rodada (achado real do review automático do Copilot, PR #54): `avoidCameraClipping`
-      // só valida o segmento ALVO→destino DESTE quadro — mas a suavização nos chamadores
-      // interpola a partir da posição da câmera do quadro ANTERIOR, não do alvo. Numa virada
-      // brusca (recentralizar, giro rápido, trocar de veículo), a posição antiga pode ficar do
+      // `avoidCameraClipping` só valida o segmento ALVO→destino DESTE quadro — mas a suavização
+      // nos chamadores interpola a partir da posição da câmera do quadro ANTERIOR, não do alvo.
+      // Numa virada brusca (recentralizar, giro rápido, trocar de veículo), a posição antiga
+      // pode ficar do
       // lado ERRADO de uma parede/rocha em relação ao novo destino, mesmo esse destino sendo
       // seguro — a interpolação em linha reta entre os dois pontos atravessa o obstáculo por
       // vários quadros. Raycast simples (sem a matemática de distância segura de
@@ -7761,16 +7747,16 @@ export function World3D({
         cameraYawOffsetRef.current = 0
         houseCameraPitchOffsetRef.current = 0
         houseCameraZoomRef.current = 1
-        // lab-178: uma pinça de zoom em andamento bem na hora de entrar em casa não deveria
-        // continuar valendo pro zoom de dentro (limites/sensação bem diferentes) — mesmo espírito
-        // do reset de yaw/pitch/zoom acima.
+        // Uma pinça de zoom em andamento bem na hora de entrar em casa não deveria continuar
+        // valendo pro zoom de dentro (limites/sensação bem diferentes) — mesmo espírito do reset
+        // de yaw/pitch/zoom acima.
         pinchPointers.clear()
         pinchStartDistance = 0
-        // Achado real do review automático do Copilot (PR #54, 7ª rodada): faltava o MESMO reset
-        // de arrasto de 1 dedo que `exitHouseInterior` já faz (lab-149) — entrar em casa com um
-        // arrasto de fora em andamento (ex.: apertar E pra entrar com o botão do mouse ainda
-        // pressionado) deixava `cameraDragging`/`outdoorDrag` presos, e o próximo `pointermove`
-        // aplicava giro de FORA (semântica errada) já dentro da sala.
+        // Mesmo cuidado pro arrasto de 1 dedo, espelhando o reset que `exitHouseInterior` já faz
+        // (lab-149) — entrar em casa com um arrasto de fora em andamento (ex.: apertar E pra
+        // entrar com o botão do mouse ainda pressionado) deixava `cameraDragging`/`outdoorDrag`
+        // presos, e o próximo `pointermove` aplicava giro de FORA (semântica errada) já dentro
+        // da sala.
         cameraDragging = false
         cameraDragPointerId = null
         currentWorldCenter = HOUSE_INTERIOR_CENTER
@@ -7814,8 +7800,8 @@ export function World3D({
         // `onCameraPointerMove`.
         cameraDragging = false
         cameraDragPointerId = null
-        // lab-178: mesmo espírito da linha acima — uma pinça de zoom em andamento na hora de sair
-        // de casa não deveria continuar valendo pro zoom de fora.
+        // Mesmo espírito da linha acima — uma pinça de zoom em andamento na hora de sair de casa
+        // não deveria continuar valendo pro zoom de fora.
         pinchPointers.clear()
         pinchStartDistance = 0
         currentWorldCenter = savedOutsideCenter
@@ -9911,54 +9897,53 @@ export function World3D({
             desiredCamPos = pos.add(sphericalOffset)
             // Dentro de casa não chama `avoidCameraClipping` (paredes translúcidas resolvem o
             // mesmo problema, ver comentário mais abaixo) — zera a flag pra não ler um valor
-            // preso de um quadro anterior fora de casa (achado real do review automático do
-            // Copilot, PR #54, 5ª rodada, ver `lastCameraClipWasObstructed` acima).
+            // preso de um quadro anterior fora de casa (ver `lastCameraClipWasObstructed` acima).
             lastCameraClipWasObstructed = false
           } else {
-            // lab-178: zoom (scroll/pinça) escala distância E altura juntas, na mesma proporção —
-            // um dolly de verdade, não uma distorção de ângulo. `avoidCameraClipping` (raycast
-            // físico do jogador até esse ponto) evita a câmera atravessando terreno/rocha —
-            // ignora o próprio colisor do jogador (`body`) pra não se confundir com ele mesmo.
+            // Zoom (scroll/pinça) escala distância E altura juntas, na mesma proporção — um dolly
+            // de verdade, não uma distorção de ângulo. `avoidCameraClipping` (raycast físico do
+            // jogador até esse ponto) evita a câmera atravessando terreno/rocha — ignora o
+            // próprio colisor do jogador (`body`) pra não se confundir com ele mesmo.
             const zoomedDist = camDist * outdoorCameraZoomRef.current
             const zoomedHeight = camHeight * outdoorCameraZoomRef.current
             const rawOutdoorCamPos = pos.subtract(camFacing.scale(zoomedDist)).add(localUp.scale(zoomedHeight))
-            // Achado real do review automático do Copilot (PR #54, 1ª rodada): este bloco roda em
-            // QUALQUER modo (câmera/multiplayer/ranking/portais "continuam rodando normalmente em
-            // qualquer caso", comentário no fim do `if` de movimento acima) — dirigindo carro ou
-            // pilotando foguete, o resultado é sobrescrito pelas câmeras específicas mais abaixo de
-            // qualquer forma, então o raycast físico aqui seria trabalho descartado todo quadro
-            // (custo real em mobile). Só computa de verdade quando esta É a câmera que vale.
+            // Este bloco roda em QUALQUER modo (câmera/multiplayer/ranking/portais "continuam
+            // rodando normalmente em qualquer caso", comentário no fim do `if` de movimento
+            // acima) — dirigindo carro ou pilotando foguete, o resultado é sobrescrito pelas
+            // câmeras específicas mais abaixo de qualquer forma, então o raycast físico aqui
+            // seria trabalho descartado todo quadro (custo real em mobile). Só computa de
+            // verdade quando esta É a câmera que vale.
             desiredCamPos =
               drivingCar || drivingRocket ? rawOutdoorCamPos : avoidCameraClipping(pos, rawOutdoorCamPos, body)
           }
-          // Achado real do review automático do Copilot (PR #54, 3ª rodada): dirigindo/pilotando,
-          // este `Lerp` continuava puxando `camera.position` uma fração (8%) em direção à posição
-          // CRUA (não corrigida) da câmera a pé, todo quadro, ANTES do bloco do carro/foguete mais
-          // abaixo aplicar seu próprio `Lerp` (12%/10%) em cima do resultado já contaminado — os
-          // dois puxões brigando pra sempre podiam deixar a câmera num equilíbrio nunca 100%
-          // correto (dentro de parede/terreno em vez da posição corrigida do veículo). A câmera do
-          // carro/foguete já é dona exclusiva de `camera.position` enquanto ativa (ver blocos
-          // abaixo), então só atualiza aqui quando for esta mesma a câmera que vale.
+          // Dirigindo/pilotando, este `Lerp` continuaria puxando `camera.position` uma fração
+          // (8%) em direção à posição CRUA (não corrigida) da câmera a pé, todo quadro, ANTES do
+          // bloco do carro/foguete mais abaixo aplicar seu próprio `Lerp` (12%/10%) em cima do
+          // resultado já contaminado — os dois puxões brigando pra sempre podiam deixar a câmera
+          // num equilíbrio nunca 100% correto (dentro de parede/terreno em vez da posição
+          // corrigida do veículo). A câmera do carro/foguete já é dona exclusiva de
+          // `camera.position` enquanto ativa (ver blocos abaixo), então só atualiza aqui quando
+          // for esta mesma a câmera que vale.
           if (!drivingCar && !drivingRocket) {
-            // Achado real do review automático do Copilot (PR #54, 5ª rodada): `avoidCameraClipping`
-            // corrige o PONTO final, mas suavizar com `Lerp` a partir da posição da câmera do
-            // quadro ANTERIOR podia atravessar a mesma parede/rocha no CAMINHO da interpolação
-            // (ex.: giro brusco — a posição antiga fica de um lado da parede, a nova do outro),
-            // mesmo o destino sendo seguro. Quando este quadro teve obstrução de verdade, pula a
-            // suavização e vai direto pro ponto seguro — sem trajeto reto entre os dois pontos,
-            // não tem como atravessar nada no meio do caminho. Volta a suavizar normalmente assim
-            // que o caminho ficar livre de novo (`lastCameraClipWasObstructed` volta a `false`).
+            // `avoidCameraClipping` corrige o PONTO final, mas suavizar com `Lerp` a partir da
+            // posição da câmera do quadro ANTERIOR podia atravessar a mesma parede/rocha no
+            // CAMINHO da interpolação (ex.: giro brusco — a posição antiga fica de um lado da
+            // parede, a nova do outro), mesmo o destino sendo seguro. Quando este quadro teve
+            // obstrução de verdade, pula a suavização e vai direto pro ponto seguro — sem
+            // trajeto reto entre os dois pontos, não tem como atravessar nada no meio do
+            // caminho. Volta a suavizar normalmente assim que o caminho ficar livre de novo
+            // (`lastCameraClipWasObstructed` volta a `false`).
             //
-            // 7ª rodada (achado real): o raycast de `avoidCameraClipping` só valida ALVO→destino
-            // DESTE quadro — a posição ANTIGA da câmera (ponto de partida do `Lerp`) pode estar do
-            // lado errado de uma parede numa virada brusca mesmo com o destino seguro, atravessando
-            // no meio do caminho sem que `lastCameraClipWasObstructed` perceba. `isPathObstructed`
-            // checa o trajeto de verdade (posição atual → destino) antes de decidir suavizar.
-            // Fora de dentro de casa, de propósito — lá a solução já é outra (parede translúcida).
-            // Achado real do review automático do Copilot (PR #54, 8ª rodada): quando o destino
-            // já estava obstruído, o resultado final é `desiredCamPos` de qualquer jeito — checar
-            // o trajeto também nesse caso é um 2º raycast Havok descartado todo quadro. `&&` de
-            // curto-circuito pula essa chamada extra quando já não faz diferença.
+            // O raycast de `avoidCameraClipping` sozinho só valida ALVO→destino DESTE quadro — a
+            // posição ANTIGA da câmera (ponto de partida do `Lerp`) pode estar do lado errado de
+            // uma parede numa virada brusca mesmo com o destino seguro, atravessando no meio do
+            // caminho sem que `lastCameraClipWasObstructed` perceba. `isPathObstructed` checa o
+            // trajeto de verdade (posição atual → destino) antes de decidir suavizar. Fora de
+            // dentro de casa, de propósito — lá a solução já é outra (parede translúcida). Quando
+            // o destino já estava obstruído, o resultado final é `desiredCamPos` de qualquer
+            // jeito — checar o trajeto também nesse caso seria um 2º raycast Havok descartado
+            // todo quadro; o `&&` de curto-circuito pula essa chamada extra quando já não faz
+            // diferença.
             const pathObstructed =
               !lastCameraClipWasObstructed && !insideHouseInterior && isPathObstructed(camera.position, desiredCamPos, body)
             camera.position =
@@ -10775,21 +10760,20 @@ export function World3D({
             Vector3.Forward(),
             drivingCar.root.computeWorldMatrix(true),
           ).normalize()
-          // lab-178: mesmo zoom (scroll/pinça) usado a pé — carro em si não tem colisor físico
-          // próprio (anda por trajeto fixo, `positionOnLoopPath`), mas o COLISOR DO AVATAR fica
-          // parado (congelado, sem gravidade/velocidade nova) bem onde o jogador embarcou —
-          // achado real do review automático do Copilot (PR #54, 1ª rodada): sem `ignoreBody`, o
-          // raycast podia acertar essa cápsula abandonada logo depois de embarcar (carro ainda
-          // perto do ponto de embarque) e encurtar a câmera como se fosse um obstáculo de verdade.
+          // Mesmo zoom (scroll/pinça) usado a pé — carro em si não tem colisor físico próprio
+          // (anda por trajeto fixo, `positionOnLoopPath`), mas o COLISOR DO AVATAR fica parado
+          // (congelado, sem gravidade/velocidade nova) bem onde o jogador embarcou: sem
+          // `ignoreBody`, o raycast podia acertar essa cápsula abandonada logo depois de embarcar
+          // (carro ainda perto do ponto de embarque) e encurtar a câmera como se fosse um
+          // obstáculo de verdade.
           const rawCarCamPos = drivingCar.root.position
             .subtract(carFwdNow.scale(CAMERA_DISTANCE * outdoorCameraZoomRef.current))
             .add(carUpNow.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
           const desiredCarCamPos = avoidCameraClipping(drivingCar.root.position, rawCarCamPos, avatarBody?.body)
-          // lab-178 (5ª/7ª rodadas de review, mesmo achado da câmera a pé acima): pula a
-          // suavização quando há obstrução no destino OU no trajeto da posição antiga até lá, pra
-          // não atravessar nada no CAMINHO da interpolação.
-          // 8ª rodada: pula o raycast extra quando o destino já estava obstruído (a decisão final
-          // já seria `desiredCarCamPos` de qualquer forma).
+          // Mesmo achado da câmera a pé acima: pula a suavização quando há obstrução no destino
+          // OU no trajeto da posição antiga até lá, pra não atravessar nada no CAMINHO da
+          // interpolação — e pula o raycast extra quando o destino já estava obstruído (a decisão
+          // final já seria `desiredCarCamPos` de qualquer forma).
           const carPathObstructed =
             !lastCameraClipWasObstructed && isPathObstructed(camera.position, desiredCarCamPos, avatarBody?.body)
           camera.position =
@@ -10901,10 +10885,10 @@ export function World3D({
               .add(shipUp.scale(CAMERA_HEIGHT * outdoorCameraZoomRef.current))
             desiredShipCamUp = shipUp
           }
-          // lab-178: mesmo zoom da câmera a pé/carro. Anti-clipping só no CRUZEIRO
-          // (`!inLaunchHold && !inLandingFlip`) — achados reais do review automático do Copilot
-          // (PR #54, 1ª rodada): (1) a nave não tem colisor físico próprio, mas o AVATAR fica com
-          // seu colisor congelado bem onde embarcou (mesmo caso do carro acima) — `ignoreBody:
+          // Mesmo zoom da câmera a pé/carro. Anti-clipping só no CRUZEIRO (`!inLaunchHold &&
+          // !inLandingFlip`) por dois motivos: (1) a nave não tem colisor físico próprio, mas o
+          // AVATAR fica com seu colisor congelado bem onde embarcou (mesmo caso do carro acima) —
+          // `ignoreBody:
           // body` cobre isso; (2) perto da plataforma (decolagem/pouso), `shipPos` começa a poucas
           // unidades do `rocketCollider` (cilindro ESTÁTICO usado só pra detectar "jogador perto,
           // mostrar dica de embarcar", raio 1,3/altura 3 a partir de 1,4 acima do chão) — um
@@ -10922,12 +10906,11 @@ export function World3D({
             // ramo de dentro de casa acima).
             lastCameraClipWasObstructed = false
           }
-          // lab-178 (5ª/7ª rodadas de review, mesmo achado da câmera a pé/carro acima): pula a
-          // suavização quando há obstrução no destino OU no trajeto — só checa o trajeto no
-          // CRUZEIRO, pela mesma razão de excluir o anti-clipping do destino nas pontas de
-          // repouso (colisor estático da plataforma perto demais, ver comentário acima).
-          // 8ª rodada: mesmo curto-circuito do carro/a pé acima — pula o raycast extra quando o
-          // destino já estava obstruído.
+          // Mesmo achado da câmera a pé/carro acima: pula a suavização quando há obstrução no
+          // destino OU no trajeto — só checa o trajeto no CRUZEIRO, pela mesma razão de excluir o
+          // anti-clipping do destino nas pontas de repouso (colisor estático da plataforma perto
+          // demais, ver comentário acima); e pula o raycast extra quando o destino já estava
+          // obstruído (mesmo curto-circuito do carro/a pé acima).
           const shipPathObstructed =
             !lastCameraClipWasObstructed &&
             !inLaunchHold &&
@@ -11271,9 +11254,9 @@ export function World3D({
     cameraRotateRightRef.current = false
   }
 
-  // lab-178 (backlog "câmera Roblox-like fácil", botão de recentralizar) — mesmo padrão de ponte
-  // de `handleTouchInteractPress`: só repassa pra função exposta no closure de `setup()`, que tem
-  // acesso direto aos refs de giro/zoom da câmera e ao estado de dentro/fora de casa.
+  // Mesmo padrão de ponte de `handleTouchInteractPress`: só repassa pra função exposta no
+  // closure de `setup()`, que tem acesso direto aos refs de giro/zoom da câmera e ao estado de
+  // dentro/fora de casa.
   function handleRecenterCamera() {
     ;(sceneRef.current as any)?.__recenterCamera?.()
   }

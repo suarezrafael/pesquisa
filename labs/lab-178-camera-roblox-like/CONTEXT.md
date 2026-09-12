@@ -326,6 +326,32 @@ como estão com justificativa:
 Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
 conteúdo da saída.
 
+**9ª rodada** — 1 achado real, só de documentação: este próprio `CONTEXT.md` chamava
+`avoidCameraClipping` de "função pura", impreciso — ela lê `havokPlugin` do escopo externo e muda
+`lastCameraClipWasObstructed` como efeito colateral, então não é pura no sentido estrito.
+Reformulado pra "helper reaproveitável" (ver "O que foi feito" acima, já corrigido).
+
+**10ª rodada** — 1 achado real de qualidade de código, sem mudança de comportamento:
+`docs/prompts/04-manutencao-clean-code.md` §2 tem uma regra `[MUST]` explícita ("nenhum
+comentário referenciando a sessão de IA, o laboratório atual ou um ticket externo... isso pertence
+ao `CONTEXT.md` do laboratório e ao histórico do git") que os comentários novos deste lab
+(`World3D.tsx`, `TouchActionButton.tsx`, `index.css`) violavam ao citar "lab-178"/"PR #54"/número
+de rodada/"Copilot" diretamente no código de produção. **Correção de rumo**: esse MESMO tipo de
+achado tinha aparecido na 6ª rodada e foi REJEITADO na época com a justificativa de que era a
+"convenção já estabelecida do repositório" (24 ocorrências pré-existentes do mesmo padrão em
+código de labs anteriores) — mas prática pré-existente generalizada não é a mesma coisa que uma
+regra `[MUST]` escrita não se aplicar; a regra existe precisamente pra essas 24 ocorrências
+também, que já eram uma dívida de qualidade antes deste lab. Revertida a rejeição da 6ª rodada:
+todos os comentários NOVOS deste lab foram reescritos mantendo só o racional durável (o cenário
+do bug, o porquê da decisão), sem citar a sessão/PR/rodada — sem tocar nas 24 ocorrências
+pré-existentes de OUTROS labs (fora de escopo desta PR, seria uma limpeza separada e maior).
+Referências a labs ANTERIORES já concluídos (ex.: "lab-177", "lab-149") foram mantidas — são
+citações históricas estáveis, não "o laboratório atual", e seguem o mesmo padrão já usado em todo
+o resto do arquivo.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
+conteúdo da saída (só reescrita de comentários, nenhuma linha de lógica mudou).
+
 ## Pendências / dívidas conhecidas
 
 - **Pinch de 2 dedos verificado só por revisão de código/matemática, não ao vivo** — as ferramentas
