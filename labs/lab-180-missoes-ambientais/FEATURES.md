@@ -1,8 +1,8 @@
 # Laboratório 180 — Missões ambientais de aprendizagem
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-12
-Fim: -
+Fim: 2026-09-12
 Commit inicial: 6114f8e3dcc5124422a0819148edd22451b7b91d
 
 ## Objetivo do laboratório
@@ -41,31 +41,36 @@ ordem sugerida do documento, item 6).
 
 ## Funcionalidades planejadas
 
-- [ ] **Ponte (lógica)** — landmark novo no planeta principal; ao apertar `E` perto, abre
+- [x] **Ponte (lógica)** — landmark novo no planeta principal; ao apertar `E` perto, abre
   `QuestModal` com uma pergunta sorteada do tipo `logica` (prioriza incompleta, cai pro pool
   inteiro se todas já feitas); resposta certa credita XP/moeda via `completeQuest`, igual a
-  responder numa escolinha.
-- [ ] **Posto de abastecimento do foguete (matemática)** — landmark perto da plataforma de
-  lançamento; mesmo mecanismo, tipo `matematica`.
-- [ ] **Placa decifrável (leitura)** — landmark novo; mesmo mecanismo, tipo `leitura`.
-- [ ] Erro nunca pune — reaproveita o `QuestModal` já existente, que já só dá feedback ("Quase!
+  responder numa escolinha. Verificado ao vivo (Chrome real): hint "Pressione E pra alinhar a
+  ponte" acende perto, `E` abre "Depois de Amanhã" (Lógica), resposta certa credita +24 XP/+24
+  moedas.
+- [x] **Posto de abastecimento do foguete (matemática)** — landmark perto da plataforma de
+  lançamento; mesmo mecanismo, tipo `matematica`. Verificado ao vivo: abre "Balas na Caixa"
+  (Matemática).
+- [x] **Placa decifrável (leitura)** — landmark novo; mesmo mecanismo, tipo `leitura`. Verificado
+  ao vivo: reward toast confirmado (+10 XP/+10 moedas).
+- [x] Erro nunca pune — reaproveita o `QuestModal` já existente, que já só dá feedback ("Quase!
   Tente outra opção") e deixa tentar de novo, sem penalidade nenhuma.
-- [ ] Eventos novos de analytics: `learning_challenge_started` (ao abrir o desafio, antes de
+- [x] Eventos novos de analytics: `learning_challenge_started` (ao abrir o desafio, antes de
   responder) e `learning_challenge_completed` (na resposta certa) — nomes exatos citados pelo
   documento —, ambos com `meta.kind` identificando o landmark (`bridge`/`rocket_fuel`/`plaque`,
   allowlist fixa em `server-accounts/src/domain.ts`, mesmo padrão de `PLANET_INTERACTION_KINDS` do
-  lab-179).
-- [ ] `retry_without_quit_rate` citado pelo documento como métrica esperada é uma métrica DERIVADA
+  lab-179). Verificado ao vivo via monkey-patch de `window.fetch`: os 2 eventos confirmados com
+  `meta.kind` correto pros 3 landmarks.
+- [x] `retry_without_quit_rate` citado pelo documento como métrica esperada é uma métrica DERIVADA
   (proporção de `learning_challenge_started` que eventualmente vira `learning_challenge_completed`
   pelo mesmo dispositivo, sem desistir) — não existe um evento próprio pra "tentativa errada" além
   do feedback visual já existente no `QuestModal`, então essa taxa se calcula comparando os dois
   eventos acima numa consulta, mesmo espírito de outras métricas "aproximadas" já documentadas em
-  `docs/event-catalog.md` (ex.: `weeklyFunnel.houseVisited`). Documentar isso no
-  `docs/event-catalog.md` deste lab, não construir um evento novo só pra essa taxa.
-- [ ] `docs/event-catalog.md` atualizado com as 2 linhas novas.
-- [ ] Testes novos em `server-accounts` (allowlist de `kind`) se alguma função pura nova for
-  criada — avaliar durante a implementação; é possível que não precise de função pura nova além da
-  allowlist (mesmo caso de `isValidPlanetInteractionKind`).
+  `docs/event-catalog.md` (ex.: `weeklyFunnel.houseVisited`). Documentado em
+  `docs/event-catalog.md`, não construído um evento novo só pra essa taxa.
+- [x] `docs/event-catalog.md` atualizado com as 2 linhas novas + nota sobre `retry_without_quit_rate`.
+- [x] Testes novos em `server-accounts`: `isValidLearningChallengeKind` (allowlist de `kind`,
+  mesmo padrão de `isValidPlanetInteractionKind` do lab-179) — não precisou de função pura nova
+  além da allowlist, confirmando a expectativa.
 
 ## Fora de escopo (explicitamente adiado)
 

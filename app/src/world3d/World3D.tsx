@@ -215,6 +215,15 @@ interface World3DProps {
   // populada com a mobília DELE em vez da local — nunca escreve em `progress`.
   visitHouseRequest: ({ id: string; nickname: string } & PublicHouseSnapshot) | null
   onVisitHouseHandled: () => void
+  // Missões ambientais (lab-180, docs/growth-retention-monetization-backlog.md "Lab 180") — 3
+  // landmarks novos no planeta principal (ponte/lógica, posto de abastecimento do foguete/
+  // matemática, placa/leitura). Mesmo padrão de `onOpenCoopChallenge`: este componente sorteia a
+  // missão (do tipo certo pro landmark) e `App.tsx` abre o `QuestModal` já existente — mas,
+  // DIFERENTE do desafio em dupla, aqui a resposta certa credita XP/moeda de verdade via
+  // `completeQuest` (é uma missão normal do pool de sempre, só alcançada por um caminho
+  // ambiental novo em vez de só pela escolinha), então não precisa de nenhuma ponte de volta
+  // pra este componente — `App.tsx` cuida do resto sozinho.
+  onOpenEnvironmentalChallenge: (quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque') => void
 }
 
 const PLANET_RADIUS = 13
@@ -2011,6 +2020,7 @@ export function World3D({
   onCoopChallengeCompleted,
   visitHouseRequest,
   onVisitHouseHandled,
+  onOpenEnvironmentalChallenge,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const joystickRef = useRef({ x: 0, y: 0 })
@@ -2060,6 +2070,7 @@ export function World3D({
   const onFurniturePlacedRef = useRef(onFurniturePlaced)
   const onOpenCoopChallengeRef = useRef(onOpenCoopChallenge)
   const onCoopChallengeCompletedRef = useRef(onCoopChallengeCompleted)
+  const onOpenEnvironmentalChallengeRef = useRef(onOpenEnvironmentalChallenge)
   // lab-175 (achado do review automático do Copilot no PR #49, 18ª rodada): `App.tsx` define
   // `handleVisitHouseHandled` como função comum (sem `useCallback`), então sua identidade muda a
   // CADA render do pai — como o efeito de polling abaixo tinha `onVisitHouseHandled` na lista de
@@ -2185,6 +2196,7 @@ export function World3D({
   onFurniturePlacedRef.current = onFurniturePlaced
   onOpenCoopChallengeRef.current = onOpenCoopChallenge
   onCoopChallengeCompletedRef.current = onCoopChallengeCompleted
+  onOpenEnvironmentalChallengeRef.current = onOpenEnvironmentalChallenge
   onVisitHouseHandledRef.current = onVisitHouseHandled
 
   // lab-136: entra no modo de posicionamento de mobília sempre que `App.tsx` pede um id novo
@@ -2824,6 +2836,11 @@ export function World3D({
     // (ver uso no loop de física) — sozinho, o jogador nunca vê a dica, pra não convidar pra um
     // desafio que não dá pra completar sozinho.
     let coopEnterHintLabel: TextBlock | null = null
+    // Missões ambientais (lab-180) — mesmo padrão de `coopEnterHintLabel` acima, mas visíveis sem
+    // precisar de outro jogador por perto (diferente do desafio em dupla).
+    let bridgeEnterHintLabel: TextBlock | null = null
+    let rocketFuelEnterHintLabel: TextBlock | null = null
+    let plaqueEnterHintLabel: TextBlock | null = null
     const houseFurnitureNodes: Record<string, TransformNode> = {}
     // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — snapshot da mobília
     // de OUTRO jogador, populado só durante uma visita (`__visitFriendHouse`, ver mais abaixo);
@@ -3474,6 +3491,29 @@ export function World3D({
             onOpenCoopChallengeRef.current(quest)
             return
           }
+        }
+
+        // Missões ambientais (lab-180) — cada landmark sorteia uma missão do TIPO certo (não
+        // qualquer uma, diferente do desafio em dupla acima), priorizando uma ainda não
+        // concluída e caindo pro pool inteiro do tipo se todas já tiverem sido respondidas —
+        // mesmo padrão de fallback já usado pelo desafio em dupla.
+        function pickEnvironmentalQuest(questType: Quest['type']): Quest {
+          const ofType = quests.filter((q) => q.type === questType)
+          const incompleteOfType = ofType.filter((q) => !progressRef.current.completedQuestIds.includes(q.id))
+          const pool = incompleteOfType.length > 0 ? incompleteOfType : ofType
+          return pool[Math.floor(Math.random() * pool.length)]
+        }
+        if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+          onOpenEnvironmentalChallengeRef.current(pickEnvironmentalQuest('logica'), 'bridge')
+          return
+        }
+        if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, rocketFuelSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+          onOpenEnvironmentalChallengeRef.current(pickEnvironmentalQuest('matematica'), 'rocket_fuel')
+          return
+        }
+        if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, plaqueSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+          onOpenEnvironmentalChallengeRef.current(pickEnvironmentalQuest('leitura'), 'plaque')
+          return
         }
 
         let nearestCar: Carro | null = null
@@ -7164,6 +7204,196 @@ export function World3D({
       coopEnterHint.linkWithMesh(coopFlag)
       coopEnterHintLabel = coopEnterHint
 
+      // Missões ambientais (lab-180, docs/growth-retention-monetization-backlog.md "Lab 180") —
+      // 3 landmarks novos, mesmo padrão de posicionamento/geometria da carteira de estudos/
+      // desafio em dupla acima (`TransformNode` fixo + `terrainGroundRadial`/
+      // `settleMeshOnTerrain` + emoji flutuante + dica "Pressione E"), cada um abrindo o MESMO
+      // `QuestModal` de sempre com uma pergunta sorteada do tipo certo — sem física de puzzle
+      // nova, sem conteúdo novo. Direções escolhidas por inspeção (mesmo método informal da
+      // carteira/desafio em dupla, não uma varredura medida contra todos os marcos como
+      // `ROCKET_LAUNCH_DIR`/`MARS_UFO_DIR`), afastadas o bastante das direções já em uso acima
+      // (spawn, carteira, desafio em dupla) e da direção da casa mais abaixo.
+
+      // Ponte (lógica) — dois pilares baixos + tabuleiro, mesmo espírito de "objeto pequeno fixo"
+      // da carteira/desafio em dupla.
+      const bridgeUp = new Vector3(0.85, 0.3, -0.4).normalize()
+      const bridgeGroundRadial = terrainGroundRadial(bridgeUp, terrainHeight(bridgeUp))
+      const bridgeSurfacePos = bridgeUp.scale(bridgeGroundRadial)
+
+      const bridgeBase = new TransformNode('ponte-logica', scene)
+      bridgeBase.position = bridgeSurfacePos
+      bridgeBase.rotationQuaternion = alignmentQuaternion(bridgeUp)
+
+      const bridgeWoodMat = new PBRMaterial('bridgeWoodMat', scene)
+      bridgeWoodMat.albedoColor = new Color3(0.5, 0.32, 0.18)
+      bridgeWoodMat.roughness = 0.8
+      const bridgeStoneMat = new PBRMaterial('bridgeStoneMat', scene)
+      bridgeStoneMat.albedoColor = new Color3(0.55, 0.52, 0.58)
+      bridgeStoneMat.roughness = 0.75
+
+      function addBridgeMesh(mesh: Mesh, mat: PBRMaterial) {
+        mesh.material = mat
+        mesh.parent = bridgeBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        return mesh
+      }
+
+      for (const side of [-1, 1]) {
+        const pillar = MeshBuilder.CreateCylinder(`bridgePillar${side}`, { height: 0.4, diameter: 0.22, tessellation: 8 }, scene)
+        pillar.position = new Vector3(0, 0.2, side * 0.55)
+        addBridgeMesh(pillar, bridgeStoneMat)
+      }
+      const bridgeDeck = MeshBuilder.CreateBox('bridgeDeck', { width: 0.9, height: 0.08, depth: 1.3 }, scene)
+      bridgeDeck.position = new Vector3(0, 0.44, 0)
+      addBridgeMesh(bridgeDeck, bridgeWoodMat)
+      for (const side of [-1, 1]) {
+        const rail = MeshBuilder.CreateBox(`bridgeRail${side}`, { width: 0.06, height: 0.3, depth: 1.3 }, scene)
+        rail.position = new Vector3(side * 0.44, 0.63, 0)
+        addBridgeMesh(rail, bridgeWoodMat)
+      }
+
+      settleMeshOnTerrain(bridgeBase, bridgeUp)
+      bridgeSurfacePos.copyFrom(bridgeBase.position)
+
+      const bridgeLabel = new TextBlock('bridgeLabel', '🌉')
+      bridgeLabel.color = 'white'
+      bridgeLabel.fontSize = mobileFontSize(28)
+      bridgeLabel.outlineWidth = 4
+      bridgeLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(bridgeLabel)
+      bridgeLabel.linkWithMesh(bridgeDeck)
+      bridgeLabel.linkOffsetY = -60
+
+      const bridgeEnterHint = new TextBlock('bridgeEnterHint', 'Pressione E pra alinhar a ponte')
+      bridgeEnterHint.color = 'white'
+      bridgeEnterHint.fontSize = mobileFontSize(18)
+      bridgeEnterHint.fontWeight = 'bold'
+      bridgeEnterHint.outlineWidth = 3
+      bridgeEnterHint.outlineColor = 'rgba(0,0,0,0.6)'
+      bridgeEnterHint.alpha = 0
+      guiTexture.addControl(bridgeEnterHint)
+      bridgeEnterHint.linkWithMesh(bridgeDeck)
+      bridgeEnterHint.linkOffsetY = -30
+      bridgeEnterHintLabel = bridgeEnterHint
+
+      // Posto de abastecimento do foguete (matemática) — perto da plataforma de lançamento
+      // (`ROCKET_LAUNCH_DIR`, mais abaixo neste arquivo, mas já em escopo de módulo).
+      const rocketFuelUp = ROCKET_LAUNCH_DIR.add(new Vector3(0.28, 0.12, -0.22)).normalize()
+      const rocketFuelGroundRadial = terrainGroundRadial(rocketFuelUp, terrainHeight(rocketFuelUp))
+      const rocketFuelSurfacePos = rocketFuelUp.scale(rocketFuelGroundRadial)
+
+      const rocketFuelBase = new TransformNode('posto-abastecimento-matematica', scene)
+      rocketFuelBase.position = rocketFuelSurfacePos
+      rocketFuelBase.rotationQuaternion = alignmentQuaternion(rocketFuelUp)
+
+      const fuelTankMat = new PBRMaterial('fuelTankMat', scene)
+      fuelTankMat.albedoColor = new Color3(0.75, 0.25, 0.2)
+      fuelTankMat.roughness = 0.5
+      fuelTankMat.metallic = 0.4
+      const fuelHoseMat = new PBRMaterial('fuelHoseMat', scene)
+      fuelHoseMat.albedoColor = new Color3(0.15, 0.15, 0.17)
+      fuelHoseMat.roughness = 0.6
+
+      function addFuelMesh(mesh: Mesh, mat: PBRMaterial) {
+        mesh.material = mat
+        mesh.parent = rocketFuelBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        return mesh
+      }
+
+      const fuelTank = MeshBuilder.CreateCylinder('fuelTank', { height: 0.75, diameter: 0.45, tessellation: 16 }, scene)
+      fuelTank.position = new Vector3(0, 0.375, 0)
+      addFuelMesh(fuelTank, fuelTankMat)
+      const fuelCap = MeshBuilder.CreateCylinder('fuelCap', { height: 0.08, diameter: 0.5, tessellation: 16 }, scene)
+      fuelCap.position = new Vector3(0, 0.79, 0)
+      addFuelMesh(fuelCap, fuelHoseMat)
+      const fuelHose = MeshBuilder.CreateCylinder('fuelHose', { height: 0.5, diameter: 0.06, tessellation: 8 }, scene)
+      fuelHose.position = new Vector3(0.3, 0.55, 0)
+      fuelHose.rotation.z = Math.PI / 2.5
+      addFuelMesh(fuelHose, fuelHoseMat)
+
+      settleMeshOnTerrain(rocketFuelBase, rocketFuelUp)
+      rocketFuelSurfacePos.copyFrom(rocketFuelBase.position)
+
+      const rocketFuelLabel = new TextBlock('rocketFuelLabel', '⛽')
+      rocketFuelLabel.color = 'white'
+      rocketFuelLabel.fontSize = mobileFontSize(28)
+      rocketFuelLabel.outlineWidth = 4
+      rocketFuelLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(rocketFuelLabel)
+      rocketFuelLabel.linkWithMesh(fuelTank)
+      rocketFuelLabel.linkOffsetY = -60
+
+      const rocketFuelEnterHint = new TextBlock('rocketFuelEnterHint', 'Pressione E pra abastecer o foguete')
+      rocketFuelEnterHint.color = 'white'
+      rocketFuelEnterHint.fontSize = mobileFontSize(18)
+      rocketFuelEnterHint.fontWeight = 'bold'
+      rocketFuelEnterHint.outlineWidth = 3
+      rocketFuelEnterHint.outlineColor = 'rgba(0,0,0,0.6)'
+      rocketFuelEnterHint.alpha = 0
+      guiTexture.addControl(rocketFuelEnterHint)
+      rocketFuelEnterHint.linkWithMesh(fuelTank)
+      rocketFuelEnterHint.linkOffsetY = -30
+      rocketFuelEnterHintLabel = rocketFuelEnterHint
+
+      // Placa decifrável (leitura) — poste + tabuleiro, mesmo espírito de "totem pequeno" das
+      // escolinhas, só que sem professor.
+      const plaqueUp = new Vector3(-0.7, -0.2, 0.65).normalize()
+      const plaqueGroundRadial = terrainGroundRadial(plaqueUp, terrainHeight(plaqueUp))
+      const plaqueSurfacePos = plaqueUp.scale(plaqueGroundRadial)
+
+      const plaqueBase = new TransformNode('placa-leitura', scene)
+      plaqueBase.position = plaqueSurfacePos
+      plaqueBase.rotationQuaternion = alignmentQuaternion(plaqueUp)
+
+      const plaquePostMat = new PBRMaterial('plaquePostMat', scene)
+      plaquePostMat.albedoColor = new Color3(0.42, 0.3, 0.17)
+      plaquePostMat.roughness = 0.8
+      const plaqueBoardMat = new PBRMaterial('plaqueBoardMat', scene)
+      plaqueBoardMat.albedoColor = new Color3(0.86, 0.78, 0.6)
+      plaqueBoardMat.roughness = 0.7
+
+      function addPlaqueMesh(mesh: Mesh, mat: PBRMaterial) {
+        mesh.material = mat
+        mesh.parent = plaqueBase
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        return mesh
+      }
+
+      const plaquePost = MeshBuilder.CreateCylinder('plaquePost', { height: 0.9, diameter: 0.1, tessellation: 8 }, scene)
+      plaquePost.position = new Vector3(0, 0.45, 0)
+      addPlaqueMesh(plaquePost, plaquePostMat)
+      const plaqueBoard = MeshBuilder.CreateBox('plaqueBoard', { width: 0.55, height: 0.4, depth: 0.05 }, scene)
+      plaqueBoard.position = new Vector3(0, 0.85, 0)
+      addPlaqueMesh(plaqueBoard, plaqueBoardMat)
+
+      settleMeshOnTerrain(plaqueBase, plaqueUp)
+      plaqueSurfacePos.copyFrom(plaqueBase.position)
+
+      const plaqueLabel = new TextBlock('plaqueLabel', '📜')
+      plaqueLabel.color = 'white'
+      plaqueLabel.fontSize = mobileFontSize(28)
+      plaqueLabel.outlineWidth = 4
+      plaqueLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(plaqueLabel)
+      plaqueLabel.linkWithMesh(plaqueBoard)
+      plaqueLabel.linkOffsetY = -50
+
+      const plaqueEnterHint = new TextBlock('plaqueEnterHint', 'Pressione E pra decifrar a placa')
+      plaqueEnterHint.color = 'white'
+      plaqueEnterHint.fontSize = mobileFontSize(18)
+      plaqueEnterHint.fontWeight = 'bold'
+      plaqueEnterHint.outlineWidth = 3
+      plaqueEnterHint.outlineColor = 'rgba(0,0,0,0.6)'
+      plaqueEnterHint.alpha = 0
+      guiTexture.addControl(plaqueEnterHint)
+      plaqueEnterHint.linkWithMesh(plaqueBoard)
+      plaqueEnterHint.linkOffsetY = -20
+      plaqueEnterHintLabel = plaqueEnterHint
+
       // Minha Casa (lab-105, primeira fatia de docs/plano-comercial-backend.md, Fase E) — espaço
       // pessoal GRATUITO de todo jogador, nunca cosmético pago (mesmo princípio já aplicado em
       // progressão/cooperação). Fachada SÓLIDA visível de fora, mesma técnica de construção das
@@ -8845,6 +9075,10 @@ export function World3D({
       // carga de página) — generosa (90s) porque ler a própria pergunta, decidir, e clicar leva
       // um tempo real de criança, e os dois raramente terminam no mesmo segundo exato.
       const COOP_COMPLETION_WINDOW_MS = 90_000
+
+      // Distância de gatilho dos 3 landmarks de missão ambiental (lab-180) — mesma faixa da
+      // carteira de estudos/desafio em dupla (objetos de tamanho parecido).
+      const ENV_CHALLENGE_TRIGGER_DISTANCE = 1.3
 
       // Distância de gatilho de Minha Casa — corrigido no lab-134 (achado real do usuário, "a casa
       // não aceita o comando E", reproduzido só depois de andar de verdade até lá, nunca com
@@ -11127,6 +11361,23 @@ export function World3D({
             !insideHouseInterior && Vector3.Distance(avatarMesh.position, coopSurfacePos) < COOP_CHALLENGE_TRIGGER_DISTANCE
           coopEnterHintLabel.alpha =
             nearLandmark && nearestRemotePlayerWithin(avatarMesh.position, COOP_PARTNER_NEARBY_DISTANCE) !== null ? 1 : 0
+        }
+
+        // Dicas "pressione E" das 3 missões ambientais (lab-180) — sempre visíveis perto do
+        // landmark, sem depender de outro jogador (diferente do desafio em dupla acima).
+        if (avatarMesh && bridgeEnterHintLabel) {
+          bridgeEnterHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+        }
+        if (avatarMesh && rocketFuelEnterHintLabel) {
+          rocketFuelEnterHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, rocketFuelSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE
+              ? 1
+              : 0
+        }
+        if (avatarMesh && plaqueEnterHintLabel) {
+          plaqueEnterHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, plaqueSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o

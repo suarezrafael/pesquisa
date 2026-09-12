@@ -186,3 +186,20 @@ export function trackPlanetTravelCompleted(toPlanetId: string): void {
 export function trackPlanetInteractionCompleted(planetId: string, kind: string): void {
   trackEvent('planet_interaction_completed', { planetId, kind })
 }
+
+// lab-180 ("Missões ambientais de aprendizagem") — nomes exatos citados pelo documento
+// (`learning_challenge_started`/`learning_challenge_completed`). `kind` identifica qual dos 3
+// landmarks novos (ponte/lógica, posto de abastecimento/matemática, placa/leitura) — allowlist
+// fixa em `server-accounts/src/domain.ts`, mesmo espírito de `kind` do
+// `trackPlanetInteractionCompleted` acima. Sem limite de "uma vez por sessão": cada tentativa é
+// seu próprio par de eventos, o que permite calcular `retry_without_quit_rate` (métrica citada
+// pelo documento, DERIVADA — proporção de `started` que eventualmente vira `completed` pelo mesmo
+// dispositivo — sem precisar de um evento próprio pra "tentativa errada", ver
+// `docs/event-catalog.md`).
+export function trackLearningChallengeStarted(kind: string): void {
+  trackEvent('learning_challenge_started', { kind })
+}
+
+export function trackLearningChallengeCompleted(kind: string): void {
+  trackEvent('learning_challenge_completed', { kind })
+}

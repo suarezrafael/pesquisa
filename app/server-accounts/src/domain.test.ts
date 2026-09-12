@@ -23,6 +23,7 @@ import {
   isValidCosmeticSlot,
   isValidDestinationPlanetId,
   isValidPlanetInteractionKind,
+  isValidLearningChallengeKind,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
   sanitizeHouseFurnitureIds,
@@ -664,6 +665,21 @@ describe('isValidPlanetInteractionKind (lab-179, "Planetas interativos v1")', ()
     expect(isValidPlanetInteractionKind('')).toBe(false)
     expect(isValidPlanetInteractionKind(123)).toBe(false)
     expect(isValidPlanetInteractionKind(null)).toBe(false)
+  })
+})
+
+describe('isValidLearningChallengeKind (lab-180, "Missões ambientais de aprendizagem")', () => {
+  it('aceita os 3 landmarks conhecidos', () => {
+    expect(isValidLearningChallengeKind('bridge')).toBe(true)
+    expect(isValidLearningChallengeKind('rocket_fuel')).toBe(true)
+    expect(isValidLearningChallengeKind('plaque')).toBe(true)
+  })
+
+  it('recusa categoria fora do conjunto conhecido', () => {
+    expect(isValidLearningChallengeKind('door_pattern')).toBe(false)
+    expect(isValidLearningChallengeKind('')).toBe(false)
+    expect(isValidLearningChallengeKind(123)).toBe(false)
+    expect(isValidLearningChallengeKind(null)).toBe(false)
   })
 })
 

@@ -20,7 +20,12 @@ import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { useHeartbeat, sendImmediateHouseVisibility } from './state/useHeartbeat'
 import type { PublicHouseSnapshot } from './state/usePlayerPublicProfile'
-import { trackFirstLearningChallenge, trackHouseVisited } from './productAnalytics'
+import {
+  trackFirstLearningChallenge,
+  trackHouseVisited,
+  trackLearningChallengeStarted,
+  trackLearningChallengeCompleted,
+} from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
 import { findPlanetQuestById } from './data/planetQuests'
@@ -130,6 +135,15 @@ function GameApp() {
   const [activeCoopQuest, setActiveCoopQuest] = useState<Quest | null>(null)
   const [coopAnswerSignalId, setCoopAnswerSignalId] = useState<string | null>(null)
   const [coopReward, setCoopReward] = useState<{ coins: number; newBadge: boolean } | null>(null)
+  // Missões ambientais (lab-180) — DIFERENTE do desafio em dupla acima: acertar aqui credita
+  // XP/moeda de verdade via `completeQuest` (é uma missão normal do pool de sempre, só alcançada
+  // por um landmark do mundo em vez de só pela escolinha), então não precisa de nenhuma ponte de
+  // volta pro `World3D.tsx` — fecha o modal e mostra o `RewardToast` de sempre, igual a
+  // `activeQuest`.
+  const [activeEnvironmentalChallenge, setActiveEnvironmentalChallenge] = useState<{
+    quest: Quest
+    kind: 'bridge' | 'rocket_fuel' | 'plaque'
+  } | null>(null)
   // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — mesma ponte de
   // `coopAnswerSignalId`/`placingFurnitureRequestId` acima: o clique em "Visitar casa" acontece
   // dentro do `FriendsPanel`, fora deste componente e do `World3D.tsx`; `id` novo a cada clique
@@ -275,6 +289,37 @@ function GameApp() {
   function handleCloseQuest() {
     if (activeQuest && !progress.completedQuestIds.includes(activeQuest.id)) resetStreak()
     setActiveQuest(null)
+  }
+
+  // Missões ambientais (lab-180) — `World3D.tsx` já sorteou a missão do tipo certo pro landmark;
+  // aqui só abre o modal e dispara `learning_challenge_started` (nomes exatos do documento,
+  // ver `productAnalytics.ts`).
+  function handleOpenEnvironmentalChallenge(quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque') {
+    setActiveEnvironmentalChallenge({ quest, kind })
+    trackLearningChallengeStarted(kind)
+  }
+
+  // Resposta certa credita XP/moeda de verdade via `completeQuest` — mesmo caminho de
+  // `handleQuestCorrect`, só que a missão veio de um landmark ambiental em vez da escolinha.
+  function handleEnvironmentalChallengeCorrect() {
+    if (!activeEnvironmentalChallenge) return
+    const { quest, kind } = activeEnvironmentalChallenge
+    const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event } = completeQuest(
+      quest,
+      entitlement?.active,
+    )
+    setReward({ quest, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event })
+    trackLearningChallengeCompleted(kind)
+    setActiveEnvironmentalChallenge(null)
+  }
+
+  // Mesmo raciocínio de `handleCloseQuest` — fechar sem responder quebra o combo de respostas
+  // certas seguidas, revisar uma missão já concluída antes não deveria punir.
+  function handleCloseEnvironmentalChallenge() {
+    if (activeEnvironmentalChallenge && !progress.completedQuestIds.includes(activeEnvironmentalChallenge.quest.id)) {
+      resetStreak()
+    }
+    setActiveEnvironmentalChallenge(null)
   }
 
   function handleSelectSurpriseQuiz(quizId: string) {
@@ -446,6 +491,7 @@ function GameApp() {
           onCoopChallengeCompleted={handleCoopChallengeCompleted}
           visitHouseRequest={visitHouseRequest}
           onVisitHouseHandled={handleVisitHouseHandled}
+          onOpenEnvironmentalChallenge={handleOpenEnvironmentalChallenge}
           onSwitchProfile={() => {
             clearActiveProfile()
             window.location.reload()
@@ -455,6 +501,7 @@ function GameApp() {
             activeSurpriseQuiz !== null ||
             activePlanetQuest !== null ||
             activeCoopQuest !== null ||
+            activeEnvironmentalChallenge !== null ||
             reward !== null ||
             coopReward !== null ||
             showHelp ||
@@ -492,6 +539,14 @@ function GameApp() {
 
       {activeCoopQuest && (
         <QuestModal quest={activeCoopQuest} onCorrect={handleCoopQuestCorrect} onClose={handleCloseCoopQuest} />
+      )}
+
+      {activeEnvironmentalChallenge && (
+        <QuestModal
+          quest={activeEnvironmentalChallenge.quest}
+          onCorrect={handleEnvironmentalChallengeCorrect}
+          onClose={handleCloseEnvironmentalChallenge}
+        />
       )}
 
       {coopReward && (
