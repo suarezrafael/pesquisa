@@ -2326,6 +2326,30 @@ export function World3D({
     ;(sceneRef.current as any)?.__refreshPet?.()
   }, [progress.equippedPetId, progress.petCareCounts])
 
+  // Bug real relatado pelo usuário num Poco C75 real, com screenshot: o HUD de depuração sempre
+  // visível (lab-67, `.world3d-debug`) sobrepunha a fileira de ícones do cabeçalho. `top: 3.6rem`
+  // fixo (`index.css`) supunha o cabeçalho cabendo numa altura previsível; `.hud-top-row` já tem
+  // `flex-wrap` como rede de segurança desde o lab-57/120 pra telas estreitas — numa tela estreita
+  // o bastante (ou com `clamp()` empurrando os botões pro tamanho máximo de toque), o cabeçalho
+  // quebra em mais linhas do que cabe nesses 3.6rem, e o debug HUD passa a cair EM CIMA dos ícones
+  // em vez de abaixo deles. Mede a altura REAL do cabeçalho (`.hud-overlay`, sempre a mesma árvore
+  // renderizada por `HudHeader.tsx`, `top: 0` fixo) via `ResizeObserver` em vez de um valor fixo —
+  // continua certo em qualquer tela/idioma/quantidade de emblemas, inclusive quando `HudHeader`
+  // ganhar mais um ícone num lab futuro (sem precisar lembrar de reajustar este valor de novo).
+  useEffect(() => {
+    const hudOverlay = document.querySelector<HTMLElement>('.hud-overlay')
+    const debugEl = debugRef.current
+    if (!hudOverlay || !debugEl) return
+    const HUD_DEBUG_GAP_PX = 6
+    function reposition() {
+      debugEl!.style.top = `${hudOverlay!.getBoundingClientRect().height + HUD_DEBUG_GAP_PX}px`
+    }
+    reposition()
+    const observer = new ResizeObserver(reposition)
+    observer.observe(hudOverlay)
+    return () => observer.disconnect()
+  }, [])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -2635,7 +2659,19 @@ export function World3D({
 
     const hemiLight = new HemisphericLight('hemi', new Vector3(0, 1, 0), scene)
     hemiLight.intensity = 0.3
-    hemiLight.groundColor = new Color3(0.4, 0.35, 0.3)
+    // 0.4/0.35/0.3 → 0.55/0.5/0.45 (lab-180, investigando "morros invisíveis"/"chão preto"
+    // relatado num Poco C75 real): `groundColor` é o que ilumina qualquer face virada pra longe
+    // do "pra cima" do MUNDO (0,1,0) — que num planeta REDONDO é boa parte da superfície (todo
+    // platô/rampa que não aponta quase reto pra cima), não só um "lado de baixo" raro como seria
+    // num cenário plano. Combinado com uma face também virada pra longe do `sunLight`, essa era
+    // a ÚNICA fonte de luz de preenchimento antes do ambiente PBR (`environmentTexture` acima)
+    // entrar — e gerar o PMREM desse ambiente em tempo real é caro o bastante (ver comentário lá)
+    // pra não estar pronto ainda bem nos primeiros quadros, exatamente quando esse piso de
+    // ambiente mais importa. Mais claro garante uma leitura mínima do relevo mesmo nesse
+    // intervalo, sem clarear visivelmente o resto do jogo (a maior parte da superfície já
+    // recebe luz direta do sol OU o ambiente PBR, então a mudança só é perceptível bem no lado
+    // de sombra).
+    hemiLight.groundColor = new Color3(0.55, 0.5, 0.45)
 
     const sunLight = new DirectionalLight('sun', new Vector3(-0.6, -1.2, -0.4), scene)
     sunLight.intensity = 1.0
@@ -3623,7 +3659,18 @@ export function World3D({
 
       // IBL real: HDRI CC0 (Poly Haven, kiara_4_mid-morning) — reflexo de ambiente de verdade
       // nos materiais PBR, não só luz hemisférica/direcional aproximada.
-      const hdrTexture = new HDRCubeTexture('/assets/hdri/kiara_4_mid-morning_1k.hdr', scene, 256)
+      //
+      // Bug real relatado num Poco C75 real (lab-180, "morros invisíveis"/"chão preto"):
+      // materiais PBR dependem MUITO desse ambiente pra iluminação difusa/especular indireta —
+      // sem ele (ou com ele ainda gerando o PMREM de mipmaps a partir do `.hdr` cru), qualquer
+      // face virada pra longe do sol (`sunLight`) e da luz hemisférica (que usa "pra cima" do
+      // MUNDO, não a normal local da esfera do planeta — uma aproximação imperfeita pra um
+      // planeta redondo) fica sem NENHUMA luz de preenchimento, lendo como preto sólido. Gerar o
+      // PMREM em tempo real a partir de um `.hdr` cru (não um `.env` pré-filtrado) é caro de CPU
+      // — resolução menor em `isLowEndDevice` (mesmo padrão já usado pro shadow map/MSAA/
+      // partículas acima) reduz esse custo, tornando menos provável que a geração fique
+      // incompleta/lenta demais bem na hora em que os primeiros quadros já estão renderizando.
+      const hdrTexture = new HDRCubeTexture('/assets/hdri/kiara_4_mid-morning_1k.hdr', scene, isLowEndDevice ? 128 : 256)
       scene.environmentTexture = hdrTexture
       scene.environmentIntensity = 0.75
       scene.createDefaultSkybox(hdrTexture, true, 500)
@@ -8947,13 +8994,20 @@ export function World3D({
       // do personagem/professor (buildStudentFigure), só que parado (sem ciclo de caminhada) e
       // afundado até a altura da água, com um balancinho de "boiando" no loop de render.
       //
-      // Removida em aparelho fraco (lab-66, pedido do usuário: "os FPS ficam muito pesados no
-      // tablet... se ajudar renderizar menos elementos pode excluir os NPCs da piscina e a
-      // própria piscina") — é a decoração mais cara do mapa (cada pessoa reaproveita o boneco
-      // completo do jogador, `buildStudentFigure`, não uma malha simples feito peixe/pato/
-      // tartaruga). Mesmo esquema de variáveis hoisted da lagoa acima — o laço de animação mais
-      // abaixo lê `poolCenterPos`/`poolForward`/`poolRight`/`poolUp`, mas nunca itera de verdade
-      // porque `poolPeople` fica vazio.
+      // lab-66, pedido do usuário: "os FPS ficam muito pesados no tablet... se ajudar renderizar
+      // menos elementos pode excluir os NPCs da piscina e a própria piscina" — a implementação
+      // original cortou a piscina INTEIRA (água+borda+gente) em `isLowEndDevice`. Bug real
+      // relatado num Poco C75 real (lab-180): a bacia (`applyBasin`, `terrainHeight`) sempre
+      // esculpe a depressão no relevo, incondicional a `isLowEndDevice` (faz parte da MESMA malha
+      // do planeta) — sem a água/borda pra preencher, um jogador em QUALQUER celular (a regex de
+      // `isLowEndDevice` casa com todo Android/iPhone/tablet, não só GPU fraca de verdade) via só
+      // um buraco vazio no chão, lendo como "a piscina está debaixo da terra". A parte
+      // genuinamente CARA (citada no próprio comentário do lab-66) é a gente NADANDO — cada
+      // pessoa reaproveita o boneco completo do jogador (`buildStudentFigure`), não uma malha
+      // simples feito peixe/pato/tartaruga; água+borda são só 2 malhas baratas (cilindro+torus),
+      // do mesmo custo de qualquer outro objeto decorativo já construído sem essa exclusão.
+      // Reduz o corte pro que era caro de verdade: água/borda agora constroem em TODO aparelho,
+      // só as pessoas continuam de fora em `isLowEndDevice`.
       let poolUp = Vector3.Up()
       let poolCenterPos = Vector3.Zero()
       let poolForward = Vector3.Right()
@@ -8987,9 +9041,15 @@ export function World3D({
         chatLabel: TextBlock
         chatTimer: number
       }[] = []
-      if (!isLowEndDevice) {
+      {
         poolUp = POOL_CENTER_DIR
-        poolCenterPos = poolUp.scale(PLANET_RADIUS + terrainHeight(poolUp) + 0.25)
+        // `terrainGroundRadial` (raycast físico real contra o colisor `MESH` do planeta) em vez
+        // da fórmula analítica sozinha (`terrainHeight`) — mesma correção já aplicada a
+        // escolas/casa/carteira/desafio em dupla desde o lab-95: a malha de verdade (só 48
+        // segmentos) pode divergir da curva suave da bacia perto da borda do smoothstep, o que
+        // bastava pra deixar a água ligeiramente alta/baixa demais em relação ao chão real ao
+        // redor.
+        poolCenterPos = poolUp.scale(terrainGroundRadial(poolUp, terrainHeight(poolUp)) + 0.25)
         poolForward = Vector3.Cross(poolUp, Vector3.Right()).normalize()
         poolRight = Vector3.Cross(poolUp, poolForward).normalize()
         const poolRadius = 1.1
@@ -9018,32 +9078,37 @@ export function World3D({
         shadowGenerator.addShadowCaster(poolRim)
 
         const POOL_PEOPLE_COUNT = 5
-        for (let i = 0; i < POOL_PEOPLE_COUNT; i++) {
-          const figure = buildStudentFigure(scene, POOL_SHIRT_COLORS[i], shadowGenerator)
-          const angle = (i / POOL_PEOPLE_COUNT) * Math.PI * 2
-          const localX = Math.cos(angle) * poolRadius * 0.5
-          const localZ = Math.sin(angle) * poolRadius * 0.5
+        // Só a gente nadando continua de fora em aparelho fraco (lab-66) — é a parte cara de
+        // verdade (cada pessoa reaproveita o boneco completo do jogador via `buildStudentFigure`,
+        // ver comentário no topo deste bloco); água/borda acima já constroem em todo aparelho.
+        if (!isLowEndDevice) {
+          for (let i = 0; i < POOL_PEOPLE_COUNT; i++) {
+            const figure = buildStudentFigure(scene, POOL_SHIRT_COLORS[i], shadowGenerator)
+            const angle = (i / POOL_PEOPLE_COUNT) * Math.PI * 2
+            const localX = Math.cos(angle) * poolRadius * 0.5
+            const localZ = Math.sin(angle) * poolRadius * 0.5
 
-          // Bolha de fala que pisca de vez em quando — só pra dar a impressão de estarem
-          // conversando (não é chat de verdade, é decoração ambiente).
-          const chatLabel = new TextBlock(`poolChat-${i}`, '')
-          chatLabel.color = 'white'
-          chatLabel.fontSize = mobileFontSize(20)
-          chatLabel.outlineWidth = 3
-          chatLabel.outlineColor = 'rgba(0,0,0,0.5)'
-          chatLabel.alpha = 0
-          guiTexture.addControl(chatLabel)
-          chatLabel.linkWithMesh(figure.head)
-          chatLabel.linkOffsetY = -55
+            // Bolha de fala que pisca de vez em quando — só pra dar a impressão de estarem
+            // conversando (não é chat de verdade, é decoração ambiente).
+            const chatLabel = new TextBlock(`poolChat-${i}`, '')
+            chatLabel.color = 'white'
+            chatLabel.fontSize = mobileFontSize(20)
+            chatLabel.outlineWidth = 3
+            chatLabel.outlineColor = 'rgba(0,0,0,0.5)'
+            chatLabel.alpha = 0
+            guiTexture.addControl(chatLabel)
+            chatLabel.linkWithMesh(figure.head)
+            chatLabel.linkOffsetY = -55
 
-          poolPeople.push({
-            figure,
-            localX,
-            localZ,
-            phase: Math.random() * Math.PI * 2,
-            chatLabel,
-            chatTimer: 2 + Math.random() * 4,
-          })
+            poolPeople.push({
+              figure,
+              localX,
+              localZ,
+              phase: Math.random() * Math.PI * 2,
+              chatLabel,
+              chatTimer: 2 + Math.random() * 4,
+            })
+          }
         }
       }
 

@@ -931,7 +931,12 @@ a.nickname-generate-btn {
      simplesmente cortar, virando uma bagunça ilegível dos dois textos sobrepostos. `max-width` +
      quebra de linha normal fazem ela virar 2-3 linhas curtas dentro da tela, sem invadir o canto
      esquerdo onde o painel do HUD já está. Descida um pouco (`top`) pra ficar abaixo da fileira
-     de ícones do HUD em vez de disputar a mesma linha. */
+     de ícones do HUD em vez de disputar a mesma linha.
+     lab-180, bug real relatado num Poco C75 real: esse `top` fixo passou a ficar EM CIMA dos
+     ícones (cabeçalho cresceu/quebrou em mais linhas do que cabia aqui). `top` agora é escrito
+     dinamicamente por um `ResizeObserver` em `World3D.tsx` (mede a altura real do `.hud-overlay`)
+     — o valor abaixo só sobrevive como estado inicial pro instante entre o primeiro paint e o
+     efeito rodar, nunca mais a fonte de verdade. */
   top: 3.6rem;
   right: 0.75rem;
   max-width: min(60vw, 320px);
