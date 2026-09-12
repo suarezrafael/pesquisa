@@ -1,8 +1,8 @@
 # Laboratório 185 — Medição de coortes de retenção e qualidade
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-12
-Fim: -
+Fim: 2026-09-12
 Commit inicial: c324d29860d896eca704104fc25369b355710464
 
 ## Objetivo do laboratório
@@ -56,50 +56,61 @@ descrição do backlog):
 
 ## Funcionalidades planejadas
 
-- [ ] 3 eventos novos na allowlist (`PRODUCT_EVENT_TYPES`) + tracker cliente (mesmo padrão fino de
+- [x] 3 eventos novos na allowlist (`PRODUCT_EVENT_TYPES`) + tracker cliente (mesmo padrão fino de
       `trackPlayClick`), um por área citada no backlog:
       - `camera_recenter_used` (clique no botão ⟲, lab-178) — é literalmente a métrica que o
         próprio Lab 178 já prometia medir ("menor uso repetido de recenter",
         `docs/growth-retention-monetization-backlog.md`, seção Lab 178) e nunca instrumentou.
       - `cosmetic_equipped` (equipar boné/óculos/cor via lojinha, `AvatarShop.tsx`/`useProfile.ts`)
-        — sinal de engajamento com o loop de customização.
+        — sinal de engajamento com o loop de customização. Implementado nos 7 slots (`hat`,
+        `shirtColor`, `pantsColor`, `shoeColor`, `backpackColor`, `hairShape`, `glasses`) dentro de
+        `useProfile.ts`, não na UI — dispara não importa qual componente chame a função de equipar.
       - `planet_travel_completed` (pouso bem-sucedido, `landRocket()`, `meta: { toPlanetId }`) —
-        base pra medir exploração de planetas antes do Lab 179 adicionar interações lá dentro.
+        base pra medir exploração de planetas antes do Lab 179 adicionar interações lá dentro. Só
+        na chegada de VERDADE (`arrivedAtDestination`), não ao desistir no meio e voltar à origem.
       (referência: backlog, Lab 185, "eventos novos necessários para câmera, loja e planetas")
-- [ ] `docs/event-catalog.md` atualizado com os 3 eventos novos (mesmo formato de tabela já usado)
-      e uma seção explícita de "nível de agregação" documentando device_id vs. perfil anônimo (a
-      limitação já é real e parcialmente documentada — consolidar num lugar claro).
+- [x] `docs/event-catalog.md` atualizado com os 3 eventos novos (mesmo formato de tabela já usado)
+      e uma seção nova "Nível de agregação" consolidando a limitação device_id-only (antes
+      espalhada em notas por evento).
       (referência: backlog, Lab 185, "catálogo de eventos, allowlist de propriedades, nível de
       agregação")
-- [ ] `GET /admin/metrics` ganha `newDevicesToday` (contagem de `device_id` cujo `day0` é hoje —
+- [x] `GET /admin/metrics` ganha `newDevicesToday` (contagem de `device_id` cujo `day0` é hoje —
       o "D0" que falta hoje; `totalDevices` já existe mas é cumulativo desde sempre, não um
       corte diário) ao lado de `d1Retention`/`d7Retention` já existentes.
       (referência: backlog, Lab 185, critério de aceite "D0/D1/D7... possuem evento/propriedade
       mapeados")
-- [ ] `GET /admin/metrics` ganha comparação de coorte antes/depois: parâmetro de consulta opcional
+- [x] `GET /admin/metrics` ganha comparação de coorte antes/depois: parâmetro de consulta opcional
       (`?cohortSplitDate=YYYY-MM-DD`) que, quando presente, recalcula d1/d7 retenção separado pra
       dispositivos com `day0` antes vs. a partir dessa data (reaproveita a MESMA CTE já existente,
-      só com uma cláusula `where` a mais) — devolvido como `cohortComparison: { splitDate, before:
-      {...}, after: {...} }` quando o parâmetro é passado, omitido quando não é (não muda o
-      formato de resposta pra quem já consome o endpoint sem o parâmetro).
+      só com `count(*) filter (where ...)` pra devolver os dois grupos numa única ida ao banco) —
+      devolvido como `cohortComparison: { splitDate, before: {...}, after: {...} }` quando o
+      parâmetro é passado, omitido quando não é (não muda o formato de resposta pra quem já
+      consome o endpoint sem o parâmetro). Data inválida devolve 400 com mensagem clara
+      (`isValidIsoDateOnly`, nova função pura em `domain.ts`, testada).
       (referência: backlog, Lab 185, critério de aceite "a saída permite comparar coortes
       antes/depois")
-- [ ] `weeklyFunnel` ganha as 3 chaves novas (`cameraRecenterUsed`, `cosmeticEquipped`,
+- [x] `weeklyFunnel` ganha as 3 chaves novas (`cameraRecenterUsed`, `cosmeticEquipped`,
       `planetTravelCompleted`), mesmo padrão de `weeklyDevices(tipo)` já usado pras outras 8
       chaves.
-- [ ] Nota de guardrails no próprio JSON de resposta (`guardrails: string[]` ou campo similar) —
-      device-based, não criança-based; nenhum dado pessoal infantil coletado; números pequenos
-      (`sampleSize` baixo) devem ser lidos com cautela. (referência: backlog, Lab 185, critério de
-      aceite "guardrails aparecem no relatório")
-- [ ] Teste automatizado das funções puras extraídas (ex.: se a lógica de split de coorte virar
-      uma função testável fora do handler HTTP, seguindo o padrão de `domain.ts` já usado pro
-      resto do backend) — só se houver lógica pura real a extrair; a query SQL em si não é
-      testável por unidade da forma como o resto de `handleAdminMetrics` já funciona hoje (sem
-      teste próprio, é I/O puro).
-- [ ] Verificado ao vivo contra produção (mesmo padrão de todo lab anterior que mexeu em
-      `server-accounts`): `wrangler dev` local, banco de PRODUÇÃO real, só leitura pros endpoints
-      de métrica; os 3 eventos novos disparados de verdade num navegador real e confirmados
-      aparecendo no `weeklyFunnel`.
+- [x] Nota de guardrails no próprio JSON de resposta (`guardrails: string[]`) — device-based, não
+      criança-based; nenhum dado pessoal infantil coletado; amostras pequenas produzem percentuais
+      instáveis. (referência: backlog, Lab 185, critério de aceite "guardrails aparecem no
+      relatório")
+- [x] Teste automatizado da função pura nova: `isValidIsoDateOnly` (`domain.ts`) ganhou 3 casos de
+      teste em `domain.test.ts` (data real incl. ano bissexto, formato errado/vazio/com hora, data
+      inexistente no calendário tipo 30 de fevereiro) — a query SQL em si continua não testável
+      por unidade, mesmo padrão do resto de `handleAdminMetrics` (I/O puro, sem lógica isolável).
+- [x] Verificado ao vivo contra produção (mesmo padrão de todo lab anterior que mexeu em
+      `server-accounts`): `wrangler dev` local (porta 8790) contra o banco de PRODUÇÃO real, só
+      leitura — `newDevicesToday`/`weeklyFunnel` com as 3 chaves novas responderam corretamente;
+      `?cohortSplitDate=2026-09-01` devolveu `before`/`after` cuja soma de `eligibleDevices` (76+47)
+      bateu EXATAMENTE com `totalDevices` (123); data malformada (`2026-99-99`) confirmada
+      devolvendo 400. Os 3 eventos novos disparados de verdade num navegador real (Chrome via
+      automação, `npm run dev` local): `camera_recenter_used` no clique do botão ⟲, `cosmetic_equipped`
+      (`meta.slot: "hat"`) ao equipar um boné na lojinha, `planet_travel_completed`
+      (`meta.toPlanetId: "marte"`) numa viagem de foguete completa de verdade (embarcar, decolar,
+      pousar — cartão-postal de Marte confirmado na tela), todos capturados via monkey-patch de
+      `window.fetch`.
 
 ## Fora de escopo (explicitamente adiado)
 

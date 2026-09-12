@@ -28,6 +28,7 @@ import {
   isSelfFriendRequest,
   isTokenRevoked,
   isValidBadgeList,
+  isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
@@ -1415,6 +1416,20 @@ async function handleSubmitNps(request: Request, env: Env): Promise<Response> {
 // partir de `product_events` (nenhuma tabela de agregado pré-computado ainda; volume baixo o
 // bastante hoje pra isso não importar). Protegido por segredo compartilhado no header (não é dado
 // de família nenhuma específica, mas ainda é métrica de negócio agregada — não fica público).
+// lab-185 — mesmo cálculo de "fração que retornou" usado em `d1Retention`/`d7Retention` desde
+// sempre, extraído aqui só porque a comparação de coorte antes/depois (`cohortSplitDate`) precisa
+// do MESMO cálculo aplicado duas vezes (antes/depois) em vez de uma.
+type RetentionBucket = { eligibleDevices: number; returnedDevices: number; percent: number | null }
+function buildRetentionBucket(eligibleRaw: string, returnedRaw: string): RetentionBucket {
+  const eligible = Number(eligibleRaw)
+  const returned = Number(returnedRaw)
+  return {
+    eligibleDevices: eligible,
+    returnedDevices: returned,
+    percent: eligible > 0 ? Math.round((returned / eligible) * 10000) / 100 : null,
+  }
+}
+
 async function handleAdminMetrics(request: Request, env: Env): Promise<Response> {
   const secret = request.headers.get('x-admin-secret')
   if (!secret || secret !== env.ADMIN_METRICS_SECRET) {
@@ -1451,8 +1466,80 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       (select count(*) from d1_eligible) as d1_eligible,
       (select count(*) from d1_returned) as d1_returned,
       (select count(*) from d7_eligible) as d7_eligible,
-      (select count(*) from d7_returned) as d7_returned
-  `) as { d1_eligible: string; d1_returned: string; d7_eligible: string; d7_returned: string }[]
+      (select count(*) from d7_returned) as d7_returned,
+      -- lab-185: "D0" que faltava, dispositivos NOVOS hoje (totalDevices mais abaixo e' o
+      -- acumulado desde sempre, um numero diferente)
+      (select count(*) from first_seen where day0 = current_date) as new_today
+  `) as { d1_eligible: string; d1_returned: string; d7_eligible: string; d7_returned: string; new_today: string }[]
+
+  // lab-185 (critério de aceite "a saída permite comparar coortes antes/depois"): quando
+  // `?cohortSplitDate=YYYY-MM-DD` vem na query string, recalcula a MESMA lógica de D1/D7 acima,
+  // só que separada em dois grupos por `day0` (dia do primeiro evento) — antes vs. a partir dessa
+  // data. Reaproveita a mesma CTE (`first_seen`/`d*_eligible`/`d*_returned`), só troca o `select`
+  // final por `filter (where ...)` pra devolver os dois grupos numa única ida ao banco.
+  const cohortSplitDateParam = new URL(request.url).searchParams.get('cohortSplitDate')
+  let cohortComparison: {
+    splitDate: string
+    before: { d1: RetentionBucket; d7: RetentionBucket }
+    after: { d1: RetentionBucket; d7: RetentionBucket }
+  } | null = null
+  if (cohortSplitDateParam) {
+    if (!isValidIsoDateOnly(cohortSplitDateParam)) {
+      return Response.json({ error: 'cohortSplitDate inválida, use YYYY-MM-DD' }, { status: 400 })
+    }
+    const [cohortRow] = (await sql`
+      with first_seen as (
+        select device_id, min(occurred_at)::date as day0
+        from product_events
+        group by device_id
+      ),
+      d1_eligible as (
+        select device_id, day0 from first_seen where day0 <= current_date - 1
+      ),
+      d1_returned as (
+        select distinct fs.device_id, fs.day0
+        from d1_eligible fs
+        join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 1
+      ),
+      d7_eligible as (
+        select device_id, day0 from first_seen where day0 <= current_date - 7
+      ),
+      d7_returned as (
+        select distinct fs.device_id, fs.day0
+        from d7_eligible fs
+        join product_events pe on pe.device_id = fs.device_id and pe.occurred_at::date = fs.day0 + 7
+      )
+      select
+        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_eligible) as before_d1_eligible,
+        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_returned) as before_d1_returned,
+        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d7_eligible) as before_d7_eligible,
+        (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d7_returned) as before_d7_returned,
+        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d1_eligible) as after_d1_eligible,
+        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d1_returned) as after_d1_returned,
+        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d7_eligible) as after_d7_eligible,
+        (select count(*) filter (where day0 >= ${cohortSplitDateParam}::date) from d7_returned) as after_d7_returned
+    `) as {
+      before_d1_eligible: string
+      before_d1_returned: string
+      before_d7_eligible: string
+      before_d7_returned: string
+      after_d1_eligible: string
+      after_d1_returned: string
+      after_d7_eligible: string
+      after_d7_returned: string
+    }[]
+    cohortComparison = {
+      splitDate: cohortSplitDateParam,
+      before: {
+        d1: buildRetentionBucket(cohortRow.before_d1_eligible, cohortRow.before_d1_returned),
+        d7: buildRetentionBucket(cohortRow.before_d7_eligible, cohortRow.before_d7_returned),
+      },
+      after: {
+        d1: buildRetentionBucket(cohortRow.after_d1_eligible, cohortRow.after_d1_returned),
+        d7: buildRetentionBucket(cohortRow.after_d7_eligible, cohortRow.after_d7_returned),
+      },
+    }
+  }
 
   const [session] = (await sql`
     select avg((meta->>'durationMs')::numeric) as avg_duration_ms, count(*) as sample_size
@@ -1483,10 +1570,8 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
   `) as { score: number }[]
   const nps = calculateNpsScore(npsRows.map((row) => row.score))
 
-  const d1Eligible = Number(retention.d1_eligible)
-  const d1Returned = Number(retention.d1_returned)
-  const d7Eligible = Number(retention.d7_eligible)
-  const d7Returned = Number(retention.d7_returned)
+  const d1Retention = buildRetentionBucket(retention.d1_eligible, retention.d1_returned)
+  const d7Retention = buildRetentionBucket(retention.d7_eligible, retention.d7_returned)
 
   // lab-165 (docs/market-metrics-engagement-backlog.md, "Lab 164" no documento) — funil SEMANAL
   // (últimos 7 dias), diferente de tudo acima (que é média/total acumulado desde o início do
@@ -1522,6 +1607,10 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // resto do funil (nenhum evento carrega identificador de perfil, só device id anônimo), não
     // uma regressão deste campo; ver nota completa em docs/event-catalog.md.
     houseVisited: weeklyDevices('house_visited'),
+    // lab-185 — mesma convenção/limitação do resto do funil (dispositivos únicos, não crianças).
+    cameraRecenterUsed: weeklyDevices('camera_recenter_used'),
+    cosmeticEquipped: weeklyDevices('cosmetic_equipped'),
+    planetTravelCompleted: weeklyDevices('planet_travel_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,
@@ -1550,16 +1639,12 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
 
   return Response.json({
     totalDevices: Number(devices.total_devices),
-    d1Retention: {
-      eligibleDevices: d1Eligible,
-      returnedDevices: d1Returned,
-      percent: d1Eligible > 0 ? Math.round((d1Returned / d1Eligible) * 10000) / 100 : null,
-    },
-    d7Retention: {
-      eligibleDevices: d7Eligible,
-      returnedDevices: d7Returned,
-      percent: d7Eligible > 0 ? Math.round((d7Returned / d7Eligible) * 10000) / 100 : null,
-    },
+    newDevicesToday: Number(retention.new_today),
+    d1Retention,
+    d7Retention,
+    // lab-185: só aparece quando `?cohortSplitDate=` foi passado — não muda o formato pra quem já
+    // consome este endpoint sem o parâmetro.
+    ...(cohortComparison ? { cohortComparison } : {}),
     avgSessionDurationMs: session.avg_duration_ms ? Math.round(Number(session.avg_duration_ms)) : null,
     sessionSampleSize: Number(session.sample_size),
     avgQuestsCompletedPerDevice: quests.avg_quests_per_device
@@ -1576,6 +1661,16 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     weeklyCommercial: {
       newFamilies: weeklyCommercialRow.new_families,
     },
+    // lab-185 (critério de aceite "guardrails aparecem no relatório") — repete no PRÓPRIO JSON as
+    // limitações já documentadas em `docs/event-catalog.md`, pra quem só olha a resposta da API
+    // (sem abrir o catálogo) não interpretar os números como mais precisos do que são.
+    guardrails: [
+      'Agregação é por dispositivo (device_id anônimo em localStorage), não por criança — um' +
+        ' aparelho compartilhado/trocado entre irmãos ou reinstalado conta como dispositivos' +
+        ' diferentes; nenhum evento carrega nome, e-mail ou identificador de perfil.',
+      'Amostras pequenas (eligibleDevices/sampleSize baixos) produzem percentuais instáveis —' +
+        ' evite tirar conclusão de uma coorte com poucas dezenas de dispositivos.',
+    ],
   })
 }
 

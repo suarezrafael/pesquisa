@@ -1,16 +1,32 @@
 # Laboratório atual
 
-**Em andamento: labs/lab-185-medicao-coortes/** — medição de coortes de retenção e qualidade.
+Último concluído: labs/lab-185-medicao-coortes/ — medição de coortes de retenção e qualidade.
 Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 185", prioridade P0/P1 — confirmado
 com o usuário via `AskUserQuestion` como o próximo lab (em vez de pular pro Lab 179) depois de
-checar que câmera (lab-178), lojinha (lab-176) e planetas não têm nenhum evento de analytics hoje.
-Investigação prévia achou que D1/D7 retenção já existe (`handleAdminMetrics`) mas sem D0 exposto e
-sem comparação de coorte antes/depois — o núcleo genuinamente novo deste lab. Escopo: 3 eventos
-novos (`camera_recenter_used`, `cosmetic_equipped`, `planet_travel_completed`), catálogo atualizado,
-`newDevicesToday` (D0), comparação de coorte via `?cohortSplitDate=`, guardrails no relatório. Ver
-`labs/lab-185-medicao-coortes/FEATURES.md`.
+checar que câmera (lab-178), lojinha (lab-176) e planetas não tinham nenhum evento de analytics.
+Investigação prévia achou que D1/D7 retenção já existia (`handleAdminMetrics`) mas sem D0 exposto e
+sem comparação de coorte antes/depois — o núcleo genuinamente novo deste lab. **3 eventos novos**
+(`camera_recenter_used`, `cosmetic_equipped`, `planet_travel_completed`) na allowlist
+`PRODUCT_EVENT_TYPES` + trackers em `productAnalytics.ts`, disparados em `World3D.tsx`
+(`handleRecenterCamera`/`landRocket`) e `useProfile.ts` (7 funções `equip*`, dentro do hook, não da
+UI). `docs/event-catalog.md` ganhou as 3 linhas + seção nova "Nível de agregação" consolidando a
+limitação device_id-only. `GET /admin/metrics` ganhou `newDevicesToday` (D0, reaproveita a MESMA
+CTE de D1/D7, sem round-trip extra), `cohortComparison` via `?cohortSplitDate=YYYY-MM-DD`
+(before/after usando `count(*) filter (where ...)` na mesma CTE, sem migração — só aparece quando o
+parâmetro é passado), `weeklyFunnel` com as 3 chaves novas, e `guardrails: string[]` no próprio
+JSON. Nova função pura testada: `isValidIsoDateOnly` (`domain.ts`, checa calendário real, não só
+regex — "30 de fevereiro" falha). `npx tsc -b`/`--noEmit` limpos; testes: app 178/178 (inalterado),
+server-accounts 134/134 (3 novos). `npm run build` sem regressão. **Verificado ao vivo contra
+produção** (`wrangler dev` local porta 8790, banco real, só leitura): `?cohortSplitDate=2026-09-01`
+devolveu before(76)+after(47)=123, EXATAMENTE igual a `totalDevices`; data malformada confirmada
+devolvendo 400. **Verificado ao vivo num navegador real**: os 3 eventos novos capturados via
+monkey-patch de `window.fetch` — `camera_recenter_used` no clique do ⟲; `cosmetic_equipped`
+(`meta.slot: "hat"`) equipando um boné de verdade na lojinha; `planet_travel_completed`
+(`meta.toPlanetId: "marte"`) numa viagem de foguete completa (embarque → decolagem → pouso,
+cartão-postal de Marte confirmado na tela). Sem migração de banco. Ver
+`labs/lab-185-medicao-coortes/CONTEXT.md`.
 
-Último concluído: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
+Antes desse: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
 Origem: `docs/growth-retention-monetization-backlog.md`, seção 7/12, "Lab 178", prioridade P0,
 próximo item da ordem recomendada após o lab-177. Investigação prévia (antes de codar) achou que
 boa parte do escopo do backlog já estava implementada por labs anteriores (giro por arrasto mouse/

@@ -185,6 +185,11 @@ const PRODUCT_EVENT_TYPES = new Set([
   // detalhe completo em docs/event-catalog.md) a "visitas por criança" citada no documento, ver
   // app/src/productAnalytics.ts.
   'house_visited',
+  // lab-185 ("Lab 185 - Medição de coortes") — câmera, lojinha e planetas não tinham nenhum
+  // evento próprio, ver app/src/productAnalytics.ts.
+  'camera_recenter_used',
+  'cosmetic_equipped',
+  'planet_travel_completed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -405,6 +410,22 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 export function isValidUuid(value: string): boolean {
   return UUID_PATTERN.test(value)
+}
+
+// lab-185 (comparação de coorte antes/depois em `GET /admin/metrics`, `?cohortSplitDate=`) — só
+// `YYYY-MM-DD` (sem hora/fuso, a query compara contra uma coluna `date`). O regex sozinho aceita
+// "2026-02-30"; o `Date.UTC` + re-serialização confere que a data existe de verdade (meses/dias
+// fora do calendário viram outro dia quando o JS "normaliza", daí a comparação de string bater
+// diferente do que foi digitado).
+const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+export function isValidIsoDateOnly(value: string): boolean {
+  if (!ISO_DATE_ONLY_PATTERN.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const asUtc = new Date(Date.UTC(year, month - 1, day))
+  return (
+    asUtc.getUTCFullYear() === year && asUtc.getUTCMonth() === month - 1 && asUtc.getUTCDate() === day
+  )
 }
 
 // lab-160 — um jogador não pode pedir amizade pra si mesmo (o `playerId` guardado localmente é

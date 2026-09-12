@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Profile } from '../types'
 import { createProfileSlot, loadProfile, saveProfile } from './storage'
+import { trackCosmeticEquipped } from '../productAnalytics'
 
 export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile())
@@ -42,6 +43,9 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    // lab-185: só ao equipar um item de verdade, não ao voltar pro padrão (`null`) — o sinal de
+    // engajamento é "escolheu um cosmético", não "removeu um".
+    if (hatId) trackCosmeticEquipped('hat')
   }
 
   // Personalização de cores/cabelo (lab-73) — mesmo formato do `equipHat` acima, um por eixo
@@ -54,6 +58,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id) trackCosmeticEquipped('shirtColor')
   }
 
   function equipPantsColor(id: string | null) {
@@ -63,6 +68,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id) trackCosmeticEquipped('pantsColor')
   }
 
   function equipShoeColor(id: string | null) {
@@ -72,6 +78,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id) trackCosmeticEquipped('shoeColor')
   }
 
   function equipBackpackColor(id: string | null) {
@@ -81,6 +88,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id) trackCosmeticEquipped('backpackColor')
   }
 
   function equipHairShape(id: string | null) {
@@ -90,6 +98,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id) trackCosmeticEquipped('hairShape')
   }
 
   function equipGlasses(id: string | null) {
@@ -99,6 +108,7 @@ export function useProfile() {
       saveProfile(next)
       return next
     })
+    if (id) trackCosmeticEquipped('glasses')
   }
 
   return {

@@ -25,6 +25,7 @@ import {
   sanitizeHouseFurnitureIds,
   sanitizeHousePlacements,
   isValidEquippedLook,
+  isValidIsoDateOnly,
   isValidNpsScore,
   isValidProductEventType,
   isValidProgressBackupPayload,
@@ -560,6 +561,26 @@ describe('isValidUuid (lab-159)', () => {
     expect(isValidUuid('')).toBe(false)
     expect(isValidUuid('não sou um uuid')).toBe(false)
     expect(isValidUuid('9b1deb4d-3b7d-4bad-9bdd')).toBe(false)
+  })
+})
+
+describe('isValidIsoDateOnly (lab-185)', () => {
+  it('aceita uma data YYYY-MM-DD real', () => {
+    expect(isValidIsoDateOnly('2026-02-14')).toBe(true)
+    expect(isValidIsoDateOnly('2024-02-29')).toBe(true) // ano bissexto
+  })
+
+  it('recusa formato errado, string vazia ou texto arbitrário', () => {
+    expect(isValidIsoDateOnly('')).toBe(false)
+    expect(isValidIsoDateOnly('não sou uma data')).toBe(false)
+    expect(isValidIsoDateOnly('2026-9-9')).toBe(false) // sem zero à esquerda
+    expect(isValidIsoDateOnly('2026-09-09T00:00:00Z')).toBe(false) // com hora
+  })
+
+  it('recusa data que não existe no calendário mesmo com formato certo', () => {
+    expect(isValidIsoDateOnly('2026-02-30')).toBe(false)
+    expect(isValidIsoDateOnly('2026-13-01')).toBe(false)
+    expect(isValidIsoDateOnly('2023-02-29')).toBe(false) // 2023 não é bissexto
   })
 })
 

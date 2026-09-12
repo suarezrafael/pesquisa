@@ -88,7 +88,7 @@ import {
   petStageScale,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
-import { trackFirstControl } from '../productAnalytics'
+import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
@@ -3075,6 +3075,9 @@ export function World3D({
           currentWorldCenter = planet.center
           currentGroundBaseFn = () => planet.radius
           teleportAvatarTo(planet.center, offsetLandingUp(planet.landingUp, planet.radius, 1.8), currentGroundBaseFn)
+          // lab-185: só na chegada de verdade ao destino — desistir no meio do caminho e pousar
+          // de volta na origem (`!arrivedAtDestination`) não é uma "viagem completada".
+          if (arrivedAtDestination) trackPlanetTravelCompleted(arrivedPlanetId)
 
           // Cartão-postal colecionável (lab-141) — concedido na PRIMEIRA chegada de verdade a
           // qualquer planeta-destino (idempotente, `useProgress().collectPostcard` não faz nada
@@ -11259,6 +11262,7 @@ export function World3D({
   // dentro/fora de casa.
   function handleRecenterCamera() {
     ;(sceneRef.current as any)?.__recenterCamera?.()
+    trackCameraRecenterUsed()
   }
 
   // Botão de toque genérico pra ação da tecla E (lab-58, pedido do usuário: "se você estiver no
