@@ -38,8 +38,10 @@ itens planejados:
 - **Nova função pura testada**: `isValidIsoDateOnly` (`domain.ts`) valida `YYYY-MM-DD` com
   checagem de calendário real (não só regex — `30 de fevereiro` passa no regex mas falha na
   reconstrução via `Date.UTC`), usada pra validar `cohortSplitDate` antes de interpolar na query
-  (400 em vez de erro de SQL/resultado sem sentido com uma data malformada). 3 casos de teste em
-  `domain.test.ts`.
+  (400 em vez de erro de SQL/resultado sem sentido com uma data malformada). Testada em
+  `domain.test.ts` (contagem final de casos, incl. os adicionados pelo review do Copilot, na seção
+  "Estado do repositório ao final" abaixo — evitando repetir um número aqui que dessincroniza fácil
+  do estado real, como já aconteceu mais de uma vez neste mesmo arquivo).
 
 ## Decisões técnicas tomadas
 
@@ -195,7 +197,10 @@ total) — todos verificados antes de corrigir, 8 reais:
   dizia "uso repetido do botão ⟲" como se `weeklyFunnel.cameraRecenterUsed` medisse frequência.
   Corrigido pra explicar a mesma limitação (alcance, não frequência) também no catálogo.
 - **`FEATURES.md` ainda contava "3 casos de teste" pra `isValidIsoDateOnly`**, defasado depois dos
-  casos adicionados nas rodadas 2 e 3 (já eram 4 blocos de teste). Corrigido.
+  casos adicionados nas rodadas 2 e 3 (já eram 5 blocos de teste: os 3 originais + 1 de ano de 2
+  dígitos da rodada 2 + 1 de ano 0000 desta própria rodada). Corrigido pra 5 — a correção original
+  desta rodada tinha dito "4" por engano (esqueceu de contar o próprio teste do ano 0000 que estava
+  sendo adicionado no mesmo commit), erro capturado e corrigido só na rodada seguinte.
 - **`labs/CURRENT.md` e a própria seção "Estado do repositório ao final" deste `CONTEXT.md`
   citavam `server-accounts 134/134 (3 novos)`**, o número da 1ª rodada — defasado depois dos testes
   adicionados nas rodadas 2 e 3 (141/141 no final). Como `CURRENT.md` é o handoff que o próximo
@@ -242,6 +247,38 @@ com `slot` inválido ou ausente → 400 (antes: 204 com `meta: null`); `planet_t
 `toPlanetId` inválido → 400; os mesmos dois eventos com valores VÁLIDOS continuam 204 e gravando só
 a chave permitida; confirmado lendo a tabela de volta que SÓ os 2 eventos válidos foram inseridos
 (os 3 payloads rejeitados nunca viraram linha).
+
+**5ª rodada** — puramente de documentação: as correções de contagem de teste da própria 3ª/4ª
+rodada continuaram introduzindo novos números errados em novos lugares (efeito chicote: cada
+correção tocava um trecho e deixava outro pra trás) — 5 achados, todos reais:
+
+- **`docs/event-catalog.md` ainda documentava `slot`/`toPlanetId` com o MESMO tratamento de
+  `durationMs`** ("grava com `meta: null`, nunca recusa o evento inteiro") — desatualizado desde a
+  correção da 4ª rodada, que passou a RECUSAR o evento inteiro (400) pra esses dois campos
+  especificamente. Corrigido pra descrever os dois comportamentos separadamente, com o porquê da
+  diferença (session_end tem um sinal válido sem duração confiável; cosmetic_equipped/
+  planet_travel_completed não têm sinal nenhum sem o slot/planeta).
+- **`labs/CURRENT.md` ainda dizia "3 rodadas" e "9 novos"** — o handoff não tinha acompanhado nem a
+  4ª rodada (que já tinha corrigido a contagem noutro arquivo) nem a 5ª que estava em andamento.
+  Corrigido pra "10 novos" com a subconta explícita por função, e trocado "3 rodadas" por uma
+  referência sem número fixo (aponta pro histórico completo no `CONTEXT.md`) — pra não continuar
+  ficando defasado a cada rodada nova.
+- **A narrativa "O que foi feito" (bem no topo deste `CONTEXT.md`) ainda tinha "3 casos de teste"
+  pra `isValidIsoDateOnly`** — um número solto duplicado da contagem "oficial" mais abaixo, achado
+  de raiz do problema: ter o MESMO número escrito em mais de um lugar do mesmo documento é o motivo
+  de continuar dessincronizando a cada rodada. Corrigido removendo o número duplicado dali (deixa
+  só um lugar — "Estado do repositório ao final" — como fonte da verdade da contagem de testes).
+- **O próprio registro da correção da 3ª rodada (neste `CONTEXT.md`) dizia "já eram 4 blocos"**,
+  mas o número certo nesse ponto já era 5 (a correção da 3ª rodada tinha, ela mesma, esquecido de
+  contar o teste do ano 0000 que estava sendo adicionado no mesmíssimo commit). Corrigido.
+- **`FEATURES.md` ainda dizia "4 blocos de teste"**, mesmo erro de origem do achado anterior,
+  propagado pro checklist. Corrigido pra 5.
+
+Verificação desta rodada: contagem re-conferida com o comando real (`awk` isolando cada bloco
+`describe` em `domain.test.ts` e contando `it(` dentro dele) em vez de contar de cabeça de novo —
+`isValidIsoDateOnly` 5, `isValidCosmeticSlot` 2, `isValidDestinationPlanetId` 2, mais 1 em
+`isValidProductEventType` = 10, batendo com `npm run test` 141/141 (baseline 131 + 10). `npx tsc
+--noEmit` limpo (mudança é só em 4 arquivos de documentação/handoff, nenhum código).
 
 ## Pendências / dívidas conhecidas
 

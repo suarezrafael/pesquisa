@@ -15,9 +15,11 @@ CTE de D1/D7, sem round-trip extra), `cohortComparison` via `?cohortSplitDate=YY
 (before/after usando `count(*) filter (where ...)` na mesma CTE, sem migração — só aparece quando o
 parâmetro é passado), `weeklyFunnel` com as 3 chaves novas, e `guardrails: string[]` no próprio
 JSON. Nova função pura testada: `isValidIsoDateOnly` (`domain.ts`, checa calendário real, não só
-regex — "30 de fevereiro" falha). `npx tsc -b`/`--noEmit` limpos; testes (após as 3 rodadas de
-review do Copilot na PR #55): app 178/178 (inalterado), server-accounts 141/141 (9 novos, incl.
-`isValidCosmeticSlot`/`isValidDestinationPlanetId`). `npm run build` sem regressão. **Verificado ao vivo contra
+regex — "30 de fevereiro" falha). `npx tsc -b`/`--noEmit` limpos; testes (estado final, após
+múltiplas rodadas de review automático do Copilot na PR #55 — ver "Review automático do Copilot"
+no `CONTEXT.md` do lab pra histórico completo): app 178/178 (inalterado), server-accounts 141/141
+(10 novos: 1 em `isValidProductEventType`, 5 em `isValidIsoDateOnly`, 2 em `isValidCosmeticSlot`, 2
+em `isValidDestinationPlanetId`). `npm run build` sem regressão. **Verificado ao vivo contra
 produção** (`wrangler dev` local porta 8790, banco real, só leitura): `?cohortSplitDate=2026-09-01`
 devolveu before(76)+after(47)=123, EXATAMENTE igual a `totalDevices`; data malformada confirmada
 devolvendo 400. **Verificado ao vivo num navegador real**: os 3 eventos novos capturados via

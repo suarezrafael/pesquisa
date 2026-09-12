@@ -34,11 +34,16 @@ linha nova e imprevista na tabela.
   do catálogo, lab-185) — nenhum client oficial manda texto livre digitado por ninguém nesses
   campos, mas nem todo `meta` é validado no SERVIDOR (achado do review da PR #55, 3ª rodada:
   atenção pra não generalizar demais essa garantia). O que É de fato ENFORÇADO em
-  `handleTrackEvent` (`server-accounts/src/index.ts`) hoje: `durationMs` de `session_end` (desde o
-  lab-99) e `slot`/`toPlanetId` dos 2 eventos do lab-185 — um valor fora do allowlist esperado grava
-  o evento com `meta: null` em vez do valor recebido, nunca recusa o evento inteiro. `questId` de
-  `quest_completed` e o `meta` dos demais tipos NÃO passam por validação de conteúdo nenhuma — são
-  gravados como o client mandar (defesa em profundidade de "nunca confiar só no client" ainda não
+  `handleTrackEvent` (`server-accounts/src/index.ts`) hoje, com tratamento DIFERENTE por campo
+  (achado da 4ª rodada — a 3ª rodada documentou os dois com o mesmo comportamento, mas só
+  `session_end` funciona assim): `durationMs` de `session_end` (desde o lab-99) — um valor
+  implausível grava o evento com `meta: null` em vez do valor recebido, nunca recusa o evento
+  inteiro (a sessão terminou é um sinal válido mesmo com duração suspeita); já `slot`/`toPlanetId`
+  dos 2 eventos do lab-185 — um valor fora do allowlist esperado RECUSA o evento inteiro (400,
+  nunca chega a gravar linha nenhuma), porque pra esses dois o slot/planeta É o sinal inteiro, não
+  um detalhe descartável. `questId` de `quest_completed` e o `meta` dos demais tipos NÃO passam por
+  validação de conteúdo nenhuma — são gravados como o client mandar (defesa em profundidade de
+  "nunca confiar só no client" ainda não
   se aplica a esses campos; documentado aqui como dívida conhecida, não como garantia).
 - `POST /events` nunca falha o jogo pra criança: toda chamada é `fetch(...).catch(() => {})`
   (`trackEvent`) — se a rede cair ou o Worker estiver fora, o evento simplesmente não é gravado,
