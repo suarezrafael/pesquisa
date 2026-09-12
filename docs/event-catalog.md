@@ -143,13 +143,23 @@ decisão").
   quais itens custam moeda). Lido semanalmente por `weeklyFunnel.cosmeticEquipped`.
 - **Planetas** (chegada medida a partir do lab-185, interação a partir do lab-179) —
   `planet_travel_completed` mede exploração (chegadas reais, não tentativas desistidas no meio do
-  caminho). `planet_interaction_completed` (lab-179, "Planetas interativos v1") mede o que a
-  criança faz DEPOIS de chegar: investigação prévia do lab-179 achou que cartão-postal
-  (`postcards.ts`, categoria "colecionável"), baú de tesouro (`treasureChests.ts`, "objeto
-  acionável") e escolinha de astronomia (`planetQuests.ts`, "desafio educativo") já existiam em 6
-  dos 7 planetas, só sem instrumentação; Marte (único sem baú/escolinha) ganhou uma interação nova
-  ("segredo visual", `planetSecrets.ts`) pra chegar a 3. Lidos semanalmente por
-  `weeklyFunnel.planetTravelCompleted`/`weeklyFunnel.planetInteractionCompleted`.
+  caminho). `planet_interaction_completed` (lab-179, "Planetas interativos v1") mede qualquer
+  interação dentro de um planeta — nem toda categoria é estritamente "depois" da chegada: o
+  cartão-postal (`postcards.ts`, "colecionável") é concedido de graça NO INSTANTE da chegada
+  (`landRocket`), não numa ação separada depois (achado do review da PR #56 — a versão anterior
+  desta nota dizia "o que a criança faz DEPOIS de chegar", categoria errada pro cartão-postal).
+  Investigação prévia do lab-179 achou que cartão-postal, baú de tesouro (`treasureChests.ts`,
+  "objeto acionável") e escolinha de astronomia (`planetQuests.ts`, "desafio educativo") já
+  existiam em 6 dos 7 planetas, só sem instrumentação; Marte (único sem baú/escolinha) ganhou uma
+  interação nova ("segredo visual", `planetSecrets.ts`) pra chegar a 3, e o pote de moedas
+  já existente (revelado ao vencer o combate, categoria "objeto acionável" — achado da 1ª rodada do
+  review: tinha ficado sem instrumentar) fechou a 3ª interação real de Marte. `weeklyFunnel.planetInteractionCompleted`
+  mede ALCANCE (dispositivos únicos com pelo menos 1 interação na semana, mesma convenção do resto
+  do `weeklyFunnel`) — NÃO é literalmente `planet_interactions_per_session` como o backlog nomeia
+  (uma métrica por SESSÃO exigiria agrupar por sessão, que este endpoint não faz hoje; achado da
+  1ª rodada do review). Documentado aqui como limitação conhecida, mesmo espírito de
+  `cameraRecenterUsed` (lab-185) — não construída uma métrica de sessão nova pra este lab. Lidos
+  semanalmente por `weeklyFunnel.planetTravelCompleted`/`weeklyFunnel.planetInteractionCompleted`.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de

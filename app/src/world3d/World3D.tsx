@@ -89,7 +89,7 @@ import {
   petStageScale,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
-import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted } from '../productAnalytics'
+import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted, trackPlanetInteractionCompleted } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
@@ -10379,6 +10379,15 @@ export function World3D({
                 if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = false
                 for (let i = 0; i < MARS_COIN_POT_REWARD; i++) onCollectCoinRef.current()
                 playCoinCollect()
+                // lab-179 (achado do review automático do Copilot, PR #56): sem isto, Marte só
+                // mandava 2 das 3 interações prometidas (`collectible`/`visual_secret`, nunca
+                // `actionable_object`) — o pote é a 2ª interação de Marte (mesmo papel do baú de
+                // tesouro nos outros 6 planetas), só que reseta a cada visita (não é permanente
+                // como o baú/segredo, por isso chamado direto aqui, sem passar por `useProgress`/
+                // `Progress` — não precisa de estado novo pra idempotência entre sessões, só
+                // não disparar mais de uma vez por visita, o que `marsCoinPotCollected` já garante
+                // sozinho). Nunca instrumenta moedas comuns — só este pote específico.
+                trackPlanetInteractionCompleted('marte', 'actionable_object')
               }
             }
 

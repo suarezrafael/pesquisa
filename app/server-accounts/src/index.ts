@@ -1713,9 +1713,13 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     cameraRecenterUsed: weeklyDevices('camera_recenter_used'),
     cosmeticEquipped: weeklyDevices('cosmetic_equipped'),
     planetTravelCompleted: weeklyDevices('planet_travel_completed'),
-    // lab-179 — mesma convenção do resto do funil (dispositivos únicos, não crianças); conta
-    // qualquer TIPO de interação (`kind` em `meta`), não uma interação específica — o backlog
-    // pede a métrica agregada (`planet_interactions_per_session`), não um contador por tipo.
+    // lab-179 — mesma convenção do resto do funil: `weeklyDevices` conta dispositivos ÚNICOS com
+    // pelo menos 1 interação na semana (`count(distinct device_id)`) — mede ALCANCE, não FREQUÊNCIA
+    // nem SESSÃO. Achado do review automático da PR #56, 1ª rodada: isso NÃO é literalmente
+    // `planet_interactions_per_session` (o nome da métrica no backlog) — uma métrica por sessão
+    // exigiria agrupar por sessão, que este endpoint não faz hoje (nenhum evento carrega um id de
+    // sessão). Mesmo espírito de `cameraRecenterUsed` (lab-185): documentar a limitação em vez de
+    // construir uma métrica de sessão nova só pra este campo.
     planetInteractionCompleted: weeklyDevices('planet_interaction_completed'),
   }
 
