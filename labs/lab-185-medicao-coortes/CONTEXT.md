@@ -411,6 +411,39 @@ semanal; `GET /admin/metrics` respondeu normalmente com o guardrail novo present
 de `product_events` conferidos via `pg_indexes` — os 2 novos (`idx_product_events_received_at`,
 `idx_product_events_device_received`) presentes ao lado dos 3 já existentes.
 
+**9ª rodada** — 4 achados reais, o mais substancial sobre a migração 0012 da rodada anterior:
+
+- **`migrations/0012_drop_orphan_appearance_columns.sql` fazia um DROP irreversível sem
+  precondição nenhuma** — `drop column if exists` só cobre "a coluna não existe", não prova que os
+  dados estão realmente vazios em QUALQUER ambiente que rode este arquivo (um clone novo, staging,
+  uma restauração de disaster-recovery). A verificação da 8ª rodada foi manual e só cobriu a
+  produção DESTE projeto no momento em que rodei — não é uma garantia que sobrevive ao arquivo em
+  si. Corrigido com um bloco `do $$ ... $$` que primeiro checa se as 7 colunas existem
+  (`information_schema.columns` — no clone novo desta branch elas NUNCA existiram, já que o arquivo
+  que as criava nunca foi commitado, então o bloco retorna sem fazer nada) e, se existirem, aborta a
+  migração inteira (`raise exception`, dentro da mesma transação de `migrate.mjs`) se encontrar
+  qualquer valor não-nulo. Testado rodando o arquivo INTEIRO contra produção dentro de uma
+  transação com `rollback` no final (nunca comitado) — confirmado que roda limpo no estado atual
+  (colunas já dropadas na 8ª rodada, então cai no caminho "0 colunas existem, retorna sem fazer
+  nada", e os `drop column if exists` depois são no-ops seguros).
+- **`docs/event-catalog.md` descrevia a janela de `isPlausibleOccurredAt` como só "~48h" sem
+  mencionar a assimetria** — o texto dava a entender que qualquer coisa dentro de ~48h passava,
+  mas o limite pro FUTURO é só 10 minutos (`MAX_OCCURRED_AT_FUTURE_MS`), não 48h — um relógio de
+  aparelho 11 minutos adiantado já recebe 400. Corrigido pra descrever os dois limites
+  separadamente.
+- **`FEATURES.md` (seção de investigação prévia, escrita ANTES de codar) ainda dizia "nenhuma
+  migração nova é necessária"** — verdade pro escopo original, mas o diff final tem 2 migrações
+  (pedidas pelo review, não pelo plano original). Adicionada uma nota de atualização deixando claro
+  que a previsão só valia pro escopo de quando foi escrita.
+- **`labs/CURRENT.md` e a descrição da PR ainda diziam "sem migração de banco"** — mesmo motivo do
+  achado anterior, propagado pro handoff e pra descrição da PR. Ambos corrigidos mencionando as 2
+  migrações (`0011`/`0012`) explicitamente.
+
+Verificação desta rodada: `npx tsc --noEmit` limpo; `npm run test` 147/147 (sem teste novo — SQL
+puro e texto de documentação). Reverificado ao vivo contra produção: `migrations/0012_...sql`
+rodado inteiro dentro de uma transação com `rollback` (nunca comitado) pra confirmar que o novo
+bloco de precondição não quebra nada no estado atual do banco.
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de

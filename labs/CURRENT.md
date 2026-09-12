@@ -27,8 +27,12 @@ devolvendo 400. **Verificado ao vivo num navegador real**: os 3 eventos novos ca
 monkey-patch de `window.fetch` — `camera_recenter_used` no clique do ⟲; `cosmetic_equipped`
 (`meta.slot: "hat"`) equipando um boné de verdade na lojinha; `planet_travel_completed`
 (`meta.toPlanetId: "marte"`) numa viagem de foguete completa (embarque → decolagem → pouso,
-cartão-postal de Marte confirmado na tela). Sem migração de banco. Ver
-`labs/lab-185-medicao-coortes/CONTEXT.md`.
+cartão-postal de Marte confirmado na tela). O escopo original não precisava de migração nenhuma,
+mas o review da PR #55 acabou adicionando 2: `0011_product_events_received_at_index.sql` (índices
+em `received_at`, necessários depois de trocar a base de cálculo de retenção pra essa coluna, 8ª
+rodada) e `0012_drop_orphan_appearance_columns.sql` (limpeza de um incidente operacional não
+relacionado a este lab — ver `CONTEXT.md` do lab, 8ª rodada, pro histórico completo). Ambas já
+aplicadas em produção. Ver `labs/lab-185-medicao-coortes/CONTEXT.md`.
 
 Antes desse: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
 Origem: `docs/growth-retention-monetization-backlog.md`, seção 7/12, "Lab 178", prioridade P0,
