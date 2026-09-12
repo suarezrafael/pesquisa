@@ -560,6 +560,41 @@ ponte ainda não existe. Coberto por `npx tsc -b` (limpo) e `npm run test` (app 
 Verificação desta rodada: `npx tsc -b` (app) e `npx tsc --noEmit` (server-accounts, mudança só de
 comentário) limpos; `npm run test` app 178/178, server-accounts 141/141 (sem teste novo).
 
+**13ª rodada** — 3 achados, 1 corrigido e 2 conscientemente ADIADOS (primeira vez nesta PR que uma
+decisão foi "não corrigir agora" em vez de corrigir):
+
+- **`camera_recenter_used` gravava `meta` LIVRE do client** (corrigido) — o evento não documenta
+  NENHUM campo de `meta` (`docs/event-catalog.md`), mas não tinha um `branch` próprio no
+  if/else de `handleTrackEvent`, então caía no `else` genérico (pensado pra eventos LEGADOS de
+  antes deste lab, que legitimamente têm meta livre já documentada assim) — um payload
+  `{ meta: { note: '<qualquer coisa>' } }` gravava esse objeto inteiro sem checagem nenhuma, apesar
+  da allowlist de propriedades por evento que o resto do lab construiu. Corrigido com um branch
+  próprio que sempre grava `meta: null` pra este evento, independente do que o client mandar.
+  Verificado ao vivo: um payload com `note`/`ip` injetados gravou `meta: null`.
+- **`CREATE INDEX` (não `CONCURRENTLY`) em `migrations/0011` bloqueia escrita em `product_events`
+  durante o build do índice** (ADIADO, não corrigido) — real em PRINCÍPIO pra uma tabela grande,
+  mas `product_events` tem 703 linhas hoje (conferido direto no banco) — construir um índice
+  simples nesse tamanho leva microssegundos, não uma janela de bloqueio perceptível. Migração já
+  rodou em produção há várias rodadas sem nenhum incidente relatado. `CREATE INDEX CONCURRENTLY`
+  não pode rodar dentro de uma transação, e `migrate.mjs` envolve TODA migração numa transação
+  (`begin`/`commit`) — mudar isso pra acomodar só estas 2 linhas exigiria reestruturar o runner de
+  migração inteiro pra TODAS as migrações futuras, uma mudança de infraestrutura bem maior que o
+  escopo deste lab (que só ganhou migração nenhuma no plano original, e 3 pelo review). Registrado
+  como dívida conhecida abaixo, não corrigido agora.
+- **`lock table ... access exclusive` em `migrations/0012` bloqueia todo o recurso social durante
+  o scan de dado + drop** (ADIADO, não corrigido) — mesmo raciocínio: `player_identities` tem 2
+  linhas hoje (conferido direto no banco), um `select count(*)` nesse tamanho é instantâneo. Essa
+  migração TAMBÉM já rodou em produção sem incidente. A sugestão do review (rodar como manutenção
+  agendada separada) exigiria um conceito de "janela de manutenção" que este projeto não tem hoje —
+  também registrado como dívida conhecida, não como bug corrigido.
+
+Verificação desta rodada: `npx tsc --noEmit` limpo; `npm run test` 141/141 (sem teste novo — I/O
+puro). Reverificado ao vivo contra produção (`wrangler dev` porta 8799, banco real): payload de
+`camera_recenter_used` com `meta.note`/`meta.ip` injetados gravou `meta: null` (confirmado lendo a
+linha de volta do banco antes de apagá-la); contagem de linhas de `product_events`
+(703)/`player_identities` (2) conferida direto no banco pra fundamentar a decisão de adiar os
+outros 2 achados.
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
@@ -578,6 +613,16 @@ comentário) limpos; `npm run test` app 178/178, server-accounts 141/141 (sem te
   hoje). Mesma categoria de limitação estrutural do item anterior (agregação imprecisa por
   natureza do modelo anônimo) — documentado, não resolvido, coerente com a decisão de escopo já
   tomada pra "agregação por device" acima.
+- **Migrações `0011`/`0012` usam `CREATE INDEX`/`LOCK TABLE ACCESS EXCLUSIVE` em vez de
+  `CONCURRENTLY`/janela de manutenção separada** (achado da 13ª rodada do review da PR #55,
+  conscientemente ADIADO, não corrigido) — real em princípio pra tabelas grandes, mas
+  `product_events` (703 linhas) e `player_identities` (2 linhas) são pequenas o bastante hoje pra
+  o lock durar microssegundos; as duas migrações já rodaram em produção sem incidente.
+  `CREATE INDEX CONCURRENTLY` não roda dentro de transação, e `migrate.mjs` envolve toda migração
+  numa transação — resolver isso de verdade exigiria reestruturar o runner de migração inteiro (não
+  só estas 2 linhas), desproporcional ao escopo deste lab. Se `product_events` crescer muito antes
+  de `migrate.mjs` ganhar suporte a `CONCURRENTLY`, futuras migrações de índice nessa tabela devem
+  reavaliar essa decisão.
 - **`activated_at` de assinatura continua sem coluna própria** (pendência do lab-165, não deste
   lab) — `weeklyCommercial` não tem "assinaturas ativadas na semana" por esse motivo, inalterado.
 - **Lab 179 (Planetas interativos v1) vai precisar de eventos PRÓPRIOS de interação** —

@@ -456,8 +456,9 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   }
 
   // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
-  // errado — os outros tipos legados podem mandar `meta` livre, mas ele só é gravado como está
-  // (nunca lido de volta em cálculo nenhum), então não precisa de validação própria.
+  // errado — os outros tipos LEGADOS (documentados em `docs/event-catalog.md` com `meta` livre ou
+  // um `questId`) podem mandar `meta` livre, mas ele só é gravado como está (nunca lido de volta em
+  // cálculo nenhum), então não precisa de validação própria.
   let safeMeta: unknown = null
   if (meta && typeof meta === 'object') {
     const metaObj = meta as Record<string, unknown>
@@ -470,6 +471,14 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       safeMeta = { slot: metaObj.slot }
     } else if (type === 'planet_travel_completed') {
       safeMeta = { toPlanetId: metaObj.toPlanetId }
+    } else if (type === 'camera_recenter_used') {
+      // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
+      // (`docs/event-catalog.md`) não documenta NENHUM campo de `meta` — sem este branch, caía no
+      // `else` genérico abaixo (pensado pra eventos LEGADOS de antes deste lab) e gravava qualquer
+      // objeto que o client mandasse, incluindo dado potencialmente identificável, apesar da
+      // allowlist de propriedades por evento. `camera_recenter_used` é um evento NOVO deste lab —
+      // não tem motivo pra herdar a tolerância dos eventos antigos.
+      safeMeta = null
     } else {
       safeMeta = metaObj
     }
