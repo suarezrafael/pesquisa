@@ -437,10 +437,27 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   }
   if (!isValidProductEventType(type)) return new Response(null, { status: 400 })
 
-  // `session_end`/`cosmetic_equipped`/`planet_travel_completed` (lab-185) são os únicos tipos com
-  // um campo de `meta` documentado como conjunto FECHADO (docs/event-catalog.md) — os outros podem
-  // mandar `meta` livre, mas ele só é gravado como está (nunca lido de volta em cálculo nenhum),
-  // então não precisa de validação própria.
+  // `cosmetic_equipped`/`planet_travel_completed` (lab-185): diferente de `session_end` (onde o
+  // evento "sessão terminou" é um sinal válido mesmo com uma duração implausível — por isso só o
+  // campo suspeito é descartado, não o evento inteiro), o ÚNICO sinal que esses dois eventos
+  // carregam É o slot/planeta. Achado do review automático do Copilot (4ª rodada): gravar o evento
+  // mesmo com `meta: null` ainda incrementava `weeklyFunnel.cosmeticEquipped`/`planetTravelCompleted`
+  // (`weeklyDevices` conta por `event_type`, sem olhar `meta`) — um payload malformado inflava a
+  // métrica exatamente do jeito que a validação deveria impedir. Nenhum client oficial manda esses
+  // dois tipos sem um valor válido (`trackCosmeticEquipped`/`trackPlanetTravelCompleted` em
+  // `productAnalytics.ts` sempre passam um), então recusar o evento inteiro (400) só afeta payload
+  // malformado/malicioso, nunca telemetria real.
+  const metaObjForValidation = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {}
+  if (type === 'cosmetic_equipped' && !isValidCosmeticSlot(metaObjForValidation.slot)) {
+    return new Response(null, { status: 400 })
+  }
+  if (type === 'planet_travel_completed' && !isValidDestinationPlanetId(metaObjForValidation.toPlanetId)) {
+    return new Response(null, { status: 400 })
+  }
+
+  // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
+  // errado — os outros tipos legados podem mandar `meta` livre, mas ele só é gravado como está
+  // (nunca lido de volta em cálculo nenhum), então não precisa de validação própria.
   let safeMeta: unknown = null
   if (meta && typeof meta === 'object') {
     const metaObj = meta as Record<string, unknown>
@@ -448,12 +465,11 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       safeMeta = isPlausibleSessionDuration(metaObj.durationMs) ? metaObj : null
       // descarta um durationMs implausível em vez de recusar o evento inteiro
     } else if (type === 'cosmetic_equipped') {
-      // achado do review automático do Copilot (3ª rodada): gravar `metaObj` inteiro deixava
-      // passar chaves extra não documentadas (ex.: `{ slot: 'hat', note: '<texto livre>' }') junto
-      // com um `slot` válido — só a chave permitida sobrevive, o resto do payload é descartado.
-      safeMeta = isValidCosmeticSlot(metaObj.slot) ? { slot: metaObj.slot } : null
+      // já validado acima — só a chave permitida sobrevive, nenhuma chave extra não documentada
+      // (ex.: `{ slot: 'hat', note: '<texto livre>' }') é gravada.
+      safeMeta = { slot: metaObj.slot }
     } else if (type === 'planet_travel_completed') {
-      safeMeta = isValidDestinationPlanetId(metaObj.toPlanetId) ? { toPlanetId: metaObj.toPlanetId } : null
+      safeMeta = { toPlanetId: metaObj.toPlanetId }
     } else {
       safeMeta = metaObj
     }

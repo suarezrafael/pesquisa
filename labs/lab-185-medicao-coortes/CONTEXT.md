@@ -212,6 +212,37 @@ lendo a linha de volta do banco antes de apagá-la); `GET /admin/metrics` sem pa
 query (76/47/123 de novo), confirmando que os dois textos de query (com/sem coorte) continuam
 equivalentes ao antigo query único nos dois casos.
 
+**4ª rodada** — "Comments generated: 0 new" + 2 achados nos "Suppressed comments", 2 reais:
+
+- **Evento com `slot`/`toPlanetId` inválido ainda inflava `weeklyFunnel`** — a correção da 3ª
+  rodada gravava `meta: null` pra um valor inválido, mas ainda INSERIA o evento; `weeklyDevices()`
+  conta por `event_type` sem olhar `meta`, então um payload malformado ainda incrementava
+  `cosmeticEquipped`/`planetTravelCompleted` — a validação protegia o CONTEÚDO gravado, não a
+  MÉTRICA, que era o ponto todo. Diferença chave em relação a `session_end` (onde só o campo
+  suspeito é descartado, evento mantido): pra `session_end`, "sessão terminou" é um sinal válido
+  mesmo com duração implausível; pra `cosmetic_equipped`/`planet_travel_completed`, o slot/planeta
+  É o sinal inteiro — não existe uma versão "válida mas sem slot" desses dois eventos, e nenhum
+  client oficial (`productAnalytics.ts`) jamais manda um sem valor. Corrigido: agora RECUSA o
+  evento inteiro (400) quando `slot`/`toPlanetId` é inválido, antes de decidir `safeMeta`, em vez
+  de aceitar com `meta: null` — comportamento novo só afeta payload malformado/malicioso, nunca
+  telemetria real.
+- **Contagem de testes "9 novos" na seção final estava errada** — a soma certa (conferida via
+  `git diff` do `domain.test.ts` inteiro contra o commit inicial do lab) é 10 blocos `it` novos,
+  não 9 (a subconta de `isValidIsoDateOnly` tinha ficado em "4 blocos" quando na verdade são 5 —
+  esqueceu de contar o próprio teste do ano 0000 adicionado nesta mesma rodada). Corrigido pra
+  listar a contagem exata por função (1+5+2+2=10) em vez de um número solto fácil de dessincronizar
+  de novo — e a descrição da PR (que ainda citava o número da 1ª rodada, 134/134) também foi
+  atualizada pra bater com o resultado final.
+
+Verificação desta rodada: `npx tsc --noEmit` (server-accounts) limpo; `npm run test`
+(server-accounts) 141/141 (sem teste novo — o comportamento novo é em `handleTrackEvent`, I/O puro
+sem lógica isolável, mesmo padrão do resto do endpoint; verificado ao vivo em vez de unitário).
+Reverificado ao vivo contra produção (`wrangler dev` porta 8794, banco real): `cosmetic_equipped`
+com `slot` inválido ou ausente → 400 (antes: 204 com `meta: null`); `planet_travel_completed` com
+`toPlanetId` inválido → 400; os mesmos dois eventos com valores VÁLIDOS continuam 204 e gravando só
+a chave permitida; confirmado lendo a tabela de volta que SÓ os 2 eventos válidos foram inseridos
+(os 3 payloads rejeitados nunca viraram linha).
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
@@ -248,11 +279,14 @@ lab deixou medindo só a chegada), sem texto livre/UGC.
 
 - Branch: `lab-185-medicao-coortes`.
 - `npx tsc -b` (app) e `npx tsc --noEmit` (server-accounts): limpos. `npm run test` (estado FINAL,
-  após as 3 rodadas de review do Copilot na PR #55): app 178/178 (inalterado, mudança client-side é
-  só uma condição a mais antes de uma chamada já existente, sem lógica nova isolável);
-  server-accounts 141/141 (9 novos: `isValidIsoDateOnly` ganhou 4 blocos de teste ao todo — data
-  real, formato/calendário inválido, anos de 2 dígitos, ano 0000 — mais `isValidCosmeticSlot`/
-  `isValidDestinationPlanetId`, 4 casos). `npm run build` (app): limpo, sem regressão de bundle.
+  após as 4 rodadas de review do Copilot na PR #55 — número conferido contra `git diff` do
+  `domain.test.ts` inteiro, achado da 4ª rodada: contagem "de cabeça" tinha ficado errada em mais
+  de um lugar): app 178/178 (inalterado, mudança client-side é só uma condição a mais antes de uma
+  chamada já existente, sem lógica nova isolável); server-accounts 141/141, 10 testes novos desde o
+  início do lab (baseline 131) — 1 em `isValidProductEventType` (allowlist aceita os 3 eventos
+  novos), 5 em `isValidIsoDateOnly` (data real/bissexta, formato/calendário inválido, anos de 2
+  dígitos, ano 0000), 2 em `isValidCosmeticSlot`, 2 em `isValidDestinationPlanetId`.
+  `npm run build` (app): limpo, sem regressão de bundle.
 - Nenhuma migração de banco — `product_events` já tinha tudo necessário.
 - **Verificado ao vivo contra produção** (`wrangler dev` local, porta 8790, banco de PRODUÇÃO
   real, só leitura): `GET /admin/metrics` respondeu com `newDevicesToday`/`weeklyFunnel` (3 chaves
