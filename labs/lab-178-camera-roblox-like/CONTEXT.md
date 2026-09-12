@@ -433,3 +433,36 @@ Seguindo a ordem recomendada por `docs/growth-retention-monetization-backlog.md`
     correto isoladamente; ver "Pendências" acima pro detalhe de por que a reprodução visual exata
     não foi 100% isolada.
   - Nenhum erro de console em nenhum momento dos testes.
+
+## Merge e deploy
+
+**PR #54 teve 12 rodadas de review automático do Copilot** — bem mais que a maioria dos labs
+anteriores, quase todas com achados reais e sucessivos na MESMA lógica de anti-clipping/suavização
+de câmera (ver rodadas 1-8 documentadas acima): câmera a pé brigando com a do veículo, câmera
+literalmente em cima do avatar, câmera atravessando o próprio obstáculo detectado, sobreposição no
+início do raio, suavização atravessando parede mesmo com o destino corrigido, raycast redundante
+descartado. Essa sequência de 5 divergências reais na mesma função (rodadas 2, 3, 4, 5, 7) levou a
+uma pausa explícita: antes de corrigir mais uma vez na 7ª rodada, o usuário foi consultado via
+`AskUserQuestion` sobre continuar, aceitar como está, ou repensar a abordagem — resposta: continuar
+corrigindo, mantendo a mesma função em vez de reescrever do zero. Uma sugestão de estilo (tirar
+referências a "lab-178"/"PR #54"/número de rodada dos comentários de código) foi REJEITADA na 6ª
+rodada com a justificativa de "convenção já estabelecida do repositório" (24 ocorrências
+pré-existentes do mesmo padrão em labs anteriores) — na 10ª rodada essa rejeição foi revertida
+depois de checar `docs/prompts/04-manutencao-clean-code.md` de verdade e confirmar uma regra
+`[MUST]` explícita contra exatamente esse padrão (prática generalizada pré-existente não invalida
+uma regra escrita — só significa que virou dívida de qualidade cedo). Todos os comentários NOVOS
+deste lab foram reescritos mantendo só o racional durável; as 24 ocorrências de OUTROS labs ficaram
+de fora, fora de escopo desta PR. Rodadas 11 e 12 vieram limpas — a 12ª só repetiu um trade-off de
+performance já avaliado e aceito na 8ª rodada (custo de 2 raycasts/quadro no estado estável, mantido
+de propósito em vez de arriscar mais um caso de borda numa lógica já frágil).
+
+**Confirma deploy em produção**: PR #54 mergeado (commit `56aba96`), CI/CD verde em
+`server-accounts`/`server-cf-relay`. O job `app` mostrou o passo "Deploy to Vercel (production)"
+como falho (`Error: fetch failed` contra uma URL de preview do Vercel, `https://app-o7e3krd05-
+suarezrafaels-projects.vercel.app`) — mas isso aconteceu DEPOIS do build de produção terminar com
+sucesso (`✓ built in 4.34s` aparece no log, antes do erro), e a checagem que falhou é um `fetch`
+pós-deploy, não o deploy em si. Confirmado diretamente: `app-two-flax-92.vercel.app` responde 200 e
+serve `index-dkgu0EZg.js` — o MESMO hash de arquivo gerado nesse build específico — provando que o
+deploy de produção aconteceu de verdade, apesar do "X" vermelho no job do CI. Atribuído a uma falha
+de rede transitória na infraestrutura do Vercel/GitHub Actions durante a checagem pós-deploy, não a
+um problema real de deploy nem de código deste lab.

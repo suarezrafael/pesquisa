@@ -24,7 +24,26 @@ isolada por um artefato do ambiente de teste (bombeamento manual de quadros pra 
 segundo plano acelerou também a física de queda do avatar), documentado em detalhe no
 `CONTEXT.md`. **Pendência real, não resolvida**: pinch de 2 dedos e teste geral em viewport mobile
 real não verificados ao vivo — as ferramentas de automação desta sessão não emulam multi-touch/
-dispositivo (mesma classe de limitação do lab-177 pra `isLowEndDevice`). Ver
+dispositivo (mesma classe de limitação do lab-177 pra `isLowEndDevice`). **PR #54 teve 12 rodadas
+de review automático do Copilot** — a maioria com achados reais e sucessivos na mesma lógica de
+anti-clipping/suavização de câmera (câmera brigando com a do veículo, câmera em cima do avatar,
+câmera atravessando o obstáculo, sobreposição no início do raio, suavização atravessando parede
+mesmo com destino seguro, raycast redundante) — 5 divergências reais na mesma função ao longo das
+rodadas 2-5 e 7 levaram a uma pausa e confirmação explícita do usuário via `AskUserQuestion` (7ª
+rodada: continuar corrigindo, confirmado) antes de seguir corrigindo. Uma sugestão de estilo (tirar
+"lab-178"/"PR #54"/rodada dos comentários de código) foi REJEITADA na 6ª rodada citando 24
+ocorrências pré-existentes da mesma convenção em labs anteriores como justificativa — na 10ª
+rodada essa rejeição foi revertida depois de checar `docs/prompts/04-manutencao-clean-code.md` de
+verdade e achar uma regra `[MUST]` explícita contra exatamente esse padrão; todos os comentários
+NOVOS deste lab foram reescritos (as 24 ocorrências pré-existentes de outros labs ficaram de fora,
+por escopo). Rodadas 11/12 vieram limpas (12ª só repetiu um trade-off de performance já aceito na
+8ª). **Confirma deploy em produção**: PR #54 mergeado (commit `56aba96`), CI/CD verde em
+`server-accounts`/`server-cf-relay`; o job `app` mostrou falha no passo de deploy do Vercel (`Error:
+fetch failed` contra uma URL de preview, DEPOIS do build terminar com sucesso — "built in 4.34s"
+aparece no log antes do erro), mas a produção real (`app-two-flax-92.vercel.app`) já está servindo
+o bundle novo (hash `index-dkgu0EZg.js` idêntico ao gerado nesse mesmo build), responde 200 —
+confirmado que o deploy de fato aconteceu, o "vermelho" no CI é uma falha transitória de rede numa
+checagem pós-deploy, não uma falha de deploy de verdade. Ver
 `labs/lab-178-camera-roblox-like/CONTEXT.md`.
 
 Antes desse: labs/lab-177-relevo-montanhas-visiveis/ — relevo e montanhas visíveis. Origem:
