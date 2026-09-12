@@ -33,8 +33,11 @@ itens planejados:
   parâmetro.
 - **`weeklyFunnel`** ganhou 3 chaves novas (`cameraRecenterUsed`, `cosmeticEquipped`,
   `planetTravelCompleted`), mesmo padrão `weeklyDevices(tipo)` das 8 chaves já existentes.
-- **`guardrails: string[]`** no próprio JSON de resposta — repete as 2 limitações mais importantes
-  (agregação por dispositivo, amostra pequena) pra quem só consome a API sem abrir o catálogo.
+- **`guardrails: string[]`** no próprio JSON de resposta — repete as limitações mais importantes
+  (agregação por dispositivo, amostra pequena, e — desde a 8ª rodada do review da PR #55 —
+  `device_id` sintético/sem autenticação) pra quem só consome a API sem abrir o catálogo. 3
+  entradas no total hoje, não 2 (achado da 12ª rodada: número desatualizado aqui desde que o
+  3º guardrail foi adicionado).
 - **Nova função pura testada**: `isValidIsoDateOnly` (`domain.ts`) valida `YYYY-MM-DD` com
   checagem de calendário real (não só regex — `30 de fevereiro` passa no regex mas falha na
   reconstrução via `Date.UTC`), usada pra validar `cohortSplitDate` antes de interpolar na query
@@ -525,6 +528,38 @@ com `rollback` — continua limpo; `GET /admin/metrics?cohortSplitDate=2026-09-0
 exatamente os mesmos números de sempre (76/47/123), confirmando que a faixa semiaberta não muda
 resultado nenhum, só a eficiência da query em escala.
 
+**12ª rodada** — 4 achados reais, 1 de código (o mais substancial) + 3 de documentação:
+
+- **`handleRecenterCamera` registrava `camera_recenter_used` mesmo quando o clique era um no-op**
+  — `sceneRef.current` é setado cedo (linha 2397), mas `(scene as any).__recenterCamera` só é
+  registrado bem depois (linha 2600), dentro do `setup()` assíncrono que carrega os assets do
+  mundo 3D. Um toque no botão ⟲ nessa janela (curta, mas real — qualquer conexão lenta/aparelho
+  fraco a alarga) fazia `?.()` virar um no-op silencioso, mas `trackCameraRecenterUsed()` disparava
+  do mesmo jeito — um falso-positivo que infla `weeklyFunnel.cameraRecenterUsed` sem a câmera ter
+  recentralizado de verdade. Corrigido: só dispara o evento quando `__recenterCamera` existe E foi
+  chamado de verdade (`typeof recenter === 'function'` antes de chamar e antes de rastrear).
+- **3 números desatualizados em `CONTEXT.md`** (efeito chicote de novo, mesmo padrão das rodadas
+  5/9): "repete as 2 limitações" no `guardrails` (já eram 3 desde a 8ª rodada), "6 funcionalidades
+  planejadas" na seção de funcionalidades não concluídas (o checklist real de `FEATURES.md` tem 8
+  itens `[x]`), e o comentário da migração `0011` ainda descrevia o join com `::date` que a 11ª
+  rodada já tinha trocado por uma faixa semiaberta. Todos corrigidos — os dois primeiros trocados
+  por descrições sem número fixo quando fazia sentido, pra não continuar dessincronizando.
+
+**Nota sobre verificação ao vivo desta rodada**: tentei verificar a correção do
+`handleRecenterCamera` num navegador real (`npm run dev`), mas o ambiente desta sessão acumulou
+contenção de recursos pesada depois de ~12 rodadas de `wrangler dev`/`tsc`/testes rodando ao longo
+de várias horas — o mundo 3D ficou preso em "Carregando o mundo 3D…" por mais de 15s sem erro
+nenhum no console, e screenshots via CDP deram timeout repetido. Não forcei a verificação ao vivo
+dessa vez: a correção é uma guarda mecânica simples (`if (typeof recenter === 'function')` antes de
+uma chamada que já existia) que não muda o comportamento do caminho feliz — já verificado ao vivo
+num navegador real na investigação original deste lab (clique real no botão ⟲ capturando
+`camera_recenter_used` via monkey-patch de `fetch`) — só adiciona uma guarda pro caso em que a
+ponte ainda não existe. Coberto por `npx tsc -b` (limpo) e `npm run test` (app 178/178, inalterado
+— a lógica de timing não é isolável em teste unitário, mesmo padrão do resto deste componente).
+
+Verificação desta rodada: `npx tsc -b` (app) e `npx tsc --noEmit` (server-accounts, mudança só de
+comentário) limpos; `npm run test` app 178/178, server-accounts 141/141 (sem teste novo).
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
@@ -558,8 +593,10 @@ resultado nenhum, só a eficiência da query em escala.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
-Nenhuma — as 6 funcionalidades planejadas em `FEATURES.md` foram concluídas e verificadas ao vivo
-contra produção (leitura) e num navegador real (os 3 eventos novos).
+Nenhuma — todos os itens marcados `[x]` em `FEATURES.md` (achado da 12ª rodada: esta seção dizia
+"6 funcionalidades", mas o checklist tem 8 itens marcados; número trocado aqui por uma descrição
+sem contagem fixa, pra não dessincronizar de novo) foram concluídos e verificados ao vivo contra
+produção (leitura) e num navegador real (os 3 eventos novos).
 
 ## O que o próximo laboratório deve desenvolver
 
