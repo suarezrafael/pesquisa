@@ -207,6 +207,42 @@ export function isPlausibleSessionDuration(durationMs: unknown): durationMs is n
   return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0 && durationMs <= MAX_PLAUSIBLE_SESSION_DURATION_MS
 }
 
+// lab-185 (review do Copilot na PR #55) — `cosmetic_equipped`/`planet_travel_completed` também
+// mandam `meta` com um valor string, mas de um conjunto FIXO conhecido no código-fonte (nunca
+// texto livre digitado por ninguém, ver docs/event-catalog.md); mesmo espírito de
+// `isPlausibleSessionDuration` acima: valida o único campo que a gente documenta como "conjunto
+// fechado" antes de gravar, em vez de confiar cegamente no que o client mandou.
+const COSMETIC_SLOTS = new Set([
+  'hat',
+  'shirtColor',
+  'pantsColor',
+  'shoeColor',
+  'backpackColor',
+  'hairShape',
+  'glasses',
+])
+
+export function isValidCosmeticSlot(slot: unknown): slot is string {
+  return typeof slot === 'string' && COSMETIC_SLOTS.has(slot)
+}
+
+// Mesmos 7 planetas de `DESTINATION_PLANETS` (app/src/world3d/World3D.tsx) — duplicado aqui de
+// propósito (mesmo motivo de `PRODUCT_EVENT_TYPES` não importar nada do client): o Worker roda
+// isolado do bundle do jogo, sem import cross-projeto viável.
+const DESTINATION_PLANET_IDS = new Set([
+  'marte',
+  'mercurio',
+  'venus',
+  'jupiter',
+  'saturno',
+  'urano',
+  'netuno',
+])
+
+export function isValidDestinationPlanetId(planetId: unknown): planetId is string {
+  return typeof planetId === 'string' && DESTINATION_PLANET_IDS.has(planetId)
+}
+
 // lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de
 // atividade — ver decisão registrada em labs/lab-119-.../FEATURES.md) que o jogo sincroniza pra
 // viabilizar o relatório semanal por e-mail. Limites generosos mas finitos: nenhum jogador real
@@ -422,7 +458,13 @@ const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 export function isValidIsoDateOnly(value: string): boolean {
   if (!ISO_DATE_ONLY_PATTERN.test(value)) return false
   const [year, month, day] = value.split('-').map(Number)
-  const asUtc = new Date(Date.UTC(year, month - 1, day))
+  // `Date.UTC(year, ...)` interpreta anos 0-99 como deslocamento a partir de 1900 (comportamento
+  // legado herdado do construtor `Date`) — "0050-01-01" viraria 1950 silenciosamente se
+  // passássemos `year` direto pro `Date.UTC`. `setUTCFullYear` não tem essa interpretação especial
+  // pra nenhum ano, então construímos a data primeiro (com um ano qualquer de 4 dígitos) e só
+  // depois setamos o ano de verdade.
+  const asUtc = new Date(Date.UTC(2000, month - 1, day))
+  asUtc.setUTCFullYear(year)
   return (
     asUtc.getUTCFullYear() === year && asUtc.getUTCMonth() === month - 1 && asUtc.getUTCDate() === day
   )

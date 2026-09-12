@@ -31,7 +31,12 @@ linha nova e imprevista na tabela.
   um id de missão do catálogo público (`questId`), ou uma string de um conjunto FIXO e pequeno
   definido no próprio código-fonte — nunca texto livre digitado por ninguém (ex.: `slot` de
   `cosmetic_equipped`, um entre 7 valores possíveis; `toPlanetId` de `planet_travel_completed`, um
-  entre os poucos ids de planeta-destino do catálogo, lab-185).
+  entre os poucos ids de planeta-destino do catálogo, lab-185). Essa garantia é ENFORÇADA no
+  servidor, não só uma convenção do client: `handleTrackEvent` (`server-accounts/src/index.ts`)
+  valida `slot`/`toPlanetId` contra o mesmo allowlist antes de gravar — um valor fora do conjunto
+  conhecido faz o evento ser gravado com `meta: null` em vez do valor recebido (mesmo tratamento já
+  dado a um `durationMs` implausível em `session_end` desde o lab-99), nunca recusado por completo
+  (achado do review da PR #55, 2ª rodada).
 - `POST /events` nunca falha o jogo pra criança: toda chamada é `fetch(...).catch(() => {})`
   (`trackEvent`) — se a rede cair ou o Worker estiver fora, o evento simplesmente não é gravado,
   sem interromper nem re-tentar de um jeito visível.
@@ -55,7 +60,7 @@ linha nova e imprevista na tabela.
 | `weekly_report_preview_viewed` | Clique em "Ver exemplo do relatório semanal" na tela de proposta de valor (lab-173) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
 | `house_visited` | Clique em "🏠 Visitar casa" no perfil público de um amigo (lab-175) | `App.tsx`, `handleVisitHouse` | — | 1x por clique |
 | `camera_recenter_used` | Clique no botão ⟲ de recentralizar câmera (lab-178) | `world3d/World3D.tsx`, `handleRecenterCamera` | — | 1x por clique |
-| `cosmetic_equipped` | Equipar boné/óculos/cor de roupa-calça-sapato-mochila/estilo de cabelo na lojinha (nunca ao voltar pro padrão, `id === null`) (lab-185) | `state/useProfile.ts`, `equipHat`/`equipShirtColor`/`equipPantsColor`/`equipShoeColor`/`equipBackpackColor`/`equipHairShape`/`equipGlasses` | `slot` (`"hat"`, `"shirtColor"`, `"pantsColor"`, `"shoeColor"`, `"backpackColor"`, `"hairShape"`, `"glasses"`) | 1x por equipar |
+| `cosmetic_equipped` | Equipar boné/óculos/cor de roupa-calça-sapato-mochila/estilo de cabelo na lojinha (nunca ao voltar pro padrão — `id === null` pra boné/óculos, ou o próprio item padrão do catálogo, custo 0 e não-exclusivo-assinante, pros eixos de cor/cabelo) (lab-185, 2ª rodada do review da PR #55) | `state/useProfile.ts`, `equipHat`/`equipShirtColor`/`equipPantsColor`/`equipShoeColor`/`equipBackpackColor`/`equipHairShape`/`equipGlasses` | `slot` (`"hat"`, `"shirtColor"`, `"pantsColor"`, `"shoeColor"`, `"backpackColor"`, `"hairShape"`, `"glasses"`) | 1x por equipar |
 | `planet_travel_completed` | Pouso bem-sucedido num planeta-destino ao final de uma viagem de foguete — só na chegada de verdade, não ao desistir no meio e voltar pra origem (lab-185) | `world3d/World3D.tsx`, `landRocket` | `toPlanetId` | 1x por chegada |
 
 ## Nível de agregação (lab-185)

@@ -28,6 +28,8 @@ import {
   isSelfFriendRequest,
   isTokenRevoked,
   isValidBadgeList,
+  isValidCosmeticSlot,
+  isValidDestinationPlanetId,
   isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
@@ -435,14 +437,19 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   }
   if (!isValidProductEventType(type)) return new Response(null, { status: 400 })
 
-  // `session_end` é o único tipo com um campo de `meta` que a gente realmente confia pra cálculo
-  // (duração) — os outros podem mandar `meta` livre, mas ele só é gravado como está (nunca lido de
-  // volta em cálculo nenhum), então não precisa de validação própria.
+  // `session_end`/`cosmetic_equipped`/`planet_travel_completed` (lab-185) são os únicos tipos com
+  // um campo de `meta` documentado como conjunto FECHADO (docs/event-catalog.md) — os outros podem
+  // mandar `meta` livre, mas ele só é gravado como está (nunca lido de volta em cálculo nenhum),
+  // então não precisa de validação própria.
   let safeMeta: unknown = null
   if (meta && typeof meta === 'object') {
     const metaObj = meta as Record<string, unknown>
     if (type === 'session_end' && !isPlausibleSessionDuration(metaObj.durationMs)) {
       safeMeta = null // descarta um durationMs implausível em vez de recusar o evento inteiro
+    } else if (type === 'cosmetic_equipped' && !isValidCosmeticSlot(metaObj.slot)) {
+      safeMeta = null // descarta um slot fora do conjunto conhecido em vez de recusar o evento inteiro
+    } else if (type === 'planet_travel_completed' && !isValidDestinationPlanetId(metaObj.toPlanetId)) {
+      safeMeta = null // descarta um toPlanetId fora do conjunto conhecido em vez de recusar o evento inteiro
     } else {
       safeMeta = metaObj
     }
@@ -1482,8 +1489,8 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
       (select count(*) from d1_returned) as d1_returned,
       (select count(*) from d7_eligible) as d7_eligible,
       (select count(*) from d7_returned) as d7_returned,
-      -- lab-185: "D0" que faltava, dispositivos NOVOS hoje (totalDevices mais abaixo e' o
-      -- acumulado desde sempre, um numero diferente)
+      -- lab-185: "D0" que faltava, dispositivos NOVOS hoje (totalDevices mais abaixo é o
+      -- acumulado desde sempre, um número diferente)
       (select count(*) from first_seen where day0 = current_date) as new_today,
       (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_eligible) as before_d1_eligible,
       (select count(*) filter (where day0 < ${cohortSplitDateParam}::date) from d1_returned) as before_d1_returned,
@@ -1595,6 +1602,13 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // uma regressão deste campo; ver nota completa em docs/event-catalog.md.
     houseVisited: weeklyDevices('house_visited'),
     // lab-185 — mesma convenção/limitação do resto do funil (dispositivos únicos, não crianças).
+    // `cameraRecenterUsed` em particular mede ALCANCE (quantos dispositivos clicaram o botão ⟲
+    // pelo menos uma vez na semana), não FREQUÊNCIA — um dispositivo que clica 1x ou 50x conta
+    // igual. O backlog original do Lab 178 queria "menor uso repetido de recentralizar" (sinal de
+    // frequência, não de alcance); decisão do review da PR #55 foi documentar essa imprecisão em
+    // vez de somar uma métrica de contagem nova (exigiria uma query adicional só pra isso, e o
+    // sinal de alcance já é suficiente pra saber SE a câmera tá sendo usada, que é o que falta
+    // hoje — refinar pra frequência fica pro dia em que isso virar decisão de verdade).
     cameraRecenterUsed: weeklyDevices('camera_recenter_used'),
     cosmeticEquipped: weeklyDevices('cosmetic_equipped'),
     planetTravelCompleted: weeklyDevices('planet_travel_completed'),
@@ -1653,8 +1667,9 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // (sem abrir o catálogo) não interpretar os números como mais precisos do que são.
     guardrails: [
       'Agregação é por dispositivo (device_id anônimo em localStorage), não por criança — um' +
-        ' aparelho compartilhado/trocado entre irmãos ou reinstalado conta como dispositivos' +
-        ' diferentes; nenhum evento carrega nome, e-mail ou identificador de perfil.',
+        ' aparelho COMPARTILHADO entre irmãos conta como UM dispositivo só (subconta crianças' +
+        ' distintas); trocar de aparelho ou reinstalar o jogo cria um dispositivo NOVO (superconta' +
+        ' a mesma criança). Nenhum evento carrega nome, e-mail ou identificador de perfil.',
       'Amostras pequenas (eligibleDevices/sampleSize baixos) produzem percentuais instáveis —' +
         ' evite tirar conclusão de uma coorte com poucas dezenas de dispositivos.',
     ],

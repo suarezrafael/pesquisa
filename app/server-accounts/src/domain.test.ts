@@ -20,6 +20,8 @@ import {
   isSelfFriendRequest,
   isTokenRevoked,
   isValidBadgeList,
+  isValidCosmeticSlot,
+  isValidDestinationPlanetId,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
   sanitizeHouseFurnitureIds,
@@ -587,6 +589,51 @@ describe('isValidIsoDateOnly (lab-185)', () => {
     expect(isValidIsoDateOnly('2026-02-30')).toBe(false)
     expect(isValidIsoDateOnly('2026-13-01')).toBe(false)
     expect(isValidIsoDateOnly('2023-02-29')).toBe(false) // 2023 não é bissexto
+  })
+
+  it('não confunde ano de 2 dígitos com o comportamento legado do Date.UTC (achado do Copilot, 2ª rodada da PR #55)', () => {
+    // `Date.UTC(50, 0, 1)` interpretaria 50 como 1950 se a implementação passasse o ano direto
+    // pro `Date.UTC` — o ano de verdade tem que ser lido de volta como 50, não 1950.
+    expect(isValidIsoDateOnly('0050-01-01')).toBe(true)
+    expect(isValidIsoDateOnly('0099-12-31')).toBe(true)
+  })
+})
+
+describe('isValidCosmeticSlot (lab-185, 2ª rodada do review da PR #55)', () => {
+  it('aceita os 7 slots conhecidos', () => {
+    expect(isValidCosmeticSlot('hat')).toBe(true)
+    expect(isValidCosmeticSlot('shirtColor')).toBe(true)
+    expect(isValidCosmeticSlot('pantsColor')).toBe(true)
+    expect(isValidCosmeticSlot('shoeColor')).toBe(true)
+    expect(isValidCosmeticSlot('backpackColor')).toBe(true)
+    expect(isValidCosmeticSlot('hairShape')).toBe(true)
+    expect(isValidCosmeticSlot('glasses')).toBe(true)
+  })
+
+  it('recusa slot fora do conjunto conhecido', () => {
+    expect(isValidCosmeticSlot('qualquer_coisa')).toBe(false)
+    expect(isValidCosmeticSlot('')).toBe(false)
+    expect(isValidCosmeticSlot(123)).toBe(false)
+    expect(isValidCosmeticSlot(null)).toBe(false)
+  })
+})
+
+describe('isValidDestinationPlanetId (lab-185, 2ª rodada do review da PR #55)', () => {
+  it('aceita os 7 planetas-destino conhecidos', () => {
+    expect(isValidDestinationPlanetId('marte')).toBe(true)
+    expect(isValidDestinationPlanetId('mercurio')).toBe(true)
+    expect(isValidDestinationPlanetId('venus')).toBe(true)
+    expect(isValidDestinationPlanetId('jupiter')).toBe(true)
+    expect(isValidDestinationPlanetId('saturno')).toBe(true)
+    expect(isValidDestinationPlanetId('urano')).toBe(true)
+    expect(isValidDestinationPlanetId('netuno')).toBe(true)
+  })
+
+  it('recusa planeta fora do conjunto conhecido', () => {
+    expect(isValidDestinationPlanetId('terra')).toBe(false)
+    expect(isValidDestinationPlanetId('')).toBe(false)
+    expect(isValidDestinationPlanetId(123)).toBe(false)
+    expect(isValidDestinationPlanetId(undefined)).toBe(false)
   })
 })
 

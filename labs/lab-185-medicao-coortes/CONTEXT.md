@@ -99,6 +99,69 @@ Verificação desta rodada: `npx tsc --noEmit` (server-accounts) limpo; `npm run
 parâmetro, `cohortComparison` confirmado ausente da resposta; `?cohortSplitDate=2026-09-01`
 confirmado continuando a funcionar depois da fusão das duas queries em uma.
 
+**2ª rodada** — "Comments generated: 0 new" no resumo, mas 7 achados substantivos nos "Suppressed
+comments" (mesmo padrão já visto no lab-178: contagem de "novos" zerada não significa nada
+acionável de verdade) — todos verificados contra o código real antes de decidir a correção, 7 reais:
+
+- **Guardrail de agregação se contradizia** — o texto dizia que aparelho COMPARTILHADO E
+  aparelho TROCADO/reinstalado "contam como dispositivos diferentes", mas são o OPOSTO: um
+  aparelho compartilhado por irmãos é UM device_id só (subconta crianças distintas); só trocar de
+  aparelho ou reinstalar CRIA um device_id novo (superconta a mesma criança). Corrigido o texto em
+  `index.ts` (guardrails) pra distinguir os dois casos corretamente.
+- **`isValidIsoDateOnly` quebrava pra anos de 2 dígitos** — `Date.UTC(year, ...)` interpreta anos
+  0-99 como deslocamento a partir de 1900 (comportamento legado do construtor `Date`), então
+  `'0050-01-01'` virava internamente 1950 e a comparação de ano batia por acidente/erro dependendo
+  do caso. Corrigido construindo a data com um ano-base de 4 dígitos e usando `setUTCFullYear` pra
+  setar o ano de verdade (sem essa interpretação especial). 2 casos de teste novos (`'0050-01-01'`,
+  `'0099-12-31'`).
+- **`meta.slot`/`meta.toPlanetId` não tinham validação nenhuma no servidor** — `handleTrackEvent`
+  só valida `meta` pra `session_end` (`durationMs`, desde o lab-99); os outros tipos, incluindo os
+  2 novos deste lab, gravavam `meta` como veio do client sem checar o valor, contradizendo a
+  própria afirmação do `docs/event-catalog.md` de que são "valores de um conjunto FIXO... nunca
+  texto livre". Corrigido com 2 funções puras novas em `domain.ts`
+  (`isValidCosmeticSlot`/`isValidDestinationPlanetId`, allowlist de 7 valores cada, com testes) e 2
+  branches novos em `handleTrackEvent`, mesmo padrão já usado pro `durationMs` implausível: valor
+  fora do allowlist grava o evento com `meta: null` em vez de recusar o evento inteiro (verificado
+  ao vivo contra produção, ver abaixo).
+- **Typo no comentário SQL** — "e' o acumulado" devia ser "é o acumulado" (apóstrofo escapando
+  sem querer o significado). Corrigido.
+- **`cameraRecenterUsed` mede alcance, não frequência** — `weeklyDevices()` conta dispositivos
+  ÚNICOS com pelo menos 1 evento na semana; o backlog original do Lab 178 queria medir "menor uso
+  repetido" (frequência). Decisão (sancionada como alternativa aceitável pelo próprio review): só
+  documentar a limitação num comentário perto de `weeklyFunnel.cameraRecenterUsed`, sem construir
+  uma métrica de contagem nova — o sinal de alcance já resolve a pergunta mais urgente ("a câmera
+  tá sendo usada?"), frequência fica pra quando isso virar decisão de produto de verdade.
+- **`cosmetic_equipped` disparava ao VOLTAR pro padrão em 5 dos 7 slots** — a decisão documentada
+  era "nunca ao voltar pro padrão", mas só `equipHat`/`equipGlasses` tratam `null` como o único
+  "padrão" (têm uma opção real "Nenhum" na UI). Pros 5 eixos de cor/cabelo
+  (`ColorSection`/`HairShapeSection` em `AvatarShop.tsx`), o PRÓPRIO item padrão do catálogo (custo
+  0, não-assinatura, sempre a primeira entrada) tem um `id` real e não-nulo — reequipar essa cor
+  depois de ter trocado por outra chamava `equip*Color(idDoPadrao)`, não `equip*Color(null)`, e o
+  guard antigo (`if (id) trackCosmeticEquipped(...)`) via isso como "equipou um cosmético novo".
+  Corrigido em `useProfile.ts`: nova função `isCatalogDefault` compara o `id` contra o catálogo real
+  (`PANTS_COLOR_CATALOG`/`SHOE_COLOR_CATALOG`/`BACKPACK_COLOR_CATALOG`/`SHIRT_COLOR_CATALOG`/
+  `HAIR_SHAPE_CATALOG`, importados de `data/customization.ts`) — o disparo do evento agora exclui
+  esse caso, sem mudar o que é persistido em `equippedXxxId`.
+- **Doc de privacidade fazia uma alegação não enforçada** — `docs/event-catalog.md` já dizia que
+  `slot`/`toPlanetId` são "um conjunto FIXO... nunca texto livre", mas isso só era verdade no
+  client, não no servidor (achado anterior). Corrigido junto com a validação: o parágrafo agora
+  explica que a garantia é enforçada em `handleTrackEvent`, com o mesmo tratamento de "grava com
+  `meta: null`" já usado desde o lab-99. A linha da tabela de `cosmetic_equipped` também foi
+  ajustada pra descrever a condição real de "voltar pro padrão" (não só `id === null`).
+
+Verificação desta rodada: `npx tsc --noEmit` (server-accounts) e `npx tsc -b` (app) limpos;
+`npm run test` server-accounts 140/140 (5 novos: 2 casos de ano de 2 dígitos, 4 casos entre
+`isValidCosmeticSlot`/`isValidDestinationPlanetId`), app 178/178 (inalterado — mudança em
+`useProfile.ts` é só uma condição a mais antes de uma chamada já testada indiretamente via
+integração, sem lógica nova isolável além do que os testes de domínio já cobrem). Reverificado ao
+vivo contra produção (`wrangler dev` porta 8792, banco real): `POST /events` com
+`meta.slot`/`meta.toPlanetId` válidos gravou o valor normalmente; com valores fora do allowlist
+(incl. um payload tipo `<script>`) gravou `meta: null` e ainda devolveu 204 (evento não recusado,
+mesmo padrão do `durationMs` implausível) — confirmado lendo as linhas de volta direto do banco
+antes de apagá-las; `GET /admin/metrics` sem parâmetro e com `?cohortSplitDate=2026-09-01`
+continuam respondendo exatamente como antes (guardrails com o texto corrigido, cohort comparison
+com a mesma soma exata de antes); data malformada/vazia confirmadas devolvendo 400.
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
