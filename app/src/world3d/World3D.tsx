@@ -9955,7 +9955,12 @@ export function World3D({
             // no meio do caminho sem que `lastCameraClipWasObstructed` perceba. `isPathObstructed`
             // checa o trajeto de verdade (posição atual → destino) antes de decidir suavizar.
             // Fora de dentro de casa, de propósito — lá a solução já é outra (parede translúcida).
-            const pathObstructed = !insideHouseInterior && isPathObstructed(camera.position, desiredCamPos, body)
+            // Achado real do review automático do Copilot (PR #54, 8ª rodada): quando o destino
+            // já estava obstruído, o resultado final é `desiredCamPos` de qualquer jeito — checar
+            // o trajeto também nesse caso é um 2º raycast Havok descartado todo quadro. `&&` de
+            // curto-circuito pula essa chamada extra quando já não faz diferença.
+            const pathObstructed =
+              !lastCameraClipWasObstructed && !insideHouseInterior && isPathObstructed(camera.position, desiredCamPos, body)
             camera.position =
               lastCameraClipWasObstructed || pathObstructed
                 ? desiredCamPos
@@ -10783,7 +10788,10 @@ export function World3D({
           // lab-178 (5ª/7ª rodadas de review, mesmo achado da câmera a pé acima): pula a
           // suavização quando há obstrução no destino OU no trajeto da posição antiga até lá, pra
           // não atravessar nada no CAMINHO da interpolação.
-          const carPathObstructed = isPathObstructed(camera.position, desiredCarCamPos, avatarBody?.body)
+          // 8ª rodada: pula o raycast extra quando o destino já estava obstruído (a decisão final
+          // já seria `desiredCarCamPos` de qualquer forma).
+          const carPathObstructed =
+            !lastCameraClipWasObstructed && isPathObstructed(camera.position, desiredCarCamPos, avatarBody?.body)
           camera.position =
             lastCameraClipWasObstructed || carPathObstructed
               ? desiredCarCamPos
@@ -10918,8 +10926,13 @@ export function World3D({
           // suavização quando há obstrução no destino OU no trajeto — só checa o trajeto no
           // CRUZEIRO, pela mesma razão de excluir o anti-clipping do destino nas pontas de
           // repouso (colisor estático da plataforma perto demais, ver comentário acima).
+          // 8ª rodada: mesmo curto-circuito do carro/a pé acima — pula o raycast extra quando o
+          // destino já estava obstruído.
           const shipPathObstructed =
-            !inLaunchHold && !inLandingFlip && isPathObstructed(camera.position, desiredShipCamPos, avatarBody?.body)
+            !lastCameraClipWasObstructed &&
+            !inLaunchHold &&
+            !inLandingFlip &&
+            isPathObstructed(camera.position, desiredShipCamPos, avatarBody?.body)
           camera.position =
             lastCameraClipWasObstructed || shipPathObstructed
               ? desiredShipCamPos

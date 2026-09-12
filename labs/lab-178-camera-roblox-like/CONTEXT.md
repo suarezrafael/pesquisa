@@ -289,6 +289,40 @@ usuário antes de corrigi-lo, ver abaixo):
 Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
 conteúdo da saída.
 
+**8ª rodada** — 3 achados reais aceitos (mesma correção nos 3 chamadores), 2 avaliados e mantidos
+como estão com justificativa:
+
+- **Aceitos: raycast extra de `isPathObstructed` era descartado quando o destino já estava
+  obstruído** — nos 3 chamadores (a pé, carro, foguete), `pathObstructed` era computado
+  incondicionalmente (chamando `isPathObstructed`, um raycast Havok de verdade) mesmo quando
+  `lastCameraClipWasObstructed` já era `true` — nesse caso o resultado final já seria
+  `desiredCamPos`/`desiredCarCamPos`/`desiredShipCamPos` de qualquer jeito, então o 2º raycast era
+  puro trabalho descartado todo quadro clipado. Corrigido com curto-circuito (`&&`): só chama
+  `isPathObstructed` quando `lastCameraClipWasObstructed` ainda for `false`.
+- **Mantido como está: piso de `MIN_TARGET_CLEARANCE = 0,15` menor que `AVATAR_RADIUS = 0,55`**
+  — reavaliado o mesmo ponto já resolvido na 4ª rodada (o review sinalizou como "código que não
+  mudou desde a última revisão", ou seja, é o MESMO trade-off, não um achado novo). Nesse cenário
+  extremo (raio já nascendo sobreposto a um colisor, `hitDistance` perto de 0), as duas exigências
+  ("nunca mais perto que o raio do avatar do alvo" e "nunca mais longe que o obstáculo") são
+  matematicamente INCOMPATÍVEIS — fisicamente não existe um ponto no espaço que satisfaça as duas
+  ao mesmo tempo quando o próprio obstáculo já invade o raio do avatar (situação que, com a
+  colisão normal do jogo, não deveria acontecer em jogo normal). A alternativa sugerida ("posição
+  que fique fora dos dois ao mesmo tempo") não é geometricamente alcançável nesse caso-limite —
+  manter a decisão já tomada e documentada na 4ª rodada: aceitar uma sobreposição mínima e
+  inevitável, nunca zerar.
+- **Mantido como está: `isPathObstructed` continua rodando 1x por quadro por chamador mesmo sem
+  nenhuma obstrução** (2 raycasts Havok/quadro no estado estável: um dentro de `avoidCameraClipping`,
+  outro aqui) — achado de PERFORMANCE, não de correção. A sugestão (só checar o trajeto numa
+  "descontinuidade de modo/alvo" detectada) exigiria rastrear estado novo pra decidir QUANDO
+  checar, numa função que já teve 5 correções reais de matemática/lógica em rodadas anteriores —
+  o risco de introduzir mais um caso de borda nessa lógica já frágil supera o ganho de performance
+  não comprovado (raycasts Havok contra geometria simples já são tolerados em outros pontos deste
+  mesmo arquivo rodando todo quadro incondicionalmente, ex. checagem de chão do pulo). Mantido como
+  está; registrado aqui como pendência de performance conhecida, não como bug.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
+conteúdo da saída.
+
 ## Pendências / dívidas conhecidas
 
 - **Pinch de 2 dedos verificado só por revisão de código/matemática, não ao vivo** — as ferramentas
