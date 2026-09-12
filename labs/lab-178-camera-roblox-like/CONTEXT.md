@@ -148,6 +148,49 @@ Verificação desta rodada: `npx tsc -b`/`npm run test` (app, 178/178, inalterad
 limpos — desta vez com leitura real do conteúdo da saída (não só código de saída), pela lição
 registrada acima.
 
+**3ª rodada** — 3 achados reais (2 de código, 1 de documentação desatualizada):
+
+- **Câmera a pé continuava "brigando" com a câmera do veículo** — mesmo com o raycast pulado
+  (correção da 1ª rodada), o `camera.position = Vector3.Lerp(camera.position, desiredCamPos, 0.08)`
+  logo abaixo continuava rodando incondicionalmente, puxando `camera.position` 8% em direção à
+  posição CRUA da câmera a pé TODO quadro, ANTES do bloco do carro/foguete aplicar seu próprio
+  `Lerp` (12%/10%) em cima do valor já contaminado — os dois puxões brigando podiam deixar a câmera
+  num equilíbrio nunca 100% correto (dentro de parede/terreno em vez da posição corrigida do
+  veículo). Corrigido: a atualização de `camera.position`/`upVector`/`setTarget` da câmera a pé só
+  roda quando esta É a câmera que vale (`!drivingCar && !drivingRocket`).
+- **Piso mínimo da 2ª rodada podia levar a câmera pra ALÉM do obstáculo** — `Math.max(minClearance,
+  hitDistance - margin)` sem teto podia devolver um valor MAIOR que o próprio `hitDistance` quando
+  o obstáculo estava mais perto que `minClearance` (ex.: `hitDistance = 0,2`, piso `0,75` vencia,
+  câmera ia parar a 0,75 do alvo — do OUTRO LADO do obstáculo a 0,2). Corrigido com um teto duro em
+  `hitDistance` (nunca além da superfície de colisão real) — ver achado da 4ª rodada abaixo pra
+  correção final.
+- **Documentação desatualizada** — `CONTEXT.md` ("O que foi feito" e "Decisões técnicas") ainda
+  descrevia a decisão ORIGINAL de `ignoreBody` (só a pé, carro/foguete sem), já superada pela
+  correção da 1ª rodada (que passou a usar `avatarBody?.body` nos 3 lugares). Corrigido pra bater
+  com o código de verdade.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
+conteúdo da saída.
+
+**4ª rodada** — 1 achado real (o teto da 3ª rodada podia recriar o bug da 2ª no extremo oposto):
+
+- **Teto em `hitDistance` colapsava de volta a zero quando o raio já começava sobreposto a um
+  colisor** — `Math.min(minClearance-ou-mais, hitDistance)` devolve `hitDistance` sempre que
+  `hitDistance <= minClearance`; se `hitDistance` estiver perto de 0 (personagem colado/atravessado
+  numa parede), o resultado também fica perto de 0, recriando a câmera EM CIMA do alvo — o mesmo
+  bug da 2ª rodada, só que pelo caminho oposto. As duas exigências ("nunca mais perto que
+  `minClearance` do alvo" e "nunca mais longe que o obstáculo") são matematicamente incompatíveis
+  quando o obstáculo está mais perto que `minClearance` — não existe um valor que satisfaça as
+  duas ao mesmo tempo nesse caso extremo. Resolvido priorizando NUNCA degenerar a zero (o problema
+  visual mais grave) com um piso bem menor e específico pra esse conflito (`MIN_TARGET_CLEARANCE =
+  0,15`, bem menor que `AVATAR_RADIUS`) — aceita uma sobreposição mínima e inevitável com o
+  obstáculo só nesse cenário raro/de fronteira (raio já nascendo dentro de algo), em vez de zerar.
+  Conferido à mão com os casos de fronteira das rodadas 2/3/4 (obstáculo longe, obstáculo a 0,2,
+  obstáculo a 0) — os três convergem pro resultado esperado.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
+conteúdo da saída.
+
 ## Pendências / dívidas conhecidas
 
 - **Pinch de 2 dedos verificado só por revisão de código/matemática, não ao vivo** — as ferramentas

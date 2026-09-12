@@ -3698,11 +3698,23 @@ export function World3D({
         // ponto de colisão (nunca além da superfície de verdade, mesmo abrindo mão da margem
         // inteira num aperto extremo) — resolve o conflito priorizando não atravessar o obstáculo
         // que acabamos de detectar, o problema mais imediato dos dois.
+        //
+        // 4ª rodada (achado real): o teto em `hitDistance` da 3ª rodada TRAVA de volta no bug da
+        // 2ª — quando o próprio raio já começa sobreposto a um colisor (`hitDistance` perto de 0,
+        // ex.: personagem colado/atravessado numa parede), `Math.min(minClearance, hitDistance)`
+        // devolve `hitDistance` de novo, podendo chegar a 0 e recriar a câmera EM CIMA do alvo.
+        // As duas exigências (nunca mais perto que `minClearance` do alvo, nunca mais longe que o
+        // obstáculo) são matematicamente incompatíveis quando o obstáculo está mais perto que
+        // `minClearance` — não dá pra satisfazer as duas ao mesmo tempo. Prioriza NUNCA deixar a
+        // distância degenerar a zero (o problema visual mais grave, câmera literalmente colada no
+        // personagem) usando um piso bem menor (`MIN_TARGET_CLEARANCE`, não o raio inteiro do
+        // avatar) só pro caso limite de sobreposição — aceita uma sobreposição mínima e inevitável
+        // com o obstáculo nesse cenário raro/de fronteira, em vez de zerar.
+        const MIN_TARGET_CLEARANCE = 0.15
         const minClearance = Math.min(AVATAR_RADIUS + 0.2, fullDistance)
-        const safeDistance = Math.min(
-          Math.max(minClearance, cameraObstructionResult.hitDistance - margin),
-          cameraObstructionResult.hitDistance,
-        )
+        const idealDistance = Math.max(minClearance, cameraObstructionResult.hitDistance - margin)
+        const obstacleFloor = Math.max(cameraObstructionResult.hitDistance, MIN_TARGET_CLEARANCE)
+        const safeDistance = Math.min(idealDistance, obstacleFloor)
         if (safeDistance >= fullDistance) return desired
         return Vector3.Lerp(target, desired, safeDistance / fullDistance)
       }
