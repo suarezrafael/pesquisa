@@ -2592,6 +2592,15 @@ export function World3D({
       // centro de novo imediatamente, nunca ficando de fato parada.
       cameraRotateLeftRef.current = false
       cameraRotateRightRef.current = false
+      // Achado real do review automático do Copilot (PR #54, 6ª rodada): mesma ideia, mas pro
+      // arrasto/pinça de ponteiro em andamento — sem cancelar `cameraDragging`/`pinchPointers`, o
+      // próximo `pointermove` do dedo que já estava arrastando (ou dos dois dedos de uma pinça)
+      // continuava alterando yaw/zoom em cima dos valores recém-zerados, e a câmera saía do
+      // centro de novo antes do jogador soltar o dedo.
+      cameraDragging = false
+      cameraDragPointerId = null
+      pinchPointers.clear()
+      pinchStartDistance = 0
     }
     ;(scene as any).__recenterCamera = recenterCamera
 
@@ -11338,10 +11347,17 @@ export function World3D({
       )}
       <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
       <TouchJoystick onChange={handleJoystickChange} inert={hudInert} />
-      <TouchActionButton className="touch-action-jump" label="⬆️" onPress={handleTouchJumpPress} inert={hudInert} />
+      <TouchActionButton
+        className="touch-action-jump"
+        label="⬆️"
+        description="Pular"
+        onPress={handleTouchJumpPress}
+        inert={hudInert}
+      />
       <TouchActionButton
         className="touch-action-run"
         label="🏃"
+        description="Correr"
         onPress={handleTouchRunPress}
         onRelease={handleTouchRunRelease}
         inert={hudInert}
@@ -11369,7 +11385,13 @@ export function World3D({
         onPress={handleRecenterCamera}
         inert={hudInert}
       />
-      <TouchActionButton className="touch-action-interact" label="E" onPress={handleTouchInteractPress} inert={hudInert} />
+      <TouchActionButton
+        className="touch-action-interact"
+        label="E"
+        description="Interagir"
+        onPress={handleTouchInteractPress}
+        inert={hudInert}
+      />
       {placingFurnitureUi && (
         <div className="furniture-placement-bar">
           {/* lab-140 (pedido do usuário: "os objetos precisam ter uma posição válida com teste de

@@ -217,6 +217,37 @@ conteúdo da saída.
 Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
 conteúdo da saída.
 
+**6ª rodada** — 2 achados reais aceitos, 4 achados de estilo REJEITADOS com justificativa:
+
+- **Aceito: `recenterCamera` não cancelava arrasto/pinça em andamento** — mesma classe do achado
+  da 5ª rodada (giro contínuo dos botões ◀/▶), mas pro gesto de PONTEIRO: sem cancelar
+  `cameraDragging`/`cameraDragPointerId`/`pinchPointers`/`pinchStartDistance`, o próximo
+  `pointermove` do dedo que já estava arrastando (ou dos dois dedos de uma pinça em andamento)
+  continuava alterando yaw/zoom em cima dos valores recém-zerados — a câmera saía do centro de
+  novo antes do jogador soltar o dedo. Corrigido zerando os 4 dentro de `recenterCamera`.
+- **Aceito: botões pular/correr/interagir (E) sem `aria-label`** — a prop `description` nova só
+  tinha sido aplicada aos 3 controles de câmera; os botões pré-existentes (`⬆️`/`🏃`/`E`) ainda só
+  expunham o emoji/glifo como nome acessível. Adicionado `description="Pular"`/`"Correr"`/
+  `"Interagir"` — mesmo mecanismo já existente, só aplicado de forma consistente aos 3 botões que
+  faltavam.
+- **Rejeitados (4): remover "lab-178"/"PR #54"/"Copilot" dos comentários no código de produção**
+  — o review sugeriu que comentários citando o número do PR/rodada de review violam a regra de
+  "comentário só com racional durável" do `docs/prompts/04-manutencao-clean-code.md`. Verificado
+  ANTES de aceitar (mesmo princípio do achado do lab-176 sobre `scene.dispose()`, onde a fonte real
+  do Babylon foi lida antes de aceitar uma sugestão): `grep -c "achado do review automático do
+  Copilot" app/src/world3d/World3D.tsx` encontra **24 ocorrências pré-existentes** desse EXATO
+  padrão (`lab-NN (achado do review automático do Copilot no PR #NN, Xª rodada): ...`), espalhadas
+  por código de labs anteriores (149, 153, 172, 175, e outros) — não é algo introduzido por este
+  lab, é a convenção JÁ ESTABELECIDA e consistente deste repositório específico ao longo de 178+
+  laboratórios, aplicada por todas as sessões anteriores. Remover essas referências só dos
+  comentários deste lab deixaria o código NOVO inconsistente com o padrão do resto do arquivo, sem
+  nenhum ganho real (a convenção do projeto já resolve "por que isso está aqui" pra quem retomar o
+  código depois, que é exatamente o propósito que a regra genérica do Copilot está tentando
+  proteger). Mantidos como estão.
+
+Verificação desta rodada: `npx tsc -b`/`npm run test`/`npm run build` limpos, com leitura real do
+conteúdo da saída.
+
 ## Pendências / dívidas conhecidas
 
 - **Pinch de 2 dedos verificado só por revisão de código/matemática, não ao vivo** — as ferramentas
