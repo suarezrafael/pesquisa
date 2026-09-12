@@ -37,6 +37,19 @@ relacionado a este lab — ver `CONTEXT.md` do lab, 8ª-11ª rodadas, pro histó
 `received_at`, 11ª rodada). Todas já aplicadas em produção. Ver
 `labs/lab-185-medicao-coortes/CONTEXT.md`.
 
+**Merge confirmado**: PR #55 mesclada em `main` no commit `3359c5c` (2026-09-12, squash), depois de
+14 rodadas de review automático do Copilot — todos os achados reais corrigidos e verificados ao
+vivo contra produção a cada rodada (histórico completo no `CONTEXT.md` do lab), incluindo 2
+incidentes operacionais descobertos e corrigidos no processo (um `git stash pop` acidental que
+vazou um arquivo de migração de outra sessão, e a limpeza resultante). CI de `main` verde nos 3
+workflows (`app`, `server-accounts`, `server-cf-relay`) e deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200) — `GET /admin/metrics`
+confirmado ao vivo com as 3 chaves novas de `weeklyFunnel` e os 3 `guardrails` presentes; schema
+final de `product_events`/`player_identities` conferido direto no banco batendo com o esperado
+(índices de `received_at` presentes, índices mortos de `occurred_at` removidos, colunas órfãs de
+`player_identities` removidas).
+
 Antes desse: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
 Origem: `docs/growth-retention-monetization-backlog.md`, seção 7/12, "Lab 178", prioridade P0,
 próximo item da ordem recomendada após o lab-177. Investigação prévia (antes de codar) achou que

@@ -686,3 +686,25 @@ lab deixou medindo só a chegada), sem texto livre/UGC.
   foguete completa (embarcar via tecla E perto do foguete, decolar, pousar — cartão-postal "Novo
   cartão-postal: Saudações de Marte!" confirmado na tela). Nenhum erro de console em nenhum
   momento dos testes.
+
+## Merge e deploy em produção
+
+PR #55 mesclada em `main` (squash) no commit `3359c5c`, em 2026-09-12, depois de 14 rodadas de
+review automático do Copilot — todas documentadas acima, todos os achados reais corrigidos e
+re-verificados ao vivo contra produção a cada rodada; 2 achados da 13ª rodada (falta de
+`CREATE INDEX CONCURRENTLY`/janela de manutenção separada nas migrações 0011/0012) foram
+conscientemente adiados como dívida conhecida em vez de corrigidos, por serem desproporcionais à
+escala atual das tabelas envolvidas (703/2 linhas) — ver seção de pendências.
+
+CI de `main` confirmado verde nos 3 workflows (`app`, `server-accounts`, `server-cf-relay`).
+Deploy de produção confirmado ao vivo: Vercel (`https://app-two-flax-92.vercel.app`, `GET` → 200) e
+o Worker `server-accounts` (`https://missao-aprender-accounts.rafaelvs.workers.dev/health` → 200).
+`GET /admin/metrics` em produção confirmado respondendo com as 3 chaves novas de `weeklyFunnel`
+(`cameraRecenterUsed`/`cosmeticEquipped`/`planetTravelCompleted`, todas 0 — nenhum evento novo
+disparado em produção ainda, esperado) e os 3 `guardrails` (agregação por device, amostra pequena,
+`device_id` sintético). Schema final conferido direto no banco: `product_events` tem
+`idx_product_events_received_at`/`idx_product_events_device_received` (novos) e
+`idx_product_events_type_occurred` (preservado), sem os 2 índices de `occurred_at` que ficaram
+mortos; `player_identities` tem 11 colunas, nenhuma órfã — o incidente das 7 colunas acidentais
+(migração `0007_player_appearance.sql` de outra sessão, aplicada por engano junto com a `0011`
+deste lab) está completamente resolvido.
