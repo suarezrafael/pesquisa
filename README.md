@@ -34,8 +34,11 @@ zero. Este README dá a visão geral; os laboratórios têm o histórico detalha
   trial de 2h/7 dias, exigindo cartão de crédito depois disso. O v2 fala exatamente o mesmo
   protocolo do v1; detalhes de arquitetura e capacidade do plano Free em
   `app/server-cf-relay/README.md`.
-- **Deploy**: frontend no Vercel (`vercel --prod`), relay no Cloudflare Workers (plano Free, sem
-  cartão de crédito).
+- **Deploy**: frontend publicado em DOIS destinos a cada push em `main` — Vercel (`vercel --prod`,
+  produção oficial, URL acima) e Cloudflare Pages (`missao-aprender-jogo.pages.dev`, espelho
+  paralelo, projeto criado no lab-109, automatizado no CI a pedido do usuário) — mesmo `dist/`
+  publicado nos dois, sem mudança de código entre eles. Relay no Cloudflare Workers (plano Free,
+  sem cartão de crédito).
 
 ## Arquitetura
 
@@ -153,16 +156,21 @@ Multiplayer localmente: `cd app/server && node relay.cjs` sobe um relay na porta
 
 ## Deploy
 
-**Automático (lab-104)**: `.github/workflows/ci.yml` roda os testes dos 3 packages em todo push/PR
-e, quando o push é em `main`, publica os 3 alvos (frontend + os dois Workers) depois dos testes
-passarem. Exige dois secrets configurados no repositório GitHub (Settings → Secrets and variables
-→ Actions): `VERCEL_TOKEN` (vercel.com → Account Settings → Tokens) e `CLOUDFLARE_API_TOKEN`
-(dash.cloudflare.com → My Profile → API Tokens → template "Edit Cloudflare Workers"). Push num
-branch de trabalho ou um PR só roda os testes, nunca publica.
+**Automático (lab-104, deploy do front no Cloudflare Pages automatizado depois, a pedido do
+usuário)**: `.github/workflows/ci.yml` roda os testes dos 3 packages em todo push/PR e, quando o
+push é em `main`, publica 4 alvos depois dos testes passarem: o frontend em Vercel E Cloudflare
+Pages (mesmo `dist/`, dois destinos) + os dois Workers. Exige dois secrets configurados no
+repositório GitHub (Settings → Secrets and variables → Actions): `VERCEL_TOKEN` (vercel.com →
+Account Settings → Tokens) e `CLOUDFLARE_API_TOKEN` (dash.cloudflare.com → My Profile → API Tokens
+— precisa dos escopos "Edit Cloudflare Workers" E "Cloudflare Pages: Edit", já que o mesmo token é
+reaproveitado pros dois Workers e pro Pages). Push num branch de trabalho ou um PR só roda os
+testes, nunca publica.
 
 **Manual** (sempre funciona, independente do CI):
 ```bash
-cd app && npx vercel --prod --yes                          # frontend (Vercel)
+cd app && npx vercel --prod --yes                          # frontend (Vercel, produção oficial)
+cd app && npm run build && npx wrangler pages deploy dist --project-name=missao-aprender-jogo --branch=main
+                                                             # frontend (Cloudflare Pages, espelho)
 cd app/server-accounts && npx wrangler deploy                # Worker de contas (Cloudflare)
 cd app/server-cf-relay && npx wrangler deploy               # relay v2 (Cloudflare Workers)
 ```

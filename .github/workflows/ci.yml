@@ -13,6 +13,12 @@ name: CI
 # atrás. Exige dois secrets no repositório GitHub (Settings → Secrets and variables → Actions):
 # `VERCEL_TOKEN` e `CLOUDFLARE_API_TOKEN` — nenhum dos dois pode ser gerado por uma sessão do
 # Claude Code (exigem acesso às contas Vercel/Cloudflare do próprio usuário).
+#
+# Pedido do usuário: publicar o front (`app`) em Vercel E Cloudflare Pages a cada push em `main`,
+# não só Vercel — o job `app` agora reaproveita o MESMO `CLOUDFLARE_API_TOKEN` já usado pelos
+# Workers abaixo pra publicar também no projeto Pages `missao-aprender-jogo` (criado no lab-109).
+# Esse token precisa ter permissão "Cloudflare Pages: Edit" além do que já usava só pra Workers —
+# se não tiver, o passo novo falha e o usuário precisa adicionar esse escopo no painel Cloudflare.
 on:
   push:
   pull_request:
@@ -47,6 +53,22 @@ jobs:
           VERCEL_ORG_ID: team_v5bJ45ceJQA8tR6Nly6P9nWh
           VERCEL_PROJECT_ID: prj_wnOVBZ6zPRz8k1mvlE9lFG4mr9AO
         run: npx vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+      # lab-109 criou o projeto Cloudflare Pages `missao-aprender-jogo` (mesma conta Cloudflare já
+      # usada pelos Workers) e publicou manualmente como deploy PARALELO, deliberadamente sem
+      # automação — Vercel continuava sendo a produção oficial, o Pages só uma opção pronta em
+      # standby. Automatizado aqui a pedido do usuário: publica o MESMO `dist/` já buildado acima
+      # (nenhuma mudança de código foi necessária pro Pages, o front já fala com os Workers via URL
+      # absoluta) nos dois destinos a cada push em `main`, sem depender de decisão de corte de DNS.
+      # Usa o mesmo `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` já usados pelos jobs de Worker
+      # abaixo — se o token não tiver permissão "Cloudflare Pages: Edit", este passo falha e precisa
+      # que o usuário adicione esse escopo ao token no painel da Cloudflare (não pode ser feito por
+      # uma sessão do Claude Code).
+      - name: Deploy to Cloudflare Pages (production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 354311826c2a9d7954df9674fa2f4ce5
+        run: npx wrangler pages deploy dist --project-name=missao-aprender-jogo --branch=main
 
   server-accounts:
     runs-on: ubuntu-latest

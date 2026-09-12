@@ -35,6 +35,15 @@ Cloudflare Pages, sem mexer no site ao vivo (Vercel) nem no DNS de `missaoaprend
   o passo de deploy do `app` em `.github/workflows/ci.yml` (lab-104) pra `wrangler pages deploy`
   em vez de `vercel --prod` — mesmo padrão condicional (`if: github.ref == 'refs/heads/main' && ...`)
   já em uso.
+  - **Atualização (fora de um lab formal, pedido direto do usuário depois do lab-179)**: em vez da
+    migração/corte de DNS prevista acima, o usuário optou por manter os DOIS destinos publicados em
+    paralelo automaticamente — `.github/workflows/ci.yml` ganhou um passo novo
+    ("Deploy to Cloudflare Pages (production)") no job `app`, logo depois do deploy pro Vercel,
+    publicando o MESMO `dist/` nos dois destinos a cada push em `main`, reaproveitando o
+    `CLOUDFLARE_API_TOKEN` já usado pelos Workers (precisa do escopo "Cloudflare Pages: Edit"
+    adicionado a esse token). Vercel continua sendo a produção oficial (URL no `README.md`); o
+    Cloudflare Pages agora fica sempre atualizado também, sem precisar de deploy manual, mas o
+    corte de DNS/decisão de qual é a origem definitiva continua em aberto, decisão do usuário.
 - **Achado durante a verificação, não é bug deste laboratório**: tentei confirmar conectividade
   cruzada de verdade fazendo um `fetch()` direto pro Worker de contas (`/health`) dentro do
   navegador, tanto a partir do Cloudflare Pages quanto (pra comparar) a partir da origem VERCEL DE
