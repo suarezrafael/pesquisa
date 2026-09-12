@@ -1753,6 +1753,16 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
         ' a mesma criança). Nenhum evento carrega nome, e-mail ou identificador de perfil.',
       'Amostras pequenas (eligibleDevices/sampleSize baixos) produzem percentuais instáveis —' +
         ' evite tirar conclusão de uma coorte com poucas dezenas de dispositivos.',
+      // achado do review automático do Copilot (8ª rodada, PR #55) — `newDevicesToday`/alcance
+      // semanal não são resistentes a abuso: `device_id` é gerado e escolhido pelo próprio client,
+      // sem autenticação nenhuma, então nada IMPEDE um script de criar um UUID novo a cada
+      // requisição (só o rate limit por IP em `/events` limita a VELOCIDADE disso, não a
+      // possibilidade). Repetido aqui pra quem só consome a API não tratar D0/alcance como um
+      // número necessariamente livre de dispositivos sintéticos.
+      '`newDevicesToday` e o alcance semanal do weeklyFunnel não são resistentes a abuso —' +
+        ' device_id é escolhido pelo próprio client sem autenticação, então nada impede gerar' +
+        ' um UUID novo por requisição pra inflar essas contagens (o rate limit por IP em' +
+        ' /events limita a velocidade do abuso, não a possibilidade dele).',
     ],
   })
 }

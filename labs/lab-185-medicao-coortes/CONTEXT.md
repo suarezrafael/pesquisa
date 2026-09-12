@@ -365,6 +365,52 @@ calculado a partir de `received_at` dá HOJE pros dois eventos, não mais "ontem
 exatamente os mesmos números de sempre (76/47/123), confirmando que a troca de coluna não muda
 nada pra tráfego real (onde `occurred_at` e `received_at` já são essencialmente o mesmo instante).
 
+**8ª rodada** — 3 achados reais + 1 incidente operacional descoberto durante a correção:
+
+- **Faltava índice em `received_at`** — a troca de `occurred_at` pra `received_at` (7ª rodada)
+  deixou a janela semanal do `weeklyFunnel` e as CTEs de retenção sem nenhum índice que sirva
+  (só existiam `idx_product_events_occurred_at`/`idx_product_events_device_occurred`, ambos sobre a
+  coluna ERRADA agora), forçando scan da tabela inteira — exatamente o mesmo problema que
+  `idx_product_events_occurred_at` já tinha resolvido pra `occurred_at` no lab-165 (PR #39).
+  Corrigido com `migrations/0011_product_events_received_at_index.sql` (2 índices novos:
+  `idx_product_events_received_at` simples pra janela semanal, `idx_product_events_device_received`
+  composto pra CTE de retenção). Confirmado com `EXPLAIN` que a query agora usa
+  `Index Scan using idx_product_events_received_at` em vez de sequential scan.
+- **`guardrails` no JSON não avisava sobre `device_id` sintético** — a pendência documentada na 7ª
+  rodada (device_id sem autenticação, `newDevicesToday`/alcance semanal infláveis) só existia no
+  `CONTEXT.md`, não na própria resposta da API — que é o lugar que `guardrails` existe pra cobrir
+  ("quem só consome a API sem abrir o catálogo"). Adicionado um 3º guardrail no JSON.
+- **Garantia de privacidade no TOPO do `docs/event-catalog.md` (linhas 33-34) contradizia a
+  correção da 7ª rodada mais abaixo** — o topo continuava dizendo "sem NENHUM vínculo com
+  nome/apelido/e-mail/família", mesma alegação incorreta que já tinha sido corrigida na seção
+  "Nível de agregação" (`player_identities` compartilha `device_id`, então É correlacionável via
+  join por quem tem acesso ao banco). Corrigido pra dizer "nenhum PAYLOAD/ENDPOINT" em vez de
+  "nenhum vínculo", com referência cruzada pra seção que já explica a ressalva completa.
+- **Incidente operacional descoberto ao aplicar a migração 0011**: `npm run migrate` processa TODO
+  arquivo em `migrations/`, sem checar se está rastreado pelo git — e um arquivo `.sql` de um
+  experimento abandonado de OUTRA sessão (`0007_player_appearance.sql`, deixado como arquivo solto
+  depois de um `git stash pop` acidental documentado mais cedo nesta mesma sessão) ainda estava no
+  diretório. `npm run migrate` aplicou os DOIS arquivos de uma vez, adicionando 7 colunas órfãs
+  (`equipped_hat_id`, `equipped_glasses_id`, `equipped_shirt_color_id`, `equipped_pants_color_id`,
+  `equipped_shoe_color_id`, `equipped_backpack_color_id`, `equipped_hair_shape_id`) a
+  `player_identities` EM PRODUÇÃO — nenhuma delas usada por código nenhum (confirmado por busca em
+  `src/`; a implementação de verdade do lab-163 usa uma coluna `equipped_look jsonb` única,
+  `0007_player_public_profile.sql`, já mesclada antes). Sempre `NULL`, zero impacto funcional, mas
+  ainda assim uma mutação de schema de produção não revisada/não intencional. Confirmado com o
+  usuário (`AskUserQuestion`) antes de corrigir: removido o arquivo solto do diretório, escrita
+  `migrations/0012_drop_orphan_appearance_columns.sql` (`drop column if exists` nas 7 colunas,
+  seguro por serem confirmadamente não-lidas por nenhum código) e aplicada — schema de
+  `player_identities` verificado de volta ao estado correto (11 colunas, batendo com
+  `0007_player_public_profile.sql` + `0010_player_house_visit.sql`).
+
+Verificação desta rodada: `npx tsc --noEmit` limpo; `npm run test` 147/147 (sem teste novo — índice
+de banco e string de guardrail, nada testável por unidade). Reverificado ao vivo contra produção
+(`wrangler dev` porta 8797, banco real): `EXPLAIN` confirmou o novo índice sendo usado pela query
+semanal; `GET /admin/metrics` respondeu normalmente com o guardrail novo presente; schema de
+`player_identities` conferido via `information_schema.columns` — 11 colunas, nenhuma órfã; índices
+de `product_events` conferidos via `pg_indexes` — os 2 novos (`idx_product_events_received_at`,
+`idx_product_events_device_received`) presentes ao lado dos 3 já existentes.
+
 ## Pendências / dívidas conhecidas
 
 - **Agregação por device, não por criança, continua sem solução real** — decisão explícita de
@@ -422,7 +468,12 @@ lab deixou medindo só a chegada), sem texto livre/UGC.
   real/bissexta, formato/calendário inválido, anos de 2 dígitos, ano 0000), 2 em
   `isValidCosmeticSlot`, 2 em `isValidDestinationPlanetId`, 6 em `isPlausibleOccurredAt`.
   `npm run build` (app): limpo, sem regressão de bundle.
-- Nenhuma migração de banco — `product_events` já tinha tudo necessário.
+- **2 migrações novas, ambas adicionadas pelo review da PR #55 (não fazem parte do escopo original
+  planejado, que de fato não precisava de nenhuma — `product_events` já tinha as colunas
+  necessárias)**: `0011_product_events_received_at_index.sql` (2 índices em `received_at`, 8ª
+  rodada) e `0012_drop_orphan_appearance_columns.sql` (limpeza de um incidente operacional não
+  relacionado a este lab — ver "Review automático do Copilot" 8ª rodada abaixo para o histórico
+  completo). Ambas aplicadas em produção via `npm run migrate` e verificadas.
 - **Verificado ao vivo contra produção** (`wrangler dev` local, porta 8790, banco de PRODUÇÃO
   real, só leitura): `GET /admin/metrics` respondeu com `newDevicesToday`/`weeklyFunnel` (3 chaves
   novas, todas 0 — nenhum evento novo em produção ainda, esperado) e `guardrails`;

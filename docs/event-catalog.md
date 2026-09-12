@@ -31,7 +31,11 @@ PR #55, 7ª rodada).
 ## Garantia de privacidade (vale pra TODOS os eventos abaixo, sem exceção)
 
 - `device_id` é um `crypto.randomUUID()` gerado e guardado só no `localStorage` do aparelho
-  (`getOrCreateDeviceId`, `state/storage.ts`) — sem NENHUM vínculo com nome/apelido/e-mail/família.
+  (`getOrCreateDeviceId`, `state/storage.ts`) — nenhum PAYLOAD/ENDPOINT deste Worker devolve nome,
+  apelido, e-mail ou família junto de um evento ou de um `device_id`. Isso é diferente de dizer que
+  os dois são impossíveis de correlacionar por quem tem acesso direto ao banco — ver a nota sobre
+  `player_identities` na seção "Nível de agregação" abaixo (achado do review da PR #55, 8ª rodada:
+  a versão anterior desta frase dizia "sem NENHUM vínculo", contradizendo essa mesma nota).
 - Nenhum evento carrega nome real, e-mail, resposta de quest, conteúdo de chat, ou qualquer outro
   dado de identificação da criança. `meta` (quando existe) só carrega números (duração/tempo em ms),
   um id de missão do catálogo público (`questId`), ou uma string de um conjunto FIXO e pequeno
