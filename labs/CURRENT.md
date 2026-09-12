@@ -1,5 +1,15 @@
 # Laboratório atual
 
+**Em andamento: labs/lab-185-medicao-coortes/** — medição de coortes de retenção e qualidade.
+Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 185", prioridade P0/P1 — confirmado
+com o usuário via `AskUserQuestion` como o próximo lab (em vez de pular pro Lab 179) depois de
+checar que câmera (lab-178), lojinha (lab-176) e planetas não têm nenhum evento de analytics hoje.
+Investigação prévia achou que D1/D7 retenção já existe (`handleAdminMetrics`) mas sem D0 exposto e
+sem comparação de coorte antes/depois — o núcleo genuinamente novo deste lab. Escopo: 3 eventos
+novos (`camera_recenter_used`, `cosmetic_equipped`, `planet_travel_completed`), catálogo atualizado,
+`newDevicesToday` (D0), comparação de coorte via `?cohortSplitDate=`, guardrails no relatório. Ver
+`labs/lab-185-medicao-coortes/FEATURES.md`.
+
 Último concluído: labs/lab-178-camera-roblox-like/ — câmera em 3ª pessoa Roblox-like fácil.
 Origem: `docs/growth-retention-monetization-backlog.md`, seção 7/12, "Lab 178", prioridade P0,
 próximo item da ordem recomendada após o lab-177. Investigação prévia (antes de codar) achou que
