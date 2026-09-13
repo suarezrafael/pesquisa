@@ -21,7 +21,6 @@ interface WeeklyEventPanelProps {
 export function WeeklyEventPanel({ progress, onClose }: WeeklyEventPanelProps) {
   const modalRef = useModalA11y(onClose)
   const event = getCurrentWeeklyEvent()
-  const hasMultiplierBonus = event.xpMultiplier > 1 || event.coinMultiplier > 1
   const objectiveDone = isWeeklyEventObjectiveDone(progress, new Date().toISOString())
 
   return (
@@ -38,7 +37,7 @@ export function WeeklyEventPanel({ progress, onClose }: WeeklyEventPanelProps) {
           {event.emoji}
         </div>
         <h2>{event.name}</h2>
-        {hasMultiplierBonus && <p className="reward-line">{event.description}</p>}
+        <p className="reward-line">{event.description}</p>
         <p className="reward-bonus-line">
           {objectiveDone
             ? `✓ Objetivo da semana concluído! Você já ganhou 🪙 ${WEEKLY_EVENT_OBJECTIVE_REWARD_COINS} moedas grátis esta semana.`

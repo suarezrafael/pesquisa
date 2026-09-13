@@ -1315,10 +1315,13 @@ a.nickname-generate-btn {
 
 /* Evento semanal (lab-22) */
 
-/* Alvo de toque mínimo de 44px lógicos (docs/prompts/02-design-profissional.md §3) via
-   `min-height`, não `height` — o mesmo raciocínio de `.modal-close`/`.planet-toggle`: preserva o
-   visual de pílula pequena enquanto garante uma área clicável real pra mão de criança. */
+/* `.badge-row` (dentro de `.hud-overlay`) é `pointer-events: none` — texto informativo, deixa
+   cliques passarem pro mundo 3D por baixo (mesmo raciocínio de `.help-button` reativando o próprio
+   pointer-events). Alvo de toque mínimo de 44px lógicos (docs/prompts/02-design-profissional.md
+   §3) via `min-height`, não `height` — mesmo raciocínio de `.modal-close`/`.planet-toggle`:
+   preserva o visual de pílula pequena enquanto garante uma área clicável real pra mão de criança. */
 .weekly-event-badge {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;

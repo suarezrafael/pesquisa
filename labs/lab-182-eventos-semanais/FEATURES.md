@@ -102,10 +102,10 @@ desenvolver").
 - Timers agressivos, desconto relâmpago, passe de batalha, recompensa aleatória paga — já excluídos
   pelo próprio backlog.
 - Recompensa cosmética dedicada nova (o backlog aceita "cosmética OU moeda grátis"; moeda grátis foi
-  escolhido por ser mais simples/consistente com os outros bônus pontuais já existentes, sem exigir
+  escolhida por ser mais simples/consistente com os outros bônus pontuais já existentes, sem exigir
   desenhar+catalogar um item novo por semana ou um item fixo reaproveitado de forma arbitrária).
 - Uma 2ª rotação semanal paralela ou objetivos DIFERENTES por tipo de evento (dourada/sábio/dupla) —
   o backlog exige explicitamente "não existe segunda rotação semanal concorrente"; o objetivo é o
-  MESMO todo toda semana, incorporado à única rotação já existente, não uma trilha nova.
+  MESMO toda semana, incorporado à única rotação já existente, não uma trilha nova.
 - Feedback qualitativo infantil (métrica citada pelo backlog) — pesquisa com usuário real, não
   código.

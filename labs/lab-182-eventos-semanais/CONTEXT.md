@@ -77,10 +77,28 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   a ÚNICA chamada de `setProgress` no handler — encadear depois de OUTRA chamada (funcional ou não)
   no mesmo handler quebra a leitura síncrona, mesmo que a escrita em si continue correta.
 
+## Review automático do Copilot (PR #61)
+
+- **Rodada 1**: 3 achados reais corrigidos, 1 deles CRÍTICO. (1) `.hud-overlay .badge-row` já
+  tinha `pointer-events: none` (`index.css:763-765`, texto informativo deixando cliques passarem
+  pro mundo 3D por baixo) — o `.weekly-event-badge` novo, virando um `<button>` de verdade, herdava
+  esse `none` e ficava CLICÁVEL SÓ PROGRAMATICAMENTE (`.click()` via JS bypassa CSS
+  `pointer-events`), nunca por mouse/toque real. A verificação ao vivo anterior usou `.click()` via
+  JS pra abrir o painel e não pegou isso — só um clique de MOUSE de verdade (coordenada) expôs o
+  bug (o clique "vazava" pro avatar/3D por baixo do badge). Corrigido com `pointer-events: auto`
+  no próprio botão (mesmo padrão de `.help-button`), e reverificado com um clique de mouse real
+  desta vez, não só JS. (2) `WeeklyEventPanel.tsx` escondia `event.description` nas semanas sem
+  multiplicador (`hasMultiplierBonus &&`), mas a descrição ("Sem bônus especial esta semana...") é
+  informativa mesmo sem bônus — corrigido removendo a condição, sempre mostra. (3) Comentário em
+  `progression.ts` ainda citava o nome antigo `advanceWeeklyEventObjective` depois do rename pra
+  `weeklyEventObjectiveProgress`. Também 2 nits de gramática (palavra duplicada "todo toda",
+  concordância de gênero "escolhido"→"escolhida") e um teste fortalecido pra checar o valor exato
+  da recompensa (`toBe`, não `toBeGreaterThan`) — todos corrigidos.
+
 ## Pendências / dívidas conhecidas
 
-- Nenhuma dívida técnica nova conhecida ao final deste lab (a única encontrada — o bug de leitura
-  síncrona acima — foi corrigida e reverificada ao vivo antes do lab ser considerado pronto).
+- Nenhuma dívida técnica nova conhecida ao final deste lab (os achados da rodada 1 do review, todos
+  corrigidos e reverificados ao vivo).
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

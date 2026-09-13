@@ -66,7 +66,7 @@ import { PET_CATALOG } from '../data/pets'
 import { quests } from '../data/quests'
 import { planetQuests } from '../data/planetQuests'
 import type { Quest } from '../types'
-import type { WeeklyEvent } from '../data/weeklyEvents'
+import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, type WeeklyEvent } from '../data/weeklyEvents'
 
 const NO_BONUS_EVENT: WeeklyEvent = {
   id: 'teste',
@@ -1397,7 +1397,7 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
   it('concede o bônus na primeira vez da semana', () => {
     const result = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
     expect(result.rewardGranted).toBe(true)
-    expect(result.progress.coins).toBeGreaterThan(emptyProgress.coins)
+    expect(result.progress.coins).toBe(emptyProgress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS)
     expect(result.progress.weeklyEventObjectiveRewardedWeekKey).not.toBeNull()
   })
 
@@ -1412,7 +1412,7 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
     const primeira = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
     const semanaSeguinte = applyWeeklyEventObjectiveProgress(primeira.progress, '2026-09-15T12:00:00.000Z')
     expect(semanaSeguinte.rewardGranted).toBe(true)
-    expect(semanaSeguinte.progress.coins).toBeGreaterThan(primeira.progress.coins)
+    expect(semanaSeguinte.progress.coins).toBe(primeira.progress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS)
   })
 
   it('isWeeklyEventObjectiveDone reflete o estado real por semana', () => {

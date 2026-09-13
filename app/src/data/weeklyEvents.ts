@@ -62,7 +62,7 @@ export function getCurrentWeeklyEvent(date: Date = new Date()): WeeklyEvent {
   return WEEKLY_EVENTS[week % WEEKLY_EVENTS.length]
 }
 
-// Objetivo educativo/ambiental do evento semanal — o MESMO todo toda semana, incorporado à única
+// Objetivo educativo/ambiental do evento semanal — o MESMO toda semana, incorporado à única
 // rotação acima (não uma segunda rotação concorrente): reaproveita os 3 desafios ambientais do
 // planeta principal (ponte/lógica, abastecimento de foguete/matemática, placa/leitura), sempre
 // disponíveis e nunca esgotam. Recompensa fixa e previsível, nunca punitiva — não completar nunca

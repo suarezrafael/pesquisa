@@ -90,7 +90,7 @@ export interface WeeklyEventObjectiveResult {
 
 // Concede o bônus do objetivo semanal (`WEEKLY_EVENT_OBJECTIVE_REWARD_COINS`, `data/weeklyEvents.ts`)
 // na PRIMEIRA vez que é chamada dentro de cada semana ISO — idempotente mesmo se completar vários
-// desafios ambientais na mesma semana, nunca paga 2x. Chamada de `advanceWeeklyEventObjective`
+// desafios ambientais na mesma semana, nunca paga 2x. Chamada de `weeklyEventObjectiveProgress`
 // (`useProgress.ts`) com um atualizador funcional, não direto — ver comentário lá sobre por quê.
 export function applyWeeklyEventObjectiveProgress(progress: Progress, nowIso: string): WeeklyEventObjectiveResult {
   if (isWeeklyEventObjectiveDone(progress, nowIso)) return { progress, rewardGranted: false }
