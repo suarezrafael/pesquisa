@@ -91,6 +91,18 @@ Commit inicial → final: 6114f8e3dcc5124422a0819148edd22451b7b91d..6e81720
   vindo de várias direções, só de um ângulo estreito que escapava da sobreposição. Deslocamento
   aumentado pra (0.38, 0.16, -0.3) — verificado com um script Node à parte: ~30° (≈6,8 unidades
   de arco), folga real de ~1,5 unidade acima do limiar de 5,3.
+  **Verificado ao vivo (Chrome real)**: distância REAL medida dentro da própria cena entre
+  `posto-abastecimento-matematica` e `rocketRoot` = 6,52 unidades (bate com a estimativa) — mais
+  de 1,2 unidade de folga acima do limiar de 5,3, confirmando que as duas zonas de gatilho não se
+  tocam mais. Interação do posto reconfirmada funcionando no local novo (abre "Figurinhas pra
+  Dividir", Matemática, via `learning_challenge_started` com `kind: "rocket_fuel"`). O embarque no
+  foguete em si NÃO foi reconfirmado ao vivo nesta sessão — mesmo perto o bastante (3,01 <
+  `ROCKET_ENTER_DISTANCE`), o próprio `rocketHint` do jogo (alpha do GUI) permaneceu em 0, sinal
+  de uma inconsistência entre `__debugTeleportExact`/estado de rastreio do foguete JÁ documentada
+  como limitação de ambiente (não deste lab) no `CONTEXT.md` do lab-177 ("comportamento
+  inconsistente... não investigado a fundo") — não uma regressão nova. Confiança no fix vem da
+  medição geométrica direta (distância real na própria cena), não de reproduzir o embarque
+  funcionando ao vivo.
 
 ## Pendências / dívidas conhecidas
 
