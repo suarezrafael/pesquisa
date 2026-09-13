@@ -197,6 +197,8 @@ const PRODUCT_EVENT_TYPES = new Set([
   // app/src/productAnalytics.ts.
   'learning_challenge_started',
   'learning_challenge_completed',
+  // lab-181 ("Circuito de descoberta e álbum de planetas") — ver app/src/productAnalytics.ts.
+  'album_planet_opened',
 ])
 
 export function isValidProductEventType(type: string): boolean {

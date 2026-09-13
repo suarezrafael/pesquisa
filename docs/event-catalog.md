@@ -88,6 +88,7 @@ PR #55, 7ª rodada).
 | `planet_interaction_completed` | Qualquer interação dentro de um planeta-destino — 1 evento genérico pra 4 categorias, não 1 evento por tipo (lab-179, "Planetas interativos v1"): cartão-postal colecionado, baú de tesouro achado, escolinha de astronomia respondida certo, segredo visual achado, ou pote de moedas de Marte revelado | `state/useProgress.ts` (`collectPostcard`/`foundTreasureChest`/`completePlanetQuest`/`foundPlanetSecret`) e `world3d/World3D.tsx` (pote de moedas de Marte, disparado direto no gatilho de proximidade — não passa por `useProgress`, já que reseta a cada visita) | `planetId` (um dos 7 planetas-destino) e `kind` (`"collectible"`, `"actionable_object"`, `"educational_quiz"`, `"visual_secret"`) | 1x por interação genuína |
 | `learning_challenge_started` | Abertura de um dos 3 landmarks de missão ambiental do planeta principal (lab-180, "Missões ambientais de aprendizagem": ponte/lógica, posto de abastecimento do foguete/matemática, placa/leitura) — dispara ao apertar `E` perto do landmark, antes de responder | `App.tsx`, `handleOpenEnvironmentalChallenge` | `kind` (`"bridge"`, `"rocket_fuel"`, `"plaque"`) | 1x por tentativa (sem limite de sessão) |
 | `learning_challenge_completed` | Resposta certa num dos 3 landmarks acima — credita XP/moeda de verdade via `completeQuest`, mesmo caminho de uma escolinha comum | `App.tsx`, `handleEnvironmentalChallengeCorrect` | `kind` (`"bridge"`, `"rocket_fuel"`, `"plaque"`) | 1x por tentativa concluída |
+| `album_planet_opened` | Expandir um planeta específico na grade nova "Planetas" do catálogo de conquistas (lab-181, "Circuito de descoberta e álbum de planetas") — sinal de interesse real num planeta, não só abrir o painel inteiro | `world3d/AchievementsPanel.tsx`, `togglePlanet` | `planetId` (um dos 7 planetas-destino) | 1x por expansão (reabrir o mesmo planeta conta de novo) |
 
 ## Nível de agregação (lab-185)
 
@@ -177,6 +178,14 @@ decisão").
   taxa por tentativa individual confiável — mesmo espírito de outras métricas "aproximadas" já
   documentadas aqui (`house_visited`, `planetInteractionCompleted`). Sem endpoint dedicado pra essa
   taxa — fica como consulta ad-hoc quando precisar, não um campo novo em `weeklyFunnel`.
+- **Álbum de planetas** (lab-181, "Circuito de descoberta e álbum de planetas") —
+  `album_planet_opened`, lido semanalmente por `weeklyFunnel.albumPlanetOpened`. O documento
+  também cita `discoverable_collected` como métrica esperada — REDUNDANTE com
+  `planet_interaction_completed` (lab-179, já existe, já tem
+  `weeklyFunnel.planetInteractionCompleted` cobrindo "descobertas por semana"), por isso não virou
+  evento novo. "D7 por número de descobertas" (outra métrica citada) não foi construída neste
+  lab — exigiria uma consulta de coorte nova, mesmo padrão do lab-185, fora do escopo pequeno
+  deste lab (documentado como pendência em `labs/lab-181-album-planetas/CONTEXT.md`).
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de

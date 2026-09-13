@@ -2,13 +2,32 @@
 // sentar, acessar seu catálogo de conquistas") — mesma estrutura de `QuestListOverlay.tsx`,
 // reaproveita as classes CSS `.quest-list`/`.quest-list-item` já existentes (o formato ícone +
 // nome + descrição + status encaixa exatamente, sem precisar de CSS novo).
+import { useState } from 'react'
 import { ACHIEVEMENT_CATALOG } from '../data/achievements'
 import { POSTCARD_CATALOG } from '../data/postcards'
 import { PET_CATALOG } from '../data/pets'
-import { petAgeYears, petLifecycleStage, petStageFor } from '../state/progression'
+import {
+  nextPlanetDiscovery,
+  petAgeYears,
+  petLifecycleStage,
+  petStageFor,
+  planetDiscoverySlots,
+  type PlanetDiscoveryKind,
+} from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
+import { trackAlbumPlanetOpened } from '../productAnalytics'
 import { STAGE_LABEL } from './PetPanel'
 import type { Progress } from '../types'
+
+// lab-181 ("Circuito de descoberta e álbum de planetas") — legenda curta pro tipo de slot dentro
+// da grade expandida de cada planeta; os nomes já vêm de `planetDiscoverySlots` (mais específicos,
+// "Baú de tesouro"/"Escolinha de astronomia"/etc.), isto é só o rótulo genérico de categoria.
+const DISCOVERY_KIND_LABEL: Record<PlanetDiscoveryKind, string> = {
+  collectible: 'Colecionável',
+  actionable_object: 'Objeto especial',
+  educational_quiz: 'Escolinha',
+  visual_secret: 'Segredo escondido',
+}
 
 interface AchievementsPanelProps {
   progress: Progress
@@ -38,6 +57,17 @@ function nextObjective(progress: Progress): { emoji: string; name: string; descr
 export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps) {
   const modalRef = useModalA11y(onClose)
   const objective = nextObjective(progress)
+  const planetDiscovery = nextPlanetDiscovery(progress)
+  // lab-181 — qual planeta está expandido na grade abaixo (mostrando os 3 slots individuais em
+  // vez de só a fração "2/3"). `null` = nenhum expandido, mostra só as linhas colapsadas.
+  const [expandedPlanetId, setExpandedPlanetId] = useState<string | null>(null)
+  function togglePlanet(planetId: string) {
+    const opening = expandedPlanetId !== planetId
+    setExpandedPlanetId(opening ? planetId : null)
+    // Dispara só ao ABRIR (não ao fechar) — sinal de interesse real num planeta específico, não
+    // de "abriu o painel inteiro" (isso já não tem evento próprio, mesmo padrão do resto do HUD).
+    if (opening) trackAlbumPlanetOpened(planetId)
+  }
   // lab-171 (achado do review automático do Copilot): calculado uma vez aqui em vez de dentro do
   // laço de pets abaixo — evita trabalho repetido a cada item E timestamps ligeiramente
   // diferentes dentro do mesmo painel se a virada de dia acontecesse no meio do render.
@@ -50,7 +80,7 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Catálogo de conquistas e cartões-postais"
+      aria-label="Catálogo de conquistas, cartões-postais e planetas"
       ref={modalRef}
       tabIndex={-1}
     >
@@ -140,6 +170,79 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
                   <span className="quest-list-type">{owned ? STAGE_LABEL[stage] : `Custa 🪙 ${pet.cost}`}</span>
                 </div>
                 <span className="quest-list-status">{owned ? '✓' : '🔒'}</span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* lab-181 ("Circuito de descoberta e álbum de planetas") — visão POR PLANETA do que já
+            foi descoberto/falta, diferente das 3 seções acima (listas planas por categoria). Cada
+            linha é um planeta colapsado ("2/3"); tocar expande os 3 slots individuais — evita uma
+            grade grande demais de cara (7 planetas × 3 slots = 21 linhas se tudo viesse expandido
+            de uma vez). Reaproveita as MESMAS classes `.quest-list*` das 3 seções acima. */}
+        <h2>Planetas</h2>
+        <p className="subtitle">Toque num planeta pra ver o que já descobriu e o que falta.</p>
+        {planetDiscovery && (
+          <div className="next-objective-callout">
+            <span className="next-objective-emoji" aria-hidden="true">
+              🎯
+            </span>
+            <div>
+              <strong>Próxima descoberta: {planetDiscovery.slot.name}</strong>
+              <p>
+                {DISCOVERY_KIND_LABEL[planetDiscovery.slot.kind]} em{' '}
+                {POSTCARD_CATALOG.find((p) => p.planetId === planetDiscovery.planetId)?.name.replace('Saudações de ', '')}{' '}
+                — sempre grátis, nunca precisa de assinatura.
+              </p>
+            </div>
+          </div>
+        )}
+        <div className="quest-list">
+          {POSTCARD_CATALOG.map((planet) => {
+            const slots = planetDiscoverySlots(planet.planetId, progress)
+            const discoveredCount = slots.filter((s) => s.discovered).length
+            const complete = discoveredCount === slots.length
+            const expanded = expandedPlanetId === planet.planetId
+            return (
+              <div key={planet.planetId}>
+                <button
+                  type="button"
+                  className={`quest-list-item planet-toggle ${complete ? 'completed' : ''}`}
+                  onClick={() => togglePlanet(planet.planetId)}
+                  aria-expanded={expanded}
+                >
+                  <span className="quest-list-index" aria-hidden="true">
+                    {planet.emoji}
+                  </span>
+                  <div className="quest-list-info">
+                    <span className="quest-list-title">{planet.name.replace('Saudações de ', '')}</span>
+                    <span className="quest-list-type">
+                      {discoveredCount}/{slots.length} descobertas
+                    </span>
+                  </div>
+                  <span className="quest-list-status" aria-hidden="true">
+                    {expanded ? '▲' : '▼'}
+                  </span>
+                </button>
+                {expanded && (
+                  <div className="quest-list quest-list-nested">
+                    {slots.map((slot) => (
+                      <div
+                        key={slot.kind}
+                        className={`quest-list-item ${slot.discovered ? 'completed' : 'locked'}`}
+                      >
+                        <span className="quest-list-index" aria-hidden="true">
+                          {slot.discovered ? slot.emoji : '❓'}
+                        </span>
+                        <div className="quest-list-info">
+                          <span className="quest-list-title">{slot.discovered ? slot.name : '???'}</span>
+                          <span className="quest-list-type">{DISCOVERY_KIND_LABEL[slot.kind]}</span>
+                        </div>
+                        <span className="quest-list-status">{slot.discovered ? '✓' : '🔒'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

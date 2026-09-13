@@ -1410,6 +1410,22 @@ a.nickname-generate-btn {
   flex-shrink: 0;
 }
 
+/* lab-181 ("Circuito de descoberta e álbum de planetas") — grade de planetas expansível dentro
+   do `AchievementsPanel.tsx`. `.planet-toggle` reseta os estilos padrão de `<button>` pra parecer
+   exatamente um `.quest-list-item` comum (mesma classe combinada); `width: 100%` garante que a
+   área clicável cubra a linha inteira, não só o texto. */
+.planet-toggle {
+  border: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.quest-list-nested {
+  margin: 0.35rem 0 0.35rem 2.25rem;
+}
+
 /* Lojinha de avatares */
 
 .avatar-shop-modal {

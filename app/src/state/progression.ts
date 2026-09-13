@@ -11,10 +11,10 @@ import {
 } from '../data/customization'
 import { GLASSES_CATALOG } from '../data/glasses'
 import { FURNITURE_CATALOG, findFurnitureRewardForPlanet, type FurnitureOption } from '../data/furniture'
-import { findPlanetIdForQuest, isPlanetFullyCompleted } from '../data/planetQuests'
-import { findTreasureChestById } from '../data/treasureChests'
-import { findPlanetSecretById } from '../data/planetSecrets'
-import { findPostcardByPlanetId } from '../data/postcards'
+import { findPlanetIdForQuest, isPlanetFullyCompleted, planetQuests } from '../data/planetQuests'
+import { findTreasureChestById, findTreasureChestByPlanetId } from '../data/treasureChests'
+import { findPlanetSecretById, findPlanetSecretByPlanetId } from '../data/planetSecrets'
+import { findPostcardByPlanetId, POSTCARD_CATALOG } from '../data/postcards'
 import { getCurrentWeeklyEvent, isoWeekKey, type WeeklyEvent } from '../data/weeklyEvents'
 import { PET_CATALOG } from '../data/pets'
 
@@ -384,6 +384,93 @@ export function unlockMarsReward(progress: Progress): MarsRewardResult {
     progress: { ...progress, unlockedHatIds: [...progress.unlockedHatIds, MARS_REWARD_HAT_ID] },
     granted: true,
   }
+}
+
+// lab-181 ("Circuito de descoberta e álbum de planetas") — cruza os 4 catálogos de descoberta por
+// planeta (postal, baú/pote de moedas, escolinha/segredo) que o lab-179 já unificou sob
+// `planet_interaction_completed`/`kind`, mas nunca tinha uma função que enumerasse "tudo que dá
+// pra descobrir no planeta X" de uma vez. Cobertura é DELIBERADAMENTE desigual entre Marte e os
+// outros 6 (decisão do lab-179, não deste lab): Marte não tem baú (`treasureChests.ts` exclui
+// `marte` de propósito) nem escolinha (`planetQuests.ts` não tem entrada pra `marte`) — no lugar
+// dos dois, tem o pote de moedas alienígena (revelado ao vencer o combate, `unlockMarsReward`,
+// persistido em `unlockedHatIds` — durável, não é o `marsClearedThisVisit` que é só por-visita) e
+// o segredo visual (`planetSecrets.ts`, também só Marte).
+export type PlanetDiscoveryKind = 'collectible' | 'actionable_object' | 'educational_quiz' | 'visual_secret'
+
+export interface PlanetDiscoverySlot {
+  kind: PlanetDiscoveryKind
+  emoji: string
+  name: string
+  discovered: boolean
+}
+
+export function planetDiscoverySlots(planetId: string, progress: Progress): PlanetDiscoverySlot[] {
+  const slots: PlanetDiscoverySlot[] = []
+
+  const postcard = findPostcardByPlanetId(planetId)
+  if (postcard) {
+    slots.push({
+      kind: 'collectible',
+      emoji: postcard.emoji,
+      name: postcard.name,
+      discovered: progress.collectedPostcardIds.includes(planetId),
+    })
+  }
+
+  if (planetId === 'marte') {
+    slots.push({
+      kind: 'actionable_object',
+      emoji: '🪙',
+      name: 'Pote de moedas alienígena',
+      discovered: progress.unlockedHatIds.includes(MARS_REWARD_HAT_ID),
+    })
+    const secret = findPlanetSecretByPlanetId(planetId)
+    if (secret) {
+      slots.push({
+        kind: 'visual_secret',
+        emoji: '🔍',
+        name: secret.name,
+        discovered: progress.foundPlanetSecretIds.includes(secret.id),
+      })
+    }
+  } else {
+    const chest = findTreasureChestByPlanetId(planetId)
+    if (chest) {
+      slots.push({
+        kind: 'actionable_object',
+        emoji: '💰',
+        name: 'Baú de tesouro',
+        discovered: progress.foundTreasureChestIds.includes(chest.id),
+      })
+    }
+    if (planetQuests[planetId]) {
+      slots.push({
+        kind: 'educational_quiz',
+        emoji: '🎓',
+        name: 'Escolinha de astronomia',
+        discovered: isPlanetFullyCompleted(planetId, progress.completedPlanetQuestIds),
+      })
+    }
+  }
+
+  return slots
+}
+
+export interface NextPlanetDiscovery {
+  planetId: string
+  slot: PlanetDiscoverySlot
+}
+
+// Ordem de `POSTCARD_CATALOG` (todos os 7 planetas-destino, mesma ordem já usada pelo seletor de
+// planeta em `World3D.tsx`) — nunca checa assinatura/`entitlementActive`: toda descoberta aqui já
+// é grátis por construção (regra inegociável do projeto, `docs/plano-comercial-backend.md`), só
+// cosmético fica atrás de assinatura.
+export function nextPlanetDiscovery(progress: Progress): NextPlanetDiscovery | null {
+  for (const { planetId } of POSTCARD_CATALOG) {
+    const slot = planetDiscoverySlots(planetId, progress).find((s) => !s.discovered)
+    if (slot) return { planetId, slot }
+  }
+  return null
 }
 
 export interface TreasureChestResult {

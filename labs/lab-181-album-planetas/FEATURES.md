@@ -1,8 +1,8 @@
 # Laboratório 181 — Circuito de descoberta e álbum de planetas
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-13
-Fim: -
+Fim: 2026-09-13
 Commit inicial: 57e52fc5fce618db0099fe6f004e014e0b4632f2
 
 ## Objetivo do laboratório
@@ -47,26 +47,33 @@ deve desenvolver").
 
 ## Funcionalidades planejadas
 
-- [ ] `data/destinationPlanets.ts` novo — lista mínima dos 7 planetas-destino (id/nome/emoji), sem
-  metadado 3D, usável por `progression.ts` e `AchievementsPanel.tsx` sem tocar `World3D.tsx`.
-- [ ] `planetDiscoverySlots(planetId, progress)` (`state/progression.ts`, função pura) — devolve os
+- [x] ~~`data/destinationPlanets.ts` novo~~ — descartado durante a implementação:
+  `data/postcards.ts` já expõe `POSTCARD_CATALOG` com id/nome/emoji dos 7 planetas-destino, na
+  mesma ordem de `DESTINATION_PLANET_LIST` (`World3D.tsx`), sem nenhum metadado 3D. Reaproveitado
+  diretamente em `progression.ts` e `AchievementsPanel.tsx` — zero import novo, zero risco de
+  duplicar a lista de planetas em dois lugares.
+- [x] `planetDiscoverySlots(planetId, progress)` (`state/progression.ts`, função pura) — devolve os
   3 slots certos pro planeta (`collectible`/`actionable_object`/o 3º que varia) com
   `discovered: boolean` cada, cruzando os 4 catálogos existentes.
-- [ ] `nextPlanetDiscovery(progress)` (função pura) — acha a próxima descoberta ainda não feita,
-  seguindo a ordem de `data/destinationPlanets.ts`; sempre grátis (nunca checa
-  `entitlementActive`/assinatura — a regra inegociável do projeto é nunca gatear
-  progresso/exploração, só cosmético).
-- [ ] Testes novos em `progression.test.ts` pras duas funções (cobrindo Marte com seus 2 catálogos
-  diferentes vs. os outros 6 planetas, planeta 100% descoberto, progresso vazio).
-- [ ] Nova seção "🪐 Planetas" dentro do `AchievementsPanel.tsx` existente (não um painel novo —
-  evita mais um ícone no `HudHeader`, que já tem ~11): grade dos 7 planetas com fração de progresso
-  (ex. "2/3"), expande ao tocar pra mostrar os 3 slots individuais; destaque "🎯 Próxima
-  descoberta" no topo da seção, mesmo padrão visual do `nextObjective` já usado pra
-  badges/postais/pets.
-- [ ] Evento novo `album_planet_opened` (`meta.planetId`) — dispara ao expandir um planeta
+- [x] `nextPlanetDiscovery(progress)` (função pura) — acha a próxima descoberta ainda não feita,
+  seguindo a ordem de `POSTCARD_CATALOG`; sempre grátis (nunca checa `entitlementActive`/assinatura
+  — a regra inegociável do projeto é nunca gatear progresso/exploração, só cosmético).
+- [x] Testes novos em `progression.test.ts` pras duas funções (cobrindo Marte com seus 2 catálogos
+  diferentes vs. os outros 6 planetas, planeta 100% descoberto, progresso vazio) — 9 testes novos,
+  194/194 no total.
+- [x] Nova seção "Planetas" dentro do `AchievementsPanel.tsx` existente (não um painel novo — evita
+  mais um ícone no `HudHeader`, que já tem ~11): grade dos 7 planetas com fração de progresso
+  (ex. "1/3 descobertas"), expande ao tocar pra mostrar os 3 slots individuais; destaque "🎯
+  Próxima descoberta" no topo da seção, mesmo padrão visual do `nextObjective` já usado pra
+  badges/postais/pets. Verificado ao vivo (dev server): expandir Marte mostra os 3 slots
+  corretos, e marcar o postal como coletado (via `localStorage`) atualiza o slot pra descoberto e
+  avança a "próxima descoberta" pro pote de moedas.
+- [x] Evento novo `album_planet_opened` (`meta.planetId`) — dispara ao expandir um planeta
   específico na grade (sinal de interesse real, não só abrir o painel inteiro). Allowlist em
   `server-accounts/src/domain.ts`, validação em `index.ts`, `weeklyFunnel.albumPlanetOpened`.
-- [ ] `docs/event-catalog.md` atualizado com a linha nova + nota que `discoverable_collected` já é
+  Verificado ao vivo via `window.fetch` monkey-patch: payload exato
+  `{"type":"album_planet_opened","meta":{"planetId":"marte"}}` capturado ao expandir Marte.
+- [x] `docs/event-catalog.md` atualizado com a linha nova + nota que `discoverable_collected` já é
   coberto por `planet_interaction_completed` (lab-179).
 
 ## Fora de escopo (explicitamente adiado)

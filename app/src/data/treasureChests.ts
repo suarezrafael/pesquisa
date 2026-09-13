@@ -22,3 +22,10 @@ export const TREASURE_CHESTS: TreasureChest[] = [
 export function findTreasureChestById(id: string): TreasureChest | undefined {
   return TREASURE_CHESTS.find((c) => c.id === id)
 }
+
+// lab-181 ("Circuito de descoberta e álbum de planetas") — mesmo padrão de
+// `findPlanetSecretByPlanetId`/`findPostcardByPlanetId`, faltava aqui por ainda não ter um
+// consumidor que precisasse buscar por planeta em vez de por id.
+export function findTreasureChestByPlanetId(planetId: string): TreasureChest | undefined {
+  return TREASURE_CHESTS.find((c) => c.planetId === planetId)
+}
