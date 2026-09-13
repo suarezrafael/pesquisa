@@ -1,11 +1,39 @@
 # Laboratório atual
 
-Em andamento: labs/lab-181-album-planetas/ — circuito de descoberta e álbum de planetas (visão
-por planeta do que já foi descoberto/falta, com destaque de "próxima descoberta"). Origem:
-`docs/growth-retention-monetization-backlog.md`, "Lab 181", item 7 da ordem sugerida, próximo
-item recomendado após o lab-180. Ver `labs/lab-181-album-planetas/FEATURES.md`.
+Último concluído: labs/lab-181-album-planetas/ — circuito de descoberta e álbum de planetas.
+Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 181", item 7 da ordem sugerida,
+próximo item recomendado após o lab-180. Nova seção "Planetas" dentro do `AchievementsPanel.tsx`
+existente (lista dos 7 planetas, expande pra mostrar os 3 slots de descoberta de cada um —
+colecionável/objeto acionável/o 3º que varia — com destaque de "próxima descoberta" sempre
+grátis); reaproveitou `POSTCARD_CATALOG` já existente em vez de criar um arquivo novo de dados.
+Evento novo `album_planet_opened`. **PR #60 teve 8 rodadas de review automático do Copilot**, a
+maioria com achados reais corrigidos: alvo de toque abaixo do mínimo de 44px; `aria-label`
+faltando "pets"; 7 comentários novos referenciando "lab-181" diretamente (MUST de
+`docs/prompts/04-manutencao-clean-code.md`); `color: inherit` faltando num botão nativo; um bug
+de correção genuína — o slot de escolinha só marcava "descoberto" na 6ª pergunta em vez da 1ª
+(dessincronizado do evento de analytics real); HTML inválido (`<div>` dentro de `<button>`); e o
+achado mais sério, encontrado em 2 rodadas (4-5): o slot de descoberta do pote de moedas de Marte
+usava o desbloqueio do capacete de combate como proxy — interação DIFERENTE da coleta do pote em
+si, que nunca teve estado durável antes deste lab — corrigido com um campo novo dedicado
+(`foundMarsCoinPotEver`/`markMarsCoinPotFound`), que por sua vez expôs uma condição de corrida
+real (rodada 6: `foundMarsCoinPot()` não usava atualizador funcional, podia sobrescrever moedas
+enfileiradas por `collectCoin()` na mesma coleta) e um `aria-controls` apontando pra um elemento
+ausente do DOM quando colapsado (rodada 7). Rodada 8 veio limpa ("Approval recommended"). `npx
+tsc -b`/`--noEmit` limpos; testes: app 198/198 (13 novos), server-accounts 148/148 (1 novo).
+`npm run build` sem regressão de bundle. **Verificado ao vivo via Chrome real**: seção Planetas
+renderiza a callout de próxima descoberta correta; expandir Marte mostra os 3 slots esperados;
+evento `album_planet_opened` confirmado via monkey-patch de `window.fetch`; coletar o postal via
+`localStorage` atualiza o slot e avança a próxima descoberta; e o teste decisivo do bug do pote —
+com o capacete de combate desbloqueado mas `foundMarsCoinPotEver: false`, o slot fica
+corretamente BLOQUEADO (prova de que não usa mais o capacete como proxy); com o campo em `true`,
+mostra descoberto. Ver `labs/lab-181-album-planetas/CONTEXT.md` pro histórico completo rodada a
+rodada. **Merge confirmado**: PR #60 mesclada em `main` no commit `5c637c8` (2026-09-13, squash).
+CI de `main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-180-missoes-ambientais/ — missões ambientais de aprendizagem
+Antes desse: labs/lab-180-missoes-ambientais/ — missões ambientais de aprendizagem
 (ponte/lógica, posto de abastecimento do foguete/matemática, placa/leitura). Origem:
 `docs/growth-retention-monetization-backlog.md`, "Lab 180", próximo item recomendado após o
 lab-179. Ver `labs/lab-180-missoes-ambientais/CONTEXT.md` pro detalhe completo, incluindo o
