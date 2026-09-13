@@ -7283,7 +7283,17 @@ export function World3D({
 
       // Posto de abastecimento do foguete (matemática) — perto da plataforma de lançamento
       // (`ROCKET_LAUNCH_DIR`, mais abaixo neste arquivo, mas já em escopo de módulo).
-      const rocketFuelUp = ROCKET_LAUNCH_DIR.add(new Vector3(0.28, 0.12, -0.22)).normalize()
+      //
+      // Achado real do review automático do Copilot (PR #59): o deslocamento original, (0.28,
+      // 0.12, -0.22), ficava só ~20,6° (≈4,7 unidades de arco) da direção do foguete — como
+      // `ENV_CHALLENGE_TRIGGER_DISTANCE` (1,3) + `ROCKET_ENTER_DISTANCE` (4) somam 5,3, as duas
+      // zonas de gatilho se sobrepunham, e o cheque do posto (que roda ANTES do embarque no
+      // laço de `E`) sempre ganhava na área de sobreposição — o jogador não conseguia embarcar
+      // vindo de várias direções, só de um ângulo estreito que escapava da sobreposição.
+      // Deslocamento maior, (0.38, 0.16, -0.3), afasta pra ~30° (≈6,8 unidades de arco) —
+      // folga real acima do limiar de 5,3, sem afastar tanto a ponto de deixar de parecer "perto
+      // do foguete" (mesma ordem de grandeza de outros marcos secundários deste planeta).
+      const rocketFuelUp = ROCKET_LAUNCH_DIR.add(new Vector3(0.38, 0.16, -0.3)).normalize()
       const rocketFuelGroundRadial = terrainGroundRadial(rocketFuelUp, terrainHeight(rocketFuelUp))
       const rocketFuelSurfacePos = rocketFuelUp.scale(rocketFuelGroundRadial)
 

@@ -83,6 +83,14 @@ Commit inicial → final: 6114f8e3dcc5124422a0819148edd22451b7b91d..6e81720
      (`state/progression.ts`), com `random` injetável — `World3D.tsx` só chama e repassa o
      resultado. 4 testes novos (`progression.test.ts`): sorteia só do tipo certo, prioriza
      incompleta, cai pro pool inteiro quando todas já feitas, RNG determinístico em teste.
+- **Achado real do review automático do Copilot na PR #59 (5ª rodada)**: o deslocamento original
+  do posto de abastecimento (0.28, 0.12, -0.22) ficava só ~20,6° (≈4,7 unidades de arco) da
+  direção do foguete — como `ENV_CHALLENGE_TRIGGER_DISTANCE` (1,3) + `ROCKET_ENTER_DISTANCE` (4)
+  somam 5,3, as duas zonas de gatilho se sobrepunham, e o cheque do posto (roda ANTES do embarque
+  no laço de `E`) sempre ganhava na sobreposição — o jogador não conseguia embarcar no foguete
+  vindo de várias direções, só de um ângulo estreito que escapava da sobreposição. Deslocamento
+  aumentado pra (0.38, 0.16, -0.3) — verificado com um script Node à parte: ~30° (≈6,8 unidades
+  de arco), folga real de ~1,5 unidade acima do limiar de 5,3.
 
 ## Pendências / dívidas conhecidas
 
