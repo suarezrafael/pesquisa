@@ -104,6 +104,29 @@ Commit inicial → final: 6114f8e3dcc5124422a0819148edd22451b7b91d..6e81720
   inconsistente... não investigado a fundo") — não uma regressão nova. Confiança no fix vem da
   medição geométrica direta (distância real na própria cena), não de reproduzir o embarque
   funcionando ao vivo.
+- **Achado real do review automático do Copilot na PR #59 (6ª rodada)**:
+  `handleCloseEnvironmentalChallenge` zerava `activeEnvironmentalAttemptIdRef` ao fechar, mesmo
+  quando o fechamento acontecia logo DEPOIS de uma resposta certa (dentro dos 700ms de feedback do
+  `QuestModal`, que deixa fechar/Escape ativos nesse intervalo) — o `onCorrect` atrasado ainda
+  dispara, mas o ref já zerado fazia `handleEnvironmentalChallengeCorrect` rejeitar uma conclusão
+  GENUÍNA, perdendo a recompensa de verdade. Corrigido não zerando no fechamento — abrir um
+  landmark NOVO já sobrescreve o ref com um `attemptId` novo, suficiente pra invalidar qualquer
+  `onCorrect` atrasado de uma tentativa substituída (o cenário original que o `attemptId` foi
+  criado pra resolver, 2ª rodada).
+- **Achado do review automático do Copilot na PR #59 (7ª rodada), AVALIADO E DESCARTADO com
+  justificativa**: o review apontou que `completeQuest` dentro de `handleEnvironmentalChallengeCorrect`
+  usa o `progress` capturado no render que abriu o modal — se outro evento mudar `progress` durante
+  os 700ms de atraso (ex.: um evento de rede como confirmação de desafio em dupla), a chamada
+  atrasada podia sobrescrever essa mudança com um `setProgress` não-funcional. Investigação
+  confirmou que isso é REAL, mas é um padrão ARQUITETURAL PRÉ-EXISTENTE, idêntico em TODO caminho
+  de conclusão de missão deste projeto — `handleQuestCorrect` (a escolinha comum, desde o lab-99,
+  já sobreviveu a dezenas de rodadas de review em vários labs) usa exatamente a mesma estrutura
+  (`completeQuest` fechado sobre o `progress` do render, mesmo atraso de 700ms do `QuestModal`,
+  mesmo `setProgress` direto em vez de funcional). Corrigir isso só no caminho NOVO deste lab
+  seria inconsistente (deixaria o mesmo risco teórico intocado no caminho mais usado do jogo,
+  a escolinha) e exigiria uma mudança bem maior — trocar `setProgress` por atualização funcional
+  em TODO `useProgress.ts`, fora do escopo de missões ambientais. Registrado aqui como pendência
+  arquitetural conhecida do projeto, não deste lab especificamente.
 
 ## Pendências / dívidas conhecidas
 
