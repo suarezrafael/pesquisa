@@ -148,13 +148,18 @@ export interface Progress {
   // `weeklyXpEarned` em `state/progression.ts`. `null` = nunca sincronizado (perfil recém-criado).
   weeklyXpWeekKey: string | null
   weeklyXpSnapshot: number
-  // Objetivo educativo/ambiental do evento semanal — reaproveita a MESMA definição de "semana" de
-  // `weeklyXpWeekKey` acima (`isoWeekKey`, `data/weeklyEvents.ts`). Guarda a chave da semana em
-  // que o bônus já foi concedido, não um contador: o objetivo é "complete pelo menos 1 desafio
-  // ambiental" (limiar 1), então só precisa saber SE já foi pago esta semana pra ser idempotente —
-  // nunca reseta pra punir, só permite ganhar de novo quando a semana muda de verdade. `null` =
-  // nunca concedido.
-  weeklyEventObjectiveRewardedWeekKey: string | null
+  // Objetivo educativo/ambiental do evento semanal — guarda o INSTANTE (ISO completo, não só a
+  // chave de semana) da última vez que o bônus foi concedido, não um contador: o objetivo é
+  // "complete pelo menos 1 desafio ambiental" (limiar 1). `null` = nunca concedido. Guardar só a
+  // CHAVE de semana e comparar por igualdade permitiria farm infinito — adiantar o relógio do
+  // aparelho pra reivindicar uma semana futura e depois voltar o relógio faria a chave guardada não
+  // bater com "agora" de novo, liberando o MESMO bônus outra vez pra semana real (mesma classe de
+  // bug já corrigida em `applyDailyLoginReward`, que rejeita explicitamente `dayGap <= 0`). Guardar
+  // o INSTANTE completo permite comparação cronológica de verdade
+  // (`nowIso <= weeklyEventObjectiveRewardedAtIso` rejeita qualquer tentativa de "voltar no tempo"
+  // pra reivindicar de novo), em vez de comparar só a chave de semana, que nem seria segura pra
+  // ordenar (`isoWeekKey` não usa zero-padding no número da semana, "W7" > "W10" lexicamente).
+  weeklyEventObjectiveRewardedAtIso: string | null
   // lab-175 ("Lab 171 - Casa visitável somente leitura", docs/market-metrics-engagement-backlog.md)
   // — controle do DONO sobre um amigo poder visitar a casa. `unlockedFurnitureIds`/
   // `housePlacements` acima são sincronizados via `POST /players/heartbeat` em TODO tick,

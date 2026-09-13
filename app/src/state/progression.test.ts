@@ -1398,7 +1398,7 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
     const result = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
     expect(result.rewardGranted).toBe(true)
     expect(result.progress.coins).toBe(emptyProgress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS)
-    expect(result.progress.weeklyEventObjectiveRewardedWeekKey).not.toBeNull()
+    expect(result.progress.weeklyEventObjectiveRewardedAtIso).toBe('2026-09-08T12:00:00.000Z')
   })
 
   it('não concede de novo na MESMA semana (idempotente, mesmo completando outro desafio)', () => {
@@ -1423,6 +1423,18 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
 
   it('perfil que nunca completou nada não mostra o objetivo como feito', () => {
     expect(isWeeklyEventObjectiveDone(emptyProgress, '2026-09-08T12:00:00.000Z')).toBe(false)
+  })
+
+  it('achado do review automático do Copilot: adiantar o relógio pra uma semana futura e depois voltar não libera o bônus de novo pra semana real', () => {
+    // Semana real: 2026-W37 (8 de setembro). Criança adianta o relógio do aparelho pra 2026-W40
+    // (29 de setembro), reivindica o bônus "daquela semana futura", depois volta o relógio pra
+    // 2026-W37 de novo — o bônus NÃO pode ser concedido outra vez pra 2026-W37, mesmo a chave de
+    // semana guardada ("2026-W40") não batendo mais com "agora" ("2026-W37").
+    const adiantouRelogio = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-29T12:00:00.000Z')
+    expect(adiantouRelogio.rewardGranted).toBe(true)
+    const voltouRelogio = applyWeeklyEventObjectiveProgress(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z')
+    expect(voltouRelogio.rewardGranted).toBe(false)
+    expect(voltouRelogio.progress).toBe(adiantouRelogio.progress) // mesma referência — não mexeu em nada
   })
 })
 

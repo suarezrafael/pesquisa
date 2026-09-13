@@ -189,7 +189,7 @@ export const emptyProgress: Progress = {
   weeklyXpWeekKey: null,
   weeklyXpSnapshot: 0,
   // Objetivo do evento semanal — ver comentário em `types.ts`.
-  weeklyEventObjectiveRewardedWeekKey: null,
+  weeklyEventObjectiveRewardedAtIso: null,
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

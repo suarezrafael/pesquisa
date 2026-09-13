@@ -170,8 +170,8 @@ interface World3DProps {
   onOpenPairing: () => void
   onOpenAchievements: () => void
   onOpenWeeklyEvent: () => void
-  // Calculado uma vez em `App.tsx` (achado do review automático do Copilot na PR #61, ver
-  // `HudHeader.tsx`) — repassado direto pro HUD, nunca calculado de novo aqui dentro.
+  // Calculado uma vez em `App.tsx` (ver `HudHeader.tsx`) — repassado direto pro HUD, nunca
+  // calculado de novo aqui dentro.
   weeklyEvent: WeeklyEvent
   onOpenMyHouse: () => void
   onUnlockMarsReward: () => void

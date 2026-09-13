@@ -131,10 +131,9 @@ function GameApp() {
     weeklyEventObjectiveProgress,
   } = useProgress()
   // Calculados uma vez aqui e repassados por props pro badge (`HudHeader.tsx`, via `World3D.tsx`)
-  // e pro painel (`WeeklyEventPanel.tsx`) — achado do review automático do Copilot na PR #61: se
-  // cada um chamasse `getCurrentWeeklyEvent()`/`isWeeklyEventObjectiveDone()` por conta própria,
-  // bem na virada exata de semana ISO o badge podia mostrar um evento diferente do painel aberto a
-  // partir dele.
+  // e pro painel (`WeeklyEventPanel.tsx`) — se cada um chamasse
+  // `getCurrentWeeklyEvent()`/`isWeeklyEventObjectiveDone()` por conta própria, bem na virada exata
+  // de semana ISO o badge podia mostrar um evento diferente do painel aberto a partir dele.
   const weeklyEventNow = new Date()
   const weeklyEvent = getCurrentWeeklyEvent(weeklyEventNow)
   const weeklyEventObjectiveDone = isWeeklyEventObjectiveDone(progress, weeklyEventNow.toISOString())
@@ -375,7 +374,7 @@ function GameApp() {
       event,
     })
     trackLearningChallengeCompleted(kind)
-    if (rewardGranted) trackWeeklyEventObjectiveCompleted()
+    if (rewardGranted) trackWeeklyEventObjectiveCompleted(nowIso)
     activeEnvironmentalAttemptIdRef.current = null
     setActiveEnvironmentalChallenge(null)
   }

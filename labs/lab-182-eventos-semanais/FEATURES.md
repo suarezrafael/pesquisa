@@ -58,7 +58,7 @@ desenvolver").
 
 ## Funcionalidades planejadas
 
-- [x] Campo novo em `Progress` (`weeklyEventObjectiveRewardedWeekKey: string | null`, `types.ts` +
+- [x] Campo novo em `Progress` (`weeklyEventObjectiveRewardedAtIso: string | null`, `types.ts` +
   default `null` em `storage.ts`) — marca em qual semana ISO o bônus já foi concedido, idempotente
   (não paga de novo na mesma semana mesmo completando vários desafios ambientais).
 - [x] `data/weeklyEvents.ts` ganha as constantes de copy/recompensa do objetivo (única fonte de

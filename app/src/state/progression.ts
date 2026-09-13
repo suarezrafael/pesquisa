@@ -78,9 +78,11 @@ export function weeklyXpEarned(progress: Progress, nowIso: string): number {
 }
 
 // Leitura pura, mesmo raciocínio de `weeklyXpEarned` acima — usada pela UI pra saber se já mostra
-// o objetivo semanal como concluído, sem precisar mutar nada.
+// o objetivo semanal como concluído, sem precisar mutar nada. Compara semana ISO (não o instante
+// bruto) — dois instantes na MESMA semana real contam como "já feito", mesmo em dias diferentes.
 export function isWeeklyEventObjectiveDone(progress: Progress, nowIso: string): boolean {
-  return progress.weeklyEventObjectiveRewardedWeekKey === isoWeekKey(new Date(nowIso))
+  if (!progress.weeklyEventObjectiveRewardedAtIso) return false
+  return isoWeekKey(new Date(progress.weeklyEventObjectiveRewardedAtIso)) === isoWeekKey(new Date(nowIso))
 }
 
 export interface WeeklyEventObjectiveResult {
@@ -93,11 +95,22 @@ export interface WeeklyEventObjectiveResult {
 // desafios ambientais na mesma semana, nunca paga 2x. Chamada de `weeklyEventObjectiveProgress`
 // (`useProgress.ts`) com um atualizador funcional, não direto — ver comentário lá sobre por quê.
 export function applyWeeklyEventObjectiveProgress(progress: Progress, nowIso: string): WeeklyEventObjectiveResult {
-  if (isWeeklyEventObjectiveDone(progress, nowIso)) return { progress, rewardGranted: false }
+  // Rejeita qualquer tentativa de "voltar no tempo" em
+  // relação à última concessão real — sem isso, adiantar o relógio do aparelho pra reivindicar uma
+  // semana futura e depois voltar o relógio liberaria o MESMO bônus de novo pra semana real (a
+  // chave de semana guardada não bateria mais com "agora"). Comparação de string funciona porque
+  // `nowIso`/`weeklyEventObjectiveRewardedAtIso` são sempre `toISOString()` (formato fixo,
+  // comparável lexicamente = comparável cronologicamente) — mesmo espírito de `dayGap <= 0` em
+  // `applyDailyLoginReward` acima.
+  const clockWentBackward =
+    progress.weeklyEventObjectiveRewardedAtIso !== null && nowIso <= progress.weeklyEventObjectiveRewardedAtIso
+  if (clockWentBackward || isWeeklyEventObjectiveDone(progress, nowIso)) {
+    return { progress, rewardGranted: false }
+  }
   return {
     progress: {
       ...progress,
-      weeklyEventObjectiveRewardedWeekKey: isoWeekKey(new Date(nowIso)),
+      weeklyEventObjectiveRewardedAtIso: nowIso,
       coins: progress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
     },
     rewardGranted: true,

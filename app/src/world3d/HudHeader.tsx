@@ -28,10 +28,10 @@ interface HudHeaderProps {
   onOpenPairing: () => void
   onSwitchProfile: () => void
   onOpenWeeklyEvent: () => void
-  // Calculado uma vez em `App.tsx` e repassado por props (achado do review automático do Copilot
-  // na PR #61) — se este componente chamasse `getCurrentWeeklyEvent()` por conta própria, bem na
-  // virada exata de semana ISO o badge podia mostrar um evento diferente do `WeeklyEventPanel`
-  // aberto a partir dele (que recebe o MESMO valor via prop também).
+  // Calculado uma vez em `App.tsx` e repassado por props — se este componente chamasse
+  // `getCurrentWeeklyEvent()` por conta própria, bem na virada exata de semana ISO o badge podia
+  // mostrar um evento diferente do `WeeklyEventPanel` aberto a partir dele (que recebe o MESMO
+  // valor via prop também).
   weeklyEvent: WeeklyEvent
   // lab-121: true enquanto qualquer painel/modal (de App.tsx ou interno do World3D) está aberto
   // por cima do HUD — tira os 9 botões da ordem de tabulação, senão um usuário de teclado consegue

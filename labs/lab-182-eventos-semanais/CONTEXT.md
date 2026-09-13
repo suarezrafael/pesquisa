@@ -5,7 +5,7 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
 
 ## O que foi feito
 
-- Campo novo em `Progress` (`weeklyEventObjectiveRewardedWeekKey: string | null`, `types.ts` +
+- Campo novo em `Progress` (`weeklyEventObjectiveRewardedAtIso: string | null`, `types.ts` +
   default `null` em `storage.ts`) — mesma definição de "semana" de `weeklyXpWeekKey` (lab-157,
   `isoWeekKey`). Guarda a chave da semana em que o bônus já foi pago, não um contador: o limiar é
   "pelo menos 1" desafio ambiental, então basta saber SE já foi pago pra ser idempotente.
@@ -53,7 +53,7 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   desafio em dupla), sem precisar desenhar/catalogar um cosmético novo por semana.
 - **Limiar de "pelo menos 1" desafio, não um contador.** Mantém o objetivo genuinamente "convite,
   não obrigação" (backlog) — fácil de bater numa sessão qualquer, sem precisar de grind. Também
-  simplifica o estado: um único campo `weeklyEventObjectiveRewardedWeekKey`, sem contador nem reset
+  simplifica o estado: um único campo `weeklyEventObjectiveRewardedAtIso`, sem contador nem reset
   explícito (a comparação contra a semana atual já cobre os dois casos).
 - **Bug real encontrado AO VIVO, não em teste unitário nem em review — o formato inicial de
   `weeklyEventObjectiveProgress` crashava de verdade.** A primeira versão copiou o formato de
@@ -68,10 +68,10 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   reproduzível: `Cannot destructure property 'rewardGranted' of 'weeklyEventObjectiveProgress(...)'
   as it is undefined`, travando o `QuestModal` num "Preparando sua recompensa..." permanente.
   Verificado que a ESCRITA em si (a moeda sendo creditada e persistida) funcionou mesmo durante o
-  crash (o `localStorage` mostrou `weeklyEventObjectiveRewardedWeekKey` gravado corretamente) — só a
+  crash (o `localStorage` mostrou `weeklyEventObjectiveRewardedAtIso` gravado corretamente) — só a
   LEITURA de volta pro código chamador quebrou. Corrigido separando as duas preocupações: a decisão
   "já concluído esta semana" é lida do `progress` do closure de render (seguro, porque
-  `completeQuest` nunca escreve em `weeklyEventObjectiveRewardedWeekKey`), e só a ESCRITA da moeda
+  `completeQuest` nunca escreve em `weeklyEventObjectiveRewardedAtIso`), e só a ESCRITA da moeda
   usa o atualizador funcional, sem tentar ler nada de volta dele. **Isso generaliza uma lição além
   deste lab**: o padrão "ler resultado de dentro do atualizador funcional" só é seguro quando essa é
   a ÚNICA chamada de `setProgress` no handler — encadear depois de OUTRA chamada (funcional ou não)
@@ -137,6 +137,34 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   achado (badge, painel, e qualquer consumidor futuro que reaproveite essas props), em vez de só o
   sintoma mais recente. Reverificado ao vivo com um clique de mouse real: painel abre corretamente
   e mostra o mesmo evento do badge.
+- **Rodada 8**: 1 achado real CRÍTICO (o mais sério do lab). `applyWeeklyEventObjectiveProgress`
+  comparava só a CHAVE de semana ISO por igualdade — uma criança podia adiantar o relógio do
+  aparelho pra uma semana futura, reivindicar o bônus "daquela semana", e depois voltar o relógio
+  pra semana real: a chave guardada (da semana futura) não batia mais com "agora" (a semana real),
+  liberando o MESMO bônus de novo, indefinidamente. Mesma classe de bug já corrigida em
+  `applyDailyLoginReward` (que rejeita `dayGap <= 0` explicitamente) — precedente direto no próprio
+  código deste projeto que deveria ter sido seguido desde o início. Corrigido trocando o campo
+  guardado de uma CHAVE de semana (`weeklyEventObjectiveRewardedWeekKey`, ex. "2026-W37" — nem
+  seria segura pra comparação cronológica, já que `isoWeekKey` não faz zero-padding do número da
+  semana: "W7" > "W10" lexicamente) pelo INSTANTE completo da última concessão
+  (`weeklyEventObjectiveRewardedAtIso`, sempre `toISOString()` — comparável lexicamente E
+  cronologicamente); a concessão agora rejeita qualquer `nowIso <= weeklyEventObjectiveRewardedAtIso`
+  (voltar ou empatar no tempo em relação à última concessão real), além de continuar idempotente
+  dentro da mesma semana ISO. Teste de regressão novo simulando o ataque exato (adianta pra
+  2026-W40, reivindica, volta pra 2026-W37, tenta reivindicar nessa semana de novo — rejeitado).
+  Achados menores na mesma rodada, também corrigidos: `trackWeeklyEventObjectiveCompleted()` não
+  usava o `nowIso` compartilhado (o evento de analytics ficaria com `occurredAt` de um instante
+  ligeiramente diferente do usado pra decidir a semana do bônus, mesma classe das rodadas 5-7);
+  `aria-label` estático no `WeeklyEventPanel` ("Evento da semana") sobrescrevia o nome acessível
+  dinâmico do `<h2>` (ex. "Semana Dourada"), corrigido pra `aria-labelledby` apontando pro próprio
+  `<h2>`; comentário do componente e docs do lab desatualizados (diziam "sem CSS novo" quando
+  `.weekly-event-modal` já tinha sido adicionado na rodada 3). **Efeito colateral transparente do
+  rename de campo** (`weeklyEventObjectiveRewardedWeekKey` → `weeklyEventObjectiveRewardedAtIso`):
+  qualquer perfil que já tivesse concedido o bônus ANTES desta rodada (só perfis de teste desta
+  sessão, nunca chegou à produção) mostra o objetivo como "pendente" de novo uma vez, já que o
+  campo antigo fica órfão no `localStorage` (inofensivo, `{...emptyProgress, ...saved}` já cobre
+  campo novo ausente com o default `null`) — sem perder moeda nem repetir a recompensa, só reseta o
+  indicador visual "já concluído esta semana" uma vez.
 
 ## Pendências / dívidas conhecidas
 

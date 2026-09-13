@@ -66,8 +66,8 @@ export function useProgress() {
 
   // lab-126: `entitlementActive` aplica o bônus de moeda de assinante (`progression.ts`) — default
   // `false` preserva o comportamento de quem chama sem saber/se importar com entitlement.
-  // `nowIso` opcional (achado do review automático do Copilot na PR #61) — sem ele, esta função
-  // lê o relógio por conta própria (`getCurrentWeeklyEvent()` default); passar um valor explícito
+  // `nowIso` opcional — sem ele, esta função lê o relógio por conta própria
+  // (`getCurrentWeeklyEvent()` default); passar um valor explícito
   // deixa o CHAMADOR garantir que o mesmo instante seja usado aqui e em outra decisão relacionada
   // (ex.: `weeklyEventObjectiveProgress`), evitando os dois discordarem bem na virada exata de
   // semana ISO.
@@ -399,7 +399,7 @@ export function useProgress() {
   // sincronia, e o atualizador só é invocado depois, tarde demais pra ler de volta aqui — `result`
   // ficava `undefined`, quebrando o app. A decisão "já concluído esta semana" é segura de ler do
   // `progress` do closure (não do `prev`) porque `completeQuest` nunca toca
-  // `weeklyEventObjectiveRewardedWeekKey`; só a ESCRITA da moeda precisa do atualizador funcional,
+  // `weeklyEventObjectiveRewardedAtIso`; só a ESCRITA da moeda precisa do atualizador funcional,
   // pra compor corretamente em cima do XP/moeda que `completeQuest` acabou de conceder.
   function weeklyEventObjectiveProgress(nowIso: string): boolean {
     if (isWeeklyEventObjectiveDone(progress, nowIso)) return false

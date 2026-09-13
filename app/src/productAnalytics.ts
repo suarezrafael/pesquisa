@@ -8,14 +8,18 @@ import { getOrCreateDeviceId } from './state/storage'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 
-function trackEvent(type: string, meta?: Record<string, unknown>): void {
+// `occurredAt` opcional (achado do review automático do Copilot) — por padrão usa "agora", mas um
+// chamador que já capturou um `nowIso` pra outra decisão relacionada (ex.: qual semana ISO um
+// bônus pertence) pode passar o MESMO instante aqui, evitando o evento registrado divergir da
+// decisão que ele está anunciando bem na virada exata de um limite de tempo.
+function trackEvent(type: string, meta?: Record<string, unknown>, occurredAt: string = new Date().toISOString()): void {
   fetch(`${ACCOUNTS_API_URL}/events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       deviceId: getOrCreateDeviceId(),
       type,
-      occurredAt: new Date().toISOString(),
+      occurredAt,
       meta,
     }),
     // Mesmo motivo do `errorReporting.ts`: `session_end` dispara no `pagehide`, bem no momento em
@@ -220,7 +224,10 @@ export function trackAlbumPlanetOpened(planetId: string): void {
 
 // Dispara na PRIMEIRA vez que o objetivo educativo/ambiental do evento semanal é concluído em cada
 // semana ISO — não a cada desafio ambiental completado, só quando o bônus é de fato concedido
-// (`applyWeeklyEventObjectiveProgress`, `progression.ts`, idempotente por semana).
-export function trackWeeklyEventObjectiveCompleted(): void {
-  trackEvent('weekly_event_objective_completed')
+// (`applyWeeklyEventObjectiveProgress`, `progression.ts`, idempotente por semana). `nowIso` é o
+// MESMO instante usado pra decidir se o bônus foi concedido (`App.tsx`) — sem isso, o evento
+// gravado podia ter um `occurredAt` de um instante ligeiramente diferente do usado pra decidir a
+// semana, divergindo bem na virada exata de semana ISO.
+export function trackWeeklyEventObjectiveCompleted(nowIso: string): void {
+  trackEvent('weekly_event_objective_completed', undefined, nowIso)
 }

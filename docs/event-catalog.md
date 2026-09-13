@@ -191,7 +191,7 @@ decisão").
   `weeklyFunnel.weeklyEventObjectiveCompleted` ("conclusão de evento", métrica citada pelo
   backlog). **Cuidado com o nome "semanal" aqui — são DUAS janelas de "semana" diferentes,
   propositalmente**: o bônus em si é idempotente por SEMANA ISO (segunda a domingo,
-  `weeklyEventObjectiveRewardedWeekKey`/`isoWeekKey`, `state/progression.ts`), mas
+  `weeklyEventObjectiveRewardedAtIso`/`isoWeekKey`, `state/progression.ts`), mas
   `weeklyFunnel.*` inteiro (não só esta métrica — todo o funil) é `weeklyDevices(...)`, uma janela
   MÓVEL de 7 dias corridos a partir do instante em que `/admin/metrics` é consultado (`now() -
   interval '7 days'`, não segunda-a-domingo) E por `device_id` distinto, não por perfil (ver "Nível
