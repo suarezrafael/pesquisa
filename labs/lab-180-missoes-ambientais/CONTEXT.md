@@ -54,6 +54,25 @@ Commit inicial → final: 6114f8e3dcc5124422a0819148edd22451b7b91d..6e81720
      cobriam só o `kind`, uma remoção acidental do allowlist principal passaria despercebida.
   3. Este `CONTEXT.md` (handoff de fim de lab) estava faltando — `FEATURES.md` já marcava
      "concluído" mas a pasta não tinha o arquivo que a própria convenção do projeto exige.
+- **Achado do review automático do Copilot na PR #59 (2ª rodada)**, 4 achados reais corrigidos:
+  1. `GET /admin/metrics` nunca expunha os 2 eventos novos em `weeklyFunnel` (só entravam na
+     allowlist) — corrigido com `weeklyFunnel.learningChallengeStarted`/`learningChallengeCompleted`
+     (`index.ts`), mesma convenção de ALCANCE do resto do funil.
+  2. Race real: `QuestModal` atrasa `onCorrect` em 700ms (`setTimeout`) — fechar o modal (ou abrir
+     outro landmark) dentro desse intervalo deixava o `onCorrect` capturado disparar depois sobre
+     um estado já trocado, podendo creditar recompensa de uma tentativa cancelada por cima de um
+     desafio novo. Corrigido com `attemptId` (`crypto.randomUUID()`, só em memória) comparado
+     contra um `ref` vivo antes de creditar qualquer coisa — o `ref` é zerado tanto ao fechar
+     quanto ao completar, invalidando qualquer callback atrasado da MESMA tentativa.
+  3. `retry_without_quit_rate` reavaliada com mais rigor: o payload não carrega id de tentativa
+     nenhum (só `kind`+`device_id`+timestamp) — se o mesmo `kind` for aberto mais de uma vez antes
+     de completar, comparar `started`×`completed` pode atribuir a conclusão à tentativa ERRADA.
+     Decisão: não adicionar um id de correlação ao contrato do evento só pra essa métrica (mudança
+     maior, fora do escopo deste lab) — reforçada a documentação (`productAnalytics.ts`,
+     `docs/event-catalog.md`) deixando explícito que é uma proporção AGREGADA, não uma taxa por
+     tentativa individual confiável.
+  4. Seção "Funcionalidades planejadas que NÃO foram concluídas" (abaixo) se autocontradizia —
+     dizia "nenhuma" no título e "todas concluídas" no corpo, texto reescrito pra não confundir.
 
 ## Pendências / dívidas conhecidas
 
@@ -66,8 +85,8 @@ Commit inicial → final: 6114f8e3dcc5124422a0819148edd22451b7b91d..6e81720
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
-- Nenhuma das 3 (mais o suporte de eventos/testes/docs) planejadas em `FEATURES.md` — todas
-  concluídas e verificadas ao vivo.
+Nenhuma — as 3 (mais o suporte de eventos/testes/docs) planejadas em `FEATURES.md` foram todas
+concluídas e verificadas ao vivo (ver "O que foi feito" acima).
 
 ## O que o próximo laboratório deve desenvolver
 

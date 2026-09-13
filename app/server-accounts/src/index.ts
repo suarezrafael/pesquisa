@@ -1734,6 +1734,12 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // sessão). Mesmo espírito de `cameraRecenterUsed` (lab-185): documentar a limitação em vez de
     // construir uma métrica de sessão nova só pra este campo.
     planetInteractionCompleted: weeklyDevices('planet_interaction_completed'),
+    // lab-180 ("Missões ambientais de aprendizagem") — achado do review automático do Copilot na
+    // PR #59: os eventos entravam na allowlist mas nunca ficavam visíveis por este endpoint,
+    // exigindo consulta ad-hoc no banco. Mesma convenção de ALCANCE (dispositivos únicos com
+    // pelo menos 1 ocorrência na semana) do resto do funil.
+    learningChallengeStarted: weeklyDevices('learning_challenge_started'),
+    learningChallengeCompleted: weeklyDevices('learning_challenge_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

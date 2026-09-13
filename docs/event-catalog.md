@@ -165,15 +165,18 @@ decisão").
   semanalmente por `weeklyFunnel.planetTravelCompleted`/`weeklyFunnel.planetInteractionCompleted`.
 - **Missões ambientais** (lab-180, "Missões ambientais de aprendizagem") — `learning_challenge_started`/
   `learning_challenge_completed` são os nomes EXATOS citados pelo documento
-  (`docs/growth-retention-monetization-backlog.md`, "Lab 180"). A 3ª métrica esperada,
-  `retry_without_quit_rate`, é DERIVADA — não existe um evento próprio pra "tentativa errada" (o
-  `QuestModal` já só dá feedback visual, "Quase! Tente outra opção", sem gerar evento nenhum por
-  resposta errada); a taxa se calcula comparando quantos `learning_challenge_started` de um mesmo
-  dispositivo eventualmente têm um `learning_challenge_completed` correspondente (mesmo `kind`,
-  dentro de uma janela de tempo razoável), nunca desistindo no meio — mesmo espírito de outras
-  métricas "aproximadas" já documentadas aqui (`house_visited`, `planetInteractionCompleted`). Sem
-  endpoint dedicado pra essa taxa até este lab — fica como consulta ad-hoc quando precisar, não um
-  campo novo em `weeklyFunnel`.
+  (`docs/growth-retention-monetization-backlog.md`, "Lab 180"), lidos semanalmente por
+  `weeklyFunnel.learningChallengeStarted`/`weeklyFunnel.learningChallengeCompleted` (mesma
+  convenção de ALCANCE do resto do funil). A 3ª métrica esperada, `retry_without_quit_rate`, é
+  DERIVADA e só APROXIMADA — não existe um evento próprio pra "tentativa errada" (o `QuestModal`
+  já só dá feedback visual, "Quase! Tente outra opção", sem gerar evento nenhum por resposta
+  errada), e o payload não carrega nenhum id de tentativa (só `kind`+`device_id`+timestamp,
+  achado do review automático da PR #59) — comparar `started`×`completed` por dispositivo+`kind`
+  numa janela de tempo pode atribuir uma conclusão à tentativa ERRADA se o mesmo `kind` for aberto
+  mais de uma vez antes de completar, então isso mede uma proporção agregada de conclusão, não uma
+  taxa por tentativa individual confiável — mesmo espírito de outras métricas "aproximadas" já
+  documentadas aqui (`house_visited`, `planetInteractionCompleted`). Sem endpoint dedicado pra essa
+  taxa — fica como consulta ad-hoc quando precisar, não um campo novo em `weeklyFunnel`.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de

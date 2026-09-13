@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { TitleScreen } from './components/TitleScreen'
 import { Onboarding } from './components/Onboarding'
 import { ProfilePicker } from './components/ProfilePicker'
@@ -143,7 +143,17 @@ function GameApp() {
   const [activeEnvironmentalChallenge, setActiveEnvironmentalChallenge] = useState<{
     quest: Quest
     kind: 'bridge' | 'rocket_fuel' | 'plaque'
+    attemptId: string
   } | null>(null)
+  // Achado do review automático do Copilot (PR #59): `QuestModal` atrasa `onCorrect` em 700ms
+  // (`setTimeout`) depois de mostrar o feedback "certo" — se a criança fechar o modal DENTRO
+  // desse intervalo (ou abrir um landmark diferente), o `onCorrect` capturado no fechamento do
+  // `QuestModal` ainda dispara depois, lendo `activeEnvironmentalChallenge` de um render antigo
+  // (via closure) — podia creditar recompensa de uma tentativa já cancelada, inclusive por cima
+  // de um desafio novo aberto nesse meio-tempo. `attemptId` (só em memória, nunca persistido) é a
+  // fonte de verdade de qual tentativa está REALMENTE ativa agora; comparado contra o valor
+  // capturado na closure antes de creditar qualquer coisa.
+  const activeEnvironmentalAttemptIdRef = useRef<string | null>(null)
   // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — mesma ponte de
   // `coopAnswerSignalId`/`placingFurnitureRequestId` acima: o clique em "Visitar casa" acontece
   // dentro do `FriendsPanel`, fora deste componente e do `World3D.tsx`; `id` novo a cada clique
@@ -302,7 +312,9 @@ function GameApp() {
   // sessão), então chamar aqui também é seguro mesmo se a criança já tiver aberto uma escolinha
   // antes.
   function handleOpenEnvironmentalChallenge(quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque') {
-    setActiveEnvironmentalChallenge({ quest, kind })
+    const attemptId = crypto.randomUUID()
+    activeEnvironmentalAttemptIdRef.current = attemptId
+    setActiveEnvironmentalChallenge({ quest, kind, attemptId })
     trackFirstLearningChallenge()
     trackLearningChallengeStarted(kind)
   }
@@ -311,6 +323,10 @@ function GameApp() {
   // `handleQuestCorrect`, só que a missão veio de um landmark ambiental em vez da escolinha.
   function handleEnvironmentalChallengeCorrect() {
     if (!activeEnvironmentalChallenge) return
+    // Guarda contra o `onCorrect` atrasado do `QuestModal` (setTimeout de 700ms) disparando
+    // DEPOIS que esta tentativa específica já foi fechada/substituída — ver comentário no
+    // `activeEnvironmentalAttemptIdRef` acima.
+    if (activeEnvironmentalAttemptIdRef.current !== activeEnvironmentalChallenge.attemptId) return
     const { quest, kind } = activeEnvironmentalChallenge
     const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event } = completeQuest(
       quest,
@@ -318,15 +334,18 @@ function GameApp() {
     )
     setReward({ quest, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event })
     trackLearningChallengeCompleted(kind)
+    activeEnvironmentalAttemptIdRef.current = null
     setActiveEnvironmentalChallenge(null)
   }
 
   // Mesmo raciocínio de `handleCloseQuest` — fechar sem responder quebra o combo de respostas
-  // certas seguidas, revisar uma missão já concluída antes não deveria punir.
+  // certas seguidas, revisar uma missão já concluída antes não deveria punir. Zera o ref ANTES de
+  // limpar o estado — invalida qualquer `onCorrect` atrasado em voo desta mesma tentativa.
   function handleCloseEnvironmentalChallenge() {
     if (activeEnvironmentalChallenge && !progress.completedQuestIds.includes(activeEnvironmentalChallenge.quest.id)) {
       resetStreak()
     }
+    activeEnvironmentalAttemptIdRef.current = null
     setActiveEnvironmentalChallenge(null)
   }
 
