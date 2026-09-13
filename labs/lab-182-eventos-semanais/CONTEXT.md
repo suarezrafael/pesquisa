@@ -214,15 +214,28 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   também, sem erro). O mecanismo em si (painel/badge exibindo o valor certo) já tinha sido
   confirmado ao vivo com cliques de mouse reais nas rodadas 1 e 7; esta rodada só muda O MOMENTO em
   que o valor é calculado, não a lógica de exibição em si.
+- **Rodada 12**: 2 achados reais. (1) O booleano `objectiveDone` da rodada 10 corrigiu QUAL
+  predicado decide o status, mas não o formato: no cenário de recuo de relógio, a recompensa foi
+  dada numa semana FUTURA, não na semana real atual — "você já ganhou moedas ESTA semana" (a
+  mensagem de "concluído") seria literalmente falso, mas "pendente, complete um desafio" também
+  prometeria algo que a próxima tentativa real recusaria. Resolvido de vez trocando o booleano por
+  `WeeklyEventObjectiveStatus` de 3 estados (`'pending' | 'done' | 'blocked'`, função nova
+  `weeklyEventObjectiveStatus` em `progression.ts`, única fonte da decisão de apresentação) — o
+  painel agora mostra uma 3ª mensagem neutra ("O bônus desta semana já foi usado...") só no caso
+  raro de `'blocked'`, nunca afirmando algo falso. Teste de regressão novo cobrindo os 3 estados,
+  incluindo o cenário exato de recuo de relógio. (2) `FEATURES.md` ainda descrevia o campo como
+  "chave de semana" em vez de instante ISO completo — corrigido.
 
 ## Pendências / dívidas conhecidas
 
-- **Pendência real, não resolvida**: o fix da rodada 11 (snapshot de `weeklyEvent`/`objectiveDone`
-  capturado no clique) não foi reverificado ao vivo num navegador real — o dev server local ficou
-  instável nesta sessão (múltiplos processos concorrentes, ver rodada 11 acima) e não deu tempo de
-  confirmar antes do fim desta verificação. Confiança vem de `tsc -b`/`npm run test`/`npm run build`
-  limpos, não de reprodução visual; recomenda-se confirmar com um clique de mouse real numa sessão
-  futura antes de assumir 100% resolvido.
+- **Pendência real, não resolvida**: os fixes das rodadas 11 e 12 (snapshot de `weeklyEvent`/
+  `status` capturado no clique; os 3 estados `WeeklyEventObjectiveStatus`) não foram reverificados
+  ao vivo num navegador real — o dev server local ficou persistentemente instável nesta sessão
+  (múltiplos processos concorrentes acumulados, reiniciado repetidas vezes sem resolver o
+  travamento no carregamento do chunk 3D preguiçoso) e não deu tempo de confirmar visualmente antes
+  do fim desta verificação. Confiança vem de `tsc -b`/`npm run test`/`npm run build` limpos, não de
+  reprodução visual; recomenda-se confirmar com um clique de mouse real numa sessão futura
+  (verificar especialmente a mensagem neutra do estado `'blocked'`) antes de assumir 100% resolvido.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

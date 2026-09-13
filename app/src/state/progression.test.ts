@@ -43,6 +43,7 @@ import {
   applyWeeklyEventObjectiveProgress,
   isWeeklyEventObjectiveDone,
   wouldGrantWeeklyEventObjectiveReward,
+  weeklyEventObjectiveStatus,
   SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
@@ -1447,6 +1448,19 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
     expect(applyWeeklyEventObjectiveProgress(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z').rewardGranted).toBe(
       false,
     )
+  })
+
+  it('weeklyEventObjectiveStatus distingue "pendente" de "concluído" de "bloqueado por recuo de relógio"', () => {
+    expect(weeklyEventObjectiveStatus(emptyProgress, '2026-09-08T12:00:00.000Z')).toBe('pending')
+
+    const concluido = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z').progress
+    expect(weeklyEventObjectiveStatus(concluido, '2026-09-10T12:00:00.000Z')).toBe('done') // mesma semana
+
+    // achado do review automático do Copilot: no cenário de recuo de relógio, a recompensa foi
+    // dada numa semana FUTURA — "concluído esta semana" seria falso, mas também não pode prometer
+    // "pendente, complete um desafio" (a próxima tentativa real seria recusada). É um 3º estado.
+    const adiantouRelogio = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-29T12:00:00.000Z').progress
+    expect(weeklyEventObjectiveStatus(adiantouRelogio, '2026-09-08T12:00:00.000Z')).toBe('blocked')
   })
 })
 

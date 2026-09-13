@@ -59,8 +59,10 @@ desenvolver").
 ## Funcionalidades planejadas
 
 - [x] Campo novo em `Progress` (`weeklyEventObjectiveRewardedAtIso: string | null`, `types.ts` +
-  default `null` em `storage.ts`) — marca em qual semana ISO o bônus já foi concedido, idempotente
-  (não paga de novo na mesma semana mesmo completando vários desafios ambientais).
+  default `null` em `storage.ts`) — guarda o INSTANTE ISO completo (`toISOString()`, não uma chave
+  de semana) da última vez que o bônus foi concedido; idempotente (não paga de novo na mesma
+  semana mesmo completando vários desafios ambientais) E comparável cronologicamente contra
+  manipulação de relógio (ver rodada 8 do review no `CONTEXT.md`).
 - [x] `data/weeklyEvents.ts` ganha as constantes de copy/recompensa do objetivo (única fonte de
   verdade, junto da rotação e do multiplicador, como o backlog pede): valor da recompensa em moeda,
   descrição do objetivo, e a mensagem de "sem problema se não der tempo — sempre grátis".

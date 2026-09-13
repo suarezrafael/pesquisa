@@ -106,6 +106,21 @@ export function wouldGrantWeeklyEventObjectiveReward(progress: Progress, nowIso:
   return !clockWentBackward && !isWeeklyEventObjectiveDone(progress, nowIso)
 }
 
+export type WeeklyEventObjectiveStatus = 'pending' | 'done' | 'blocked'
+
+// Status de apresentação pro `WeeklyEventPanel.tsx` — achado do review automático do Copilot:
+// reduzir isso a um booleano ("já concluído?") confundia dois estados bem diferentes no cenário de
+// recuo de relógio (adiantar, reivindicar, voltar): a recompensa foi dada numa semana FUTURA, não
+// na semana real atual, então "você já ganhou X moedas ESTA semana" seria literalmente falso —
+// mas também não dá pra mostrar "pendente, complete um desafio pra ganhar" (a guarda anti-recuo
+// vai recusar a próxima tentativa mesmo assim). `'blocked'` é o 3º estado, neutro, pra esse caso
+// raro (só alcançável manipulando o relógio do aparelho).
+export function weeklyEventObjectiveStatus(progress: Progress, nowIso: string): WeeklyEventObjectiveStatus {
+  if (isWeeklyEventObjectiveDone(progress, nowIso)) return 'done'
+  if (wouldGrantWeeklyEventObjectiveReward(progress, nowIso)) return 'pending'
+  return 'blocked'
+}
+
 export interface WeeklyEventObjectiveResult {
   progress: Progress
   rewardGranted: boolean

@@ -45,7 +45,7 @@ import {
 import type { Profile, Progress, Quest } from './types'
 import type { FurnitureOption } from './data/furniture'
 import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, getCurrentWeeklyEvent, type WeeklyEvent } from './data/weeklyEvents'
-import { wouldGrantWeeklyEventObjectiveReward } from './state/progression'
+import { weeklyEventObjectiveStatus, type WeeklyEventObjectiveStatus } from './state/progression'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
@@ -203,9 +203,10 @@ function GameApp() {
   // e o re-render que de fato abre o painel, bem na virada exata de semana ISO. Guardar o valor já
   // decidido no momento do clique, em vez de deixar o painel reconsultar `new Date()` de novo em
   // outro render, fecha essa classe de divergência de vez.
-  const [weeklyEventPanel, setWeeklyEventPanel] = useState<{ event: WeeklyEvent; objectiveDone: boolean } | null>(
-    null,
-  )
+  const [weeklyEventPanel, setWeeklyEventPanel] = useState<{
+    event: WeeklyEvent
+    status: WeeklyEventObjectiveStatus
+  } | null>(null)
   // lab-136 (pedido do usuário: "escolher em que posição da casa deve ficar a peça... o ângulo e
   // posição") — id do item que o jogador clicou "Mover" no `MyHousePanel`; `World3D.tsx` observa
   // essa prop e entra no modo de posicionamento dentro da cena 3D, depois chama
@@ -562,13 +563,7 @@ function GameApp() {
             const now = new Date()
             setWeeklyEventPanel({
               event: getCurrentWeeklyEvent(now),
-              // `wouldGrantWeeklyEventObjectiveReward`, NÃO `isWeeklyEventObjectiveDone` sozinho —
-              // as duas divergem depois de um recuo de relógio (adiantar, reivindicar, voltar):
-              // `isWeeklyEventObjectiveDone` diria "não concluído" (semana ISO diferente da
-              // guardada), mas `applyWeeklyEventObjectiveProgress` rejeitaria a próxima tentativa
-              // mesmo assim (guarda anti-recuo) — o painel prometeria "+20 moedas" por completar um
-              // desafio que na prática não paga nada.
-              objectiveDone: !wouldGrantWeeklyEventObjectiveReward(progress, now.toISOString()),
+              status: weeklyEventObjectiveStatus(progress, now.toISOString()),
             })
           }}
           weeklyEvent={weeklyEvent}
@@ -687,7 +682,7 @@ function GameApp() {
       {weeklyEventPanel && (
         <WeeklyEventPanel
           event={weeklyEventPanel.event}
-          objectiveDone={weeklyEventPanel.objectiveDone}
+          status={weeklyEventPanel.status}
           onClose={() => setWeeklyEventPanel(null)}
         />
       )}

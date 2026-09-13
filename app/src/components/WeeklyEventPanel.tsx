@@ -11,19 +11,26 @@ import {
   WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
   type WeeklyEvent,
 } from '../data/weeklyEvents'
+import type { WeeklyEventObjectiveStatus } from '../state/progression'
 
 interface WeeklyEventPanelProps {
   // Calculados uma vez em `App.tsx` e recebidos prontos — este painel NUNCA chama
-  // `getCurrentWeeklyEvent()`/`wouldGrantWeeklyEventObjectiveReward()` por conta própria, pra
-  // sempre bater com o badge que o abriu (`HudHeader.tsx`, mesmo valor via props também).
+  // `getCurrentWeeklyEvent()`/`weeklyEventObjectiveStatus()` por conta própria, pra sempre bater
+  // com o badge que o abriu (`HudHeader.tsx`, mesmo valor via props também).
   event: WeeklyEvent
-  objectiveDone: boolean
+  // 3 estados, não um booleano — achado do review automático do Copilot: um booleano simples
+  // ("já concluído?") confundia dois casos bem diferentes no cenário raro de recuo de relógio
+  // (só alcançável manipulando o relógio do aparelho): a recompensa foi dada numa semana FUTURA,
+  // não na semana real atual, então "você já ganhou moedas ESTA semana" seria literalmente falso —
+  // mas também não dá pra prometer "complete um desafio pra ganhar", já que a próxima tentativa
+  // real seria recusada mesmo assim. `'blocked'` é o 3º estado, neutro, pra esse caso.
+  status: WeeklyEventObjectiveStatus
   onClose: () => void
 }
 
 const TITLE_ID = 'weekly-event-panel-title'
 
-export function WeeklyEventPanel({ event, objectiveDone, onClose }: WeeklyEventPanelProps) {
+export function WeeklyEventPanel({ event, status, onClose }: WeeklyEventPanelProps) {
   const modalRef = useModalA11y(onClose)
 
   return (
@@ -42,9 +49,11 @@ export function WeeklyEventPanel({ event, objectiveDone, onClose }: WeeklyEventP
         <h2 id={TITLE_ID}>{event.name}</h2>
         <p className="reward-line">{event.description}</p>
         <p className="reward-bonus-line">
-          {objectiveDone
-            ? `✓ Objetivo da semana concluído! Você já ganhou 🪙 ${WEEKLY_EVENT_OBJECTIVE_REWARD_COINS} moedas grátis esta semana.`
-            : `🌱 Objetivo da semana: ${WEEKLY_EVENT_OBJECTIVE_DESCRIPTION} Ganhe 🪙 ${WEEKLY_EVENT_OBJECTIVE_REWARD_COINS} moedas grátis!`}
+          {status === 'done' &&
+            `✓ Objetivo da semana concluído! Você já ganhou 🪙 ${WEEKLY_EVENT_OBJECTIVE_REWARD_COINS} moedas grátis esta semana.`}
+          {status === 'pending' &&
+            `🌱 Objetivo da semana: ${WEEKLY_EVENT_OBJECTIVE_DESCRIPTION} Ganhe 🪙 ${WEEKLY_EVENT_OBJECTIVE_REWARD_COINS} moedas grátis!`}
+          {status === 'blocked' && 'O bônus desta semana já foi usado. Uma nova chance chega em breve!'}
         </p>
         <p className="reward-bonus-line">{WEEKLY_EVENT_NO_PRESSURE_MESSAGE}</p>
         <button type="button" className="primary-button" onClick={onClose}>
