@@ -105,6 +105,12 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   já que `.modal` sozinho não tem limite de altura/scroll. Corrigido com uma classe nova
   `.weekly-event-modal` (`max-height: 80vh; overflow-y: auto`), mesmo padrão já usado por
   `.quest-list-modal`.
+- **Rodada 4**: 1 achado real de documentação — `docs/event-catalog.md` não deixava claro que
+  `weeklyFunnel.weeklyEventObjectiveCompleted` mede uma coisa DIFERENTE do bônus em si: o bônus é
+  idempotente por semana ISO (segunda-domingo), mas `weeklyFunnel.*` inteiro (herdado do
+  lab-165/185) é uma janela MÓVEL de 7 dias corridos a partir da consulta (`now() - interval '7
+  days'`) por `device_id` distinto — não "quantos perfis bateram o objetivo nesta semana ISO".
+  Corrigida a nota do catálogo pra explicitar essa diferença.
 
 ## Pendências / dívidas conhecidas
 

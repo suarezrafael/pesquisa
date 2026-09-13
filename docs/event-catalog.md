@@ -187,10 +187,19 @@ decisão").
   evento novo. "D7 por número de descobertas" (outra métrica citada) não foi construída neste
   lab — exigiria uma consulta de coorte nova, mesmo padrão do lab-185, fora do escopo pequeno
   deste lab (documentado como pendência em `labs/lab-181-album-planetas/CONTEXT.md`).
-- **Eventos semanais saudáveis** (lab-182) — `weekly_event_objective_completed`, lido semanalmente
-  por `weeklyFunnel.weeklyEventObjectiveCompleted` ("conclusão de evento", métrica citada pelo
-  backlog). "Retorno semanal" (outra métrica citada) já é coberto pela infraestrutura de retenção
-  D1/D7 existente (`handleAdminMetrics`, lab-185) — nada novo necessário aqui, o evento novo mede a
+- **Eventos semanais saudáveis** (lab-182) — `weekly_event_objective_completed`, lido por
+  `weeklyFunnel.weeklyEventObjectiveCompleted` ("conclusão de evento", métrica citada pelo
+  backlog). **Cuidado com o nome "semanal" aqui — são DUAS janelas de "semana" diferentes,
+  propositalmente**: o bônus em si é idempotente por SEMANA ISO (segunda a domingo,
+  `weeklyEventObjectiveRewardedWeekKey`/`isoWeekKey`, `state/progression.ts`), mas
+  `weeklyFunnel.*` inteiro (não só esta métrica — todo o funil) é `weeklyDevices(...)`, uma janela
+  MÓVEL de 7 dias corridos a partir do instante em que `/admin/metrics` é consultado (`now() -
+  interval '7 days'`, não segunda-a-domingo) E por `device_id` distinto, não por perfil (ver "Nível
+  de agregação" abaixo). Ou seja: `weeklyFunnel.weeklyEventObjectiveCompleted` não é "quantos
+  perfis bateram o objetivo nesta semana ISO" — é "quantos aparelhos distintos dispararam o evento
+  nos últimos 7 dias corridos", uma aproximação de alcance, não uma contagem exata por semana/perfil.
+  "Retorno semanal" (outra métrica citada) já é coberto pela infraestrutura de retenção D1/D7
+  existente (`handleAdminMetrics`, lab-185) — nada novo necessário aqui, o evento novo mede a
   CONCLUSÃO do objetivo, não a volta em si. "Feedback qualitativo infantil" (3ª métrica citada) é
   pesquisa com usuário real, fora de escopo de laboratório de código.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
