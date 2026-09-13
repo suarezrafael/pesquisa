@@ -211,7 +211,7 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
                   className={`quest-list-item planet-toggle ${complete ? 'completed' : ''}`}
                   onClick={() => togglePlanet(planet.planetId)}
                   aria-expanded={expanded}
-                  aria-controls={slotsListId}
+                  aria-controls={expanded ? slotsListId : undefined}
                 >
                   <span className="quest-list-index" aria-hidden="true">
                     {planet.emoji}

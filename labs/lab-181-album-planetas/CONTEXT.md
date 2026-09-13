@@ -158,6 +158,11 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
   coberto (`AchievementsPanel.tsx` JSX, e o corpo da própria PR #60 no GitHub). Também adicionado
   `aria-controls` no botão de cada planeta, apontando pro `id` da lista de slots expandida
   (padrão de disclosure), achado novo que não tinha aparecido nas rodadas anteriores.
+- **Rodada 7**: 1 achado real — o `aria-controls` novo da rodada 6 apontava pro `id` da lista de
+  slots mesmo com o planeta ainda FECHADO, mas essa lista só existe no DOM quando `expanded` é
+  `true` (`{expanded && <div id={slotsListId}>...}`); leitores de tela não achavam o elemento
+  referenciado no estado colapsado. Corrigido só atribuindo `aria-controls` quando `expanded` é
+  verdadeiro (`aria-controls={expanded ? slotsListId : undefined}`).
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
