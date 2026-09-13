@@ -5,6 +5,7 @@ import { loadProgress, saveProgress } from './storage'
 import { findTreasureChestById } from '../data/treasureChests'
 import { findPlanetSecretById } from '../data/planetSecrets'
 import { findPlanetIdForQuest } from '../data/planetQuests'
+import { getCurrentWeeklyEvent } from '../data/weeklyEvents'
 import {
   applyCoinCollected,
   applyQuestCompletion,
@@ -65,7 +66,12 @@ export function useProgress() {
 
   // lab-126: `entitlementActive` aplica o bônus de moeda de assinante (`progression.ts`) — default
   // `false` preserva o comportamento de quem chama sem saber/se importar com entitlement.
-  function completeQuest(quest: Quest, entitlementActive = false): CompletionResult {
+  // `nowIso` opcional (achado do review automático do Copilot na PR #61) — sem ele, esta função
+  // lê o relógio por conta própria (`getCurrentWeeklyEvent()` default); passar um valor explícito
+  // deixa o CHAMADOR garantir que o mesmo instante seja usado aqui e em outra decisão relacionada
+  // (ex.: `weeklyEventObjectiveProgress`), evitando os dois discordarem bem na virada exata de
+  // semana ISO.
+  function completeQuest(quest: Quest, entitlementActive = false, nowIso?: string): CompletionResult {
     // lab-99: `applyQuestCompletion` é idempotente (responder uma missão já concluída de novo não
     // premia XP/moeda de novo, ver `progression.ts`) — só dispara o evento de analytics numa
     // conclusão GENUÍNA (o array de concluídas cresceu), senão "quests concluídas por
@@ -75,7 +81,8 @@ export function useProgress() {
     // perfil que ainda não tinha NENHUMA missão concluída pode fechar o "ciclo de ativação"
     // (ver `trackFirstReward`, `productAnalytics.ts`).
     const isFirstQuestEver = progress.completedQuestIds.length === 0
-    const result = applyQuestCompletion(progress, quest, undefined, entitlementActive)
+    const event = nowIso ? getCurrentWeeklyEvent(new Date(nowIso)) : undefined
+    const result = applyQuestCompletion(progress, quest, event, entitlementActive)
     setProgress(result.progress)
     saveProgress(result.progress)
     if (!wasAlreadyCompleted) {

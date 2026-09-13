@@ -116,6 +116,15 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   na virada exata de domingo pra segunda, as duas leituras podiam divergir e mostrar o evento de uma
   semana com o status do objetivo de outra. Corrigido capturando um único `Date` e reaproveitando
   nas duas chamadas.
+- **Rodada 6**: 1 achado real (mesma classe da rodada 5, lugar diferente) — `completeQuest()`
+  (`useProgress.ts`) lê o relógio por conta própria pro multiplicador semanal (`getCurrentWeeklyEvent()`
+  default), enquanto `handleEnvironmentalChallengeCorrect` (`App.tsx`) lia de novo, separadamente,
+  pro objetivo; bem na virada exata de semana ISO os dois podiam divergir (toast mostrando o
+  evento de uma semana, bônus/analytics gravados pra outra). Corrigido dando a `completeQuest` um
+  3º parâmetro opcional `nowIso` (default preserva o comportamento de todo chamador que não passa —
+  só `handleEnvironmentalChallengeCorrect` usa), e capturando um único `nowIso` no topo do handler,
+  reaproveitado nas duas chamadas (`completeQuest`/`weeklyEventObjectiveProgress`). Reverificado ao
+  vivo depois da mudança de assinatura: fluxo completo continua funcionando sem regressão.
 
 ## Pendências / dívidas conhecidas
 

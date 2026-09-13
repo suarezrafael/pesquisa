@@ -339,14 +339,21 @@ function GameApp() {
     // jogador fechou antes do próprio atraso de 700ms terminar).
     if (activeEnvironmentalAttemptIdRef.current !== activeEnvironmentalChallenge.attemptId) return
     const { quest, kind } = activeEnvironmentalChallenge
+    // Um único `nowIso` pras duas chamadas abaixo (achado do review automático do Copilot na PR
+    // #61) — sem isso, `completeQuest` leria o relógio por conta própria pro multiplicador semanal
+    // e `weeklyEventObjectiveProgress` leria de novo pro objetivo; bem na virada exata de semana
+    // ISO os dois podiam divergir (o toast mostrando o evento de uma semana, o bônus/analytics
+    // gravados pra outra).
+    const nowIso = new Date().toISOString()
     const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event } = completeQuest(
       quest,
       entitlement?.active,
+      nowIso,
     )
     // Objetivo educativo/ambiental do evento semanal — qualquer um dos 3 tipos de desafio conta,
     // sempre depois de `completeQuest` acima (ver comentário de `weeklyEventObjectiveProgress` em
     // `useProgress.ts` sobre por que a ordem/atualizador funcional importam aqui).
-    const rewardGranted = weeklyEventObjectiveProgress(new Date().toISOString())
+    const rewardGranted = weeklyEventObjectiveProgress(nowIso)
     const weeklyEventObjectiveBonusCoins = rewardGranted ? WEEKLY_EVENT_OBJECTIVE_REWARD_COINS : undefined
     setReward({
       quest,
