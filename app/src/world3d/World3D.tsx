@@ -47,6 +47,7 @@ import { AdvancedDynamicTexture } from '@babylonjs/gui/2D/advancedDynamicTexture
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock'
 import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
+import { selectEnvironmentalChallengeQuest } from '../state/progression'
 import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
@@ -3494,25 +3495,28 @@ export function World3D({
         }
 
         // Missões ambientais (lab-180) — cada landmark sorteia uma missão do TIPO certo (não
-        // qualquer uma, diferente do desafio em dupla acima), priorizando uma ainda não
-        // concluída e caindo pro pool inteiro do tipo se todas já tiverem sido respondidas —
-        // mesmo padrão de fallback já usado pelo desafio em dupla.
-        function pickEnvironmentalQuest(questType: Quest['type']): Quest {
-          const ofType = quests.filter((q) => q.type === questType)
-          const incompleteOfType = ofType.filter((q) => !progressRef.current.completedQuestIds.includes(q.id))
-          const pool = incompleteOfType.length > 0 ? incompleteOfType : ofType
-          return pool[Math.floor(Math.random() * pool.length)]
-        }
+        // qualquer uma, diferente do desafio em dupla acima) via `selectEnvironmentalChallengeQuest`
+        // (`state/progression.ts`, achado do review automático do Copilot na PR #59: regra de
+        // quest/progressão não pode morar acoplada à engine 3D).
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
-          onOpenEnvironmentalChallengeRef.current(pickEnvironmentalQuest('logica'), 'bridge')
+          onOpenEnvironmentalChallengeRef.current(
+            selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),
+            'bridge',
+          )
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, rocketFuelSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
-          onOpenEnvironmentalChallengeRef.current(pickEnvironmentalQuest('matematica'), 'rocket_fuel')
+          onOpenEnvironmentalChallengeRef.current(
+            selectEnvironmentalChallengeQuest('matematica', progressRef.current.completedQuestIds),
+            'rocket_fuel',
+          )
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, plaqueSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
-          onOpenEnvironmentalChallengeRef.current(pickEnvironmentalQuest('leitura'), 'plaque')
+          onOpenEnvironmentalChallengeRef.current(
+            selectEnvironmentalChallengeQuest('leitura', progressRef.current.completedQuestIds),
+            'plaque',
+          )
           return
         }
 

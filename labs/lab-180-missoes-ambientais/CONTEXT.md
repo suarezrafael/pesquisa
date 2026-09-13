@@ -73,6 +73,16 @@ Commit inicial → final: 6114f8e3dcc5124422a0819148edd22451b7b91d..6e81720
      tentativa individual confiável.
   4. Seção "Funcionalidades planejadas que NÃO foram concluídas" (abaixo) se autocontradizia —
      dizia "nenhuma" no título e "todas concluídas" no corpo, texto reescrito pra não confundir.
+- **Achado do review automático do Copilot na PR #59 (3ª/4ª rodadas)**:
+  1. Consistência de histórico de review entre `CONTEXT.md`/`CURRENT.md` (achado da 3ª rodada,
+     texto ajustado, sem mudança de código).
+  2. **Achado arquitetural real (4ª rodada)**: a seleção de pergunta certa pro landmark
+     (`pickEnvironmentalQuest`) morava DENTRO de `World3D.tsx`, acoplada à engine 3D — viola
+     `docs/prompts/03-arquitetura-sistema.md` §1 (regra de quest/progressão precisa ficar testável
+     sem instanciar a cena). Extraída pra `selectEnvironmentalChallengeQuest`
+     (`state/progression.ts`), com `random` injetável — `World3D.tsx` só chama e repassa o
+     resultado. 4 testes novos (`progression.test.ts`): sorteia só do tipo certo, prioriza
+     incompleta, cai pro pool inteiro quando todas já feitas, RNG determinístico em teste.
 
 ## Pendências / dívidas conhecidas
 
@@ -96,10 +106,11 @@ o **Lab 181 - Circuito de descoberta e álbum de planetas** (item 7 da ordem sug
 ## Estado do repositório ao final
 
 - Branch: `lab-180-missoes-ambientais`, PR #59 aberta contra `main`.
-- `npx tsc -b` (app) / `npx tsc --noEmit` (server-accounts): limpos. `npm run test`: app 181/181
-  (sem teste novo — sem lógica de domínio isolável além de reaproveitar `completeQuest`);
-  server-accounts 147/147 (3 novos: 2 `it`s de `isValidLearningChallengeKind`, 1 confirmando o
-  allowlist de `isValidProductEventType`). `npm run build` (app): limpo.
+- `npx tsc -b` (app) / `npx tsc --noEmit` (server-accounts): limpos. `npm run test`: app 185/185
+  (4 novos, `selectEnvironmentalChallengeQuest` — extraída de `World3D.tsx` na 4ª rodada do
+  review, ver "Decisões técnicas tomadas"); server-accounts 147/147 (3 novos: 2 `it`s de
+  `isValidLearningChallengeKind`, 1 confirmando o allowlist de `isValidProductEventType`).
+  `npm run build` (app): limpo.
 - **Verificado ao vivo via Chrome real** (Vite dev server local, não produção): hint "Pressione E"
   acende perto de cada landmark; os 3 abrem o tipo de pergunta certo (Lógica "Depois de Amanhã" /
   Matemática "Balas na Caixa" / Leitura); resposta certa credita XP/moeda reais (RewardToast

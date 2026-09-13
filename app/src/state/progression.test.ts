@@ -33,6 +33,7 @@ import {
   petLifecycleStage,
   petStageFor,
   petStageScale,
+  selectEnvironmentalChallengeQuest,
   seriesForLevel,
   skillBreakdown,
   syncWeeklyXpSnapshot,
@@ -563,6 +564,37 @@ describe('skillBreakdown (lab-167)', () => {
       completedPlanetQuestIds: Object.values(planetQuests).flat().map((q) => q.id),
     }
     expect(skillBreakdown(progress)).toEqual({ logica: 0, matematica: 0, leitura: 0 })
+  })
+})
+
+describe('selectEnvironmentalChallengeQuest (lab-180, "Missões ambientais de aprendizagem")', () => {
+  it('sorteia só entre missões do tipo pedido', () => {
+    const quest = selectEnvironmentalChallengeQuest('matematica', [], () => 0)
+    expect(quest.type).toBe('matematica')
+  })
+
+  it('prioriza uma missão ainda não concluída do tipo', () => {
+    const allMatematica = quests.filter((q) => q.type === 'matematica')
+    // completa todas menos a última do tipo
+    const completedQuestIds = allMatematica.slice(0, -1).map((q) => q.id)
+    const quest = selectEnvironmentalChallengeQuest('matematica', completedQuestIds, () => 0)
+    expect(quest.id).toBe(allMatematica[allMatematica.length - 1].id)
+  })
+
+  it('cai pro pool inteiro do tipo se todas já foram concluídas (nunca trava sem opção)', () => {
+    const allLeitura = quests.filter((q) => q.type === 'leitura')
+    const completedQuestIds = allLeitura.map((q) => q.id)
+    const quest = selectEnvironmentalChallengeQuest('leitura', completedQuestIds, () => 0)
+    expect(quest.type).toBe('leitura')
+    expect(allLeitura.map((q) => q.id)).toContain(quest.id)
+  })
+
+  it('usa o RNG injetado pra escolher a posição dentro do pool (determinístico em teste)', () => {
+    const allLogica = quests.filter((q) => q.type === 'logica')
+    const first = selectEnvironmentalChallengeQuest('logica', [], () => 0)
+    const last = selectEnvironmentalChallengeQuest('logica', [], () => 0.999999)
+    expect(first.id).toBe(allLogica[0].id)
+    expect(last.id).toBe(allLogica[allLogica.length - 1].id)
   })
 })
 
