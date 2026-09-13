@@ -570,6 +570,12 @@ a.nickname-generate-btn {
 .hub-header-info h1 {
   font-size: clamp(0.65rem, 3.2vmin, 1.1rem);
   margin: 0 0 clamp(0.1rem, 0.8vmin, 0.35rem);
+  /* Achado do review automático do Copilot (PR #58): o `overflow: hidden` novo em
+     `.hud-overlay .hub-header` (abaixo) contém o cartão, mas sem isto um apelido longo de
+     verdade (até 20 caracteres, `Onboarding.tsx`) vira um único token sem espaço — não quebra
+     linha sozinho — e podia ficar CORTADO pelo `overflow: hidden` em vez de só ficar contido.
+     `overflow-wrap: anywhere` deixa esse token quebrar dentro da largura disponível. */
+  overflow-wrap: anywhere;
 }
 
 .xp-bar {
@@ -722,18 +728,25 @@ a.nickname-generate-btn {
   flex-shrink: 0;
   /* Tamanho INTOCADO (piso de 44px de toque, auditoria WCAG AA acima) — pedido do usuário (lab-180,
      fora do fluxo normal de lab) de "botões menores no celular" foi atendido só via transparência
-     (0.82 → 0.62), nunca encolhendo abaixo do piso de acessibilidade já validado. */
+     (0.82 → 0.62), nunca encolhendo abaixo do piso de acessibilidade já validado.
+     Achado do review automático do Copilot (PR #58): reduzir o preenchimento sem NENHUMA borda
+     visível deixava a silhueta do círculo sem garantia de contraste contra um céu/terreno 3D
+     CLARO (fundo variável, não uma cor de tela fixa) — a mesma exigência de contraste mínimo AA
+     do WCAG 2.1 (3:1 pra ícones/UI, `docs/prompts/02-design-profissional.md` §3, [MUST]) que já
+     motivou o piso de 44px acima. Anel duplo (borda clara quase opaca + anel escuro por fora via
+     `box-shadow`) garante contraste em QUALQUER fundo — claro ou escuro —, sem precisar validar
+     manualmente contra toda cena possível do jogo. */
   width: clamp(2.75rem, 6.5vmin, 3.2rem);
   height: clamp(2.75rem, 6.5vmin, 3.2rem);
   border-radius: 50%;
-  border: none;
+  border: 2px solid rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.62);
   color: var(--ink);
   font-weight: 800;
   /* lab-120: proporcional ao novo tamanho maior do botão (mesma razão ~0,48× de antes) — senão o
      emoji ficaria pequeno demais sobrando espaço dentro do círculo maior. */
   font-size: clamp(1.3rem, 3vmin, 1.5rem);
-  box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(23, 44, 102, 0.2);
   cursor: pointer;
 }
 
@@ -939,16 +952,19 @@ a.nickname-generate-btn {
   border-radius: 50%;
   /* Pedido do usuário (lab-180, fora do fluxo normal de lab, junto do bug do painel de FPS):
      botões virtuais "mais transparentes" no celular — mantém o TAMANHO (piso de toque confiável,
-     não mexido) e só reduz a opacidade do preenchimento/borda, pra ocupar menos atenção visual
-     sem arriscar dificultar o toque.
-     Achado do review automático do Copilot (PR #58): branco a 0.18/0.4 sozinho, sem nenhuma
-     sombra, não garante contraste nenhum contra um céu/terreno CLARO (fundo 3D variável, não uma
-     cor de tela fixa) — o controle podia ficar quase invisível bem na cena mais comum do jogo.
-     `box-shadow` escura por fora garante uma silhueta visível contra QUALQUER fundo (claro ou
-     escuro), mesmo com o preenchimento translúcido continuando discreto. */
+     não mexido) e só reduz a opacidade do preenchimento, pra ocupar menos atenção visual sem
+     arriscar dificultar o toque.
+     2ª rodada do review automático do Copilot (PR #58): a 1ª tentativa (borda clara 0.45 + anel
+     escuro 0.25/sombra 0.3, ambos translúcidos) ainda não garantia o contraste mínimo AA (3:1
+     pra UI/ícones, `docs/prompts/02-design-profissional.md` §3, [MUST]) contra um fundo 3D
+     CLARO — dois tons translúcidos compostos sobre uma cor de céu clara continuam próximos um do
+     outro, não garantem 3:1. Corrigido com um anel de VERDADE: borda quase opaca (0.9) + anel
+     escuro quase opaco por fora (`box-shadow` a 0.55, não mais 0.25) — um dos dois sempre
+     contrasta forte, não importa a cor por trás. O preenchimento interno continua translúcido
+     (a parte que o usuário pediu pra ficar discreta). */
   background: rgba(255, 255, 255, 0.18);
-  border: 2px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
   touch-action: none;
 }
 
@@ -976,10 +992,20 @@ a.nickname-generate-btn {
      a tela (mesmo problema já resolvido no resto do HUD via `clamp(mín, vmin, máx)`, labs 57-59/
      120), então numa tela estreita esse texto (5 campos, já quebrado em várias linhas) dominava
      boa parte da área jogável. `vmin` acompanha o lado mais apertado da tela, encolhendo em
-     qualquer orientação; mais transparente também (0.55 → 0.4), no mesmo espírito do pedido do
-     usuário pros botões de toque abaixo.
-  */
-  background: rgba(0, 0, 0, 0.4);
+     qualquer orientação.
+     Achado do review automático do Copilot (PR #58): a 1ª tentativa também reduziu o fundo (0.55
+     → 0.4) — mas esse painel é EXPLICITAMENTE mantido visível em produção por pedido do usuário
+     (lab-67, "preciso de informações de FPS na tela em produção"), então o texto verde precisa
+     do contraste mínimo AA de texto normal (4.5:1, mesmo §3 do `.help-button` acima) contra
+     QUALQUER fundo 3D, não só um fundo escuro — 0.4 de opacidade preta deixa passar claridade
+     demais de um céu/terreno claro por trás. Fundo mantido no valor original (0.55), só o
+     tamanho/espaço resolvido — o pedido do usuário era sobre ESPAÇO, não sobre transparência
+     deste painel especificamente. `overflow-wrap: anywhere` cobre outro achado: `buriedSchoolReport`
+     (`World3D.tsx`) junta vários `qNN(...)` num token só sem espaço nenhum — `white-space: normal`
+     sozinho não quebra um token sem espaço, então esse texto podia continuar vazando pra fora do
+     `max-width` mesmo menor. */
+  background: rgba(0, 0, 0, 0.55);
+  overflow-wrap: anywhere;
   color: #7CFC9A;
   font-family: monospace;
   font-size: clamp(0.5rem, 1.7vmin, 0.7rem);
@@ -1010,14 +1036,13 @@ a.nickname-generate-btn {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  /* Mesmo pedido de transparência do `.joystick-base` acima (lab-180, fora do fluxo normal de
-     lab) — tamanho intocado, só a opacidade do preenchimento/borda reduzida. Mesmo achado do
-     review automático do Copilot (PR #58) sobre contraste contra fundo 3D claro/escuro variável
-     — `box-shadow` escura garante uma silhueta visível em qualquer cena, o `text-shadow` do
-     emoji abaixo já ajudava só o ÍCONE, não o contorno do círculo em si. */
+  /* Mesmo tratamento de anel duplo do `.joystick-base` acima (lab-180 + 2ª rodada do review
+     automático do Copilot, PR #58) — borda quase opaca + anel escuro quase opaco por fora
+     garantem contraste mínimo AA (3:1) contra qualquer fundo 3D; o `text-shadow` do emoji abaixo
+     só ajudava o ÍCONE, nunca o contorno do círculo em si. */
   background: rgba(255, 255, 255, 0.18);
-  border: 2px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
   color: white;
   font-weight: 700;
   /* lab-150 (achado do Copilot, PRs #2/#5): agora é um <button> de verdade, não um <div> — reseta
