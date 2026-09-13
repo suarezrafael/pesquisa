@@ -474,6 +474,11 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   ) {
     return new Response(null, { status: 400 })
   }
+  // Mesmo raciocínio dos eventos acima: `album_planet_opened` só faz sentido com um `planetId`
+  // válido (é o que identifica qual planeta o jogador expandiu na lista).
+  if (type === 'album_planet_opened' && !isValidDestinationPlanetId(metaObjForValidation.planetId)) {
+    return new Response(null, { status: 400 })
+  }
 
   // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
   // errado — os outros tipos LEGADOS (documentados em `docs/event-catalog.md` com `meta` livre ou
@@ -497,6 +502,9 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     } else if (type === 'learning_challenge_started' || type === 'learning_challenge_completed') {
       // já validado acima — só a chave permitida sobrevive.
       safeMeta = { kind: metaObj.kind }
+    } else if (type === 'album_planet_opened') {
+      // já validado acima — só a chave permitida sobrevive.
+      safeMeta = { planetId: metaObj.planetId }
     } else if (type === 'camera_recenter_used') {
       // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
       // (`docs/event-catalog.md`) não documenta NENHUM campo de `meta` — sem este branch, caía no
@@ -1740,6 +1748,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // pelo menos 1 ocorrência na semana) do resto do funil.
     learningChallengeStarted: weeklyDevices('learning_challenge_started'),
     learningChallengeCompleted: weeklyDevices('learning_challenge_completed'),
+    albumPlanetOpened: weeklyDevices('album_planet_opened'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

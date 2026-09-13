@@ -29,7 +29,9 @@ import {
   resolveHouseSyncSnapshot,
   getLevel,
   isQuestUnlocked,
+  nextPlanetDiscovery,
   petAgeYears,
+  planetDiscoverySlots,
   petLifecycleStage,
   petStageFor,
   petStageScale,
@@ -48,6 +50,7 @@ import {
   unlockHat,
   unlockHairShape,
   unlockMarsReward,
+  markMarsCoinPotFound,
   unlockPantsColor,
   unlockPlanetFurnitureReward,
   unlockShirtColor,
@@ -687,6 +690,21 @@ describe('unlockMarsReward (lab-94)', () => {
     const result = unlockMarsReward(jaTem)
     expect(result.granted).toBe(false)
     expect(result.progress).toBe(jaTem)
+  })
+})
+
+describe('markMarsCoinPotFound (lab-181, marco permanente do pote de moedas)', () => {
+  it('marca o marco na primeira vez', () => {
+    const result = markMarsCoinPotFound(emptyProgress)
+    expect(result.granted).toBe(true)
+    expect(result.progress.foundMarsCoinPotEver).toBe(true)
+  })
+
+  it('é idempotente — não "concede" de novo se o marco já estiver marcado (pote continua repetível)', () => {
+    const jaAchou = { ...emptyProgress, foundMarsCoinPotEver: true }
+    const result = markMarsCoinPotFound(jaAchou)
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(jaAchou)
   })
 })
 
@@ -1383,5 +1401,93 @@ describe('seriesForLevel (lab-156)', () => {
     expect(seriesForLevel(24)).toBe('ouro')
     expect(seriesForLevel(25)).toBe('diamante')
     expect(seriesForLevel(100)).toBe('diamante')
+  })
+})
+
+describe('planetDiscoverySlots (lab-181, "Circuito de descoberta e álbum de planetas")', () => {
+  it('Marte tem 3 slots — postal, pote de moedas, segredo visual (nunca baú/escolinha)', () => {
+    const slots = planetDiscoverySlots('marte', emptyProgress)
+    expect(slots.map((s) => s.kind)).toEqual(['collectible', 'actionable_object', 'visual_secret'])
+    expect(slots.every((s) => !s.discovered)).toBe(true)
+  })
+
+  it('os outros 6 planetas têm 3 slots — postal, baú, escolinha (nunca segredo visual)', () => {
+    const slots = planetDiscoverySlots('mercurio', emptyProgress)
+    expect(slots.map((s) => s.kind)).toEqual(['collectible', 'actionable_object', 'educational_quiz'])
+    expect(slots.every((s) => !s.discovered)).toBe(true)
+  })
+
+  it('planeta inexistente devolve lista vazia (não quebra)', () => {
+    expect(planetDiscoverySlots('planeta-que-nao-existe', emptyProgress)).toEqual([])
+  })
+
+  it('nome de propriedade herdada de Object.prototype não quebra nem finge ser um planeta válido', () => {
+    expect(planetDiscoverySlots('constructor', emptyProgress)).toEqual([])
+    expect(planetDiscoverySlots('toString', emptyProgress)).toEqual([])
+  })
+
+  it('cada slot reflete o progresso real (postal coletado, pote de Marte revelado)', () => {
+    const comPostal = applyPostcardCollected(emptyProgress, 'marte').progress
+    const comPoteTambem = markMarsCoinPotFound(comPostal).progress
+    const slots = planetDiscoverySlots('marte', comPoteTambem)
+    expect(slots.find((s) => s.kind === 'collectible')?.discovered).toBe(true)
+    expect(slots.find((s) => s.kind === 'actionable_object')?.discovered).toBe(true)
+    expect(slots.find((s) => s.kind === 'visual_secret')?.discovered).toBe(false)
+  })
+
+  it('baú e escolinha de um planeta normal refletem o progresso real', () => {
+    const comBau = applyTreasureChestFound(emptyProgress, 'bau-mercurio').progress
+    const comEscolinhaTambem = {
+      ...comBau,
+      completedPlanetQuestIds: planetQuests.mercurio.map((q) => q.id),
+    }
+    const slots = planetDiscoverySlots('mercurio', comEscolinhaTambem)
+    expect(slots.find((s) => s.kind === 'actionable_object')?.discovered).toBe(true)
+    expect(slots.find((s) => s.kind === 'educational_quiz')?.discovered).toBe(true)
+    expect(slots.find((s) => s.kind === 'collectible')?.discovered).toBe(false)
+  })
+
+  it('escolinha já conta como descoberta na 1ª pergunta certa do planeta, não só quando as 6 terminam', () => {
+    const comUmaPergunta = {
+      ...emptyProgress,
+      completedPlanetQuestIds: [planetQuests.mercurio[0].id],
+    }
+    const slots = planetDiscoverySlots('mercurio', comUmaPergunta)
+    expect(slots.find((s) => s.kind === 'educational_quiz')?.discovered).toBe(true)
+  })
+})
+
+describe('nextPlanetDiscovery (lab-181)', () => {
+  it('perfil sem nenhuma descoberta aponta pro postal de Marte (1º planeta, 1º slot)', () => {
+    const next = nextPlanetDiscovery(emptyProgress)
+    expect(next).toEqual({ planetId: 'marte', slot: expect.objectContaining({ kind: 'collectible' }) })
+  })
+
+  it('depois de completar os 3 slots de Marte, avança pro próximo planeta (Mercúrio)', () => {
+    let progress = applyPostcardCollected(emptyProgress, 'marte').progress
+    progress = markMarsCoinPotFound(progress).progress
+    progress = applyPlanetSecretFound(progress, 'segredo-marte-sonda').progress
+    const next = nextPlanetDiscovery(progress)
+    expect(next?.planetId).toBe('mercurio')
+    expect(next?.slot.kind).toBe('collectible')
+  })
+
+  it('perfil com TUDO descoberto nos 7 planetas devolve null (nunca trava numa tela vazia)', () => {
+    const allPostcards = ['marte', 'mercurio', 'venus', 'jupiter', 'saturno', 'urano', 'netuno']
+    const progress = {
+      ...emptyProgress,
+      collectedPostcardIds: allPostcards,
+      foundMarsCoinPotEver: true,
+      foundPlanetSecretIds: ['segredo-marte-sonda'],
+      foundTreasureChestIds: ['bau-mercurio', 'bau-venus', 'bau-jupiter', 'bau-saturno', 'bau-urano', 'bau-netuno'],
+      completedPlanetQuestIds: Object.values(planetQuests).flat().map((q) => q.id),
+    }
+    expect(nextPlanetDiscovery(progress)).toBeNull()
+  })
+
+  it('nunca depende de assinatura — mesmo resultado com ou sem entitlement (regra inegociável do projeto)', () => {
+    // planetDiscoverySlots/nextPlanetDiscovery não recebem nem checam entitlementActive — a
+    // ausência do parâmetro na assinatura JÁ é a garantia; este teste documenta a intenção.
+    expect(nextPlanetDiscovery(emptyProgress)).toEqual(nextPlanetDiscovery({ ...emptyProgress }))
   })
 })

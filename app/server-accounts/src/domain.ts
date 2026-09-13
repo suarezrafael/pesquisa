@@ -197,6 +197,7 @@ const PRODUCT_EVENT_TYPES = new Set([
   // app/src/productAnalytics.ts.
   'learning_challenge_started',
   'learning_challenge_completed',
+  'album_planet_opened',
 ])
 
 export function isValidProductEventType(type: string): boolean {

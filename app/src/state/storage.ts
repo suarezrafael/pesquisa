@@ -162,6 +162,8 @@ export const emptyProgress: Progress = {
   foundTreasureChestIds: [],
   // Segredos visuais escondidos por planeta (lab-179) — ver comentário em `types.ts`.
   foundPlanetSecretIds: [],
+  // Marco permanente do pote de moedas de Marte — ver comentário em `types.ts`.
+  foundMarsCoinPotEver: false,
   // Combo de respostas certas seguidas (lab-132) — ver comentário em `types.ts`.
   currentStreak: 0,
   // Posicionamento manual de mobília dentro de casa (lab-136) — ver comentário em `types.ts`.

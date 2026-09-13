@@ -23,6 +23,7 @@ import {
   setFurniturePlacement as applySetFurniturePlacement,
   removeFurniture as applyRemoveFurniture,
   unlockMarsReward as applyMarsRewardUnlock,
+  markMarsCoinPotFound as applyMarsCoinPotFound,
   applyTreasureChestFound,
   applyStreakReset,
   applyDailyLoginReward,
@@ -225,6 +226,20 @@ export function useProgress() {
     return result.granted
   }
 
+  // Marco permanente de "já achou o pote de moedas de Marte" (`foundMarsCoinPotEver`, ver
+  // `types.ts`) — chamado a cada coleta real do pote em `World3D.tsx`, logo depois de várias
+  // chamadas a `collectCoin()` na mesma coleta (`MARS_COIN_POT_REWARD` moedas). Atualizador
+  // funcional, como `collectCoin()` acima — ler `progress` do closure aqui sobrescreveria as
+  // moedas recém-enfileiradas por essas chamadas anteriores no mesmo lote do React.
+  function foundMarsCoinPot(): void {
+    setProgress((prev) => {
+      const result = applyMarsCoinPotFound(prev)
+      if (!result.granted) return prev
+      saveProgress(result.progress)
+      return result.progress
+    })
+  }
+
   // Baú de tesouro escondido (lab-131) — mesmo formato de `unlockMarsReward` acima: devolve se
   // realmente concedeu moeda nova (o chamador em `App.tsx`/`World3D.tsx` usa isso pra decidir se
   // mostra a mensagem transitória de "achado", não a cada vez que a checagem de proximidade roda).
@@ -396,6 +411,7 @@ export function useProgress() {
     setFurniturePlacement,
     removeFurniture,
     unlockMarsReward,
+    foundMarsCoinPot,
     foundTreasureChest,
     foundPlanetSecret,
     resetStreak,

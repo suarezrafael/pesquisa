@@ -210,3 +210,10 @@ export function trackLearningChallengeStarted(kind: string): void {
 export function trackLearningChallengeCompleted(kind: string): void {
   trackEvent('learning_challenge_completed', { kind })
 }
+
+// Dispara ao EXPANDIR um planeta específico na lista do `AchievementsPanel.tsx` (sinal de
+// interesse real num planeta, distinto de só abrir o painel inteiro). Sem limite de "uma vez por
+// sessão": reabrir o mesmo planeta depois de fechar conta de novo.
+export function trackAlbumPlanetOpened(planetId: string): void {
+  trackEvent('album_planet_opened', { planetId })
+}

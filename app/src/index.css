@@ -1410,6 +1410,26 @@ a.nickname-generate-btn {
   flex-shrink: 0;
 }
 
+/* Reseta os estilos padrão de `<button>` pra parecer exatamente um `.quest-list-item` comum
+   (mesma classe combinada); `width: 100%` garante que a área clicável cubra a linha inteira, não
+   só o texto. `color: inherit` porque um `<button>` nativo usa a cor `buttontext` do navegador em
+   vez de herdar a cor do body. `min-height: 44px` (docs/prompts/02-design-profissional.md §3)
+   porque o padding vertical de `.quest-list-item` sozinho deixa a linha com ~39px, abaixo do alvo
+   de toque mínimo. */
+.planet-toggle {
+  border: none;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.quest-list-nested {
+  margin: 0.35rem 0 0.35rem 2.25rem;
+}
+
 /* Lojinha de avatares */
 
 .avatar-shop-modal {

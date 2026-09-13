@@ -22,3 +22,7 @@ export const TREASURE_CHESTS: TreasureChest[] = [
 export function findTreasureChestById(id: string): TreasureChest | undefined {
   return TREASURE_CHESTS.find((c) => c.id === id)
 }
+
+export function findTreasureChestByPlanetId(planetId: string): TreasureChest | undefined {
+  return TREASURE_CHESTS.find((c) => c.planetId === planetId)
+}

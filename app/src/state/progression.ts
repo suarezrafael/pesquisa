@@ -11,10 +11,10 @@ import {
 } from '../data/customization'
 import { GLASSES_CATALOG } from '../data/glasses'
 import { FURNITURE_CATALOG, findFurnitureRewardForPlanet, type FurnitureOption } from '../data/furniture'
-import { findPlanetIdForQuest, isPlanetFullyCompleted } from '../data/planetQuests'
-import { findTreasureChestById } from '../data/treasureChests'
-import { findPlanetSecretById } from '../data/planetSecrets'
-import { findPostcardByPlanetId } from '../data/postcards'
+import { findPlanetIdForQuest, isPlanetFullyCompleted, planetQuests } from '../data/planetQuests'
+import { findTreasureChestById, findTreasureChestByPlanetId } from '../data/treasureChests'
+import { findPlanetSecretById, findPlanetSecretByPlanetId } from '../data/planetSecrets'
+import { findPostcardByPlanetId, POSTCARD_CATALOG } from '../data/postcards'
 import { getCurrentWeeklyEvent, isoWeekKey, type WeeklyEvent } from '../data/weeklyEvents'
 import { PET_CATALOG } from '../data/pets'
 
@@ -384,6 +384,109 @@ export function unlockMarsReward(progress: Progress): MarsRewardResult {
     progress: { ...progress, unlockedHatIds: [...progress.unlockedHatIds, MARS_REWARD_HAT_ID] },
     granted: true,
   }
+}
+
+export interface MarsCoinPotResult {
+  progress: Progress
+  granted: boolean
+}
+
+// Marca o marco permanente "já achou o pote pelo menos uma vez" (ver `foundMarsCoinPotEver` em
+// `types.ts`) — chamado TODA vez que o pote é coletado (mesmo já tendo sido achado antes), já que
+// o pote em si continua repetível; só o campo booleano é que nunca volta a `false`.
+export function markMarsCoinPotFound(progress: Progress): MarsCoinPotResult {
+  if (progress.foundMarsCoinPotEver) return { progress, granted: false }
+  return { progress: { ...progress, foundMarsCoinPotEver: true }, granted: true }
+}
+
+// Cruza os 4 catálogos de descoberta por planeta (postal, baú/pote de moedas, escolinha/segredo),
+// já unificados sob `planet_interaction_completed`/`kind`. Cobertura é DELIBERADAMENTE desigual
+// entre Marte e os outros 6: Marte não tem baú (`treasureChests.ts` exclui `marte` de propósito)
+// nem escolinha (`planetQuests.ts` não tem entrada pra `marte`) — no lugar dos dois, tem o pote de
+// moedas alienígena (`foundMarsCoinPotEver`, marcado por `markMarsCoinPotFound` — ver comentário
+// em `types.ts` sobre por que não é `unlockedHatIds`/`unlockMarsReward`, uma interação diferente)
+// e o segredo visual (`planetSecrets.ts`, também só Marte).
+export type PlanetDiscoveryKind = 'collectible' | 'actionable_object' | 'educational_quiz' | 'visual_secret'
+
+export interface PlanetDiscoverySlot {
+  kind: PlanetDiscoveryKind
+  emoji: string
+  name: string
+  discovered: boolean
+}
+
+export function planetDiscoverySlots(planetId: string, progress: Progress): PlanetDiscoverySlot[] {
+  const slots: PlanetDiscoverySlot[] = []
+
+  const postcard = findPostcardByPlanetId(planetId)
+  if (postcard) {
+    slots.push({
+      kind: 'collectible',
+      emoji: postcard.emoji,
+      name: postcard.name,
+      discovered: progress.collectedPostcardIds.includes(planetId),
+    })
+  }
+
+  if (planetId === 'marte') {
+    slots.push({
+      kind: 'actionable_object',
+      emoji: '🪙',
+      name: 'Pote de moedas alienígena',
+      discovered: progress.foundMarsCoinPotEver,
+    })
+    const secret = findPlanetSecretByPlanetId(planetId)
+    if (secret) {
+      slots.push({
+        kind: 'visual_secret',
+        emoji: '🔍',
+        name: secret.name,
+        discovered: progress.foundPlanetSecretIds.includes(secret.id),
+      })
+    }
+  } else {
+    const chest = findTreasureChestByPlanetId(planetId)
+    if (chest) {
+      slots.push({
+        kind: 'actionable_object',
+        emoji: '💰',
+        name: 'Baú de tesouro',
+        discovered: progress.foundTreasureChestIds.includes(chest.id),
+      })
+    }
+    const planetQuestList = planetQuests[planetId]
+    if (Array.isArray(planetQuestList)) {
+      slots.push({
+        kind: 'educational_quiz',
+        emoji: '🎓',
+        name: 'Escolinha de astronomia',
+        // `trackPlanetInteractionCompleted(planetId, 'educational_quiz')` (useProgress.ts) dispara
+        // na PRIMEIRA pergunta certa do planeta, não só quando as 6 são respondidas
+        // (`isPlanetFullyCompleted` é pra outra coisa: a recompensa de mobília) — o slot precisa
+        // do mesmo critério pra não ficar "não descoberto" depois da interação já ter acontecido.
+        discovered: planetQuestList.some((q) => progress.completedPlanetQuestIds.includes(q.id)),
+      })
+    }
+  }
+
+  return slots
+}
+
+export interface NextPlanetDiscovery {
+  planetId: string
+  slot: PlanetDiscoverySlot
+}
+
+// Ordem de `POSTCARD_CATALOG` (todos os 7 planetas-destino, mesma ordem já usada pelo seletor de
+// planeta em `World3D.tsx`) — nunca checa assinatura/`entitlementActive`: toda descoberta aqui já
+// é grátis por construção (regra inegociável do projeto, `docs/plano-comercial-backend.md`), só
+// cosmético fica atrás de assinatura.
+export function nextPlanetDiscovery(progress: Progress): NextPlanetDiscovery | null {
+  for (const { planetId } of POSTCARD_CATALOG) {
+    const slot = planetDiscoverySlots(planetId, progress).find((s) => !s.discovered)
+    if (slot) return { planetId, slot }
+  }
+  return null
 }
 
 export interface TreasureChestResult {
