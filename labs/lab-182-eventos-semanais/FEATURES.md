@@ -81,9 +81,10 @@ desenvolver").
   quando o objetivo semanal é concedido NAQUELA resposta — feedback claro no momento certo.
 - [x] Badge do evento semanal (`HudHeader.tsx`, `.weekly-event-badge`) vira um botão clicável (sem
   aumentar a fileira de ~11 ícones já existente) abrindo um painel novo pequeno
-  (`WeeklyEventPanel.tsx`, mesmo padrão de `DailyLoginToast.tsx`/`.reward-modal`, sem CSS novo):
-  nome/emoji/descrição do evento, status do objetivo (pendente ou já concluído esta semana +
-  quanto ganhou), e a mensagem de "sem problema se não der tempo / sempre grátis".
+  (`WeeklyEventPanel.tsx`, mesmo padrão de `DailyLoginToast.tsx`/`.reward-modal`, mais uma classe
+  nova `.weekly-event-modal` pra caber em telas curtas): nome/emoji/descrição do evento, status do
+  objetivo (pendente ou já concluído esta semana + quanto ganhou), e a mensagem de "sem problema se
+  não der tempo / sempre grátis".
 - [x] `components/FamilyPortal.tsx`, seção "📚 Aprendizagem sempre grátis" (já existente, lab-166)
   ganha uma frase curta confirmando que o bônus do evento semanal também é sempre grátis — reforça
   o critério de aceite "responsável entende que não há pressão de compra" sem criar seção nova.

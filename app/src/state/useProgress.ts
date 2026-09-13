@@ -43,7 +43,7 @@ import {
   type PetDailyChallengeResult,
   syncWeeklyXpSnapshot as applySyncWeeklyXpSnapshot,
   applyWeeklyEventObjectiveProgress,
-  isWeeklyEventObjectiveDone,
+  wouldGrantWeeklyEventObjectiveReward,
 } from './progression'
 
 export function useProgress() {
@@ -401,8 +401,14 @@ export function useProgress() {
   // `progress` do closure (não do `prev`) porque `completeQuest` nunca toca
   // `weeklyEventObjectiveRewardedAtIso`; só a ESCRITA da moeda precisa do atualizador funcional,
   // pra compor corretamente em cima do XP/moeda que `completeQuest` acabou de conceder.
+  // `wouldGrantWeeklyEventObjectiveReward` (não `isWeeklyEventObjectiveDone` sozinho) — achado do
+  // review automático do Copilot: usar só `isWeeklyEventObjectiveDone` aqui divergia da decisão
+  // real de `applyWeeklyEventObjectiveProgress` depois que a guarda anti-recuo de relógio foi
+  // adicionada só lá — um relógio adiantado-e-devolvido fazia este pré-check devolver `true`
+  // (semana diferente da guardada) enquanto a escrita de verdade rejeitava (recuo de relógio),
+  // mostrando "+20 moedas" no toast sem a moeda ter sido creditada.
   function weeklyEventObjectiveProgress(nowIso: string): boolean {
-    if (isWeeklyEventObjectiveDone(progress, nowIso)) return false
+    if (!wouldGrantWeeklyEventObjectiveReward(progress, nowIso)) return false
     setProgress((prev) => {
       const result = applyWeeklyEventObjectiveProgress(prev, nowIso)
       if (result.rewardGranted) saveProgress(result.progress)

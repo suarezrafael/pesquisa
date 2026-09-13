@@ -6,15 +6,20 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
 ## O que foi feito
 
 - Campo novo em `Progress` (`weeklyEventObjectiveRewardedAtIso: string | null`, `types.ts` +
-  default `null` em `storage.ts`) — mesma definição de "semana" de `weeklyXpWeekKey` (lab-157,
-  `isoWeekKey`). Guarda a chave da semana em que o bônus já foi pago, não um contador: o limiar é
-  "pelo menos 1" desafio ambiental, então basta saber SE já foi pago pra ser idempotente.
+  default `null` em `storage.ts`) — guarda o INSTANTE ISO completo (`toISOString()`, não uma chave
+  de semana) da última vez que o bônus foi pago, não um contador: o limiar é "pelo menos 1" desafio
+  ambiental, então basta saber SE já foi pago pra ser idempotente. Guardar o instante completo (em
+  vez de só a chave de semana) permite comparação cronológica de verdade contra manipulação de
+  relógio — ver rodada 8 do review abaixo.
 - `data/weeklyEvents.ts` ganhou 3 constantes novas (única fonte de verdade de rotação/bônus/copy,
   como o backlog pede): `WEEKLY_EVENT_OBJECTIVE_REWARD_COINS` (20), `WEEKLY_EVENT_OBJECTIVE_DESCRIPTION`,
   `WEEKLY_EVENT_NO_PRESSURE_MESSAGE`.
-- Duas funções puras novas em `state/progression.ts`: `applyWeeklyEventObjectiveProgress(progress, nowIso)`
-  (credita a moeda e marca a semana na primeira vez; idempotente depois) e
-  `isWeeklyEventObjectiveDone(progress, nowIso)` (leitura pura pra UI).
+- Três funções puras novas em `state/progression.ts`: `applyWeeklyEventObjectiveProgress(progress, nowIso)`
+  (credita a moeda e marca o instante na primeira vez; idempotente depois),
+  `isWeeklyEventObjectiveDone(progress, nowIso)` (leitura pura pra UI — mesma semana ISO do último
+  pagamento) e `wouldGrantWeeklyEventObjectiveReward(progress, nowIso)` (a decisão de "concede ou
+  não" fatorada numa função só, reaproveitada pela escrita acima E pelo pré-check síncrono de
+  `useProgress.ts` — ver rodada 9 do review abaixo).
 - `weeklyEventObjectiveProgress(nowIso)` novo em `state/useProgress.ts`, chamado de
   `handleEnvironmentalChallengeCorrect` (`App.tsx`) logo depois de `completeQuest(...)` — qualquer
   um dos 3 desafios ambientais do lab-180 (ponte/lógica, abastecimento de foguete/matemática,
@@ -24,10 +29,11 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   momento exato em que o bônus é concedido.
 - Badge do evento semanal (`HudHeader.tsx`, `.weekly-event-badge`) virou um `<button>` clicável (sem
   aumentar a fileira de ~11 ícones do HUD) abrindo `components/WeeklyEventPanel.tsx` (novo, mesmo
-  padrão de `DailyLoginToast.tsx`, reaproveita `.reward-modal`/`.reward-icon`/`.reward-bonus-line`
-  sem CSS novo além do próprio botão): nome/emoji/descrição do evento ativo, status do objetivo
-  (pendente com a descrição+recompensa, ou "✓ concluído, já ganhou X moedas") e a mensagem de
-  "sem problema se não der tempo — sempre grátis".
+  padrão de `DailyLoginToast.tsx`, reaproveita `.reward-modal`/`.reward-icon`/`.reward-bonus-line`;
+  `.weekly-event-modal` em `index.css` é a única classe nova, `max-height`/`overflow-y` pra caber
+  em telas curtas — ver rodada 3 do review abaixo): nome/emoji/descrição do evento ativo, status do
+  objetivo (pendente com a descrição+recompensa, ou "✓ concluído, já ganhou X moedas") e a mensagem
+  de "sem problema se não der tempo — sempre grátis".
 - `components/FamilyPortal.tsx`, seção "📚 Aprendizagem sempre grátis" (lab-166) ganhou uma frase
   confirmando que o bônus do evento semanal também é sempre grátis, sem criar seção nova.
 - Evento novo `weekly_event_objective_completed` (sem `meta`) — allowlist em
@@ -37,10 +43,12 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
 - `docs/event-catalog.md` atualizado com a linha do evento novo e uma nota explicando que "retorno
   semanal" já é coberto pela infraestrutura D1/D7 existente e "feedback qualitativo infantil" é
   pesquisa com usuário real, fora de escopo de código.
-- Testes: 5 novos em `progression.test.ts` (concede na 1ª vez, idempotente na mesma semana, concede
+- Testes: 7 novos em `progression.test.ts` (concede na 1ª vez, idempotente na mesma semana, concede
   de novo numa semana nova, `isWeeklyEventObjectiveDone` reflete o estado real, perfil vazio nunca
-  mostra concluído) e 1 novo em `server-accounts/src/domain.test.ts`. Suíte completa: app 203/203,
-  server-accounts 149/149, `tsc -b`/`tsc --noEmit` e `npm run build` limpos.
+  mostra concluído, regressão do ataque de adiantar-e-voltar o relógio, `wouldGrantWeeklyEventObjectiveReward`
+  nunca diverge de `applyWeeklyEventObjectiveProgress`) e 1 novo em `server-accounts/src/domain.test.ts`.
+  Suíte completa ao final: app 204/204, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e
+  `npm run build` limpos.
 
 ## Decisões técnicas tomadas
 

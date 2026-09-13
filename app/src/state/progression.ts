@@ -85,6 +85,27 @@ export function isWeeklyEventObjectiveDone(progress: Progress, nowIso: string): 
   return isoWeekKey(new Date(progress.weeklyEventObjectiveRewardedAtIso)) === isoWeekKey(new Date(nowIso))
 }
 
+// Única decisão de "concede ou não" do objetivo semanal — usada TANTO pela função pura de escrita
+// abaixo QUANTO pelo pré-check síncrono de `weeklyEventObjectiveProgress` (`useProgress.ts`).
+// Achado do review automático do Copilot: as duas checagens tinham ficado DUPLICADAS e
+// DIVERGENTES depois da guarda anti-recuo de relógio ser adicionada só na função de escrita — o
+// pré-check síncrono continuava usando só `isWeeklyEventObjectiveDone`, então um relógio
+// adiantado-e-devolvido fazia o pré-check dizer "vai conceder" (semana diferente da guardada) e a
+// escrita de verdade rejeitar (recuo de relógio), resultando num toast/analytics de "+20 moedas"
+// SEM a moeda ter sido creditada de verdade. Fatorar numa função só elimina a possibilidade das
+// duas divergirem de novo.
+export function wouldGrantWeeklyEventObjectiveReward(progress: Progress, nowIso: string): boolean {
+  // Rejeita qualquer tentativa de "voltar no tempo" em relação à última concessão real — sem isso,
+  // adiantar o relógio do aparelho pra reivindicar uma semana futura e depois voltar o relógio
+  // liberaria o MESMO bônus de novo pra semana real (a chave de semana guardada não bateria mais
+  // com "agora"). Comparação de string funciona porque `nowIso`/`weeklyEventObjectiveRewardedAtIso`
+  // são sempre `toISOString()` (formato fixo, comparável lexicamente = comparável
+  // cronologicamente) — mesmo espírito de `dayGap <= 0` em `applyDailyLoginReward` acima.
+  const clockWentBackward =
+    progress.weeklyEventObjectiveRewardedAtIso !== null && nowIso <= progress.weeklyEventObjectiveRewardedAtIso
+  return !clockWentBackward && !isWeeklyEventObjectiveDone(progress, nowIso)
+}
+
 export interface WeeklyEventObjectiveResult {
   progress: Progress
   rewardGranted: boolean
@@ -95,18 +116,7 @@ export interface WeeklyEventObjectiveResult {
 // desafios ambientais na mesma semana, nunca paga 2x. Chamada de `weeklyEventObjectiveProgress`
 // (`useProgress.ts`) com um atualizador funcional, não direto — ver comentário lá sobre por quê.
 export function applyWeeklyEventObjectiveProgress(progress: Progress, nowIso: string): WeeklyEventObjectiveResult {
-  // Rejeita qualquer tentativa de "voltar no tempo" em
-  // relação à última concessão real — sem isso, adiantar o relógio do aparelho pra reivindicar uma
-  // semana futura e depois voltar o relógio liberaria o MESMO bônus de novo pra semana real (a
-  // chave de semana guardada não bateria mais com "agora"). Comparação de string funciona porque
-  // `nowIso`/`weeklyEventObjectiveRewardedAtIso` são sempre `toISOString()` (formato fixo,
-  // comparável lexicamente = comparável cronologicamente) — mesmo espírito de `dayGap <= 0` em
-  // `applyDailyLoginReward` acima.
-  const clockWentBackward =
-    progress.weeklyEventObjectiveRewardedAtIso !== null && nowIso <= progress.weeklyEventObjectiveRewardedAtIso
-  if (clockWentBackward || isWeeklyEventObjectiveDone(progress, nowIso)) {
-    return { progress, rewardGranted: false }
-  }
+  if (!wouldGrantWeeklyEventObjectiveReward(progress, nowIso)) return { progress, rewardGranted: false }
   return {
     progress: {
       ...progress,

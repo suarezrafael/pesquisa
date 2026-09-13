@@ -42,6 +42,7 @@ import {
   weeklyXpEarned,
   applyWeeklyEventObjectiveProgress,
   isWeeklyEventObjectiveDone,
+  wouldGrantWeeklyEventObjectiveReward,
   SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
@@ -1435,6 +1436,17 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
     const voltouRelogio = applyWeeklyEventObjectiveProgress(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z')
     expect(voltouRelogio.rewardGranted).toBe(false)
     expect(voltouRelogio.progress).toBe(adiantouRelogio.progress) // mesma referência — não mexeu em nada
+  })
+
+  it('achado do review automático do Copilot: wouldGrantWeeklyEventObjectiveReward nunca diverge de applyWeeklyEventObjectiveProgress no cenário de recuo de relógio', () => {
+    // O pré-check síncrono usado por `useProgress.ts` (`weeklyEventObjectiveProgress`) precisa
+    // concordar com a decisão real de `applyWeeklyEventObjectiveProgress`, senão o app mostra
+    // "+20 moedas" no toast sem a moeda ter sido creditada de verdade (achado real desta rodada).
+    const adiantouRelogio = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-29T12:00:00.000Z')
+    expect(wouldGrantWeeklyEventObjectiveReward(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z')).toBe(false)
+    expect(applyWeeklyEventObjectiveProgress(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z').rewardGranted).toBe(
+      false,
+    )
   })
 })
 
