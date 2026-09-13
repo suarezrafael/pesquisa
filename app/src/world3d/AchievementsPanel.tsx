@@ -203,6 +203,7 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
             const discoveredCount = slots.filter((s) => s.discovered).length
             const complete = discoveredCount === slots.length
             const expanded = expandedPlanetId === planet.planetId
+            const slotsListId = `planet-slots-${planet.planetId}`
             return (
               <div key={planet.planetId}>
                 <button
@@ -210,6 +211,7 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
                   className={`quest-list-item planet-toggle ${complete ? 'completed' : ''}`}
                   onClick={() => togglePlanet(planet.planetId)}
                   aria-expanded={expanded}
+                  aria-controls={slotsListId}
                 >
                   <span className="quest-list-index" aria-hidden="true">
                     {planet.emoji}
@@ -225,7 +227,7 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
                   </span>
                 </button>
                 {expanded && (
-                  <div className="quest-list quest-list-nested">
+                  <div id={slotsListId} className="quest-list quest-list-nested">
                     {slots.map((slot) => (
                       <div
                         key={slot.kind}

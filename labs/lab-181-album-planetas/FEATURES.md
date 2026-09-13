@@ -23,10 +23,13 @@ deve desenvolver").
 - Cada planeta-destino já tem exatamente 3 "slots" de descoberta graças ao lab-179 (unificados sob
   `planet_interaction_completed`/`kind`): `collectible` (postal, `data/postcards.ts`, todos os 7
   planetas), `actionable_object` (baú de tesouro pra 6 planetas via `data/treasureChests.ts`, OU o
-  pote de moedas de Marte — persistido em `progress.unlockedHatIds` via `unlockMarsReward`,
-  confirmado durável, não é só `marsClearedThisVisit` que é por-visita), e o 3º slot varia:
-  `educational_quiz` (`data/planetQuests.ts`, 6 planetas) OU `visual_secret`
-  (`data/planetSecrets.ts`, só Marte).
+  pote de moedas de Marte), e o 3º slot varia: `educational_quiz` (`data/planetQuests.ts`, 6
+  planetas) OU `visual_secret` (`data/planetSecrets.ts`, só Marte).
+  **Correção pós-implementação (rodada 5 do review, ver `CONTEXT.md`)**: a suposição original
+  aqui — que o pote de Marte já era durável via `progress.unlockedHatIds`/`unlockMarsReward` — era
+  ERRADA. Aquele campo é concedido ao vencer o COMBATE (uma recompensa de item diferente); a coleta
+  do pote em si é uma interação separada, sem estado durável existente antes deste lab. A
+  implementação final adicionou um campo novo (`foundMarsCoinPotEver`) só pra isso.
 - Não existe hoje nenhuma função que enumere "tudo que dá pra descobrir no planeta X" cruzando os 4
   catálogos — `progression.ts` JÁ importa os 4 helpers relevantes
   (`findPostcardByPlanetId`/`findTreasureChestById`/`findPlanetSecretByPlanetId`/

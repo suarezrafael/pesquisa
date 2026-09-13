@@ -403,9 +403,9 @@ export function markMarsCoinPotFound(progress: Progress): MarsCoinPotResult {
 // já unificados sob `planet_interaction_completed`/`kind`. Cobertura é DELIBERADAMENTE desigual
 // entre Marte e os outros 6: Marte não tem baú (`treasureChests.ts` exclui `marte` de propósito)
 // nem escolinha (`planetQuests.ts` não tem entrada pra `marte`) — no lugar dos dois, tem o pote de
-// moedas alienígena (revelado ao vencer o combate, `unlockMarsReward`, persistido em
-// `unlockedHatIds` — durável, não é o `marsClearedThisVisit` que é só por-visita) e o segredo
-// visual (`planetSecrets.ts`, também só Marte).
+// moedas alienígena (`foundMarsCoinPotEver`, marcado por `markMarsCoinPotFound` — ver comentário
+// em `types.ts` sobre por que não é `unlockedHatIds`/`unlockMarsReward`, uma interação diferente)
+// e o segredo visual (`planetSecrets.ts`, também só Marte).
 export type PlanetDiscoveryKind = 'collectible' | 'actionable_object' | 'educational_quiz' | 'visual_secret'
 
 export interface PlanetDiscoverySlot {

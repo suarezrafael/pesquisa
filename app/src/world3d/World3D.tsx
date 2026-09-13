@@ -170,9 +170,9 @@ interface World3DProps {
   onOpenAchievements: () => void
   onOpenMyHouse: () => void
   onUnlockMarsReward: () => void
-  // Marco permanente de "já achou o pote de moedas de Marte" (lab-181), chamado a cada coleta real
-  // do pote — o pote em si continua repetível a cada visita, só o marco em `Progress` é que nunca
-  // desfaz; `App.tsx` repassa direto pra `useProgress().foundMarsCoinPot`, idempotente sozinho.
+  // Marco permanente de "já achou o pote de moedas de Marte", chamado a cada coleta real do pote —
+  // o pote em si continua repetível a cada visita, só o marco em `Progress` é que nunca desfaz;
+  // `App.tsx` repassa direto pra `useProgress().foundMarsCoinPot`, idempotente sozinho.
   onFoundMarsCoinPot: () => void
   // lab-131 (pedido do usuário: "baús de tesouro escondidos") — chamado ao achar um baú por
   // proximidade real; `App.tsx` repassa direto pra `useProgress().foundTreasureChest`, que já é
@@ -10705,9 +10705,9 @@ export function World3D({
                 // tesouro nos outros 6 planetas), só que reseta a cada visita (não é permanente
                 // como o baú/segredo). O EVENTO dispara em toda coleta, sem checagem de "primeira
                 // vez" (mede alcance semanal, não descoberta única) — `marsCoinPotCollected` só
-                // evita disparar 2x na mesma visita. `onFoundMarsCoinPotRef` (lab-181) é diferente:
-                // persiste em `Progress` só a PRIMEIRA vez, pro álbum de descobertas saber que este
-                // pote específico já foi achado alguma vez, sem mudar a recompensa repetível em si.
+                // evita disparar 2x na mesma visita. `onFoundMarsCoinPotRef` é diferente: persiste
+                // em `Progress` só a PRIMEIRA vez, pro álbum de descobertas saber que este pote
+                // específico já foi achado alguma vez, sem mudar a recompensa repetível em si.
                 trackPlanetInteractionCompleted('marte', 'actionable_object')
                 onFoundMarsCoinPotRef.current()
               }

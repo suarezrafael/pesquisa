@@ -80,9 +80,8 @@ export interface Progress {
   // O pote de moedas de Marte (lab-128) é deliberadamente repetível — recarrega e volta a dar
   // moeda a cada visita em que o combate é vencido de novo (ver comentário de
   // `foundTreasureChestIds` acima). Este campo NÃO muda esse comportamento: é só um marco
-  // permanente de "já achou esse pote pelo menos uma vez", usado pelo álbum de descobertas
-  // (lab-181) pra saber se já mostra o pote como descoberto — nunca lido pela lógica de
-  // recompensa em si.
+  // permanente de "já achou esse pote pelo menos uma vez", usado pelo álbum de descobertas pra
+  // saber se já mostra o pote como descoberto — nunca lido pela lógica de recompensa em si.
   foundMarsCoinPotEver: boolean
   // Combo de respostas certas seguidas (lab-132, pedido do usuário: "combo de respostas certas
   // seguidas") — cresce a cada resposta certa GENUÍNA de missão real (principal ou de planeta;

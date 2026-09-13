@@ -140,6 +140,24 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
   capacete de combate desbloqueado mas `foundMarsCoinPotEver: false`, o slot fica corretamente
   bloqueado (prova de que não usa mais o capacete como proxy); com o campo em `true`, mostra
   descoberto.
+- **Rodada 6**: 1 achado real crítico + 6 de limpeza. O crítico: `foundMarsCoinPot()`
+  (`useProgress.ts`) lia `progress` do closure de render em vez de usar atualizador funcional —
+  `World3D.tsx` chama essa função logo depois de até `MARS_COIN_POT_REWARD` chamadas encadeadas a
+  `collectCoin()` (que É funcional, `setProgress(prev => ...)`) na mesma coleta; ler o `progress`
+  "velho" do closure e escrever por cima com `setProgress(result.progress)` podia sobrescrever as
+  moedas recém-enfileiradas por essas chamadas anteriores no mesmo lote do React, perdendo moeda de
+  verdade. Corrigido pra usar `setProgress(prev => ...)`, mesmo padrão de `collectCoin`/
+  `collectCoins`. Limpeza: mais 4 comentários novos com "lab-181" (`types.ts`, `storage.ts`,
+  `World3D.tsx` ×2) removidos; comentário em `progression.ts` ainda descrevia o pote como
+  persistido via `unlockedHatIds`/`unlockMarsReward` (a explicação da rodada 4, já superada pela
+  rodada 5) — atualizado pra citar `foundMarsCoinPotEver`/`markMarsCoinPotFound`; contagem de teste
+  desatualizada (194) num trecho do `CONTEXT.md` que a rodada 4 não tinha coberto, corrigida pra
+  198; `FEATURES.md` (investigação prévia) ainda afirmava como fato atual que o pote já era durável
+  via `unlockedHatIds` — anotado como suposição original ERRADA, sem reescrever a investigação
+  em si; descrição/PR também diziam "grade" em vez de "lista" num lugar que a rodada 2 não tinha
+  coberto (`AchievementsPanel.tsx` JSX, e o corpo da própria PR #60 no GitHub). Também adicionado
+  `aria-controls` no botão de cada planeta, apontando pro `id` da lista de slots expandida
+  (padrão de disclosure), achado novo que não tinha aparecido nas rodadas anteriores.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
@@ -164,7 +182,8 @@ conflitante com a progressão atual.
 
 - Branch: `lab-181-album-planetas` (a mesclar em `main` via PR).
 - Como rodar/verificar o que foi construído neste laboratório:
-  - `cd app && npm run test` (194 testes, inclui `planetDiscoverySlots`/`nextPlanetDiscovery`).
+  - `cd app && npm run test` (198 testes, inclui `markMarsCoinPotFound`/`planetDiscoverySlots`/
+    `nextPlanetDiscovery`).
   - `cd app/server-accounts && npm run test` (148 testes, inclui validação de
     `album_planet_opened`).
   - `cd app && npm run dev`, abrir o jogo, teleportar até um planeta-destino, coletar/descobrir
