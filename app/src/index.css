@@ -712,7 +712,16 @@ a.nickname-generate-btn {
      teto em telas largas (desktop/tablet) mas encolhe proporcionalmente em telas estreitas. */
   max-width: min(420px, 62vw);
   flex: 1;
-  min-width: 0;
+  /* Achado do review automático do Copilot (PR #58): `min-width: 0` (sem piso nenhum) combinado
+     com `flex: 1` (base 0%) deixava este item ser espremido quase a zero numa linha com vários
+     botões de 44px antes de `.hud-top-row` decidir quebrar — com o `overflow: hidden` novo acima,
+     esse espremer virava CORTE de verdade (avatar/nome/XP/nível/moedas sumindo), não só aperto.
+     Piso de 140px garante espaço mínimo legível pro conteúdo — `.hud-top-row` (`flex-wrap`) reage
+     jogando os botões que não cabem pra próxima linha, exatamente o comportamento que já existe
+     pros próprios botões (nunca depende deste elemento poder encolher além do necessário pra
+     texto quebrar — isso já é coberto por `overflow-wrap: anywhere` no `h1`, não por espremer a
+     caixa toda). */
+  min-width: 140px;
 }
 
 /* lab-120, auditoria WCAG AA: o piso do `clamp()` era 1.4rem (22.4px), teto 2.25rem (36px) — os
@@ -996,18 +1005,20 @@ a.nickname-generate-btn {
      120), então numa tela estreita esse texto (5 campos, já quebrado em várias linhas) dominava
      boa parte da área jogável. `vmin` acompanha o lado mais apertado da tela, encolhendo em
      qualquer orientação.
-     Achado do review automático do Copilot (PR #58): a 1ª tentativa também reduziu o fundo (0.55
-     → 0.4) — mas esse painel é EXPLICITAMENTE mantido visível em produção por pedido do usuário
-     (lab-67, "preciso de informações de FPS na tela em produção"), então o texto verde precisa
-     do contraste mínimo AA de texto normal (4.5:1, mesmo §3 do `.help-button` acima) contra
-     QUALQUER fundo 3D, não só um fundo escuro — 0.4 de opacidade preta deixa passar claridade
-     demais de um céu/terreno claro por trás. Fundo mantido no valor original (0.55), só o
-     tamanho/espaço resolvido — o pedido do usuário era sobre ESPAÇO, não sobre transparência
-     deste painel especificamente. `overflow-wrap: anywhere` cobre outro achado: `buriedSchoolReport`
+     Achado do review automático do Copilot (PR #58), 2 rodadas: a 1ª tentativa reduziu o fundo
+     (0.55 → 0.4) — mas esse painel é EXPLICITAMENTE mantido visível em produção por pedido do
+     usuário (lab-67, "preciso de informações de FPS na tela em produção"), então o texto verde
+     precisa do contraste mínimo AA de texto normal (4.5:1, mesmo §3 do `.help-button` acima)
+     contra QUALQUER fundo 3D. A 2ª rodada mediu que até o valor ORIGINAL (0.55) não bastava
+     contra um fundo BRANCO no pior caso (preto a 0.55 sobre branco compõe pra `#737373`, e
+     `#7CFC9A` contra esse cinza fica só ~3,7:1) — cálculo real: preto a 55% sobre branco puro
+     resulta 255×0,45≈115 por canal; a 75% de opacidade o resultado cai pra 255×0,25≈64, escuro o
+     bastante pra qualquer texto claro passar de 4,5:1 com folga, mesmo no pior caso (branco puro
+     atrás). `overflow-wrap: anywhere` cobre outro achado: `buriedSchoolReport`
      (`World3D.tsx`) junta vários `qNN(...)` num token só sem espaço nenhum — `white-space: normal`
      sozinho não quebra um token sem espaço, então esse texto podia continuar vazando pra fora do
      `max-width` mesmo menor. */
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.75);
   overflow-wrap: anywhere;
   color: #7CFC9A;
   font-family: monospace;
