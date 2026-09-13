@@ -728,25 +728,26 @@ a.nickname-generate-btn {
   flex-shrink: 0;
   /* Tamanho INTOCADO (piso de 44px de toque, auditoria WCAG AA acima) — pedido do usuário (lab-180,
      fora do fluxo normal de lab) de "botões menores no celular" foi atendido só via transparência
-     (0.82 → 0.62), nunca encolhendo abaixo do piso de acessibilidade já validado.
-     Achado do review automático do Copilot (PR #58): reduzir o preenchimento sem NENHUMA borda
-     visível deixava a silhueta do círculo sem garantia de contraste contra um céu/terreno 3D
-     CLARO (fundo variável, não uma cor de tela fixa) — a mesma exigência de contraste mínimo AA
-     do WCAG 2.1 (3:1 pra ícones/UI, `docs/prompts/02-design-profissional.md` §3, [MUST]) que já
-     motivou o piso de 44px acima. Anel duplo (borda clara quase opaca + anel escuro por fora via
-     `box-shadow`) garante contraste em QUALQUER fundo — claro ou escuro —, sem precisar validar
-     manualmente contra toda cena possível do jogo. */
+     (0.82 → 0.62) no PREENCHIMENTO, nunca encolhendo abaixo do piso de acessibilidade já validado.
+     4ª/5ª rodadas do review automático do Copilot (PR #58): um anel translúcido (mesmo a 0.9/0.45)
+     ainda pode cair abaixo do contraste mínimo AA (3:1 pra ícones/UI,
+     `docs/prompts/02-design-profissional.md` §3, [MUST]) contra um fundo 3D de tom MÉDIO (nem
+     claro nem escuro o bastante) — a matemática de contraste do WCAG depende da cor final
+     COMPOSTA, e um anel translúcido composto sobre um cinza médio fica ele mesmo num tom médio,
+     perto demais do fundo. Só um anel OPACO garante o contraste calculado independente do que
+     estiver atrás: branco opaco força ~4,5:1+ contra qualquer cinza médio pra escuro, preto opaco
+     força o mesmo contra qualquer cinza médio pra claro — pelo menos um dos dois sempre passa. */
   width: clamp(2.75rem, 6.5vmin, 3.2rem);
   height: clamp(2.75rem, 6.5vmin, 3.2rem);
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.9);
+  border: 2px solid #fff;
   background: rgba(255, 255, 255, 0.62);
   color: var(--ink);
   font-weight: 800;
   /* lab-120: proporcional ao novo tamanho maior do botão (mesma razão ~0,48× de antes) — senão o
      emoji ficaria pequeno demais sobrando espaço dentro do círculo maior. */
   font-size: clamp(1.3rem, 3vmin, 1.5rem);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(23, 44, 102, 0.2);
+  box-shadow: 0 0 0 2px #000, 0 4px 12px rgba(23, 44, 102, 0.2);
   cursor: pointer;
 }
 
@@ -952,19 +953,21 @@ a.nickname-generate-btn {
   border-radius: 50%;
   /* Pedido do usuário (lab-180, fora do fluxo normal de lab, junto do bug do painel de FPS):
      botões virtuais "mais transparentes" no celular — mantém o TAMANHO (piso de toque confiável,
-     não mexido) e só reduz a opacidade do preenchimento, pra ocupar menos atenção visual sem
+     não mexido) e só reduz a opacidade do PREENCHIMENTO, pra ocupar menos atenção visual sem
      arriscar dificultar o toque.
-     2ª rodada do review automático do Copilot (PR #58): a 1ª tentativa (borda clara 0.45 + anel
-     escuro 0.25/sombra 0.3, ambos translúcidos) ainda não garantia o contraste mínimo AA (3:1
-     pra UI/ícones, `docs/prompts/02-design-profissional.md` §3, [MUST]) contra um fundo 3D
-     CLARO — dois tons translúcidos compostos sobre uma cor de céu clara continuam próximos um do
-     outro, não garantem 3:1. Corrigido com um anel de VERDADE: borda quase opaca (0.9) + anel
-     escuro quase opaco por fora (`box-shadow` a 0.55, não mais 0.25) — um dos dois sempre
-     contrasta forte, não importa a cor por trás. O preenchimento interno continua translúcido
-     (a parte que o usuário pediu pra ficar discreta). */
+     3 rodadas do review automático do Copilot (PR #58) até o anel ficar certo: 2ª rodada — anéis
+     translúcidos (0.45/0.25) não garantiam 3:1 (`docs/prompts/02-design-profissional.md` §3,
+     [MUST]) contra um fundo CLARO. 5ª rodada — mesmo um anel quase opaco (0.9/0.55) ainda podia
+     cair abaixo de 3:1 contra um fundo de tom MÉDIO (nem claro nem escuro): a matemática de
+     contraste do WCAG depende da cor final COMPOSTA, e um anel translúcido composto sobre cinza
+     médio fica ele mesmo num tom médio, perto demais do fundo. Só um anel OPACO garante o
+     contraste calculado independente do que estiver atrás — branco opaco força contraste alto
+     contra qualquer fundo médio-pra-escuro, preto opaco o mesmo contra médio-pra-claro, um dos
+     dois sempre passa. O preenchimento interno continua translúcido (a parte que o usuário pediu
+     pra ficar discreta). */
   background: rgba(255, 255, 255, 0.18);
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #000, 0 2px 8px rgba(0, 0, 0, 0.3);
   touch-action: none;
 }
 
@@ -1036,13 +1039,13 @@ a.nickname-generate-btn {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  /* Mesmo tratamento de anel duplo do `.joystick-base` acima (lab-180 + 2ª rodada do review
-     automático do Copilot, PR #58) — borda quase opaca + anel escuro quase opaco por fora
-     garantem contraste mínimo AA (3:1) contra qualquer fundo 3D; o `text-shadow` do emoji abaixo
-     só ajudava o ÍCONE, nunca o contorno do círculo em si. */
+  /* Mesmo tratamento de anel do `.joystick-base` acima (lab-180 + 3 rodadas do review automático
+     do Copilot, PR #58, até chegar num anel OPACO — só translúcido não garante 3:1 contra
+     fundo médio) — o `text-shadow` do emoji abaixo só ajudava o ÍCONE, nunca o contorno do
+     círculo em si. */
   background: rgba(255, 255, 255, 0.18);
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #000, 0 2px 8px rgba(0, 0, 0, 0.3);
   color: white;
   font-weight: 700;
   /* lab-150 (achado do Copilot, PRs #2/#5): agora é um <button> de verdade, não um <div> — reseta
