@@ -1,5 +1,10 @@
 # Laboratório atual
 
+Em andamento: labs/lab-181-album-planetas/ — circuito de descoberta e álbum de planetas (visão
+por planeta do que já foi descoberto/falta, com destaque de "próxima descoberta"). Origem:
+`docs/growth-retention-monetization-backlog.md`, "Lab 181", item 7 da ordem sugerida, próximo
+item recomendado após o lab-180. Ver `labs/lab-181-album-planetas/FEATURES.md`.
+
 Último concluído: labs/lab-180-missoes-ambientais/ — missões ambientais de aprendizagem
 (ponte/lógica, posto de abastecimento do foguete/matemática, placa/leitura). Origem:
 `docs/growth-retention-monetization-backlog.md`, "Lab 180", próximo item recomendado após o
