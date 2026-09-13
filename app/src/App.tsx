@@ -45,7 +45,7 @@ import {
 import type { Profile, Progress, Quest } from './types'
 import type { FurnitureOption } from './data/furniture'
 import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, getCurrentWeeklyEvent, type WeeklyEvent } from './data/weeklyEvents'
-import { isWeeklyEventObjectiveDone } from './state/progression'
+import { wouldGrantWeeklyEventObjectiveReward } from './state/progression'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
@@ -131,12 +131,19 @@ function GameApp() {
     weeklyEventObjectiveProgress,
   } = useProgress()
   // Calculados uma vez aqui e repassados por props pro badge (`HudHeader.tsx`, via `World3D.tsx`)
-  // e pro painel (`WeeklyEventPanel.tsx`) — se cada um chamasse
-  // `getCurrentWeeklyEvent()`/`isWeeklyEventObjectiveDone()` por conta própria, bem na virada exata
-  // de semana ISO o badge podia mostrar um evento diferente do painel aberto a partir dele.
+  // e pro painel (`WeeklyEventPanel.tsx`) — se cada um chamasse `getCurrentWeeklyEvent()`/
+  // `wouldGrantWeeklyEventObjectiveReward()` por conta própria, bem na virada exata de semana ISO
+  // o badge podia mostrar um evento diferente do painel aberto a partir dele.
   const weeklyEventNow = new Date()
   const weeklyEvent = getCurrentWeeklyEvent(weeklyEventNow)
-  const weeklyEventObjectiveDone = isWeeklyEventObjectiveDone(progress, weeklyEventNow.toISOString())
+  // `!wouldGrantWeeklyEventObjectiveReward(...)`, NÃO `isWeeklyEventObjectiveDone(...)` — achado do
+  // review automático do Copilot: essas duas divergem depois de um recuo de relógio (adiantar,
+  // reivindicar, voltar). `isWeeklyEventObjectiveDone` diria "não concluído" (semana ISO diferente
+  // da guardada), mas `applyWeeklyEventObjectiveProgress` rejeitaria a próxima tentativa mesmo
+  // assim (guarda anti-recuo) — o painel prometeria "+20 moedas" por completar um desafio que na
+  // prática não paga nada. Reaproveitar o MESMO predicado da escrita garante que o painel nunca
+  // prometa uma recompensa que a escrita real vai recusar.
+  const weeklyEventObjectiveDone = !wouldGrantWeeklyEventObjectiveReward(progress, weeklyEventNow.toISOString())
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [activePlanetQuest, setActivePlanetQuest] = useState<Quest | null>(null)

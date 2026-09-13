@@ -173,6 +173,24 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   campo antigo fica órfão no `localStorage` (inofensivo, `{...emptyProgress, ...saved}` já cobre
   campo novo ausente com o default `null`) — sem perder moeda nem repetir a recompensa, só reseta o
   indicador visual "já concluído esta semana" uma vez.
+- **Rodada 9**: 1 achado real — a correção da rodada 8 introduziu uma divergência nova entre o
+  pré-check síncrono de `weeklyEventObjectiveProgress` (`useProgress.ts`, usava só
+  `isWeeklyEventObjectiveDone`) e a decisão real de `applyWeeklyEventObjectiveProgress` (que também
+  checa o recuo de relógio). No cenário de adiantar-e-voltar o relógio, o pré-check dizia "vai
+  conceder" (semana diferente da guardada) enquanto a escrita de verdade rejeitava (recuo de
+  relógio) — o app mostraria "+20 moedas" no toast e disparia o evento de analytics SEM a moeda ter
+  sido creditada. Corrigido fatorando a decisão inteira numa função só, exportada
+  (`wouldGrantWeeklyEventObjectiveReward`), reaproveitada pelos dois lugares — elimina a
+  possibilidade estrutural das duas decisões divergirem de novo. Teste de regressão novo provando
+  que o predicado nunca diverge da função de escrita no cenário exato do ataque.
+- **Rodada 10**: 1 achado real — mesma classe da rodada 9, um nível acima: `App.tsx` calculava o
+  status "concluído" do painel (`weeklyEventObjectiveDone`) com `isWeeklyEventObjectiveDone`, não
+  com `wouldGrantWeeklyEventObjectiveReward` — no cenário de recuo de relógio, o painel mostraria a
+  mensagem de "pendente, complete um desafio pra ganhar +20" mesmo a próxima tentativa real sendo
+  bloqueada pela guarda anti-recuo, prometendo uma recompensa que nunca seria entregue. Corrigido
+  trocando pra `!wouldGrantWeeklyEventObjectiveReward(...)` — o MESMO predicado que decide a
+  escrita real agora também decide o que o painel mostra, garantindo que a UI nunca prometa uma
+  recompensa que a escrita vai recusar.
 
 ## Pendências / dívidas conhecidas
 

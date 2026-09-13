@@ -14,8 +14,8 @@ import {
 
 interface WeeklyEventPanelProps {
   // Calculados uma vez em `App.tsx` e recebidos prontos — este painel NUNCA chama
-  // `getCurrentWeeklyEvent()`/`isWeeklyEventObjectiveDone()` por conta própria, pra sempre bater
-  // com o badge que o abriu (`HudHeader.tsx`, mesmo valor via props também).
+  // `getCurrentWeeklyEvent()`/`wouldGrantWeeklyEventObjectiveReward()` por conta própria, pra
+  // sempre bater com o badge que o abriu (`HudHeader.tsx`, mesmo valor via props também).
   event: WeeklyEvent
   objectiveDone: boolean
   onClose: () => void
