@@ -298,6 +298,25 @@ export function skillBreakdown(progress: Progress): Record<QuestType, number> {
   return breakdown
 }
 
+// lab-180 ("Missões ambientais de aprendizagem") — sorteia a pergunta certa pro landmark
+// ambiental que o jogador acabou de acionar (ponte/lógica, posto de abastecimento/matemática,
+// placa/leitura). Extraído de `world3d/World3D.tsx` (achado do review automático do Copilot na
+// PR #59): é regra de quest/progressão, não pode morar acoplada à engine 3D
+// (`docs/prompts/03-arquitetura-sistema.md` §1) — aqui fica testável sem instanciar a cena.
+// Prioriza uma pergunta ainda não respondida do tipo certo, caindo pro pool inteiro do tipo se
+// todas já tiverem sido feitas (mesmo padrão de fallback já usado pelo desafio em dupla, também
+// em `World3D.tsx`). `random` é injetável só pros testes — produção usa `Math.random` por padrão.
+export function selectEnvironmentalChallengeQuest(
+  questType: QuestType,
+  completedQuestIds: string[],
+  random: () => number = Math.random,
+): Quest {
+  const ofType = quests.filter((q) => q.type === questType)
+  const incompleteOfType = ofType.filter((q) => !completedQuestIds.includes(q.id))
+  const pool = incompleteOfType.length > 0 ? incompleteOfType : ofType
+  return pool[Math.floor(random() * pool.length)]
+}
+
 // Moedinhas espalhadas pelo terreno pra explorar — bônus à parte das missões, não persistem
 // individualmente (reaparecem a cada sessão), só a moeda ganha soma no total mesmo.
 export function applyCoinCollected(progress: Progress): Progress {

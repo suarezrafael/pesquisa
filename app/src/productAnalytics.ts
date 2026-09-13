@@ -186,3 +186,27 @@ export function trackPlanetTravelCompleted(toPlanetId: string): void {
 export function trackPlanetInteractionCompleted(planetId: string, kind: string): void {
   trackEvent('planet_interaction_completed', { planetId, kind })
 }
+
+// lab-180 ("Missões ambientais de aprendizagem") — nomes exatos citados pelo documento
+// (`learning_challenge_started`/`learning_challenge_completed`). `kind` identifica qual dos 3
+// landmarks novos (ponte/lógica, posto de abastecimento/matemática, placa/leitura) — allowlist
+// fixa em `server-accounts/src/domain.ts`, mesmo espírito de `kind` do
+// `trackPlanetInteractionCompleted` acima. Sem limite de "uma vez por sessão": cada tentativa é
+// seu próprio par de eventos.
+//
+// Achado do review automático do Copilot (PR #59): SEM um id de tentativa no payload (só
+// `kind`+`device_id`+timestamp), não dá pra calcular `retry_without_quit_rate` (métrica citada
+// pelo documento) como uma taxa POR TENTATIVA de verdade — se o mesmo dispositivo abre o mesmo
+// `kind` duas vezes antes de completar uma vez, não tem como saber com certeza qual `started`
+// aquele `completed` fecha (pode atribuir a conclusão à tentativa ERRADA). Decisão: não adicionar
+// um id de correlação ao contrato do evento só pra essa métrica — ela fica documentada como
+// aproximação grosseira (proporção agregada de `started`/`completed` por dispositivo+`kind` numa
+// janela de tempo, não uma taxa por tentativa individual confiável), mesmo espírito de outras
+// métricas "aproximadas" já aceitas neste catálogo (`docs/event-catalog.md`).
+export function trackLearningChallengeStarted(kind: string): void {
+  trackEvent('learning_challenge_started', { kind })
+}
+
+export function trackLearningChallengeCompleted(kind: string): void {
+  trackEvent('learning_challenge_completed', { kind })
+}

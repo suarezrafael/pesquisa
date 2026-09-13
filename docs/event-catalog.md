@@ -86,6 +86,8 @@ PR #55, 7ª rodada).
 | `cosmetic_equipped` | Equipar boné/óculos/cor de roupa-calça-sapato-mochila/estilo de cabelo na lojinha (nunca ao voltar pro padrão — `id === null` pra boné/óculos, ou o próprio item padrão do catálogo, custo 0 e não-exclusivo-assinante, pros eixos de cor/cabelo) (lab-185, 2ª rodada do review da PR #55) | `state/useProfile.ts`, `equipHat`/`equipShirtColor`/`equipPantsColor`/`equipShoeColor`/`equipBackpackColor`/`equipHairShape`/`equipGlasses` | `slot` (`"hat"`, `"shirtColor"`, `"pantsColor"`, `"shoeColor"`, `"backpackColor"`, `"hairShape"`, `"glasses"`) | 1x por equipar |
 | `planet_travel_completed` | Pouso bem-sucedido num planeta-destino ao final de uma viagem de foguete — só na chegada de verdade, não ao desistir no meio e voltar pra origem (lab-185) | `world3d/World3D.tsx`, `landRocket` | `toPlanetId` | 1x por chegada |
 | `planet_interaction_completed` | Qualquer interação dentro de um planeta-destino — 1 evento genérico pra 4 categorias, não 1 evento por tipo (lab-179, "Planetas interativos v1"): cartão-postal colecionado, baú de tesouro achado, escolinha de astronomia respondida certo, segredo visual achado, ou pote de moedas de Marte revelado | `state/useProgress.ts` (`collectPostcard`/`foundTreasureChest`/`completePlanetQuest`/`foundPlanetSecret`) e `world3d/World3D.tsx` (pote de moedas de Marte, disparado direto no gatilho de proximidade — não passa por `useProgress`, já que reseta a cada visita) | `planetId` (um dos 7 planetas-destino) e `kind` (`"collectible"`, `"actionable_object"`, `"educational_quiz"`, `"visual_secret"`) | 1x por interação genuína |
+| `learning_challenge_started` | Abertura de um dos 3 landmarks de missão ambiental do planeta principal (lab-180, "Missões ambientais de aprendizagem": ponte/lógica, posto de abastecimento do foguete/matemática, placa/leitura) — dispara ao apertar `E` perto do landmark, antes de responder | `App.tsx`, `handleOpenEnvironmentalChallenge` | `kind` (`"bridge"`, `"rocket_fuel"`, `"plaque"`) | 1x por tentativa (sem limite de sessão) |
+| `learning_challenge_completed` | Resposta certa num dos 3 landmarks acima — credita XP/moeda de verdade via `completeQuest`, mesmo caminho de uma escolinha comum | `App.tsx`, `handleEnvironmentalChallengeCorrect` | `kind` (`"bridge"`, `"rocket_fuel"`, `"plaque"`) | 1x por tentativa concluída |
 
 ## Nível de agregação (lab-185)
 
@@ -161,6 +163,20 @@ decisão").
   1ª rodada do review). Documentado aqui como limitação conhecida, mesmo espírito de
   `cameraRecenterUsed` (lab-185) — não construída uma métrica de sessão nova pra este lab. Lidos
   semanalmente por `weeklyFunnel.planetTravelCompleted`/`weeklyFunnel.planetInteractionCompleted`.
+- **Missões ambientais** (lab-180, "Missões ambientais de aprendizagem") — `learning_challenge_started`/
+  `learning_challenge_completed` são os nomes EXATOS citados pelo documento
+  (`docs/growth-retention-monetization-backlog.md`, "Lab 180"), lidos semanalmente por
+  `weeklyFunnel.learningChallengeStarted`/`weeklyFunnel.learningChallengeCompleted` (mesma
+  convenção de ALCANCE do resto do funil). A 3ª métrica esperada, `retry_without_quit_rate`, é
+  DERIVADA e só APROXIMADA — não existe um evento próprio pra "tentativa errada" (o `QuestModal`
+  já só dá feedback visual, "Quase! Tente outra opção", sem gerar evento nenhum por resposta
+  errada), e o payload não carrega nenhum id de tentativa (só `kind`+`device_id`+timestamp,
+  achado do review automático da PR #59) — comparar `started`×`completed` por dispositivo+`kind`
+  numa janela de tempo pode atribuir uma conclusão à tentativa ERRADA se o mesmo `kind` for aberto
+  mais de uma vez antes de completar, então isso mede uma proporção agregada de conclusão, não uma
+  taxa por tentativa individual confiável — mesmo espírito de outras métricas "aproximadas" já
+  documentadas aqui (`house_visited`, `planetInteractionCompleted`). Sem endpoint dedicado pra essa
+  taxa — fica como consulta ad-hoc quando precisar, não um campo novo em `weeklyFunnel`.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de
