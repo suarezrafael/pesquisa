@@ -163,6 +163,7 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
   `true` (`{expanded && <div id={slotsListId}>...}`); leitores de tela não achavam o elemento
   referenciado no estado colapsado. Corrigido só atribuindo `aria-controls` quando `expanded` é
   verdadeiro (`aria-controls={expanded ? slotsListId : undefined}`).
+- **Rodada 8**: 0 achados novos — "Approval recommended".
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
