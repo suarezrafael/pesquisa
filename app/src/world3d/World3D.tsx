@@ -2102,6 +2102,14 @@ export function World3D({
   const [placingFurnitureInvalid, setPlacingFurnitureInvalid] = useState(false)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
+  const debugWrapperRef = useRef<HTMLDivElement>(null)
+  // Pedido do usuário, com screenshot de celular: "o painel de FPS ocupa muito espaço... precisa
+  // de uma opção pra encolher ele quando não está depurando". Começa expandido (mantém o
+  // comportamento padrão já pedido no lab-67 — "preciso de informações de FPS na tela em
+  // produção"), mas agora dá pra encolher pro ícone pequeno via toque. Não persiste entre sessões
+  // de propósito — mesmo padrão de `muted` logo abaixo, um ajuste de sessão, não uma preferência
+  // duradoura (o pedido original do lab-67 continua valendo por padrão a cada carregamento).
+  const [debugPanelExpanded, setDebugPanelExpanded] = useState(true)
   const [muted, setMuted] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -2358,11 +2366,13 @@ export function World3D({
   // ganhar mais um ícone num lab futuro (sem precisar lembrar de reajustar este valor de novo).
   useEffect(() => {
     const hudOverlay = document.querySelector<HTMLElement>('.hud-overlay')
-    const debugEl = debugRef.current
-    if (!hudOverlay || !debugEl) return
+    // Reposiciona o WRAPPER (botão de encolher + texto), não mais só o texto — o botão precisa
+    // ficar na mesma altura mesmo com o texto escondido (`debugPanelExpanded === false`).
+    const wrapperEl = debugWrapperRef.current
+    if (!hudOverlay || !wrapperEl) return
     const HUD_DEBUG_GAP_PX = 6
     function reposition() {
-      debugEl!.style.top = `${hudOverlay!.getBoundingClientRect().height + HUD_DEBUG_GAP_PX}px`
+      wrapperEl!.style.top = `${hudOverlay!.getBoundingClientRect().height + HUD_DEBUG_GAP_PX}px`
     }
     reposition()
     const observer = new ResizeObserver(reposition)
@@ -11788,7 +11798,18 @@ export function World3D({
           precisa de `inert` junto com o HUD — senão dá pra Tab escapar de um modal aberto direto
           pro canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). */}
       <canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />
-      <div ref={debugRef} className="world3d-debug" />
+      <div ref={debugWrapperRef} className="world3d-debug-wrapper">
+        <button
+          type="button"
+          className="world3d-debug-toggle"
+          onClick={() => setDebugPanelExpanded((expanded) => !expanded)}
+          aria-expanded={debugPanelExpanded}
+          aria-label={debugPanelExpanded ? 'Encolher painel de depuração' : 'Expandir painel de depuração'}
+        >
+          {debugPanelExpanded ? '▾' : '🐞'}
+        </button>
+        {debugPanelExpanded && <div ref={debugRef} className="world3d-debug" />}
+      </div>
       <HudHeader
         profile={profile}
         progress={progress}
