@@ -111,6 +111,11 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   lab-165/185) é uma janela MÓVEL de 7 dias corridos a partir da consulta (`now() - interval '7
   days'`) por `device_id` distinto — não "quantos perfis bateram o objetivo nesta semana ISO".
   Corrigida a nota do catálogo pra explicitar essa diferença.
+- **Rodada 5**: 1 achado real (extremo, mas real) — `WeeklyEventPanel` lia o relógio 2 vezes
+  (`getCurrentWeeklyEvent()` sem argumento e `new Date().toISOString()` separado pro objetivo); bem
+  na virada exata de domingo pra segunda, as duas leituras podiam divergir e mostrar o evento de uma
+  semana com o status do objetivo de outra. Corrigido capturando um único `Date` e reaproveitando
+  nas duas chamadas.
 
 ## Pendências / dívidas conhecidas
 

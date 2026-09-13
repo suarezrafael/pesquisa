@@ -20,8 +20,11 @@ interface WeeklyEventPanelProps {
 
 export function WeeklyEventPanel({ progress, onClose }: WeeklyEventPanelProps) {
   const modalRef = useModalA11y(onClose)
-  const event = getCurrentWeeklyEvent()
-  const objectiveDone = isWeeklyEventObjectiveDone(progress, new Date().toISOString())
+  // Um único `Date` pras duas leituras abaixo — capturar horários diferentes podia, bem na virada
+  // exata de domingo pra segunda, mostrar o evento de uma semana com o status do objetivo de outra.
+  const now = new Date()
+  const event = getCurrentWeeklyEvent(now)
+  const objectiveDone = isWeeklyEventObjectiveDone(progress, now.toISOString())
 
   return (
     <div
