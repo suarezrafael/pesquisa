@@ -386,15 +386,13 @@ export function unlockMarsReward(progress: Progress): MarsRewardResult {
   }
 }
 
-// lab-181 ("Circuito de descoberta e álbum de planetas") — cruza os 4 catálogos de descoberta por
-// planeta (postal, baú/pote de moedas, escolinha/segredo) que o lab-179 já unificou sob
-// `planet_interaction_completed`/`kind`, mas nunca tinha uma função que enumerasse "tudo que dá
-// pra descobrir no planeta X" de uma vez. Cobertura é DELIBERADAMENTE desigual entre Marte e os
-// outros 6 (decisão do lab-179, não deste lab): Marte não tem baú (`treasureChests.ts` exclui
-// `marte` de propósito) nem escolinha (`planetQuests.ts` não tem entrada pra `marte`) — no lugar
-// dos dois, tem o pote de moedas alienígena (revelado ao vencer o combate, `unlockMarsReward`,
-// persistido em `unlockedHatIds` — durável, não é o `marsClearedThisVisit` que é só por-visita) e
-// o segredo visual (`planetSecrets.ts`, também só Marte).
+// Cruza os 4 catálogos de descoberta por planeta (postal, baú/pote de moedas, escolinha/segredo),
+// já unificados sob `planet_interaction_completed`/`kind`. Cobertura é DELIBERADAMENTE desigual
+// entre Marte e os outros 6: Marte não tem baú (`treasureChests.ts` exclui `marte` de propósito)
+// nem escolinha (`planetQuests.ts` não tem entrada pra `marte`) — no lugar dos dois, tem o pote de
+// moedas alienígena (revelado ao vencer o combate, `unlockMarsReward`, persistido em
+// `unlockedHatIds` — durável, não é o `marsClearedThisVisit` que é só por-visita) e o segredo
+// visual (`planetSecrets.ts`, também só Marte).
 export type PlanetDiscoveryKind = 'collectible' | 'actionable_object' | 'educational_quiz' | 'visual_secret'
 
 export interface PlanetDiscoverySlot {

@@ -211,10 +211,9 @@ export function trackLearningChallengeCompleted(kind: string): void {
   trackEvent('learning_challenge_completed', { kind })
 }
 
-// lab-181 ("Circuito de descoberta e álbum de planetas") — dispara ao EXPANDIR um planeta
-// específico na grade nova do `AchievementsPanel.tsx` (sinal de interesse real num planeta, não
-// só "abriu o painel inteiro" — isso já não tem evento próprio, mesmo padrão do resto do jogo).
-// Sem limite de "uma vez por sessão": reabrir o mesmo planeta depois de fechar conta de novo.
+// Dispara ao EXPANDIR um planeta específico na lista do `AchievementsPanel.tsx` (sinal de
+// interesse real num planeta, distinto de só abrir o painel inteiro). Sem limite de "uma vez por
+// sessão": reabrir o mesmo planeta depois de fechar conta de novo.
 export function trackAlbumPlanetOpened(planetId: string): void {
   trackEvent('album_planet_opened', { planetId })
 }

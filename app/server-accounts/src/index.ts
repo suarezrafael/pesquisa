@@ -474,9 +474,8 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   ) {
     return new Response(null, { status: 400 })
   }
-  // lab-181 ("Circuito de descoberta e álbum de planetas") — mesmo raciocínio dos eventos acima:
-  // `album_planet_opened` só faz sentido com um `planetId` válido (é o que identifica qual
-  // planeta o jogador expandiu na grade).
+  // Mesmo raciocínio dos eventos acima: `album_planet_opened` só faz sentido com um `planetId`
+  // válido (é o que identifica qual planeta o jogador expandiu na lista).
   if (type === 'album_planet_opened' && !isValidDestinationPlanetId(metaObjForValidation.planetId)) {
     return new Response(null, { status: 400 })
   }
@@ -1749,8 +1748,6 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // pelo menos 1 ocorrência na semana) do resto do funil.
     learningChallengeStarted: weeklyDevices('learning_challenge_started'),
     learningChallengeCompleted: weeklyDevices('learning_challenge_completed'),
-    // lab-181 ("Circuito de descoberta e álbum de planetas") — mesma convenção de ALCANCE do
-    // resto do funil.
     albumPlanetOpened: weeklyDevices('album_planet_opened'),
   }
 

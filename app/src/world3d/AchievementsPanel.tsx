@@ -19,9 +19,9 @@ import { trackAlbumPlanetOpened } from '../productAnalytics'
 import { STAGE_LABEL } from './PetPanel'
 import type { Progress } from '../types'
 
-// lab-181 ("Circuito de descoberta e álbum de planetas") — legenda curta pro tipo de slot dentro
-// da grade expandida de cada planeta; os nomes já vêm de `planetDiscoverySlots` (mais específicos,
-// "Baú de tesouro"/"Escolinha de astronomia"/etc.), isto é só o rótulo genérico de categoria.
+// Legenda curta pro tipo de slot dentro da lista expandida de cada planeta; os nomes já vêm de
+// `planetDiscoverySlots` (mais específicos, "Baú de tesouro"/"Escolinha de astronomia"/etc.), isto
+// é só o rótulo genérico de categoria.
 const DISCOVERY_KIND_LABEL: Record<PlanetDiscoveryKind, string> = {
   collectible: 'Colecionável',
   actionable_object: 'Objeto especial',
@@ -58,8 +58,8 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
   const modalRef = useModalA11y(onClose)
   const objective = nextObjective(progress)
   const planetDiscovery = nextPlanetDiscovery(progress)
-  // lab-181 — qual planeta está expandido na grade abaixo (mostrando os 3 slots individuais em
-  // vez de só a fração "2/3"). `null` = nenhum expandido, mostra só as linhas colapsadas.
+  // Qual planeta está expandido na lista abaixo (mostrando os 3 slots individuais em vez de só a
+  // fração "2/3"). `null` = nenhum expandido, mostra só as linhas colapsadas.
   const [expandedPlanetId, setExpandedPlanetId] = useState<string | null>(null)
   function togglePlanet(planetId: string) {
     const opening = expandedPlanetId !== planetId
@@ -175,11 +175,11 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
           })}
         </div>
 
-        {/* lab-181 ("Circuito de descoberta e álbum de planetas") — visão POR PLANETA do que já
-            foi descoberto/falta, diferente das 3 seções acima (listas planas por categoria). Cada
-            linha é um planeta colapsado ("2/3"); tocar expande os 3 slots individuais — evita uma
-            grade grande demais de cara (7 planetas × 3 slots = 21 linhas se tudo viesse expandido
-            de uma vez). Reaproveita as MESMAS classes `.quest-list*` das 3 seções acima. */}
+        {/* Visão POR PLANETA do que já foi descoberto/falta, diferente das 3 seções acima (listas
+            planas por categoria). Cada linha é um planeta colapsado ("2/3"); tocar expande os 3
+            slots individuais — evita uma lista grande demais de cara (7 planetas × 3 slots = 21
+            linhas se tudo viesse expandido de uma vez). Reaproveita as MESMAS classes
+            `.quest-list*` das 3 seções acima. */}
         <h2>Planetas</h2>
         <p className="subtitle">Toque num planeta pra ver o que já descobriu e o que falta.</p>
         {planetDiscovery && (

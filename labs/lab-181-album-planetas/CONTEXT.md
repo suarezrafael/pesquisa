@@ -16,12 +16,12 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
   - `findTreasureChestByPlanetId` adicionado em `data/treasureChests.ts` por simetria com os
     outros 3 catálogos (só existia `findTreasureChestById`).
 - Nova seção "Planetas" dentro do `AchievementsPanel.tsx` existente (não um painel novo separado):
-  grade dos 7 planetas com fração de progresso (ex. "1/3 descobertas"), expande ao tocar pra
+  lista dos 7 planetas com fração de progresso (ex. "1/3 descobertas"), expande ao tocar pra
   mostrar os 3 slots individuais com nome/emoji reais quando descoberto ou `???`/🔒 quando não;
   destaque "🎯 Próxima descoberta" no topo, reaproveitando o padrão visual do `nextObjective` já
   usado pelas seções de badges/postais/pets.
 - Evento novo `album_planet_opened` (`meta.planetId`), disparado ao expandir um planeta específico
-  na grade (sinal de interesse real, distinto de simplesmente abrir o painel inteiro):
+  na lista (sinal de interesse real, distinto de simplesmente abrir o painel inteiro):
   `trackAlbumPlanetOpened` em `productAnalytics.ts`, allowlist em `server-accounts/src/domain.ts`,
   validação de `planetId` em `index.ts`, `weeklyFunnel.albumPlanetOpened` agregando por device.
 - `docs/event-catalog.md` atualizado com a linha do evento novo e uma nota explícita de que
