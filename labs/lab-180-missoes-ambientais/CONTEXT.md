@@ -43,7 +43,7 @@ Commit inicial → final: 6114f8e3dcc5124422a0819148edd22451b7b91d..6e81720
 - **Resposta certa credita recompensa REAL** (não um caminho paralelo tipo desafio em dupla) —
   decisão consciente: os landmarks são uma pele nova pra responder o MESMO pool de perguntas, não
   uma economia de recompensa separada.
-- **Achado do review automático do Copilot na PR #59 (1ª rodada, único ciclo até este handoff)**,
+- **Achado do review automático do Copilot na PR #59 (1ª rodada)**,
   3 achados reais corrigidos:
   1. `trackFirstLearningChallenge()` não disparava ao abrir um landmark ambiental (só via
      escolinha) — uma criança que começasse a sessão por um landmark ficava fora do funil de
@@ -105,9 +105,10 @@ o **Lab 181 - Circuito de descoberta e álbum de planetas** (item 7 da ordem sug
   Matemática "Balas na Caixa" / Leitura); resposta certa credita XP/moeda reais (RewardToast
   confirmado); `learning_challenge_completed` dispara com `kind` correto pros 3 (confirmado via
   monkey-patch de `window.fetch`).
-- CI verde na PR #59 (3 workflows). 1 rodada de review automático do Copilot com 3 achados reais,
-  todos corrigidos (ver "Decisões técnicas tomadas") — aguardando confirmação de rodada limpa
-  antes do merge/deploy (fora do escopo deste `CONTEXT.md`, que documenta o código já implementado
-  e verificado, não o processo de review ainda em andamento).
+- CI verde na PR #59 (3 workflows). 2 rodadas de review automático do Copilot até este handoff
+  (3 achados reais na 1ª, 4 na 2ª — 7 no total), todos corrigidos (ver "Decisões técnicas
+  tomadas") — aguardando confirmação de rodada limpa antes do merge/deploy (fora do escopo deste
+  `CONTEXT.md`, que documenta o código já implementado e verificado, não o processo de review
+  ainda em andamento — este handoff é atualizado a cada rodada com achados reais).
 - Como verificar: abrir o jogo, andar até um dos 3 landmarks novos no planeta principal (ponte,
   posto de abastecimento perto do foguete, placa), apertar `E` com a dica visível.

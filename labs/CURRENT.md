@@ -4,7 +4,7 @@ Implementação concluída, aguardando merge: labs/lab-180-missoes-ambientais/ �
 de aprendizagem (ponte/lógica, posto de abastecimento do foguete/matemática, placa/leitura).
 Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 180", próximo item recomendado após
 o lab-179. Código implementado e verificado ao vivo (ver `labs/lab-180-missoes-ambientais/CONTEXT.md`
-pro detalhe completo); PR #59 aberta contra `main`, CI verde, 1 rodada de review automático do
+pro detalhe completo); PR #59 aberta contra `main`, CI verde, 2 rodadas de review automático do
 Copilot já com achados corrigidos — falta confirmar rodada limpa, mesclar e confirmar deploy antes
 de virar "Último concluído" abaixo.
 
