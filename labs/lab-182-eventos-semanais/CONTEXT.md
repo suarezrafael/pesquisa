@@ -99,6 +99,12 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   objetivo que paga 20 moedas na mesma semana. Corrigido pra "Sem multiplicador de XP/moedas esta
   semana — mas o objetivo da semana ainda vale!", deixando claro que só o multiplicador passivo
   está ausente, não o bônus fixo do objetivo.
+- **Rodada 3**: 1 achado real — o painel tem 2 parágrafos longos (status do objetivo + mensagem de
+  "sem pressão") além da descrição do evento, mais texto que os outros usuários de `.reward-modal`
+  (toasts curtos); em telas curtas isso podia empurrar o botão "Fechar" pra fora da área visível,
+  já que `.modal` sozinho não tem limite de altura/scroll. Corrigido com uma classe nova
+  `.weekly-event-modal` (`max-height: 80vh; overflow-y: auto`), mesmo padrão já usado por
+  `.quest-list-modal`.
 
 ## Pendências / dívidas conhecidas
 

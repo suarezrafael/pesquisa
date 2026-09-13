@@ -1365,6 +1365,16 @@ a.nickname-generate-btn {
   overflow-y: auto;
 }
 
+/* O painel do evento semanal tem 2 parágrafos longos (status do objetivo + mensagem de "sem
+   pressão") além da descrição do evento — mais texto que os outros usuários de `.reward-modal`
+   (toasts curtos de recompensa). Em telas curtas isso podia empurrar o botão "Fechar" pra fora da
+   área visível, já que `.modal` sozinho não tem limite de altura/scroll — mesmo fix de
+   `.quest-list-modal` acima. */
+.weekly-event-modal {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
 .quest-list {
   display: flex;
   flex-direction: column;

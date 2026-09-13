@@ -32,7 +32,7 @@ export function WeeklyEventPanel({ progress, onClose }: WeeklyEventPanelProps) {
       ref={modalRef}
       tabIndex={-1}
     >
-      <div className="modal reward-modal">
+      <div className="modal reward-modal weekly-event-modal">
         <div className="reward-icon" aria-hidden="true">
           {event.emoji}
         </div>
