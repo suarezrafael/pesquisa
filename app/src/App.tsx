@@ -11,6 +11,7 @@ import { DailyLoginToast } from './components/DailyLoginToast'
 import { CoopChallengeToast } from './components/CoopChallengeToast'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
+import { WeeklyEventPanel } from './components/WeeklyEventPanel'
 import { MyHousePanel } from './world3d/MyHousePanel'
 import { PetPanel } from './world3d/PetPanel'
 import { FriendsPanel } from './world3d/FriendsPanel'
@@ -25,6 +26,7 @@ import {
   trackHouseVisited,
   trackLearningChallengeStarted,
   trackLearningChallengeCompleted,
+  trackWeeklyEventObjectiveCompleted,
 } from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
@@ -42,7 +44,7 @@ import {
 } from './state/storage'
 import type { Profile, Progress, Quest } from './types'
 import type { FurnitureOption } from './data/furniture'
-import type { WeeklyEvent } from './data/weeklyEvents'
+import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, type WeeklyEvent } from './data/weeklyEvents'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
@@ -125,6 +127,7 @@ function GameApp() {
     petDailyChallengeCompleted,
     toggleHouseVisible,
     syncWeeklyXp,
+    weeklyEventObjectiveProgress,
   } = useProgress()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
@@ -170,6 +173,10 @@ function GameApp() {
     streakBonusCoins: number
     planetClearBonusXp?: number
     planetClearBonusCoins?: number
+    // Só populado quando esta resposta veio de um desafio ambiental (`handleEnvironmentalChallengeCorrect`
+    // abaixo) E concedeu o bônus do objetivo semanal nesta mesma resposta — moeda ADICIONAL, não
+    // incluída em `awardedCoins` acima.
+    weeklyEventObjectiveBonusCoins?: number
     // lab-150 (achado do Copilot, PR #2): evento semanal capturado no MOMENTO do cálculo da
     // recompensa (`CompletionResult.event`), não recalculado de novo na hora de mostrar o toast.
     event: WeeklyEvent
@@ -184,6 +191,7 @@ function GameApp() {
   const [showMyHouse, setShowMyHouse] = useState(false)
   const [showPets, setShowPets] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
+  const [showWeeklyEvent, setShowWeeklyEvent] = useState(false)
   // lab-136 (pedido do usuário: "escolher em que posição da casa deve ficar a peça... o ângulo e
   // posição") — id do item que o jogador clicou "Mover" no `MyHousePanel`; `World3D.tsx` observa
   // essa prop e entra no modo de posicionamento dentro da cena 3D, depois chama
@@ -335,8 +343,23 @@ function GameApp() {
       quest,
       entitlement?.active,
     )
-    setReward({ quest, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event })
+    // Objetivo educativo/ambiental do evento semanal — qualquer um dos 3 tipos de desafio conta,
+    // sempre depois de `completeQuest` acima (ver comentário de `weeklyEventObjectiveProgress` em
+    // `useProgress.ts` sobre por que a ordem/atualizador funcional importam aqui).
+    const rewardGranted = weeklyEventObjectiveProgress(new Date().toISOString())
+    const weeklyEventObjectiveBonusCoins = rewardGranted ? WEEKLY_EVENT_OBJECTIVE_REWARD_COINS : undefined
+    setReward({
+      quest,
+      newBadges,
+      awardedXp,
+      awardedCoins,
+      currentStreak,
+      streakBonusCoins,
+      weeklyEventObjectiveBonusCoins,
+      event,
+    })
     trackLearningChallengeCompleted(kind)
+    if (rewardGranted) trackWeeklyEventObjectiveCompleted()
     activeEnvironmentalAttemptIdRef.current = null
     setActiveEnvironmentalChallenge(null)
   }
@@ -514,6 +537,7 @@ function GameApp() {
           onOpenShop={() => setShowShop(true)}
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
+          onOpenWeeklyEvent={() => setShowWeeklyEvent(true)}
           onOpenMyHouse={() => setShowMyHouse(true)}
           onOpenPets={() => setShowPets(true)}
           onOpenFriends={() => setShowFriends(true)}
@@ -553,7 +577,8 @@ function GameApp() {
             showMyHouse ||
             showPets ||
             showFriends ||
-            showMarsReward
+            showMarsReward ||
+            showWeeklyEvent
           }
         />
       </Suspense>
@@ -609,6 +634,7 @@ function GameApp() {
           streakBonusCoins={reward.streakBonusCoins}
           planetClearBonusXp={reward.planetClearBonusXp}
           planetClearBonusCoins={reward.planetClearBonusCoins}
+          weeklyEventObjectiveBonusCoins={reward.weeklyEventObjectiveBonusCoins}
           event={reward.event}
           onContinue={() => setReward(null)}
         />
@@ -622,6 +648,10 @@ function GameApp() {
 
       {showAchievements && (
         <AchievementsPanel progress={progress} onClose={() => setShowAchievements(false)} />
+      )}
+
+      {showWeeklyEvent && (
+        <WeeklyEventPanel progress={progress} onClose={() => setShowWeeklyEvent(false)} />
       )}
 
       {showMyHouse && (

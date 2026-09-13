@@ -15,7 +15,12 @@ import { findPlanetIdForQuest, isPlanetFullyCompleted, planetQuests } from '../d
 import { findTreasureChestById, findTreasureChestByPlanetId } from '../data/treasureChests'
 import { findPlanetSecretById, findPlanetSecretByPlanetId } from '../data/planetSecrets'
 import { findPostcardByPlanetId, POSTCARD_CATALOG } from '../data/postcards'
-import { getCurrentWeeklyEvent, isoWeekKey, type WeeklyEvent } from '../data/weeklyEvents'
+import {
+  getCurrentWeeklyEvent,
+  isoWeekKey,
+  WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
+  type WeeklyEvent,
+} from '../data/weeklyEvents'
 import { PET_CATALOG } from '../data/pets'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -70,6 +75,33 @@ export function weeklyXpEarned(progress: Progress, nowIso: string): number {
   const currentWeekKey = isoWeekKey(new Date(nowIso))
   if (progress.weeklyXpWeekKey !== currentWeekKey) return 0
   return Math.max(0, progress.xp - progress.weeklyXpSnapshot)
+}
+
+// Leitura pura, mesmo raciocínio de `weeklyXpEarned` acima — usada pela UI pra saber se já mostra
+// o objetivo semanal como concluído, sem precisar mutar nada.
+export function isWeeklyEventObjectiveDone(progress: Progress, nowIso: string): boolean {
+  return progress.weeklyEventObjectiveRewardedWeekKey === isoWeekKey(new Date(nowIso))
+}
+
+export interface WeeklyEventObjectiveResult {
+  progress: Progress
+  rewardGranted: boolean
+}
+
+// Concede o bônus do objetivo semanal (`WEEKLY_EVENT_OBJECTIVE_REWARD_COINS`, `data/weeklyEvents.ts`)
+// na PRIMEIRA vez que é chamada dentro de cada semana ISO — idempotente mesmo se completar vários
+// desafios ambientais na mesma semana, nunca paga 2x. Chamada de `advanceWeeklyEventObjective`
+// (`useProgress.ts`) com um atualizador funcional, não direto — ver comentário lá sobre por quê.
+export function applyWeeklyEventObjectiveProgress(progress: Progress, nowIso: string): WeeklyEventObjectiveResult {
+  if (isWeeklyEventObjectiveDone(progress, nowIso)) return { progress, rewardGranted: false }
+  return {
+    progress: {
+      ...progress,
+      weeklyEventObjectiveRewardedWeekKey: isoWeekKey(new Date(nowIso)),
+      coins: progress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
+    },
+    rewardGranted: true,
+  }
 }
 
 // Exportadas (lab-93) pra `data/achievements.ts` usar como fonte única de verdade — sem isso, o

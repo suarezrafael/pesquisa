@@ -217,3 +217,10 @@ export function trackLearningChallengeCompleted(kind: string): void {
 export function trackAlbumPlanetOpened(planetId: string): void {
   trackEvent('album_planet_opened', { planetId })
 }
+
+// Dispara na PRIMEIRA vez que o objetivo educativo/ambiental do evento semanal é concluído em cada
+// semana ISO — não a cada desafio ambiental completado, só quando o bônus é de fato concedido
+// (`applyWeeklyEventObjectiveProgress`, `progression.ts`, idempotente por semana).
+export function trackWeeklyEventObjectiveCompleted(): void {
+  trackEvent('weekly_event_objective_completed')
+}

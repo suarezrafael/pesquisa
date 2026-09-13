@@ -279,6 +279,10 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
   it('aceita o evento do álbum de planetas do lab-181', () => {
     expect(isValidProductEventType('album_planet_opened')).toBe(true)
   })
+
+  it('aceita o evento do objetivo semanal do lab-182', () => {
+    expect(isValidProductEventType('weekly_event_objective_completed')).toBe(true)
+  })
 })
 
 describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {

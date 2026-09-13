@@ -1,8 +1,8 @@
 # Laboratório 182 — Eventos semanais saudáveis
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-13
-Fim: -
+Fim: 2026-09-13
 Commit inicial: eb1b75a4d3495bcc2b90030a75f51ea852146135
 
 ## Objetivo do laboratório
@@ -58,37 +58,43 @@ desenvolver").
 
 ## Funcionalidades planejadas
 
-- [ ] Campo novo em `Progress` (`weeklyEventObjectiveRewardedWeekKey: string | null`, `types.ts` +
+- [x] Campo novo em `Progress` (`weeklyEventObjectiveRewardedWeekKey: string | null`, `types.ts` +
   default `null` em `storage.ts`) — marca em qual semana ISO o bônus já foi concedido, idempotente
   (não paga de novo na mesma semana mesmo completando vários desafios ambientais).
-- [ ] `data/weeklyEvents.ts` ganha as constantes de copy/recompensa do objetivo (única fonte de
+- [x] `data/weeklyEvents.ts` ganha as constantes de copy/recompensa do objetivo (única fonte de
   verdade, junto da rotação e do multiplicador, como o backlog pede): valor da recompensa em moeda,
   descrição do objetivo, e a mensagem de "sem problema se não der tempo — sempre grátis".
-- [ ] `applyWeeklyEventObjectiveProgress(progress, nowIso)` (`progression.ts`, função pura) — se a
+- [x] `applyWeeklyEventObjectiveProgress(progress, nowIso)` (`progression.ts`, função pura) — se a
   semana atual ainda não foi recompensada, credita a moeda e marca a semana; senão devolve
   `progress` inalterado. `isWeeklyEventObjectiveDone(progress, nowIso)` (leitura pura, sem mutar)
   pra UI saber se já foi concluído esta semana.
-- [ ] `advanceWeeklyEventObjective()` (`useProgress.ts`) — chamado de `handleEnvironmentalChallengeCorrect`
-  (`App.tsx`) logo após `completeQuest(...)`; usa `setProgress(prev => ...)` (não a versão direta),
-  pelo achado técnico acima.
-- [ ] `RewardToast.tsx` ganha uma linha de bônus opcional (mesmo padrão de `planetClearBonusCoins`)
+- [x] `weeklyEventObjectiveProgress(nowIso)` (`useProgress.ts`, renomeado de
+  `advanceWeeklyEventObjective` durante a implementação) — chamado de
+  `handleEnvironmentalChallengeCorrect` (`App.tsx`) logo após `completeQuest(...)`. **Achado ao vivo
+  real, diferente do previsto acima** — ver "Decisões técnicas" no `CONTEXT.md`: o formato inicial
+  (ler o resultado de DENTRO do atualizador funcional, copiando `petDailyChallengeCompleted`) causou
+  um crash de verdade (`Cannot destructure property 'rewardGranted' of ... undefined`), porque
+  encadear depois de `completeQuest` (não-funcional) pula o atalho de "bailout adiantado" do
+  `useState`. Corrigido lendo a decisão do `progress` do closure (seguro, campo nunca tocado por
+  `completeQuest`) e usando o atualizador funcional só pra ESCRITA, sem tentar ler de volta.
+- [x] `RewardToast.tsx` ganha uma linha de bônus opcional (mesmo padrão de `planetClearBonusCoins`)
   quando o objetivo semanal é concedido NAQUELA resposta — feedback claro no momento certo.
-- [ ] Badge do evento semanal (`HudHeader.tsx`, `.weekly-event-badge`) vira um botão clicável (sem
+- [x] Badge do evento semanal (`HudHeader.tsx`, `.weekly-event-badge`) vira um botão clicável (sem
   aumentar a fileira de ~11 ícones já existente) abrindo um painel novo pequeno
   (`WeeklyEventPanel.tsx`, mesmo padrão de `DailyLoginToast.tsx`/`.reward-modal`, sem CSS novo):
   nome/emoji/descrição do evento, status do objetivo (pendente ou já concluído esta semana +
   quanto ganhou), e a mensagem de "sem problema se não der tempo / sempre grátis".
-- [ ] `components/FamilyPortal.tsx`, seção "📚 Aprendizagem sempre grátis" (já existente, lab-166)
+- [x] `components/FamilyPortal.tsx`, seção "📚 Aprendizagem sempre grátis" (já existente, lab-166)
   ganha uma frase curta confirmando que o bônus do evento semanal também é sempre grátis — reforça
   o critério de aceite "responsável entende que não há pressão de compra" sem criar seção nova.
-- [ ] Evento novo `weekly_event_objective_completed` (sem `meta`, mesmo padrão de
+- [x] Evento novo `weekly_event_objective_completed` (sem `meta`, mesmo padrão de
   `camera_recenter_used`) — allowlist em `server-accounts/src/domain.ts`, branch explícito em
   `index.ts` (não herdar a tolerância de `meta` livre dos eventos legados), `weeklyFunnel.weeklyEventObjectiveCompleted`.
-- [ ] `docs/event-catalog.md` atualizado com a linha do evento novo + nota sobre "retorno semanal"
+- [x] `docs/event-catalog.md` atualizado com a linha do evento novo + nota sobre "retorno semanal"
   já ser coberto pela infraestrutura de `weeklyFunnel`/D7 existente (nada novo necessário ali) e
   "feedback qualitativo infantil" ser pesquisa com usuário real, fora de escopo de laboratório de
   código (mesmo padrão de itens de pesquisa marcados fora de escopo em labs anteriores).
-- [ ] Testes novos em `progression.test.ts` (idempotência por semana, concede só 1x, reseta numa
+- [x] Testes novos em `progression.test.ts` (idempotência por semana, concede só 1x, reseta numa
   semana nova) e em `server-accounts/src/domain.test.ts` (allowlist do evento novo).
 
 ## Fora de escopo (explicitamente adiado)

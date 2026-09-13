@@ -62,6 +62,20 @@ export function getCurrentWeeklyEvent(date: Date = new Date()): WeeklyEvent {
   return WEEKLY_EVENTS[week % WEEKLY_EVENTS.length]
 }
 
+// Objetivo educativo/ambiental do evento semanal — o MESMO todo toda semana, incorporado à única
+// rotação acima (não uma segunda rotação concorrente): reaproveita os 3 desafios ambientais do
+// planeta principal (ponte/lógica, abastecimento de foguete/matemática, placa/leitura), sempre
+// disponíveis e nunca esgotam. Recompensa fixa e previsível, nunca punitiva — não completar nunca
+// tira nada, só não ganha o bônus extra desta semana; sempre grátis, nunca precisa de assinatura.
+export const WEEKLY_EVENT_OBJECTIVE_REWARD_COINS = 20
+
+export const WEEKLY_EVENT_OBJECTIVE_DESCRIPTION =
+  'Complete pelo menos 1 desafio ambiental (ponte, abastecimento de foguete ou placa) nesta semana.'
+
+export const WEEKLY_EVENT_NO_PRESSURE_MESSAGE =
+  'Sem problema se não der tempo essa semana — não há nenhuma penalidade, e uma nova chance chega ' +
+  'toda semana. Esse bônus é sempre gratuito, nunca precisa de assinatura.'
+
 // lab-157 (ranking local entre perfis do mesmo aparelho, Grupo A do backlog social do lab-154) —
 // chave de semana estável ("2026-W23"), reaproveitando a MESMA definição ISO 8601 já usada pra
 // girar o evento semanal (garante que "essa semana" signifique a mesma coisa nos dois lugares).

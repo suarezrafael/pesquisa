@@ -40,6 +40,8 @@ import {
   skillBreakdown,
   syncWeeklyXpSnapshot,
   weeklyXpEarned,
+  applyWeeklyEventObjectiveProgress,
+  isWeeklyEventObjectiveDone,
   SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
@@ -1388,6 +1390,39 @@ describe('syncWeeklyXpSnapshot/weeklyXpEarned (lab-157)', () => {
     const synced = syncWeeklyXpSnapshot({ ...emptyProgress, xp: 150 }, '2026-09-08T12:00:00.000Z')
     const comMenosXp = { ...synced, xp: 100 }
     expect(weeklyXpEarned(comMenosXp, '2026-09-09T12:00:00.000Z')).toBe(0)
+  })
+})
+
+describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182, "Eventos semanais saudáveis")', () => {
+  it('concede o bônus na primeira vez da semana', () => {
+    const result = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    expect(result.rewardGranted).toBe(true)
+    expect(result.progress.coins).toBeGreaterThan(emptyProgress.coins)
+    expect(result.progress.weeklyEventObjectiveRewardedWeekKey).not.toBeNull()
+  })
+
+  it('não concede de novo na MESMA semana (idempotente, mesmo completando outro desafio)', () => {
+    const primeira = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    const segunda = applyWeeklyEventObjectiveProgress(primeira.progress, '2026-09-10T12:00:00.000Z') // mesma semana
+    expect(segunda.rewardGranted).toBe(false)
+    expect(segunda.progress).toBe(primeira.progress) // mesma referência — não mexeu em nada
+  })
+
+  it('concede de novo numa semana NOVA', () => {
+    const primeira = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    const semanaSeguinte = applyWeeklyEventObjectiveProgress(primeira.progress, '2026-09-15T12:00:00.000Z')
+    expect(semanaSeguinte.rewardGranted).toBe(true)
+    expect(semanaSeguinte.progress.coins).toBeGreaterThan(primeira.progress.coins)
+  })
+
+  it('isWeeklyEventObjectiveDone reflete o estado real por semana', () => {
+    const progress = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z').progress
+    expect(isWeeklyEventObjectiveDone(progress, '2026-09-10T12:00:00.000Z')).toBe(true) // mesma semana
+    expect(isWeeklyEventObjectiveDone(progress, '2026-09-15T12:00:00.000Z')).toBe(false) // semana seguinte
+  })
+
+  it('perfil que nunca completou nada não mostra o objetivo como feito', () => {
+    expect(isWeeklyEventObjectiveDone(emptyProgress, '2026-09-08T12:00:00.000Z')).toBe(false)
   })
 })
 

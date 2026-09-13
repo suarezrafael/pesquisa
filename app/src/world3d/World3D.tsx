@@ -168,6 +168,7 @@ interface World3DProps {
   onOpenFriends: () => void
   onOpenPairing: () => void
   onOpenAchievements: () => void
+  onOpenWeeklyEvent: () => void
   onOpenMyHouse: () => void
   onUnlockMarsReward: () => void
   // Marco permanente de "já achou o pote de moedas de Marte", chamado a cada coleta real do pote —
@@ -2008,6 +2009,7 @@ export function World3D({
   onOpenFriends,
   onOpenPairing,
   onOpenAchievements,
+  onOpenWeeklyEvent,
   onOpenMyHouse,
   onUnlockMarsReward,
   onFoundMarsCoinPot,
@@ -11805,6 +11807,7 @@ export function World3D({
         onOpenBag={() => setBagOpen(true)}
         onOpenPairing={onOpenPairing}
         onSwitchProfile={onSwitchProfile}
+        onOpenWeeklyEvent={onOpenWeeklyEvent}
         inert={hudInert}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}

@@ -41,6 +41,8 @@ import {
   applyPetDailyChallengeCompleted,
   type PetDailyChallengeResult,
   syncWeeklyXpSnapshot as applySyncWeeklyXpSnapshot,
+  applyWeeklyEventObjectiveProgress,
+  isWeeklyEventObjectiveDone,
 } from './progression'
 
 export function useProgress() {
@@ -381,6 +383,27 @@ export function useProgress() {
     return result
   }
 
+  // Objetivo educativo/ambiental do evento semanal — chamado de `handleEnvironmentalChallengeCorrect`
+  // (`App.tsx`) logo DEPOIS de `completeQuest(...)`, no mesmo handler. NÃO segue o formato de
+  // `petDailyChallengeCompleted`/`coopChallengeCompleted` acima (ler o resultado de dentro do
+  // atualizador funcional) — verificado ao vivo que isso quebra aqui: como já existe uma atualização
+  // PENDENTE de `completeQuest` na fila do React (não-funcional, `setProgress(result.progress)`),
+  // o atalho de "bailout adiantado" do `useState` não roda pra este segundo `setProgress` na MESMA
+  // sincronia, e o atualizador só é invocado depois, tarde demais pra ler de volta aqui — `result`
+  // ficava `undefined`, quebrando o app. A decisão "já concluído esta semana" é segura de ler do
+  // `progress` do closure (não do `prev`) porque `completeQuest` nunca toca
+  // `weeklyEventObjectiveRewardedWeekKey`; só a ESCRITA da moeda precisa do atualizador funcional,
+  // pra compor corretamente em cima do XP/moeda que `completeQuest` acabou de conceder.
+  function weeklyEventObjectiveProgress(nowIso: string): boolean {
+    if (isWeeklyEventObjectiveDone(progress, nowIso)) return false
+    setProgress((prev) => {
+      const result = applyWeeklyEventObjectiveProgress(prev, nowIso)
+      if (result.rewardGranted) saveProgress(result.progress)
+      return result.progress
+    })
+    return true
+  }
+
   // Ranking local entre perfis (lab-157) — mesmo gatilho/formato de `touchLastPlayed`, uma vez
   // por sessão (ver `App.tsx`): reseta o snapshot de XP semanal se a semana real mudou desde a
   // última vez, sem mexer em nada se ainda é a mesma semana (ver `syncWeeklyXpSnapshot`).
@@ -424,5 +447,6 @@ export function useProgress() {
     petDailyChallengeCompleted,
     toggleHouseVisible,
     syncWeeklyXp,
+    weeklyEventObjectiveProgress,
   }
 }

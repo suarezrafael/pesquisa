@@ -148,6 +148,13 @@ export interface Progress {
   // `weeklyXpEarned` em `state/progression.ts`. `null` = nunca sincronizado (perfil recém-criado).
   weeklyXpWeekKey: string | null
   weeklyXpSnapshot: number
+  // Objetivo educativo/ambiental do evento semanal — reaproveita a MESMA definição de "semana" de
+  // `weeklyXpWeekKey` acima (`isoWeekKey`, `data/weeklyEvents.ts`). Guarda a chave da semana em
+  // que o bônus já foi concedido, não um contador: o objetivo é "complete pelo menos 1 desafio
+  // ambiental" (limiar 1), então só precisa saber SE já foi pago esta semana pra ser idempotente —
+  // nunca reseta pra punir, só permite ganhar de novo quando a semana muda de verdade. `null` =
+  // nunca concedido.
+  weeklyEventObjectiveRewardedWeekKey: string | null
   // lab-175 ("Lab 171 - Casa visitável somente leitura", docs/market-metrics-engagement-backlog.md)
   // — controle do DONO sobre um amigo poder visitar a casa. `unlockedFurnitureIds`/
   // `housePlacements` acima são sincronizados via `POST /players/heartbeat` em TODO tick,

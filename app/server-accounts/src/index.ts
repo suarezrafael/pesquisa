@@ -513,6 +513,10 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       // allowlist de propriedades por evento. `camera_recenter_used` é um evento NOVO deste lab —
       // não tem motivo pra herdar a tolerância dos eventos antigos.
       safeMeta = null
+    } else if (type === 'weekly_event_objective_completed') {
+      // Mesmo raciocínio de `camera_recenter_used` acima: evento novo, sem campo de `meta`
+      // documentado — não herda a tolerância de `meta` livre dos eventos legados.
+      safeMeta = null
     } else {
       safeMeta = metaObj
     }
@@ -1749,6 +1753,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     learningChallengeStarted: weeklyDevices('learning_challenge_started'),
     learningChallengeCompleted: weeklyDevices('learning_challenge_completed'),
     albumPlanetOpened: weeklyDevices('album_planet_opened'),
+    weeklyEventObjectiveCompleted: weeklyDevices('weekly_event_objective_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,
