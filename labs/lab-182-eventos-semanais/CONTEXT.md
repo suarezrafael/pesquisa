@@ -265,6 +265,18 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   (ambos também só dependem do relógio local). Documentado explicitamente no código como decisão
   consciente, não como bug esquecido — corrigir isso está fora do escopo deste lab pequeno. (5)
   Contagem de testes desatualizada (205, real final é 207) em 2 lugares do `CONTEXT.md` — corrigida.
+- **Rodada 15**: 1 achado real — mesma classe, camada final: a rodada 14 unificou o `event` do
+  badge e do painel, mas o STATUS do objetivo (`weeklyEventObjectiveStatus`) ainda era calculado
+  com um `new Date()` próprio no clique, separado do timer que atualiza `weeklyEvent`. Na janela de
+  até 60s entre a última atualização do timer e o clique, o painel podia combinar a descrição de
+  UMA semana com o status de OUTRA. Resolvido de vez fundindo `event` e `nowIso` num único objeto
+  de estado (`weeklyEventSnapshot`), atualizado ATOMICAMENTE pelo mesmo timer — não existe mais
+  nenhum `new Date()` independente nesse subsistema inteiro, só uma fonte única de "agora" pra
+  tudo relacionado ao evento semanal. **Verificado ao vivo com sucesso** (dev server finalmente
+  estável): clique de mouse real no badge abre o painel corretamente, mostrando "Semana Dourada" e
+  o objetivo pendente; `aria-labelledby` confirmado apontando pro `<h2>` dinâmico via inspeção do
+  DOM. Isso confirma retroativamente que as rodadas 11-15 funcionam corretamente na prática, não só
+  na teoria — a pendência de verificação ao vivo registrada nas rodadas anteriores está resolvida.
 
 ## Pendências / dívidas conhecidas
 
@@ -274,16 +286,13 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   relógio de servidor confiável, fora de escopo deste jogo (frontend-only, sem backend de gameplay)
   e deste lab pequeno — mesma limitação já presente em `weeklyXpSnapshot`/`getCurrentWeeklyEvent`.
   Ver comentário em `hasWeeklyEventClockRolledBack` (`progression.ts`) e rodada 14 do review acima.
-- **Pendência real, não resolvida**: os fixes das rodadas 11-14 (snapshot de `weeklyEvent`/`status`
-  capturado no clique; os 3 estados `WeeklyEventObjectiveStatus`; o refresh periódico do badge a
-  cada minuto; a reordenação do recuo-de-relógio antes de "mesma semana") não foram reverificados
-  ao vivo num navegador real — o dev server local ficou
-  persistentemente instável nesta sessão (múltiplos processos concorrentes acumulados, reiniciado
-  repetidas vezes sem resolver o travamento no carregamento do chunk 3D preguiçoso) e não deu tempo
-  de confirmar visualmente antes do fim desta verificação. Confiança vem de `tsc -b`/`npm run test`/
-  `npm run build` limpos, não de reprodução visual; recomenda-se confirmar com um clique de mouse
-  real numa sessão futura (verificar especialmente a mensagem neutra do estado `'blocked'` e que o
-  badge de fato atualiza sozinho depois de ~1 minuto parado) antes de assumir 100% resolvido.
+- ~~Pendência de verificação ao vivo das rodadas 11-14~~ — **resolvida na rodada 15**: o dev server
+  local, instável por boa parte desta sessão (múltiplos processos concorrentes acumulados),
+  finalmente estabilizou e o clique real de mouse no badge foi confirmado abrindo o painel
+  corretamente. O estado `'blocked'` e o auto-refresh do badge após ~1 minuto parado continuam sem
+  reprodução visual direta (achados raros, difíceis de forçar num teste manual rápido) — confiança
+  nesses dois casos específicos ainda vem só dos testes unitários (`weeklyEventObjectiveStatus`,
+  cenário de recuo de relógio) e da leitura do código, não de reprodução visual.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

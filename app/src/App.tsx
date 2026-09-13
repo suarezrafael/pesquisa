@@ -130,21 +130,27 @@ function GameApp() {
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
   } = useProgress()
-  // Estado (não uma variável recalculada a cada render) atualizado a cada minuto — repassado pro
-  // badge (`HudHeader.tsx`, via `World3D.tsx`) E lido pelo clique que abre o painel
-  // (`onOpenWeeklyEvent` abaixo), garantindo que os dois usem exatamente o MESMO valor, nunca dois
-  // `new Date()` separados. Achado do review automático do Copilot, em 2 partes: (1) sem o timer, o
-  // badge ficaria preso no evento antigo se a criança deixasse o jogo aberto e PARADO (sem nenhuma
-  // interação disparando um re-render — o loop de física/render do Babylon.js roda por fora do
-  // React) atravessando a virada exata de semana ISO; (2) a primeira versão do timer só forçava um
-  // re-render (recalculando `weeklyEvent` de novo a cada render), mas o clique no badge ainda lia
-  // `new Date()` fresco no PRÓPRIO handler — se a semana virasse nesse intervalo de até 60s entre a
-  // última atualização do badge e o clique, o painel podia abrir mostrando um evento diferente do
-  // que estava escrito no badge no instante do clique. Guardar o valor como estado, e o clique
-  // reaproveitando esse MESMO estado (em vez de recalcular), elimina os dois problemas de vez.
-  const [weeklyEvent, setWeeklyEvent] = useState(() => getCurrentWeeklyEvent())
+  // Estado ÚNICO (não duas leituras de relógio separadas) atualizado a cada minuto — `event` vai
+  // pro badge (`HudHeader.tsx`, via `World3D.tsx`); o clique que abre o painel (`onOpenWeeklyEvent`
+  // abaixo) reaproveita TANTO `event` QUANTO `nowIso` deste mesmo objeto, nunca lê `new Date()` de
+  // novo por conta própria. Histórico do achado (review automático do Copilot, 3 rodadas até fechar
+  // de vez): (1) sem o timer, o badge ficaria preso no evento antigo se a criança deixasse o jogo
+  // aberto e PARADO (sem nenhuma interação disparando um re-render — o loop de física/render do
+  // Babylon.js roda por fora do React) atravessando a virada exata de semana ISO; (2) uma versão
+  // intermediária só compartilhava `event`, mas o clique ainda calculava o STATUS do objetivo
+  // (`weeklyEventObjectiveStatus`) com um `new Date()` próprio — bem no intervalo de até 60s entre
+  // a última atualização do timer e o clique, o painel podia combinar a descrição de UMA semana com
+  // o status de OUTRA. Guardar `event` e `nowIso` juntos, atualizados sempre no mesmo instante,
+  // elimina a classe inteira: só existe UM relógio de referência pra todo esse subsistema.
+  const [weeklyEventSnapshot, setWeeklyEventSnapshot] = useState(() => {
+    const now = new Date()
+    return { event: getCurrentWeeklyEvent(now), nowIso: now.toISOString() }
+  })
   useEffect(() => {
-    const id = setInterval(() => setWeeklyEvent(getCurrentWeeklyEvent()), 60_000)
+    const id = setInterval(() => {
+      const now = new Date()
+      setWeeklyEventSnapshot({ event: getCurrentWeeklyEvent(now), nowIso: now.toISOString() })
+    }, 60_000)
     return () => clearInterval(id)
   }, [])
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
@@ -572,14 +578,15 @@ function GameApp() {
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
           onOpenWeeklyEvent={() => {
-            // Reaproveita o MESMO `weeklyEvent` do badge (não recalcula com um `new Date()`
-            // próprio) — ver comentário na declaração de `weeklyEvent` acima sobre por quê.
+            // Reaproveita `event` E `nowIso` do MESMO `weeklyEventSnapshot` do badge (nunca
+            // recalcula com um `new Date()` próprio) — ver comentário na declaração acima sobre
+            // por quê os dois precisam vir do mesmo instante.
             setWeeklyEventPanel({
-              event: weeklyEvent,
-              status: weeklyEventObjectiveStatus(progress, new Date().toISOString()),
+              event: weeklyEventSnapshot.event,
+              status: weeklyEventObjectiveStatus(progress, weeklyEventSnapshot.nowIso),
             })
           }}
-          weeklyEvent={weeklyEvent}
+          weeklyEvent={weeklyEventSnapshot.event}
           onOpenMyHouse={() => setShowMyHouse(true)}
           onOpenPets={() => setShowPets(true)}
           onOpenFriends={() => setShowFriends(true)}
