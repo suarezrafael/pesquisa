@@ -53,7 +53,7 @@ export function WeeklyEventPanel({ event, status, onClose }: WeeklyEventPanelPro
             `✓ Objetivo da semana concluído! Você já ganhou 🪙 ${WEEKLY_EVENT_OBJECTIVE_REWARD_COINS} moedas grátis esta semana.`}
           {status === 'pending' &&
             `🌱 Objetivo da semana: ${WEEKLY_EVENT_OBJECTIVE_DESCRIPTION} Ganhe 🪙 ${WEEKLY_EVENT_OBJECTIVE_REWARD_COINS} moedas grátis!`}
-          {status === 'blocked' && 'O bônus desta semana já foi usado. Uma nova chance chega em breve!'}
+          {status === 'blocked' && 'O bônus semanal já foi concedido. Uma nova chance chega em breve!'}
         </p>
         <p className="reward-bonus-line">{WEEKLY_EVENT_NO_PRESSURE_MESSAGE}</p>
         <button type="button" className="primary-button" onClick={onClose}>

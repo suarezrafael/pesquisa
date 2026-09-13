@@ -43,12 +43,14 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
 - `docs/event-catalog.md` atualizado com a linha do evento novo e uma nota explicando que "retorno
   semanal" já é coberto pela infraestrutura D1/D7 existente e "feedback qualitativo infantil" é
   pesquisa com usuário real, fora de escopo de código.
-- Testes: 7 novos em `progression.test.ts` (concede na 1ª vez, idempotente na mesma semana, concede
+- Testes: 9 novos em `progression.test.ts` (concede na 1ª vez, idempotente na mesma semana, concede
   de novo numa semana nova, `isWeeklyEventObjectiveDone` reflete o estado real, perfil vazio nunca
-  mostra concluído, regressão do ataque de adiantar-e-voltar o relógio, `wouldGrantWeeklyEventObjectiveReward`
-  nunca diverge de `applyWeeklyEventObjectiveProgress`) e 1 novo em `server-accounts/src/domain.test.ts`.
-  Suíte completa ao final: app 205/205, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e
-  `npm run build` limpos.
+  mostra concluído, regressão do ataque de adiantar-e-voltar o relógio,
+  `wouldGrantWeeklyEventObjectiveReward` nunca diverge de `applyWeeklyEventObjectiveProgress`, os 3
+  estados de `weeklyEventObjectiveStatus`, recuo de relógio DENTRO da mesma semana também bloqueia)
+  e 1 novo em `server-accounts/src/domain.test.ts`. Suíte completa ao final (após todas as rodadas
+  de review): app 207/207, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e `npm run build`
+  limpos.
 
 ## Decisões técnicas tomadas
 
@@ -237,12 +239,45 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   "rotação"). Também reconciliada a descrição da PR no GitHub, que ainda afirmava "verificado ao
   vivo" sem qualificar que as rodadas 11-13 não tiveram essa reverificação (instabilidade do dev
   server local, ver pendência abaixo).
+- **Rodada 14**: 5 achados, a maioria real. (1) Real — a correção da rodada 13 (timer forçando
+  re-render) não bastava: o CLIQUE no badge ainda lia `new Date()` fresco no próprio handler
+  (`onOpenWeeklyEvent`), então na janela de até 60s entre a última atualização do timer e o clique,
+  o painel podia mostrar um evento diferente do que estava escrito no badge no instante exato do
+  clique. Resolvido na raiz: `weeklyEvent` virou um `useState` de verdade (não uma variável
+  recalculada por render), atualizado pelo mesmo timer de 1 minuto; o clique agora REAPROVEITA esse
+  MESMO estado em vez de recalcular — badge e painel usam literalmente o mesmo valor, sem
+  possibilidade de divergência. (2) Real e mais sutil — `weeklyEventObjectiveStatus` checava
+  "mesma semana ISO" ANTES de checar o recuo de relógio; no cenário "reivindica na sexta-feira,
+  volta o relógio pra segunda-feira DA MESMA SEMANA", as duas datas caem na mesma semana ISO, então
+  a função dizia `'done'` mesmo o recuo sendo real. Corrigido invertendo a ordem: o recuo de
+  relógio (`hasWeeklyEventClockRolledBack`, extraído como função só, reaproveitada por
+  `wouldGrantWeeklyEventObjectiveReward` E `weeklyEventObjectiveStatus` — mesmo padrão de fatorar
+  numa função só das rodadas anteriores) é checado PRIMEIRO, antes de "mesma semana". Teste de
+  regressão novo cobrindo exatamente esse cenário. (3) Real, cosmético — a mensagem do estado
+  `'blocked'` dizia "o bônus DESTA SEMANA já foi usado", mas a recompensa pode ter vindo de uma
+  semana futura (não necessariamente "esta semana") — reescrita pra "O bônus semanal já foi
+  concedido", sem afirmar qual semana. (4) Real, mas ACEITO como limitação conhecida, não
+  corrigido: nada impede um jogador de adiantar o relógio repetidamente (W40, W41, W42...) e
+  reivindicar o bônus a cada "semana" fictícia nova — a guarda anti-recuo só bloqueia VOLTAR o
+  relógio, não bloqueia AVANÇAR indefinidamente. Corrigir de verdade exigiria um relógio de
+  servidor confiável, que este jogo não tem por design (frontend-only, sem backend de gameplay,
+  `CLAUDE.md`) — mesma limitação já presente em `weeklyXpSnapshot`/`getCurrentWeeklyEvent`
+  (ambos também só dependem do relógio local). Documentado explicitamente no código como decisão
+  consciente, não como bug esquecido — corrigir isso está fora do escopo deste lab pequeno. (5)
+  Contagem de testes desatualizada (205, real final é 207) em 2 lugares do `CONTEXT.md` — corrigida.
 
 ## Pendências / dívidas conhecidas
 
-- **Pendência real, não resolvida**: os fixes das rodadas 11-13 (snapshot de `weeklyEvent`/`status`
+- **Limitação conhecida, aceita por decisão consciente (não um bug esquecido)**: a guarda
+  anti-recuo do objetivo semanal só bloqueia VOLTAR o relógio do aparelho, não bloqueia AVANÇÁ-LO
+  repetidamente pra reivindicar semanas fictícias novas a cada vez. Corrigir de verdade exigiria um
+  relógio de servidor confiável, fora de escopo deste jogo (frontend-only, sem backend de gameplay)
+  e deste lab pequeno — mesma limitação já presente em `weeklyXpSnapshot`/`getCurrentWeeklyEvent`.
+  Ver comentário em `hasWeeklyEventClockRolledBack` (`progression.ts`) e rodada 14 do review acima.
+- **Pendência real, não resolvida**: os fixes das rodadas 11-14 (snapshot de `weeklyEvent`/`status`
   capturado no clique; os 3 estados `WeeklyEventObjectiveStatus`; o refresh periódico do badge a
-  cada minuto) não foram reverificados ao vivo num navegador real — o dev server local ficou
+  cada minuto; a reordenação do recuo-de-relógio antes de "mesma semana") não foram reverificados
+  ao vivo num navegador real — o dev server local ficou
   persistentemente instável nesta sessão (múltiplos processos concorrentes acumulados, reiniciado
   repetidas vezes sem resolver o travamento no carregamento do chunk 3D preguiçoso) e não deu tempo
   de confirmar visualmente antes do fim desta verificação. Confiança vem de `tsc -b`/`npm run test`/
@@ -270,8 +305,8 @@ benefícios, cancelamento e a regra de aprendizagem grátis. Métricas citadas:
 
 - Branch: `lab-182-eventos-semanais` (a mesclar em `main` via PR).
 - Como rodar/verificar o que foi construído neste laboratório:
-  - `cd app && npm run test` (205 testes, inclui `applyWeeklyEventObjectiveProgress`/
-    `wouldGrantWeeklyEventObjectiveReward`).
+  - `cd app && npm run test` (207 testes, inclui `applyWeeklyEventObjectiveProgress`/
+    `wouldGrantWeeklyEventObjectiveReward`/`weeklyEventObjectiveStatus`).
   - `cd app/server-accounts && npm run test` (149 testes, inclui validação de
     `weekly_event_objective_completed`).
   - `cd app && npm run dev`, abrir o jogo, clicar no badge do evento semanal (topo esquerdo,

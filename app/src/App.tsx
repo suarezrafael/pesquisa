@@ -130,21 +130,23 @@ function GameApp() {
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
   } = useProgress()
-  // Calculado a cada render, sempre com o relógio ATUAL — repassado pro badge (`HudHeader.tsx`, via
-  // `World3D.tsx`), que deve mesmo refletir "agora" de forma contínua enquanto o app fica aberto.
-  // O painel (`WeeklyEventPanel.tsx`) é DIFERENTE: usa um snapshot capturado no clique
-  // (`weeklyEventPanel` abaixo), não este valor — ver comentário lá sobre por quê.
-  //
-  // `weeklyEventRefreshTick` (achado do review automático do Copilot) força um re-render a cada
-  // minuto só pra recalcular `weeklyEvent` de novo — sem isso, uma criança que deixa o jogo aberto
-  // e PARADO (sem nenhuma interação disparando outro re-render) atravessando a virada exata de
-  // domingo pra segunda veria o badge preso no evento da semana anterior até a próxima ação.
-  const [, setWeeklyEventRefreshTick] = useState(0)
+  // Estado (não uma variável recalculada a cada render) atualizado a cada minuto — repassado pro
+  // badge (`HudHeader.tsx`, via `World3D.tsx`) E lido pelo clique que abre o painel
+  // (`onOpenWeeklyEvent` abaixo), garantindo que os dois usem exatamente o MESMO valor, nunca dois
+  // `new Date()` separados. Achado do review automático do Copilot, em 2 partes: (1) sem o timer, o
+  // badge ficaria preso no evento antigo se a criança deixasse o jogo aberto e PARADO (sem nenhuma
+  // interação disparando um re-render — o loop de física/render do Babylon.js roda por fora do
+  // React) atravessando a virada exata de semana ISO; (2) a primeira versão do timer só forçava um
+  // re-render (recalculando `weeklyEvent` de novo a cada render), mas o clique no badge ainda lia
+  // `new Date()` fresco no PRÓPRIO handler — se a semana virasse nesse intervalo de até 60s entre a
+  // última atualização do badge e o clique, o painel podia abrir mostrando um evento diferente do
+  // que estava escrito no badge no instante do clique. Guardar o valor como estado, e o clique
+  // reaproveitando esse MESMO estado (em vez de recalcular), elimina os dois problemas de vez.
+  const [weeklyEvent, setWeeklyEvent] = useState(() => getCurrentWeeklyEvent())
   useEffect(() => {
-    const id = setInterval(() => setWeeklyEventRefreshTick((n) => n + 1), 60_000)
+    const id = setInterval(() => setWeeklyEvent(getCurrentWeeklyEvent()), 60_000)
     return () => clearInterval(id)
   }, [])
-  const weeklyEvent = getCurrentWeeklyEvent()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [activePlanetQuest, setActivePlanetQuest] = useState<Quest | null>(null)
@@ -570,10 +572,11 @@ function GameApp() {
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
           onOpenWeeklyEvent={() => {
-            const now = new Date()
+            // Reaproveita o MESMO `weeklyEvent` do badge (não recalcula com um `new Date()`
+            // próprio) — ver comentário na declaração de `weeklyEvent` acima sobre por quê.
             setWeeklyEventPanel({
-              event: getCurrentWeeklyEvent(now),
-              status: weeklyEventObjectiveStatus(progress, now.toISOString()),
+              event: weeklyEvent,
+              status: weeklyEventObjectiveStatus(progress, new Date().toISOString()),
             })
           }}
           weeklyEvent={weeklyEvent}

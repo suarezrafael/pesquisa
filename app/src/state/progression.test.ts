@@ -1462,6 +1462,15 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
     const adiantouRelogio = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-29T12:00:00.000Z').progress
     expect(weeklyEventObjectiveStatus(adiantouRelogio, '2026-09-08T12:00:00.000Z')).toBe('blocked')
   })
+
+  it('achado do review automático do Copilot: recuar o relógio DENTRO da mesma semana ISO também bloqueia, não mostra "concluído"', () => {
+    // Reivindica numa sexta-feira (2026-09-11, ainda semana 2026-W37), depois o relógio volta pra
+    // segunda-feira DA MESMA SEMANA (2026-09-08) — comparar só a semana ISO diria "concluído" (as
+    // duas datas caem na mesma semana), mas o recuo de relógio em si já é o sinal de manipulação,
+    // independente de cair na mesma semana ou numa diferente.
+    const reivindicouSexta = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-11T12:00:00.000Z').progress
+    expect(weeklyEventObjectiveStatus(reivindicouSexta, '2026-09-08T09:00:00.000Z')).toBe('blocked')
+  })
 })
 
 describe('seriesForLevel (lab-156)', () => {
