@@ -94,6 +94,7 @@ import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted,
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
+import type { WeeklyEvent } from '../data/weeklyEvents'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { TouchActionButton } from './TouchActionButton'
@@ -169,6 +170,9 @@ interface World3DProps {
   onOpenPairing: () => void
   onOpenAchievements: () => void
   onOpenWeeklyEvent: () => void
+  // Calculado uma vez em `App.tsx` (achado do review automático do Copilot na PR #61, ver
+  // `HudHeader.tsx`) — repassado direto pro HUD, nunca calculado de novo aqui dentro.
+  weeklyEvent: WeeklyEvent
   onOpenMyHouse: () => void
   onUnlockMarsReward: () => void
   // Marco permanente de "já achou o pote de moedas de Marte", chamado a cada coleta real do pote —
@@ -2010,6 +2014,7 @@ export function World3D({
   onOpenPairing,
   onOpenAchievements,
   onOpenWeeklyEvent,
+  weeklyEvent,
   onOpenMyHouse,
   onUnlockMarsReward,
   onFoundMarsCoinPot,
@@ -11808,6 +11813,7 @@ export function World3D({
         onOpenPairing={onOpenPairing}
         onSwitchProfile={onSwitchProfile}
         onOpenWeeklyEvent={onOpenWeeklyEvent}
+        weeklyEvent={weeklyEvent}
         inert={hudInert}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}

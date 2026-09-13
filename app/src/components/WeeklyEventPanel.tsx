@@ -3,28 +3,26 @@
 // `.reward-bonus-line`, sem CSS novo). Mostra o evento ativo, o objetivo educativo/ambiental (feito
 // ou pendente) e a mensagem de que não há problema em perder — nunca soma XP/moeda por conta
 // própria, só apresenta o que `progression.ts` já decidiu.
-import type { Progress } from '../types'
 import { useModalA11y } from '../state/useModalA11y'
 import {
-  getCurrentWeeklyEvent,
   WEEKLY_EVENT_NO_PRESSURE_MESSAGE,
   WEEKLY_EVENT_OBJECTIVE_DESCRIPTION,
   WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
+  type WeeklyEvent,
 } from '../data/weeklyEvents'
-import { isWeeklyEventObjectiveDone } from '../state/progression'
 
 interface WeeklyEventPanelProps {
-  progress: Progress
+  // Calculados uma vez em `App.tsx` e recebidos prontos (achado do review automático do Copilot na
+  // PR #61) — este painel NUNCA chama `getCurrentWeeklyEvent()`/`isWeeklyEventObjectiveDone()` por
+  // conta própria, pra sempre bater com o badge que o abriu (`HudHeader.tsx`, mesmo valor via
+  // props também).
+  event: WeeklyEvent
+  objectiveDone: boolean
   onClose: () => void
 }
 
-export function WeeklyEventPanel({ progress, onClose }: WeeklyEventPanelProps) {
+export function WeeklyEventPanel({ event, objectiveDone, onClose }: WeeklyEventPanelProps) {
   const modalRef = useModalA11y(onClose)
-  // Um único `Date` pras duas leituras abaixo — capturar horários diferentes podia, bem na virada
-  // exata de domingo pra segunda, mostrar o evento de uma semana com o status do objetivo de outra.
-  const now = new Date()
-  const event = getCurrentWeeklyEvent(now)
-  const objectiveDone = isWeeklyEventObjectiveDone(progress, now.toISOString())
 
   return (
     <div

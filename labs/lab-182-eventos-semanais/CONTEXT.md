@@ -125,6 +125,18 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   só `handleEnvironmentalChallengeCorrect` usa), e capturando um único `nowIso` no topo do handler,
   reaproveitado nas duas chamadas (`completeQuest`/`weeklyEventObjectiveProgress`). Reverificado ao
   vivo depois da mudança de assinatura: fluxo completo continua funcionando sem regressão.
+- **Rodada 7**: 1 achado real — mesma classe das rodadas 5-6, num 3º lugar: `HudHeader.tsx` (o
+  badge) calculava `getCurrentWeeklyEvent()` por conta própria, independente do
+  `WeeklyEventPanel.tsx` que ele abre (já corrigido pra capturar 1 `Date` na rodada 5) — na virada
+  exata de semana ISO os dois ainda podiam divergir. Em vez de continuar corrigindo local por
+  local, resolvida a causa raiz de uma vez: `weeklyEvent` e `weeklyEventObjectiveDone` agora são
+  calculados UMA ÚNICA VEZ em `App.tsx` (a partir do mesmo `Date`) e repassados por props pra baixo
+  — `World3D.tsx` → `HudHeader.tsx` (prop nova `weeklyEvent`, substitui a chamada interna) e direto
+  pro `WeeklyEventPanel.tsx` (props novas `event`/`objectiveDone`, substituem `progress` +
+  `getCurrentWeeklyEvent()`/`isWeeklyEventObjectiveDone()` internos). Fecha a classe inteira do
+  achado (badge, painel, e qualquer consumidor futuro que reaproveite essas props), em vez de só o
+  sintoma mais recente. Reverificado ao vivo com um clique de mouse real: painel abre corretamente
+  e mostra o mesmo evento do badge.
 
 ## Pendências / dívidas conhecidas
 

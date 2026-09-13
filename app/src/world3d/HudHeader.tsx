@@ -1,6 +1,6 @@
 import type { Profile, Progress } from '../types'
 import { getLevel, seriesForLevel, xpIntoLevel, type PlayerSeries } from '../state/progression'
-import { getCurrentWeeklyEvent } from '../data/weeklyEvents'
+import type { WeeklyEvent } from '../data/weeklyEvents'
 
 // lab-156 — emblema/rótulo por série, só apresentação (a regra de qual nível vira qual série
 // mora em `seriesForLevel`, `state/progression.ts`).
@@ -28,6 +28,11 @@ interface HudHeaderProps {
   onOpenPairing: () => void
   onSwitchProfile: () => void
   onOpenWeeklyEvent: () => void
+  // Calculado uma vez em `App.tsx` e repassado por props (achado do review automático do Copilot
+  // na PR #61) — se este componente chamasse `getCurrentWeeklyEvent()` por conta própria, bem na
+  // virada exata de semana ISO o badge podia mostrar um evento diferente do `WeeklyEventPanel`
+  // aberto a partir dele (que recebe o MESMO valor via prop também).
+  weeklyEvent: WeeklyEvent
   // lab-121: true enquanto qualquer painel/modal (de App.tsx ou interno do World3D) está aberto
   // por cima do HUD — tira os 9 botões da ordem de tabulação, senão um usuário de teclado consegue
   // dar Tab por dentro de um modal visualmente aberto e cair nos botões escondidos atrás dele.
@@ -51,12 +56,12 @@ export function HudHeader({
   onOpenPairing,
   onSwitchProfile,
   onOpenWeeklyEvent,
+  weeklyEvent,
   inert,
 }: HudHeaderProps) {
   const level = getLevel(progress.xp)
   const { current, needed } = xpIntoLevel(progress.xp)
   const percent = Math.min(100, Math.round((current / needed) * 100))
-  const weeklyEvent = getCurrentWeeklyEvent()
   const series = SERIES_BADGE[seriesForLevel(level)]
 
   return (

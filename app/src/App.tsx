@@ -44,7 +44,8 @@ import {
 } from './state/storage'
 import type { Profile, Progress, Quest } from './types'
 import type { FurnitureOption } from './data/furniture'
-import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, type WeeklyEvent } from './data/weeklyEvents'
+import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, getCurrentWeeklyEvent, type WeeklyEvent } from './data/weeklyEvents'
+import { isWeeklyEventObjectiveDone } from './state/progression'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
@@ -129,6 +130,14 @@ function GameApp() {
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
   } = useProgress()
+  // Calculados uma vez aqui e repassados por props pro badge (`HudHeader.tsx`, via `World3D.tsx`)
+  // e pro painel (`WeeklyEventPanel.tsx`) — achado do review automático do Copilot na PR #61: se
+  // cada um chamasse `getCurrentWeeklyEvent()`/`isWeeklyEventObjectiveDone()` por conta própria,
+  // bem na virada exata de semana ISO o badge podia mostrar um evento diferente do painel aberto a
+  // partir dele.
+  const weeklyEventNow = new Date()
+  const weeklyEvent = getCurrentWeeklyEvent(weeklyEventNow)
+  const weeklyEventObjectiveDone = isWeeklyEventObjectiveDone(progress, weeklyEventNow.toISOString())
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [activePlanetQuest, setActivePlanetQuest] = useState<Quest | null>(null)
@@ -545,6 +554,7 @@ function GameApp() {
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
           onOpenWeeklyEvent={() => setShowWeeklyEvent(true)}
+          weeklyEvent={weeklyEvent}
           onOpenMyHouse={() => setShowMyHouse(true)}
           onOpenPets={() => setShowPets(true)}
           onOpenFriends={() => setShowFriends(true)}
@@ -658,7 +668,11 @@ function GameApp() {
       )}
 
       {showWeeklyEvent && (
-        <WeeklyEventPanel progress={progress} onClose={() => setShowWeeklyEvent(false)} />
+        <WeeklyEventPanel
+          event={weeklyEvent}
+          objectiveDone={weeklyEventObjectiveDone}
+          onClose={() => setShowWeeklyEvent(false)}
+        />
       )}
 
       {showMyHouse && (
