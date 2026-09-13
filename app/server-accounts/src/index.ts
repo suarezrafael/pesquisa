@@ -31,6 +31,7 @@ import {
   isValidCosmeticSlot,
   isValidDestinationPlanetId,
   isValidPlanetInteractionKind,
+  isValidLearningChallengeKind,
   isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
@@ -464,6 +465,15 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   ) {
     return new Response(null, { status: 400 })
   }
+  // lab-180 ("Missões ambientais de aprendizagem") — mesmo raciocínio de `planet_interaction_completed`
+  // acima: os dois eventos só fazem sentido com um `kind` válido (é o que identifica qual dos 3
+  // landmarks novos gerou o evento).
+  if (
+    (type === 'learning_challenge_started' || type === 'learning_challenge_completed') &&
+    !isValidLearningChallengeKind(metaObjForValidation.kind)
+  ) {
+    return new Response(null, { status: 400 })
+  }
 
   // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
   // errado — os outros tipos LEGADOS (documentados em `docs/event-catalog.md` com `meta` livre ou
@@ -484,6 +494,9 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     } else if (type === 'planet_interaction_completed') {
       // já validado acima — só as 2 chaves permitidas sobrevivem.
       safeMeta = { planetId: metaObj.planetId, kind: metaObj.kind }
+    } else if (type === 'learning_challenge_started' || type === 'learning_challenge_completed') {
+      // já validado acima — só a chave permitida sobrevive.
+      safeMeta = { kind: metaObj.kind }
     } else if (type === 'camera_recenter_used') {
       // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
       // (`docs/event-catalog.md`) não documenta NENHUM campo de `meta` — sem este branch, caía no
@@ -1721,6 +1734,12 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // sessão). Mesmo espírito de `cameraRecenterUsed` (lab-185): documentar a limitação em vez de
     // construir uma métrica de sessão nova só pra este campo.
     planetInteractionCompleted: weeklyDevices('planet_interaction_completed'),
+    // lab-180 ("Missões ambientais de aprendizagem") — achado do review automático do Copilot na
+    // PR #59: os eventos entravam na allowlist mas nunca ficavam visíveis por este endpoint,
+    // exigindo consulta ad-hoc no banco. Mesma convenção de ALCANCE (dispositivos únicos com
+    // pelo menos 1 ocorrência na semana) do resto do funil.
+    learningChallengeStarted: weeklyDevices('learning_challenge_started'),
+    learningChallengeCompleted: weeklyDevices('learning_challenge_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

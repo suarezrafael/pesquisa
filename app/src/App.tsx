@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { TitleScreen } from './components/TitleScreen'
 import { Onboarding } from './components/Onboarding'
 import { ProfilePicker } from './components/ProfilePicker'
@@ -20,7 +20,12 @@ import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { useHeartbeat, sendImmediateHouseVisibility } from './state/useHeartbeat'
 import type { PublicHouseSnapshot } from './state/usePlayerPublicProfile'
-import { trackFirstLearningChallenge, trackHouseVisited } from './productAnalytics'
+import {
+  trackFirstLearningChallenge,
+  trackHouseVisited,
+  trackLearningChallengeStarted,
+  trackLearningChallengeCompleted,
+} from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
 import { findPlanetQuestById } from './data/planetQuests'
@@ -130,6 +135,25 @@ function GameApp() {
   const [activeCoopQuest, setActiveCoopQuest] = useState<Quest | null>(null)
   const [coopAnswerSignalId, setCoopAnswerSignalId] = useState<string | null>(null)
   const [coopReward, setCoopReward] = useState<{ coins: number; newBadge: boolean } | null>(null)
+  // Missões ambientais (lab-180) — DIFERENTE do desafio em dupla acima: acertar aqui credita
+  // XP/moeda de verdade via `completeQuest` (é uma missão normal do pool de sempre, só alcançada
+  // por um landmark do mundo em vez de só pela escolinha), então não precisa de nenhuma ponte de
+  // volta pro `World3D.tsx` — fecha o modal e mostra o `RewardToast` de sempre, igual a
+  // `activeQuest`.
+  const [activeEnvironmentalChallenge, setActiveEnvironmentalChallenge] = useState<{
+    quest: Quest
+    kind: 'bridge' | 'rocket_fuel' | 'plaque'
+    attemptId: string
+  } | null>(null)
+  // Achado do review automático do Copilot (PR #59): `QuestModal` atrasa `onCorrect` em 700ms
+  // (`setTimeout`) depois de mostrar o feedback "certo" — se a criança fechar o modal DENTRO
+  // desse intervalo (ou abrir um landmark diferente), o `onCorrect` capturado no fechamento do
+  // `QuestModal` ainda dispara depois, lendo `activeEnvironmentalChallenge` de um render antigo
+  // (via closure) — podia creditar recompensa de uma tentativa já cancelada, inclusive por cima
+  // de um desafio novo aberto nesse meio-tempo. `attemptId` (só em memória, nunca persistido) é a
+  // fonte de verdade de qual tentativa está REALMENTE ativa agora; comparado contra o valor
+  // capturado na closure antes de creditar qualquer coisa.
+  const activeEnvironmentalAttemptIdRef = useRef<string | null>(null)
   // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — mesma ponte de
   // `coopAnswerSignalId`/`placingFurnitureRequestId` acima: o clique em "Visitar casa" acontece
   // dentro do `FriendsPanel`, fora deste componente e do `World3D.tsx`; `id` novo a cada clique
@@ -275,6 +299,66 @@ function GameApp() {
   function handleCloseQuest() {
     if (activeQuest && !progress.completedQuestIds.includes(activeQuest.id)) resetStreak()
     setActiveQuest(null)
+  }
+
+  // Missões ambientais (lab-180) — `World3D.tsx` já sorteou a missão do tipo certo pro landmark;
+  // aqui só abre o modal e dispara `learning_challenge_started` (nomes exatos do documento,
+  // ver `productAnalytics.ts`).
+  //
+  // Achado do review automático do Copilot (PR #59): esta também é uma abertura de missão — uma
+  // criança que começa a sessão por um landmark em vez de uma escolinha (`handleSelectQuest`)
+  // nunca disparava `trackFirstLearningChallenge()`, ficando de fora do funil de ativação de 10
+  // minutos (lab-164). `trackFirstLearningChallenge` já é idempotente (só dispara uma vez por
+  // sessão), então chamar aqui também é seguro mesmo se a criança já tiver aberto uma escolinha
+  // antes.
+  function handleOpenEnvironmentalChallenge(quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque') {
+    const attemptId = crypto.randomUUID()
+    activeEnvironmentalAttemptIdRef.current = attemptId
+    setActiveEnvironmentalChallenge({ quest, kind, attemptId })
+    trackFirstLearningChallenge()
+    trackLearningChallengeStarted(kind)
+  }
+
+  // Resposta certa credita XP/moeda de verdade via `completeQuest` — mesmo caminho de
+  // `handleQuestCorrect`, só que a missão veio de um landmark ambiental em vez da escolinha.
+  function handleEnvironmentalChallengeCorrect() {
+    if (!activeEnvironmentalChallenge) return
+    // Guarda contra o `onCorrect` atrasado do `QuestModal` (setTimeout de 700ms) disparando
+    // DEPOIS que esta tentativa específica já foi SUBSTITUÍDA por um landmark novo (o ref só
+    // muda ao ABRIR um novo desafio, `handleOpenEnvironmentalChallenge` — nunca ao fechar, ver
+    // `handleCloseEnvironmentalChallenge` — pra não invalidar uma resposta certa genuína que o
+    // jogador fechou antes do próprio atraso de 700ms terminar).
+    if (activeEnvironmentalAttemptIdRef.current !== activeEnvironmentalChallenge.attemptId) return
+    const { quest, kind } = activeEnvironmentalChallenge
+    const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event } = completeQuest(
+      quest,
+      entitlement?.active,
+    )
+    setReward({ quest, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event })
+    trackLearningChallengeCompleted(kind)
+    activeEnvironmentalAttemptIdRef.current = null
+    setActiveEnvironmentalChallenge(null)
+  }
+
+  // Mesmo raciocínio de `handleCloseQuest` — fechar sem responder quebra o combo de respostas
+  // certas seguidas, revisar uma missão já concluída antes não deveria punir.
+  //
+  // Achado do review automático do Copilot (PR #59, 6ª rodada): a versão anterior zerava
+  // `activeEnvironmentalAttemptIdRef` aqui também — mas `QuestModal` deixa o botão de fechar (×)
+  // e Escape ativos mesmo DURANTE os 700ms de feedback "certo" antes do `onCorrect` atrasado
+  // disparar. Uma criança que clicasse a resposta certa e fechasse o modal nesse intervalo
+  // perdia a recompensa de verdade (o `onCorrect` atrasado ainda dispara, mas o ref já tinha
+  // sido zerado por ESTE fechamento, então `handleEnvironmentalChallengeCorrect` rejeitava uma
+  // conclusão genuína). NÃO zerar aqui continua protegendo contra o cenário que o `attemptId`
+  // foi criado pra resolver (round anterior): se um landmark NOVO abrir antes do `onCorrect`
+  // atrasado da tentativa antiga disparar, `handleOpenEnvironmentalChallenge` já sobrescreve o
+  // ref com um `attemptId` novo — a comparação em `handleEnvironmentalChallengeCorrect` falha
+  // do mesmo jeito, sem precisar que o fechamento zere nada.
+  function handleCloseEnvironmentalChallenge() {
+    if (activeEnvironmentalChallenge && !progress.completedQuestIds.includes(activeEnvironmentalChallenge.quest.id)) {
+      resetStreak()
+    }
+    setActiveEnvironmentalChallenge(null)
   }
 
   function handleSelectSurpriseQuiz(quizId: string) {
@@ -446,6 +530,7 @@ function GameApp() {
           onCoopChallengeCompleted={handleCoopChallengeCompleted}
           visitHouseRequest={visitHouseRequest}
           onVisitHouseHandled={handleVisitHouseHandled}
+          onOpenEnvironmentalChallenge={handleOpenEnvironmentalChallenge}
           onSwitchProfile={() => {
             clearActiveProfile()
             window.location.reload()
@@ -455,6 +540,7 @@ function GameApp() {
             activeSurpriseQuiz !== null ||
             activePlanetQuest !== null ||
             activeCoopQuest !== null ||
+            activeEnvironmentalChallenge !== null ||
             reward !== null ||
             coopReward !== null ||
             showHelp ||
@@ -492,6 +578,14 @@ function GameApp() {
 
       {activeCoopQuest && (
         <QuestModal quest={activeCoopQuest} onCorrect={handleCoopQuestCorrect} onClose={handleCloseCoopQuest} />
+      )}
+
+      {activeEnvironmentalChallenge && (
+        <QuestModal
+          quest={activeEnvironmentalChallenge.quest}
+          onCorrect={handleEnvironmentalChallengeCorrect}
+          onClose={handleCloseEnvironmentalChallenge}
+        />
       )}
 
       {coopReward && (

@@ -193,6 +193,10 @@ const PRODUCT_EVENT_TYPES = new Set([
   // lab-179 ("Planetas interativos v1") — evento único pra qualquer interação dentro de um
   // planeta-destino, ver app/src/productAnalytics.ts (`trackPlanetInteractionCompleted`).
   'planet_interaction_completed',
+  // lab-180 ("Missões ambientais de aprendizagem") — nomes exatos citados pelo documento, ver
+  // app/src/productAnalytics.ts.
+  'learning_challenge_started',
+  'learning_challenge_completed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -272,6 +276,15 @@ const PLANET_INTERACTION_KINDS = new Set(['collectible', 'actionable_object', 'e
 
 export function isValidPlanetInteractionKind(kind: unknown): kind is string {
   return typeof kind === 'string' && PLANET_INTERACTION_KINDS.has(kind)
+}
+
+// lab-180 ("Missões ambientais de aprendizagem") — qual dos 3 landmarks novos do planeta
+// principal gerou o desafio, mesmo espírito de `PLANET_INTERACTION_KINDS` acima: valor de um
+// conjunto FIXO no código-fonte, nunca texto livre.
+const LEARNING_CHALLENGE_KINDS = new Set(['bridge', 'rocket_fuel', 'plaque'])
+
+export function isValidLearningChallengeKind(kind: unknown): kind is string {
+  return typeof kind === 'string' && LEARNING_CHALLENGE_KINDS.has(kind)
 }
 
 // lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de
