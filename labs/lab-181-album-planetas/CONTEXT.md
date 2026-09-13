@@ -27,18 +27,23 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
 - `docs/event-catalog.md` atualizado com a linha do evento novo e uma nota explícita de que
   `discoverable_collected` (citado no backlog) já é coberto por `planet_interaction_completed`
   (lab-179) — não recriado.
-- Testes: 11 novos em `progression.test.ts` (7 para `planetDiscoverySlots`, 4 para
-  `nextPlanetDiscovery`) e 1 novo em `server-accounts/src/domain.test.ts`. Suíte completa
-  verificada ao final: app 196/196, server-accounts 148/148, `tsc -b`/`tsc --noEmit` e
-  `npm run build` limpos.
+- Testes: 13 novos em `progression.test.ts` (2 para `markMarsCoinPotFound`, 7 para
+  `planetDiscoverySlots`, 4 para `nextPlanetDiscovery`) e 1 novo em
+  `server-accounts/src/domain.test.ts`. Suíte completa verificada ao final: app 198/198,
+  server-accounts 148/148, `tsc -b`/`tsc --noEmit` e `npm run build` limpos.
+- Campo novo em `Progress` (`foundMarsCoinPotEver: boolean`, `types.ts`) e função pura
+  `markMarsCoinPotFound` (`progression.ts`) — ver rodada 5 do review abaixo pra motivação; não
+  muda a recompensa repetível do pote em si (`World3D.tsx`), só adiciona um marco permanente
+  separado pro álbum.
 - Verificação ao vivo (dev server, `localhost:5176`, Chrome): seção "Planetas" renderiza a
   callout de próxima descoberta correta; expandir Marte mostra os 3 slots esperados
   (Colecionável/Objeto especial/Segredo escondido), todos bloqueados no estado inicial; o evento
   `album_planet_opened` dispara com `planetId: "marte"` (confirmado via monkey-patch de
   `window.fetch`); após simular a coleta do postal de Marte via `localStorage` e recarregar, o
   slot Colecionável passa a `✓`/nome real ("Saudações de Marte") e a callout avança
-  corretamente para a Coroa de Herói de Marte (`actionable_object`) como próxima descoberta
-  grátis (nome ajustado na rodada 4 do review — ver abaixo).
+  corretamente para o pote de moedas alienígena (`actionable_object`) como próxima descoberta
+  grátis (o critério de "descoberto" desse slot específico passou por 2 correções reais nas
+  rodadas 4-5 do review — ver abaixo).
 
 ## Decisões técnicas tomadas
 
@@ -119,6 +124,22 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
   `Array.isArray(...)` no lugar do truthy check, com teste de regressão novo. (4) Contagem de
   testes errada no `CONTEXT.md`/`FEATURES.md` (diziam 9, eram 10 depois da rodada 3) — corrigida
   pra refletir o número real a cada rodada daqui pra frente.
+- **Rodada 5**: a correção da rodada 4 (renomear o slot pra "Coroa de Herói de Marte") foi
+  insuficiente — trocar só o RÓTULO não resolvia a inconsistência real: o `kind: 'actionable_object'`
+  de Marte, em todo o resto do domínio (`docs/event-catalog.md`, `planet_interaction_completed`),
+  já significa especificamente "pote de moedas", então renomear o texto sem mudar o que
+  `discovered` de fato mede deixava a categoria e o rótulo dizendo coisas diferentes. Fix definitivo:
+  campo novo `foundMarsCoinPotEver: boolean` em `Progress` (`types.ts`) + `markMarsCoinPotFound`
+  (`progression.ts`, mesmo padrão `{ progress, granted }` de `applyTreasureChestFound`), chamado em
+  `World3D.tsx` (via `onFoundMarsCoinPotRef`, prop nova `onFoundMarsCoinPot` até `App.tsx` →
+  `useProgress().foundMarsCoinPot()`) TODA vez que o pote é coletado de verdade — sem mudar o
+  evento de analytics existente (que já dispara em toda coleta, não só a 1ª) nem a recompensa
+  repetível em si (o pote continua dando moeda a cada visita); o campo novo só nunca desfaz depois
+  de marcado uma vez. Voltou o slot pro nome/emoji originais ("Pote de moedas alienígena"/🪙), já
+  que agora `discovered` mede exatamente essa coisa. Verificado ao vivo (dev server): com o
+  capacete de combate desbloqueado mas `foundMarsCoinPotEver: false`, o slot fica corretamente
+  bloqueado (prova de que não usa mais o capacete como proxy); com o campo em `true`, mostra
+  descoberto.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

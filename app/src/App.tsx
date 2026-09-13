@@ -112,6 +112,7 @@ function GameApp() {
     setFurniturePlacement,
     removeFurniture,
     unlockMarsReward,
+    foundMarsCoinPot,
     foundTreasureChest,
     foundPlanetSecret,
     resetStreak,
@@ -517,6 +518,7 @@ function GameApp() {
           onOpenPets={() => setShowPets(true)}
           onOpenFriends={() => setShowFriends(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
+          onFoundMarsCoinPot={foundMarsCoinPot}
           onFindTreasureChest={foundTreasureChest}
           onFindPlanetSecret={foundPlanetSecret}
           onCollectPostcard={collectPostcard}

@@ -50,6 +50,7 @@ import {
   unlockHat,
   unlockHairShape,
   unlockMarsReward,
+  markMarsCoinPotFound,
   unlockPantsColor,
   unlockPlanetFurnitureReward,
   unlockShirtColor,
@@ -689,6 +690,21 @@ describe('unlockMarsReward (lab-94)', () => {
     const result = unlockMarsReward(jaTem)
     expect(result.granted).toBe(false)
     expect(result.progress).toBe(jaTem)
+  })
+})
+
+describe('markMarsCoinPotFound (lab-181, marco permanente do pote de moedas)', () => {
+  it('marca o marco na primeira vez', () => {
+    const result = markMarsCoinPotFound(emptyProgress)
+    expect(result.granted).toBe(true)
+    expect(result.progress.foundMarsCoinPotEver).toBe(true)
+  })
+
+  it('é idempotente — não "concede" de novo se o marco já estiver marcado (pote continua repetível)', () => {
+    const jaAchou = { ...emptyProgress, foundMarsCoinPotEver: true }
+    const result = markMarsCoinPotFound(jaAchou)
+    expect(result.granted).toBe(false)
+    expect(result.progress).toBe(jaAchou)
   })
 })
 
@@ -1412,7 +1428,7 @@ describe('planetDiscoverySlots (lab-181, "Circuito de descoberta e álbum de pla
 
   it('cada slot reflete o progresso real (postal coletado, pote de Marte revelado)', () => {
     const comPostal = applyPostcardCollected(emptyProgress, 'marte').progress
-    const comPoteTambem = unlockMarsReward(comPostal).progress
+    const comPoteTambem = markMarsCoinPotFound(comPostal).progress
     const slots = planetDiscoverySlots('marte', comPoteTambem)
     expect(slots.find((s) => s.kind === 'collectible')?.discovered).toBe(true)
     expect(slots.find((s) => s.kind === 'actionable_object')?.discovered).toBe(true)
@@ -1449,7 +1465,7 @@ describe('nextPlanetDiscovery (lab-181)', () => {
 
   it('depois de completar os 3 slots de Marte, avança pro próximo planeta (Mercúrio)', () => {
     let progress = applyPostcardCollected(emptyProgress, 'marte').progress
-    progress = unlockMarsReward(progress).progress
+    progress = markMarsCoinPotFound(progress).progress
     progress = applyPlanetSecretFound(progress, 'segredo-marte-sonda').progress
     const next = nextPlanetDiscovery(progress)
     expect(next?.planetId).toBe('mercurio')
@@ -1461,7 +1477,7 @@ describe('nextPlanetDiscovery (lab-181)', () => {
     const progress = {
       ...emptyProgress,
       collectedPostcardIds: allPostcards,
-      unlockedHatIds: ['capacete_heroi_marte'],
+      foundMarsCoinPotEver: true,
       foundPlanetSecretIds: ['segredo-marte-sonda'],
       foundTreasureChestIds: ['bau-mercurio', 'bau-venus', 'bau-jupiter', 'bau-saturno', 'bau-urano', 'bau-netuno'],
       completedPlanetQuestIds: Object.values(planetQuests).flat().map((q) => q.id),

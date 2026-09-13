@@ -170,6 +170,10 @@ interface World3DProps {
   onOpenAchievements: () => void
   onOpenMyHouse: () => void
   onUnlockMarsReward: () => void
+  // Marco permanente de "já achou o pote de moedas de Marte" (lab-181), chamado a cada coleta real
+  // do pote — o pote em si continua repetível a cada visita, só o marco em `Progress` é que nunca
+  // desfaz; `App.tsx` repassa direto pra `useProgress().foundMarsCoinPot`, idempotente sozinho.
+  onFoundMarsCoinPot: () => void
   // lab-131 (pedido do usuário: "baús de tesouro escondidos") — chamado ao achar um baú por
   // proximidade real; `App.tsx` repassa direto pra `useProgress().foundTreasureChest`, que já é
   // idempotente sozinho (não precisa de checagem extra aqui).
@@ -2006,6 +2010,7 @@ export function World3D({
   onOpenAchievements,
   onOpenMyHouse,
   onUnlockMarsReward,
+  onFoundMarsCoinPot,
   onFindTreasureChest,
   onFindPlanetSecret,
   onCollectPostcard,
@@ -2063,6 +2068,7 @@ export function World3D({
   const onOpenAchievementsRef = useRef(onOpenAchievements)
   const onOpenMyHouseRef = useRef(onOpenMyHouse)
   const onUnlockMarsRewardRef = useRef(onUnlockMarsReward)
+  const onFoundMarsCoinPotRef = useRef(onFoundMarsCoinPot)
   const onFindTreasureChestRef = useRef(onFindTreasureChest)
   const onFindPlanetSecretRef = useRef(onFindPlanetSecret)
   const onCollectPostcardRef = useRef(onCollectPostcard)
@@ -2189,6 +2195,7 @@ export function World3D({
   onOpenAchievementsRef.current = onOpenAchievements
   onOpenMyHouseRef.current = onOpenMyHouse
   onUnlockMarsRewardRef.current = onUnlockMarsReward
+  onFoundMarsCoinPotRef.current = onFoundMarsCoinPot
   onFindTreasureChestRef.current = onFindTreasureChest
   onFindPlanetSecretRef.current = onFindPlanetSecret
   onCollectPostcardRef.current = onCollectPostcard
@@ -10696,11 +10703,13 @@ export function World3D({
                 // mandava 2 das 3 interações prometidas (`collectible`/`visual_secret`, nunca
                 // `actionable_object`) — o pote é a 2ª interação de Marte (mesmo papel do baú de
                 // tesouro nos outros 6 planetas), só que reseta a cada visita (não é permanente
-                // como o baú/segredo, por isso chamado direto aqui, sem passar por `useProgress`/
-                // `Progress` — não precisa de estado novo pra idempotência entre sessões, só
-                // não disparar mais de uma vez por visita, o que `marsCoinPotCollected` já garante
-                // sozinho). Nunca instrumenta moedas comuns — só este pote específico.
+                // como o baú/segredo). O EVENTO dispara em toda coleta, sem checagem de "primeira
+                // vez" (mede alcance semanal, não descoberta única) — `marsCoinPotCollected` só
+                // evita disparar 2x na mesma visita. `onFoundMarsCoinPotRef` (lab-181) é diferente:
+                // persiste em `Progress` só a PRIMEIRA vez, pro álbum de descobertas saber que este
+                // pote específico já foi achado alguma vez, sem mudar a recompensa repetível em si.
                 trackPlanetInteractionCompleted('marte', 'actionable_object')
+                onFoundMarsCoinPotRef.current()
               }
             }
 

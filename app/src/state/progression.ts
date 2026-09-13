@@ -386,6 +386,19 @@ export function unlockMarsReward(progress: Progress): MarsRewardResult {
   }
 }
 
+export interface MarsCoinPotResult {
+  progress: Progress
+  granted: boolean
+}
+
+// Marca o marco permanente "já achou o pote pelo menos uma vez" (ver `foundMarsCoinPotEver` em
+// `types.ts`) — chamado TODA vez que o pote é coletado (mesmo já tendo sido achado antes), já que
+// o pote em si continua repetível; só o campo booleano é que nunca volta a `false`.
+export function markMarsCoinPotFound(progress: Progress): MarsCoinPotResult {
+  if (progress.foundMarsCoinPotEver) return { progress, granted: false }
+  return { progress: { ...progress, foundMarsCoinPotEver: true }, granted: true }
+}
+
 // Cruza os 4 catálogos de descoberta por planeta (postal, baú/pote de moedas, escolinha/segredo),
 // já unificados sob `planet_interaction_completed`/`kind`. Cobertura é DELIBERADAMENTE desigual
 // entre Marte e os outros 6: Marte não tem baú (`treasureChests.ts` exclui `marte` de propósito)
@@ -418,14 +431,9 @@ export function planetDiscoverySlots(planetId: string, progress: Progress): Plan
   if (planetId === 'marte') {
     slots.push({
       kind: 'actionable_object',
-      emoji: '🪐',
-      // A coleta do pote de moedas em si (`marsCoinPotCollected`, World3D.tsx) é
-      // deliberadamente por-visita, sem estado durável em `Progress` — não dá pra saber aqui se o
-      // pote específico já foi coletado alguma vez. `MARS_REWARD_HAT_ID` é o item durável mais
-      // próximo dessa interação (concedido ao derrotar todos os inimigos de Marte, o mesmo
-      // momento em que o pote é revelado), então o slot descreve ESSA recompensa, não o pote.
-      name: 'Coroa de Herói de Marte',
-      discovered: progress.unlockedHatIds.includes(MARS_REWARD_HAT_ID),
+      emoji: '🪙',
+      name: 'Pote de moedas alienígena',
+      discovered: progress.foundMarsCoinPotEver,
     })
     const secret = findPlanetSecretByPlanetId(planetId)
     if (secret) {

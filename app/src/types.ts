@@ -77,6 +77,13 @@ export interface Progress {
   // o array é por id (não um boolean fixo) pra não precisar de outra migração de tipo se um lab
   // futuro adicionar segredos a mais planetas.
   foundPlanetSecretIds: string[]
+  // O pote de moedas de Marte (lab-128) é deliberadamente repetível — recarrega e volta a dar
+  // moeda a cada visita em que o combate é vencido de novo (ver comentário de
+  // `foundTreasureChestIds` acima). Este campo NÃO muda esse comportamento: é só um marco
+  // permanente de "já achou esse pote pelo menos uma vez", usado pelo álbum de descobertas
+  // (lab-181) pra saber se já mostra o pote como descoberto — nunca lido pela lógica de
+  // recompensa em si.
+  foundMarsCoinPotEver: boolean
   // Combo de respostas certas seguidas (lab-132, pedido do usuário: "combo de respostas certas
   // seguidas") — cresce a cada resposta certa GENUÍNA de missão real (principal ou de planeta;
   // nunca quiz surpresa, que não é idempotente por id e seria fácil de farmar), zera ao fechar
