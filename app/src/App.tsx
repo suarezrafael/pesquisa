@@ -324,8 +324,10 @@ function GameApp() {
   function handleEnvironmentalChallengeCorrect() {
     if (!activeEnvironmentalChallenge) return
     // Guarda contra o `onCorrect` atrasado do `QuestModal` (setTimeout de 700ms) disparando
-    // DEPOIS que esta tentativa específica já foi fechada/substituída — ver comentário no
-    // `activeEnvironmentalAttemptIdRef` acima.
+    // DEPOIS que esta tentativa específica já foi SUBSTITUÍDA por um landmark novo (o ref só
+    // muda ao ABRIR um novo desafio, `handleOpenEnvironmentalChallenge` — nunca ao fechar, ver
+    // `handleCloseEnvironmentalChallenge` — pra não invalidar uma resposta certa genuína que o
+    // jogador fechou antes do próprio atraso de 700ms terminar).
     if (activeEnvironmentalAttemptIdRef.current !== activeEnvironmentalChallenge.attemptId) return
     const { quest, kind } = activeEnvironmentalChallenge
     const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event } = completeQuest(
@@ -339,13 +341,23 @@ function GameApp() {
   }
 
   // Mesmo raciocínio de `handleCloseQuest` — fechar sem responder quebra o combo de respostas
-  // certas seguidas, revisar uma missão já concluída antes não deveria punir. Zera o ref ANTES de
-  // limpar o estado — invalida qualquer `onCorrect` atrasado em voo desta mesma tentativa.
+  // certas seguidas, revisar uma missão já concluída antes não deveria punir.
+  //
+  // Achado do review automático do Copilot (PR #59, 6ª rodada): a versão anterior zerava
+  // `activeEnvironmentalAttemptIdRef` aqui também — mas `QuestModal` deixa o botão de fechar (×)
+  // e Escape ativos mesmo DURANTE os 700ms de feedback "certo" antes do `onCorrect` atrasado
+  // disparar. Uma criança que clicasse a resposta certa e fechasse o modal nesse intervalo
+  // perdia a recompensa de verdade (o `onCorrect` atrasado ainda dispara, mas o ref já tinha
+  // sido zerado por ESTE fechamento, então `handleEnvironmentalChallengeCorrect` rejeitava uma
+  // conclusão genuína). NÃO zerar aqui continua protegendo contra o cenário que o `attemptId`
+  // foi criado pra resolver (round anterior): se um landmark NOVO abrir antes do `onCorrect`
+  // atrasado da tentativa antiga disparar, `handleOpenEnvironmentalChallenge` já sobrescreve o
+  // ref com um `attemptId` novo — a comparação em `handleEnvironmentalChallengeCorrect` falha
+  // do mesmo jeito, sem precisar que o fechamento zere nada.
   function handleCloseEnvironmentalChallenge() {
     if (activeEnvironmentalChallenge && !progress.completedQuestIds.includes(activeEnvironmentalChallenge.quest.id)) {
       resetStreak()
     }
-    activeEnvironmentalAttemptIdRef.current = null
     setActiveEnvironmentalChallenge(null)
   }
 

@@ -15,8 +15,9 @@ Commit inicial → final: 6114f8e3dcc5124422a0819148edd22451b7b91d..6e81720
   - **Placa** (`placa-leitura`, 📜) — poste + tabuleiro.
 - Cada landmark sorteia uma pergunta do TIPO certo (`logica`/`matematica`/`leitura`) de
   `data/quests.ts`, priorizando uma ainda não respondida (cai pro pool inteiro do tipo se todas já
-  feitas) — `pickEnvironmentalQuest`, dentro do mesmo handler de tecla `E` que já trata
-  carro/foguete/casa/desafio em dupla.
+  feitas) — `selectEnvironmentalChallengeQuest` (`state/progression.ts`, função pura testável),
+  chamada pelo mesmo handler de tecla `E` que já trata carro/foguete/casa/desafio em dupla
+  (`World3D.tsx`).
 - Resposta certa credita XP/moeda REAIS via `completeQuest` (`App.tsx`,
   `handleEnvironmentalChallengeCorrect`) — é uma missão normal do pool de sempre, só alcançada por
   um caminho ambiental novo, não uma recompensa paralela como o desafio em dupla.
@@ -136,10 +137,10 @@ o **Lab 181 - Circuito de descoberta e álbum de planetas** (item 7 da ordem sug
   Matemática "Balas na Caixa" / Leitura); resposta certa credita XP/moeda reais (RewardToast
   confirmado); `learning_challenge_completed` dispara com `kind` correto pros 3 (confirmado via
   monkey-patch de `window.fetch`).
-- CI verde na PR #59 (3 workflows). 2 rodadas de review automático do Copilot até este handoff
-  (3 achados reais na 1ª, 4 na 2ª — 7 no total), todos corrigidos (ver "Decisões técnicas
-  tomadas") — aguardando confirmação de rodada limpa antes do merge/deploy (fora do escopo deste
-  `CONTEXT.md`, que documenta o código já implementado e verificado, não o processo de review
-  ainda em andamento — este handoff é atualizado a cada rodada com achados reais).
+- CI verde na PR #59 (3 workflows). Várias rodadas de review automático do Copilot até este
+  handoff, todos os achados reais corrigidos — ver histórico rodada a rodada completo em
+  "Decisões técnicas tomadas" acima (não repetido aqui de propósito: um número fixo de rodadas
+  ficou desatualizado 2 vezes seguidas neste mesmo lab só de FICAR nesta linha também) —
+  aguardando confirmação de rodada limpa antes do merge/deploy.
 - Como verificar: abrir o jogo, andar até um dos 3 landmarks novos no planeta principal (ponte,
   posto de abastecimento perto do foguete, placa), apertar `E` com a dica visível.
