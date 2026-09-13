@@ -214,12 +214,12 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
                   <span className="quest-list-index" aria-hidden="true">
                     {planet.emoji}
                   </span>
-                  <div className="quest-list-info">
+                  <span className="quest-list-info">
                     <span className="quest-list-title">{planet.name.replace('Saudações de ', '')}</span>
                     <span className="quest-list-type">
                       {discoveredCount}/{slots.length} descobertas
                     </span>
-                  </div>
+                  </span>
                   <span className="quest-list-status" aria-hidden="true">
                     {expanded ? '▲' : '▼'}
                   </span>

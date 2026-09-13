@@ -441,12 +441,17 @@ export function planetDiscoverySlots(planetId: string, progress: Progress): Plan
         discovered: progress.foundTreasureChestIds.includes(chest.id),
       })
     }
-    if (planetQuests[planetId]) {
+    const planetQuestList = planetQuests[planetId]
+    if (planetQuestList) {
       slots.push({
         kind: 'educational_quiz',
         emoji: '🎓',
         name: 'Escolinha de astronomia',
-        discovered: isPlanetFullyCompleted(planetId, progress.completedPlanetQuestIds),
+        // `trackPlanetInteractionCompleted(planetId, 'educational_quiz')` (useProgress.ts) dispara
+        // na PRIMEIRA pergunta certa do planeta, não só quando as 6 são respondidas
+        // (`isPlanetFullyCompleted` é pra outra coisa: a recompensa de mobília) — o slot precisa
+        // do mesmo critério pra não ficar "não descoberto" depois da interação já ter acontecido.
+        discovered: planetQuestList.some((q) => progress.completedPlanetQuestIds.includes(q.id)),
       })
     }
   }

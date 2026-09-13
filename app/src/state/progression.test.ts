@@ -1425,6 +1425,15 @@ describe('planetDiscoverySlots (lab-181, "Circuito de descoberta e álbum de pla
     expect(slots.find((s) => s.kind === 'educational_quiz')?.discovered).toBe(true)
     expect(slots.find((s) => s.kind === 'collectible')?.discovered).toBe(false)
   })
+
+  it('escolinha já conta como descoberta na 1ª pergunta certa do planeta, não só quando as 6 terminam', () => {
+    const comUmaPergunta = {
+      ...emptyProgress,
+      completedPlanetQuestIds: [planetQuests.mercurio[0].id],
+    }
+    const slots = planetDiscoverySlots('mercurio', comUmaPergunta)
+    expect(slots.find((s) => s.kind === 'educational_quiz')?.discovered).toBe(true)
+  })
 })
 
 describe('nextPlanetDiscovery (lab-181)', () => {

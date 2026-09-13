@@ -76,6 +76,29 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
   referenciava "lab-181" diretamente — violação do MUST de
   `docs/prompts/04-manutencao-clean-code.md` §2 (nenhum comentário deve referenciar o laboratório
   atual), reescrito para descrever só o "porquê" técnico (altura do alvo de toque).
+- **Rodada 2**: mais 7 comentários novos (todos deste lab) referenciando "lab-181" diretamente —
+  mesma violação do MUST acima, não pega na 1ª rodada porque o `.planet-toggle` foi o único achado
+  citado explicitamente ali; removidos/reescritos em `domain.ts`, `index.ts` (2), `treasureChests.ts`,
+  `productAnalytics.ts`, `progression.ts`, `AchievementsPanel.tsx` (3). Também 1 achado real de CSS:
+  `.planet-toggle` é um `<button>` nativo, que usa a cor `buttontext` do navegador em vez de herdar
+  a cor do body — corrigido com `color: inherit`, senão as linhas de planeta ficariam com uma cor
+  de texto diferente das outras linhas do mesmo catálogo. E 1 achado de consistência
+  documentação-vs-código: `FEATURES.md`/`CONTEXT.md` descreviam a seção nova como "grade" (grid),
+  mas o código sempre reaproveitou o mesmo padrão de LISTA vertical (`.quest-list`) das outras 3
+  seções — corrigida a documentação pra bater com o que foi de fato implementado (a decisão de
+  reaproveitar o padrão de lista, não criar um grid novo, é a mesma citada nas "Decisões técnicas"
+  acima).
+- **Rodada 3**: 2 achados reais corrigidos. (1) `planetDiscoverySlots` marcava o slot
+  `educational_quiz` como descoberto só com `isPlanetFullyCompleted` (as 6 perguntas do planeta
+  respondidas), mas `trackPlanetInteractionCompleted(planetId, 'educational_quiz')`
+  (`useProgress.ts`, `completePlanetQuest`) já dispara na PRIMEIRA pergunta certa — o álbum ficava
+  mostrando a escolinha como "não descoberta" mesmo depois da interação real já ter acontecido e
+  sido contabilizada em `planet_interaction_completed`. Corrigido pra checar "pelo menos uma
+  pergunta do planeta respondida" (`planetQuestList.some(...)`), o mesmo critério do evento; teste
+  de regressão novo cobrindo o caso de só 1 pergunta respondida. (2) `<div className="quest-list-info">`
+  aninhado direto dentro do `<button>` da linha do planeta — HTML inválido (`<button>` só aceita
+  "phrasing content", `<div>` não é) que pode gerar árvore de acessibilidade inconsistente;
+  corrigido trocando por `<span>` (a mesma classe CSS já usa `display: flex`, funciona igual).
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
