@@ -94,6 +94,11 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   `weeklyEventObjectiveProgress`. Também 2 nits de gramática (palavra duplicada "todo toda",
   concordância de gênero "escolhido"→"escolhida") e um teste fortalecido pra checar o valor exato
   da recompensa (`toBe`, não `toBeGreaterThan`) — todos corrigidos.
+- **Rodada 2**: 1 achado real — a copy de `semana-normal` ("Sem bônus especial esta semana — volte
+  na próxima!") ficou CONTRADITÓRIA depois deste lab: o painel mostra essa frase E, logo abaixo, um
+  objetivo que paga 20 moedas na mesma semana. Corrigido pra "Sem multiplicador de XP/moedas esta
+  semana — mas o objetivo da semana ainda vale!", deixando claro que só o multiplicador passivo
+  está ausente, não o bônus fixo do objetivo.
 
 ## Pendências / dívidas conhecidas
 

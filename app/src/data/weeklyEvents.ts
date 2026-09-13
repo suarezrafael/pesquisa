@@ -16,7 +16,7 @@ const WEEKLY_EVENTS: WeeklyEvent[] = [
     id: 'semana-normal',
     name: 'Semana Normal',
     emoji: '📅',
-    description: 'Sem bônus especial esta semana — volte na próxima!',
+    description: 'Sem multiplicador de XP/moedas esta semana — mas o objetivo da semana ainda vale!',
     xpMultiplier: 1,
     coinMultiplier: 1,
   },
