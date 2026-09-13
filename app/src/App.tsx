@@ -130,10 +130,20 @@ function GameApp() {
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
   } = useProgress()
-  // Calculado uma vez aqui, sempre com o relógio ATUAL — repassado pro badge (`HudHeader.tsx`, via
+  // Calculado a cada render, sempre com o relógio ATUAL — repassado pro badge (`HudHeader.tsx`, via
   // `World3D.tsx`), que deve mesmo refletir "agora" de forma contínua enquanto o app fica aberto.
   // O painel (`WeeklyEventPanel.tsx`) é DIFERENTE: usa um snapshot capturado no clique
   // (`weeklyEventPanel` abaixo), não este valor — ver comentário lá sobre por quê.
+  //
+  // `weeklyEventRefreshTick` (achado do review automático do Copilot) força um re-render a cada
+  // minuto só pra recalcular `weeklyEvent` de novo — sem isso, uma criança que deixa o jogo aberto
+  // e PARADO (sem nenhuma interação disparando outro re-render) atravessando a virada exata de
+  // domingo pra segunda veria o badge preso no evento da semana anterior até a próxima ação.
+  const [, setWeeklyEventRefreshTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setWeeklyEventRefreshTick((n) => n + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
   const weeklyEvent = getCurrentWeeklyEvent()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)

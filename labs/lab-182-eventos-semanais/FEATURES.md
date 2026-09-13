@@ -20,7 +20,7 @@ desenvolver").
 
 - `data/weeklyEvents.ts` (lab-22) já é a única fonte de verdade da rotação semanal: 4 eventos fixos
   (`semana-normal`, `semana-dourada` 2x moeda, `semana-sabio` 2x XP, `semana-dupla` 2x ambos),
-  escolhido deterministicamente por `getCurrentWeeklyEvent(date)` via número da semana ISO 8601 —
+  escolhida deterministicamente por `getCurrentWeeklyEvent(date)` via número da semana ISO 8601 —
   todo jogador na mesma semana real vê o mesmo evento, sem servidor. Consumido em 3 lugares:
   `progression.ts` (multiplica XP/moeda ao completar missão), `HudHeader.tsx` (badge não-clicável
   no topo, só tooltip com a descrição) e `RewardToast.tsx` (linha de bônus quando o multiplicador é

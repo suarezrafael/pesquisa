@@ -225,17 +225,30 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   raro de `'blocked'`, nunca afirmando algo falso. Teste de regressão novo cobrindo os 3 estados,
   incluindo o cenário exato de recuo de relógio. (2) `FEATURES.md` ainda descrevia o campo como
   "chave de semana" em vez de instante ISO completo — corrigido.
+- **Rodada 13**: 2 achados. (1) Real — `weeklyEvent` (a variável do badge) é recalculada a cada
+  render de `App.tsx`, mas NADA garantia que `App.tsx` re-renderizasse periodicamente por conta
+  própria: se a criança deixasse o jogo aberto e PARADO (sem nenhuma interação disparando outro
+  re-render — o loop de física/render do Babylon.js roda por fora do React, não conta) atravessando
+  a virada exata de domingo pra segunda, o badge ficaria preso no evento da semana anterior até a
+  próxima ação qualquer. Corrigido com um `setInterval` de 1 minuto (`useEffect` novo, um contador
+  interno só pra forçar o re-render — o valor em si nunca é lido, só o `setState` importa) — o
+  badge agora se autocorrige sozinho em até 1 minuto de qualquer virada de semana, mesmo com o app
+  parado. (2) Nit de gramática em `FEATURES.md` ("escolhido" → "escolhida", concordância com
+  "rotação"). Também reconciliada a descrição da PR no GitHub, que ainda afirmava "verificado ao
+  vivo" sem qualificar que as rodadas 11-13 não tiveram essa reverificação (instabilidade do dev
+  server local, ver pendência abaixo).
 
 ## Pendências / dívidas conhecidas
 
-- **Pendência real, não resolvida**: os fixes das rodadas 11 e 12 (snapshot de `weeklyEvent`/
-  `status` capturado no clique; os 3 estados `WeeklyEventObjectiveStatus`) não foram reverificados
-  ao vivo num navegador real — o dev server local ficou persistentemente instável nesta sessão
-  (múltiplos processos concorrentes acumulados, reiniciado repetidas vezes sem resolver o
-  travamento no carregamento do chunk 3D preguiçoso) e não deu tempo de confirmar visualmente antes
-  do fim desta verificação. Confiança vem de `tsc -b`/`npm run test`/`npm run build` limpos, não de
-  reprodução visual; recomenda-se confirmar com um clique de mouse real numa sessão futura
-  (verificar especialmente a mensagem neutra do estado `'blocked'`) antes de assumir 100% resolvido.
+- **Pendência real, não resolvida**: os fixes das rodadas 11-13 (snapshot de `weeklyEvent`/`status`
+  capturado no clique; os 3 estados `WeeklyEventObjectiveStatus`; o refresh periódico do badge a
+  cada minuto) não foram reverificados ao vivo num navegador real — o dev server local ficou
+  persistentemente instável nesta sessão (múltiplos processos concorrentes acumulados, reiniciado
+  repetidas vezes sem resolver o travamento no carregamento do chunk 3D preguiçoso) e não deu tempo
+  de confirmar visualmente antes do fim desta verificação. Confiança vem de `tsc -b`/`npm run test`/
+  `npm run build` limpos, não de reprodução visual; recomenda-se confirmar com um clique de mouse
+  real numa sessão futura (verificar especialmente a mensagem neutra do estado `'blocked'` e que o
+  badge de fato atualiza sozinho depois de ~1 minuto parado) antes de assumir 100% resolvido.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
