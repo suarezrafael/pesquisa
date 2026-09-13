@@ -80,7 +80,7 @@ export function AchievementsPanel({ progress, onClose }: AchievementsPanelProps)
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Catálogo de conquistas, cartões-postais e planetas"
+      aria-label="Catálogo de conquistas, cartões-postais, pets e planetas"
       ref={modalRef}
       tabIndex={-1}
     >
