@@ -59,15 +59,17 @@ deve desenvolver").
   seguindo a ordem de `POSTCARD_CATALOG`; sempre grátis (nunca checa `entitlementActive`/assinatura
   — a regra inegociável do projeto é nunca gatear progresso/exploração, só cosmético).
 - [x] Testes novos em `progression.test.ts` pras duas funções (cobrindo Marte com seus 2 catálogos
-  diferentes vs. os outros 6 planetas, planeta 100% descoberto, progresso vazio) — 9 testes novos,
-  194/194 no total.
+  diferentes vs. os outros 6 planetas, planeta 100% descoberto, progresso vazio, nome de
+  planeta herdado de `Object.prototype`, escolinha descoberta na 1ª pergunta) — 11 testes novos
+  (7 em `planetDiscoverySlots`, 4 em `nextPlanetDiscovery`), 196/196 no total.
 - [x] Nova seção "Planetas" dentro do `AchievementsPanel.tsx` existente (não um painel novo — evita
   mais um ícone no `HudHeader`, que já tem ~11): lista dos 7 planetas com fração de progresso
   (ex. "1/3 descobertas"), expande ao tocar pra mostrar os 3 slots individuais; destaque "🎯
   Próxima descoberta" no topo da seção, mesmo padrão visual do `nextObjective` já usado pra
   badges/postais/pets. Verificado ao vivo (dev server): expandir Marte mostra os 3 slots
   corretos, e marcar o postal como coletado (via `localStorage`) atualiza o slot pra descoberto e
-  avança a "próxima descoberta" pro pote de moedas.
+  avança a "próxima descoberta" pra Coroa de Herói de Marte (ver "Decisões técnicas" no
+  `CONTEXT.md` sobre por que o slot descreve essa recompensa, não o pote de moedas em si).
 - [x] Evento novo `album_planet_opened` (`meta.planetId`) — dispara ao expandir um planeta
   específico na lista (sinal de interesse real, não só abrir o painel inteiro). Allowlist em
   `server-accounts/src/domain.ts`, validação em `index.ts`, `weeklyFunnel.albumPlanetOpened`.

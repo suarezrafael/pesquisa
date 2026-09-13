@@ -27,17 +27,18 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
 - `docs/event-catalog.md` atualizado com a linha do evento novo e uma nota explícita de que
   `discoverable_collected` (citado no backlog) já é coberto por `planet_interaction_completed`
   (lab-179) — não recriado.
-- Testes: 9 novos em `progression.test.ts` (5 para `planetDiscoverySlots`, 4 para
+- Testes: 11 novos em `progression.test.ts` (7 para `planetDiscoverySlots`, 4 para
   `nextPlanetDiscovery`) e 1 novo em `server-accounts/src/domain.test.ts`. Suíte completa
-  verificada: app 194/194, server-accounts 148/148, `tsc -b`/`tsc --noEmit` e `npm run build`
-  limpos.
+  verificada ao final: app 196/196, server-accounts 148/148, `tsc -b`/`tsc --noEmit` e
+  `npm run build` limpos.
 - Verificação ao vivo (dev server, `localhost:5176`, Chrome): seção "Planetas" renderiza a
   callout de próxima descoberta correta; expandir Marte mostra os 3 slots esperados
   (Colecionável/Objeto especial/Segredo escondido), todos bloqueados no estado inicial; o evento
   `album_planet_opened` dispara com `planetId: "marte"` (confirmado via monkey-patch de
   `window.fetch`); após simular a coleta do postal de Marte via `localStorage` e recarregar, o
   slot Colecionável passa a `✓`/nome real ("Saudações de Marte") e a callout avança
-  corretamente para o pote de moedas (`actionable_object`) como próxima descoberta grátis.
+  corretamente para a Coroa de Herói de Marte (`actionable_object`) como próxima descoberta
+  grátis (nome ajustado na rodada 4 do review — ver abaixo).
 
 ## Decisões técnicas tomadas
 
@@ -99,6 +100,25 @@ Commit inicial → final: 57e52fc5fce618db0099fe6f004e014e0b4632f2..(commit dest
   aninhado direto dentro do `<button>` da linha do planeta — HTML inválido (`<button>` só aceita
   "phrasing content", `<div>` não é) que pode gerar árvore de acessibilidade inconsistente;
   corrigido trocando por `<span>` (a mesma classe CSS já usa `display: flex`, funciona igual).
+- **Rodada 4**: 4 achados reais corrigidos. (1) O slot `actionable_object` de Marte usava
+  `unlockedHatIds.includes(MARS_REWARD_HAT_ID)` como proxy pra "coletou o pote de moedas", mas são
+  interações DIFERENTES: `unlockMarsReward` (a Coroa de Herói) dispara ao derrotar o último
+  inimigo, enquanto a coleta do pote em si (`marsCoinPotCollected`, `World3D.tsx`) é
+  deliberadamente por-visita, sem estado durável em `Progress` (decisão do lab-179, pra não
+  precisar de idempotência entre sessões nesse pote específico) — não existe hoje nenhum sinal
+  persistente que corresponda literalmente a "o pote foi coletado alguma vez". Corrigido
+  RENOMEANDO o slot pra descrever a recompensa que de fato é durável e correspondente
+  (`name: 'Coroa de Herói de Marte'`, emoji 🪐, mesmo item de `data/hats.ts`), em vez de inventar
+  estado novo só pra este lab — mantém a asserção "clareou Marte" honesta sem contradizer a
+  decisão de design do lab-179 de manter o pote efêmero. (2) `docs/event-catalog.md` também
+  descrevia a seção nova como "grade" — mesma correção de wording da rodada 2, que não tinha
+  coberto este arquivo. (3) `planetQuests[planetId]` (objeto plain, chave arbitrária) com um
+  `planetId` igual a uma propriedade herdada de `Object.prototype` (`"constructor"`, `"toString"`)
+  devolvia um valor truthy não-array, e o `.some(...)` seguinte lançava exceção — contradizendo o
+  próprio comportamento documentado de planeta inválido devolver `[]`; corrigido com
+  `Array.isArray(...)` no lugar do truthy check, com teste de regressão novo. (4) Contagem de
+  testes errada no `CONTEXT.md`/`FEATURES.md` (diziam 9, eram 10 depois da rodada 3) — corrigida
+  pra refletir o número real a cada rodada daqui pra frente.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 

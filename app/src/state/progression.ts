@@ -418,8 +418,13 @@ export function planetDiscoverySlots(planetId: string, progress: Progress): Plan
   if (planetId === 'marte') {
     slots.push({
       kind: 'actionable_object',
-      emoji: '🪙',
-      name: 'Pote de moedas alienígena',
+      emoji: '🪐',
+      // A coleta do pote de moedas em si (`marsCoinPotCollected`, World3D.tsx) é
+      // deliberadamente por-visita, sem estado durável em `Progress` — não dá pra saber aqui se o
+      // pote específico já foi coletado alguma vez. `MARS_REWARD_HAT_ID` é o item durável mais
+      // próximo dessa interação (concedido ao derrotar todos os inimigos de Marte, o mesmo
+      // momento em que o pote é revelado), então o slot descreve ESSA recompensa, não o pote.
+      name: 'Coroa de Herói de Marte',
       discovered: progress.unlockedHatIds.includes(MARS_REWARD_HAT_ID),
     })
     const secret = findPlanetSecretByPlanetId(planetId)
@@ -442,7 +447,7 @@ export function planetDiscoverySlots(planetId: string, progress: Progress): Plan
       })
     }
     const planetQuestList = planetQuests[planetId]
-    if (planetQuestList) {
+    if (Array.isArray(planetQuestList)) {
       slots.push({
         kind: 'educational_quiz',
         emoji: '🎓',

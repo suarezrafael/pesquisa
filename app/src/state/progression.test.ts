@@ -1405,6 +1405,11 @@ describe('planetDiscoverySlots (lab-181, "Circuito de descoberta e álbum de pla
     expect(planetDiscoverySlots('planeta-que-nao-existe', emptyProgress)).toEqual([])
   })
 
+  it('nome de propriedade herdada de Object.prototype não quebra nem finge ser um planeta válido', () => {
+    expect(planetDiscoverySlots('constructor', emptyProgress)).toEqual([])
+    expect(planetDiscoverySlots('toString', emptyProgress)).toEqual([])
+  })
+
   it('cada slot reflete o progresso real (postal coletado, pote de Marte revelado)', () => {
     const comPostal = applyPostcardCollected(emptyProgress, 'marte').progress
     const comPoteTambem = unlockMarsReward(comPostal).progress
