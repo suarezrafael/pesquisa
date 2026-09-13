@@ -47,7 +47,7 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   de novo numa semana nova, `isWeeklyEventObjectiveDone` reflete o estado real, perfil vazio nunca
   mostra concluído, regressão do ataque de adiantar-e-voltar o relógio, `wouldGrantWeeklyEventObjectiveReward`
   nunca diverge de `applyWeeklyEventObjectiveProgress`) e 1 novo em `server-accounts/src/domain.test.ts`.
-  Suíte completa ao final: app 204/204, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e
+  Suíte completa ao final: app 205/205, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e
   `npm run build` limpos.
 
 ## Decisões técnicas tomadas
@@ -191,11 +191,38 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   trocando pra `!wouldGrantWeeklyEventObjectiveReward(...)` — o MESMO predicado que decide a
   escrita real agora também decide o que o painel mostra, garantindo que a UI nunca prometa uma
   recompensa que a escrita vai recusar.
+- **Rodada 11**: 2 achados. (1) Real, mesma classe das rodadas 5-10 num nível ainda mais alto:
+  `weeklyEvent`/`weeklyEventObjectiveDone` eram recalculados no CORPO do componente — recalculados
+  a cada re-render de `App.tsx`, não capturados uma vez. Clicar no badge dispara um re-render
+  (`setShowWeeklyEvent`/estado novo); se a virada de semana ISO acontecer EXATAMENTE entre o
+  render que desenhou o badge clicado e o render que abre o painel, o painel podia mostrar um
+  evento diferente do que estava no badge no instante do clique. Resolvido definitivamente (não só
+  mais um patch local): o painel agora usa um SNAPSHOT capturado dentro do próprio handler de
+  clique (`onOpenWeeklyEvent`, um novo `useState<{ event, objectiveDone } | null>` substituindo o
+  antigo `showWeeklyEvent: boolean`) — o valor é decidido uma vez, no instante exato do clique, e
+  nunca mais recalculado enquanto o painel fica aberto. O badge em si continua vivo/reativo
+  (recalculado a cada render, do jeito que deve ser — precisa refletir "agora" continuamente
+  enquanto o app fica aberto). (2) Documentação: contagem de testes desatualizada (203 nalguns
+  lugares do handoff/descrição da PR, real é 205) — corrigida em todos os lugares.
+  **Verificação ao vivo NÃO completada nesta rodada** — o dev server local ficou instável (múltiplos
+  processos concorrentes acumulados de rodadas anteriores desta sessão disputando recursos,
+  travando o carregamento do chunk 3D preguiçoso mesmo depois de reiniciado 2x) e não foi possível
+  confirmar visualmente o snapshot funcionando antes do fim do tempo desta verificação. Confiança
+  vem de 3 verificações estáticas independentes, todas limpas: `tsc -b`, `npm run test` (205/205,
+  inalterado — esta mudança não introduz lógica pura nova, só MUDA QUANDO um valor já testado é
+  lido) e `npm run build` (build de produção completo, que de fato empacota `World3D`/`HudHeader`
+  também, sem erro). O mecanismo em si (painel/badge exibindo o valor certo) já tinha sido
+  confirmado ao vivo com cliques de mouse reais nas rodadas 1 e 7; esta rodada só muda O MOMENTO em
+  que o valor é calculado, não a lógica de exibição em si.
 
 ## Pendências / dívidas conhecidas
 
-- Nenhuma dívida técnica nova conhecida ao final deste lab (os achados da rodada 1 do review, todos
-  corrigidos e reverificados ao vivo).
+- **Pendência real, não resolvida**: o fix da rodada 11 (snapshot de `weeklyEvent`/`objectiveDone`
+  capturado no clique) não foi reverificado ao vivo num navegador real — o dev server local ficou
+  instável nesta sessão (múltiplos processos concorrentes, ver rodada 11 acima) e não deu tempo de
+  confirmar antes do fim desta verificação. Confiança vem de `tsc -b`/`npm run test`/`npm run build`
+  limpos, não de reprodução visual; recomenda-se confirmar com um clique de mouse real numa sessão
+  futura antes de assumir 100% resolvido.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
@@ -217,8 +244,8 @@ benefícios, cancelamento e a regra de aprendizagem grátis. Métricas citadas:
 
 - Branch: `lab-182-eventos-semanais` (a mesclar em `main` via PR).
 - Como rodar/verificar o que foi construído neste laboratório:
-  - `cd app && npm run test` (203 testes, inclui `applyWeeklyEventObjectiveProgress`/
-    `isWeeklyEventObjectiveDone`).
+  - `cd app && npm run test` (205 testes, inclui `applyWeeklyEventObjectiveProgress`/
+    `wouldGrantWeeklyEventObjectiveReward`).
   - `cd app/server-accounts && npm run test` (149 testes, inclui validação de
     `weekly_event_objective_completed`).
   - `cd app && npm run dev`, abrir o jogo, clicar no badge do evento semanal (topo esquerdo,

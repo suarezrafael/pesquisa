@@ -130,20 +130,11 @@ function GameApp() {
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
   } = useProgress()
-  // Calculados uma vez aqui e repassados por props pro badge (`HudHeader.tsx`, via `World3D.tsx`)
-  // e pro painel (`WeeklyEventPanel.tsx`) — se cada um chamasse `getCurrentWeeklyEvent()`/
-  // `wouldGrantWeeklyEventObjectiveReward()` por conta própria, bem na virada exata de semana ISO
-  // o badge podia mostrar um evento diferente do painel aberto a partir dele.
-  const weeklyEventNow = new Date()
-  const weeklyEvent = getCurrentWeeklyEvent(weeklyEventNow)
-  // `!wouldGrantWeeklyEventObjectiveReward(...)`, NÃO `isWeeklyEventObjectiveDone(...)` — achado do
-  // review automático do Copilot: essas duas divergem depois de um recuo de relógio (adiantar,
-  // reivindicar, voltar). `isWeeklyEventObjectiveDone` diria "não concluído" (semana ISO diferente
-  // da guardada), mas `applyWeeklyEventObjectiveProgress` rejeitaria a próxima tentativa mesmo
-  // assim (guarda anti-recuo) — o painel prometeria "+20 moedas" por completar um desafio que na
-  // prática não paga nada. Reaproveitar o MESMO predicado da escrita garante que o painel nunca
-  // prometa uma recompensa que a escrita real vai recusar.
-  const weeklyEventObjectiveDone = !wouldGrantWeeklyEventObjectiveReward(progress, weeklyEventNow.toISOString())
+  // Calculado uma vez aqui, sempre com o relógio ATUAL — repassado pro badge (`HudHeader.tsx`, via
+  // `World3D.tsx`), que deve mesmo refletir "agora" de forma contínua enquanto o app fica aberto.
+  // O painel (`WeeklyEventPanel.tsx`) é DIFERENTE: usa um snapshot capturado no clique
+  // (`weeklyEventPanel` abaixo), não este valor — ver comentário lá sobre por quê.
+  const weeklyEvent = getCurrentWeeklyEvent()
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [activePlanetQuest, setActivePlanetQuest] = useState<Quest | null>(null)
@@ -206,7 +197,15 @@ function GameApp() {
   const [showMyHouse, setShowMyHouse] = useState(false)
   const [showPets, setShowPets] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
-  const [showWeeklyEvent, setShowWeeklyEvent] = useState(false)
+  // Snapshot capturado no INSTANTE do clique (`onOpenWeeklyEvent` abaixo), não um booleano simples
+  // — achado do review automático do Copilot: `weeklyEvent`/`weeklyEventObjectiveDone` (calculados
+  // no corpo do componente, recalculados a CADA re-render) podiam divergir entre o clique no badge
+  // e o re-render que de fato abre o painel, bem na virada exata de semana ISO. Guardar o valor já
+  // decidido no momento do clique, em vez de deixar o painel reconsultar `new Date()` de novo em
+  // outro render, fecha essa classe de divergência de vez.
+  const [weeklyEventPanel, setWeeklyEventPanel] = useState<{ event: WeeklyEvent; objectiveDone: boolean } | null>(
+    null,
+  )
   // lab-136 (pedido do usuário: "escolher em que posição da casa deve ficar a peça... o ângulo e
   // posição") — id do item que o jogador clicou "Mover" no `MyHousePanel`; `World3D.tsx` observa
   // essa prop e entra no modo de posicionamento dentro da cena 3D, depois chama
@@ -559,7 +558,19 @@ function GameApp() {
           onOpenShop={() => setShowShop(true)}
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
-          onOpenWeeklyEvent={() => setShowWeeklyEvent(true)}
+          onOpenWeeklyEvent={() => {
+            const now = new Date()
+            setWeeklyEventPanel({
+              event: getCurrentWeeklyEvent(now),
+              // `wouldGrantWeeklyEventObjectiveReward`, NÃO `isWeeklyEventObjectiveDone` sozinho —
+              // as duas divergem depois de um recuo de relógio (adiantar, reivindicar, voltar):
+              // `isWeeklyEventObjectiveDone` diria "não concluído" (semana ISO diferente da
+              // guardada), mas `applyWeeklyEventObjectiveProgress` rejeitaria a próxima tentativa
+              // mesmo assim (guarda anti-recuo) — o painel prometeria "+20 moedas" por completar um
+              // desafio que na prática não paga nada.
+              objectiveDone: !wouldGrantWeeklyEventObjectiveReward(progress, now.toISOString()),
+            })
+          }}
           weeklyEvent={weeklyEvent}
           onOpenMyHouse={() => setShowMyHouse(true)}
           onOpenPets={() => setShowPets(true)}
@@ -601,7 +612,7 @@ function GameApp() {
             showPets ||
             showFriends ||
             showMarsReward ||
-            showWeeklyEvent
+            weeklyEventPanel !== null
           }
         />
       </Suspense>
@@ -673,11 +684,11 @@ function GameApp() {
         <AchievementsPanel progress={progress} onClose={() => setShowAchievements(false)} />
       )}
 
-      {showWeeklyEvent && (
+      {weeklyEventPanel && (
         <WeeklyEventPanel
-          event={weeklyEvent}
-          objectiveDone={weeklyEventObjectiveDone}
-          onClose={() => setShowWeeklyEvent(false)}
+          event={weeklyEventPanel.event}
+          objectiveDone={weeklyEventPanel.objectiveDone}
+          onClose={() => setWeeklyEventPanel(null)}
         />
       )}
 
