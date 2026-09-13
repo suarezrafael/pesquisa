@@ -570,6 +570,12 @@ a.nickname-generate-btn {
 .hub-header-info h1 {
   font-size: clamp(0.65rem, 3.2vmin, 1.1rem);
   margin: 0 0 clamp(0.1rem, 0.8vmin, 0.35rem);
+  /* Achado do review automático do Copilot (PR #58): o `overflow: hidden` novo em
+     `.hud-overlay .hub-header` (abaixo) contém o cartão, mas sem isto um apelido longo de
+     verdade (até 20 caracteres, `Onboarding.tsx`) vira um único token sem espaço — não quebra
+     linha sozinho — e podia ficar CORTADO pelo `overflow: hidden` em vez de só ficar contido.
+     `overflow-wrap: anywhere` deixa esse token quebrar dentro da largura disponível. */
+  overflow-wrap: anywhere;
 }
 
 .xp-bar {
@@ -681,7 +687,23 @@ a.nickname-generate-btn {
 .hud-overlay .hub-header {
   pointer-events: none;
   background: rgba(255, 255, 255, 0.82);
-  border-radius: 999px;
+  /* Bug real relatado pelo usuário com screenshot (lab-180, fora do fluxo normal de lab): um
+     `border-radius: 999px` (cápsula "perfeita", raio = metade da menor dimensão) só fica bonito
+     quando a altura da caixa é previsível — nesta tela, `.hub-header-info` empilha nome + barra de
+     XP + "Nível X · série" dentro da largura estreita de `max-width` abaixo; numa tela de celular
+     estreita o bastante, esse texto quebra em mais linhas do que num desktop, a caixa fica mais
+     ALTA, e a cápsula acompanha essa altura nova — o texto (sem `overflow: hidden` aqui) não é
+     cortado, só passa a ficar visualmente por FORA do fundo arredondado. Um raio fixo continua um
+     cantinho arredondado agradável em qualquer altura, sem depender de quantas linhas o conteúdo
+     ocupa. */
+  border-radius: 20px;
+  /* Achado do review automático do Copilot (PR #58): o raio fixo acima sozinho reduz o problema
+     mas não o CONTÉM de verdade — `border-radius` só pinta o fundo/borda; os filhos de
+     `.hub-header-info` continuam livres pra renderizar nos cantos (agora com fundo transparente,
+     já que não há mais cápsula) se o conteúdo crescer mais alto que o previsto. `overflow: hidden`
+     garante que nada renderize fora do retângulo lógico da caixa — defesa em profundidade pro
+     mesmo cenário (nome muito longo, texto de nível maior que o esperado). */
+  overflow: hidden;
   padding: clamp(0.2rem, 1.6vmin, 0.5rem) clamp(0.35rem, 2.6vmin, 0.9rem);
   box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
   /* lab-70, pedido do usuário: "o painel que mostra o avatar o nome e as moedas é muito largo,
@@ -690,7 +712,16 @@ a.nickname-generate-btn {
      teto em telas largas (desktop/tablet) mas encolhe proporcionalmente em telas estreitas. */
   max-width: min(420px, 62vw);
   flex: 1;
-  min-width: 0;
+  /* Achado do review automático do Copilot (PR #58): `min-width: 0` (sem piso nenhum) combinado
+     com `flex: 1` (base 0%) deixava este item ser espremido quase a zero numa linha com vários
+     botões de 44px antes de `.hud-top-row` decidir quebrar — com o `overflow: hidden` novo acima,
+     esse espremer virava CORTE de verdade (avatar/nome/XP/nível/moedas sumindo), não só aperto.
+     Piso de 140px garante espaço mínimo legível pro conteúdo — `.hud-top-row` (`flex-wrap`) reage
+     jogando os botões que não cabem pra próxima linha, exatamente o comportamento que já existe
+     pros próprios botões (nunca depende deste elemento poder encolher além do necessário pra
+     texto quebrar — isso já é coberto por `overflow-wrap: anywhere` no `h1`, não por espremer a
+     caixa toda). */
+  min-width: 140px;
 }
 
 /* lab-120, auditoria WCAG AA: o piso do `clamp()` era 1.4rem (22.4px), teto 2.25rem (36px) — os
@@ -704,17 +735,28 @@ a.nickname-generate-btn {
 .help-button {
   pointer-events: auto;
   flex-shrink: 0;
+  /* Tamanho INTOCADO (piso de 44px de toque, auditoria WCAG AA acima) — pedido do usuário (lab-180,
+     fora do fluxo normal de lab) de "botões menores no celular" foi atendido só via transparência
+     (0.82 → 0.62) no PREENCHIMENTO, nunca encolhendo abaixo do piso de acessibilidade já validado.
+     4ª/5ª rodadas do review automático do Copilot (PR #58): um anel translúcido (mesmo a 0.9/0.45)
+     ainda pode cair abaixo do contraste mínimo AA (3:1 pra ícones/UI,
+     `docs/prompts/02-design-profissional.md` §3, [MUST]) contra um fundo 3D de tom MÉDIO (nem
+     claro nem escuro o bastante) — a matemática de contraste do WCAG depende da cor final
+     COMPOSTA, e um anel translúcido composto sobre um cinza médio fica ele mesmo num tom médio,
+     perto demais do fundo. Só um anel OPACO garante o contraste calculado independente do que
+     estiver atrás: branco opaco força ~4,5:1+ contra qualquer cinza médio pra escuro, preto opaco
+     força o mesmo contra qualquer cinza médio pra claro — pelo menos um dos dois sempre passa. */
   width: clamp(2.75rem, 6.5vmin, 3.2rem);
   height: clamp(2.75rem, 6.5vmin, 3.2rem);
   border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.82);
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.62);
   color: var(--ink);
   font-weight: 800;
   /* lab-120: proporcional ao novo tamanho maior do botão (mesma razão ~0,48× de antes) — senão o
      emoji ficaria pequeno demais sobrando espaço dentro do círculo maior. */
   font-size: clamp(1.3rem, 3vmin, 1.5rem);
-  box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
+  box-shadow: 0 0 0 2px #000, 0 4px 12px rgba(23, 44, 102, 0.2);
   cursor: pointer;
 }
 
@@ -918,8 +960,23 @@ a.nickname-generate-btn {
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  /* Pedido do usuário (lab-180, fora do fluxo normal de lab, junto do bug do painel de FPS):
+     botões virtuais "mais transparentes" no celular — mantém o TAMANHO (piso de toque confiável,
+     não mexido) e só reduz a opacidade do PREENCHIMENTO, pra ocupar menos atenção visual sem
+     arriscar dificultar o toque.
+     3 rodadas do review automático do Copilot (PR #58) até o anel ficar certo: 2ª rodada — anéis
+     translúcidos (0.45/0.25) não garantiam 3:1 (`docs/prompts/02-design-profissional.md` §3,
+     [MUST]) contra um fundo CLARO. 5ª rodada — mesmo um anel quase opaco (0.9/0.55) ainda podia
+     cair abaixo de 3:1 contra um fundo de tom MÉDIO (nem claro nem escuro): a matemática de
+     contraste do WCAG depende da cor final COMPOSTA, e um anel translúcido composto sobre cinza
+     médio fica ele mesmo num tom médio, perto demais do fundo. Só um anel OPACO garante o
+     contraste calculado independente do que estiver atrás — branco opaco força contraste alto
+     contra qualquer fundo médio-pra-escuro, preto opaco o mesmo contra médio-pra-claro, um dos
+     dois sempre passa. O preenchimento interno continua translúcido (a parte que o usuário pediu
+     pra ficar discreta). */
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #000, 0 2px 8px rgba(0, 0, 0, 0.3);
   touch-action: none;
 }
 
@@ -939,14 +996,34 @@ a.nickname-generate-btn {
      efeito rodar, nunca mais a fonte de verdade. */
   top: 3.6rem;
   right: 0.75rem;
-  max-width: min(60vw, 320px);
+  max-width: min(52vw, 300px);
   white-space: normal;
   text-align: right;
-  background: rgba(0, 0, 0, 0.55);
+  /* Bug real relatado pelo usuário com screenshot (lab-180, fora do fluxo normal de lab): "o
+     painel de FPS ocupa muito espaço" no celular — `font-size`/`padding` fixos não encolhiam com
+     a tela (mesmo problema já resolvido no resto do HUD via `clamp(mín, vmin, máx)`, labs 57-59/
+     120), então numa tela estreita esse texto (5 campos, já quebrado em várias linhas) dominava
+     boa parte da área jogável. `vmin` acompanha o lado mais apertado da tela, encolhendo em
+     qualquer orientação.
+     Achado do review automático do Copilot (PR #58), 2 rodadas: a 1ª tentativa reduziu o fundo
+     (0.55 → 0.4) — mas esse painel é EXPLICITAMENTE mantido visível em produção por pedido do
+     usuário (lab-67, "preciso de informações de FPS na tela em produção"), então o texto verde
+     precisa do contraste mínimo AA de texto normal (4.5:1, mesmo §3 do `.help-button` acima)
+     contra QUALQUER fundo 3D. A 2ª rodada mediu que até o valor ORIGINAL (0.55) não bastava
+     contra um fundo BRANCO no pior caso (preto a 0.55 sobre branco compõe pra `#737373`, e
+     `#7CFC9A` contra esse cinza fica só ~3,7:1) — cálculo real: preto a 55% sobre branco puro
+     resulta 255×0,45≈115 por canal; a 75% de opacidade o resultado cai pra 255×0,25≈64, escuro o
+     bastante pra qualquer texto claro passar de 4,5:1 com folga, mesmo no pior caso (branco puro
+     atrás). `overflow-wrap: anywhere` cobre outro achado: `buriedSchoolReport`
+     (`World3D.tsx`) junta vários `qNN(...)` num token só sem espaço nenhum — `white-space: normal`
+     sozinho não quebra um token sem espaço, então esse texto podia continuar vazando pra fora do
+     `max-width` mesmo menor. */
+  background: rgba(0, 0, 0, 0.75);
+  overflow-wrap: anywhere;
   color: #7CFC9A;
   font-family: monospace;
-  font-size: 0.7rem;
-  padding: 0.25rem 0.5rem;
+  font-size: clamp(0.5rem, 1.7vmin, 0.7rem);
+  padding: clamp(0.15rem, 0.6vmin, 0.25rem) clamp(0.3rem, 1vmin, 0.5rem);
   border-radius: 6px;
   pointer-events: none;
 }
@@ -973,8 +1050,13 @@ a.nickname-generate-btn {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  /* Mesmo tratamento de anel do `.joystick-base` acima (lab-180 + 3 rodadas do review automático
+     do Copilot, PR #58, até chegar num anel OPACO — só translúcido não garante 3:1 contra
+     fundo médio) — o `text-shadow` do emoji abaixo só ajudava o ÍCONE, nunca o contorno do
+     círculo em si. */
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #000, 0 2px 8px rgba(0, 0, 0, 0.3);
   color: white;
   font-weight: 700;
   /* lab-150 (achado do Copilot, PRs #2/#5): agora é um <button> de verdade, não um <div> — reseta
@@ -982,7 +1064,17 @@ a.nickname-generate-btn {
      mostra a mão de "clicável" (o toque em si não depende disso, só ajuda quem usa mouse/trackpad). */
   font: inherit;
   cursor: pointer;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  /* 3ª rodada do review automático do Copilot (PR #58): o preenchimento mais claro (0.18) deixa
+     um branco quase-branco sobre céu/terreno claro — a sombra suave de antes (só um leve
+     `blur`) não bastava pra separar o glifo BRANCO desse fundo também claro. Contorno sólido em 4
+     direções (mesma técnica de "text-stroke" via `text-shadow` repetido) garante uma borda escura
+     de verdade ao redor do glifo, legível contra qualquer fundo — não só um blur que se perde
+     quando o fundo já é claro. */
+  text-shadow:
+    1px 1px 0 rgba(0, 0, 0, 0.75),
+    -1px -1px 0 rgba(0, 0, 0, 0.75),
+    1px -1px 0 rgba(0, 0, 0, 0.75),
+    -1px 1px 0 rgba(0, 0, 0, 0.75);
   touch-action: none;
   user-select: none;
   -webkit-touch-callout: none;
