@@ -1050,7 +1050,17 @@ a.nickname-generate-btn {
      mostra a mão de "clicável" (o toque em si não depende disso, só ajuda quem usa mouse/trackpad). */
   font: inherit;
   cursor: pointer;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  /* 3ª rodada do review automático do Copilot (PR #58): o preenchimento mais claro (0.18) deixa
+     um branco quase-branco sobre céu/terreno claro — a sombra suave de antes (só um leve
+     `blur`) não bastava pra separar o glifo BRANCO desse fundo também claro. Contorno sólido em 4
+     direções (mesma técnica de "text-stroke" via `text-shadow` repetido) garante uma borda escura
+     de verdade ao redor do glifo, legível contra qualquer fundo — não só um blur que se perde
+     quando o fundo já é claro. */
+  text-shadow:
+    1px 1px 0 rgba(0, 0, 0, 0.75),
+    -1px -1px 0 rgba(0, 0, 0, 0.75),
+    1px -1px 0 rgba(0, 0, 0, 0.75),
+    -1px 1px 0 rgba(0, 0, 0, 0.75);
   touch-action: none;
   user-select: none;
   -webkit-touch-callout: none;
