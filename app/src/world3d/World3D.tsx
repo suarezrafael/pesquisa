@@ -2144,6 +2144,21 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     const sunLight = new DirectionalLight('benchSunLight', new Vector3(-1, -2, -1), benchScene)
     const shadowGenerator = new ShadowGenerator(1024, sunLight)
     shadowGenerator.useBlurExponentialShadowMap = true
+    // Achado do review automático do Copilot: `ShadowGenerator` não é um recurso da `Scene` — ela
+    // NÃO dispõe o gerador (nem o shadow map/render-list dele) sozinha ao chamar `scene.dispose()`
+    // (mesmo comportamento já documentado noutro lugar do código, `studentFigure.ts`). Registrado
+    // AQUI, logo após a criação — se `disposables.push` viesse só depois de `ground`/`prop`
+    // existirem, uma falha nesse meio-tempo (o caminho que essa lista existe pra cobrir) deixaria
+    // o gerador de fora, sem cobertura nenhuma. `shadowCasterProp` (nula até `addShadowCaster`
+    // rodar de verdade, mais abaixo) deixa o disposer seguro de chamar em qualquer ponto da
+    // inicialização — remove da renderList só se um caster já foi de fato adicionado.
+    let shadowCasterProp: Mesh | null = null
+    disposables.push({
+      dispose: () => {
+        if (shadowCasterProp) shadowGenerator.removeShadowCaster(shadowCasterProp)
+        shadowGenerator.dispose()
+      },
+    })
 
     const ground = MeshBuilder.CreateGround('benchGround', { width: 40, height: 40 }, benchScene)
     ground.receiveShadows = true
@@ -2159,19 +2174,7 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     prop.thinInstanceSetBuffer('matrix', matrixData, 16)
     prop.receiveShadows = true
     shadowGenerator.addShadowCaster(prop)
-    // Achado do review automático do Copilot: `ShadowGenerator` não é um recurso da `Scene` — ela
-    // NÃO dispõe o gerador (nem o shadow map/render-list dele) sozinha ao chamar `scene.dispose()`
-    // (mesmo comportamento já documentado noutro lugar do código, `studentFigure.ts`). Sem isto,
-    // cada benchmark deixava um shadow map vivo pra trás. Remove `prop` da renderList ANTES de
-    // descartar o gerador — mesmo padrão já usado noutro lugar deste arquivo (`getChildMeshes()`
-    // + `removeShadowCaster` antes de liberar a malha) — só `.dispose()` deixava a malha já
-    // descartada retida na renderList do gerador.
-    disposables.push({
-      dispose: () => {
-        shadowGenerator.removeShadowCaster(prop)
-        shadowGenerator.dispose()
-      },
-    })
+    shadowCasterProp = prop
 
     // Achado do review automático do Copilot: sem `particleTexture` e com a taxa de emissão padrão
     // (10/s), a maioria das 400 partículas nunca chegava a existir de verdade durante os poucos
