@@ -28,8 +28,37 @@ export function useModalA11y(onClose: () => void) {
       rootRef.current?.focus()
     }
 
+    // Achado do review automático do Copilot: Esc fechava e o foco inicial entrava no painel, mas
+    // nada impedia Tab de escapar PRA FORA dele enquanto aberto — um usuário de teclado conseguia
+    // tabular direto pro resto da página/jogo por trás do painel, quebrando o isolamento que
+    // `aria-modal`/`inert` (aplicados por quem usa este hook) prometem. Prende o foco dentro da
+    // raiz do painel: Tab no ÚLTIMO elemento focável volta pro primeiro; Shift+Tab no PRIMEIRO vai
+    // pro último — mesmo padrão de focus trap de diálogo modal.
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCloseRef.current()
+      if (e.key === 'Escape') {
+        onCloseRef.current()
+        return
+      }
+      if (e.key !== 'Tab' || !rootRef.current) return
+      const focusable = rootRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      // Achado do review automático do Copilot: quando nada dentro do painel tem `autoFocus`, o
+      // foco inicial (efeito acima) cai na PRÓPRIA raiz (`tabIndex={-1}`) — que não entra em
+      // `focusable` (excluída de propósito, já que `-1` não faz parte da ordem normal de Tab).
+      // Sem tratar esse caso, Shift+Tab a partir da raiz não batia nem com `first` nem com `last`,
+      // escapando do trap logo no PRIMEIRO Shift+Tab, antes mesmo do usuário ter tabulado uma vez.
+      const onRoot = document.activeElement === rootRef.current
+      if (e.shiftKey && (onRoot || document.activeElement === first)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && (onRoot || document.activeElement === last)) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
 

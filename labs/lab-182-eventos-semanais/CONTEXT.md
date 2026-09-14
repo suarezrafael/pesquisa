@@ -1,0 +1,433 @@
+# Contexto — Laboratório 182 — Eventos semanais saudáveis
+
+Preenchido em: 2026-09-13
+Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit deste lab, ver PR)
+
+## O que foi feito
+
+- Campo novo em `Progress` (`weeklyEventObjectiveRewardedAtIso: string | null`, `types.ts` +
+  default `null` em `storage.ts`) — guarda o INSTANTE ISO completo (`toISOString()`, não uma chave
+  de semana) da última vez que o bônus foi pago, não um contador: o limiar é "pelo menos 1" desafio
+  ambiental, então basta saber SE já foi pago pra ser idempotente. Guardar o instante completo (em
+  vez de só a chave de semana) permite comparação cronológica de verdade contra manipulação de
+  relógio — ver rodada 8 do review abaixo.
+- `data/weeklyEvents.ts` ganhou 3 constantes novas (única fonte de verdade de rotação/bônus/copy,
+  como o backlog pede): `WEEKLY_EVENT_OBJECTIVE_REWARD_COINS` (20), `WEEKLY_EVENT_OBJECTIVE_DESCRIPTION`,
+  `WEEKLY_EVENT_NO_PRESSURE_MESSAGE`.
+- Três funções puras novas em `state/progression.ts`: `applyWeeklyEventObjectiveProgress(progress, nowIso)`
+  (credita a moeda e marca o instante na primeira vez; idempotente depois),
+  `isWeeklyEventObjectiveDone(progress, nowIso)` (leitura pura pra UI — mesma semana ISO do último
+  pagamento) e `wouldGrantWeeklyEventObjectiveReward(progress, nowIso)` (a decisão de "concede ou
+  não" fatorada numa função só, reaproveitada pela escrita acima E pelo pré-check síncrono de
+  `useProgress.ts` — ver rodada 9 do review abaixo).
+- `weeklyEventObjectiveProgress(nowIso)` novo em `state/useProgress.ts`, chamado de
+  `handleEnvironmentalChallengeCorrect` (`App.tsx`) logo depois de `completeQuest(...)` — qualquer
+  um dos 3 desafios ambientais do lab-180 (ponte/lógica, abastecimento de foguete/matemática,
+  placa/leitura) conta, já que todos passam por esse mesmo handler.
+- `RewardToast.tsx` ganhou uma linha de bônus opcional (`weeklyEventObjectiveBonusCoins`, mesmo
+  padrão de `planetClearBonusCoins`) — "🌱 Objetivo da semana concluído! +20 moedas bônus!" no
+  momento exato em que o bônus é concedido.
+- Badge do evento semanal (`HudHeader.tsx`, `.weekly-event-badge`) virou um `<button>` clicável (sem
+  aumentar a fileira de ~11 ícones do HUD) abrindo `components/WeeklyEventPanel.tsx` (novo, mesmo
+  padrão de `DailyLoginToast.tsx`, reaproveita `.reward-modal`/`.reward-icon`/`.reward-bonus-line`;
+  `.weekly-event-modal` em `index.css` é a única classe nova, `max-height`/`overflow-y` pra caber
+  em telas curtas — ver rodada 3 do review abaixo): nome/emoji/descrição do evento ativo, status do
+  objetivo (pendente com a descrição+recompensa, ou "✓ concluído, já ganhou X moedas") e a mensagem
+  de "sem problema se não der tempo — sempre grátis".
+- `components/FamilyPortal.tsx`, seção "📚 Aprendizagem sempre grátis" (lab-166) ganhou uma frase
+  confirmando que o bônus do evento semanal também é sempre grátis, sem criar seção nova.
+- Evento novo `weekly_event_objective_completed` (sem `meta`) — allowlist em
+  `server-accounts/src/domain.ts`, branch explícito em `index.ts` (mesmo padrão de
+  `camera_recenter_used`, não herda a tolerância de `meta` livre dos eventos legados),
+  `weeklyFunnel.weeklyEventObjectiveCompleted`.
+- `docs/event-catalog.md` atualizado com a linha do evento novo e uma nota explicando que "retorno
+  semanal" já é coberto pela infraestrutura D1/D7 existente e "feedback qualitativo infantil" é
+  pesquisa com usuário real, fora de escopo de código.
+- Testes: 10 novos em `progression.test.ts` (concede na 1ª vez, idempotente na mesma semana, concede
+  de novo numa semana nova, `isWeeklyEventObjectiveDone` reflete o estado real, perfil vazio nunca
+  mostra concluído, regressão do ataque de adiantar-e-voltar o relógio,
+  `wouldGrantWeeklyEventObjectiveReward` nunca diverge de `applyWeeklyEventObjectiveProgress`, os 3
+  estados de `weeklyEventObjectiveStatus`, recuo de relógio DENTRO da mesma semana também bloqueia,
+  `nowIso` IGUAL ao instante da recompensa mostra "concluído") e 1 novo em
+  `server-accounts/src/domain.test.ts`. Suíte completa ao final (após todas as rodadas de review):
+  app 208/208, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e `npm run build` limpos.
+
+## Decisões técnicas tomadas
+
+- **Reaproveitar os 3 desafios ambientais do lab-180 como o "objetivo educativo/ambiental" do
+  backlog, em vez de criar conteúdo novo.** Já são sempre disponíveis, nunca esgotam (sorteiam
+  pergunta aleatória do tipo certo a cada abertura) e o próprio nome do backlog ("educativo/
+  ambiental") já batia com o tema. Zero conteúdo/pergunta nova precisou ser escrita.
+- **Recompensa em moeda grátis, não item cosmético dedicado.** O backlog aceita qualquer um dos
+  dois; moeda é mais simples e consistente com os outros bônus pontuais já existentes (baú, segredo,
+  desafio em dupla), sem precisar desenhar/catalogar um cosmético novo por semana.
+- **Limiar de "pelo menos 1" desafio, não um contador.** Mantém o objetivo genuinamente "convite,
+  não obrigação" (backlog) — fácil de bater numa sessão qualquer, sem precisar de grind. Também
+  simplifica o estado: um único campo `weeklyEventObjectiveRewardedAtIso`, sem contador nem reset
+  explícito (a comparação contra a semana atual já cobre os dois casos).
+- **Bug real encontrado AO VIVO, não em teste unitário nem em review — o formato inicial de
+  `weeklyEventObjectiveProgress` crashava de verdade.** A primeira versão copiou o formato de
+  `petDailyChallengeCompleted`/`coopChallengeCompleted` (ler o resultado de DENTRO do atualizador
+  funcional do `setProgress`, via uma variável `let result!: T` capturada no closure). Isso funciona
+  quando a função é a ÚNICA chamada de `setProgress` no handler, mas `handleEnvironmentalChallengeCorrect`
+  chama `completeQuest(...)` (não-funcional, `setProgress(result.progress)`) IMEDIATAMENTE ANTES —
+  como já existe uma atualização pendente na fila do `useState` quando a segunda chamada
+  (`weeklyEventObjectiveProgress`) acontece, o atalho de "bailout adiantado" do React (que invoca o
+  atualizador de forma síncrona só quando a fila está vazia) não se aplica, e o atualizador só roda
+  DEPOIS — tarde demais pra `result` já ter sido lido de volta. Isso produziu um crash real e
+  reproduzível: `Cannot destructure property 'rewardGranted' of 'weeklyEventObjectiveProgress(...)'
+  as it is undefined`, travando o `QuestModal` num "Preparando sua recompensa..." permanente.
+  Verificado que a ESCRITA em si (a moeda sendo creditada e persistida) funcionou mesmo durante o
+  crash (o `localStorage` mostrou `weeklyEventObjectiveRewardedAtIso` gravado corretamente) — só a
+  LEITURA de volta pro código chamador quebrou. Corrigido separando as duas preocupações: a decisão
+  "já concluído esta semana" é lida do `progress` do closure de render (seguro, porque
+  `completeQuest` nunca escreve em `weeklyEventObjectiveRewardedAtIso`), e só a ESCRITA da moeda
+  usa o atualizador funcional, sem tentar ler nada de volta dele. **Isso generaliza uma lição além
+  deste lab**: o padrão "ler resultado de dentro do atualizador funcional" só é seguro quando essa é
+  a ÚNICA chamada de `setProgress` no handler — encadear depois de OUTRA chamada (funcional ou não)
+  no mesmo handler quebra a leitura síncrona, mesmo que a escrita em si continue correta.
+
+## Review automático do Copilot (PR #61)
+
+- **Rodada 1**: 3 achados reais corrigidos, 1 deles CRÍTICO. (1) `.hud-overlay .badge-row` já
+  tinha `pointer-events: none` (`index.css:763-765`, texto informativo deixando cliques passarem
+  pro mundo 3D por baixo) — o `.weekly-event-badge` novo, virando um `<button>` de verdade, herdava
+  esse `none` e ficava CLICÁVEL SÓ PROGRAMATICAMENTE (`.click()` via JS bypassa CSS
+  `pointer-events`), nunca por mouse/toque real. A verificação ao vivo anterior usou `.click()` via
+  JS pra abrir o painel e não pegou isso — só um clique de MOUSE de verdade (coordenada) expôs o
+  bug (o clique "vazava" pro avatar/3D por baixo do badge). Corrigido com `pointer-events: auto`
+  no próprio botão (mesmo padrão de `.help-button`), e reverificado com um clique de mouse real
+  desta vez, não só JS. (2) `WeeklyEventPanel.tsx` escondia `event.description` nas semanas sem
+  multiplicador (`hasMultiplierBonus &&`), mas a descrição ("Sem bônus especial esta semana...") é
+  informativa mesmo sem bônus — corrigido removendo a condição, sempre mostra. (3) Comentário em
+  `progression.ts` ainda citava o nome antigo `advanceWeeklyEventObjective` depois do rename pra
+  `weeklyEventObjectiveProgress`. Também 2 nits de gramática (palavra duplicada "todo toda",
+  concordância de gênero "escolhido"→"escolhida") e um teste fortalecido pra checar o valor exato
+  da recompensa (`toBe`, não `toBeGreaterThan`) — todos corrigidos.
+- **Rodada 2**: 1 achado real — a copy de `semana-normal` ("Sem bônus especial esta semana — volte
+  na próxima!") ficou CONTRADITÓRIA depois deste lab: o painel mostra essa frase E, logo abaixo, um
+  objetivo que paga 20 moedas na mesma semana. Corrigido pra "Sem multiplicador de XP/moedas esta
+  semana — mas o objetivo da semana ainda vale!", deixando claro que só o multiplicador passivo
+  está ausente, não o bônus fixo do objetivo.
+- **Rodada 3**: 1 achado real — o painel tem 2 parágrafos longos (status do objetivo + mensagem de
+  "sem pressão") além da descrição do evento, mais texto que os outros usuários de `.reward-modal`
+  (toasts curtos); em telas curtas isso podia empurrar o botão "Fechar" pra fora da área visível,
+  já que `.modal` sozinho não tem limite de altura/scroll. Corrigido com uma classe nova
+  `.weekly-event-modal` (`max-height: 80vh; overflow-y: auto`), mesmo padrão já usado por
+  `.quest-list-modal`.
+- **Rodada 4**: 1 achado real de documentação — `docs/event-catalog.md` não deixava claro que
+  `weeklyFunnel.weeklyEventObjectiveCompleted` mede uma coisa DIFERENTE do bônus em si: o bônus é
+  idempotente por semana ISO (segunda-domingo), mas `weeklyFunnel.*` inteiro (herdado do
+  lab-165/185) é uma janela MÓVEL de 7 dias corridos a partir da consulta (`now() - interval '7
+  days'`) por `device_id` distinto — não "quantos perfis bateram o objetivo nesta semana ISO".
+  Corrigida a nota do catálogo pra explicitar essa diferença.
+- **Rodada 5**: 1 achado real (extremo, mas real) — `WeeklyEventPanel` lia o relógio 2 vezes
+  (`getCurrentWeeklyEvent()` sem argumento e `new Date().toISOString()` separado pro objetivo); bem
+  na virada exata de domingo pra segunda, as duas leituras podiam divergir e mostrar o evento de uma
+  semana com o status do objetivo de outra. Corrigido capturando um único `Date` e reaproveitando
+  nas duas chamadas.
+- **Rodada 6**: 1 achado real (mesma classe da rodada 5, lugar diferente) — `completeQuest()`
+  (`useProgress.ts`) lê o relógio por conta própria pro multiplicador semanal (`getCurrentWeeklyEvent()`
+  default), enquanto `handleEnvironmentalChallengeCorrect` (`App.tsx`) lia de novo, separadamente,
+  pro objetivo; bem na virada exata de semana ISO os dois podiam divergir (toast mostrando o
+  evento de uma semana, bônus/analytics gravados pra outra). Corrigido dando a `completeQuest` um
+  3º parâmetro opcional `nowIso` (default preserva o comportamento de todo chamador que não passa —
+  só `handleEnvironmentalChallengeCorrect` usa), e capturando um único `nowIso` no topo do handler,
+  reaproveitado nas duas chamadas (`completeQuest`/`weeklyEventObjectiveProgress`). Reverificado ao
+  vivo depois da mudança de assinatura: fluxo completo continua funcionando sem regressão.
+- **Rodada 7**: 1 achado real — mesma classe das rodadas 5-6, num 3º lugar: `HudHeader.tsx` (o
+  badge) calculava `getCurrentWeeklyEvent()` por conta própria, independente do
+  `WeeklyEventPanel.tsx` que ele abre (já corrigido pra capturar 1 `Date` na rodada 5) — na virada
+  exata de semana ISO os dois ainda podiam divergir. Em vez de continuar corrigindo local por
+  local, resolvida a causa raiz de uma vez: `weeklyEvent` e `weeklyEventObjectiveDone` agora são
+  calculados UMA ÚNICA VEZ em `App.tsx` (a partir do mesmo `Date`) e repassados por props pra baixo
+  — `World3D.tsx` → `HudHeader.tsx` (prop nova `weeklyEvent`, substitui a chamada interna) e direto
+  pro `WeeklyEventPanel.tsx` (props novas `event`/`objectiveDone`, substituem `progress` +
+  `getCurrentWeeklyEvent()`/`isWeeklyEventObjectiveDone()` internos). Fecha a classe inteira do
+  achado (badge, painel, e qualquer consumidor futuro que reaproveite essas props), em vez de só o
+  sintoma mais recente. Reverificado ao vivo com um clique de mouse real: painel abre corretamente
+  e mostra o mesmo evento do badge.
+- **Rodada 8**: 1 achado real CRÍTICO (o mais sério do lab). `applyWeeklyEventObjectiveProgress`
+  comparava só a CHAVE de semana ISO por igualdade — uma criança podia adiantar o relógio do
+  aparelho pra uma semana futura, reivindicar o bônus "daquela semana", e depois voltar o relógio
+  pra semana real: a chave guardada (da semana futura) não batia mais com "agora" (a semana real),
+  liberando o MESMO bônus de novo, indefinidamente. Mesma classe de bug já corrigida em
+  `applyDailyLoginReward` (que rejeita `dayGap <= 0` explicitamente) — precedente direto no próprio
+  código deste projeto que deveria ter sido seguido desde o início. Corrigido trocando o campo
+  guardado de uma CHAVE de semana (`weeklyEventObjectiveRewardedWeekKey`, ex. "2026-W37" — nem
+  seria segura pra comparação cronológica, já que `isoWeekKey` não faz zero-padding do número da
+  semana: "W7" > "W10" lexicamente) pelo INSTANTE completo da última concessão
+  (`weeklyEventObjectiveRewardedAtIso`, sempre `toISOString()` — comparável lexicamente E
+  cronologicamente); a concessão agora rejeita qualquer `nowIso <= weeklyEventObjectiveRewardedAtIso`
+  (voltar ou empatar no tempo em relação à última concessão real), além de continuar idempotente
+  dentro da mesma semana ISO. Teste de regressão novo simulando o ataque exato (adianta pra
+  2026-W40, reivindica, volta pra 2026-W37, tenta reivindicar nessa semana de novo — rejeitado).
+  Achados menores na mesma rodada, também corrigidos: `trackWeeklyEventObjectiveCompleted()` não
+  usava o `nowIso` compartilhado (o evento de analytics ficaria com `occurredAt` de um instante
+  ligeiramente diferente do usado pra decidir a semana do bônus, mesma classe das rodadas 5-7);
+  `aria-label` estático no `WeeklyEventPanel` ("Evento da semana") sobrescrevia o nome acessível
+  dinâmico do `<h2>` (ex. "Semana Dourada"), corrigido pra `aria-labelledby` apontando pro próprio
+  `<h2>`; comentário do componente e docs do lab desatualizados (diziam "sem CSS novo" quando
+  `.weekly-event-modal` já tinha sido adicionado na rodada 3). **Efeito colateral transparente do
+  rename de campo** (`weeklyEventObjectiveRewardedWeekKey` → `weeklyEventObjectiveRewardedAtIso`):
+  qualquer perfil que já tivesse concedido o bônus ANTES desta rodada (só perfis de teste desta
+  sessão, nunca chegou à produção) mostra o objetivo como "pendente" de novo uma vez, já que o
+  campo antigo fica órfão no `localStorage` (inofensivo, `{...emptyProgress, ...saved}` já cobre
+  campo novo ausente com o default `null`) — sem perder moeda nem repetir a recompensa, só reseta o
+  indicador visual "já concluído esta semana" uma vez.
+- **Rodada 9**: 1 achado real — a correção da rodada 8 introduziu uma divergência nova entre o
+  pré-check síncrono de `weeklyEventObjectiveProgress` (`useProgress.ts`, usava só
+  `isWeeklyEventObjectiveDone`) e a decisão real de `applyWeeklyEventObjectiveProgress` (que também
+  checa o recuo de relógio). No cenário de adiantar-e-voltar o relógio, o pré-check dizia "vai
+  conceder" (semana diferente da guardada) enquanto a escrita de verdade rejeitava (recuo de
+  relógio) — o app mostraria "+20 moedas" no toast e disparia o evento de analytics SEM a moeda ter
+  sido creditada. Corrigido fatorando a decisão inteira numa função só, exportada
+  (`wouldGrantWeeklyEventObjectiveReward`), reaproveitada pelos dois lugares — elimina a
+  possibilidade estrutural das duas decisões divergirem de novo. Teste de regressão novo provando
+  que o predicado nunca diverge da função de escrita no cenário exato do ataque.
+- **Rodada 10**: 1 achado real — mesma classe da rodada 9, um nível acima: `App.tsx` calculava o
+  status "concluído" do painel (`weeklyEventObjectiveDone`) com `isWeeklyEventObjectiveDone`, não
+  com `wouldGrantWeeklyEventObjectiveReward` — no cenário de recuo de relógio, o painel mostraria a
+  mensagem de "pendente, complete um desafio pra ganhar +20" mesmo a próxima tentativa real sendo
+  bloqueada pela guarda anti-recuo, prometendo uma recompensa que nunca seria entregue. Corrigido
+  trocando pra `!wouldGrantWeeklyEventObjectiveReward(...)` — o MESMO predicado que decide a
+  escrita real agora também decide o que o painel mostra, garantindo que a UI nunca prometa uma
+  recompensa que a escrita vai recusar.
+- **Rodada 11**: 2 achados. (1) Real, mesma classe das rodadas 5-10 num nível ainda mais alto:
+  `weeklyEvent`/`weeklyEventObjectiveDone` eram recalculados no CORPO do componente — recalculados
+  a cada re-render de `App.tsx`, não capturados uma vez. Clicar no badge dispara um re-render
+  (`setShowWeeklyEvent`/estado novo); se a virada de semana ISO acontecer EXATAMENTE entre o
+  render que desenhou o badge clicado e o render que abre o painel, o painel podia mostrar um
+  evento diferente do que estava no badge no instante do clique. Resolvido definitivamente (não só
+  mais um patch local): o painel agora usa um SNAPSHOT capturado dentro do próprio handler de
+  clique (`onOpenWeeklyEvent`, um novo `useState<{ event, objectiveDone } | null>` substituindo o
+  antigo `showWeeklyEvent: boolean`) — o valor é decidido uma vez, no instante exato do clique, e
+  nunca mais recalculado enquanto o painel fica aberto. O badge em si continua vivo/reativo
+  (recalculado a cada render, do jeito que deve ser — precisa refletir "agora" continuamente
+  enquanto o app fica aberto). (2) Documentação: contagem de testes desatualizada (203 nalguns
+  lugares do handoff/descrição da PR, real é 205) — corrigida em todos os lugares.
+  **Verificação ao vivo NÃO completada nesta rodada** — o dev server local ficou instável (múltiplos
+  processos concorrentes acumulados de rodadas anteriores desta sessão disputando recursos,
+  travando o carregamento do chunk 3D preguiçoso mesmo depois de reiniciado 2x) e não foi possível
+  confirmar visualmente o snapshot funcionando antes do fim do tempo desta verificação. Confiança
+  vem de 3 verificações estáticas independentes, todas limpas: `tsc -b`, `npm run test` (205/205,
+  inalterado — esta mudança não introduz lógica pura nova, só MUDA QUANDO um valor já testado é
+  lido) e `npm run build` (build de produção completo, que de fato empacota `World3D`/`HudHeader`
+  também, sem erro). O mecanismo em si (painel/badge exibindo o valor certo) já tinha sido
+  confirmado ao vivo com cliques de mouse reais nas rodadas 1 e 7; esta rodada só muda O MOMENTO em
+  que o valor é calculado, não a lógica de exibição em si.
+- **Rodada 12**: 2 achados reais. (1) O booleano `objectiveDone` da rodada 10 corrigiu QUAL
+  predicado decide o status, mas não o formato: no cenário de recuo de relógio, a recompensa foi
+  dada numa semana FUTURA, não na semana real atual — "você já ganhou moedas ESTA semana" (a
+  mensagem de "concluído") seria literalmente falso, mas "pendente, complete um desafio" também
+  prometeria algo que a próxima tentativa real recusaria. Resolvido de vez trocando o booleano por
+  `WeeklyEventObjectiveStatus` de 3 estados (`'pending' | 'done' | 'blocked'`, função nova
+  `weeklyEventObjectiveStatus` em `progression.ts`, única fonte da decisão de apresentação) — o
+  painel agora mostra uma 3ª mensagem neutra ("O bônus desta semana já foi usado...") só no caso
+  raro de `'blocked'`, nunca afirmando algo falso. Teste de regressão novo cobrindo os 3 estados,
+  incluindo o cenário exato de recuo de relógio. (2) `FEATURES.md` ainda descrevia o campo como
+  "chave de semana" em vez de instante ISO completo — corrigido.
+- **Rodada 13**: 2 achados. (1) Real — `weeklyEvent` (a variável do badge) é recalculada a cada
+  render de `App.tsx`, mas NADA garantia que `App.tsx` re-renderizasse periodicamente por conta
+  própria: se a criança deixasse o jogo aberto e PARADO (sem nenhuma interação disparando outro
+  re-render — o loop de física/render do Babylon.js roda por fora do React, não conta) atravessando
+  a virada exata de domingo pra segunda, o badge ficaria preso no evento da semana anterior até a
+  próxima ação qualquer. Corrigido com um `setInterval` de 1 minuto (`useEffect` novo, um contador
+  interno só pra forçar o re-render — o valor em si nunca é lido, só o `setState` importa) — o
+  badge agora se autocorrige sozinho em até 1 minuto de qualquer virada de semana, mesmo com o app
+  parado. (2) Nit de gramática em `FEATURES.md` ("escolhido" → "escolhida", concordância com
+  "rotação"). Também reconciliada a descrição da PR no GitHub, que ainda afirmava "verificado ao
+  vivo" sem qualificar que as rodadas 11-13 não tiveram essa reverificação (instabilidade do dev
+  server local, ver pendência abaixo).
+- **Rodada 14**: 5 achados, a maioria real. (1) Real — a correção da rodada 13 (timer forçando
+  re-render) não bastava: o CLIQUE no badge ainda lia `new Date()` fresco no próprio handler
+  (`onOpenWeeklyEvent`), então na janela de até 60s entre a última atualização do timer e o clique,
+  o painel podia mostrar um evento diferente do que estava escrito no badge no instante exato do
+  clique. Resolvido na raiz: `weeklyEvent` virou um `useState` de verdade (não uma variável
+  recalculada por render), atualizado pelo mesmo timer de 1 minuto; o clique agora REAPROVEITA esse
+  MESMO estado em vez de recalcular — badge e painel usam literalmente o mesmo valor, sem
+  possibilidade de divergência. (2) Real e mais sutil — `weeklyEventObjectiveStatus` checava
+  "mesma semana ISO" ANTES de checar o recuo de relógio; no cenário "reivindica na sexta-feira,
+  volta o relógio pra segunda-feira DA MESMA SEMANA", as duas datas caem na mesma semana ISO, então
+  a função dizia `'done'` mesmo o recuo sendo real. Corrigido invertendo a ordem: o recuo de
+  relógio (`hasWeeklyEventClockRolledBack`, extraído como função só, reaproveitada por
+  `wouldGrantWeeklyEventObjectiveReward` E `weeklyEventObjectiveStatus` — mesmo padrão de fatorar
+  numa função só das rodadas anteriores) é checado PRIMEIRO, antes de "mesma semana". Teste de
+  regressão novo cobrindo exatamente esse cenário. (3) Real, cosmético — a mensagem do estado
+  `'blocked'` dizia "o bônus DESTA SEMANA já foi usado", mas a recompensa pode ter vindo de uma
+  semana futura (não necessariamente "esta semana") — reescrita pra "O bônus semanal já foi
+  concedido", sem afirmar qual semana. (4) Real, mas ACEITO como limitação conhecida, não
+  corrigido: nada impede um jogador de adiantar o relógio repetidamente (W40, W41, W42...) e
+  reivindicar o bônus a cada "semana" fictícia nova — a guarda anti-recuo só bloqueia VOLTAR o
+  relógio, não bloqueia AVANÇAR indefinidamente. Corrigir de verdade exigiria um relógio de
+  servidor confiável, que este jogo não tem por design (frontend-only, sem backend de gameplay,
+  `CLAUDE.md`) — mesma limitação já presente em `weeklyXpSnapshot`/`getCurrentWeeklyEvent`
+  (ambos também só dependem do relógio local). Documentado explicitamente no código como decisão
+  consciente, não como bug esquecido — corrigir isso está fora do escopo deste lab pequeno. (5)
+  Contagem de testes desatualizada (205, real final é 207) em 2 lugares do `CONTEXT.md` — corrigida.
+- **Rodada 15**: 1 achado real — mesma classe, camada final: a rodada 14 unificou o `event` do
+  badge e do painel, mas o STATUS do objetivo (`weeklyEventObjectiveStatus`) ainda era calculado
+  com um `new Date()` próprio no clique, separado do timer que atualiza `weeklyEvent`. Na janela de
+  até 60s entre a última atualização do timer e o clique, o painel podia combinar a descrição de
+  UMA semana com o status de OUTRA. Resolvido de vez fundindo `event` e `nowIso` num único objeto
+  de estado (`weeklyEventSnapshot`), atualizado ATOMICAMENTE pelo mesmo timer — não existe mais
+  nenhum `new Date()` independente nesse subsistema inteiro, só uma fonte única de "agora" pra
+  tudo relacionado ao evento semanal. **Verificado ao vivo com sucesso** (dev server finalmente
+  estável): clique de mouse real no badge abre o painel corretamente, mostrando "Semana Dourada" e
+  o objetivo pendente; `aria-labelledby` confirmado apontando pro `<h2>` dinâmico via inspeção do
+  DOM. Isso confirma retroativamente que as rodadas 11-15 funcionam corretamente na prática, não só
+  na teoria — a pendência de verificação ao vivo registrada nas rodadas anteriores está resolvida.
+- **Rodada 16**: 2 achados reais. (1) Mesma classe da rodada 15, último caso restante:
+  `weeklyEventSnapshot.nowIso` só avançava sozinho no timer periódico de 60s — se a criança
+  completasse o desafio ambiental e abrisse o emblema DENTRO desse minuto,
+  `weeklyEventObjectiveStatus` comparava o instante da recompensa (gravado agora mesmo, mais novo)
+  contra um `nowIso` de snapshot mais VELHO, lendo isso como "relógio voltou no tempo" (a mesma
+  checagem anti-farm que existe pra detectar manipulação de verdade) e mostrando "bloqueado" em vez
+  do objetivo recém-concluído. Corrigido avançando o snapshot junto, no mesmo instante em que a
+  recompensa é concedida (`nowIso <= prev.nowIso ? prev : ...` — nunca anda pra trás). (2) Esta
+  seção do `CONTEXT.md` já registrava a verificação ao vivo bem-sucedida da rodada 15, mas a
+  descrição da própria PR #61 no GitHub ainda dizia que as rodadas 11-14 seguiam sem verificação ao
+  vivo e que o dev server permanecia instável — corrigido reconciliando a descrição da PR com este
+  registro.
+- **Rodada 17**: 1 achado real — a correção da rodada 16 introduziu um novo caso-limite:
+  `hasWeeklyEventClockRolledBack` usava `<=` (não `<`) pra detectar recuo de relógio, mas `App.tsx`
+  agora grava o MESMO `nowIso` tanto em `weeklyEventObjectiveRewardedAtIso` quanto no snapshot
+  usado pra calcular o status logo em seguida — abrir o emblema imediatamente após ganhar o bônus
+  consulta o status com `nowIso === rewardedAtIso`, não um instante posterior. Com `<=`, igualdade
+  também contava como recuo, mostrando "bloqueado" em vez de "concluído" bem na hora que a criança
+  mais quer ver a confirmação. Corrigido trocando por `<` estrito — a checagem de "mesma semana
+  ISO" em `isWeeklyEventObjectiveDone`/`wouldGrantWeeklyEventObjectiveReward` já impede uma segunda
+  concessão no mesmo instante, então nada de novo fica liberado pro lado da manipulação de relógio.
+  Teste de regressão novo cobre o timestamp exato (208 testes no total agora).
+- **Rodada 18**: 1 achado real — `weeklyEventSnapshot` mora em `GameApp`, cuja árvore inclui o
+  `<World3D>` inteiro (não memoizado); o timer de 60s atualizava o estado incondicionalmente, mesmo
+  nos ~10079 minutos de cada semana em que o evento não muda de verdade (só troca na virada da
+  semana ISO), re-renderizando esse componente grande à toa a cada minuto — custo real de React
+  recorrente na tela 3D em tempo real, sensível em aparelho fraco. Corrigido comparando `event.id`
+  contra o snapshot anterior dentro do próprio atualizador do `useState`: devolve a MESMA
+  referência quando não muda, e o React (via `Object.is`) pula o re-render por completo — sem
+  precisar isolar o estado num componente à parte, a alternativa mais invasiva sugerida pelo
+  review. `nowIso` não precisa ficar fresco no timer além disso, já que a freshness usada pra
+  decidir status na hora da recompensa é avançada separadamente (rodada 16).
+- **Rodada 19**: 1 achado real — a otimização da rodada 18 (só atualizar `weeklyEventSnapshot`
+  quando `event.id` muda) tinha um efeito colateral real: `nowIso` (guardado DENTRO do mesmo
+  estado) ficava PRESO num valor velho sempre que o relógio do aparelho fosse adiantado e depois
+  voltado ainda dentro do mesmo evento/semana — o timer não atualizava mais o estado nesse caso
+  (por design, pra evitar o re-render), então o painel podia mostrar "concluído" usando esse
+  `nowIso` desatualizado, mesmo com a PRÓXIMA tentativa de recompensa já corretamente bloqueada por
+  `hasWeeklyEventClockRolledBack` (que usa seu próprio `new Date()` fresco, código diferente). Fix
+  definitivo: `nowIsoRef` (`useRef`) vira a ÚNICA fonte de "agora" pro cálculo de status —
+  atualizado a CADA tick do timer de 60s (refs nunca disparam re-render sozinhos, então não competem
+  com a otimização da rodada 18) e avançado também na hora da recompensa (substitui o
+  `setWeeklyEventSnapshot` da rodada 16, que não é mais necessário). `weeklyEventSnapshot` (estado)
+  fica só com `event` — a única coisa que realmente precisa disparar re-render, e só quando muda de
+  verdade. "Quando re-renderizar" e "manter o relógio fresco" deixam de ser a MESMA preocupação,
+  eliminando a tensão que causou este achado.
+- **Rodada 20**: 4 achados reais, 3 deles a MESMA classe (`weeklyEventSnapshot`/`nowIsoRef` ainda
+  tinham janelas de inconsistência): (1) `nowIso > nowIsoRef.current` avançava a referência pra uma
+  semana NOVA na hora da recompensa, sem atualizar `event` do snapshot — o badge/descrição podia
+  ficar da semana antiga enquanto o status já era da nova; (2) os dois inicializadores
+  (`weeklyEventSnapshot`/`nowIsoRef`) liam `new Date()` de forma independente, podendo divergir bem
+  na virada de semana; (3) `nowIsoRef.current` só era atualizado pelo timer/reward-grant, não no
+  PRÓPRIO clique — um recuo de relógio nos até 60s entre o último tick e o clique não era refletido
+  no painel. As 3 rodadas anteriores (16-19) foram tentativas sucessivas de compartilhar uma
+  referência de tempo entre o BADGE (precisa ficar fresco continuamente) e o PAINEL (só calculado
+  uma vez, no clique) — cada tentativa fechava uma janela e abria outra. Fix definitivo, mais
+  simples que tudo que veio antes: o painel para de reaproveitar QUALQUER estado/ref do badge —
+  `onOpenWeeklyEvent` calcula `event`/`nowIso` frescos, de um único `new Date()`, no exato instante
+  do clique (mesmo padrão já usado por `handleEnvironmentalChallengeCorrect` pra decidir a
+  recompensa). `nowIsoRef` removido por completo; `weeklyEventSnapshot`/o timer de 60s continuam
+  existindo, mas só pro badge. (4) achado não relacionado: `useModalA11y` (hook compartilhado por
+  todo painel/modal do jogo) tinha Esc/foco inicial mas nenhum focus trap — Tab escapava do painel
+  pro resto da página. Corrigido no hook compartilhado (beneficia todos os painéis existentes, não
+  só o `WeeklyEventPanel` novo): Tab no último elemento focável volta pro primeiro, Shift+Tab no
+  primeiro vai pro último.
+- **Rodada 21**: 5 achados reais. (1) O fix da rodada 20 resolveu a staleness do PAINEL, mas abriu
+  um novo caso: o BADGE (`weeklyEventSnapshot`) só atualiza sozinho no timer de 60s — clicar bem na
+  janela de até 60s depois de uma virada de semana abre o painel com um evento MAIS NOVO que o
+  badge ainda visível no HUD, uma inconsistência visual (não de segurança). Corrigido sincronizando
+  o badge com o evento recém-calculado dentro do próprio `onOpenWeeklyEvent` (mesma otimização de
+  comparar `event.id` de sempre — só troca a referência quando muda de verdade). (2) achado mais
+  sério, NÃO limitado a este lab: `inert` (via `suspendTriggers`/`chatOpen`/`rankingOpen`/etc.) só
+  desativa a subárvore do DOM — o listener GLOBAL de teclado em `World3D.tsx` continuava lendo/
+  consumindo teclas de movimento/pulo/interagir com QUALQUER modal aberto por cima, incluindo o
+  `WeeklyEventPanel` novo (e todos os outros modais pré-existentes — chat, ranking, mochila,
+  seletor de planeta, portão parental). Corrigido com `hudInertRef` (mesmo padrão de `suspendRef`
+  já usado no arquivo): `onKeyDown` ignora a tecla inteira enquanto suspenso (fecha o caminho
+  síncrono de `E`/interagir e o latch de espaço/pulo), e o loop de física para de LER `keysDown`
+  enquanto suspenso (não precisa "limpar" o dicionário na transição, só ignorar valores já `true`
+  durante a suspensão — volta a valer sozinho quando o modal fecha). (3) comentário em `types.ts`
+  ainda descrevia a guarda anti-recuo como `<=`, desatualizado desde a rodada 17 (`<` estrito). (4)
+  contagem de testes desatualizada no `CONTEXT.md` (9, real é 10 desde a rodada 17). (5) contagem
+  de rodadas na descrição da PR desatualizada (dizia 17, já eram mais) — reconciliada.
+- **Rodada 22**: 3 achados, todos em `useModalA11y.ts`/`World3D.tsx` (não específicos deste lab,
+  mas tocados pela rodada 20-21). (1) Nit — comentário do focus trap (rodada 20) tinha a palavra
+  duplicada "padrão padrão" — corrigido. (2) Real — quando nada dentro do painel tem `autoFocus`,
+  o foco inicial cai na PRÓPRIA raiz (`tabIndex={-1}`), que fica de fora do `NodeList` de
+  `focusable` (excluída de propósito, já que `-1` não faz parte da ordem normal de Tab); sem tratar
+  esse caso, `Shift+Tab` a partir da raiz não batia nem com o primeiro nem com o último elemento
+  focável, escapando do trap no PRIMEIRO `Shift+Tab`, antes mesmo de qualquer Tab ter acontecido.
+  Corrigido comparando também contra `document.activeElement === rootRef.current` nas duas
+  condições do trap. (3) Real, mesma classe do achado (2) da rodada 21 (`hudInertRef` já bloqueava
+  `keysDown`, mas não o joystick): `TouchJoystick`'s `inert` bloqueia NOVO toque enquanto um modal
+  está aberto, mas não zera um vetor já diferente de zero — segurar o joystick antes/durante um
+  modal abrir deixava `joystickRef.current` parado num valor não-nulo, continuando a mover o avatar
+  por trás do modal mesmo sem nenhum toque novo. Corrigido zerando `x`/`y` (em vez de ler
+  `joystickRef.current`) enquanto `hudInertRef.current`, mesmo padrão do `keysDown` ao lado.
+- **Rodada 23**: 2 achados reais. (1) Mesma classe do "modal não suspende entrada" das rodadas 21-22,
+  num lugar novo: `DailyLoginToast` (`App.tsx`) é um modal de verdade (`.modal-overlay`,
+  `aria-modal="true"`, usa `useModalA11y`, mesmo padrão de `MarsRewardToast`/`RewardToast`/
+  `CoopChallengeToast`), mas `dailyLoginReward !== null` não estava na expressão `suspendTriggers`
+  passada pra `<World3D>` — enquanto esse aviso de login diário ficava aberto, `hudInertRef.current`
+  continuava `false`, deixando teclado global e joystick agirem por trás dele (o mesmo bug das
+  rodadas 21-22, só que num modal que os outros ainda não cobriam). Corrigido adicionando
+  `dailyLoginReward !== null` à mesma expressão. (2) Nit de documentação — a descrição da PR ainda
+  dizia "21 rodadas ao todo" depois das rodadas 22-23 serem escritas neste `CONTEXT.md` —
+  reconciliada pra refletir o total atual.
+- **Rodada 24**: 0 achados — "Approval recommended", 0 comentários novos. PR convergiu depois de 24
+  rodadas de review automático.
+
+## Pendências / dívidas conhecidas
+
+- **Limitação conhecida, aceita por decisão consciente (não um bug esquecido)**: a guarda
+  anti-recuo do objetivo semanal só bloqueia VOLTAR o relógio do aparelho, não bloqueia AVANÇÁ-LO
+  repetidamente pra reivindicar semanas fictícias novas a cada vez. Corrigir de verdade exigiria um
+  relógio de servidor confiável, fora de escopo deste jogo (frontend-only, sem backend de gameplay)
+  e deste lab pequeno — mesma limitação já presente em `weeklyXpSnapshot`/`getCurrentWeeklyEvent`.
+  Ver comentário em `hasWeeklyEventClockRolledBack` (`progression.ts`) e rodada 14 do review acima.
+- ~~Pendência de verificação ao vivo das rodadas 11-14~~ — **resolvida na rodada 15**: o dev server
+  local, instável por boa parte desta sessão (múltiplos processos concorrentes acumulados),
+  finalmente estabilizou e o clique real de mouse no badge foi confirmado abrindo o painel
+  corretamente. O estado `'blocked'` e o auto-refresh do badge após ~1 minuto parado continuam sem
+  reprodução visual direta (achados raros, difíceis de forçar num teste manual rápido) — confiança
+  nesses dois casos específicos ainda vem só dos testes unitários (`weeklyEventObjectiveStatus`,
+  cenário de recuo de relógio) e da leitura do código, não de reprodução visual.
+
+## Funcionalidades planejadas que NÃO foram concluídas
+
+- Nenhuma — todos os itens do FEATURES.md foram concluídos.
+
+## O que o próximo laboratório deve desenvolver
+
+Próximo item da ordem sugerida em `docs/growth-retention-monetization-backlog.md` (item 9): **Lab
+183 - Auditoria da vitrine adulta de assinatura** — não é construir nada novo, é AUDITAR
+`TitleScreen`/`AvatarShop`/`/familia`/relatório de exemplo/CTA adulto/textos de item premium contra
+a experiência infantil, ajustando só lacunas concretas encontradas (copy infantil que incentive
+compra, falta de clareza grátis-vs-pago, ausência de evento num ponto adulto relevante). Critérios
+de aceite do backlog: criança nunca vê checkout/preço/urgência; adulto continua vendo preço,
+benefícios, cancelamento e a regra de aprendizagem grátis. Métricas citadas:
+`parent_value_comprehension_rate`, `weekly_report_preview_viewed` (já existe, lab-173),
+`checkout_started_from_parent_area`, zero entrada direta de checkout infantil.
+
+## Estado do repositório ao final
+
+- Branch: `lab-182-eventos-semanais` (a mesclar em `main` via PR).
+- Como rodar/verificar o que foi construído neste laboratório:
+  - `cd app && npm run test` (208 testes, inclui `applyWeeklyEventObjectiveProgress`/
+    `wouldGrantWeeklyEventObjectiveReward`/`weeklyEventObjectiveStatus`).
+  - `cd app/server-accounts && npm run test` (149 testes, inclui validação de
+    `weekly_event_objective_completed`).
+  - `cd app && npm run dev`, abrir o jogo, clicar no badge do evento semanal (topo esquerdo,
+    "Semana Dourada"/etc.) pra ver o painel novo, depois completar qualquer desafio ambiental
+    (ponte/abastecimento/placa) e conferir a linha de bônus no toast de recompensa + o painel
+    atualizado como concluído.

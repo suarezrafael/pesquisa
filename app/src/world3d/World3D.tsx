@@ -94,6 +94,7 @@ import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted,
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
+import type { WeeklyEvent } from '../data/weeklyEvents'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { TouchActionButton } from './TouchActionButton'
@@ -168,6 +169,10 @@ interface World3DProps {
   onOpenFriends: () => void
   onOpenPairing: () => void
   onOpenAchievements: () => void
+  onOpenWeeklyEvent: () => void
+  // Calculado uma vez em `App.tsx` (ver `HudHeader.tsx`) — repassado direto pro HUD, nunca
+  // calculado de novo aqui dentro.
+  weeklyEvent: WeeklyEvent
   onOpenMyHouse: () => void
   onUnlockMarsReward: () => void
   // Marco permanente de "já achou o pote de moedas de Marte", chamado a cada coleta real do pote —
@@ -2433,6 +2438,8 @@ export function World3D({
   onOpenFriends,
   onOpenPairing,
   onOpenAchievements,
+  onOpenWeeklyEvent,
+  weeklyEvent,
   onOpenMyHouse,
   onUnlockMarsReward,
   onFoundMarsCoinPot,
@@ -2516,6 +2523,15 @@ export function World3D({
   const progressRef = useRef(progress)
   const entitlementActiveRef = useRef(entitlementActive)
   const suspendRef = useRef(suspendTriggers)
+  // Achado do review automático do Copilot: `hudInert` (calculado mais abaixo, combina
+  // `suspendTriggers`/`chatOpen`/`rankingOpen`/`bagOpen`/`planetPickerOpen`/`showParentalGate`/
+  // `!setupReady`) só desativa a subárvore do DOM (`inert`) — o listener global de teclado
+  // (`onKeyDown`, dentro de `setup()`) continuava lendo/consumindo teclas de movimento/pulo/
+  // interagir com QUALQUER modal aberto por cima, inclusive o painel de evento semanal novo deste
+  // lab. Espelhado num ref (mesmo padrão de `suspendRef` acima) pra `onKeyDown` — definido uma vez
+  // só, dentro do `setup()` assíncrono — sempre ler o valor mais atual, não um valor congelado da
+  // primeira renderização.
+  const hudInertRef = useRef(false)
   const onSelectQuestRef = useRef(onSelectQuest)
   const onSelectSurpriseQuizRef = useRef(onSelectSurpriseQuiz)
   const onSelectPlanetQuestRef = useRef(onSelectPlanetQuest)
@@ -4224,6 +4240,13 @@ export function World3D({
         // física inteiro, mesmo comentário já documentado onde `handleInteractPress` é definida).
         // `inert` não ajuda aqui — só afeta a subárvore do DOM, não listeners de `window`.
         if (!inputReady) return
+        // Achado do review automático do Copilot: mesma lacuna de `inert` acima, mas pra QUALQUER
+        // modal suspendendo o jogo depois do carregamento (chat/ranking/mochila/seletor de
+        // planeta/portão parental/painel de evento semanal) — `E`/espaço continuavam interagindo/
+        // pulando por trás de um modal aberto. `hudInertRef` (mesmo padrão de ref-sempre-atual,
+        // ver declaração perto de `suspendRef`) cobre o resto da sessão de jogo, não só o
+        // carregamento inicial que `inputReady` cobre.
+        if (hudInertRef.current) return
         const target = e.target as HTMLElement | null
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
         const key = e.key.toLowerCase()
@@ -10399,12 +10422,29 @@ export function World3D({
         }
 
         // combina teclado + joystick
-        let x = joystickRef.current.x
-        let y = joystickRef.current.y
-        if (keysDown['arrowup'] || keysDown['w']) y -= 1
-        if (keysDown['arrowdown'] || keysDown['s']) y += 1
-        if (keysDown['arrowleft'] || keysDown['a']) x -= 1
-        if (keysDown['arrowright'] || keysDown['d']) x += 1
+        // Achado do review automático do Copilot: `inert` (via `TouchJoystick`) bloqueia NOVO
+        // toque enquanto um modal está aberto, mas não zera um vetor JÁ diferente de zero — segurar
+        // o joystick antes/durante um modal abrir deixava `joystickRef.current` parado num valor
+        // não-nulo, continuando a mover o avatar por trás do modal mesmo sem nenhum toque novo.
+        // Mesmo tratamento de `keysDown` logo abaixo: ignora o vetor inteiro (não só as teclas)
+        // enquanto `hudInertRef.current` — não precisa zerar `joystickRef` na transição, só parar
+        // de LER o valor (já parado) enquanto suspenso.
+        let x = hudInertRef.current ? 0 : joystickRef.current.x
+        let y = hudInertRef.current ? 0 : joystickRef.current.y
+        // `inert` (via `TouchJoystick`) já bloqueia o joystick de toque enquanto um modal está
+        // aberto, mas `keysDown` (populado pelo listener GLOBAL de `window`, fora do DOM) continua
+        // sendo lido aqui incondicionalmente — segurar uma tecla de movimento antes/durante um
+        // modal aberto (chat/ranking/mochila/painel de evento semanal etc.) continuava andando o
+        // avatar por trás dele. Ignora `keysDown` inteiro enquanto `hudInertRef.current` — não
+        // precisa "limpar" o dicionário na transição, só parar de LER os valores (já `true`)
+        // enquanto suspenso; volta a valer sozinho assim que o modal fecha, sem exigir soltar e
+        // apertar a tecla de novo.
+        if (!hudInertRef.current) {
+          if (keysDown['arrowup'] || keysDown['w']) y -= 1
+          if (keysDown['arrowdown'] || keysDown['s']) y += 1
+          if (keysDown['arrowleft'] || keysDown['a']) x -= 1
+          if (keysDown['arrowright'] || keysDown['d']) x += 1
+        }
         const mag = Math.hypot(x, y)
         // lab-164 (jornada de ativação de 10 minutos) — "conseguiu controlar o personagem" (mesma
         // definição citada em docs/market-metrics-engagement-backlog.md §4), primeiro sinal de
@@ -12412,6 +12452,7 @@ export function World3D({
   // declaração) desabilita toda a UI que depende da cena (canvas/joystick/botões de toque, ver
   // `inert={hudInert}` abaixo) durante a janela inteira, em vez de proteger handler por handler.
   const hudInert = !setupReady || suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
+  hudInertRef.current = hudInert
 
   return (
     <div className="world3d-container">
@@ -12464,6 +12505,8 @@ export function World3D({
         onOpenBag={() => setBagOpen(true)}
         onOpenPairing={onOpenPairing}
         onSwitchProfile={onSwitchProfile}
+        onOpenWeeklyEvent={onOpenWeeklyEvent}
+        weeklyEvent={weeklyEvent}
         inert={hudInert}
       />
       {onMarsCombatZone && <MarsHealthBar health={marsHealthDisplay} maxHealth={MARS_MAX_HEALTH} />}

@@ -15,7 +15,12 @@ import { findPlanetIdForQuest, isPlanetFullyCompleted, planetQuests } from '../d
 import { findTreasureChestById, findTreasureChestByPlanetId } from '../data/treasureChests'
 import { findPlanetSecretById, findPlanetSecretByPlanetId } from '../data/planetSecrets'
 import { findPostcardByPlanetId, POSTCARD_CATALOG } from '../data/postcards'
-import { getCurrentWeeklyEvent, isoWeekKey, type WeeklyEvent } from '../data/weeklyEvents'
+import {
+  getCurrentWeeklyEvent,
+  isoWeekKey,
+  WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
+  type WeeklyEvent,
+} from '../data/weeklyEvents'
 import { PET_CATALOG } from '../data/pets'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
@@ -70,6 +75,97 @@ export function weeklyXpEarned(progress: Progress, nowIso: string): number {
   const currentWeekKey = isoWeekKey(new Date(nowIso))
   if (progress.weeklyXpWeekKey !== currentWeekKey) return 0
   return Math.max(0, progress.xp - progress.weeklyXpSnapshot)
+}
+
+// Leitura pura, mesmo raciocínio de `weeklyXpEarned` acima — usada pela UI pra saber se já mostra
+// o objetivo semanal como concluído, sem precisar mutar nada. Compara semana ISO (não o instante
+// bruto) — dois instantes na MESMA semana real contam como "já feito", mesmo em dias diferentes.
+export function isWeeklyEventObjectiveDone(progress: Progress, nowIso: string): boolean {
+  if (!progress.weeklyEventObjectiveRewardedAtIso) return false
+  return isoWeekKey(new Date(progress.weeklyEventObjectiveRewardedAtIso)) === isoWeekKey(new Date(nowIso))
+}
+
+// Rejeita qualquer tentativa de "voltar no tempo" em relação à última concessão real — sem isso,
+// adiantar o relógio do aparelho pra reivindicar uma semana futura e depois voltar o relógio
+// liberaria o MESMO bônus de novo pra semana real (a chave de semana guardada não bateria mais com
+// "agora"). Comparação de string funciona porque `nowIso`/`weeklyEventObjectiveRewardedAtIso` são
+// sempre `toISOString()` (formato fixo, comparável lexicamente = comparável cronologicamente) —
+// mesmo espírito de `dayGap <= 0` em `applyDailyLoginReward` acima. Sob jogo honesto,
+// `weeklyEventObjectiveRewardedAtIso` NUNCA fica no futuro em relação a "agora" — só acontece
+// manipulando o relógio, então esse recuo é o sinal em si, independente de cair na MESMA semana
+// ISO ou numa diferente (achado do review automático do Copilot: uma versão anterior só olhava
+// `isWeeklyEventObjectiveDone` pra decidir "concluído" vs. "bloqueado", então reivindicar na
+// sexta-feira e voltar o relógio pra segunda-feira DA MESMA SEMANA mostrava "concluído" mesmo o
+// recuo sendo real — checar o recuo de relógio ANTES do "mesma semana" corrige isso).
+//
+// **Limitação conhecida, aceita de propósito**: isto só bloqueia RECUAR o relógio, não
+// ADIANTÁ-LO indefinidamente — sem um relógio de servidor confiável (este jogo é frontend-only,
+// sem conta/backend de gameplay, ver `CLAUDE.md`), nada impede reivindicar semana após semana só
+// avançando o relógio do aparelho pra frente. Aceitável aqui porque a moeda do jogo não tem valor
+// monetário nem vantagem de progresso — mesma classe de limitação já presente em
+// `weeklyXpSnapshot`/`getCurrentWeeklyEvent` (ambos também dependem só do relógio local). Corrigir
+// de verdade exigiria validação de tempo no servidor, fora de escopo deste lab.
+function hasWeeklyEventClockRolledBack(progress: Progress, nowIso: string): boolean {
+  // Achado do review automático do Copilot: `<=` (em vez de `<`) tratava um `nowIso` IGUAL ao
+  // último instante de recompensa como recuo de relógio — mas `App.tsx` grava esse EXATO mesmo
+  // `nowIso` tanto em `weeklyEventObjectiveRewardedAtIso` quanto no snapshot usado pra calcular o
+  // status logo em seguida (correção da rodada anterior, pra não ler um snapshot mais VELHO que a
+  // recompensa recém-concedida). Com `<=`, abrir o emblema imediatamente após ganhar o bônus
+  // mostrava "bloqueado" em vez de "concluído". `<` estrito continua bloqueando qualquer instante
+  // GENUINAMENTE anterior (recuo de verdade); a checagem de "mesma semana ISO" em
+  // `isWeeklyEventObjectiveDone`/`wouldGrantWeeklyEventObjectiveReward` já impede uma segunda
+  // concessão no mesmo instante (ou no resto da mesma semana), então nada de novo fica liberado.
+  return progress.weeklyEventObjectiveRewardedAtIso !== null && nowIso < progress.weeklyEventObjectiveRewardedAtIso
+}
+
+// Única decisão de "concede ou não" do objetivo semanal — usada TANTO pela função pura de escrita
+// abaixo QUANTO pelo pré-check síncrono de `weeklyEventObjectiveProgress` (`useProgress.ts`).
+// Achado do review automático do Copilot: as duas checagens tinham ficado DUPLICADAS e
+// DIVERGENTES depois da guarda anti-recuo de relógio ser adicionada só na função de escrita — o
+// pré-check síncrono continuava usando só `isWeeklyEventObjectiveDone`, então um relógio
+// adiantado-e-devolvido fazia o pré-check dizer "vai conceder" (semana diferente da guardada) e a
+// escrita de verdade rejeitar (recuo de relógio), resultando num toast/analytics de "+20 moedas"
+// SEM a moeda ter sido creditada de verdade. Fatorar numa função só elimina a possibilidade das
+// duas divergirem de novo.
+export function wouldGrantWeeklyEventObjectiveReward(progress: Progress, nowIso: string): boolean {
+  return !hasWeeklyEventClockRolledBack(progress, nowIso) && !isWeeklyEventObjectiveDone(progress, nowIso)
+}
+
+export type WeeklyEventObjectiveStatus = 'pending' | 'done' | 'blocked'
+
+// Status de apresentação pro `WeeklyEventPanel.tsx` — achado do review automático do Copilot:
+// reduzir isso a um booleano ("já concluído?") confundia dois estados bem diferentes no cenário de
+// recuo de relógio: a recompensa foi dada num instante DEPOIS de "agora" (semana futura, OU mais
+// tarde na mesma semana), então "você já ganhou X moedas ESTA semana" seria literalmente falso —
+// mas também não dá pra mostrar "pendente, complete um desafio pra ganhar" (a guarda anti-recuo
+// vai recusar a próxima tentativa mesmo assim). `'blocked'` é o 3º estado, neutro, pra esse caso
+// raro (só alcançável manipulando o relógio do aparelho). O recuo de relógio é checado ANTES da
+// checagem de "mesma semana" — checar na ordem errada reintroduziria o mesmo problema (reivindicar
+// na sexta e voltar o relógio pra segunda DA MESMA SEMANA mostraria "concluído" incorretamente).
+export function weeklyEventObjectiveStatus(progress: Progress, nowIso: string): WeeklyEventObjectiveStatus {
+  if (hasWeeklyEventClockRolledBack(progress, nowIso)) return 'blocked'
+  return isWeeklyEventObjectiveDone(progress, nowIso) ? 'done' : 'pending'
+}
+
+export interface WeeklyEventObjectiveResult {
+  progress: Progress
+  rewardGranted: boolean
+}
+
+// Concede o bônus do objetivo semanal (`WEEKLY_EVENT_OBJECTIVE_REWARD_COINS`, `data/weeklyEvents.ts`)
+// na PRIMEIRA vez que é chamada dentro de cada semana ISO — idempotente mesmo se completar vários
+// desafios ambientais na mesma semana, nunca paga 2x. Chamada de `weeklyEventObjectiveProgress`
+// (`useProgress.ts`) com um atualizador funcional, não direto — ver comentário lá sobre por quê.
+export function applyWeeklyEventObjectiveProgress(progress: Progress, nowIso: string): WeeklyEventObjectiveResult {
+  if (!wouldGrantWeeklyEventObjectiveReward(progress, nowIso)) return { progress, rewardGranted: false }
+  return {
+    progress: {
+      ...progress,
+      weeklyEventObjectiveRewardedAtIso: nowIso,
+      coins: progress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
+    },
+    rewardGranted: true,
+  }
 }
 
 // Exportadas (lab-93) pra `data/achievements.ts` usar como fonte única de verdade — sem isso, o

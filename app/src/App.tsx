@@ -11,6 +11,7 @@ import { DailyLoginToast } from './components/DailyLoginToast'
 import { CoopChallengeToast } from './components/CoopChallengeToast'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
+import { WeeklyEventPanel } from './components/WeeklyEventPanel'
 import { MyHousePanel } from './world3d/MyHousePanel'
 import { PetPanel } from './world3d/PetPanel'
 import { FriendsPanel } from './world3d/FriendsPanel'
@@ -25,6 +26,7 @@ import {
   trackHouseVisited,
   trackLearningChallengeStarted,
   trackLearningChallengeCompleted,
+  trackWeeklyEventObjectiveCompleted,
 } from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
@@ -42,7 +44,8 @@ import {
 } from './state/storage'
 import type { Profile, Progress, Quest } from './types'
 import type { FurnitureOption } from './data/furniture'
-import type { WeeklyEvent } from './data/weeklyEvents'
+import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, getCurrentWeeklyEvent, type WeeklyEvent } from './data/weeklyEvents'
+import { weeklyEventObjectiveStatus, type WeeklyEventObjectiveStatus } from './state/progression'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
@@ -125,7 +128,30 @@ function GameApp() {
     petDailyChallengeCompleted,
     toggleHouseVisible,
     syncWeeklyXp,
+    weeklyEventObjectiveProgress,
   } = useProgress()
+  // Achado do review automático do Copilot (várias rodadas até chegar aqui): tentativas
+  // anteriores guardavam `event`+`nowIso` juntos num estado atualizado por um timer de 60s,
+  // compartilhado entre o
+  // BADGE (precisa ficar fresco continuamente, mesmo sem nenhuma interação) e o PAINEL (só
+  // calculado uma vez, no clique) — as duas necessidades são bem diferentes e cada tentativa de
+  // servir as duas com a MESMA fonte deixava uma janela de inconsistência (timer atrasado vs.
+  // clique, relógio adiantado-e-voltado, virada de semana entre inicializações separadas). Fix
+  // definitivo: `weeklyEventSnapshot` (estado, só `event`) existe SÓ pro badge, atualizado pelo
+  // timer com a mesma otimização de sempre (compara `event.id`, devolve a mesma referência quando
+  // não muda, pra não re-renderizar `World3D` à toa a cada minuto). O PAINEL não usa NADA disso —
+  // `onOpenWeeklyEvent` (mais abaixo) calcula `event`/`nowIso` frescos, de um ÚNICO `new Date()`,
+  // no exato instante do clique — mesmo padrão já usado por `handleEnvironmentalChallengeCorrect`.
+  // Sem estado/ref compartilhado entre badge e painel, não sobra nenhuma janela de staleness pro
+  // clique herdar.
+  const [weeklyEventSnapshot, setWeeklyEventSnapshot] = useState(() => ({ event: getCurrentWeeklyEvent(new Date()) }))
+  useEffect(() => {
+    const id = setInterval(() => {
+      const event = getCurrentWeeklyEvent(new Date())
+      setWeeklyEventSnapshot((prev) => (prev.event.id === event.id ? prev : { event }))
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [])
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null)
   const [activeSurpriseQuiz, setActiveSurpriseQuiz] = useState<Quest | null>(null)
   const [activePlanetQuest, setActivePlanetQuest] = useState<Quest | null>(null)
@@ -170,6 +196,10 @@ function GameApp() {
     streakBonusCoins: number
     planetClearBonusXp?: number
     planetClearBonusCoins?: number
+    // Só populado quando esta resposta veio de um desafio ambiental (`handleEnvironmentalChallengeCorrect`
+    // abaixo) E concedeu o bônus do objetivo semanal nesta mesma resposta — moeda ADICIONAL, não
+    // incluída em `awardedCoins` acima.
+    weeklyEventObjectiveBonusCoins?: number
     // lab-150 (achado do Copilot, PR #2): evento semanal capturado no MOMENTO do cálculo da
     // recompensa (`CompletionResult.event`), não recalculado de novo na hora de mostrar o toast.
     event: WeeklyEvent
@@ -184,6 +214,16 @@ function GameApp() {
   const [showMyHouse, setShowMyHouse] = useState(false)
   const [showPets, setShowPets] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
+  // Snapshot capturado no INSTANTE do clique (`onOpenWeeklyEvent` abaixo), não um booleano simples
+  // — achado do review automático do Copilot: `weeklyEvent`/`weeklyEventObjectiveDone` (calculados
+  // no corpo do componente, recalculados a CADA re-render) podiam divergir entre o clique no badge
+  // e o re-render que de fato abre o painel, bem na virada exata de semana ISO. Guardar o valor já
+  // decidido no momento do clique, em vez de deixar o painel reconsultar `new Date()` de novo em
+  // outro render, fecha essa classe de divergência de vez.
+  const [weeklyEventPanel, setWeeklyEventPanel] = useState<{
+    event: WeeklyEvent
+    status: WeeklyEventObjectiveStatus
+  } | null>(null)
   // lab-136 (pedido do usuário: "escolher em que posição da casa deve ficar a peça... o ângulo e
   // posição") — id do item que o jogador clicou "Mover" no `MyHousePanel`; `World3D.tsx` observa
   // essa prop e entra no modo de posicionamento dentro da cena 3D, depois chama
@@ -331,12 +371,34 @@ function GameApp() {
     // jogador fechou antes do próprio atraso de 700ms terminar).
     if (activeEnvironmentalAttemptIdRef.current !== activeEnvironmentalChallenge.attemptId) return
     const { quest, kind } = activeEnvironmentalChallenge
+    // Um único `nowIso` pras duas chamadas abaixo (achado do review automático do Copilot na PR
+    // #61) — sem isso, `completeQuest` leria o relógio por conta própria pro multiplicador semanal
+    // e `weeklyEventObjectiveProgress` leria de novo pro objetivo; bem na virada exata de semana
+    // ISO os dois podiam divergir (o toast mostrando o evento de uma semana, o bônus/analytics
+    // gravados pra outra).
+    const nowIso = new Date().toISOString()
     const { newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event } = completeQuest(
       quest,
       entitlement?.active,
+      nowIso,
     )
-    setReward({ quest, newBadges, awardedXp, awardedCoins, currentStreak, streakBonusCoins, event })
+    // Objetivo educativo/ambiental do evento semanal — qualquer um dos 3 tipos de desafio conta,
+    // sempre depois de `completeQuest` acima (ver comentário de `weeklyEventObjectiveProgress` em
+    // `useProgress.ts` sobre por que a ordem/atualizador funcional importam aqui).
+    const rewardGranted = weeklyEventObjectiveProgress(nowIso)
+    const weeklyEventObjectiveBonusCoins = rewardGranted ? WEEKLY_EVENT_OBJECTIVE_REWARD_COINS : undefined
+    setReward({
+      quest,
+      newBadges,
+      awardedXp,
+      awardedCoins,
+      currentStreak,
+      streakBonusCoins,
+      weeklyEventObjectiveBonusCoins,
+      event,
+    })
     trackLearningChallengeCompleted(kind)
+    if (rewardGranted) trackWeeklyEventObjectiveCompleted(nowIso)
     activeEnvironmentalAttemptIdRef.current = null
     setActiveEnvironmentalChallenge(null)
   }
@@ -514,6 +576,26 @@ function GameApp() {
           onOpenShop={() => setShowShop(true)}
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
+          onOpenWeeklyEvent={() => {
+            // Achado do review automático do Copilot (ver histórico completo no `CONTEXT.md` do
+            // lab): `event` e `nowIso` calculados AQUI, de um único `new Date()`, no exato instante
+            // do clique — não reaproveita `weeklyEventSnapshot` (que existe só pro badge, atualizado
+            // por um timer de 60s) nem nenhum `ref` cacheado. Mesmo padrão já usado por
+            // `handleEnvironmentalChallengeCorrect` pra decidir a recompensa — sem nenhum estado
+            // compartilhado entre badge e painel, não sobra janela de staleness nenhuma pro clique
+            // herdar (nem virada de semana, nem relógio adiantado-e-voltado, nem timer atrasado).
+            const nowIso = new Date().toISOString()
+            const event = getCurrentWeeklyEvent(new Date(nowIso))
+            // Achado do review automático do Copilot: o badge (`weeklyEventSnapshot`) só atualiza
+            // no timer de 60s — clicar bem na janela de até 60s depois de uma virada de semana
+            // abriria o painel com um evento MAIS NOVO que o badge ainda visível no HUD, uma
+            // inconsistência visual (badge de uma semana, painel de outra). Mesma otimização de
+            // sempre (compara `event.id`, só troca a referência quando muda de verdade) — sincroniza
+            // o badge com o que acabou de ser calculado, em vez de esperar o próximo tick.
+            setWeeklyEventSnapshot((prev) => (prev.event.id === event.id ? prev : { event }))
+            setWeeklyEventPanel({ event, status: weeklyEventObjectiveStatus(progress, nowIso) })
+          }}
+          weeklyEvent={weeklyEventSnapshot.event}
           onOpenMyHouse={() => setShowMyHouse(true)}
           onOpenPets={() => setShowPets(true)}
           onOpenFriends={() => setShowFriends(true)}
@@ -553,7 +635,9 @@ function GameApp() {
             showMyHouse ||
             showPets ||
             showFriends ||
-            showMarsReward
+            showMarsReward ||
+            weeklyEventPanel !== null ||
+            dailyLoginReward !== null
           }
         />
       </Suspense>
@@ -609,6 +693,7 @@ function GameApp() {
           streakBonusCoins={reward.streakBonusCoins}
           planetClearBonusXp={reward.planetClearBonusXp}
           planetClearBonusCoins={reward.planetClearBonusCoins}
+          weeklyEventObjectiveBonusCoins={reward.weeklyEventObjectiveBonusCoins}
           event={reward.event}
           onContinue={() => setReward(null)}
         />
@@ -622,6 +707,14 @@ function GameApp() {
 
       {showAchievements && (
         <AchievementsPanel progress={progress} onClose={() => setShowAchievements(false)} />
+      )}
+
+      {weeklyEventPanel && (
+        <WeeklyEventPanel
+          event={weeklyEventPanel.event}
+          status={weeklyEventPanel.status}
+          onClose={() => setWeeklyEventPanel(null)}
+        />
       )}
 
       {showMyHouse && (

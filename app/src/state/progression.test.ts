@@ -40,6 +40,10 @@ import {
   skillBreakdown,
   syncWeeklyXpSnapshot,
   weeklyXpEarned,
+  applyWeeklyEventObjectiveProgress,
+  isWeeklyEventObjectiveDone,
+  wouldGrantWeeklyEventObjectiveReward,
+  weeklyEventObjectiveStatus,
   SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
@@ -64,7 +68,7 @@ import { PET_CATALOG } from '../data/pets'
 import { quests } from '../data/quests'
 import { planetQuests } from '../data/planetQuests'
 import type { Quest } from '../types'
-import type { WeeklyEvent } from '../data/weeklyEvents'
+import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, type WeeklyEvent } from '../data/weeklyEvents'
 
 const NO_BONUS_EVENT: WeeklyEvent = {
   id: 'teste',
@@ -1388,6 +1392,94 @@ describe('syncWeeklyXpSnapshot/weeklyXpEarned (lab-157)', () => {
     const synced = syncWeeklyXpSnapshot({ ...emptyProgress, xp: 150 }, '2026-09-08T12:00:00.000Z')
     const comMenosXp = { ...synced, xp: 100 }
     expect(weeklyXpEarned(comMenosXp, '2026-09-09T12:00:00.000Z')).toBe(0)
+  })
+})
+
+describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182, "Eventos semanais saudáveis")', () => {
+  it('concede o bônus na primeira vez da semana', () => {
+    const result = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    expect(result.rewardGranted).toBe(true)
+    expect(result.progress.coins).toBe(emptyProgress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS)
+    expect(result.progress.weeklyEventObjectiveRewardedAtIso).toBe('2026-09-08T12:00:00.000Z')
+  })
+
+  it('não concede de novo na MESMA semana (idempotente, mesmo completando outro desafio)', () => {
+    const primeira = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    const segunda = applyWeeklyEventObjectiveProgress(primeira.progress, '2026-09-10T12:00:00.000Z') // mesma semana
+    expect(segunda.rewardGranted).toBe(false)
+    expect(segunda.progress).toBe(primeira.progress) // mesma referência — não mexeu em nada
+  })
+
+  it('concede de novo numa semana NOVA', () => {
+    const primeira = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    const semanaSeguinte = applyWeeklyEventObjectiveProgress(primeira.progress, '2026-09-15T12:00:00.000Z')
+    expect(semanaSeguinte.rewardGranted).toBe(true)
+    expect(semanaSeguinte.progress.coins).toBe(primeira.progress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS)
+  })
+
+  it('isWeeklyEventObjectiveDone reflete o estado real por semana', () => {
+    const progress = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z').progress
+    expect(isWeeklyEventObjectiveDone(progress, '2026-09-10T12:00:00.000Z')).toBe(true) // mesma semana
+    expect(isWeeklyEventObjectiveDone(progress, '2026-09-15T12:00:00.000Z')).toBe(false) // semana seguinte
+  })
+
+  it('perfil que nunca completou nada não mostra o objetivo como feito', () => {
+    expect(isWeeklyEventObjectiveDone(emptyProgress, '2026-09-08T12:00:00.000Z')).toBe(false)
+  })
+
+  it('achado do review automático do Copilot: adiantar o relógio pra uma semana futura e depois voltar não libera o bônus de novo pra semana real', () => {
+    // Semana real: 2026-W37 (8 de setembro). Criança adianta o relógio do aparelho pra 2026-W40
+    // (29 de setembro), reivindica o bônus "daquela semana futura", depois volta o relógio pra
+    // 2026-W37 de novo — o bônus NÃO pode ser concedido outra vez pra 2026-W37, mesmo a chave de
+    // semana guardada ("2026-W40") não batendo mais com "agora" ("2026-W37").
+    const adiantouRelogio = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-29T12:00:00.000Z')
+    expect(adiantouRelogio.rewardGranted).toBe(true)
+    const voltouRelogio = applyWeeklyEventObjectiveProgress(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z')
+    expect(voltouRelogio.rewardGranted).toBe(false)
+    expect(voltouRelogio.progress).toBe(adiantouRelogio.progress) // mesma referência — não mexeu em nada
+  })
+
+  it('achado do review automático do Copilot: wouldGrantWeeklyEventObjectiveReward nunca diverge de applyWeeklyEventObjectiveProgress no cenário de recuo de relógio', () => {
+    // O pré-check síncrono usado por `useProgress.ts` (`weeklyEventObjectiveProgress`) precisa
+    // concordar com a decisão real de `applyWeeklyEventObjectiveProgress`, senão o app mostra
+    // "+20 moedas" no toast sem a moeda ter sido creditada de verdade (achado real desta rodada).
+    const adiantouRelogio = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-29T12:00:00.000Z')
+    expect(wouldGrantWeeklyEventObjectiveReward(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z')).toBe(false)
+    expect(applyWeeklyEventObjectiveProgress(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z').rewardGranted).toBe(
+      false,
+    )
+  })
+
+  it('weeklyEventObjectiveStatus distingue "pendente" de "concluído" de "bloqueado por recuo de relógio"', () => {
+    expect(weeklyEventObjectiveStatus(emptyProgress, '2026-09-08T12:00:00.000Z')).toBe('pending')
+
+    const concluido = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-08T12:00:00.000Z').progress
+    expect(weeklyEventObjectiveStatus(concluido, '2026-09-10T12:00:00.000Z')).toBe('done') // mesma semana
+
+    // achado do review automático do Copilot: no cenário de recuo de relógio, a recompensa foi
+    // dada numa semana FUTURA — "concluído esta semana" seria falso, mas também não pode prometer
+    // "pendente, complete um desafio" (a próxima tentativa real seria recusada). É um 3º estado.
+    const adiantouRelogio = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-29T12:00:00.000Z').progress
+    expect(weeklyEventObjectiveStatus(adiantouRelogio, '2026-09-08T12:00:00.000Z')).toBe('blocked')
+  })
+
+  it('achado do review automático do Copilot: recuar o relógio DENTRO da mesma semana ISO também bloqueia, não mostra "concluído"', () => {
+    // Reivindica numa sexta-feira (2026-09-11, ainda semana 2026-W37), depois o relógio volta pra
+    // segunda-feira DA MESMA SEMANA (2026-09-08) — comparar só a semana ISO diria "concluído" (as
+    // duas datas caem na mesma semana), mas o recuo de relógio em si já é o sinal de manipulação,
+    // independente de cair na mesma semana ou numa diferente.
+    const reivindicouSexta = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-11T12:00:00.000Z').progress
+    expect(weeklyEventObjectiveStatus(reivindicouSexta, '2026-09-08T09:00:00.000Z')).toBe('blocked')
+  })
+
+  it('achado do review automático do Copilot: nowIso IGUAL ao instante da recompensa mostra "concluído", não "bloqueado"', () => {
+    // App.tsx grava o MESMO nowIso tanto em weeklyEventObjectiveRewardedAtIso quanto no snapshot
+    // usado pra calcular o status logo em seguida (avança o snapshot junto ao conceder a
+    // recompensa, pra não ler um valor mais velho) — abrir o emblema imediatamente após ganhar o
+    // bônus consulta o status com nowIso === rewardedAtIso, não um instante posterior.
+    const nowIso = '2026-09-08T12:00:00.000Z'
+    const concluidoAgoraMesmo = applyWeeklyEventObjectiveProgress(emptyProgress, nowIso).progress
+    expect(weeklyEventObjectiveStatus(concluidoAgoraMesmo, nowIso)).toBe('done')
   })
 })
 

@@ -89,6 +89,7 @@ PR #55, 7ª rodada).
 | `learning_challenge_started` | Abertura de um dos 3 landmarks de missão ambiental do planeta principal (lab-180, "Missões ambientais de aprendizagem": ponte/lógica, posto de abastecimento do foguete/matemática, placa/leitura) — dispara ao apertar `E` perto do landmark, antes de responder | `App.tsx`, `handleOpenEnvironmentalChallenge` | `kind` (`"bridge"`, `"rocket_fuel"`, `"plaque"`) | 1x por tentativa (sem limite de sessão) |
 | `learning_challenge_completed` | Resposta certa num dos 3 landmarks acima — credita XP/moeda de verdade via `completeQuest`, mesmo caminho de uma escolinha comum | `App.tsx`, `handleEnvironmentalChallengeCorrect` | `kind` (`"bridge"`, `"rocket_fuel"`, `"plaque"`) | 1x por tentativa concluída |
 | `album_planet_opened` | Expandir um planeta específico na lista nova "Planetas" do catálogo de conquistas (lab-181, "Circuito de descoberta e álbum de planetas") — sinal de interesse real num planeta, não só abrir o painel inteiro | `world3d/AchievementsPanel.tsx`, `togglePlanet` | `planetId` (um dos 7 planetas-destino) | 1x por expansão (reabrir o mesmo planeta conta de novo) |
+| `weekly_event_objective_completed` | Objetivo educativo/ambiental do evento semanal concedido (lab-182, "Eventos semanais saudáveis") — dispara só na PRIMEIRA vez em cada semana ISO que o bônus é de fato pago, mesmo completando vários desafios ambientais na mesma semana | `App.tsx`, `handleEnvironmentalChallengeCorrect` | — | 1x por semana ISO por perfil |
 
 ## Nível de agregação (lab-185)
 
@@ -186,6 +187,21 @@ decisão").
   evento novo. "D7 por número de descobertas" (outra métrica citada) não foi construída neste
   lab — exigiria uma consulta de coorte nova, mesmo padrão do lab-185, fora do escopo pequeno
   deste lab (documentado como pendência em `labs/lab-181-album-planetas/CONTEXT.md`).
+- **Eventos semanais saudáveis** (lab-182) — `weekly_event_objective_completed`, lido por
+  `weeklyFunnel.weeklyEventObjectiveCompleted` ("conclusão de evento", métrica citada pelo
+  backlog). **Cuidado com o nome "semanal" aqui — são DUAS janelas de "semana" diferentes,
+  propositalmente**: o bônus em si é idempotente por SEMANA ISO (segunda a domingo,
+  `weeklyEventObjectiveRewardedAtIso`/`isoWeekKey`, `state/progression.ts`), mas
+  `weeklyFunnel.*` inteiro (não só esta métrica — todo o funil) é `weeklyDevices(...)`, uma janela
+  MÓVEL de 7 dias corridos a partir do instante em que `/admin/metrics` é consultado (`now() -
+  interval '7 days'`, não segunda-a-domingo) E por `device_id` distinto, não por perfil (ver "Nível
+  de agregação" abaixo). Ou seja: `weeklyFunnel.weeklyEventObjectiveCompleted` não é "quantos
+  perfis bateram o objetivo nesta semana ISO" — é "quantos aparelhos distintos dispararam o evento
+  nos últimos 7 dias corridos", uma aproximação de alcance, não uma contagem exata por semana/perfil.
+  "Retorno semanal" (outra métrica citada) já é coberto pela infraestrutura de retenção D1/D7
+  existente (`handleAdminMetrics`, lab-185) — nada novo necessário aqui, o evento novo mede a
+  CONCLUSÃO do objetivo, não a volta em si. "Feedback qualitativo infantil" (3ª métrica citada) é
+  pesquisa com usuário real, fora de escopo de laboratório de código.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de

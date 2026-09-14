@@ -149,6 +149,9 @@ function FamilyValueProp({ onContinue }: { onContinue: () => void }) {
       <p>
         Missões de lógica, matemática e leitura, progresso, cooperação com amigos, pets e casa
         virtual — tudo isso é <strong>100% gratuito e sempre será</strong>, com assinatura ou sem.
+        O mesmo vale pro evento semanal e seu objetivo educativo/ambiental: sem pressa e sem
+        cobrança nenhuma — não completar uma semana nunca tira nada, e a próxima chance chega
+        sempre grátis.
       </p>
 
       <h2>💎 O que a assinatura muda</h2>

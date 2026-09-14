@@ -188,6 +188,8 @@ export const emptyProgress: Progress = {
   // Ranking local entre perfis (lab-157) — ver comentário em `types.ts`.
   weeklyXpWeekKey: null,
   weeklyXpSnapshot: 0,
+  // Objetivo do evento semanal — ver comentário em `types.ts`.
+  weeklyEventObjectiveRewardedAtIso: null,
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

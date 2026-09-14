@@ -1390,17 +1390,26 @@ a.nickname-generate-btn {
 
 /* Evento semanal (lab-22) */
 
+/* `.badge-row` (dentro de `.hud-overlay`) é `pointer-events: none` — texto informativo, deixa
+   cliques passarem pro mundo 3D por baixo (mesmo raciocínio de `.help-button` reativando o próprio
+   pointer-events). Alvo de toque mínimo de 44px lógicos (docs/prompts/02-design-profissional.md
+   §3) via `min-height`, não `height` — mesmo raciocínio de `.modal-close`/`.planet-toggle`:
+   preserva o visual de pílula pequena enquanto garante uma área clicável real pra mão de criança. */
 .weekly-event-badge {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
   padding: 0.3rem 0.6rem;
+  min-height: 44px;
+  border: none;
   border-radius: 999px;
   background: #fff2d6;
   color: #8a5a00;
-  cursor: default;
+  cursor: pointer;
 }
 
 /* lab-171 — destaque de "próximo objetivo" no topo do álbum de conquistas. */
@@ -1427,6 +1436,16 @@ a.nickname-generate-btn {
 /* Lista de missões */
 
 .quest-list-modal {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* O painel do evento semanal tem 2 parágrafos longos (status do objetivo + mensagem de "sem
+   pressão") além da descrição do evento — mais texto que os outros usuários de `.reward-modal`
+   (toasts curtos de recompensa). Em telas curtas isso podia empurrar o botão "Fechar" pra fora da
+   área visível, já que `.modal` sozinho não tem limite de altura/scroll — mesmo fix de
+   `.quest-list-modal` acima. */
+.weekly-event-modal {
   max-height: 80vh;
   overflow-y: auto;
 }

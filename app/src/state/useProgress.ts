@@ -5,6 +5,7 @@ import { loadProgress, saveProgress } from './storage'
 import { findTreasureChestById } from '../data/treasureChests'
 import { findPlanetSecretById } from '../data/planetSecrets'
 import { findPlanetIdForQuest } from '../data/planetQuests'
+import { getCurrentWeeklyEvent } from '../data/weeklyEvents'
 import {
   applyCoinCollected,
   applyQuestCompletion,
@@ -41,6 +42,8 @@ import {
   applyPetDailyChallengeCompleted,
   type PetDailyChallengeResult,
   syncWeeklyXpSnapshot as applySyncWeeklyXpSnapshot,
+  applyWeeklyEventObjectiveProgress,
+  wouldGrantWeeklyEventObjectiveReward,
 } from './progression'
 
 export function useProgress() {
@@ -63,7 +66,12 @@ export function useProgress() {
 
   // lab-126: `entitlementActive` aplica o bônus de moeda de assinante (`progression.ts`) — default
   // `false` preserva o comportamento de quem chama sem saber/se importar com entitlement.
-  function completeQuest(quest: Quest, entitlementActive = false): CompletionResult {
+  // `nowIso` opcional — sem ele, esta função lê o relógio por conta própria
+  // (`getCurrentWeeklyEvent()` default); passar um valor explícito
+  // deixa o CHAMADOR garantir que o mesmo instante seja usado aqui e em outra decisão relacionada
+  // (ex.: `weeklyEventObjectiveProgress`), evitando os dois discordarem bem na virada exata de
+  // semana ISO.
+  function completeQuest(quest: Quest, entitlementActive = false, nowIso?: string): CompletionResult {
     // lab-99: `applyQuestCompletion` é idempotente (responder uma missão já concluída de novo não
     // premia XP/moeda de novo, ver `progression.ts`) — só dispara o evento de analytics numa
     // conclusão GENUÍNA (o array de concluídas cresceu), senão "quests concluídas por
@@ -73,7 +81,8 @@ export function useProgress() {
     // perfil que ainda não tinha NENHUMA missão concluída pode fechar o "ciclo de ativação"
     // (ver `trackFirstReward`, `productAnalytics.ts`).
     const isFirstQuestEver = progress.completedQuestIds.length === 0
-    const result = applyQuestCompletion(progress, quest, undefined, entitlementActive)
+    const event = nowIso ? getCurrentWeeklyEvent(new Date(nowIso)) : undefined
+    const result = applyQuestCompletion(progress, quest, event, entitlementActive)
     setProgress(result.progress)
     saveProgress(result.progress)
     if (!wasAlreadyCompleted) {
@@ -381,6 +390,33 @@ export function useProgress() {
     return result
   }
 
+  // Objetivo educativo/ambiental do evento semanal — chamado de `handleEnvironmentalChallengeCorrect`
+  // (`App.tsx`) logo DEPOIS de `completeQuest(...)`, no mesmo handler. NÃO segue o formato de
+  // `petDailyChallengeCompleted`/`coopChallengeCompleted` acima (ler o resultado de dentro do
+  // atualizador funcional) — verificado ao vivo que isso quebra aqui: como já existe uma atualização
+  // PENDENTE de `completeQuest` na fila do React (não-funcional, `setProgress(result.progress)`),
+  // o atalho de "bailout adiantado" do `useState` não roda pra este segundo `setProgress` na MESMA
+  // sincronia, e o atualizador só é invocado depois, tarde demais pra ler de volta aqui — `result`
+  // ficava `undefined`, quebrando o app. A decisão "já concluído esta semana" é segura de ler do
+  // `progress` do closure (não do `prev`) porque `completeQuest` nunca toca
+  // `weeklyEventObjectiveRewardedAtIso`; só a ESCRITA da moeda precisa do atualizador funcional,
+  // pra compor corretamente em cima do XP/moeda que `completeQuest` acabou de conceder.
+  // `wouldGrantWeeklyEventObjectiveReward` (não `isWeeklyEventObjectiveDone` sozinho) — achado do
+  // review automático do Copilot: usar só `isWeeklyEventObjectiveDone` aqui divergia da decisão
+  // real de `applyWeeklyEventObjectiveProgress` depois que a guarda anti-recuo de relógio foi
+  // adicionada só lá — um relógio adiantado-e-devolvido fazia este pré-check devolver `true`
+  // (semana diferente da guardada) enquanto a escrita de verdade rejeitava (recuo de relógio),
+  // mostrando "+20 moedas" no toast sem a moeda ter sido creditada.
+  function weeklyEventObjectiveProgress(nowIso: string): boolean {
+    if (!wouldGrantWeeklyEventObjectiveReward(progress, nowIso)) return false
+    setProgress((prev) => {
+      const result = applyWeeklyEventObjectiveProgress(prev, nowIso)
+      if (result.rewardGranted) saveProgress(result.progress)
+      return result.progress
+    })
+    return true
+  }
+
   // Ranking local entre perfis (lab-157) — mesmo gatilho/formato de `touchLastPlayed`, uma vez
   // por sessão (ver `App.tsx`): reseta o snapshot de XP semanal se a semana real mudou desde a
   // última vez, sem mexer em nada se ainda é a mesma semana (ver `syncWeeklyXpSnapshot`).
@@ -424,5 +460,6 @@ export function useProgress() {
     petDailyChallengeCompleted,
     toggleHouseVisible,
     syncWeeklyXp,
+    weeklyEventObjectiveProgress,
   }
 }

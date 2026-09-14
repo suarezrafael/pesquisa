@@ -32,6 +32,10 @@ interface RewardToastProps {
   // `awardedXp`/`awardedCoins`.
   planetClearBonusXp?: number
   planetClearBonusCoins?: number
+  // Só vem preenchido quando esta resposta veio de um desafio ambiental E concedeu o bônus do
+  // objetivo semanal (mesmo padrão de `planetClearBonusCoins` acima — moeda ADICIONAL, primeira
+  // vez em cada semana ISO).
+  weeklyEventObjectiveBonusCoins?: number
   onContinue: () => void
 }
 
@@ -49,6 +53,7 @@ export function RewardToast({
   streakBonusCoins,
   planetClearBonusXp,
   planetClearBonusCoins,
+  weeklyEventObjectiveBonusCoins,
   event,
   onContinue,
 }: RewardToastProps) {
@@ -86,6 +91,11 @@ export function RewardToast({
         {!!planetClearBonusCoins && (
           <p className="reward-bonus-line">
             🌟 Bônus por limpar o planeta! +{planetClearBonusXp} XP · +{planetClearBonusCoins} moedas!
+          </p>
+        )}
+        {!!weeklyEventObjectiveBonusCoins && (
+          <p className="reward-bonus-line">
+            🌱 Objetivo da semana concluído! +{weeklyEventObjectiveBonusCoins} moedas bônus!
           </p>
         )}
         {streakBonusCoins > 0 && (

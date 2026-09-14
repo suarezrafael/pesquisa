@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Em andamento: labs/lab-182-eventos-semanais/ — eventos semanais saudáveis (objetivo educativo/
+ambiental novo no sistema de evento semanal já existente, reaproveitando os desafios ambientais do
+lab-180, com recompensa fixa em moeda e mensagem de que não há problema em perder). Origem:
+`docs/growth-retention-monetization-backlog.md`, "Lab 182", item 8 da ordem sugerida, próximo item
+recomendado após o lab-181. Ver `labs/lab-182-eventos-semanais/FEATURES.md`.
+
 Último concluído: labs/lab-181-album-planetas/ — circuito de descoberta e álbum de planetas.
 Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 181", item 7 da ordem sugerida,
 próximo item recomendado após o lab-180. Nova seção "Planetas" dentro do `AchievementsPanel.tsx`

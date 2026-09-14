@@ -198,6 +198,7 @@ const PRODUCT_EVENT_TYPES = new Set([
   'learning_challenge_started',
   'learning_challenge_completed',
   'album_planet_opened',
+  'weekly_event_objective_completed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
