@@ -149,7 +149,18 @@ function GameApp() {
   useEffect(() => {
     const id = setInterval(() => {
       const now = new Date()
-      setWeeklyEventSnapshot({ event: getCurrentWeeklyEvent(now), nowIso: now.toISOString() })
+      const event = getCurrentWeeklyEvent(now)
+      // Achado do review automático do Copilot: `weeklyEventSnapshot` mora em `GameApp`, cuja
+      // árvore inclui o `<World3D>` inteiro (não memoizado) — atualizar o estado a cada 60s
+      // incondicionalmente re-renderizava esse componente grande toda vez, mesmo nos ~10079
+      // minutos de cada semana em que o evento não muda de verdade (só troca na virada da semana
+      // ISO). `event.id` idêntico ao anterior devolve a MESMA referência de estado (`prev`) em vez
+      // de um objeto novo — o React reconhece isso (`Object.is`) e pula o re-render por completo,
+      // sem precisar isolar o estado num componente à parte. `nowIso` não precisa ficar fresco
+      // aqui além disso: o instante usado pra decidir status na hora da recompensa já é avançado
+      // separadamente por `weeklyEventObjectiveProgress` (ver comentário ali), então este timer só
+      // existe pra pegar a VIRADA de semana, não pra manter `nowIso` atualizado ao segundo.
+      setWeeklyEventSnapshot((prev) => (prev.event.id === event.id ? prev : { event, nowIso: now.toISOString() }))
     }, 60_000)
     return () => clearInterval(id)
   }, [])
