@@ -387,6 +387,14 @@ function GameApp() {
     // sempre depois de `completeQuest` acima (ver comentário de `weeklyEventObjectiveProgress` em
     // `useProgress.ts` sobre por que a ordem/atualizador funcional importam aqui).
     const rewardGranted = weeklyEventObjectiveProgress(nowIso)
+    // Achado do review automático do Copilot: `weeklyEventSnapshot.nowIso` só avança sozinho no
+    // timer de 60s — se a criança completar o desafio e abrir o emblema DENTRO desse minuto,
+    // `weeklyEventObjectiveStatus` comparava o instante da recompensa (`nowIso`, agora mesmo)
+    // contra um snapshot mais VELHO, lendo isso como "relógio voltou no tempo" (mesma checagem
+    // anti-farm que existe pra detectar manipulação de verdade) e mostrando "bloqueado" em vez do
+    // objetivo recém-concluído. Avança o snapshot junto (nunca pra trás — `nowIso <= prev.nowIso`
+    // no raro caso de eventos fora de ordem mantém o snapshot mais recente já visto).
+    setWeeklyEventSnapshot((prev) => (nowIso <= prev.nowIso ? prev : { event: getCurrentWeeklyEvent(new Date(nowIso)), nowIso }))
     const weeklyEventObjectiveBonusCoins = rewardGranted ? WEEKLY_EVENT_OBJECTIVE_REWARD_COINS : undefined
     setReward({
       quest,
