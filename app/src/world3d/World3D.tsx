@@ -2243,23 +2243,6 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
       // ficou em segundo plano por um tempo, não porque é realmente lento. O teto de segurança
       // agora pausa (cancela) enquanto oculto e reinicia do zero quando volta a ficar visível; o
       // loop de render também pula quadros (sem contar progresso nem renderizar) enquanto oculto.
-      let safetyTimeoutHandle: number | null = null
-      function scheduleSafetyTimeout() {
-        if (safetyTimeoutHandle !== null) window.clearTimeout(safetyTimeoutHandle)
-        safetyTimeoutHandle = window.setTimeout(() => settle(true), SAFETY_TIMEOUT_MS)
-      }
-      function onVisibilityChange() {
-        if (document.visibilityState === 'visible') {
-          scheduleSafetyTimeout()
-        } else if (safetyTimeoutHandle !== null) {
-          window.clearTimeout(safetyTimeoutHandle)
-          safetyTimeoutHandle = null
-        }
-      }
-      document.addEventListener('visibilitychange', onVisibilityChange)
-      scheduleSafetyTimeout()
-
-      let frame = 0
       // Achado do review automático do Copilot: `engine.getFps()` é um contador interno do
       // Babylon atualizado periodicamente, não uma medida instantânea por quadro — numa janela tão
       // curta (30 quadros, ~500ms a 60Hz) várias leituras podem repetir o mesmo valor (inicial ou
@@ -2271,11 +2254,39 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
       // Acumula por DELTA entre quadros CONSECUTIVOS visíveis (não um único "início"/"fim") —
       // achado do review automático do Copilot: se a aba ficar oculta bem no meio da amostragem,
       // o tempo parado contaria como se fosse tempo de renderização (denominador inflado, FPS
-      // medido artificialmente baixo, "fraco" por engano). `lastFrameTime = 0` ao pular um quadro
-      // oculto reseta a referência — o primeiro quadro visível depois de um período oculto não
-      // soma o hiato à amostra, só os quadros DEPOIS dele voltam a contar delta normalmente.
+      // medido artificialmente baixo, "fraco" por engano). `lastFrameTime = 0` reseta a referência
+      // pra um hiato oculto não entrar na amostra.
       let sampleElapsedMs = 0
       let lastFrameTime = 0
+
+      let safetyTimeoutHandle: number | null = null
+      function scheduleSafetyTimeout() {
+        if (safetyTimeoutHandle !== null) window.clearTimeout(safetyTimeoutHandle)
+        safetyTimeoutHandle = window.setTimeout(() => settle(true), SAFETY_TIMEOUT_MS)
+      }
+      function onVisibilityChange() {
+        if (document.visibilityState === 'visible') {
+          scheduleSafetyTimeout()
+        } else {
+          // Achado do review automático do Copilot: resetar `lastFrameTime` só DENTRO do callback
+          // do render loop não bastava — se o navegador PAUSAR `requestAnimationFrame` por
+          // completo enquanto oculto (comum, não só limitar a cadência), o callback simplesmente
+          // não roda nenhuma vez durante o período oculto, então aquele reset nunca executava a
+          // tempo; o primeiro quadro depois de voltar a ficar visível calculava o delta contra o
+          // timestamp de ANTES de esconder, somando o hiato inteiro à amostra. O evento
+          // `visibilitychange` dispara de verdade independente do `requestAnimationFrame` estar
+          // pausado ou não — reseta aqui, na transição, não esperando o próximo quadro.
+          lastFrameTime = 0
+          if (safetyTimeoutHandle !== null) {
+            window.clearTimeout(safetyTimeoutHandle)
+            safetyTimeoutHandle = null
+          }
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibilityChange)
+      scheduleSafetyTimeout()
+
+      let frame = 0
       benchEngine.runRenderLoop(() => {
         if (shouldAbort()) {
           settle(true)
@@ -12011,6 +12022,12 @@ export function World3D({
     }
     let fpsAutoTuneInterval: number | null = null
     let fpsAutoTuneTimeout: number | null = null
+    // Achado do review automático do Copilot: declarado no escopo do EFEITO (não dentro do bloco
+    // `{...}` mais abaixo) pra ficar acessível à limpeza no `return` no fim do efeito — sem isso,
+    // desmontar o componente antes de `setupSettled` virar `true` (sobretudo com a aba em segundo
+    // plano, que atrasa/limita até `setInterval`) deixava o polling rodando até um tick futuro
+    // eventualmente notar `disposed` e se auto-limpar, em vez de parar já no cleanup.
+    let waitForSetupInterval: number | null = null
     // Achado do review automático do Copilot: antes só rodava com `isLowEndDevice` (aparelho
     // classificado fraco pelo benchmark de GPU, ver `benchmarkIsWeakGpu`), mas esse benchmark mede
     // só desenho de GPU numa cena pequena fora da tela — um aparelho com GPU forte mas CPU/física
@@ -12064,7 +12081,6 @@ export function World3D({
       // de `setup()` TERMINAR — sondar `setupSettled` (ver comentário perto de `setup()` acima)
       // garante que o relógio de 6s só começa depois do carregamento pesado (Havok+18 GLBs) já ter
       // acabado de verdade, não importa quanto tempo ele leve.
-      let waitForSetupInterval: number | null = null
       waitForSetupInterval = window.setInterval(() => {
         if (disposed) {
           if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
@@ -12080,6 +12096,7 @@ export function World3D({
       disposed = true
       if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
       if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
+      if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
       if (petAgingInterval !== null) window.clearInterval(petAgingInterval)
       window.removeEventListener('resize', onResize)
       canvas.removeEventListener('pointerdown', onCameraPointerDown)
