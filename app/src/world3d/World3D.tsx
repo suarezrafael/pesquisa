@@ -12324,6 +12324,12 @@ export function World3D({
           precisa de `inert` junto com o HUD — senão dá pra Tab escapar de um modal aberto direto
           pro canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). */}
       <canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />
+      {/* Achado do review automático do Copilot: sem isto, o benchmark de GPU + o resto de setup()
+          assíncrono (Havok+18 GLBs) rodavam sem feedback nenhum — o canvas já montado, mas vazio,
+          podia parecer travado por vários segundos num aparelho lento. Mesma aparência do
+          `.world-loading` de App.tsx (Suspense do carregamento do MÓDULO), pra não ter uma troca
+          brusca de visual entre as duas fases de carregamento. */}
+      {!setupReady && <div className="world3d-setup-loading">Carregando o mundo 3D…</div>}
       <div ref={debugRef} className="world3d-debug" />
       <HudHeader
         profile={profile}

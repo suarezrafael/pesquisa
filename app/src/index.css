@@ -634,6 +634,25 @@ a.nickname-generate-btn {
   font-weight: 700;
 }
 
+/* Achado do review automático do Copilot: o Suspense de App.tsx (`.world-loading` acima) só cobre
+   o carregamento do MÓDULO World3D — depois disso, o benchmark de GPU (`gpuTier`) + o resto de
+   `setup()` assíncrono (Havok+18 GLBs) ainda rodam sem nenhum feedback visual, com o canvas já
+   montado mas vazio (`hudInert` só desabilita os controles, não esconde a tela em branco). Num
+   aparelho lento isso podia parecer travado por vários segundos. Reaproveita a MESMA aparência do
+   `.world-loading`, só com z-index acima de qualquer elemento do HUD (maior já usado, 30) — sem
+   isso, elementos do HUD com z-index explícito pintariam por cima mesmo vindo antes no DOM. */
+.world3d-setup-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #a6d1ed;
+  color: var(--ink);
+  font-weight: 700;
+  z-index: 40;
+}
+
 /* Mundo 3D */
 
 .world3d-container {
