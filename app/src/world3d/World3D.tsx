@@ -1994,6 +1994,95 @@ function buildLaserGun(scene: Scene, shadowGenerator: ShadowGenerator): Transfor
   return root
 }
 
+// Detecta GPU fraca de verdade, sem confiar em user-agent (bug real relatado pelo usuário: um
+// iPhone qualquer, mesmo modelo recente com GPU forte, caía no MESMO perfil "fraco" que um Poco
+// C75/Redmi Pad 2 real só por casar com `/iPhone/` no user-agent — "a qualidade do iPhone ficou
+// baixíssima... só a resolução da tela não deve determinar a qualidade, deve levar em conta o
+// hardware"). Em vez de checar tipo de aparelho, renderiza uma cena sintética representativa (luz
+// direcional com sombra + ~800 instâncias + partículas — mesma ordem de grandeza do mundo real,
+// nem no piso nem no teto de contagem já usados por `isLowEndDevice` hoje) num canvas fora da tela
+// (nunca anexado ao DOM, então o usuário não vê nada rodando) e mede o FPS médio de verdade, o
+// mesmo tipo de sinal que `SCALING_TIERS`/`desiredTierIndex` já usam pra ajustar a resolução ao
+// vivo — só que aqui decide, ANTES de montar o mundo real, os ajustes que só dá pra fazer uma vez
+// na criação da cena (anti-aliasing, resolução de sombra/HDR, contagem de props/grama/partículas)
+// e por isso não dá pra corrigir depois só com o auto-tune de resolução.
+async function benchmarkIsWeakGpu(): Promise<boolean> {
+  const WEAK_GPU_AVG_FPS_THRESHOLD = 40
+  const WARMUP_FRAMES = 10
+  const SAMPLE_FRAMES = 20
+  // Teto de segurança: se por algum motivo o benchmark nunca produzir amostras suficientes (aba
+  // carregada em segundo plano, erro de contexto WebGL, etc.), assume fraco — mesmo valor padrão
+  // conservador de antes desta mudança, nunca deixa o jogo travado esperando o benchmark.
+  const SAFETY_TIMEOUT_MS = 2500
+
+  try {
+    const benchCanvas = document.createElement('canvas')
+    benchCanvas.width = 256
+    benchCanvas.height = 256
+    const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: false })
+    const benchScene = new Scene(benchEngine)
+
+    const light = new HemisphericLight('benchHemiLight', new Vector3(0, 1, 0), benchScene)
+    light.intensity = 0.6
+    const sunLight = new DirectionalLight('benchSunLight', new Vector3(-1, -2, -1), benchScene)
+    const shadowGenerator = new ShadowGenerator(1024, sunLight)
+    shadowGenerator.useBlurExponentialShadowMap = true
+
+    const ground = MeshBuilder.CreateGround('benchGround', { width: 40, height: 40 }, benchScene)
+    ground.receiveShadows = true
+
+    const prop = MeshBuilder.CreateSphere('benchProp', { segments: 8 }, benchScene)
+    const PROP_INSTANCE_COUNT = 800
+    const matrixData = new Float32Array(16 * PROP_INSTANCE_COUNT)
+    for (let i = 0; i < PROP_INSTANCE_COUNT; i++) {
+      const angle = (i / PROP_INSTANCE_COUNT) * Math.PI * 2 * 6
+      const radius = 1 + (i / PROP_INSTANCE_COUNT) * 18
+      Matrix.Translation(Math.cos(angle) * radius, 0.5, Math.sin(angle) * radius).copyToArray(matrixData, i * 16)
+    }
+    prop.thinInstanceSetBuffer('matrix', matrixData, 16)
+    prop.receiveShadows = true
+    shadowGenerator.addShadowCaster(prop)
+
+    const particles = new ParticleSystem('benchParticles', 400, benchScene)
+    particles.emitter = Vector3.Zero()
+    particles.minEmitBox = new Vector3(-5, 0, -5)
+    particles.maxEmitBox = new Vector3(5, 5, 5)
+    particles.start()
+
+    const result = await new Promise<boolean>((resolve) => {
+      let settled = false
+      const settle = (isWeak: boolean) => {
+        if (settled) return
+        settled = true
+        benchEngine.stopRenderLoop()
+        benchScene.dispose()
+        benchEngine.dispose()
+        resolve(isWeak)
+      }
+
+      let frame = 0
+      const samples: number[] = []
+      benchEngine.runRenderLoop(() => {
+        benchScene.render()
+        frame++
+        if (frame > WARMUP_FRAMES) samples.push(benchEngine.getFps())
+        if (frame >= WARMUP_FRAMES + SAMPLE_FRAMES) {
+          const avgFps = samples.reduce((a, b) => a + b, 0) / samples.length
+          settle(avgFps < WEAK_GPU_AVG_FPS_THRESHOLD)
+        }
+      })
+
+      window.setTimeout(() => settle(true), SAFETY_TIMEOUT_MS)
+    })
+
+    return result
+  } catch {
+    // Falha ao criar engine/contexto WebGL pro benchmark (raro) — assume fraco, mesmo padrão
+    // conservador de segurança do timeout acima.
+    return true
+  }
+}
+
 export function World3D({
   profile,
   progress,
@@ -2029,6 +2118,19 @@ export function World3D({
   onOpenEnvironmentalChallenge,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Resultado do benchmark de GPU (ver `benchmarkIsWeakGpu` acima) — roda uma vez, fora do efeito
+  // pesado que monta o mundo, pra não recarregar o mundo inteiro se algo mais nesse efeito mudar.
+  // `'pending'` segura o efeito de montagem do mundo (mais abaixo) até o benchmark terminar.
+  const [gpuTier, setGpuTier] = useState<'pending' | 'weak' | 'strong'>('pending')
+  useEffect(() => {
+    let cancelled = false
+    benchmarkIsWeakGpu().then((isWeak) => {
+      if (!cancelled) setGpuTier(isWeak ? 'weak' : 'strong')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const joystickRef = useRef({ x: 0, y: 0 })
   // Botões de toque (pedido do usuário: "o android não tem teclado" — sem eles, pular/correr só
   // funcionava via teclado, inacessível em celular/tablet). Mesmo padrão do `joystickRef`: a UI
@@ -2372,16 +2474,21 @@ export function World3D({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    // `gpuTier === 'pending'` significa que `benchmarkIsWeakGpu` (efeito acima) ainda não
+    // terminou — espera o resultado real em vez de montar o mundo com um valor adivinhado.
+    // Esse `return` sem `disposed`/listeners registrados ainda é um no-op de limpeza, mesmo
+    // padrão do `if (!canvas) return` que já existia aqui.
+    if (!canvas || gpuTier === 'pending') return
 
     let disposed = false
 
-    // Redmi Pad 2 e tablets/celulares similares têm GPU muito mais fraca que desktop — sem essa
-    // detecção o jogo roda em resolução nativa com MSAA+FXAA+SSAO+sombras em ~1900 meshes, o que
-    // não é jogável em GPU mobile de entrada. Em vez de tentar medir a GPU (APIs pouco confiáveis
-    // e inconsistentes entre navegadores), usa o mesmo sinal que já decide mostrar os controles de
-    // toque: é um aparelho móvel/tablet.
-    const isLowEndDevice = /Android|iPad|iPhone|iPod|Tablet|Mobi/i.test(navigator.userAgent)
+    // Antes (labs 56-72) isso vinha de um regex de user-agent (`/Android|iPad|iPhone|.../`), que
+    // tratava QUALQUER iPhone como GPU fraca — mesmo perfil de um Poco C75/Redmi Pad 2 reais,
+    // mesmo num iPhone recente com GPU forte (achado do usuário: "a qualidade do iPhone ficou
+    // baixíssima... só a resolução da tela não deve determinar a qualidade, deve levar em conta o
+    // hardware"). `gpuTier` mede desempenho real (benchmark síncrono numa cena sintética fora da
+    // tela, ver `benchmarkIsWeakGpu`), não o tipo de aparelho.
+    const isLowEndDevice = gpuTier === 'weak'
     // Legendas flutuantes (Babylon.GUI, número da escolinha/dica de interação/etc.) — o lab-57 já
     // corrigiu o bug de RESOLUÇÃO da textura de GUI (borrada, upscaled), mas o TAMANHO da fonte em
     // si continuava fixo em pixels reais de dispositivo — grande demais numa tela física pequena
@@ -11669,8 +11776,12 @@ export function World3D({
       scene.dispose()
       engine.dispose()
     }
+    // `gpuTier` é a única dependência real: o efeito só roda de verdade quando o benchmark
+    // termina (`'weak'`/`'strong'`) — antes disso (`'pending'`) o guard acima já retornou sem
+    // montar nada. Continua rodando só UMA VEZ (mesmo padrão de antes, quando a dependência era
+    // `[]`), já que `gpuTier` não muda de novo depois de resolvido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [gpuTier])
 
   function handleJoystickChange(vector: { x: number; y: number }) {
     joystickRef.current = vector
