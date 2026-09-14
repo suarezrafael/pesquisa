@@ -106,7 +106,16 @@ export function isWeeklyEventObjectiveDone(progress: Progress, nowIso: string): 
 // `weeklyXpSnapshot`/`getCurrentWeeklyEvent` (ambos também dependem só do relógio local). Corrigir
 // de verdade exigiria validação de tempo no servidor, fora de escopo deste lab.
 function hasWeeklyEventClockRolledBack(progress: Progress, nowIso: string): boolean {
-  return progress.weeklyEventObjectiveRewardedAtIso !== null && nowIso <= progress.weeklyEventObjectiveRewardedAtIso
+  // Achado do review automático do Copilot: `<=` (em vez de `<`) tratava um `nowIso` IGUAL ao
+  // último instante de recompensa como recuo de relógio — mas `App.tsx` grava esse EXATO mesmo
+  // `nowIso` tanto em `weeklyEventObjectiveRewardedAtIso` quanto no snapshot usado pra calcular o
+  // status logo em seguida (correção da rodada anterior, pra não ler um snapshot mais VELHO que a
+  // recompensa recém-concedida). Com `<=`, abrir o emblema imediatamente após ganhar o bônus
+  // mostrava "bloqueado" em vez de "concluído". `<` estrito continua bloqueando qualquer instante
+  // GENUINAMENTE anterior (recuo de verdade); a checagem de "mesma semana ISO" em
+  // `isWeeklyEventObjectiveDone`/`wouldGrantWeeklyEventObjectiveReward` já impede uma segunda
+  // concessão no mesmo instante (ou no resto da mesma semana), então nada de novo fica liberado.
+  return progress.weeklyEventObjectiveRewardedAtIso !== null && nowIso < progress.weeklyEventObjectiveRewardedAtIso
 }
 
 // Única decisão de "concede ou não" do objetivo semanal — usada TANTO pela função pura de escrita

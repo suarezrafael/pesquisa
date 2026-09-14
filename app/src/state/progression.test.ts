@@ -1471,6 +1471,16 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
     const reivindicouSexta = applyWeeklyEventObjectiveProgress(emptyProgress, '2026-09-11T12:00:00.000Z').progress
     expect(weeklyEventObjectiveStatus(reivindicouSexta, '2026-09-08T09:00:00.000Z')).toBe('blocked')
   })
+
+  it('achado do review automático do Copilot: nowIso IGUAL ao instante da recompensa mostra "concluído", não "bloqueado"', () => {
+    // App.tsx grava o MESMO nowIso tanto em weeklyEventObjectiveRewardedAtIso quanto no snapshot
+    // usado pra calcular o status logo em seguida (avança o snapshot junto ao conceder a
+    // recompensa, pra não ler um valor mais velho) — abrir o emblema imediatamente após ganhar o
+    // bônus consulta o status com nowIso === rewardedAtIso, não um instante posterior.
+    const nowIso = '2026-09-08T12:00:00.000Z'
+    const concluidoAgoraMesmo = applyWeeklyEventObjectiveProgress(emptyProgress, nowIso).progress
+    expect(weeklyEventObjectiveStatus(concluidoAgoraMesmo, nowIso)).toBe('done')
+  })
 })
 
 describe('seriesForLevel (lab-156)', () => {
