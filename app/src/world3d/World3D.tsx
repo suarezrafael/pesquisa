@@ -2044,6 +2044,16 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
   // de resolução ao vivo (agora ligado pra QUALQUER classificação, não só "fraco" — ver comentário
   // perto de `SCALING_TIERS`), que ainda reage a um fill-rate real pior que o medido aqui, só não
   // consegue desligar sombra/SSAO/MSAA depois de já escolhidos na criação da cena.
+  //
+  // Mesma limitação aceita se estende ao resto da cena sintética (achado repetido do review
+  // automático em rodadas seguintes, apontando peças específicas): não usa SSAO2/GlowLayer/HDR nem
+  // a contagem alta de props/critters/grama do mundo real (`PROP_COUNT`, `CRITTER_COUNT` etc. em
+  // `setup()`) — só uma malha com sombra e partículas. Replicar TODOS esses passos aqui pra fechar
+  // esse gap por completo equivaleria a montar o mundo pesado duas vezes (uma pro benchmark, outra
+  // pro jogo de verdade), o oposto do objetivo de ter um pré-teste barato antes de pagar esse custo
+  // uma vez só. Escolha consciente: aceitar essa fidelidade parcial (só GPU/desenho básico + CPU
+  // simulado, ver `simulateEntityWorkload` abaixo) em troca de manter o benchmark rápido o bastante
+  // pra não virar ele mesmo um problema de carregamento — mesma troca já validada ao vivo acima.
   const BENCH_MAX_PIXELS = 480 * 480
   function benchCanvasSize(realWidth: number, realHeight: number): { width: number; height: number } {
     const scale = Math.min(1, Math.sqrt(BENCH_MAX_PIXELS / (realWidth * realHeight)))
@@ -2063,16 +2073,31 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
   // aparelho que pode ser forte de verdade. Como o resultado nunca é medido de novo depois (é
   // decidido uma vez só, antes do mundo montar), esse falso negativo duraria a sessão INTEIRA.
   // Espera a aba ficar visível antes de sequer começar a medir.
+  //
+  // Achado do review automático do Copilot: sem checar `shouldAbort` ENQUANTO espera (só depois,
+  // na volta), desmontar o componente com a aba ainda oculta deixava esta Promise pendurada pra
+  // sempre — o listener de `visibilitychange` nunca era removido, e a closure inteira (canvas,
+  // engine ainda nem criados) ficava presa na memória até uma eventual e improvável mudança de
+  // visibilidade futura. Sondar `shouldAbort` num intervalo curto, ao lado do listener, garante
+  // que cancelar o componente também encerra essa espera e libera o listener imediatamente.
   async function waitForVisible(): Promise<void> {
-    if (document.visibilityState === 'visible') return
+    if (document.visibilityState === 'visible' || shouldAbort()) return
     await new Promise<void>((resolve) => {
+      let settled = false
+      function finish() {
+        if (settled) return
+        settled = true
+        document.removeEventListener('visibilitychange', onChange)
+        window.clearInterval(abortPoll)
+        resolve()
+      }
       function onChange() {
-        if (document.visibilityState === 'visible') {
-          document.removeEventListener('visibilitychange', onChange)
-          resolve()
-        }
+        if (document.visibilityState === 'visible') finish()
       }
       document.addEventListener('visibilitychange', onChange)
+      const abortPoll = window.setInterval(() => {
+        if (shouldAbort()) finish()
+      }, 200)
     })
   }
 
