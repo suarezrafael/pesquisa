@@ -1,0 +1,51 @@
+# Laboratório 183 — Auditoria da vitrine adulta de assinatura
+
+Status: em andamento
+Início: 2026-09-14
+Fim: -
+Commit inicial: 9bd2221bcf2fe5eebaf8692a6562b22034ba1acf
+
+## Objetivo do laboratório
+
+Auditar (não reconstruir) a vitrine de assinatura já existente (labs 166/173) contra a experiência
+infantil: provar que a separação criança/responsável e a ausência de pressão de compra continuam
+valendo depois de várias features novas terem sido adicionadas por cima, e corrigir só as lacunas
+concretas encontradas — não redesenhar a vitrine do zero.
+
+Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 183", item 9 da ordem sugerida,
+próximo item recomendado após o lab-182 (`CONTEXT.md` do lab-182).
+
+## Funcionalidades planejadas
+
+- [ ] Auditar `TitleScreen`/tela inicial: nenhuma menção a preço/assinatura/urgência visível pra
+  quem ainda não passou pelo portão parental (backlog: "Fora de escopo — pedir compra no fluxo
+  infantil").
+- [ ] Auditar `AvatarShop`/lojinha de cosméticos: textos de item premium (`subscriptionOnly`) não
+  incentivam compra com linguagem voltada à criança nem escondem que é "coisa de assinatura" atrás
+  de copy ambígua.
+- [ ] Auditar `/familia` (`FamilyPortal.tsx`, `FamilyValueProp`, `Dashboard`): responsável continua
+  vendo preço, benefícios, cancelamento e a regra de aprendizagem sempre grátis com clareza — sem
+  nenhuma peça que tenha ficado desatualizada ou contraditória depois dos labs 176-182.
+  (referência: `docs/plano-comercial-backend.md`, regra inegociável de gating cosmético-only)
+- [ ] Auditar o preview do relatório semanal exemplo (lab-173) e qualquer CTA adulto novo
+  introduzido por labs recentes (166/173 em diante) contra o mesmo checklist.
+- [ ] Auditar textos de item premium em todo catálogo de cosméticos por clareza "grátis vs. pago"
+  (nenhum item educacional/de progresso pode parecer bloqueado por assinatura).
+- [ ] Conferir cobertura de métricas: `parent_value_comprehension_rate` (se ainda não existir,
+  avaliar se cabe neste lab ou é product research fora de escopo de código),
+  `weekly_report_preview_viewed` (já existe, lab-173 — só confirmar que continua disparando),
+  `checkout_started_from_parent_area` (conferir se equivale ao `checkout_started` já existente do
+  lab-166 ou se falta um evento dedicado), zero entrada direta de checkout a partir de superfície
+  infantil (auditoria de código, não evento novo).
+- [ ] Corrigir só as lacunas concretas encontradas na auditoria acima (copy, evento faltando,
+  contradição entre telas) — sem adicionar escopo novo de monetização.
+
+## Fora de escopo (explicitamente adiado)
+
+- Pedir compra no fluxo infantil, bloquear escola/quest atrás de assinatura, ou qualquer forma de
+  urgência artificial (contagem regressiva, "oferta por tempo limitado") — proibido pelo backlog.
+- Redesenhar a vitrine adulta do zero — este lab é auditoria + correção pontual, não uma feature
+  nova.
+- Pesquisa com usuário real (parent_value_comprehension_rate como estudo qualitativo) — fora de
+  escopo de laboratório de código, mesma exclusão já registrada em labs anteriores (185, 178 etc.)
+  para itens de pesquisa pura.

@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-183-auditoria-vitrine-assinatura/ — auditoria da vitrine adulta de
+assinatura (não é construir nada novo: auditar `TitleScreen`/`AvatarShop`/`/familia`/relatório de
+exemplo/CTA adulto/textos de item premium contra a experiência infantil, corrigindo só lacunas
+concretas). Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 183", item 9 da ordem
+sugerida, próximo item recomendado após o lab-182. Ver
+`labs/lab-183-auditoria-vitrine-assinatura/FEATURES.md`.
+
 Último concluído: labs/lab-182-eventos-semanais/ — eventos semanais saudáveis. Origem:
 `docs/growth-retention-monetization-backlog.md`, "Lab 182", item 8 da ordem sugerida, próximo item
 recomendado após o lab-181. Objetivo educativo/ambiental novo no sistema de evento semanal já
