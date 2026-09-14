@@ -1,12 +1,34 @@
 # Laboratório atual
 
-Em andamento: labs/lab-182-eventos-semanais/ — eventos semanais saudáveis (objetivo educativo/
-ambiental novo no sistema de evento semanal já existente, reaproveitando os desafios ambientais do
-lab-180, com recompensa fixa em moeda e mensagem de que não há problema em perder). Origem:
+Último concluído: labs/lab-182-eventos-semanais/ — eventos semanais saudáveis. Origem:
 `docs/growth-retention-monetization-backlog.md`, "Lab 182", item 8 da ordem sugerida, próximo item
-recomendado após o lab-181. Ver `labs/lab-182-eventos-semanais/FEATURES.md`.
+recomendado após o lab-181. Objetivo educativo/ambiental novo no sistema de evento semanal já
+existente (`data/weeklyEvents.ts`): completar pelo menos 1 dos 3 desafios ambientais do lab-180
+(ponte/lógica, abastecimento de foguete/matemática, placa/leitura) nesta semana concede um bônus
+fixo de 20 moedas, sempre grátis — reaproveita os desafios já existentes, sem conteúdo novo. Badge
+do evento semanal (`HudHeader.tsx`) virou um botão clicável abrindo um painel novo
+(`WeeklyEventPanel.tsx`) com o objetivo, status (pendente/concluído/bloqueado) e a mensagem de que
+não há problema em perder — nunca obrigação, sempre convite. Evento novo
+`weekly_event_objective_completed`, exposto em `weeklyFunnel`. **PR #61 teve 24 rodadas de review
+automático do Copilot**, a maioria com achados reais corrigidos — destaques: um bug crítico de
+manipulação de relógio (adiantar o relógio do aparelho, reivindicar o bônus, voltar o relógio
+liberava o mesmo bônus de novo, corrigido trocando uma chave de semana por um instante ISO completo
+com guarda anti-recuo estrita); uma reformulação em várias etapas de como o badge/painel
+compartilham (ou não) uma referência de tempo, convergindo num design onde o painel calcula tudo
+fresco no clique, sem estado/ref cacheado; um focus trap novo no `useModalA11y.ts` compartilhado por
+todo modal do jogo (Tab escapava do painel pra trás dele), incluindo o caso do foco inicial cair na
+própria raiz do modal; e um bloqueio de teclado/joystick global durante qualquer modal aberto
+(`hudInertRef`), estendido em rodadas sucessivas até cobrir também o `DailyLoginToast`, que tinha
+ficado de fora da lista de modais suspensos. Rodada 24 veio limpa ("Approval recommended"). `npx
+tsc -b` limpo; testes: app 208/208 (10 novos), server-accounts 149/149 (1 novo). `npm run build`
+sem regressão de bundle. Ver `labs/lab-182-eventos-semanais/CONTEXT.md` pro histórico completo
+rodada a rodada. **Merge confirmado**: PR #61 mesclada em `main` no commit `ae7eaf0` (2026-09-14,
+squash). CI de `main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-181-album-planetas/ — circuito de descoberta e álbum de planetas.
+Antes desse: labs/lab-181-album-planetas/ — circuito de descoberta e álbum de planetas.
 Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 181", item 7 da ordem sugerida,
 próximo item recomendado após o lab-180. Nova seção "Planetas" dentro do `AchievementsPanel.tsx`
 existente (lista dos 7 planetas, expande pra mostrar os 3 slots de descoberta de cada um —
