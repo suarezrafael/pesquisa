@@ -374,6 +374,16 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   modal abrir deixava `joystickRef.current` parado num valor não-nulo, continuando a mover o avatar
   por trás do modal mesmo sem nenhum toque novo. Corrigido zerando `x`/`y` (em vez de ler
   `joystickRef.current`) enquanto `hudInertRef.current`, mesmo padrão do `keysDown` ao lado.
+- **Rodada 23**: 2 achados reais. (1) Mesma classe do "modal não suspende entrada" das rodadas 21-22,
+  num lugar novo: `DailyLoginToast` (`App.tsx`) é um modal de verdade (`.modal-overlay`,
+  `aria-modal="true"`, usa `useModalA11y`, mesmo padrão de `MarsRewardToast`/`RewardToast`/
+  `CoopChallengeToast`), mas `dailyLoginReward !== null` não estava na expressão `suspendTriggers`
+  passada pra `<World3D>` — enquanto esse aviso de login diário ficava aberto, `hudInertRef.current`
+  continuava `false`, deixando teclado global e joystick agirem por trás dele (o mesmo bug das
+  rodadas 21-22, só que num modal que os outros ainda não cobriam). Corrigido adicionando
+  `dailyLoginReward !== null` à mesma expressão. (2) Nit de documentação — a descrição da PR ainda
+  dizia "21 rodadas ao todo" depois das rodadas 22-23 serem escritas neste `CONTEXT.md` —
+  reconciliada pra refletir o total atual.
 
 ## Pendências / dívidas conhecidas
 

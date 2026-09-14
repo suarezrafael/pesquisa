@@ -636,7 +636,8 @@ function GameApp() {
             showPets ||
             showFriends ||
             showMarsReward ||
-            weeklyEventPanel !== null
+            weeklyEventPanel !== null ||
+            dailyLoginReward !== null
           }
         />
       </Suspense>
