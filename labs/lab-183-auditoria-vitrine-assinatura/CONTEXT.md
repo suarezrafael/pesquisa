@@ -189,3 +189,5 @@ feedback de playtest.
   corrigido pra refletir que a correção foi estendida. (2) Erro de aritmética: "2 em
   `PairingScreen.tsx` + 1 em `TitleScreen.tsx` + 4 em `FamilyPortal.tsx`" soma 7, não 6 como estava
   escrito em 4 lugares deste arquivo — corrigido em todos.
+- **Rodada 4**: 0 achados — "Approval recommended", 0 comentários novos. PR convergiu depois de 4
+  rodadas de review automático.
