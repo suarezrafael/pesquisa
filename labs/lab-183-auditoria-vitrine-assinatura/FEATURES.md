@@ -17,13 +17,17 @@ próximo item recomendado após o lab-182 (`CONTEXT.md` do lab-182).
 
 ## Funcionalidades planejadas
 
-- [x] Auditar `TitleScreen`/tela inicial: nenhuma menção a preço/assinatura/urgência visível pra
-  quem ainda não passou pelo portão parental (backlog: "Fora de escopo — pedir compra no fluxo
-  infantil"). **Conforme, sem achado** — só os 4 sinais de confiança + link calmo pra `/familia`.
+- [x] Auditar `TitleScreen`/tela inicial: nenhum CHECKOUT/PREÇO/URGÊNCIA visível pra quem ainda não
+  passou pelo portão parental (backlog: "Fora de escopo — pedir compra no fluxo infantil"). **Conforme,
+  sem achado** — a tela TEM uma menção informativa a "assinatura" (sinal de confiança "Assinatura só
+  para itens visuais", não-transacional, sem preço/CTA/urgência ao lado), que é exatamente o tipo de
+  divulgação que o critério do backlog permite; nenhum preço/checkout aparece nela.
 - [x] Auditar `AvatarShop`/lojinha de cosméticos: textos de item premium (`subscriptionOnly`) não
   incentivam compra com linguagem voltada à criança nem escondem que é "coisa de assinatura" atrás
   de copy ambígua. **Conforme, sem achado** — mesmo padrão em `MyHousePanel.tsx` (mobília
-  exclusiva), tag "🔒 Assinantes" sem preço nenhum visível.
+  exclusiva), tag "🔒 Assinantes" sem preço em R$ nenhum visível (a loja tem botões de compra, mas só
+  com moeda do próprio jogo — nunca dinheiro real; economia interna já auditada/aceita antes deste
+  lab, fora do que o critério "sem checkout infantil" cobre).
 - [x] Auditar `/familia` (`FamilyPortal.tsx`, `FamilyValueProp`, `Dashboard`): responsável continua
   vendo preço, benefícios, cancelamento e a regra de aprendizagem sempre grátis com clareza — sem
   nenhuma peça que tenha ficado desatualizada ou contraditória depois dos labs 176-182.
@@ -31,9 +35,11 @@ próximo item recomendado após o lab-182 (`CONTEXT.md` do lab-182).
   **Conforme, sem achado de copy** — texto do bônus do evento semanal (lab-182) confirmado
   atualizado.
 - [x] Auditar o preview do relatório semanal exemplo (lab-173) e qualquer CTA adulto novo
-  introduzido por labs recentes (166/173 em diante) contra o mesmo checklist. **1 achado real**:
+  introduzido por labs recentes (166/173 em diante) contra o mesmo checklist. **2 achados reais**:
   `PairingScreen.tsx` (CTA "Abrir área dos responsáveis") tinha 2 links `target="_blank"` sem
-  `noopener` — corrigido.
+  `noopener` explícito (inconsistente com a convenção do resto do repo) e sem indicar "abre em nova
+  aba" no nome acessível — ambos corrigidos. Ver `CONTEXT.md` pro detalhe e a ressalva sobre o
+  `noopener` não ser um furo de segurança ativo em navegador atualizado.
 - [x] Auditar textos de item premium em todo catálogo de cosméticos por clareza "grátis vs. pago"
   (nenhum item educacional/de progresso pode parecer bloqueado por assinatura). **Conforme** —
   catálogos (`hats.ts` etc.) só têm nome/emoji/geometria, sem copy de venda por item.
@@ -45,8 +51,8 @@ próximo item recomendado após o lab-182 (`CONTEXT.md` do lab-182).
   infantil (auditoria de código, não evento novo). **Reconciliado** — ver `CONTEXT.md` pro
   detalhe dos 4 itens.
 - [x] Corrigir só as lacunas concretas encontradas na auditoria acima (copy, evento faltando,
-  contradição entre telas) — sem adicionar escopo novo de monetização. **1 correção aplicada**
-  (`noopener` em `PairingScreen.tsx`).
+  contradição entre telas) — sem adicionar escopo novo de monetização. **2 correções aplicadas em
+  `PairingScreen.tsx`** (`noopener` + `aria-label` de nova aba nos 2 links).
 
 ## Fora de escopo (explicitamente adiado)
 

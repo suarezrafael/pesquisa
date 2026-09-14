@@ -13,13 +13,19 @@ preço, benefícios, cancelamento e a regra de aprendizagem grátis".
 
 Superfícies auditadas (leitura completa do código-fonte de cada uma):
 
-- **`TitleScreen.tsx`** (primeira tela, sem gate nenhum) — só os 4 "sinais de confiança"
-  (aprendizado sempre grátis, sem chat livre, assinatura só pra itens visuais, feito pro navegador)
-  e um link calmo "Área dos responsáveis" separado visualmente do CTA principal "Jogar". Nenhuma
-  menção a preço/checkout. **Conforme, sem achado.**
+- **`TitleScreen.tsx`** (primeira tela, sem gate nenhum) — os 4 "sinais de confiança" incluem a
+  frase "Assinatura só para itens visuais" (divulgação NÃO-transacional — informa que assinatura
+  existe e não afeta o jogo, sem preço/CTA/urgência nenhum ao lado). Nenhuma menção a preço/
+  checkout, só esse aviso informativo + um link calmo "Área dos responsáveis" separado do CTA
+  principal "Jogar". **Conforme com o critério do backlog** (que proíbe checkout/preço/urgência
+  visível à criança, não a palavra "assinatura" em si) **, sem achado.**
 - **`AvatarShop.tsx`** (lojinha, acessível jogando) — itens `subscriptionOnly` mostram só a tag
-  "🔒 Assinantes" com o texto "peça pra quem cuida de você conferir a área dos responsáveis";
-  nenhum preço em R$, nenhum botão de compra visível pra criança. **Conforme, sem achado.**
+  "🔒 Assinantes" com o texto "peça pra quem cuida de você conferir a área dos responsáveis"; nenhum
+  preço em R$, nenhum CTA de assinatura visível pra criança. A loja TEM botões de compra — mas só
+  com a moeda do próprio jogo (🪙, ganha jogando), nunca dinheiro real; isso é a economia interna já
+  auditada/aceita desde antes deste lab (nenhuma transação real de dinheiro passa por aqui). O
+  achado do backlog ("criança não vê checkout") é sobre dinheiro real, não sobre a moeda do jogo.
+  **Conforme, sem achado.**
 - **`MyHousePanel.tsx`** (mobília exclusiva de assinante) — mesmo padrão exato da lojinha
   (`usable = subscriptionOnly ? entitlementActive : owned`, tag "🔒 Assinantes"). **Conforme, sem
   achado.**
@@ -30,12 +36,21 @@ Superfícies auditadas (leitura completa do código-fonte de cada uma):
   bônus do evento semanal (lab-182) confirmado atualizado e consistente com a implementação real
   (menciona "objetivo educativo/ambiental", "sem pressa e sem cobrança"); `Dashboard` (só depois de
   login) tem o botão real de assinar/cancelar/gerenciar cobrança. **Conforme, sem achado de copy.**
-- **`PairingScreen.tsx`** (criança digita o código gerado pelo responsável) — **1 achado real**: os
-  dois links "Abrir área dos responsáveis" (`target="_blank"`) usavam só `rel="noreferrer"`, sem
-  `noopener` — mesma classe de vulnerabilidade (reverse tabnabbing: a aba nova pode redirecionar a
-  aba original via `window.opener`) já corrigida no lab-166 em 4 outras ocorrências
-  (`FamilyPortal.tsx`/`LoginScreen`), mas essas duas de `PairingScreen.tsx` ficaram de fora daquela
-  varredura. Corrigido trocando pra `rel="noopener noreferrer"` nas duas ocorrências.
+- **`PairingScreen.tsx`** (criança digita o código gerado pelo responsável) — **2 achados reais**:
+  (1) os dois links "Abrir área dos responsáveis" (`target="_blank"`) usavam só `rel="noreferrer"`,
+  sem `noopener` explícito — em navegadores modernos/compatíveis `noreferrer` já implica o mesmo
+  comportamento de bloquear `window.opener` (não é uma vulnerabilidade explorável hoje em
+  navegador atualizado), mas `noopener` explícito é a convenção já adotada em TODAS as outras
+  ocorrências do repo (lab-161/166) — essas duas ficaram inconsistentes com o resto do código por
+  terem sido adicionadas antes daquela varredura. Corrigido por consistência/clareza de intenção,
+  alinhando com a convenção do projeto, não por um buraco de segurança ativo. (2) Achado do review
+  automático do Copilot (PR ligada a este lab): os mesmos dois links abrem nova aba mas o nome
+  acessível só diz "Abrir área dos responsáveis", sem indicar a mudança de contexto pra quem usa
+  leitor de tela/teclado — corrigido com `aria-label="Abrir área dos responsáveis (abre em nova
+  aba)"` nos dois. (Esse mesmo padrão de `target="_blank"` sem indicação de nova aba também existe
+  em `TitleScreen.tsx`/`FamilyPortal.tsx`, fora do escopo tocado por este lab — registrado como
+  pendência conhecida abaixo, não corrigido aqui pra não expandir o diff além das superfícies que
+  este lab já estava tocando.)
 - **Ausência de linguagem de urgência**: grep por "tempo limitado"/"últimas vagas"/"promoção"/
   "desconto"/"urgência" etc. em todo `app/src` — nenhuma ocorrência. **Conforme.**
 - **Zero entrada direta de checkout infantil**: `grep` por `POST /checkout` e `trackCheckoutStarted`
@@ -47,12 +62,18 @@ Reconciliação das métricas esperadas pelo item 9 do backlog:
 
 - `weekly_report_preview_viewed` — já existe desde o lab-173, confirmado disparando (efeito reage à
   transição de `showReportPreview`, mesmo padrão desde a correção do PR #47).
-- `checkout_started_from_parent_area` — não é um evento novo: `checkout_started` (lab-166) já
-  satisfaz esse critério por construção, já que o único site de disparo já fica atrás da área dos
-  pais (ver achado acima). Nota adicionada em `docs/event-catalog.md` explicando essa equivalência,
-  pra qualquer lab futuro que leia o backlog literalmente e ache que falta um evento.
+- `checkout_started_from_parent_area` — não é um evento de INSTRUMENTAÇÃO novo: `checkout_started`
+  (lab-166) já satisfaz esse critério por construção, já que o único site de disparo já fica atrás
+  da área dos pais (ver achado acima) — a linha bruta já chega em `product_events`. Achado do
+  review automático: isso cobre só a captura, não a EXPOSIÇÃO — `checkout_started` ainda não
+  aparece em `weeklyFunnel` (`GET /admin/metrics`), que só expõe campos explicitamente mapeados;
+  um consumidor do dashboard não consegue ler essa métrica hoje. Nota adicionada em
+  `docs/event-catalog.md` explicando as duas partes (equivalência de instrumentação + gap de
+  exposição no dashboard, deixado como possível item de lab futuro se a visibilidade no admin
+  virar prioridade real).
 - `parent_value_comprehension_rate` — o próprio backlog descreve como "em teste, 8/10 explicam o
-  que é grátis, pago, seguro e sem chat livre" (§12 do documento) — é uma métrica de pesquisa
+  que é grátis, pago, seguro e sem chat livre" (§6, "North Star e metricas" → "Metricas do
+  responsavel") — é uma métrica de pesquisa
   qualitativa com usuário real, não algo que um evento de client mede; fora de escopo de
   laboratório de código, mesma exclusão já usada em labs anteriores (178, 185) pra itens de
   pesquisa pura.
@@ -71,11 +92,16 @@ copy/atributo HTML); `npm run build` sem regressão de bundle.
   escopo ("Fora de escopo: pedir compra no fluxo infantil, bloquear escola/quest, urgência
   artificial" — não menciona redesenho, e o objetivo do lab é confiança na separação já existente,
   não polimento visual).
-- **Corrigir o achado de `noopener` mesmo sendo pequeno e um pouco fora do tema central
-  ("copy"/"preço"), porque toca diretamente uma superfície em escopo** (o link "Abrir área dos
-  responsáveis" É o CTA adulto que este lab audita) e é a mesma classe de bug de segurança
-  (OWASP: reverse tabnabbing) já tratada como MUST em `docs/prompts/01-seguranca.md` e corrigida
-  no lab-166 — deixar de fora seria uma auditoria incompleta da mesma superfície.
+- **Corrigir a inconsistência de `noopener` e o `aria-label` de nova aba mesmo sendo pequenos e um
+  pouco fora do tema central ("copy"/"preço"), porque tocam diretamente uma superfície em escopo**
+  (o link "Abrir área dos responsáveis" É o CTA adulto que este lab audita) — deixar de fora seria
+  uma auditoria incompleta da mesma superfície, mesmo o `noopener` não sendo uma vulnerabilidade
+  ativa em navegador atualizado (ver achado acima).
+- **Não expandir a correção de `aria-label` de "abre em nova aba" pros outros links
+  `target="_blank"` do repo** (`TitleScreen.tsx`, `FamilyPortal.tsx`) — são o MESMO padrão, mas
+  fora das superfícies que este lab já estava tocando; corrigir todos de uma vez ampliaria o diff
+  além do que a auditoria pediu. Registrado como pendência conhecida pro próximo lab que tocar
+  qualquer um desses arquivos.
 - **Não criar `checkout_started_from_parent_area` como evento novo.** Duplicar
   `checkout_started` com um nome mais descritivo criaria dois eventos medindo exatamente a mesma
   coisa (mesmo site de disparo, mesma condição de gate) — mesmo raciocínio já usado no
@@ -84,7 +110,14 @@ copy/atributo HTML); `npm run build` sem regressão de bundle.
 
 ## Pendências / dívidas conhecidas
 
-- Nenhuma nova. O achado de `noopener` foi corrigido nesta mesma sessão.
+- **`target="_blank"` sem indicação de "abre em nova aba" pro nome acessível** — corrigido só nos
+  2 links de `PairingScreen.tsx` tocados por este lab; o mesmo padrão existe em `TitleScreen.tsx`
+  (link "Área dos responsáveis") e `FamilyPortal.tsx` (links pra `/privacidade`/`/termos`, 2
+  ocorrências cada). Não corrigido agora por ficar fora do escopo das superfícies que este lab
+  estava auditando — candidato a correção no próximo lab que tocar qualquer um desses arquivos.
+- **`checkout_started` não aparece em `weeklyFunnel`** (`GET /admin/metrics`) — a instrumentação
+  já existe (lab-166), mas o dashboard não expõe essa métrica hoje. Exposição trivial se algum dia
+  for prioridade (ver nota em `docs/event-catalog.md`).
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
@@ -108,6 +141,30 @@ feedback de playtest.
   - `cd app && npm run test` (208/208, inalterado).
   - `cd app && npm run build` (build de produção limpo).
   - Ler `app/src/components/PairingScreen.tsx` (linhas do link "Abrir área dos responsáveis") e
-    confirmar `rel="noopener noreferrer"` nas duas ocorrências.
+    confirmar `rel="noopener noreferrer"` + `aria-label` de nova aba nas duas ocorrências.
   - Ler `docs/event-catalog.md` (nota nova na seção "Confiança do responsável" explicando a
-    equivalência `checkout_started` ≡ `checkout_started_from_parent_area`).
+    equivalência `checkout_started` ≡ `checkout_started_from_parent_area` e o gap de exposição no
+    `weeklyFunnel`).
+
+## Review automático do Copilot (PR #64)
+
+- **Rodada 1** (2 reviews consecutivas do mesmo pedido, tratadas juntas): 4 achados reais, todos de
+  precisão de documentação/acessibilidade, nenhum de lógica de domínio. (1) Os 2 links "Abrir área
+  dos responsáveis" de `PairingScreen.tsx` abrem nova aba mas o nome acessível não avisava —
+  corrigido com `aria-label` explícito nos dois. (2) O texto novo em `docs/event-catalog.md`/
+  `CONTEXT.md` citava "§12" do backlog pra "Metricas do responsavel", mas essa lista mora em §6
+  ("North Star e metricas") — §12 é só o prompt de execução que lista "Lab 183" na ordem sugerida;
+  corrigido nos dois lugares. (3) A nota sobre `checkout_started` ≡ `checkout_started_from_parent_area`
+  cobria só a captura bruta do evento, não a exposição — `weeklyFunnel` não inclui esse campo,
+  então um consumidor de `GET /admin/metrics` não lê essa métrica hoje; corrigido qualificando a
+  nota e registrando como pendência. (4) O texto do achado do `noopener` classificava o estado
+  anterior como "vulnerabilidade real" de reverse tabnabbing, mas `rel="noreferrer"` sozinho já
+  implica o mesmo bloqueio de `window.opener` em navegador moderno — reclassificado como correção
+  de consistência com a convenção do resto do repo, não uma correção de furo de segurança ativo.
+  Achados adicionais da 2ª review (mesma rodada): o texto do audit de `AvatarShop.tsx` dizia "nenhum
+  botão de compra visível" mas a loja TEM botões de compra com moeda do jogo (nunca dinheiro real)
+  — corrigido qualificando que o achado do backlog é sobre dinheiro real, não a economia interna; e
+  o checklist de `TitleScreen` dizia "nenhuma menção a assinatura" quando a própria tela mostra o
+  sinal de confiança "Assinatura só para itens visuais" — corrigido esclarecendo que é divulgação
+  informativa, não transacional (sem preço/CTA/urgência ao lado), o que já satisfaz o critério real
+  do backlog.
