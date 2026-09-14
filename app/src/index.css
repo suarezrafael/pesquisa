@@ -1002,8 +1002,15 @@ a.nickname-generate-btn {
   top: 3.6rem;
   right: 0.75rem;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  /* Achado do review automático do Copilot: `column` empilhava o botão ACIMA do texto — como o
+     texto já quebra em várias linhas (5 campos), isso somava a altura do botão (44px) em CIMA da
+     altura que o texto já ocupava, aumentando o espaço total do painel expandido em vez de manter
+     compacto, reintroduzindo justamente o problema original ("painel ocupa muito espaço"). `row`
+     com `align-items: flex-start` coloca o botão do LADO do texto (topo alinhado com a primeira
+     linha), sem somar altura nenhuma — só largura, que o texto já reserva via `max-width` abaixo.
+     Ordem no JSX é [botão, texto]; `align-items: flex-start` mantém os dois encostados no topo. */
+  flex-direction: row;
+  align-items: flex-start;
   gap: 0.25rem;
   /* Achado do review automático do Copilot: sem isto, o WRAPPER (não só o texto) fica
      `pointer-events: auto` por padrão — como ele é uma caixa flex posicionada sobre o canvas,
