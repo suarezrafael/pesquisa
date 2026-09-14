@@ -980,11 +980,13 @@ a.nickname-generate-btn {
   touch-action: none;
 }
 
-/* Envolve o botão de encolher/expandir + o texto (`.world3d-debug` abaixo) — carrega o
+/* Achado do review automático do Copilot: este comentário descrevia `flex-direction: column`
+   (botão empilhado ACIMA do texto), desatualizado desde que a regra abaixo virou `row` (botão do
+   LADO do texto — ver comentário junto de `flex-direction: row` abaixo pro porquê da troca).
+   Envolve o botão de encolher/expandir + o texto (`.world3d-debug` abaixo) — carrega o
    posicionamento (antes vivia direto em `.world3d-debug`) porque agora precisa se aplicar mesmo
    quando o texto está escondido (painel encolhido, pedido do usuário com screenshot: "o painel de
-   FPS ocupa muito espaço... precisa de uma opção pra encolher"). `flex-direction: column` empilha
-   o botão acima do texto, alinhados à direita.
+   FPS ocupa muito espaço... precisa de uma opção pra encolher").
    lab-72, bug real visto num screenshot do celular do usuário: numa tela estreita, essa string
    (uma linha só, sem largura máxima) ficava mais larga que o viewport inteiro — como é ancorada
    pela borda DIREITA, a sobra ia parar por baixo/atrás do painel avatar+nome+moedas em vez de
