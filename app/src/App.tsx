@@ -142,25 +142,26 @@ function GameApp() {
   // a última atualização do timer e o clique, o painel podia combinar a descrição de UMA semana com
   // o status de OUTRA. Guardar `event` e `nowIso` juntos, atualizados sempre no mesmo instante,
   // elimina a classe inteira: só existe UM relógio de referência pra todo esse subsistema.
-  const [weeklyEventSnapshot, setWeeklyEventSnapshot] = useState(() => {
-    const now = new Date()
-    return { event: getCurrentWeeklyEvent(now), nowIso: now.toISOString() }
-  })
+  const [weeklyEventSnapshot, setWeeklyEventSnapshot] = useState(() => ({ event: getCurrentWeeklyEvent(new Date()) }))
+  // Achado do review automático do Copilot: uma rodada anterior guardava `nowIso` DENTRO do
+  // mesmo estado usado pro badge (`weeklyEventSnapshot`), avançado tanto pelo timer de 60s quanto
+  // na hora da recompensa — mas aí o timer só podia atualizar esse estado quando `event.id`
+  // mudasse (senão re-renderizava `World3D` à toa a cada minuto, achado de uma rodada anterior
+  // ainda), deixando `nowIso` PRESO num valor velho sempre que o relógio do aparelho fosse
+  // adiantado E DEPOIS voltado ainda dentro do mesmo evento/semana — o painel podia mostrar
+  // "concluído" usando esse `nowIso` desatualizado, mesmo com a PRÓXIMA tentativa de recompensa já
+  // corretamente bloqueada por `hasWeeklyEventClockRolledBack` (que usa seu próprio `new Date()`
+  // fresco). Um `ref` resolve a tensão de vez: nunca dispara re-render sozinho (então pode ser
+  // atualizado a CADA tick do timer, sem custo de árvore nenhum), mas fica sempre fresco pra
+  // leitura no clique — `event` (estado, pro badge/`World3D`) e "agora" (ref, pro cálculo de
+  // status) passam a ser preocupações completamente independentes.
+  const nowIsoRef = useRef(new Date().toISOString())
   useEffect(() => {
     const id = setInterval(() => {
       const now = new Date()
+      nowIsoRef.current = now.toISOString()
       const event = getCurrentWeeklyEvent(now)
-      // Achado do review automático do Copilot: `weeklyEventSnapshot` mora em `GameApp`, cuja
-      // árvore inclui o `<World3D>` inteiro (não memoizado) — atualizar o estado a cada 60s
-      // incondicionalmente re-renderizava esse componente grande toda vez, mesmo nos ~10079
-      // minutos de cada semana em que o evento não muda de verdade (só troca na virada da semana
-      // ISO). `event.id` idêntico ao anterior devolve a MESMA referência de estado (`prev`) em vez
-      // de um objeto novo — o React reconhece isso (`Object.is`) e pula o re-render por completo,
-      // sem precisar isolar o estado num componente à parte. `nowIso` não precisa ficar fresco
-      // aqui além disso: o instante usado pra decidir status na hora da recompensa já é avançado
-      // separadamente por `weeklyEventObjectiveProgress` (ver comentário ali), então este timer só
-      // existe pra pegar a VIRADA de semana, não pra manter `nowIso` atualizado ao segundo.
-      setWeeklyEventSnapshot((prev) => (prev.event.id === event.id ? prev : { event, nowIso: now.toISOString() }))
+      setWeeklyEventSnapshot((prev) => (prev.event.id === event.id ? prev : { event }))
     }, 60_000)
     return () => clearInterval(id)
   }, [])
@@ -398,14 +399,15 @@ function GameApp() {
     // sempre depois de `completeQuest` acima (ver comentário de `weeklyEventObjectiveProgress` em
     // `useProgress.ts` sobre por que a ordem/atualizador funcional importam aqui).
     const rewardGranted = weeklyEventObjectiveProgress(nowIso)
-    // Achado do review automático do Copilot: `weeklyEventSnapshot.nowIso` só avança sozinho no
-    // timer de 60s — se a criança completar o desafio e abrir o emblema DENTRO desse minuto,
-    // `weeklyEventObjectiveStatus` comparava o instante da recompensa (`nowIso`, agora mesmo)
-    // contra um snapshot mais VELHO, lendo isso como "relógio voltou no tempo" (mesma checagem
-    // anti-farm que existe pra detectar manipulação de verdade) e mostrando "bloqueado" em vez do
-    // objetivo recém-concluído. Avança o snapshot junto (nunca pra trás — `nowIso <= prev.nowIso`
-    // no raro caso de eventos fora de ordem mantém o snapshot mais recente já visto).
-    setWeeklyEventSnapshot((prev) => (nowIso <= prev.nowIso ? prev : { event: getCurrentWeeklyEvent(new Date(nowIso)), nowIso }))
+    // Achado do review automático do Copilot: `nowIsoRef` (ver comentário na declaração, perto de
+    // `weeklyEventSnapshot`) só avançava sozinho no timer de 60s — se a criança completasse o
+    // desafio e abrisse o emblema DENTRO desse minuto, `weeklyEventObjectiveStatus` comparava o
+    // instante da recompensa (`nowIso`, agora mesmo) contra uma referência mais VELHA, lendo isso
+    // como "relógio voltou no tempo" (mesma checagem anti-farm que existe pra detectar manipulação
+    // de verdade) e mostrando "bloqueado" em vez do objetivo recém-concluído. Avança a referência
+    // junto (nunca pra trás — no raro caso de eventos fora de ordem mantém a mais recente já
+    // vista); um `ref` não dispara re-render, então não compete com a otimização acima.
+    if (nowIso > nowIsoRef.current) nowIsoRef.current = nowIso
     const weeklyEventObjectiveBonusCoins = rewardGranted ? WEEKLY_EVENT_OBJECTIVE_REWARD_COINS : undefined
     setReward({
       quest,
@@ -597,12 +599,13 @@ function GameApp() {
           onOpenPairing={() => setShowPairing(true)}
           onOpenAchievements={() => setShowAchievements(true)}
           onOpenWeeklyEvent={() => {
-            // Reaproveita `event` E `nowIso` do MESMO `weeklyEventSnapshot` do badge (nunca
-            // recalcula com um `new Date()` próprio) — ver comentário na declaração acima sobre
-            // por quê os dois precisam vir do mesmo instante.
+            // `event` vem do estado do badge (só muda de verdade na virada de semana); o status
+            // usa `nowIsoRef.current` (sempre fresco, nunca dispara re-render sozinho) em vez de
+            // `new Date()` próprio — ver comentário na declaração de `nowIsoRef` sobre por quê os
+            // dois viraram preocupações independentes.
             setWeeklyEventPanel({
               event: weeklyEventSnapshot.event,
-              status: weeklyEventObjectiveStatus(progress, weeklyEventSnapshot.nowIso),
+              status: weeklyEventObjectiveStatus(progress, nowIsoRef.current),
             })
           }}
           weeklyEvent={weeklyEventSnapshot.event}
