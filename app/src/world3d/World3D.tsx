@@ -2006,7 +2006,14 @@ function buildLaserGun(scene: Scene, shadowGenerator: ShadowGenerator): Transfor
 // vivo — só que aqui decide, ANTES de montar o mundo real, os ajustes que só dá pra fazer uma vez
 // na criação da cena (anti-aliasing, resolução de sombra/HDR, contagem de props/grama/partículas)
 // e por isso não dá pra corrigir depois só com o auto-tune de resolução.
-async function benchmarkIsWeakGpu(): Promise<boolean> {
+//
+// `shouldAbort` (achado do review automático do Copilot): se o componente desmontar antes do
+// benchmark terminar sozinho, o efeito que o chama marca cancelado — sem isso, o loop de render
+// desanexado continuava rodando (até 30 quadros ou 2.5s) gastando GPU à toa, e o ciclo de
+// montagem dupla do StrictMode (dev) chegava a rodar DOIS benchmarks ao mesmo tempo disputando a
+// mesma GPU, distorcendo a medição de ambos. Checar a cada quadro descarta o benchmark assim que
+// o cancelamento chega, em vez de só ignorar o resultado no fim.
+async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> {
   const WEAK_GPU_AVG_FPS_THRESHOLD = 40
   const WARMUP_FRAMES = 10
   const SAMPLE_FRAMES = 20
@@ -2021,6 +2028,14 @@ async function benchmarkIsWeakGpu(): Promise<boolean> {
     benchCanvas.height = 256
     const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: false })
     const benchScene = new Scene(benchEngine)
+
+    // Achado do review automático do Copilot: sem câmera ativa, `Scene.render()` não desenha nada
+    // (não há de onde projetar a cena) — o loop rodava "de graça", sem custo real de GPU, e
+    // qualquer aparelho media FPS alto por medir só a cadência do próprio loop, não desempenho de
+    // renderização nenhum. Mira a câmera pro centro da malha de instâncias criada mais abaixo.
+    const camera = new UniversalCamera('benchCamera', new Vector3(0, 6, -14), benchScene)
+    camera.setTarget(Vector3.Zero())
+    benchScene.activeCamera = camera
 
     const light = new HemisphericLight('benchHemiLight', new Vector3(0, 1, 0), benchScene)
     light.intensity = 0.6
@@ -2063,6 +2078,10 @@ async function benchmarkIsWeakGpu(): Promise<boolean> {
       let frame = 0
       const samples: number[] = []
       benchEngine.runRenderLoop(() => {
+        if (shouldAbort()) {
+          settle(true)
+          return
+        }
         benchScene.render()
         frame++
         if (frame > WARMUP_FRAMES) samples.push(benchEngine.getFps())
@@ -2124,7 +2143,7 @@ export function World3D({
   const [gpuTier, setGpuTier] = useState<'pending' | 'weak' | 'strong'>('pending')
   useEffect(() => {
     let cancelled = false
-    benchmarkIsWeakGpu().then((isWeak) => {
+    benchmarkIsWeakGpu(() => cancelled).then((isWeak) => {
       if (!cancelled) setGpuTier(isWeak ? 'weak' : 'strong')
     })
     return () => {
