@@ -44,13 +44,14 @@ Superfícies auditadas (leitura completa do código-fonte de cada uma):
   ocorrências do repo (lab-161/166) — essas duas ficaram inconsistentes com o resto do código por
   terem sido adicionadas antes daquela varredura. Corrigido por consistência/clareza de intenção,
   alinhando com a convenção do projeto, não por um buraco de segurança ativo. (2) Achado do review
-  automático do Copilot (PR ligada a este lab): os mesmos dois links abrem nova aba mas o nome
-  acessível só diz "Abrir área dos responsáveis", sem indicar a mudança de contexto pra quem usa
-  leitor de tela/teclado — corrigido com `aria-label="Abrir área dos responsáveis (abre em nova
-  aba)"` nos dois. (Esse mesmo padrão de `target="_blank"` sem indicação de nova aba também existe
-  em `TitleScreen.tsx`/`FamilyPortal.tsx`, fora do escopo tocado por este lab — registrado como
-  pendência conhecida abaixo, não corrigido aqui pra não expandir o diff além das superfícies que
-  este lab já estava tocando.)
+  automático do Copilot: os mesmos dois links abrem nova aba mas o nome acessível só diz "Abrir
+  área dos responsáveis", sem indicar a mudança de contexto pra quem usa leitor de tela/teclado —
+  corrigido com `aria-label="Abrir área dos responsáveis (abre em nova aba)"` nos dois. Esse mesmo
+  padrão de `target="_blank"` sem indicação de nova aba existia também em `TitleScreen.tsx` (1
+  link) e `FamilyPortal.tsx` (4 links, `/termos`/`/privacidade`) — como essas duas telas SÃO
+  superfícies auditadas por este próprio lab (ver acima), a correção foi estendida a elas também
+  (achado da 2ª rodada de review, ver seção de review abaixo): os 7 links `target="_blank"` do app
+  todos têm `aria-label` de nova aba agora.
 - **Ausência de linguagem de urgência**: grep por "tempo limitado"/"últimas vagas"/"promoção"/
   "desconto"/"urgência" etc. em todo `app/src` — nenhuma ocorrência. **Conforme.**
 - **Zero entrada direta de checkout infantil**: `grep` por `POST /checkout` e `trackCheckoutStarted`
@@ -103,7 +104,7 @@ copy/atributo HTML); `npm run build` sem regressão de bundle.
   `TitleScreen`/`FamilyPortal` SÃO superfícies explicitamente auditadas por este próprio lab (ver
   lista acima); deixar o mesmo padrão sem correção nelas, enquanto corrigido em `PairingScreen`,
   criaria orientação inconsistente pra usuário de leitor de tela entre os pontos de entrada da área
-  dos pais — revertida a decisão original, todos os 6 links `target="_blank"` do app (2 em
+  dos pais — revertida a decisão original, todos os 7 links `target="_blank"` do app (2 em
   `PairingScreen.tsx`, 1 em `TitleScreen.tsx`, 4 em `FamilyPortal.tsx`) agora têm `aria-label`
   anunciando a nova aba.
 - **Não criar `checkout_started_from_parent_area` como evento novo.** Duplicar
@@ -121,7 +122,7 @@ copy/atributo HTML); `npm run build` sem regressão de bundle.
 ## Funcionalidades planejadas que NÃO foram concluídas
 
 - Nenhuma — todos os itens do `FEATURES.md` foram auditados; os ajustes concretos necessários
-  (consistência de `rel="noopener noreferrer"` e `aria-label` de "abre em nova aba" em todos os 6
+  (consistência de `rel="noopener noreferrer"` e `aria-label` de "abre em nova aba" em todos os 7
   links `target="_blank"` do app) foram corrigidos.
 
 ## O que o próximo laboratório deve desenvolver
@@ -140,7 +141,7 @@ feedback de playtest.
 - Como rodar/verificar o que foi construído neste laboratório:
   - `cd app && npm run test` (208/208, inalterado).
   - `cd app && npm run build` (build de produção limpo).
-  - Ler os 6 links `target="_blank"` do app (`PairingScreen.tsx` x2, `TitleScreen.tsx` x1,
+  - Ler os 7 links `target="_blank"` do app (`PairingScreen.tsx` x2, `TitleScreen.tsx` x1,
     `FamilyPortal.tsx` x4) e confirmar `rel="noopener noreferrer"` + `aria-label` de nova aba em
     todos.
   - Ler `docs/event-catalog.md` (nota nova na seção "Confiança do responsável" explicando a
@@ -175,9 +176,16 @@ feedback de playtest.
   explícita de não expandir o diff — mas essas duas SÃO superfícies auditadas por este mesmo lab
   (ver lista de "O que foi feito"), então deixar o mesmo padrão sem correção nelas geraria
   orientação inconsistente pra usuário de leitor de tela entre pontos de entrada equivalentes da
-  área dos pais. Revertida a decisão original: os 6 links `target="_blank"` do app (2 em
+  área dos pais. Revertida a decisão original: os 7 links `target="_blank"` do app (2 em
   `PairingScreen.tsx`, 1 em `TitleScreen.tsx`, 4 em `FamilyPortal.tsx` — 2 na `FamilyValueProp`, 2
   no consentimento de cadastro da `LoginScreen`) agora têm `aria-label` anunciando a nova aba. (2) A
   seção "Funcionalidades planejadas que NÃO foram concluídas" ainda dizia "o único ajuste concreto
   necessário (link sem `noopener`) foi corrigido", omitindo o `aria-label` do resumo — corrigido
   pra mencionar as duas correções.
+- **Rodada 3**: 2 achados reais, ambos erros introduzidos pela própria pressa de documentar a
+  rodada 2. (1) O parágrafo de `PairingScreen.tsx` em "O que foi feito" não tinha sido atualizado
+  junto com a correção da rodada 2 — ainda dizia que o `aria-label` ficou como pendência pra
+  `TitleScreen`/`FamilyPortal`, contradizendo o código real e as outras seções deste mesmo arquivo;
+  corrigido pra refletir que a correção foi estendida. (2) Erro de aritmética: "2 em
+  `PairingScreen.tsx` + 1 em `TitleScreen.tsx` + 4 em `FamilyPortal.tsx`" soma 7, não 6 como estava
+  escrito em 4 lugares deste arquivo — corrigido em todos.
