@@ -49,7 +49,7 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   `wouldGrantWeeklyEventObjectiveReward` nunca diverge de `applyWeeklyEventObjectiveProgress`, os 3
   estados de `weeklyEventObjectiveStatus`, recuo de relógio DENTRO da mesma semana também bloqueia)
   e 1 novo em `server-accounts/src/domain.test.ts`. Suíte completa ao final (após todas as rodadas
-  de review): app 207/207, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e `npm run build`
+  de review): app 208/208, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e `npm run build`
   limpos.
 
 ## Decisões técnicas tomadas
@@ -289,6 +289,16 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   descrição da própria PR #61 no GitHub ainda dizia que as rodadas 11-14 seguiam sem verificação ao
   vivo e que o dev server permanecia instável — corrigido reconciliando a descrição da PR com este
   registro.
+- **Rodada 17**: 1 achado real — a correção da rodada 16 introduziu um novo caso-limite:
+  `hasWeeklyEventClockRolledBack` usava `<=` (não `<`) pra detectar recuo de relógio, mas `App.tsx`
+  agora grava o MESMO `nowIso` tanto em `weeklyEventObjectiveRewardedAtIso` quanto no snapshot
+  usado pra calcular o status logo em seguida — abrir o emblema imediatamente após ganhar o bônus
+  consulta o status com `nowIso === rewardedAtIso`, não um instante posterior. Com `<=`, igualdade
+  também contava como recuo, mostrando "bloqueado" em vez de "concluído" bem na hora que a criança
+  mais quer ver a confirmação. Corrigido trocando por `<` estrito — a checagem de "mesma semana
+  ISO" em `isWeeklyEventObjectiveDone`/`wouldGrantWeeklyEventObjectiveReward` já impede uma segunda
+  concessão no mesmo instante, então nada de novo fica liberado pro lado da manipulação de relógio.
+  Teste de regressão novo cobre o timestamp exato (208 testes no total agora).
 
 ## Pendências / dívidas conhecidas
 
@@ -326,7 +336,7 @@ benefícios, cancelamento e a regra de aprendizagem grátis. Métricas citadas:
 
 - Branch: `lab-182-eventos-semanais` (a mesclar em `main` via PR).
 - Como rodar/verificar o que foi construído neste laboratório:
-  - `cd app && npm run test` (207 testes, inclui `applyWeeklyEventObjectiveProgress`/
+  - `cd app && npm run test` (208 testes, inclui `applyWeeklyEventObjectiveProgress`/
     `wouldGrantWeeklyEventObjectiveReward`/`weeklyEventObjectiveStatus`).
   - `cd app/server-accounts && npm run test` (149 testes, inclui validação de
     `weekly_event_objective_completed`).
