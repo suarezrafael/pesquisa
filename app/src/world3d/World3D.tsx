@@ -2032,6 +2032,18 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
   // tela) — o PRÓPRIO benchmark precisa continuar barato de sobra até no pior aparelho (senão
   // ele mesmo trava o carregamento logo no início, justo no caso que mais importa detectar
   // rápido); a correção de proporção acima já resolve a distorção sem precisar de área grande.
+  //
+  // Limitação aceita, não corrigida (achado do review automático do Copilot, mantido pequeno de
+  // propósito): mesmo com a proporção certa, 480×480 (230 mil pixels) ainda é bem menor que a
+  // área real de um celular moderno em tela cheia (ex.: ~3 milhões de pixels num 390×844 a DPR 3)
+  // — um aparelho "limitado por preenchimento de pixel" (fill-rate) pode passar aqui e ainda assim
+  // sofrer no jogo de verdade em resolução cheia. Testado ao vivo (720×720, ~518 mil pixels)
+  // durante esta mesma rodada: aumentar a área pra ficar mais fiel deixou o PRÓPRIO benchmark lento
+  // demais num aparelho fraco/GPU virtualizada, quase travando o carregamento por completo — o
+  // remédio piorou o problema que existe pra resolver. A rede de segurança que sobra é o auto-tune
+  // de resolução ao vivo (agora ligado pra QUALQUER classificação, não só "fraco" — ver comentário
+  // perto de `SCALING_TIERS`), que ainda reage a um fill-rate real pior que o medido aqui, só não
+  // consegue desligar sombra/SSAO/MSAA depois de já escolhidos na criação da cena.
   const BENCH_MAX_PIXELS = 480 * 480
   function benchCanvasSize(realWidth: number, realHeight: number): { width: number; height: number } {
     const scale = Math.min(1, Math.sqrt(BENCH_MAX_PIXELS / (realWidth * realHeight)))
@@ -2045,7 +2057,29 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
   // o `catch` libera tudo que já existe, em vez de só reportar "fraco" e deixar vazar.
   const disposables: { dispose: () => void }[] = []
 
+  // Achado do review automático do Copilot: se o componente montar com a aba/PWA em segundo plano,
+  // `requestAnimationFrame` fica pausado/limitado pelo navegador — o loop abaixo nunca junta os 30
+  // quadros a tempo, bate no teto de segurança (`SAFETY_TIMEOUT_MS`) e classifica "fraco" um
+  // aparelho que pode ser forte de verdade. Como o resultado nunca é medido de novo depois (é
+  // decidido uma vez só, antes do mundo montar), esse falso negativo duraria a sessão INTEIRA.
+  // Espera a aba ficar visível antes de sequer começar a medir.
+  async function waitForVisible(): Promise<void> {
+    if (document.visibilityState === 'visible') return
+    await new Promise<void>((resolve) => {
+      function onChange() {
+        if (document.visibilityState === 'visible') {
+          document.removeEventListener('visibilitychange', onChange)
+          resolve()
+        }
+      }
+      document.addEventListener('visibilitychange', onChange)
+    })
+  }
+
   try {
+    await waitForVisible()
+    if (shouldAbort()) return true
+
     const dpr = window.devicePixelRatio || 1
     const { width, height } = benchCanvasSize(window.innerWidth * dpr, window.innerHeight * dpr)
     const benchCanvas = document.createElement('canvas')
@@ -2068,6 +2102,11 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     light.intensity = 0.6
     const sunLight = new DirectionalLight('benchSunLight', new Vector3(-1, -2, -1), benchScene)
     const shadowGenerator = new ShadowGenerator(1024, sunLight)
+    // Achado do review automático do Copilot: `ShadowGenerator` não é um recurso da `Scene` — ela
+    // NÃO dispõe o gerador (nem o shadow map/render-list dele) sozinha ao chamar `scene.dispose()`
+    // (mesmo comportamento já documentado noutro lugar do código, `studentFigure.ts`). Sem isto,
+    // cada benchmark deixava um shadow map vivo pra trás.
+    disposables.push(shadowGenerator)
     shadowGenerator.useBlurExponentialShadowMap = true
 
     const ground = MeshBuilder.CreateGround('benchGround', { width: 40, height: 40 }, benchScene)
@@ -2135,14 +2174,44 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
       const settle = (isWeak: boolean) => {
         if (settled) return
         settled = true
-        benchEngine.stopRenderLoop()
-        benchScene.dispose()
-        benchEngine.dispose()
+        // Achado do review automático do Copilot: se qualquer chamada de limpeza abaixo lançar
+        // (ex.: contexto WebGL parcialmente perdido), a exceção saía do callback do render loop
+        // ANTES de `resolve()` — `settled` já virava `true`, então nem o teto de segurança
+        // conseguia tentar de novo (`settle` vira no-op), deixando a Promise pendurada pra sempre
+        // e `gpuTier` preso em `'pending'` (o mundo NUNCA monta). Cada passo é best-effort; `resolve`
+        // sempre roda por fora, não importa quantos passos falharem.
+        try {
+          benchEngine.stopRenderLoop()
+        } catch {
+          /* best-effort */
+        }
+        try {
+          shadowGenerator.dispose()
+        } catch {
+          /* best-effort */
+        }
+        try {
+          benchScene.dispose()
+        } catch {
+          /* best-effort */
+        }
+        try {
+          benchEngine.dispose()
+        } catch {
+          /* best-effort */
+        }
         resolve(isWeak)
       }
 
       let frame = 0
-      const samples: number[] = []
+      // Achado do review automático do Copilot: `engine.getFps()` é um contador interno do
+      // Babylon atualizado periodicamente, não uma medida instantânea por quadro — numa janela tão
+      // curta (30 quadros, ~500ms a 60Hz) várias leituras podem repetir o mesmo valor (inicial ou
+      // desatualizado), mascarando um aparelho que na real está rodando bem mais devagar (ex.:
+      // 30-39 FPS classificado por engano como "forte"). Mede o tempo de relógio de verdade
+      // decorrido entre o fim do aquecimento e o fim da amostragem — quadros/segundos reais, sem
+      // depender de quando o contador interno decide se atualizar.
+      let sampleWindowStart = 0
       benchEngine.runRenderLoop(() => {
         if (shouldAbort()) {
           settle(true)
@@ -2151,9 +2220,10 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
         simulateEntityWorkload()
         benchScene.render()
         frame++
-        if (frame > WARMUP_FRAMES) samples.push(benchEngine.getFps())
+        if (frame === WARMUP_FRAMES) sampleWindowStart = performance.now()
         if (frame >= WARMUP_FRAMES + SAMPLE_FRAMES) {
-          const avgFps = samples.reduce((a, b) => a + b, 0) / samples.length
+          const elapsedSeconds = (performance.now() - sampleWindowStart) / 1000
+          const avgFps = SAMPLE_FRAMES / elapsedSeconds
           settle(avgFps < WEAK_GPU_AVG_FPS_THRESHOLD)
         }
       })
@@ -12043,7 +12113,15 @@ export function World3D({
   // dele — um usuário de teclado conseguia dar Tab por dentro de um modal visualmente aberto e
   // cair nos botões escondidos atrás. `inert` no HUD inteiro resolve isso numa mudança central,
   // sem precisar de um focus-trap manual em cada um dos 12 painéis.
-  const hudInert = suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
+  // Achado do review automático do Copilot: `gpuTier === 'pending'` (benchmark de GPU ainda
+  // rodando) some com QUALQUER bridge de `setup()` (não só as duas já protegidas por polling,
+  // `placingFurnitureRequestId`/`coopAnswerSignalId` — também `handleRecenterCamera`,
+  // `handleTouchInteractPress` etc.) — tocar um desses botões durante o benchmark descartava a
+  // ação em silêncio, sem nenhum jeito de saber que "não fez nada" foi por causa do carregamento
+  // ainda em andamento. Reaproveita o MESMO mecanismo de `inert` já usado pra modais — desabilita
+  // toda a UI que depende da cena (inclusive o canvas/joystick/botões de toque, ver `inert=
+  // {hudInert}` abaixo) enquanto o benchmark roda, em vez de proteger handler por handler.
+  const hudInert = gpuTier === 'pending' || suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
 
   return (
     <div className="world3d-container">
