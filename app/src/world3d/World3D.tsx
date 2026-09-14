@@ -10422,16 +10422,23 @@ export function World3D({
         }
 
         // combina teclado + joystick
-        let x = joystickRef.current.x
-        let y = joystickRef.current.y
-        // Achado do review automático do Copilot: `inert` (via `TouchJoystick`) já bloqueia o
-        // joystick de toque enquanto um modal está aberto, mas `keysDown` (populado pelo listener
-        // GLOBAL de `window`, fora do DOM) continua sendo lido aqui incondicionalmente — segurar
-        // uma tecla de movimento antes/durante um modal aberto (chat, ranking, mochila, painel de
-        // evento semanal etc.) continuava andando o avatar por trás dele. Ignora `keysDown`
-        // inteiro enquanto `hudInertRef.current` — não precisa "limpar" o dicionário na transição,
-        // só parar de LER os valores (já `true`) enquanto suspenso; volta a valer sozinho assim
-        // que o modal fecha, sem exigir soltar e apertar a tecla de novo.
+        // Achado do review automático do Copilot: `inert` (via `TouchJoystick`) bloqueia NOVO
+        // toque enquanto um modal está aberto, mas não zera um vetor JÁ diferente de zero — segurar
+        // o joystick antes/durante um modal abrir deixava `joystickRef.current` parado num valor
+        // não-nulo, continuando a mover o avatar por trás do modal mesmo sem nenhum toque novo.
+        // Mesmo tratamento de `keysDown` logo abaixo: ignora o vetor inteiro (não só as teclas)
+        // enquanto `hudInertRef.current` — não precisa zerar `joystickRef` na transição, só parar
+        // de LER o valor (já parado) enquanto suspenso.
+        let x = hudInertRef.current ? 0 : joystickRef.current.x
+        let y = hudInertRef.current ? 0 : joystickRef.current.y
+        // `inert` (via `TouchJoystick`) já bloqueia o joystick de toque enquanto um modal está
+        // aberto, mas `keysDown` (populado pelo listener GLOBAL de `window`, fora do DOM) continua
+        // sendo lido aqui incondicionalmente — segurar uma tecla de movimento antes/durante um
+        // modal aberto (chat/ranking/mochila/painel de evento semanal etc.) continuava andando o
+        // avatar por trás dele. Ignora `keysDown` inteiro enquanto `hudInertRef.current` — não
+        // precisa "limpar" o dicionário na transição, só parar de LER os valores (já `true`)
+        // enquanto suspenso; volta a valer sozinho assim que o modal fecha, sem exigir soltar e
+        // apertar a tecla de novo.
         if (!hudInertRef.current) {
           if (keysDown['arrowup'] || keysDown['w']) y -= 1
           if (keysDown['arrowdown'] || keysDown['s']) y += 1

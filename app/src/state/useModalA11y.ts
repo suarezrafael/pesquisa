@@ -33,7 +33,7 @@ export function useModalA11y(onClose: () => void) {
     // tabular direto pro resto da página/jogo por trás do painel, quebrando o isolamento que
     // `aria-modal`/`inert` (aplicados por quem usa este hook) prometem. Prende o foco dentro da
     // raiz do painel: Tab no ÚLTIMO elemento focável volta pro primeiro; Shift+Tab no PRIMEIRO vai
-    // pro último — mesmo padrão padrão de focus trap de diálogo modal.
+    // pro último — mesmo padrão de focus trap de diálogo modal.
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         onCloseRef.current()
@@ -46,10 +46,16 @@ export function useModalA11y(onClose: () => void) {
       if (focusable.length === 0) return
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
-      if (e.shiftKey && document.activeElement === first) {
+      // Achado do review automático do Copilot: quando nada dentro do painel tem `autoFocus`, o
+      // foco inicial (efeito acima) cai na PRÓPRIA raiz (`tabIndex={-1}`) — que não entra em
+      // `focusable` (excluída de propósito, já que `-1` não faz parte da ordem normal de Tab).
+      // Sem tratar esse caso, Shift+Tab a partir da raiz não batia nem com `first` nem com `last`,
+      // escapando do trap logo no PRIMEIRO Shift+Tab, antes mesmo do usuário ter tabulado uma vez.
+      const onRoot = document.activeElement === rootRef.current
+      if (e.shiftKey && (onRoot || document.activeElement === first)) {
         e.preventDefault()
         last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && (onRoot || document.activeElement === last)) {
         e.preventDefault()
         first.focus()
       }

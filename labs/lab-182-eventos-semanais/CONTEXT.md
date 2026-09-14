@@ -360,6 +360,20 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   ainda descrevia a guarda anti-recuo como `<=`, desatualizado desde a rodada 17 (`<` estrito). (4)
   contagem de testes desatualizada no `CONTEXT.md` (9, real é 10 desde a rodada 17). (5) contagem
   de rodadas na descrição da PR desatualizada (dizia 17, já eram mais) — reconciliada.
+- **Rodada 22**: 3 achados, todos em `useModalA11y.ts`/`World3D.tsx` (não específicos deste lab,
+  mas tocados pela rodada 20-21). (1) Nit — comentário do focus trap (rodada 20) tinha a palavra
+  duplicada "padrão padrão" — corrigido. (2) Real — quando nada dentro do painel tem `autoFocus`,
+  o foco inicial cai na PRÓPRIA raiz (`tabIndex={-1}`), que fica de fora do `NodeList` de
+  `focusable` (excluída de propósito, já que `-1` não faz parte da ordem normal de Tab); sem tratar
+  esse caso, `Shift+Tab` a partir da raiz não batia nem com o primeiro nem com o último elemento
+  focável, escapando do trap no PRIMEIRO `Shift+Tab`, antes mesmo de qualquer Tab ter acontecido.
+  Corrigido comparando também contra `document.activeElement === rootRef.current` nas duas
+  condições do trap. (3) Real, mesma classe do achado (2) da rodada 21 (`hudInertRef` já bloqueava
+  `keysDown`, mas não o joystick): `TouchJoystick`'s `inert` bloqueia NOVO toque enquanto um modal
+  está aberto, mas não zera um vetor já diferente de zero — segurar o joystick antes/durante um
+  modal abrir deixava `joystickRef.current` parado num valor não-nulo, continuando a mover o avatar
+  por trás do modal mesmo sem nenhum toque novo. Corrigido zerando `x`/`y` (em vez de ler
+  `joystickRef.current`) enquanto `hudInertRef.current`, mesmo padrão do `keysDown` ao lado.
 
 ## Pendências / dívidas conhecidas
 
