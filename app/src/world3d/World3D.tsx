@@ -12087,6 +12087,18 @@ export function World3D({
         if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
         if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
         if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
+        // Limitação aceita, não corrigida (achado do review automático do Copilot): isto para o
+        // custo mais caro (o render loop) e os timers pendentes, mas NÃO desfaz tudo que `setup()`
+        // já pode ter registrado antes de falhar (listeners globais de teclado/pointer,
+        // observers/intervalos internos da cena) — esse teardown completo só roda no cleanup do
+        // efeito (`return () => {...}` no fim), que não dispara aqui porque o componente continua
+        // montado de propósito, pra exibir `setupFailed`. Fazer um teardown idempotente reutilizável
+        // entre "desmontou de verdade" e "setup() falhou mas continua montado" exigiria extrair boa
+        // parte da limpeza atual pra uma função nomeada chamada dos dois lugares — escopo maior que
+        // o justificado aqui: falha de rede a MEIO do carregamento de Havok/18 GLBs é um caminho já
+        // raro, e mesmo sem esse teardown completo o resultado é estritamente melhor que o
+        // comportamento de antes desta correção (tela congelada pra sempre, sem nenhuma mensagem,
+        // com o MESMO render loop e listeners já vivos de qualquer forma).
       },
     )
 

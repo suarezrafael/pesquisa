@@ -639,8 +639,16 @@ a.nickname-generate-btn {
    `setup()` assíncrono (Havok+18 GLBs) ainda rodam sem nenhum feedback visual, com o canvas já
    montado mas vazio (`hudInert` só desabilita os controles, não esconde a tela em branco). Num
    aparelho lento isso podia parecer travado por vários segundos. Reaproveita a MESMA aparência do
-   `.world-loading`, só com z-index acima de qualquer elemento do HUD (maior já usado, 30) — sem
-   isso, elementos do HUD com z-index explícito pintariam por cima mesmo vindo antes no DOM. */
+   `.world-loading`.
+   Achado do review automático do Copilot (rodada seguinte): `z-index: 40` (pensado só pra ficar
+   acima do HUD) ficava ACIMA de `.modal-overlay` (z-index: 10) também — o modal global de login
+   diário (aberto automaticamente ao entrar) ou qualquer outro modal já aberto nesse instante
+   ficava atrás desta camada, inacessível até o carregamento terminar (ou pra sempre, se `setup()`
+   falhar). Os únicos elementos do HUD com z-index explícito maior que 1 (`.mars-*`,
+   `.furniture-placement-bar`, até 30) são estado de JOGO EM ANDAMENTO — impossíveis de existir
+   durante o carregamento inicial, então não competem de verdade com este overlay. `z-index: 1`
+   já basta pra ficar acima do canvas/HUD padrão (sem z-index explícito, "auto") e continua bem
+   abaixo de `.modal-overlay`. */
 .world3d-setup-loading {
   position: fixed;
   inset: 0;
@@ -650,7 +658,7 @@ a.nickname-generate-btn {
   background: #a6d1ed;
   color: var(--ink);
   font-weight: 700;
-  z-index: 40;
+  z-index: 1;
 }
 
 /* Mundo 3D */
