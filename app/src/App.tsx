@@ -585,10 +585,15 @@ function GameApp() {
             // compartilhado entre badge e painel, não sobra janela de staleness nenhuma pro clique
             // herdar (nem virada de semana, nem relógio adiantado-e-voltado, nem timer atrasado).
             const nowIso = new Date().toISOString()
-            setWeeklyEventPanel({
-              event: getCurrentWeeklyEvent(new Date(nowIso)),
-              status: weeklyEventObjectiveStatus(progress, nowIso),
-            })
+            const event = getCurrentWeeklyEvent(new Date(nowIso))
+            // Achado do review automático do Copilot: o badge (`weeklyEventSnapshot`) só atualiza
+            // no timer de 60s — clicar bem na janela de até 60s depois de uma virada de semana
+            // abriria o painel com um evento MAIS NOVO que o badge ainda visível no HUD, uma
+            // inconsistência visual (badge de uma semana, painel de outra). Mesma otimização de
+            // sempre (compara `event.id`, só troca a referência quando muda de verdade) — sincroniza
+            // o badge com o que acabou de ser calculado, em vez de esperar o próximo tick.
+            setWeeklyEventSnapshot((prev) => (prev.event.id === event.id ? prev : { event }))
+            setWeeklyEventPanel({ event, status: weeklyEventObjectiveStatus(progress, nowIso) })
           }}
           weeklyEvent={weeklyEventSnapshot.event}
           onOpenMyHouse={() => setShowMyHouse(true)}

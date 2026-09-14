@@ -43,14 +43,14 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
 - `docs/event-catalog.md` atualizado com a linha do evento novo e uma nota explicando que "retorno
   semanal" já é coberto pela infraestrutura D1/D7 existente e "feedback qualitativo infantil" é
   pesquisa com usuário real, fora de escopo de código.
-- Testes: 9 novos em `progression.test.ts` (concede na 1ª vez, idempotente na mesma semana, concede
+- Testes: 10 novos em `progression.test.ts` (concede na 1ª vez, idempotente na mesma semana, concede
   de novo numa semana nova, `isWeeklyEventObjectiveDone` reflete o estado real, perfil vazio nunca
   mostra concluído, regressão do ataque de adiantar-e-voltar o relógio,
   `wouldGrantWeeklyEventObjectiveReward` nunca diverge de `applyWeeklyEventObjectiveProgress`, os 3
-  estados de `weeklyEventObjectiveStatus`, recuo de relógio DENTRO da mesma semana também bloqueia)
-  e 1 novo em `server-accounts/src/domain.test.ts`. Suíte completa ao final (após todas as rodadas
-  de review): app 208/208, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e `npm run build`
-  limpos.
+  estados de `weeklyEventObjectiveStatus`, recuo de relógio DENTRO da mesma semana também bloqueia,
+  `nowIso` IGUAL ao instante da recompensa mostra "concluído") e 1 novo em
+  `server-accounts/src/domain.test.ts`. Suíte completa ao final (após todas as rodadas de review):
+  app 208/208, server-accounts 149/149, `tsc -b`/`tsc --noEmit` e `npm run build` limpos.
 
 ## Decisões técnicas tomadas
 
