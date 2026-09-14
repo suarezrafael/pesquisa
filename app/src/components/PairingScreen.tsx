@@ -115,7 +115,7 @@ export function PairingScreen({
             {/* lab-137 (backlog reportado na sequência do lab-133): o link pra `/familia` só
                 existia na tela de ANTES de vincular — quem cuida da criança e já vinculou não
                 tinha como voltar pra ver relatório/gerenciar assinatura de dentro do jogo. */}
-            <a href="/familia" target="_blank" rel="noreferrer" className="nickname-generate-btn">
+            <a href="/familia" target="_blank" rel="noopener noreferrer" className="nickname-generate-btn">
               Abrir área dos responsáveis
             </a>
           </>
@@ -134,7 +134,7 @@ export function PairingScreen({
             {/* Pedido do usuário (2026-08-24): não tinha nenhum link de verdade pra `/familia` em
                 lugar nenhum do jogo, só esse texto — quem cuida da criança não tinha como achar a
                 área dos responsáveis sem já saber o endereço de cor. */}
-            <a href="/familia" target="_blank" rel="noreferrer" className="nickname-generate-btn">
+            <a href="/familia" target="_blank" rel="noopener noreferrer" className="nickname-generate-btn">
               Abrir área dos responsáveis
             </a>
             <form onSubmit={handleSubmit}>

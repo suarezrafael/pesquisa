@@ -210,6 +210,12 @@ decisão").
   não faz parte da SEQUÊNCIA obrigatória do funil (pode ou não acontecer entre
   `family_landing_viewed` e `parent_signup_started`), é lido em paralelo pra saber quantos
   responsáveis que veem a proposta clicam especificamente pra ver o exemplo do relatório.
+  **Auditoria do lab-183**: `docs/growth-retention-monetization-backlog.md` (§12, "Metricas do
+  responsavel") cita o nome `checkout_started_from_parent_area` — não é um evento à parte de
+  `checkout_started`, é o MESMO evento com um nome mais descritivo na lista de métricas esperadas;
+  `checkout_started` só tem 1 site de disparo no código inteiro (`Dashboard.handleSubscribe`,
+  atrás do portão de matemática + login do responsável em `/familia`), então já satisfaz o critério
+  "checkout iniciado a partir da área dos pais" por construção, sem precisar de um evento novo.
 - **`title_play_click_rate`** — `play_click` / total de sessões (`session_start`).
 - **"Visitas por criança"** (métrica esperada de "Lab 171 - Casa visitável somente leitura",
   docs/market-metrics-engagement-backlog.md) — aproximada por `house_visited` (lab-175), lido em
