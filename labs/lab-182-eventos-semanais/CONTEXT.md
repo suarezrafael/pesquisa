@@ -299,6 +299,16 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   ISO" em `isWeeklyEventObjectiveDone`/`wouldGrantWeeklyEventObjectiveReward` já impede uma segunda
   concessão no mesmo instante, então nada de novo fica liberado pro lado da manipulação de relógio.
   Teste de regressão novo cobre o timestamp exato (208 testes no total agora).
+- **Rodada 18**: 1 achado real — `weeklyEventSnapshot` mora em `GameApp`, cuja árvore inclui o
+  `<World3D>` inteiro (não memoizado); o timer de 60s atualizava o estado incondicionalmente, mesmo
+  nos ~10079 minutos de cada semana em que o evento não muda de verdade (só troca na virada da
+  semana ISO), re-renderizando esse componente grande à toa a cada minuto — custo real de React
+  recorrente na tela 3D em tempo real, sensível em aparelho fraco. Corrigido comparando `event.id`
+  contra o snapshot anterior dentro do próprio atualizador do `useState`: devolve a MESMA
+  referência quando não muda, e o React (via `Object.is`) pula o re-render por completo — sem
+  precisar isolar o estado num componente à parte, a alternativa mais invasiva sugerida pelo
+  review. `nowIso` não precisa ficar fresco no timer além disso, já que a freshness usada pra
+  decidir status na hora da recompensa é avançada separadamente (rodada 16).
 
 ## Pendências / dívidas conhecidas
 
