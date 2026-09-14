@@ -2110,7 +2110,12 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     const benchCanvas = document.createElement('canvas')
     benchCanvas.width = width
     benchCanvas.height = height
-    const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: false })
+    // Achado do review automático do Copilot: `preserveDrawingBuffer: true` (igual ao engine real,
+    // `preserveDrawingBuffer: true` mais abaixo) — em alguns drivers/GPUs, preservar o back buffer
+    // impede otimizações de descarte/renderização em blocos (comum em GPU mobile), um custo real
+    // que o engine de verdade paga mas que `false` aqui deixaria de fora da medição, inflando o
+    // FPS do benchmark em relação ao que o jogo de verdade vai conseguir sustentar.
+    const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: true })
     // Achado do review automático do Copilot: registrado ANTES de `setSize` — se `setSize` lançar
     // (contexto WebGL parcialmente perdido, etc.), o `catch` mais abaixo ainda encontra o engine
     // na lista e consegue descartá-lo; empurrar depois deixaria esse exato caminho de erro sem
@@ -2203,6 +2208,15 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
         const z = Math.sin(fakeEntityPhases[i]) * 5
         fakeEntityAccumulator += Math.atan2(z, x) + Math.sqrt(x * x + z * z)
       }
+      // Achado do review automático do Copilot: `fakeEntityAccumulator` nunca era lido por nada
+      // observável (nem a cena, nem o resultado) — um JIT otimizador pode legitimamente provar que
+      // o cálculo inteiro acima não tem efeito nenhum e eliminá-lo depois de "aquecer", zerando o
+      // custo de CPU que esse bloco existe pra simular (um aparelho com CPU fraca voltaria a
+      // classificar "forte" por engano). Aplica o valor a algo que a Babylon LÊ de verdade a cada
+      // quadro (posição da câmera, entra na matriz de view) — desvio imperceptível (±0,001,
+      // `Math.sin` limita o range mesmo com o acumulador crescendo sem parar), mas torna o cálculo
+      // observável o bastante pra não poder ser cortado com segurança.
+      camera.position.y = 6 + Math.sin(fakeEntityAccumulator) * 0.001
     }
 
     const result = await new Promise<boolean>((resolve) => {
@@ -2434,6 +2448,15 @@ export function World3D({
       cancelled = true
     }
   }, [])
+  // Achado do review automático do Copilot: `gpuTier === 'pending'` só cobre o benchmark de GPU —
+  // depois dele resolver, o efeito pesado ainda tem `setup()` assíncrono pela frente (Havok + 18
+  // GLBs), que só registra as pontes de cena (`__recenterCamera` etc.) no FIM. Nessa janela o
+  // canvas/HUD de toque já ficava interativo de novo (só `gpuTier` saiu de `'pending'`), mas tocar
+  // continuava sendo descartado em silêncio pelas mesmas pontes ainda não registradas. Estado
+  // React (não só uma variável local do efeito) porque `hudInert`, calculado no corpo do
+  // componente, precisa reagir a isso — `setupSettled` (variável local do efeito, usada só pro
+  // agendamento do auto-tune) resolve uma necessidade diferente e continua existindo à parte.
+  const [setupReady, setSetupReady] = useState(false)
   const joystickRef = useRef({ x: 0, y: 0 })
   // Botões de toque (pedido do usuário: "o android não tem teclado" — sem eles, pular/correr só
   // funcionava via teclado, inacessível em celular/tablet). Mesmo padrão do `joystickRef`: a UI
@@ -12005,6 +12028,11 @@ export function World3D({
     let setupSettled = false
     setup().finally(() => {
       setupSettled = true
+      // Achado do review automático do Copilot: além da variável local (uso imperativo, agendamento
+      // do auto-tune), também sinaliza como estado React — `hudInert` (corpo do componente) precisa
+      // saber quando `setup()` termina pra manter o HUD/canvas inerte durante TODO o carregamento
+      // pesado, não só durante o benchmark de GPU (`gpuTier === 'pending'`).
+      if (!disposed) setSetupReady(true)
     })
 
     engine.runRenderLoop(() => {
@@ -12280,15 +12308,15 @@ export function World3D({
   // dele — um usuário de teclado conseguia dar Tab por dentro de um modal visualmente aberto e
   // cair nos botões escondidos atrás. `inert` no HUD inteiro resolve isso numa mudança central,
   // sem precisar de um focus-trap manual em cada um dos 12 painéis.
-  // Achado do review automático do Copilot: `gpuTier === 'pending'` (benchmark de GPU ainda
-  // rodando) some com QUALQUER bridge de `setup()` (não só as duas já protegidas por polling,
-  // `placingFurnitureRequestId`/`coopAnswerSignalId` — também `handleRecenterCamera`,
-  // `handleTouchInteractPress` etc.) — tocar um desses botões durante o benchmark descartava a
-  // ação em silêncio, sem nenhum jeito de saber que "não fez nada" foi por causa do carregamento
-  // ainda em andamento. Reaproveita o MESMO mecanismo de `inert` já usado pra modais — desabilita
-  // toda a UI que depende da cena (inclusive o canvas/joystick/botões de toque, ver `inert=
-  // {hudInert}` abaixo) enquanto o benchmark roda, em vez de proteger handler por handler.
-  const hudInert = gpuTier === 'pending' || suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
+  // Achado do review automático do Copilot: nem o benchmark de GPU nem o resto de `setup()`
+  // assíncrono depois dele (Havok+18 GLBs) tinham suas bridges (`__recenterCamera`,
+  // `handleTouchInteractPress`, `placingFurnitureRequestId`/`coopAnswerSignalId` etc.) registradas
+  // ainda — tocar um desses botões durante TODO esse carregamento descartava a ação em silêncio.
+  // Reaproveita o MESMO mecanismo de `inert` já usado pra modais — `!setupReady` (`false` desde
+  // antes do benchmark começar até `setup()` de verdade terminar, ver comentário perto de sua
+  // declaração) desabilita toda a UI que depende da cena (canvas/joystick/botões de toque, ver
+  // `inert={hudInert}` abaixo) durante a janela inteira, em vez de proteger handler por handler.
+  const hudInert = !setupReady || suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
 
   return (
     <div className="world3d-container">
