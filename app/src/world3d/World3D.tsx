@@ -2880,6 +2880,16 @@ export function World3D({
     if (!canvas || gpuTier === 'pending') return
 
     let disposed = false
+    // Achado do review automático do Copilot: declarado cedo (`let`, atribuído só no fim do
+    // efeito, onde os listeners/observers que ele desfaz já existem) pra ficar chamável tanto do
+    // cleanup normal do efeito (`return () => {...}`, no fim) quanto do caminho de falha de
+    // `setup()` — antes, a falha só parava o render loop e os timers do auto-tune, deixando
+    // listeners globais de teclado/pointer e o contexto WebGL vivos indefinidamente atrás da tela
+    // de erro (o componente continua montado de propósito, pra exibir `setupFailed`, então o
+    // cleanup do efeito nunca dispara sozinho nesse caminho). Seguro de chamar duas vezes (uma
+    // pela falha, outra no desmonte de verdade depois) — a própria função vira no-op na segunda
+    // chamada.
+    let teardown: (() => void) | null = null
 
     // Antes (labs 56-72) isso vinha de um regex de user-agent (`/Android|iPad|iPhone|.../`), que
     // tratava QUALQUER iPhone como GPU fraca — mesmo perfil de um Poco C75/Redmi Pad 2 reais,
@@ -12078,27 +12088,13 @@ export function World3D({
         console.error('Falha ao carregar o mundo 3D:', error)
         if (disposed) return
         setSetupFailed(true)
-        // Achado do review automático do Copilot: sem isto, uma falha de carregamento (rede caindo
-        // no meio de Havok/algum GLB) deixava `engine.runRenderLoop()` renderizando pra sempre por
-        // trás da tela de erro (gastando CPU/GPU indefinidamente numa cena quebrada que ninguém
-        // vê) — e `setupSettled = true` deixaria o auto-tune agendar seu 1º ciclo mesmo assim,
-        // medindo/ajustando a resolução de uma cena que nunca vai terminar de montar.
-        engine.stopRenderLoop()
-        if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
-        if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
-        if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
-        // Limitação aceita, não corrigida (achado do review automático do Copilot): isto para o
-        // custo mais caro (o render loop) e os timers pendentes, mas NÃO desfaz tudo que `setup()`
-        // já pode ter registrado antes de falhar (listeners globais de teclado/pointer,
-        // observers/intervalos internos da cena) — esse teardown completo só roda no cleanup do
-        // efeito (`return () => {...}` no fim), que não dispara aqui porque o componente continua
-        // montado de propósito, pra exibir `setupFailed`. Fazer um teardown idempotente reutilizável
-        // entre "desmontou de verdade" e "setup() falhou mas continua montado" exigiria extrair boa
-        // parte da limpeza atual pra uma função nomeada chamada dos dois lugares — escopo maior que
-        // o justificado aqui: falha de rede a MEIO do carregamento de Havok/18 GLBs é um caminho já
-        // raro, e mesmo sem esse teardown completo o resultado é estritamente melhor que o
-        // comportamento de antes desta correção (tela congelada pra sempre, sem nenhuma mensagem,
-        // com o MESMO render loop e listeners já vivos de qualquer forma).
+        // Achado do review automático do Copilot (2 rodadas — a 1ª correção só parava o render
+        // loop e os timers do auto-tune, deixando listeners globais de teclado/pointer e o
+        // contexto WebGL vivos indefinidamente atrás da tela de erro, já que o componente continua
+        // montado de propósito pra exibir `setupFailed`, então o cleanup do efeito nunca disparava
+        // sozinho nesse caminho): chama o MESMO teardown do desmonte de verdade — seguro de chamar
+        // aqui e de novo depois no cleanup real do efeito, a função vira no-op na segunda chamada.
+        teardown?.()
       },
     )
 
@@ -12242,7 +12238,14 @@ export function World3D({
       }, 500)
     }
 
-    return () => {
+    // Achado do review automático do Copilot: atribuído aqui (fim do efeito, onde todos os
+    // listeners/observers abaixo já existem de verdade), mas DECLARADO cedo (`let teardown`, perto
+    // de `disposed`) — a rejeição de `setup()` (bem acima) chama a MESMA função em vez de duplicar
+    // uma versão parcial da limpeza. `if (disposed) return` no topo é a garantia de idempotência:
+    // chamado uma vez pela falha e de novo no desmonte de verdade depois, só a PRIMEIRA chamada
+    // faz alguma coisa.
+    teardown = () => {
+      if (disposed) return
       disposed = true
       if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
       if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
@@ -12260,6 +12263,8 @@ export function World3D({
       scene.dispose()
       engine.dispose()
     }
+
+    return () => teardown?.()
     // `gpuTier` é a única dependência real: o efeito só roda de verdade quando o benchmark
     // termina (`'weak'`/`'strong'`) — antes disso (`'pending'`) o guard acima já retornou sem
     // montar nada. Continua rodando só UMA VEZ (mesmo padrão de antes, quando a dependência era
