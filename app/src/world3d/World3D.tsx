@@ -2111,6 +2111,13 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     benchCanvas.width = width
     benchCanvas.height = height
     const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: false })
+    // Achado do review automático do Copilot: `benchCanvas` nunca é anexado ao DOM — sem layout,
+    // `clientWidth`/`clientHeight` ficam em 0. O `Engine` pode ler esses valores (0) ao inicializar
+    // e sobrescrever o `width`/`height` já setados acima, fazendo o benchmark medir uma resolução
+    // de renderização minúscula/zero (custo de GPU quase nenhum, FPS sempre alto, "forte" garantido
+    // não importa o aparelho). `setSize` força o tamanho de renderização explicitamente, depois de
+    // qualquer auto-detecção da engine — não depende de layout de DOM nenhum.
+    benchEngine.setSize(width, height)
     disposables.push(benchEngine)
     const benchScene = new Scene(benchEngine)
     disposables.push(benchScene)
@@ -2225,8 +2232,32 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
         } catch {
           /* best-effort */
         }
+        document.removeEventListener('visibilitychange', onVisibilityChange)
         resolve(isWeak)
       }
+
+      // Achado do review automático do Copilot: `waitForVisible` só cobre a aba estar oculta ANTES
+      // de começar — se ficar oculta NO MEIO da amostragem, `requestAnimationFrame` pausa/atrasa,
+      // mas o `window.setTimeout` do teto de segurança é baseado em relógio de parede e continua
+      // contando por fora, podendo disparar e classificar "fraco" um aparelho só porque a aba
+      // ficou em segundo plano por um tempo, não porque é realmente lento. O teto de segurança
+      // agora pausa (cancela) enquanto oculto e reinicia do zero quando volta a ficar visível; o
+      // loop de render também pula quadros (sem contar progresso nem renderizar) enquanto oculto.
+      let safetyTimeoutHandle: number | null = null
+      function scheduleSafetyTimeout() {
+        if (safetyTimeoutHandle !== null) window.clearTimeout(safetyTimeoutHandle)
+        safetyTimeoutHandle = window.setTimeout(() => settle(true), SAFETY_TIMEOUT_MS)
+      }
+      function onVisibilityChange() {
+        if (document.visibilityState === 'visible') {
+          scheduleSafetyTimeout()
+        } else if (safetyTimeoutHandle !== null) {
+          window.clearTimeout(safetyTimeoutHandle)
+          safetyTimeoutHandle = null
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibilityChange)
+      scheduleSafetyTimeout()
 
       let frame = 0
       // Achado do review automático do Copilot: `engine.getFps()` é um contador interno do
@@ -2234,26 +2265,42 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
       // curta (30 quadros, ~500ms a 60Hz) várias leituras podem repetir o mesmo valor (inicial ou
       // desatualizado), mascarando um aparelho que na real está rodando bem mais devagar (ex.:
       // 30-39 FPS classificado por engano como "forte"). Mede o tempo de relógio de verdade
-      // decorrido entre o fim do aquecimento e o fim da amostragem — quadros/segundos reais, sem
-      // depender de quando o contador interno decide se atualizar.
-      let sampleWindowStart = 0
+      // decorrido, quadro a quadro — quadros/segundos reais, sem depender de quando o contador
+      // interno decide se atualizar.
+      //
+      // Acumula por DELTA entre quadros CONSECUTIVOS visíveis (não um único "início"/"fim") —
+      // achado do review automático do Copilot: se a aba ficar oculta bem no meio da amostragem,
+      // o tempo parado contaria como se fosse tempo de renderização (denominador inflado, FPS
+      // medido artificialmente baixo, "fraco" por engano). `lastFrameTime = 0` ao pular um quadro
+      // oculto reseta a referência — o primeiro quadro visível depois de um período oculto não
+      // soma o hiato à amostra, só os quadros DEPOIS dele voltam a contar delta normalmente.
+      let sampleElapsedMs = 0
+      let lastFrameTime = 0
       benchEngine.runRenderLoop(() => {
         if (shouldAbort()) {
           settle(true)
           return
         }
+        // Pula o quadro (sem renderizar, sem contar progresso) enquanto a aba está oculta — não
+        // desanda a amostra já em andamento, só espera; o teto de segurança acima trata do "espera
+        // demais" de verdade.
+        if (document.visibilityState !== 'visible') {
+          lastFrameTime = 0
+          return
+        }
+        const now = performance.now()
         simulateEntityWorkload()
         benchScene.render()
         frame++
-        if (frame === WARMUP_FRAMES) sampleWindowStart = performance.now()
-        if (frame >= WARMUP_FRAMES + SAMPLE_FRAMES) {
-          const elapsedSeconds = (performance.now() - sampleWindowStart) / 1000
-          const avgFps = SAMPLE_FRAMES / elapsedSeconds
-          settle(avgFps < WEAK_GPU_AVG_FPS_THRESHOLD)
+        if (frame > WARMUP_FRAMES) {
+          if (lastFrameTime !== 0) sampleElapsedMs += now - lastFrameTime
+          if (frame >= WARMUP_FRAMES + SAMPLE_FRAMES) {
+            const avgFps = SAMPLE_FRAMES / (sampleElapsedMs / 1000)
+            settle(avgFps < WEAK_GPU_AVG_FPS_THRESHOLD)
+          }
         }
+        lastFrameTime = now
       })
-
-      window.setTimeout(() => settle(true), SAFETY_TIMEOUT_MS)
     })
 
     return result
@@ -11883,7 +11930,16 @@ export function World3D({
       }
     }
 
-    setup()
+    // Achado do review automático do Copilot: o auto-tune (mais abaixo) agora roda pra QUALQUER
+    // classificação de `gpuTier`, não só "fraco" — mas seu primeiro ciclo era agendado 6s depois
+    // de CHAMAR `setup()`, não depois dele TERMINAR (`await HavokPhysics()` + `Promise.all` de 18
+    // GLBs). Se o carregamento passar de 6s, a primeira amostra mede a cena ainda incompleta e
+    // pode gravar um aparelho FORTE numa escala baixa (`firstCycle` aceita o alvo da 1ª amostra
+    // sem gradualismo). `setupSettled` sinaliza o fim de verdade pro agendamento do 1º ciclo.
+    let setupSettled = false
+    setup().finally(() => {
+      setupSettled = true
+    })
 
     engine.runRenderLoop(() => {
       if (!disposed) scene.render()
@@ -12003,7 +12059,21 @@ export function World3D({
       // Espera 6s antes do PRIMEIRO ciclo (não só entre ciclos) — sem isso mediria FPS ainda
       // durante o carregamento inicial (física/glTF/texturas), que é enganosamente baixo e não
       // representa o jogo já rodando de verdade.
-      fpsAutoTuneTimeout = window.setTimeout(runAutoTuneCycle, 6000)
+      //
+      // Achado do review automático do Copilot: os 6s contavam a partir de CHAMAR `setup()`, não
+      // de `setup()` TERMINAR — sondar `setupSettled` (ver comentário perto de `setup()` acima)
+      // garante que o relógio de 6s só começa depois do carregamento pesado (Havok+18 GLBs) já ter
+      // acabado de verdade, não importa quanto tempo ele leve.
+      let waitForSetupInterval: number | null = null
+      waitForSetupInterval = window.setInterval(() => {
+        if (disposed) {
+          if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
+          return
+        }
+        if (!setupSettled) return
+        if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
+        fpsAutoTuneTimeout = window.setTimeout(runAutoTuneCycle, 6000)
+      }, 500)
     }
 
     return () => {
