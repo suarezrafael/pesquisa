@@ -342,6 +342,24 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   pro resto da página. Corrigido no hook compartilhado (beneficia todos os painéis existentes, não
   só o `WeeklyEventPanel` novo): Tab no último elemento focável volta pro primeiro, Shift+Tab no
   primeiro vai pro último.
+- **Rodada 21**: 5 achados reais. (1) O fix da rodada 20 resolveu a staleness do PAINEL, mas abriu
+  um novo caso: o BADGE (`weeklyEventSnapshot`) só atualiza sozinho no timer de 60s — clicar bem na
+  janela de até 60s depois de uma virada de semana abre o painel com um evento MAIS NOVO que o
+  badge ainda visível no HUD, uma inconsistência visual (não de segurança). Corrigido sincronizando
+  o badge com o evento recém-calculado dentro do próprio `onOpenWeeklyEvent` (mesma otimização de
+  comparar `event.id` de sempre — só troca a referência quando muda de verdade). (2) achado mais
+  sério, NÃO limitado a este lab: `inert` (via `suspendTriggers`/`chatOpen`/`rankingOpen`/etc.) só
+  desativa a subárvore do DOM — o listener GLOBAL de teclado em `World3D.tsx` continuava lendo/
+  consumindo teclas de movimento/pulo/interagir com QUALQUER modal aberto por cima, incluindo o
+  `WeeklyEventPanel` novo (e todos os outros modais pré-existentes — chat, ranking, mochila,
+  seletor de planeta, portão parental). Corrigido com `hudInertRef` (mesmo padrão de `suspendRef`
+  já usado no arquivo): `onKeyDown` ignora a tecla inteira enquanto suspenso (fecha o caminho
+  síncrono de `E`/interagir e o latch de espaço/pulo), e o loop de física para de LER `keysDown`
+  enquanto suspenso (não precisa "limpar" o dicionário na transição, só ignorar valores já `true`
+  durante a suspensão — volta a valer sozinho quando o modal fecha). (3) comentário em `types.ts`
+  ainda descrevia a guarda anti-recuo como `<=`, desatualizado desde a rodada 17 (`<` estrito). (4)
+  contagem de testes desatualizada no `CONTEXT.md` (9, real é 10 desde a rodada 17). (5) contagem
+  de rodadas na descrição da PR desatualizada (dizia 17, já eram mais) — reconciliada.
 
 ## Pendências / dívidas conhecidas
 
