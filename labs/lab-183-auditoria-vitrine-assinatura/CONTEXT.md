@@ -97,11 +97,15 @@ copy/atributo HTML); `npm run build` sem regressão de bundle.
   (o link "Abrir área dos responsáveis" É o CTA adulto que este lab audita) — deixar de fora seria
   uma auditoria incompleta da mesma superfície, mesmo o `noopener` não sendo uma vulnerabilidade
   ativa em navegador atualizado (ver achado acima).
-- **Não expandir a correção de `aria-label` de "abre em nova aba" pros outros links
-  `target="_blank"` do repo** (`TitleScreen.tsx`, `FamilyPortal.tsx`) — são o MESMO padrão, mas
-  fora das superfícies que este lab já estava tocando; corrigir todos de uma vez ampliaria o diff
-  além do que a auditoria pediu. Registrado como pendência conhecida pro próximo lab que tocar
-  qualquer um desses arquivos.
+- **Estender a correção de `aria-label` de "abre em nova aba" pra `TitleScreen.tsx` e
+  `FamilyPortal.tsx` também** (achado do review automático, 2ª rodada) — inicialmente corrigido só
+  em `PairingScreen.tsx` por parecer fora do diff que este lab já estava tocando, mas
+  `TitleScreen`/`FamilyPortal` SÃO superfícies explicitamente auditadas por este próprio lab (ver
+  lista acima); deixar o mesmo padrão sem correção nelas, enquanto corrigido em `PairingScreen`,
+  criaria orientação inconsistente pra usuário de leitor de tela entre os pontos de entrada da área
+  dos pais — revertida a decisão original, todos os 6 links `target="_blank"` do app (2 em
+  `PairingScreen.tsx`, 1 em `TitleScreen.tsx`, 4 em `FamilyPortal.tsx`) agora têm `aria-label`
+  anunciando a nova aba.
 - **Não criar `checkout_started_from_parent_area` como evento novo.** Duplicar
   `checkout_started` com um nome mais descritivo criaria dois eventos medindo exatamente a mesma
   coisa (mesmo site de disparo, mesma condição de gate) — mesmo raciocínio já usado no
@@ -110,19 +114,15 @@ copy/atributo HTML); `npm run build` sem regressão de bundle.
 
 ## Pendências / dívidas conhecidas
 
-- **`target="_blank"` sem indicação de "abre em nova aba" pro nome acessível** — corrigido só nos
-  2 links de `PairingScreen.tsx` tocados por este lab; o mesmo padrão existe em `TitleScreen.tsx`
-  (link "Área dos responsáveis") e `FamilyPortal.tsx` (links pra `/privacidade`/`/termos`, 2
-  ocorrências cada). Não corrigido agora por ficar fora do escopo das superfícies que este lab
-  estava auditando — candidato a correção no próximo lab que tocar qualquer um desses arquivos.
 - **`checkout_started` não aparece em `weeklyFunnel`** (`GET /admin/metrics`) — a instrumentação
   já existe (lab-166), mas o dashboard não expõe essa métrica hoje. Exposição trivial se algum dia
   for prioridade (ver nota em `docs/event-catalog.md`).
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
-- Nenhuma — todos os itens do `FEATURES.md` foram auditados; o único ajuste concreto necessário
-  (link sem `noopener`) foi corrigido.
+- Nenhuma — todos os itens do `FEATURES.md` foram auditados; os ajustes concretos necessários
+  (consistência de `rel="noopener noreferrer"` e `aria-label` de "abre em nova aba" em todos os 6
+  links `target="_blank"` do app) foram corrigidos.
 
 ## O que o próximo laboratório deve desenvolver
 
@@ -140,8 +140,9 @@ feedback de playtest.
 - Como rodar/verificar o que foi construído neste laboratório:
   - `cd app && npm run test` (208/208, inalterado).
   - `cd app && npm run build` (build de produção limpo).
-  - Ler `app/src/components/PairingScreen.tsx` (linhas do link "Abrir área dos responsáveis") e
-    confirmar `rel="noopener noreferrer"` + `aria-label` de nova aba nas duas ocorrências.
+  - Ler os 6 links `target="_blank"` do app (`PairingScreen.tsx` x2, `TitleScreen.tsx` x1,
+    `FamilyPortal.tsx` x4) e confirmar `rel="noopener noreferrer"` + `aria-label` de nova aba em
+    todos.
   - Ler `docs/event-catalog.md` (nota nova na seção "Confiança do responsável" explicando a
     equivalência `checkout_started` ≡ `checkout_started_from_parent_area` e o gap de exposição no
     `weeklyFunnel`).
@@ -168,3 +169,15 @@ feedback de playtest.
   sinal de confiança "Assinatura só para itens visuais" — corrigido esclarecendo que é divulgação
   informativa, não transacional (sem preço/CTA/urgência ao lado), o que já satisfaz o critério real
   do backlog.
+- **Rodada 2**: 2 achados reais, ambos de completude/consistência da própria documentação da
+  auditoria. (1) O `Pendências` da rodada 1 registrava o `aria-label` de nova aba como corrigido só
+  em `PairingScreen.tsx`, deixando `TitleScreen.tsx`/`FamilyPortal.tsx` de fora por decisão
+  explícita de não expandir o diff — mas essas duas SÃO superfícies auditadas por este mesmo lab
+  (ver lista de "O que foi feito"), então deixar o mesmo padrão sem correção nelas geraria
+  orientação inconsistente pra usuário de leitor de tela entre pontos de entrada equivalentes da
+  área dos pais. Revertida a decisão original: os 6 links `target="_blank"` do app (2 em
+  `PairingScreen.tsx`, 1 em `TitleScreen.tsx`, 4 em `FamilyPortal.tsx` — 2 na `FamilyValueProp`, 2
+  no consentimento de cadastro da `LoginScreen`) agora têm `aria-label` anunciando a nova aba. (2) A
+  seção "Funcionalidades planejadas que NÃO foram concluídas" ainda dizia "o único ajuste concreto
+  necessário (link sem `noopener`) foi corrigido", omitindo o `aria-label` do resumo — corrigido
+  pra mencionar as duas correções.
