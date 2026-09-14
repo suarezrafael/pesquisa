@@ -2565,6 +2565,14 @@ export function World3D({
   const [placingFurnitureInvalid, setPlacingFurnitureInvalid] = useState(false)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
+  const debugWrapperRef = useRef<HTMLDivElement>(null)
+  // Pedido do usuário, com screenshot de celular: "o painel de FPS ocupa muito espaço... precisa
+  // de uma opção pra encolher ele quando não está depurando". Começa expandido (mantém o
+  // comportamento padrão já pedido no lab-67 — "preciso de informações de FPS na tela em
+  // produção"), mas agora dá pra encolher pro ícone pequeno via toque. Não persiste entre sessões
+  // de propósito — mesmo padrão de `muted` logo abaixo, um ajuste de sessão, não uma preferência
+  // duradoura (o pedido original do lab-67 continua valendo por padrão a cada carregamento).
+  const [debugPanelExpanded, setDebugPanelExpanded] = useState(true)
   const [muted, setMuted] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -2859,11 +2867,13 @@ export function World3D({
   // ganhar mais um ícone num lab futuro (sem precisar lembrar de reajustar este valor de novo).
   useEffect(() => {
     const hudOverlay = document.querySelector<HTMLElement>('.hud-overlay')
-    const debugEl = debugRef.current
-    if (!hudOverlay || !debugEl) return
+    // Reposiciona o WRAPPER (botão de encolher + texto), não mais só o texto — o botão precisa
+    // ficar na mesma altura mesmo com o texto escondido (`debugPanelExpanded === false`).
+    const wrapperEl = debugWrapperRef.current
+    if (!hudOverlay || !wrapperEl) return
     const HUD_DEBUG_GAP_PX = 6
     function reposition() {
-      debugEl!.style.top = `${hudOverlay!.getBoundingClientRect().height + HUD_DEBUG_GAP_PX}px`
+      wrapperEl!.style.top = `${hudOverlay!.getBoundingClientRect().height + HUD_DEBUG_GAP_PX}px`
     }
     reposition()
     const observer = new ResizeObserver(reposition)
@@ -12421,7 +12431,23 @@ export function World3D({
           {setupFailed ? 'Não foi possível carregar o mundo. Tente recarregar a página.' : 'Carregando o mundo 3D…'}
         </div>
       )}
-      <div ref={debugRef} className="world3d-debug" />
+      {/* Achado do review automático do Copilot: este botão fica fora de `HudHeader`/`.hud-overlay`,
+          então não herdava `inert` da lista de controles logo abaixo — com um modal aberto
+          (chat/ranking/mochila/seletor de planeta/portão parental), o toggle continuava focável e
+          clicável por trás do modal, quebrando o isolamento de foco/interação que o resto do HUD
+          já tem (mesmo `hudInert` usado no `<canvas>` acima e em cada controle mais abaixo). */}
+      <div ref={debugWrapperRef} className="world3d-debug-wrapper" inert={hudInert}>
+        <button
+          type="button"
+          className="world3d-debug-toggle"
+          onClick={() => setDebugPanelExpanded((expanded) => !expanded)}
+          aria-expanded={debugPanelExpanded}
+          aria-label={debugPanelExpanded ? 'Encolher painel de depuração' : 'Expandir painel de depuração'}
+        >
+          {debugPanelExpanded ? '▾' : '🐞'}
+        </button>
+        {debugPanelExpanded && <div ref={debugRef} className="world3d-debug" />}
+      </div>
       <HudHeader
         profile={profile}
         progress={progress}

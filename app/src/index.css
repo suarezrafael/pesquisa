@@ -1007,22 +1007,69 @@ a.nickname-generate-btn {
   touch-action: none;
 }
 
-.world3d-debug {
+/* Achado do review automático do Copilot: este comentário descrevia `flex-direction: column`
+   (botão empilhado ACIMA do texto), desatualizado desde que a regra abaixo virou `row` (botão do
+   LADO do texto — ver comentário junto de `flex-direction: row` abaixo pro porquê da troca).
+   Envolve o botão de encolher/expandir + o texto (`.world3d-debug` abaixo) — carrega o
+   posicionamento (antes vivia direto em `.world3d-debug`) porque agora precisa se aplicar mesmo
+   quando o texto está escondido (painel encolhido, pedido do usuário com screenshot: "o painel de
+   FPS ocupa muito espaço... precisa de uma opção pra encolher").
+   lab-72, bug real visto num screenshot do celular do usuário: numa tela estreita, essa string
+   (uma linha só, sem largura máxima) ficava mais larga que o viewport inteiro — como é ancorada
+   pela borda DIREITA, a sobra ia parar por baixo/atrás do painel avatar+nome+moedas em vez de
+   simplesmente cortar, virando uma bagunça ilegível dos dois textos sobrepostos. `max-width` (em
+   `.world3d-debug`) + quebra de linha normal fazem ela virar 2-3 linhas curtas dentro da tela, sem
+   invadir o canto esquerdo onde o painel do HUD já está. Descida um pouco (`top`) pra ficar abaixo
+   da fileira de ícones do HUD em vez de disputar a mesma linha.
+   lab-180, bug real relatado num Poco C75 real: esse `top` fixo passou a ficar EM CIMA dos ícones
+   (cabeçalho cresceu/quebrou em mais linhas do que cabia aqui). `top` agora é escrito
+   dinamicamente por um `ResizeObserver` em `World3D.tsx` (mede a altura real do `.hud-overlay`) —
+   o valor abaixo só sobrevive como estado inicial pro instante entre o primeiro paint e o efeito
+   rodar, nunca mais a fonte de verdade. */
+.world3d-debug-wrapper {
   position: absolute;
-  /* lab-72, bug real visto num screenshot do celular do usuário: numa tela estreita, essa string
-     (uma linha só, sem largura máxima) ficava mais larga que o viewport inteiro — como é ancorada
-     pela borda DIREITA, a sobra ia parar por baixo/atrás do painel avatar+nome+moedas em vez de
-     simplesmente cortar, virando uma bagunça ilegível dos dois textos sobrepostos. `max-width` +
-     quebra de linha normal fazem ela virar 2-3 linhas curtas dentro da tela, sem invadir o canto
-     esquerdo onde o painel do HUD já está. Descida um pouco (`top`) pra ficar abaixo da fileira
-     de ícones do HUD em vez de disputar a mesma linha.
-     lab-180, bug real relatado num Poco C75 real: esse `top` fixo passou a ficar EM CIMA dos
-     ícones (cabeçalho cresceu/quebrou em mais linhas do que cabia aqui). `top` agora é escrito
-     dinamicamente por um `ResizeObserver` em `World3D.tsx` (mede a altura real do `.hud-overlay`)
-     — o valor abaixo só sobrevive como estado inicial pro instante entre o primeiro paint e o
-     efeito rodar, nunca mais a fonte de verdade. */
   top: 3.6rem;
   right: 0.75rem;
+  display: flex;
+  /* Achado do review automático do Copilot: `column` empilhava o botão ACIMA do texto — como o
+     texto já quebra em várias linhas (5 campos), isso somava a altura do botão (44px) em CIMA da
+     altura que o texto já ocupava, aumentando o espaço total do painel expandido em vez de manter
+     compacto, reintroduzindo justamente o problema original ("painel ocupa muito espaço"). `row`
+     com `align-items: flex-start` coloca o botão do LADO do texto (topo alinhado com a primeira
+     linha), sem somar altura nenhuma — só largura, que o texto já reserva via `max-width` abaixo.
+     Ordem no JSX é [botão, texto]; `align-items: flex-start` mantém os dois encostados no topo. */
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.25rem;
+  /* Achado do review automático do Copilot: sem isto, o WRAPPER (não só o texto) fica
+     `pointer-events: auto` por padrão — como ele é uma caixa flex posicionada sobre o canvas,
+     qualquer toque dentro do seu retângulo (inclusive o espaço/gap entre botão e texto, e a área
+     do texto, que só o FILHO tem `pointer-events: none`) acaba sendo capturado pelo wrapper em
+     vez de passar pro jogo por baixo — exatamente o bug que `.world3d-debug` já evitava antes
+     desta mudança. `none` aqui devolve esse comportamento; o botão abaixo reativa
+     `pointer-events: auto` só pra si mesmo. */
+  pointer-events: none;
+}
+
+/* Alvo de toque mínimo de 44px lógicos (docs/prompts/02-design-profissional.md §3) — só este
+   botão precisa de `pointer-events: auto`; o texto (`.world3d-debug`) continua `none`, senão
+   bloquearia toques no mundo 3D por baixo dele. */
+.world3d-debug-toggle {
+  pointer-events: auto;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #7CFC9A;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.world3d-debug {
   max-width: min(52vw, 300px);
   white-space: normal;
   text-align: right;
@@ -1031,7 +1078,8 @@ a.nickname-generate-btn {
      a tela (mesmo problema já resolvido no resto do HUD via `clamp(mín, vmin, máx)`, labs 57-59/
      120), então numa tela estreita esse texto (5 campos, já quebrado em várias linhas) dominava
      boa parte da área jogável. `vmin` acompanha o lado mais apertado da tela, encolhendo em
-     qualquer orientação.
+     qualquer orientação. Além disso, agora dá pra encolher o painel inteiro via
+     `.world3d-debug-toggle` acima, pra quem não está depurando de propósito.
      Achado do review automático do Copilot (PR #58), 2 rodadas: a 1ª tentativa reduziu o fundo
      (0.55 → 0.4) — mas esse painel é EXPLICITAMENTE mantido visível em produção por pedido do
      usuário (lab-67, "preciso de informações de FPS na tela em produção"), então o texto verde
