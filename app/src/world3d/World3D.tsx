@@ -2111,6 +2111,11 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     benchCanvas.width = width
     benchCanvas.height = height
     const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: false })
+    // Achado do review automático do Copilot: registrado ANTES de `setSize` — se `setSize` lançar
+    // (contexto WebGL parcialmente perdido, etc.), o `catch` mais abaixo ainda encontra o engine
+    // na lista e consegue descartá-lo; empurrar depois deixaria esse exato caminho de erro sem
+    // limpar nada, justo o cenário que `disposables` existe pra cobrir.
+    disposables.push(benchEngine)
     // Achado do review automático do Copilot: `benchCanvas` nunca é anexado ao DOM — sem layout,
     // `clientWidth`/`clientHeight` ficam em 0. O `Engine` pode ler esses valores (0) ao inicializar
     // e sobrescrever o `width`/`height` já setados acima, fazendo o benchmark medir uma resolução
@@ -2118,7 +2123,6 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     // não importa o aparelho). `setSize` força o tamanho de renderização explicitamente, depois de
     // qualquer auto-detecção da engine — não depende de layout de DOM nenhum.
     benchEngine.setSize(width, height)
-    disposables.push(benchEngine)
     const benchScene = new Scene(benchEngine)
     disposables.push(benchScene)
 
@@ -2233,6 +2237,15 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
           /* best-effort */
         }
         document.removeEventListener('visibilitychange', onVisibilityChange)
+        // Achado do review automático do Copilot: sem isto, o teto de segurança continuava
+        // pendurado por até mais 2.5s depois de `settle` já ter resolvido por outro caminho
+        // (amostragem completa ou abort) — o callback dele retinha a closure inteira (engine,
+        // cena, sombra, partículas, todos JÁ descartados acima) até disparar à toa.
+        if (safetyTimeoutHandle !== null) {
+          window.clearTimeout(safetyTimeoutHandle)
+          safetyTimeoutHandle = null
+        }
+        window.clearInterval(abortPollInterval)
         resolve(isWeak)
       }
 
@@ -2284,9 +2297,40 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
         }
       }
       document.addEventListener('visibilitychange', onVisibilityChange)
+      // Achado do review automático do Copilot: se algo lançar DEPOIS de registrar o listener/
+      // teto de segurança, mas antes de `settle` alguma vez rodar, só o `catch` mais abaixo (com a
+      // lista `disposables`) consegue limpar — `settle` (que normalmente cuida disso) nunca chega
+      // a ser chamado nesse caminho. Registra a limpeza do listener/timeout aqui, no MESMO lugar
+      // que já limpa engine/cena/sombra no erro.
+      disposables.push({
+        dispose: () => {
+          document.removeEventListener('visibilitychange', onVisibilityChange)
+          if (safetyTimeoutHandle !== null) window.clearTimeout(safetyTimeoutHandle)
+        },
+      })
       scheduleSafetyTimeout()
 
+      // Achado do review automático do Copilot: depois que o benchmark começa, o ÚNICO lugar que
+      // checa `shouldAbort` é dentro do callback do `runRenderLoop` — se a aba ficar oculta
+      // (`requestAnimationFrame` pausado) bem quando o componente desmonta, esse callback pode não
+      // rodar de novo até a aba voltar a ficar visível, retendo engine/cena/contexto WebGL o tempo
+      // todo. Um `setInterval` independente do RAF (mesmo padrão já usado em `waitForVisible`)
+      // continua checando cancelamento mesmo com a aba oculta.
+      const abortPollInterval = window.setInterval(() => {
+        if (shouldAbort()) settle(true)
+      }, 500)
+      disposables.push({ dispose: () => window.clearInterval(abortPollInterval) })
+
       let frame = 0
+      // Achado do review automático do Copilot: contar conclusão por `frame` (quadros renderizados)
+      // não é o mesmo que contar por DELTAS somados — se uma interrupção de visibilidade zerar
+      // `lastFrameTime`, o quadro seguinte incrementa `frame` mas NÃO soma delta nenhum (o `if
+      // (lastFrameTime !== 0)` descarta esse primeiro quadro de propósito). Dividir por
+      // `SAMPLE_FRAMES` fixo quando só `SAMPLE_FRAMES - 1` deltas de verdade entraram na soma
+      // infla o FPS calculado (~5% nesse caso) — o bastante pra confundir um aparelho limítrofe
+      // (ex.: 38-39 FPS reais virando "40+", classificado "forte" por engano). `deltaCount` conta
+      // só deltas realmente somados; a amostra só termina quando esse número bate `SAMPLE_FRAMES`.
+      let deltaCount = 0
       benchEngine.runRenderLoop(() => {
         if (shouldAbort()) {
           settle(true)
@@ -2304,8 +2348,11 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
         benchScene.render()
         frame++
         if (frame > WARMUP_FRAMES) {
-          if (lastFrameTime !== 0) sampleElapsedMs += now - lastFrameTime
-          if (frame >= WARMUP_FRAMES + SAMPLE_FRAMES) {
+          if (lastFrameTime !== 0) {
+            sampleElapsedMs += now - lastFrameTime
+            deltaCount++
+          }
+          if (deltaCount >= SAMPLE_FRAMES) {
             const avgFps = SAMPLE_FRAMES / (sampleElapsedMs / 1000)
             settle(avgFps < WEAK_GPU_AVG_FPS_THRESHOLD)
           }
