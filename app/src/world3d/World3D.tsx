@@ -2143,11 +2143,6 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     light.intensity = 0.6
     const sunLight = new DirectionalLight('benchSunLight', new Vector3(-1, -2, -1), benchScene)
     const shadowGenerator = new ShadowGenerator(1024, sunLight)
-    // Achado do review automático do Copilot: `ShadowGenerator` não é um recurso da `Scene` — ela
-    // NÃO dispõe o gerador (nem o shadow map/render-list dele) sozinha ao chamar `scene.dispose()`
-    // (mesmo comportamento já documentado noutro lugar do código, `studentFigure.ts`). Sem isto,
-    // cada benchmark deixava um shadow map vivo pra trás.
-    disposables.push(shadowGenerator)
     shadowGenerator.useBlurExponentialShadowMap = true
 
     const ground = MeshBuilder.CreateGround('benchGround', { width: 40, height: 40 }, benchScene)
@@ -2164,6 +2159,19 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     prop.thinInstanceSetBuffer('matrix', matrixData, 16)
     prop.receiveShadows = true
     shadowGenerator.addShadowCaster(prop)
+    // Achado do review automático do Copilot: `ShadowGenerator` não é um recurso da `Scene` — ela
+    // NÃO dispõe o gerador (nem o shadow map/render-list dele) sozinha ao chamar `scene.dispose()`
+    // (mesmo comportamento já documentado noutro lugar do código, `studentFigure.ts`). Sem isto,
+    // cada benchmark deixava um shadow map vivo pra trás. Remove `prop` da renderList ANTES de
+    // descartar o gerador — mesmo padrão já usado noutro lugar deste arquivo (`getChildMeshes()`
+    // + `removeShadowCaster` antes de liberar a malha) — só `.dispose()` deixava a malha já
+    // descartada retida na renderList do gerador.
+    disposables.push({
+      dispose: () => {
+        shadowGenerator.removeShadowCaster(prop)
+        shadowGenerator.dispose()
+      },
+    })
 
     // Achado do review automático do Copilot: sem `particleTexture` e com a taxa de emissão padrão
     // (10/s), a maioria das 400 partículas nunca chegava a existir de verdade durante os poucos
@@ -2236,6 +2244,7 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
           /* best-effort */
         }
         try {
+          shadowGenerator.removeShadowCaster(prop)
           shadowGenerator.dispose()
         } catch {
           /* best-effort */
@@ -2457,6 +2466,13 @@ export function World3D({
   // componente, precisa reagir a isso — `setupSettled` (variável local do efeito, usada só pro
   // agendamento do auto-tune) resolve uma necessidade diferente e continua existindo à parte.
   const [setupReady, setSetupReady] = useState(false)
+  // Achado do review automático do Copilot: `setup().finally(...)` marcava pronto mesmo numa
+  // REJEIÇÃO (falha real de rede carregando Havok/algum dos 18 GLBs) — a tela de carregamento
+  // sumia, os controles voltavam a responder, mas a cena ficava incompleta/quebrada, sem NENHUMA
+  // mensagem de erro, e a rejeição em si ficava sem tratamento (unhandled rejection). Fica
+  // fail-closed: só marca pronto no CAMINHO DE SUCESSO; numa falha, mantém a tela de carregamento
+  // (com uma mensagem de erro, não "carregando" pra sempre) em vez de liberar uma cena quebrada.
+  const [setupFailed, setSetupFailed] = useState(false)
   const joystickRef = useRef({ x: 0, y: 0 })
   // Botões de toque (pedido do usuário: "o android não tem teclado" — sem eles, pular/correr só
   // funcionava via teclado, inacessível em celular/tablet). Mesmo padrão do `joystickRef`: a UI
@@ -12026,14 +12042,34 @@ export function World3D({
     // pode gravar um aparelho FORTE numa escala baixa (`firstCycle` aceita o alvo da 1ª amostra
     // sem gradualismo). `setupSettled` sinaliza o fim de verdade pro agendamento do 1º ciclo.
     let setupSettled = false
-    setup().finally(() => {
-      setupSettled = true
-      // Achado do review automático do Copilot: além da variável local (uso imperativo, agendamento
-      // do auto-tune), também sinaliza como estado React — `hudInert` (corpo do componente) precisa
-      // saber quando `setup()` termina pra manter o HUD/canvas inerte durante TODO o carregamento
-      // pesado, não só durante o benchmark de GPU (`gpuTier === 'pending'`).
-      if (!disposed) setSetupReady(true)
-    })
+    // Achado do review automático do Copilot: `.finally()` rodava tanto no sucesso quanto numa
+    // REJEIÇÃO (falha real carregando Havok/algum GLB) — sinalizava "pronto" e liberava a UI numa
+    // cena quebrada, além de deixar a rejeição sem `.catch`/`.then` de verdade (unhandled
+    // rejection). `.then(sucesso, falha)` trata os dois caminhos explicitamente: só o sucesso marca
+    // `setupReady`; a falha fica fail-closed (`setupFailed`, ver comentário perto da declaração —
+    // a tela de carregamento continua visível, agora com mensagem de erro em vez de "carregando").
+    // `setupSettled` (só a variável local, usada pro agendamento do auto-tune) marca fim em AMBOS
+    // os casos — o auto-tune medir FPS de uma cena com falha de asset não é o problema que essa
+    // variável existe pra evitar, só a UI/interatividade precisa ficar fail-closed.
+    setup().then(
+      () => {
+        setupSettled = true
+        // Achado do review automático do Copilot: `inert` só afeta a subárvore do DOM — não os
+        // listeners de `window` (`onKeyDown`/`onKeyUp`, registrados dentro de `setup()`, bem antes
+        // dela terminar de verdade). Uma tecla espaço/WASD apertada durante a tela de carregamento
+        // ficava latched em `jumpRequested`/`keysDown` e era consumida assim que o overlay sumisse
+        // — o personagem pulava/andava sozinho no instante em que o jogo "aparecia". Descarta
+        // qualquer entrada acumulada durante o carregamento antes de liberar a UI.
+        keysDown = {}
+        jumpRequested = false
+        if (!disposed) setSetupReady(true)
+      },
+      (error) => {
+        setupSettled = true
+        console.error('Falha ao carregar o mundo 3D:', error)
+        if (!disposed) setSetupFailed(true)
+      },
+    )
 
     engine.runRenderLoop(() => {
       if (!disposed) scene.render()
@@ -12329,7 +12365,13 @@ export function World3D({
           podia parecer travado por vários segundos num aparelho lento. Mesma aparência do
           `.world-loading` de App.tsx (Suspense do carregamento do MÓDULO), pra não ter uma troca
           brusca de visual entre as duas fases de carregamento. */}
-      {!setupReady && <div className="world3d-setup-loading">Carregando o mundo 3D…</div>}
+      {/* Achado do review automático do Copilot: div comum não anuncia nada pra leitor de tela —
+          quem usa um não tinha como saber por que o canvas/HUD ficaram sem resposta. */}
+      {!setupReady && (
+        <div className="world3d-setup-loading" role="status" aria-live="polite">
+          {setupFailed ? 'Não foi possível carregar o mundo. Tente recarregar a página.' : 'Carregando o mundo 3D…'}
+        </div>
+      )}
       <div ref={debugRef} className="world3d-debug" />
       <HudHeader
         profile={profile}
