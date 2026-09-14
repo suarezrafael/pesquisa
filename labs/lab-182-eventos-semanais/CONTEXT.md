@@ -277,6 +277,18 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   o objetivo pendente; `aria-labelledby` confirmado apontando pro `<h2>` dinâmico via inspeção do
   DOM. Isso confirma retroativamente que as rodadas 11-15 funcionam corretamente na prática, não só
   na teoria — a pendência de verificação ao vivo registrada nas rodadas anteriores está resolvida.
+- **Rodada 16**: 2 achados reais. (1) Mesma classe da rodada 15, último caso restante:
+  `weeklyEventSnapshot.nowIso` só avançava sozinho no timer periódico de 60s — se a criança
+  completasse o desafio ambiental e abrisse o emblema DENTRO desse minuto,
+  `weeklyEventObjectiveStatus` comparava o instante da recompensa (gravado agora mesmo, mais novo)
+  contra um `nowIso` de snapshot mais VELHO, lendo isso como "relógio voltou no tempo" (a mesma
+  checagem anti-farm que existe pra detectar manipulação de verdade) e mostrando "bloqueado" em vez
+  do objetivo recém-concluído. Corrigido avançando o snapshot junto, no mesmo instante em que a
+  recompensa é concedida (`nowIso <= prev.nowIso ? prev : ...` — nunca anda pra trás). (2) Esta
+  seção do `CONTEXT.md` já registrava a verificação ao vivo bem-sucedida da rodada 15, mas a
+  descrição da própria PR #61 no GitHub ainda dizia que as rodadas 11-14 seguiam sem verificação ao
+  vivo e que o dev server permanecia instável — corrigido reconciliando a descrição da PR com este
+  registro.
 
 ## Pendências / dívidas conhecidas
 
