@@ -2022,24 +2022,39 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
   // conservador de antes desta mudança, nunca deixa o jogo travado esperando o benchmark.
   const SAFETY_TIMEOUT_MS = 2500
 
-  // Achado do review automático do Copilot: um alvo fixo pequeno (256×256) tem custo de
-  // preenchimento de pixel MUITO menor que o canvas real em tela cheia — um aparelho podia "passar"
-  // no benchmark pequeno (sombra/partículas custam pouco em poucos pixels) e mesmo assim sofrer no
-  // jogo de verdade, em resolução real. Usa uma versão proporcional (não o tamanho exato — o
-  // benchmark roda ANTES do mundo pesado existir, então ainda vale manter um teto que não deixe o
-  // próprio benchmark ficar caro demais num monitor 4K) da resolução real do dispositivo.
-  const BENCH_CANVAS_MAX_DIMENSION = 720
-  function benchCanvasDimension(devicePixels: number): number {
-    return Math.min(Math.round(devicePixels), BENCH_CANVAS_MAX_DIMENSION)
+  // Achado do review automático do Copilot: um alvo fixo pequeno (256×256, depois um teto por
+  // DIMENSÃO de 720px) distorcia — um celular alto e estreito (ex.: 390×844 lógicos × DPR 3 =
+  // 1170×2532 reais) virava um benchmark QUADRADO (720×720), com contagem de pixel bem menor e
+  // proporção diferente da tela real cheia, então o custo de preenchimento (sombra/SSAO/HDR) saía
+  // várias vezes menor que o real — um aparelho que sofre na resolução do jogo podia "passar" no
+  // benchmark. Preserva a PROPORÇÃO real e limita pela ÁREA total (não por dimensão isolada).
+  // Orçamento de pixel deliberadamente conservador (bem menor que a resolução real de qualquer
+  // tela) — o PRÓPRIO benchmark precisa continuar barato de sobra até no pior aparelho (senão
+  // ele mesmo trava o carregamento logo no início, justo no caso que mais importa detectar
+  // rápido); a correção de proporção acima já resolve a distorção sem precisar de área grande.
+  const BENCH_MAX_PIXELS = 480 * 480
+  function benchCanvasSize(realWidth: number, realHeight: number): { width: number; height: number } {
+    const scale = Math.min(1, Math.sqrt(BENCH_MAX_PIXELS / (realWidth * realHeight)))
+    return { width: Math.max(64, Math.round(realWidth * scale)), height: Math.max(64, Math.round(realHeight * scale)) }
   }
+
+  // Achado do review automático do Copilot: se qualquer criação abaixo (textura, sistema de
+  // partículas etc.) lançar DEPOIS do engine/cena já existirem, mas ANTES de `settle` (dentro da
+  // Promise mais abaixo) existir pra limpar os dois, o contexto WebGL ficava vivo pra sempre — a
+  // única limpeza era dentro de `settle`. Cada recurso descartável entra aqui assim que é criado;
+  // o `catch` libera tudo que já existe, em vez de só reportar "fraco" e deixar vazar.
+  const disposables: { dispose: () => void }[] = []
 
   try {
     const dpr = window.devicePixelRatio || 1
+    const { width, height } = benchCanvasSize(window.innerWidth * dpr, window.innerHeight * dpr)
     const benchCanvas = document.createElement('canvas')
-    benchCanvas.width = benchCanvasDimension(window.innerWidth * dpr)
-    benchCanvas.height = benchCanvasDimension(window.innerHeight * dpr)
+    benchCanvas.width = width
+    benchCanvas.height = height
     const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: false })
+    disposables.push(benchEngine)
     const benchScene = new Scene(benchEngine)
+    disposables.push(benchScene)
 
     // Achado do review automático do Copilot: sem câmera ativa, `Scene.render()` não desenha nada
     // (não há de onde projetar a cena) — o loop rodava "de graça", sem custo real de GPU, e
@@ -2093,6 +2108,28 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     particles.manualEmitCount = 400
     particles.start()
 
+    // Achado do review automático do Copilot: o benchmark só mede desenho de GPU (thin instances
+    // estáticas, sem física/IA nenhuma) — um aparelho com GPU forte mas CPU/física fraca passava
+    // como "forte" mesmo que o jogo de verdade tenha critters/NPCs/inimigos com Havok e IA por
+    // quadro (contagens que também dependem de `isLowEndDevice`, decidido por este benchmark).
+    // Carregar o Havok de verdade só pro benchmark seria caro/lento demais (é boa parte do tempo
+    // de carregamento do jogo real). Em vez disso, simula um custo de CPU por quadro na mesma
+    // ordem de grandeza de atualizar ~60 entidades (critters+NPCs+inimigos no teto atual) fazendo
+    // sua própria matemática de movimento/orientação — entra na MESMA medição de FPS, então um
+    // gargalo de CPU (não só de GPU) também reduz o FPS medido e classifica o aparelho como fraco.
+    const FAKE_ENTITY_COUNT = 60
+    const fakeEntityPhases = new Float32Array(FAKE_ENTITY_COUNT)
+    for (let i = 0; i < FAKE_ENTITY_COUNT; i++) fakeEntityPhases[i] = i
+    let fakeEntityAccumulator = 0
+    function simulateEntityWorkload() {
+      for (let i = 0; i < FAKE_ENTITY_COUNT; i++) {
+        fakeEntityPhases[i] += 0.05
+        const x = Math.cos(fakeEntityPhases[i]) * 5
+        const z = Math.sin(fakeEntityPhases[i]) * 5
+        fakeEntityAccumulator += Math.atan2(z, x) + Math.sqrt(x * x + z * z)
+      }
+    }
+
     const result = await new Promise<boolean>((resolve) => {
       let settled = false
       const settle = (isWeak: boolean) => {
@@ -2111,6 +2148,7 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
           settle(true)
           return
         }
+        simulateEntityWorkload()
         benchScene.render()
         frame++
         if (frame > WARMUP_FRAMES) samples.push(benchEngine.getFps())
@@ -2125,8 +2163,17 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
 
     return result
   } catch {
-    // Falha ao criar engine/contexto WebGL pro benchmark (raro) — assume fraco, mesmo padrão
-    // conservador de segurança do timeout acima.
+    // Falha ao criar engine/contexto WebGL pro benchmark, ou qualquer recurso depois dele (raro) —
+    // assume fraco (mesmo padrão conservador de segurança do timeout acima) e libera o que já foi
+    // criado, em ordem reversa (cena antes do engine — descartar o engine primeiro invalidaria o
+    // contexto WebGL que a cena ainda depende).
+    for (let i = disposables.length - 1; i >= 0; i--) {
+      try {
+        disposables[i].dispose()
+      } catch {
+        // best-effort — um recurso já pode ter sido parcialmente invalidado por outra falha.
+      }
+    }
     return true
   }
 }
@@ -2237,6 +2284,15 @@ export function World3D({
   // todo outro callback deste componente (`onFurniturePlacedRef` etc., acima) — o efeito só
   // depende de `visitHouseRequest`, nunca reinicia por causa de um re-render do pai.
   const onVisitHouseHandledRef = useRef(onVisitHouseHandled)
+  // Achado do review automático do Copilot: mesmo padrão de "ref sempre atual" de
+  // `onVisitHouseHandledRef` acima, aplicado às outras duas pontes de pedido único
+  // (`placingFurnitureRequestId`/`coopAnswerSignalId`) — precisam virar polling com teto (mesmo
+  // padrão de `visitHouseRequest`) em vez de uma tentativa só, senão clicar "Mover"/responder um
+  // desafio em dupla durante o benchmark de GPU (`gpuTier === 'pending'`) OU durante o resto do
+  // carregamento de `setup()` (que registra a ponte só no fim) descarta o pedido sem nunca
+  // executar a ação de verdade.
+  const onPlacingRequestHandledRef = useRef(onPlacingRequestHandled)
+  const onCoopAnswerHandledRef = useRef(onCoopAnswerHandled)
   // lab-136: espelha o item sendo posicionado pra fora do loop de física (Confirmar/Cancelar são
   // botões React normais, não Babylon GUI — mesmo raciocínio de `survivalPlanetId`/
   // `survivalTimeRef` acima: o closure do loop precisa de um valor ATUAL a cada quadro (por isso
@@ -2356,34 +2412,65 @@ export function World3D({
   onCoopChallengeCompletedRef.current = onCoopChallengeCompleted
   onOpenEnvironmentalChallengeRef.current = onOpenEnvironmentalChallenge
   onVisitHouseHandledRef.current = onVisitHouseHandled
+  onPlacingRequestHandledRef.current = onPlacingRequestHandled
+  onCoopAnswerHandledRef.current = onCoopAnswerHandled
 
   // lab-136: entra no modo de posicionamento de mobília sempre que `App.tsx` pede um id novo
   // (clique em "Mover" no `MyHousePanel`, que fica fora deste componente) — mesmo padrão de
   // `__refreshHouseFurniture`/`unlockedFurnitureIds` acima. Confirma o consumo do pedido de volta
   // pra `App.tsx` (`onPlacingRequestHandled`) senão o MESMO id reabriria o modo de novo a cada
   // re-render deste componente (ex.: qualquer outra mudança de `progress`).
+  // Achado do review automático do Copilot: uma tentativa só (`?.()` como no-op silencioso) perdia
+  // o pedido de "Mover" se a ponte ainda não existisse — não só durante `gpuTier === 'pending'`
+  // (benchmark de GPU, ver `benchmarkIsWeakGpu`), mas também durante o resto de `setup()`
+  // assíncrono (que só registra `__startFurniturePlacement` no fim, depois de Havok/assets
+  // carregarem) — a MESMA classe de bug já corrigida pra `visitHouseRequest` acima (lab-175).
+  // Mesmo padrão de polling com teto (200ms, 60s) em vez de reinventar uma abordagem nova.
   useEffect(() => {
     if (!placingFurnitureRequestId) return
-    // Achado do review automático do Copilot: enquanto `gpuTier === 'pending'` (benchmark de GPU
-    // ainda rodando, ver `benchmarkIsWeakGpu`), o efeito que cria a cena/`sceneRef.current` nem
-    // rodou ainda — sem este guard, `__startFurniturePlacement` seria sempre um no-op nessa
-    // janela, mas `onPlacingRequestHandled()` rodava mesmo assim, CONSUMINDO o pedido de "Mover"
-    // sem nunca de fato abrir o modo de posicionamento. Não consome o pedido até o benchmark
-    // resolver — a MESMA lista de dependências reexecuta este efeito quando `gpuTier` muda.
-    if (gpuTier === 'pending') return
-    ;(sceneRef.current as any)?.__startFurniturePlacement?.(placingFurnitureRequestId)
-    onPlacingRequestHandled()
-  }, [placingFurnitureRequestId, onPlacingRequestHandled, gpuTier])
+    const request = placingFurnitureRequestId
+    let attempts = 0
+    const MAX_ATTEMPTS = 300 // 300 × 200ms = 60s
+    const interval = setInterval(() => {
+      attempts += 1
+      const bridge = (sceneRef.current as any)?.__startFurniturePlacement
+      if (typeof bridge === 'function') {
+        bridge(request)
+        clearInterval(interval)
+        onPlacingRequestHandledRef.current()
+      } else if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(interval)
+        onPlacingRequestHandledRef.current()
+      }
+    }, 200)
+    return () => clearInterval(interval)
+  }, [placingFurnitureRequestId])
 
   // lab-172 — mesma ponte de `placingFurnitureRequestId` acima: `App.tsx` muda
   // `coopAnswerSignalId` quando o `QuestModal` do desafio em dupla chama `onCorrect` (o clique
   // acontece fora deste componente); só então este código sabe que a resposta certa aconteceu e
   // manda `sendCoopDone` pelo relé (dentro de `__onCoopAnswerCorrect`, ver `setup()`).
+  // Achado do review automático do Copilot: mesma classe de bug de `placingFurnitureRequestId`
+  // acima — uma tentativa só perdia a confirmação de "resposta certa" (e o `sendCoopDone` que
+  // depende dela) se a ponte ainda não existisse. Mesmo polling com teto.
   useEffect(() => {
     if (!coopAnswerSignalId) return
-    ;(sceneRef.current as any)?.__onCoopAnswerCorrect?.()
-    onCoopAnswerHandled()
-  }, [coopAnswerSignalId, onCoopAnswerHandled])
+    let attempts = 0
+    const MAX_ATTEMPTS = 300 // 300 × 200ms = 60s
+    const interval = setInterval(() => {
+      attempts += 1
+      const bridge = (sceneRef.current as any)?.__onCoopAnswerCorrect
+      if (typeof bridge === 'function') {
+        bridge()
+        clearInterval(interval)
+        onCoopAnswerHandledRef.current()
+      } else if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(interval)
+        onCoopAnswerHandledRef.current()
+      }
+    }, 200)
+    return () => clearInterval(interval)
+  }, [coopAnswerSignalId])
 
   // lab-175 — mesma ponte das duas acima: `App.tsx` muda `visitHouseRequest` quando o jogador
   // clica "Visitar casa" no `FriendsPanel`, fora deste componente.
