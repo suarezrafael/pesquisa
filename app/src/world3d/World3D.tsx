@@ -11798,7 +11798,12 @@ export function World3D({
           precisa de `inert` junto com o HUD — senão dá pra Tab escapar de um modal aberto direto
           pro canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). */}
       <canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />
-      <div ref={debugWrapperRef} className="world3d-debug-wrapper">
+      {/* Achado do review automático do Copilot: este botão fica fora de `HudHeader`/`.hud-overlay`,
+          então não herdava `inert` da lista de controles logo abaixo — com um modal aberto
+          (chat/ranking/mochila/seletor de planeta/portão parental), o toggle continuava focável e
+          clicável por trás do modal, quebrando o isolamento de foco/interação que o resto do HUD
+          já tem (mesmo `hudInert` usado no `<canvas>` acima e em cada controle mais abaixo). */}
+      <div ref={debugWrapperRef} className="world3d-debug-wrapper" inert={hudInert}>
         <button
           type="button"
           className="world3d-debug-toggle"

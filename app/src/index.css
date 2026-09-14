@@ -1005,6 +1005,14 @@ a.nickname-generate-btn {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.25rem;
+  /* Achado do review automático do Copilot: sem isto, o WRAPPER (não só o texto) fica
+     `pointer-events: auto` por padrão — como ele é uma caixa flex posicionada sobre o canvas,
+     qualquer toque dentro do seu retângulo (inclusive o espaço/gap entre botão e texto, e a área
+     do texto, que só o FILHO tem `pointer-events: none`) acaba sendo capturado pelo wrapper em
+     vez de passar pro jogo por baixo — exatamente o bug que `.world3d-debug` já evitava antes
+     desta mudança. `none` aqui devolve esse comportamento; o botão abaixo reativa
+     `pointer-events: auto` só pra si mesmo. */
+  pointer-events: none;
 }
 
 /* Alvo de toque mínimo de 44px lógicos (docs/prompts/02-design-profissional.md §3) — só este
