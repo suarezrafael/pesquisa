@@ -2105,8 +2105,15 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     await waitForVisible()
     if (shouldAbort()) return true
 
-    const dpr = window.devicePixelRatio || 1
-    const { width, height } = benchCanvasSize(window.innerWidth * dpr, window.innerHeight * dpr)
+    // Achado do review automático do Copilot: o engine REAL (mais abaixo, `new Engine(canvas,
+    // ..., { preserveDrawingBuffer: true, stencil: true })`) não passa `adaptToDeviceRatio` —
+    // Babylon só multiplica pelo `devicePixelRatio` real quando esse parâmetro é `true`; sem ele,
+    // renderiza no tamanho em pixels CSS do canvas, não nos pixels físicos do aparelho. Multiplicar
+    // por `dpr` aqui fazia o benchmark medir uma resolução BEM maior (~3x num iPhone com DPR 3) do
+    // que o jogo de verdade realmente usa — o oposto do problema original: um aparelho capaz podia
+    // ser classificado "fraco" à toa, recriando o mesmo perfil de baixa qualidade que este PR existe
+    // pra evitar. Usa pixels CSS (sem `dpr`), igual ao engine real.
+    const { width, height } = benchCanvasSize(window.innerWidth, window.innerHeight)
     const benchCanvas = document.createElement('canvas')
     benchCanvas.width = width
     benchCanvas.height = height
@@ -12068,9 +12075,18 @@ export function World3D({
         if (!disposed) setSetupReady(true)
       },
       (error) => {
-        setupSettled = true
         console.error('Falha ao carregar o mundo 3D:', error)
-        if (!disposed) setSetupFailed(true)
+        if (disposed) return
+        setSetupFailed(true)
+        // Achado do review automático do Copilot: sem isto, uma falha de carregamento (rede caindo
+        // no meio de Havok/algum GLB) deixava `engine.runRenderLoop()` renderizando pra sempre por
+        // trás da tela de erro (gastando CPU/GPU indefinidamente numa cena quebrada que ninguém
+        // vê) — e `setupSettled = true` deixaria o auto-tune agendar seu 1º ciclo mesmo assim,
+        // medindo/ajustando a resolução de uma cena que nunca vai terminar de montar.
+        engine.stopRenderLoop()
+        if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
+        if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
+        if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
       },
     )
 
