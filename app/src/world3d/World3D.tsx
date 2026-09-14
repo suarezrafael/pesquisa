@@ -2308,7 +2308,15 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
           if (safetyTimeoutHandle !== null) window.clearTimeout(safetyTimeoutHandle)
         },
       })
-      scheduleSafetyTimeout()
+      // Achado do review automático do Copilot: entre `waitForVisible()` resolver e chegar aqui, a
+      // criação síncrona do engine/cena/malhas roda sem nenhum listener de `visibilitychange`
+      // registrado ainda — se a aba ficar oculta bem nesse meio-tempo, esse evento específico nunca
+      // chega a `onVisibilityChange` (o listener só entra em cena um instante depois), mas
+      // `scheduleSafetyTimeout` incondicional armava o teto do mesmo jeito, como se ainda
+      // estivesse visível. Só arma se JÁ estiver visível agora; se já estiver oculta, deixa o teto
+      // desarmado — o listener (que SEMPRE captura a próxima mudança de visibilidade em diante,
+      // já que está registrado antes desta checagem) arma quando a aba realmente voltar.
+      if (document.visibilityState === 'visible') scheduleSafetyTimeout()
 
       // Achado do review automático do Copilot: depois que o benchmark começa, o ÚNICO lugar que
       // checa `shouldAbort` é dentro do callback do `runRenderLoop` — se a aba ficar oculta
