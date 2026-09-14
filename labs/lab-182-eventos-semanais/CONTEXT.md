@@ -323,6 +323,25 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   fica só com `event` — a única coisa que realmente precisa disparar re-render, e só quando muda de
   verdade. "Quando re-renderizar" e "manter o relógio fresco" deixam de ser a MESMA preocupação,
   eliminando a tensão que causou este achado.
+- **Rodada 20**: 4 achados reais, 3 deles a MESMA classe (`weeklyEventSnapshot`/`nowIsoRef` ainda
+  tinham janelas de inconsistência): (1) `nowIso > nowIsoRef.current` avançava a referência pra uma
+  semana NOVA na hora da recompensa, sem atualizar `event` do snapshot — o badge/descrição podia
+  ficar da semana antiga enquanto o status já era da nova; (2) os dois inicializadores
+  (`weeklyEventSnapshot`/`nowIsoRef`) liam `new Date()` de forma independente, podendo divergir bem
+  na virada de semana; (3) `nowIsoRef.current` só era atualizado pelo timer/reward-grant, não no
+  PRÓPRIO clique — um recuo de relógio nos até 60s entre o último tick e o clique não era refletido
+  no painel. As 3 rodadas anteriores (16-19) foram tentativas sucessivas de compartilhar uma
+  referência de tempo entre o BADGE (precisa ficar fresco continuamente) e o PAINEL (só calculado
+  uma vez, no clique) — cada tentativa fechava uma janela e abria outra. Fix definitivo, mais
+  simples que tudo que veio antes: o painel para de reaproveitar QUALQUER estado/ref do badge —
+  `onOpenWeeklyEvent` calcula `event`/`nowIso` frescos, de um único `new Date()`, no exato instante
+  do clique (mesmo padrão já usado por `handleEnvironmentalChallengeCorrect` pra decidir a
+  recompensa). `nowIsoRef` removido por completo; `weeklyEventSnapshot`/o timer de 60s continuam
+  existindo, mas só pro badge. (4) achado não relacionado: `useModalA11y` (hook compartilhado por
+  todo painel/modal do jogo) tinha Esc/foco inicial mas nenhum focus trap — Tab escapava do painel
+  pro resto da página. Corrigido no hook compartilhado (beneficia todos os painéis existentes, não
+  só o `WeeklyEventPanel` novo): Tab no último elemento focável volta pro primeiro, Shift+Tab no
+  primeiro vai pro último.
 
 ## Pendências / dívidas conhecidas
 
