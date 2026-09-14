@@ -2890,6 +2890,12 @@ export function World3D({
     // pela falha, outra no desmonte de verdade depois) — a própria função vira no-op na segunda
     // chamada.
     let teardown: (() => void) | null = null
+    // Achado do review automático do Copilot: `onKeyDown` (registrado dentro de `setup()`, bem
+    // antes dela terminar) chama `handleInteractPress()` de forma SÍNCRONA pra tecla `E` — `inert`
+    // (que já cobre canvas/HUD) não afeta listeners de `window`. Só vira `true` quando `setup()`
+    // termina com sucesso (ver `setSetupReady`/`.then` mais abaixo), fechando tanto esse caminho
+    // síncrono quanto o de teclas de movimento (consumidas depois, no loop de física).
+    let inputReady = false
 
     // Antes (labs 56-72) isso vinha de um regex de user-agent (`/Android|iPad|iPhone|.../`), que
     // tratava QUALQUER iPhone como GPU fraca — mesmo perfil de um Poco C75/Redmi Pad 2 reais,
@@ -4199,6 +4205,15 @@ export function World3D({
       ;(scene as any).__handleInteractPress = handleInteractPress
 
       const onKeyDown = (e: KeyboardEvent) => {
+        // Achado do review automático do Copilot: resetar `keysDown`/`jumpRequested` quando
+        // `setup()` termina (ver comentário perto de `inputReady`) só cobre teclas de MOVIMENTO,
+        // que só são consumidas depois, no loop de física. A tecla `E` chama
+        // `handleInteractPress()` de forma SÍNCRONA, aqui mesmo — apertar `E` durante a tela de
+        // carregamento executava a ação de interagir contra uma cena ainda incompleta (avatar,
+        // carro, etc. podem nem existir ainda), risco real de exceção não tratada (trava o loop de
+        // física inteiro, mesmo comentário já documentado onde `handleInteractPress` é definida).
+        // `inert` não ajuda aqui — só afeta a subárvore do DOM, não listeners de `window`.
+        if (!inputReady) return
         const target = e.target as HTMLElement | null
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
         const key = e.key.toLowerCase()
@@ -12074,14 +12089,12 @@ export function World3D({
     setup().then(
       () => {
         setupSettled = true
-        // Achado do review automático do Copilot: `inert` só afeta a subárvore do DOM — não os
-        // listeners de `window` (`onKeyDown`/`onKeyUp`, registrados dentro de `setup()`, bem antes
-        // dela terminar de verdade). Uma tecla espaço/WASD apertada durante a tela de carregamento
-        // ficava latched em `jumpRequested`/`keysDown` e era consumida assim que o overlay sumisse
-        // — o personagem pulava/andava sozinho no instante em que o jogo "aparecia". Descarta
-        // qualquer entrada acumulada durante o carregamento antes de liberar a UI.
-        keysDown = {}
-        jumpRequested = false
+        // Achado do review automático do Copilot: `onKeyDown` (ver comentário perto de
+        // `inputReady`, declarado no topo do efeito) só processa teclas a partir daqui — antes
+        // disso, o handler inteiro retorna cedo, então nenhuma tecla apertada durante o
+        // carregamento chega a ser latched em `keysDown`/`jumpRequested` OU a disparar
+        // `handleInteractPress()` de forma síncrona contra uma cena ainda incompleta.
+        inputReady = true
         if (!disposed) setSetupReady(true)
       },
       (error) => {
