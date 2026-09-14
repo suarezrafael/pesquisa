@@ -309,6 +309,20 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   precisar isolar o estado num componente à parte, a alternativa mais invasiva sugerida pelo
   review. `nowIso` não precisa ficar fresco no timer além disso, já que a freshness usada pra
   decidir status na hora da recompensa é avançada separadamente (rodada 16).
+- **Rodada 19**: 1 achado real — a otimização da rodada 18 (só atualizar `weeklyEventSnapshot`
+  quando `event.id` muda) tinha um efeito colateral real: `nowIso` (guardado DENTRO do mesmo
+  estado) ficava PRESO num valor velho sempre que o relógio do aparelho fosse adiantado e depois
+  voltado ainda dentro do mesmo evento/semana — o timer não atualizava mais o estado nesse caso
+  (por design, pra evitar o re-render), então o painel podia mostrar "concluído" usando esse
+  `nowIso` desatualizado, mesmo com a PRÓXIMA tentativa de recompensa já corretamente bloqueada por
+  `hasWeeklyEventClockRolledBack` (que usa seu próprio `new Date()` fresco, código diferente). Fix
+  definitivo: `nowIsoRef` (`useRef`) vira a ÚNICA fonte de "agora" pro cálculo de status —
+  atualizado a CADA tick do timer de 60s (refs nunca disparam re-render sozinhos, então não competem
+  com a otimização da rodada 18) e avançado também na hora da recompensa (substitui o
+  `setWeeklyEventSnapshot` da rodada 16, que não é mais necessário). `weeklyEventSnapshot` (estado)
+  fica só com `event` — a única coisa que realmente precisa disparar re-render, e só quando muda de
+  verdade. "Quando re-renderizar" e "manter o relógio fresco" deixam de ser a MESMA preocupação,
+  eliminando a tensão que causou este achado.
 
 ## Pendências / dívidas conhecidas
 
