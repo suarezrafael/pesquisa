@@ -2022,10 +2022,22 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
   // conservador de antes desta mudança, nunca deixa o jogo travado esperando o benchmark.
   const SAFETY_TIMEOUT_MS = 2500
 
+  // Achado do review automático do Copilot: um alvo fixo pequeno (256×256) tem custo de
+  // preenchimento de pixel MUITO menor que o canvas real em tela cheia — um aparelho podia "passar"
+  // no benchmark pequeno (sombra/partículas custam pouco em poucos pixels) e mesmo assim sofrer no
+  // jogo de verdade, em resolução real. Usa uma versão proporcional (não o tamanho exato — o
+  // benchmark roda ANTES do mundo pesado existir, então ainda vale manter um teto que não deixe o
+  // próprio benchmark ficar caro demais num monitor 4K) da resolução real do dispositivo.
+  const BENCH_CANVAS_MAX_DIMENSION = 720
+  function benchCanvasDimension(devicePixels: number): number {
+    return Math.min(Math.round(devicePixels), BENCH_CANVAS_MAX_DIMENSION)
+  }
+
   try {
+    const dpr = window.devicePixelRatio || 1
     const benchCanvas = document.createElement('canvas')
-    benchCanvas.width = 256
-    benchCanvas.height = 256
+    benchCanvas.width = benchCanvasDimension(window.innerWidth * dpr)
+    benchCanvas.height = benchCanvasDimension(window.innerHeight * dpr)
     const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: false })
     const benchScene = new Scene(benchEngine)
 
@@ -2058,10 +2070,27 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     prop.receiveShadows = true
     shadowGenerator.addShadowCaster(prop)
 
+    // Achado do review automático do Copilot: sem `particleTexture` e com a taxa de emissão padrão
+    // (10/s), a maioria das 400 partículas nunca chegava a existir de verdade durante os poucos
+    // quadros medidos — o sistema não desenhava o volume de partículas que o `400` no construtor
+    // sugere, então esse custo real (textura + blending) não entrava na medição. Mesmo padrão de
+    // textura simples de `rainDropTexture` (mais abaixo, real, em `setup()`): um `DynamicTexture`
+    // pequeno preenchido de branco. `manualEmitCount` + vida longa força as 400 vivas de uma vez,
+    // cobrindo toda a janela de amostragem — não deixa a emissão gradual mascarar o custo real.
+    const particleTexture = new DynamicTexture('benchParticleTex', { width: 8, height: 8 }, benchScene, false)
+    const particleCtx = particleTexture.getContext() as CanvasRenderingContext2D
+    particleCtx.fillStyle = 'white'
+    particleCtx.fillRect(0, 0, 8, 8)
+    particleTexture.update()
+
     const particles = new ParticleSystem('benchParticles', 400, benchScene)
+    particles.particleTexture = particleTexture
     particles.emitter = Vector3.Zero()
     particles.minEmitBox = new Vector3(-5, 0, -5)
     particles.maxEmitBox = new Vector3(5, 5, 5)
+    particles.minLifeTime = 5
+    particles.maxLifeTime = 5
+    particles.manualEmitCount = 400
     particles.start()
 
     const result = await new Promise<boolean>((resolve) => {
@@ -2335,9 +2364,16 @@ export function World3D({
   // re-render deste componente (ex.: qualquer outra mudança de `progress`).
   useEffect(() => {
     if (!placingFurnitureRequestId) return
+    // Achado do review automático do Copilot: enquanto `gpuTier === 'pending'` (benchmark de GPU
+    // ainda rodando, ver `benchmarkIsWeakGpu`), o efeito que cria a cena/`sceneRef.current` nem
+    // rodou ainda — sem este guard, `__startFurniturePlacement` seria sempre um no-op nessa
+    // janela, mas `onPlacingRequestHandled()` rodava mesmo assim, CONSUMINDO o pedido de "Mover"
+    // sem nunca de fato abrir o modo de posicionamento. Não consome o pedido até o benchmark
+    // resolver — a MESMA lista de dependências reexecuta este efeito quando `gpuTier` muda.
+    if (gpuTier === 'pending') return
     ;(sceneRef.current as any)?.__startFurniturePlacement?.(placingFurnitureRequestId)
     onPlacingRequestHandled()
-  }, [placingFurnitureRequestId, onPlacingRequestHandled])
+  }, [placingFurnitureRequestId, onPlacingRequestHandled, gpuTier])
 
   // lab-172 — mesma ponte de `placingFurnitureRequestId` acima: `App.tsx` muda
   // `coopAnswerSignalId` quando o `QuestModal` do desafio em dupla chama `onCorrect` (o clique
@@ -11737,8 +11773,18 @@ export function World3D({
     }
     let fpsAutoTuneInterval: number | null = null
     let fpsAutoTuneTimeout: number | null = null
-    if (isLowEndDevice) {
-      let currentTier = 1 // nível moderado inicial (ver `engine.setHardwareScalingLevel` mais acima)
+    // Achado do review automático do Copilot: antes só rodava com `isLowEndDevice` (aparelho
+    // classificado fraco pelo benchmark de GPU, ver `benchmarkIsWeakGpu`), mas esse benchmark mede
+    // só desenho de GPU numa cena pequena fora da tela — um aparelho com GPU forte mas CPU/física
+    // fraca pode ser classificado "forte" (sem essa rede de segurança) e nunca ter a resolução
+    // ajustada se o FPS real (com física de verdade, área do mapa mais pesada, etc.) cair. Roda
+    // pra QUALQUER classificação agora — a rede de segurança nunca faz mal num aparelho realmente
+    // forte (só confirma que a escala pode ficar em 1.0 e não mexe em nada).
+    {
+      // `indexOf` em vez de um valor fixo: aparelho "forte" começa em 1.0 (índice 0, nunca
+      // chamou `engine.setHardwareScalingLevel(1.15)` mais acima), aparelho "fraco" começa em
+      // 1.15 (índice 1) — precisa refletir o valor REAL já aplicado, não assumir sempre o mesmo.
+      let currentTier = Math.max(0, SCALING_TIERS.indexOf(engine.getHardwareScalingLevel()))
       let firstCycle = true
       const runAutoTuneCycle = () => {
         if (disposed) return
