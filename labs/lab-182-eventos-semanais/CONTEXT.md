@@ -384,6 +384,8 @@ Commit inicial → final: eb1b75a4d3495bcc2b90030a75f51ea852146135..(commit dest
   `dailyLoginReward !== null` à mesma expressão. (2) Nit de documentação — a descrição da PR ainda
   dizia "21 rodadas ao todo" depois das rodadas 22-23 serem escritas neste `CONTEXT.md` —
   reconciliada pra refletir o total atual.
+- **Rodada 24**: 0 achados — "Approval recommended", 0 comentários novos. PR convergiu depois de 24
+  rodadas de review automático.
 
 ## Pendências / dívidas conhecidas
 
