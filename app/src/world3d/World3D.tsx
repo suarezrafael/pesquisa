@@ -1994,6 +1994,431 @@ function buildLaserGun(scene: Scene, shadowGenerator: ShadowGenerator): Transfor
   return root
 }
 
+// Detecta GPU fraca de verdade, sem confiar em user-agent (bug real relatado pelo usuário: um
+// iPhone qualquer, mesmo modelo recente com GPU forte, caía no MESMO perfil "fraco" que um Poco
+// C75/Redmi Pad 2 real só por casar com `/iPhone/` no user-agent — "a qualidade do iPhone ficou
+// baixíssima... só a resolução da tela não deve determinar a qualidade, deve levar em conta o
+// hardware"). Em vez de checar tipo de aparelho, renderiza uma cena sintética representativa (luz
+// direcional com sombra + ~800 instâncias + partículas — mesma ordem de grandeza do mundo real,
+// nem no piso nem no teto de contagem já usados por `isLowEndDevice` hoje) num canvas fora da tela
+// (nunca anexado ao DOM, então o usuário não vê nada rodando) e mede o FPS médio de verdade, o
+// mesmo tipo de sinal que `SCALING_TIERS`/`desiredTierIndex` já usam pra ajustar a resolução ao
+// vivo — só que aqui decide, ANTES de montar o mundo real, os ajustes que só dá pra fazer uma vez
+// na criação da cena (anti-aliasing, resolução de sombra/HDR, contagem de props/grama/partículas)
+// e por isso não dá pra corrigir depois só com o auto-tune de resolução.
+//
+// `shouldAbort` (achado do review automático do Copilot): se o componente desmontar antes do
+// benchmark terminar sozinho, o efeito que o chama marca cancelado — sem isso, o loop de render
+// desanexado continuava rodando (até 30 quadros ou 2.5s) gastando GPU à toa, e o ciclo de
+// montagem dupla do StrictMode (dev) chegava a rodar DOIS benchmarks ao mesmo tempo disputando a
+// mesma GPU, distorcendo a medição de ambos. Checar a cada quadro descarta o benchmark assim que
+// o cancelamento chega, em vez de só ignorar o resultado no fim.
+async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> {
+  const WEAK_GPU_AVG_FPS_THRESHOLD = 40
+  const WARMUP_FRAMES = 10
+  const SAMPLE_FRAMES = 20
+  // Teto de segurança: se por algum motivo o benchmark nunca produzir amostras suficientes (aba
+  // carregada em segundo plano, erro de contexto WebGL, etc.), assume fraco — mesmo valor padrão
+  // conservador de antes desta mudança, nunca deixa o jogo travado esperando o benchmark.
+  const SAFETY_TIMEOUT_MS = 2500
+
+  // Achado do review automático do Copilot: um alvo fixo pequeno (256×256, depois um teto por
+  // DIMENSÃO de 720px) distorcia — um celular alto e estreito (ex.: 390×844 lógicos × DPR 3 =
+  // 1170×2532 reais) virava um benchmark QUADRADO (720×720), com contagem de pixel bem menor e
+  // proporção diferente da tela real cheia, então o custo de preenchimento (sombra/SSAO/HDR) saía
+  // várias vezes menor que o real — um aparelho que sofre na resolução do jogo podia "passar" no
+  // benchmark. Preserva a PROPORÇÃO real e limita pela ÁREA total (não por dimensão isolada).
+  // Orçamento de pixel deliberadamente conservador (bem menor que a resolução real de qualquer
+  // tela) — o PRÓPRIO benchmark precisa continuar barato de sobra até no pior aparelho (senão
+  // ele mesmo trava o carregamento logo no início, justo no caso que mais importa detectar
+  // rápido); a correção de proporção acima já resolve a distorção sem precisar de área grande.
+  //
+  // Limitação aceita, não corrigida (achado do review automático do Copilot, mantido pequeno de
+  // propósito): mesmo com a proporção certa, 480×480 (230 mil pixels) ainda é bem menor que a
+  // área real de um celular moderno em tela cheia (ex.: ~3 milhões de pixels num 390×844 a DPR 3)
+  // — um aparelho "limitado por preenchimento de pixel" (fill-rate) pode passar aqui e ainda assim
+  // sofrer no jogo de verdade em resolução cheia. Testado ao vivo (720×720, ~518 mil pixels)
+  // durante esta mesma rodada: aumentar a área pra ficar mais fiel deixou o PRÓPRIO benchmark lento
+  // demais num aparelho fraco/GPU virtualizada, quase travando o carregamento por completo — o
+  // remédio piorou o problema que existe pra resolver. A rede de segurança que sobra é o auto-tune
+  // de resolução ao vivo (agora ligado pra QUALQUER classificação, não só "fraco" — ver comentário
+  // perto de `SCALING_TIERS`), que ainda reage a um fill-rate real pior que o medido aqui, só não
+  // consegue desligar sombra/SSAO/MSAA depois de já escolhidos na criação da cena.
+  //
+  // Mesma limitação aceita se estende ao resto da cena sintética (achado repetido do review
+  // automático em rodadas seguintes, apontando peças específicas): não usa SSAO2/GlowLayer/HDR nem
+  // a contagem alta de props/critters/grama do mundo real (`PROP_COUNT`, `CRITTER_COUNT` etc. em
+  // `setup()`) — só uma malha com sombra e partículas. Replicar TODOS esses passos aqui pra fechar
+  // esse gap por completo equivaleria a montar o mundo pesado duas vezes (uma pro benchmark, outra
+  // pro jogo de verdade), o oposto do objetivo de ter um pré-teste barato antes de pagar esse custo
+  // uma vez só. Escolha consciente: aceitar essa fidelidade parcial (só GPU/desenho básico + CPU
+  // simulado, ver `simulateEntityWorkload` abaixo) em troca de manter o benchmark rápido o bastante
+  // pra não virar ele mesmo um problema de carregamento — mesma troca já validada ao vivo acima.
+  const BENCH_MAX_PIXELS = 480 * 480
+  function benchCanvasSize(realWidth: number, realHeight: number): { width: number; height: number } {
+    const scale = Math.min(1, Math.sqrt(BENCH_MAX_PIXELS / (realWidth * realHeight)))
+    return { width: Math.max(64, Math.round(realWidth * scale)), height: Math.max(64, Math.round(realHeight * scale)) }
+  }
+
+  // Achado do review automático do Copilot: se qualquer criação abaixo (textura, sistema de
+  // partículas etc.) lançar DEPOIS do engine/cena já existirem, mas ANTES de `settle` (dentro da
+  // Promise mais abaixo) existir pra limpar os dois, o contexto WebGL ficava vivo pra sempre — a
+  // única limpeza era dentro de `settle`. Cada recurso descartável entra aqui assim que é criado;
+  // o `catch` libera tudo que já existe, em vez de só reportar "fraco" e deixar vazar.
+  const disposables: { dispose: () => void }[] = []
+
+  // Achado do review automático do Copilot: se o componente montar com a aba/PWA em segundo plano,
+  // `requestAnimationFrame` fica pausado/limitado pelo navegador — o loop abaixo nunca junta os 30
+  // quadros a tempo, bate no teto de segurança (`SAFETY_TIMEOUT_MS`) e classifica "fraco" um
+  // aparelho que pode ser forte de verdade. Como o resultado nunca é medido de novo depois (é
+  // decidido uma vez só, antes do mundo montar), esse falso negativo duraria a sessão INTEIRA.
+  // Espera a aba ficar visível antes de sequer começar a medir.
+  //
+  // Achado do review automático do Copilot: sem checar `shouldAbort` ENQUANTO espera (só depois,
+  // na volta), desmontar o componente com a aba ainda oculta deixava esta Promise pendurada pra
+  // sempre — o listener de `visibilitychange` nunca era removido, e a closure inteira (canvas,
+  // engine ainda nem criados) ficava presa na memória até uma eventual e improvável mudança de
+  // visibilidade futura. Sondar `shouldAbort` num intervalo curto, ao lado do listener, garante
+  // que cancelar o componente também encerra essa espera e libera o listener imediatamente.
+  async function waitForVisible(): Promise<void> {
+    if (document.visibilityState === 'visible' || shouldAbort()) return
+    await new Promise<void>((resolve) => {
+      let settled = false
+      function finish() {
+        if (settled) return
+        settled = true
+        document.removeEventListener('visibilitychange', onChange)
+        window.clearInterval(abortPoll)
+        resolve()
+      }
+      function onChange() {
+        if (document.visibilityState === 'visible') finish()
+      }
+      document.addEventListener('visibilitychange', onChange)
+      const abortPoll = window.setInterval(() => {
+        if (shouldAbort()) finish()
+      }, 200)
+    })
+  }
+
+  try {
+    await waitForVisible()
+    if (shouldAbort()) return true
+
+    // Achado do review automático do Copilot: o engine REAL (mais abaixo, `new Engine(canvas,
+    // ..., { preserveDrawingBuffer: true, stencil: true })`) não passa `adaptToDeviceRatio` —
+    // Babylon só multiplica pelo `devicePixelRatio` real quando esse parâmetro é `true`; sem ele,
+    // renderiza no tamanho em pixels CSS do canvas, não nos pixels físicos do aparelho. Multiplicar
+    // por `dpr` aqui fazia o benchmark medir uma resolução BEM maior (~3x num iPhone com DPR 3) do
+    // que o jogo de verdade realmente usa — o oposto do problema original: um aparelho capaz podia
+    // ser classificado "fraco" à toa, recriando o mesmo perfil de baixa qualidade que este PR existe
+    // pra evitar. Usa pixels CSS (sem `dpr`), igual ao engine real.
+    const { width, height } = benchCanvasSize(window.innerWidth, window.innerHeight)
+    const benchCanvas = document.createElement('canvas')
+    benchCanvas.width = width
+    benchCanvas.height = height
+    // Achado do review automático do Copilot: `preserveDrawingBuffer: true` (igual ao engine real,
+    // `preserveDrawingBuffer: true` mais abaixo) — em alguns drivers/GPUs, preservar o back buffer
+    // impede otimizações de descarte/renderização em blocos (comum em GPU mobile), um custo real
+    // que o engine de verdade paga mas que `false` aqui deixaria de fora da medição, inflando o
+    // FPS do benchmark em relação ao que o jogo de verdade vai conseguir sustentar.
+    const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: true })
+    // Achado do review automático do Copilot: registrado ANTES de `setSize` — se `setSize` lançar
+    // (contexto WebGL parcialmente perdido, etc.), o `catch` mais abaixo ainda encontra o engine
+    // na lista e consegue descartá-lo; empurrar depois deixaria esse exato caminho de erro sem
+    // limpar nada, justo o cenário que `disposables` existe pra cobrir.
+    disposables.push(benchEngine)
+    // Achado do review automático do Copilot: `benchCanvas` nunca é anexado ao DOM — sem layout,
+    // `clientWidth`/`clientHeight` ficam em 0. O `Engine` pode ler esses valores (0) ao inicializar
+    // e sobrescrever o `width`/`height` já setados acima, fazendo o benchmark medir uma resolução
+    // de renderização minúscula/zero (custo de GPU quase nenhum, FPS sempre alto, "forte" garantido
+    // não importa o aparelho). `setSize` força o tamanho de renderização explicitamente, depois de
+    // qualquer auto-detecção da engine — não depende de layout de DOM nenhum.
+    benchEngine.setSize(width, height)
+    const benchScene = new Scene(benchEngine)
+    disposables.push(benchScene)
+
+    // Achado do review automático do Copilot: sem câmera ativa, `Scene.render()` não desenha nada
+    // (não há de onde projetar a cena) — o loop rodava "de graça", sem custo real de GPU, e
+    // qualquer aparelho media FPS alto por medir só a cadência do próprio loop, não desempenho de
+    // renderização nenhum. Mira a câmera pro centro da malha de instâncias criada mais abaixo.
+    const camera = new UniversalCamera('benchCamera', new Vector3(0, 6, -14), benchScene)
+    camera.setTarget(Vector3.Zero())
+    benchScene.activeCamera = camera
+
+    const light = new HemisphericLight('benchHemiLight', new Vector3(0, 1, 0), benchScene)
+    light.intensity = 0.6
+    const sunLight = new DirectionalLight('benchSunLight', new Vector3(-1, -2, -1), benchScene)
+    const shadowGenerator = new ShadowGenerator(1024, sunLight)
+    shadowGenerator.useBlurExponentialShadowMap = true
+    // Achado do review automático do Copilot: `ShadowGenerator` não é um recurso da `Scene` — ela
+    // NÃO dispõe o gerador (nem o shadow map/render-list dele) sozinha ao chamar `scene.dispose()`
+    // (mesmo comportamento já documentado noutro lugar do código, `studentFigure.ts`). Registrado
+    // AQUI, logo após a criação — se `disposables.push` viesse só depois de `ground`/`prop`
+    // existirem, uma falha nesse meio-tempo (o caminho que essa lista existe pra cobrir) deixaria
+    // o gerador de fora, sem cobertura nenhuma. `shadowCasterProp` (nula até `addShadowCaster`
+    // rodar de verdade, mais abaixo) deixa o disposer seguro de chamar em qualquer ponto da
+    // inicialização — remove da renderList só se um caster já foi de fato adicionado.
+    let shadowCasterProp: Mesh | null = null
+    disposables.push({
+      dispose: () => {
+        if (shadowCasterProp) shadowGenerator.removeShadowCaster(shadowCasterProp)
+        shadowGenerator.dispose()
+      },
+    })
+
+    const ground = MeshBuilder.CreateGround('benchGround', { width: 40, height: 40 }, benchScene)
+    ground.receiveShadows = true
+
+    const prop = MeshBuilder.CreateSphere('benchProp', { segments: 8 }, benchScene)
+    const PROP_INSTANCE_COUNT = 800
+    const matrixData = new Float32Array(16 * PROP_INSTANCE_COUNT)
+    for (let i = 0; i < PROP_INSTANCE_COUNT; i++) {
+      const angle = (i / PROP_INSTANCE_COUNT) * Math.PI * 2 * 6
+      const radius = 1 + (i / PROP_INSTANCE_COUNT) * 18
+      Matrix.Translation(Math.cos(angle) * radius, 0.5, Math.sin(angle) * radius).copyToArray(matrixData, i * 16)
+    }
+    prop.thinInstanceSetBuffer('matrix', matrixData, 16)
+    prop.receiveShadows = true
+    shadowGenerator.addShadowCaster(prop)
+    shadowCasterProp = prop
+
+    // Achado do review automático do Copilot: sem `particleTexture` e com a taxa de emissão padrão
+    // (10/s), a maioria das 400 partículas nunca chegava a existir de verdade durante os poucos
+    // quadros medidos — o sistema não desenhava o volume de partículas que o `400` no construtor
+    // sugere, então esse custo real (textura + blending) não entrava na medição. Mesmo padrão de
+    // textura simples de `rainDropTexture` (mais abaixo, real, em `setup()`): um `DynamicTexture`
+    // pequeno preenchido de branco. `manualEmitCount` + vida longa força as 400 vivas de uma vez,
+    // cobrindo toda a janela de amostragem — não deixa a emissão gradual mascarar o custo real.
+    const particleTexture = new DynamicTexture('benchParticleTex', { width: 8, height: 8 }, benchScene, false)
+    const particleCtx = particleTexture.getContext() as CanvasRenderingContext2D
+    particleCtx.fillStyle = 'white'
+    particleCtx.fillRect(0, 0, 8, 8)
+    particleTexture.update()
+
+    const particles = new ParticleSystem('benchParticles', 400, benchScene)
+    particles.particleTexture = particleTexture
+    particles.emitter = Vector3.Zero()
+    particles.minEmitBox = new Vector3(-5, 0, -5)
+    particles.maxEmitBox = new Vector3(5, 5, 5)
+    particles.minLifeTime = 5
+    particles.maxLifeTime = 5
+    particles.manualEmitCount = 400
+    particles.start()
+
+    // Achado do review automático do Copilot: o benchmark só mede desenho de GPU (thin instances
+    // estáticas, sem física/IA nenhuma) — um aparelho com GPU forte mas CPU/física fraca passava
+    // como "forte" mesmo que o jogo de verdade tenha critters/NPCs/inimigos com Havok e IA por
+    // quadro (contagens que também dependem de `isLowEndDevice`, decidido por este benchmark).
+    // Carregar o Havok de verdade só pro benchmark seria caro/lento demais (é boa parte do tempo
+    // de carregamento do jogo real). Em vez disso, simula um custo de CPU por quadro na mesma
+    // ordem de grandeza de atualizar ~60 entidades (critters+NPCs+inimigos no teto atual) fazendo
+    // sua própria matemática de movimento/orientação — entra na MESMA medição de FPS, então um
+    // gargalo de CPU (não só de GPU) também reduz o FPS medido e classifica o aparelho como fraco.
+    const FAKE_ENTITY_COUNT = 60
+    const fakeEntityPhases = new Float32Array(FAKE_ENTITY_COUNT)
+    for (let i = 0; i < FAKE_ENTITY_COUNT; i++) fakeEntityPhases[i] = i
+    let fakeEntityAccumulator = 0
+    function simulateEntityWorkload() {
+      for (let i = 0; i < FAKE_ENTITY_COUNT; i++) {
+        fakeEntityPhases[i] += 0.05
+        const x = Math.cos(fakeEntityPhases[i]) * 5
+        const z = Math.sin(fakeEntityPhases[i]) * 5
+        fakeEntityAccumulator += Math.atan2(z, x) + Math.sqrt(x * x + z * z)
+      }
+      // Achado do review automático do Copilot: `fakeEntityAccumulator` nunca era lido por nada
+      // observável (nem a cena, nem o resultado) — um JIT otimizador pode legitimamente provar que
+      // o cálculo inteiro acima não tem efeito nenhum e eliminá-lo depois de "aquecer", zerando o
+      // custo de CPU que esse bloco existe pra simular (um aparelho com CPU fraca voltaria a
+      // classificar "forte" por engano). Aplica o valor a algo que a Babylon LÊ de verdade a cada
+      // quadro (posição da câmera, entra na matriz de view) — desvio imperceptível (±0,001,
+      // `Math.sin` limita o range mesmo com o acumulador crescendo sem parar), mas torna o cálculo
+      // observável o bastante pra não poder ser cortado com segurança.
+      camera.position.y = 6 + Math.sin(fakeEntityAccumulator) * 0.001
+    }
+
+    const result = await new Promise<boolean>((resolve) => {
+      let settled = false
+      const settle = (isWeak: boolean) => {
+        if (settled) return
+        settled = true
+        // Achado do review automático do Copilot: se qualquer chamada de limpeza abaixo lançar
+        // (ex.: contexto WebGL parcialmente perdido), a exceção saía do callback do render loop
+        // ANTES de `resolve()` — `settled` já virava `true`, então nem o teto de segurança
+        // conseguia tentar de novo (`settle` vira no-op), deixando a Promise pendurada pra sempre
+        // e `gpuTier` preso em `'pending'` (o mundo NUNCA monta). Cada passo é best-effort; `resolve`
+        // sempre roda por fora, não importa quantos passos falharem.
+        try {
+          benchEngine.stopRenderLoop()
+        } catch {
+          /* best-effort */
+        }
+        try {
+          shadowGenerator.removeShadowCaster(prop)
+          shadowGenerator.dispose()
+        } catch {
+          /* best-effort */
+        }
+        try {
+          benchScene.dispose()
+        } catch {
+          /* best-effort */
+        }
+        try {
+          benchEngine.dispose()
+        } catch {
+          /* best-effort */
+        }
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+        // Achado do review automático do Copilot: sem isto, o teto de segurança continuava
+        // pendurado por até mais 2.5s depois de `settle` já ter resolvido por outro caminho
+        // (amostragem completa ou abort) — o callback dele retinha a closure inteira (engine,
+        // cena, sombra, partículas, todos JÁ descartados acima) até disparar à toa.
+        if (safetyTimeoutHandle !== null) {
+          window.clearTimeout(safetyTimeoutHandle)
+          safetyTimeoutHandle = null
+        }
+        window.clearInterval(abortPollInterval)
+        resolve(isWeak)
+      }
+
+      // Achado do review automático do Copilot: `waitForVisible` só cobre a aba estar oculta ANTES
+      // de começar — se ficar oculta NO MEIO da amostragem, `requestAnimationFrame` pausa/atrasa,
+      // mas o `window.setTimeout` do teto de segurança é baseado em relógio de parede e continua
+      // contando por fora, podendo disparar e classificar "fraco" um aparelho só porque a aba
+      // ficou em segundo plano por um tempo, não porque é realmente lento. O teto de segurança
+      // agora pausa (cancela) enquanto oculto e reinicia do zero quando volta a ficar visível; o
+      // loop de render também pula quadros (sem contar progresso nem renderizar) enquanto oculto.
+      // Achado do review automático do Copilot: `engine.getFps()` é um contador interno do
+      // Babylon atualizado periodicamente, não uma medida instantânea por quadro — numa janela tão
+      // curta (30 quadros, ~500ms a 60Hz) várias leituras podem repetir o mesmo valor (inicial ou
+      // desatualizado), mascarando um aparelho que na real está rodando bem mais devagar (ex.:
+      // 30-39 FPS classificado por engano como "forte"). Mede o tempo de relógio de verdade
+      // decorrido, quadro a quadro — quadros/segundos reais, sem depender de quando o contador
+      // interno decide se atualizar.
+      //
+      // Acumula por DELTA entre quadros CONSECUTIVOS visíveis (não um único "início"/"fim") —
+      // achado do review automático do Copilot: se a aba ficar oculta bem no meio da amostragem,
+      // o tempo parado contaria como se fosse tempo de renderização (denominador inflado, FPS
+      // medido artificialmente baixo, "fraco" por engano). `lastFrameTime = 0` reseta a referência
+      // pra um hiato oculto não entrar na amostra.
+      let sampleElapsedMs = 0
+      let lastFrameTime = 0
+
+      let safetyTimeoutHandle: number | null = null
+      function scheduleSafetyTimeout() {
+        if (safetyTimeoutHandle !== null) window.clearTimeout(safetyTimeoutHandle)
+        safetyTimeoutHandle = window.setTimeout(() => settle(true), SAFETY_TIMEOUT_MS)
+      }
+      function onVisibilityChange() {
+        if (document.visibilityState === 'visible') {
+          scheduleSafetyTimeout()
+        } else {
+          // Achado do review automático do Copilot: resetar `lastFrameTime` só DENTRO do callback
+          // do render loop não bastava — se o navegador PAUSAR `requestAnimationFrame` por
+          // completo enquanto oculto (comum, não só limitar a cadência), o callback simplesmente
+          // não roda nenhuma vez durante o período oculto, então aquele reset nunca executava a
+          // tempo; o primeiro quadro depois de voltar a ficar visível calculava o delta contra o
+          // timestamp de ANTES de esconder, somando o hiato inteiro à amostra. O evento
+          // `visibilitychange` dispara de verdade independente do `requestAnimationFrame` estar
+          // pausado ou não — reseta aqui, na transição, não esperando o próximo quadro.
+          lastFrameTime = 0
+          if (safetyTimeoutHandle !== null) {
+            window.clearTimeout(safetyTimeoutHandle)
+            safetyTimeoutHandle = null
+          }
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibilityChange)
+      // Achado do review automático do Copilot: se algo lançar DEPOIS de registrar o listener/
+      // teto de segurança, mas antes de `settle` alguma vez rodar, só o `catch` mais abaixo (com a
+      // lista `disposables`) consegue limpar — `settle` (que normalmente cuida disso) nunca chega
+      // a ser chamado nesse caminho. Registra a limpeza do listener/timeout aqui, no MESMO lugar
+      // que já limpa engine/cena/sombra no erro.
+      disposables.push({
+        dispose: () => {
+          document.removeEventListener('visibilitychange', onVisibilityChange)
+          if (safetyTimeoutHandle !== null) window.clearTimeout(safetyTimeoutHandle)
+        },
+      })
+      // Achado do review automático do Copilot: entre `waitForVisible()` resolver e chegar aqui, a
+      // criação síncrona do engine/cena/malhas roda sem nenhum listener de `visibilitychange`
+      // registrado ainda — se a aba ficar oculta bem nesse meio-tempo, esse evento específico nunca
+      // chega a `onVisibilityChange` (o listener só entra em cena um instante depois), mas
+      // `scheduleSafetyTimeout` incondicional armava o teto do mesmo jeito, como se ainda
+      // estivesse visível. Só arma se JÁ estiver visível agora; se já estiver oculta, deixa o teto
+      // desarmado — o listener (que SEMPRE captura a próxima mudança de visibilidade em diante,
+      // já que está registrado antes desta checagem) arma quando a aba realmente voltar.
+      if (document.visibilityState === 'visible') scheduleSafetyTimeout()
+
+      // Achado do review automático do Copilot: depois que o benchmark começa, o ÚNICO lugar que
+      // checa `shouldAbort` é dentro do callback do `runRenderLoop` — se a aba ficar oculta
+      // (`requestAnimationFrame` pausado) bem quando o componente desmonta, esse callback pode não
+      // rodar de novo até a aba voltar a ficar visível, retendo engine/cena/contexto WebGL o tempo
+      // todo. Um `setInterval` independente do RAF (mesmo padrão já usado em `waitForVisible`)
+      // continua checando cancelamento mesmo com a aba oculta.
+      const abortPollInterval = window.setInterval(() => {
+        if (shouldAbort()) settle(true)
+      }, 500)
+      disposables.push({ dispose: () => window.clearInterval(abortPollInterval) })
+
+      let frame = 0
+      // Achado do review automático do Copilot: contar conclusão por `frame` (quadros renderizados)
+      // não é o mesmo que contar por DELTAS somados — se uma interrupção de visibilidade zerar
+      // `lastFrameTime`, o quadro seguinte incrementa `frame` mas NÃO soma delta nenhum (o `if
+      // (lastFrameTime !== 0)` descarta esse primeiro quadro de propósito). Dividir por
+      // `SAMPLE_FRAMES` fixo quando só `SAMPLE_FRAMES - 1` deltas de verdade entraram na soma
+      // infla o FPS calculado (~5% nesse caso) — o bastante pra confundir um aparelho limítrofe
+      // (ex.: 38-39 FPS reais virando "40+", classificado "forte" por engano). `deltaCount` conta
+      // só deltas realmente somados; a amostra só termina quando esse número bate `SAMPLE_FRAMES`.
+      let deltaCount = 0
+      benchEngine.runRenderLoop(() => {
+        if (shouldAbort()) {
+          settle(true)
+          return
+        }
+        // Pula o quadro (sem renderizar, sem contar progresso) enquanto a aba está oculta — não
+        // desanda a amostra já em andamento, só espera; o teto de segurança acima trata do "espera
+        // demais" de verdade.
+        if (document.visibilityState !== 'visible') {
+          lastFrameTime = 0
+          return
+        }
+        const now = performance.now()
+        simulateEntityWorkload()
+        benchScene.render()
+        frame++
+        if (frame > WARMUP_FRAMES) {
+          if (lastFrameTime !== 0) {
+            sampleElapsedMs += now - lastFrameTime
+            deltaCount++
+          }
+          if (deltaCount >= SAMPLE_FRAMES) {
+            const avgFps = SAMPLE_FRAMES / (sampleElapsedMs / 1000)
+            settle(avgFps < WEAK_GPU_AVG_FPS_THRESHOLD)
+          }
+        }
+        lastFrameTime = now
+      })
+    })
+
+    return result
+  } catch {
+    // Falha ao criar engine/contexto WebGL pro benchmark, ou qualquer recurso depois dele (raro) —
+    // assume fraco (mesmo padrão conservador de segurança do timeout acima) e libera o que já foi
+    // criado, em ordem reversa (cena antes do engine — descartar o engine primeiro invalidaria o
+    // contexto WebGL que a cena ainda depende).
+    for (let i = disposables.length - 1; i >= 0; i--) {
+      try {
+        disposables[i].dispose()
+      } catch {
+        // best-effort — um recurso já pode ter sido parcialmente invalidado por outra falha.
+      }
+    }
+    return true
+  }
+}
+
 export function World3D({
   profile,
   progress,
@@ -2029,6 +2454,35 @@ export function World3D({
   onOpenEnvironmentalChallenge,
 }: World3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Resultado do benchmark de GPU (ver `benchmarkIsWeakGpu` acima) — roda uma vez, fora do efeito
+  // pesado que monta o mundo, pra não recarregar o mundo inteiro se algo mais nesse efeito mudar.
+  // `'pending'` segura o efeito de montagem do mundo (mais abaixo) até o benchmark terminar.
+  const [gpuTier, setGpuTier] = useState<'pending' | 'weak' | 'strong'>('pending')
+  useEffect(() => {
+    let cancelled = false
+    benchmarkIsWeakGpu(() => cancelled).then((isWeak) => {
+      if (!cancelled) setGpuTier(isWeak ? 'weak' : 'strong')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  // Achado do review automático do Copilot: `gpuTier === 'pending'` só cobre o benchmark de GPU —
+  // depois dele resolver, o efeito pesado ainda tem `setup()` assíncrono pela frente (Havok + 18
+  // GLBs), que só registra as pontes de cena (`__recenterCamera` etc.) no FIM. Nessa janela o
+  // canvas/HUD de toque já ficava interativo de novo (só `gpuTier` saiu de `'pending'`), mas tocar
+  // continuava sendo descartado em silêncio pelas mesmas pontes ainda não registradas. Estado
+  // React (não só uma variável local do efeito) porque `hudInert`, calculado no corpo do
+  // componente, precisa reagir a isso — `setupSettled` (variável local do efeito, usada só pro
+  // agendamento do auto-tune) resolve uma necessidade diferente e continua existindo à parte.
+  const [setupReady, setSetupReady] = useState(false)
+  // Achado do review automático do Copilot: `setup().finally(...)` marcava pronto mesmo numa
+  // REJEIÇÃO (falha real de rede carregando Havok/algum dos 18 GLBs) — a tela de carregamento
+  // sumia, os controles voltavam a responder, mas a cena ficava incompleta/quebrada, sem NENHUMA
+  // mensagem de erro, e a rejeição em si ficava sem tratamento (unhandled rejection). Fica
+  // fail-closed: só marca pronto no CAMINHO DE SUCESSO; numa falha, mantém a tela de carregamento
+  // (com uma mensagem de erro, não "carregando" pra sempre) em vez de liberar uma cena quebrada.
+  const [setupFailed, setSetupFailed] = useState(false)
   const joystickRef = useRef({ x: 0, y: 0 })
   // Botões de toque (pedido do usuário: "o android não tem teclado" — sem eles, pular/correr só
   // funcionava via teclado, inacessível em celular/tablet). Mesmo padrão do `joystickRef`: a UI
@@ -2087,6 +2541,15 @@ export function World3D({
   // todo outro callback deste componente (`onFurniturePlacedRef` etc., acima) — o efeito só
   // depende de `visitHouseRequest`, nunca reinicia por causa de um re-render do pai.
   const onVisitHouseHandledRef = useRef(onVisitHouseHandled)
+  // Achado do review automático do Copilot: mesmo padrão de "ref sempre atual" de
+  // `onVisitHouseHandledRef` acima, aplicado às outras duas pontes de pedido único
+  // (`placingFurnitureRequestId`/`coopAnswerSignalId`) — precisam virar polling com teto (mesmo
+  // padrão de `visitHouseRequest`) em vez de uma tentativa só, senão clicar "Mover"/responder um
+  // desafio em dupla durante o benchmark de GPU (`gpuTier === 'pending'`) OU durante o resto do
+  // carregamento de `setup()` (que registra a ponte só no fim) descarta o pedido sem nunca
+  // executar a ação de verdade.
+  const onPlacingRequestHandledRef = useRef(onPlacingRequestHandled)
+  const onCoopAnswerHandledRef = useRef(onCoopAnswerHandled)
   // lab-136: espelha o item sendo posicionado pra fora do loop de física (Confirmar/Cancelar são
   // botões React normais, não Babylon GUI — mesmo raciocínio de `survivalPlanetId`/
   // `survivalTimeRef` acima: o closure do loop precisa de um valor ATUAL a cada quadro (por isso
@@ -2214,27 +2677,65 @@ export function World3D({
   onCoopChallengeCompletedRef.current = onCoopChallengeCompleted
   onOpenEnvironmentalChallengeRef.current = onOpenEnvironmentalChallenge
   onVisitHouseHandledRef.current = onVisitHouseHandled
+  onPlacingRequestHandledRef.current = onPlacingRequestHandled
+  onCoopAnswerHandledRef.current = onCoopAnswerHandled
 
   // lab-136: entra no modo de posicionamento de mobília sempre que `App.tsx` pede um id novo
   // (clique em "Mover" no `MyHousePanel`, que fica fora deste componente) — mesmo padrão de
   // `__refreshHouseFurniture`/`unlockedFurnitureIds` acima. Confirma o consumo do pedido de volta
   // pra `App.tsx` (`onPlacingRequestHandled`) senão o MESMO id reabriria o modo de novo a cada
   // re-render deste componente (ex.: qualquer outra mudança de `progress`).
+  // Achado do review automático do Copilot: uma tentativa só (`?.()` como no-op silencioso) perdia
+  // o pedido de "Mover" se a ponte ainda não existisse — não só durante `gpuTier === 'pending'`
+  // (benchmark de GPU, ver `benchmarkIsWeakGpu`), mas também durante o resto de `setup()`
+  // assíncrono (que só registra `__startFurniturePlacement` no fim, depois de Havok/assets
+  // carregarem) — a MESMA classe de bug já corrigida pra `visitHouseRequest` acima (lab-175).
+  // Mesmo padrão de polling com teto (200ms, 60s) em vez de reinventar uma abordagem nova.
   useEffect(() => {
     if (!placingFurnitureRequestId) return
-    ;(sceneRef.current as any)?.__startFurniturePlacement?.(placingFurnitureRequestId)
-    onPlacingRequestHandled()
-  }, [placingFurnitureRequestId, onPlacingRequestHandled])
+    const request = placingFurnitureRequestId
+    let attempts = 0
+    const MAX_ATTEMPTS = 300 // 300 × 200ms = 60s
+    const interval = setInterval(() => {
+      attempts += 1
+      const bridge = (sceneRef.current as any)?.__startFurniturePlacement
+      if (typeof bridge === 'function') {
+        bridge(request)
+        clearInterval(interval)
+        onPlacingRequestHandledRef.current()
+      } else if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(interval)
+        onPlacingRequestHandledRef.current()
+      }
+    }, 200)
+    return () => clearInterval(interval)
+  }, [placingFurnitureRequestId])
 
   // lab-172 — mesma ponte de `placingFurnitureRequestId` acima: `App.tsx` muda
   // `coopAnswerSignalId` quando o `QuestModal` do desafio em dupla chama `onCorrect` (o clique
   // acontece fora deste componente); só então este código sabe que a resposta certa aconteceu e
   // manda `sendCoopDone` pelo relé (dentro de `__onCoopAnswerCorrect`, ver `setup()`).
+  // Achado do review automático do Copilot: mesma classe de bug de `placingFurnitureRequestId`
+  // acima — uma tentativa só perdia a confirmação de "resposta certa" (e o `sendCoopDone` que
+  // depende dela) se a ponte ainda não existisse. Mesmo polling com teto.
   useEffect(() => {
     if (!coopAnswerSignalId) return
-    ;(sceneRef.current as any)?.__onCoopAnswerCorrect?.()
-    onCoopAnswerHandled()
-  }, [coopAnswerSignalId, onCoopAnswerHandled])
+    let attempts = 0
+    const MAX_ATTEMPTS = 300 // 300 × 200ms = 60s
+    const interval = setInterval(() => {
+      attempts += 1
+      const bridge = (sceneRef.current as any)?.__onCoopAnswerCorrect
+      if (typeof bridge === 'function') {
+        bridge()
+        clearInterval(interval)
+        onCoopAnswerHandledRef.current()
+      } else if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(interval)
+        onCoopAnswerHandledRef.current()
+      }
+    }, 200)
+    return () => clearInterval(interval)
+  }, [coopAnswerSignalId])
 
   // lab-175 — mesma ponte das duas acima: `App.tsx` muda `visitHouseRequest` quando o jogador
   // clica "Visitar casa" no `FriendsPanel`, fora deste componente.
@@ -2382,16 +2883,37 @@ export function World3D({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    // `gpuTier === 'pending'` significa que `benchmarkIsWeakGpu` (efeito acima) ainda não
+    // terminou — espera o resultado real em vez de montar o mundo com um valor adivinhado.
+    // Esse `return` sem `disposed`/listeners registrados ainda é um no-op de limpeza, mesmo
+    // padrão do `if (!canvas) return` que já existia aqui.
+    if (!canvas || gpuTier === 'pending') return
 
     let disposed = false
+    // Achado do review automático do Copilot: declarado cedo (`let`, atribuído só no fim do
+    // efeito, onde os listeners/observers que ele desfaz já existem) pra ficar chamável tanto do
+    // cleanup normal do efeito (`return () => {...}`, no fim) quanto do caminho de falha de
+    // `setup()` — antes, a falha só parava o render loop e os timers do auto-tune, deixando
+    // listeners globais de teclado/pointer e o contexto WebGL vivos indefinidamente atrás da tela
+    // de erro (o componente continua montado de propósito, pra exibir `setupFailed`, então o
+    // cleanup do efeito nunca dispara sozinho nesse caminho). Seguro de chamar duas vezes (uma
+    // pela falha, outra no desmonte de verdade depois) — a própria função vira no-op na segunda
+    // chamada.
+    let teardown: (() => void) | null = null
+    // Achado do review automático do Copilot: `onKeyDown` (registrado dentro de `setup()`, bem
+    // antes dela terminar) chama `handleInteractPress()` de forma SÍNCRONA pra tecla `E` — `inert`
+    // (que já cobre canvas/HUD) não afeta listeners de `window`. Só vira `true` quando `setup()`
+    // termina com sucesso (ver `setSetupReady`/`.then` mais abaixo), fechando tanto esse caminho
+    // síncrono quanto o de teclas de movimento (consumidas depois, no loop de física).
+    let inputReady = false
 
-    // Redmi Pad 2 e tablets/celulares similares têm GPU muito mais fraca que desktop — sem essa
-    // detecção o jogo roda em resolução nativa com MSAA+FXAA+SSAO+sombras em ~1900 meshes, o que
-    // não é jogável em GPU mobile de entrada. Em vez de tentar medir a GPU (APIs pouco confiáveis
-    // e inconsistentes entre navegadores), usa o mesmo sinal que já decide mostrar os controles de
-    // toque: é um aparelho móvel/tablet.
-    const isLowEndDevice = /Android|iPad|iPhone|iPod|Tablet|Mobi/i.test(navigator.userAgent)
+    // Antes (labs 56-72) isso vinha de um regex de user-agent (`/Android|iPad|iPhone|.../`), que
+    // tratava QUALQUER iPhone como GPU fraca — mesmo perfil de um Poco C75/Redmi Pad 2 reais,
+    // mesmo num iPhone recente com GPU forte (achado do usuário: "a qualidade do iPhone ficou
+    // baixíssima... só a resolução da tela não deve determinar a qualidade, deve levar em conta o
+    // hardware"). `gpuTier` mede desempenho real (benchmark síncrono numa cena sintética fora da
+    // tela, ver `benchmarkIsWeakGpu`), não o tipo de aparelho.
+    const isLowEndDevice = gpuTier === 'weak'
     // Legendas flutuantes (Babylon.GUI, número da escolinha/dica de interação/etc.) — o lab-57 já
     // corrigiu o bug de RESOLUÇÃO da textura de GUI (borrada, upscaled), mas o TAMANHO da fonte em
     // si continuava fixo em pixels reais de dispositivo — grande demais numa tela física pequena
@@ -3693,6 +4215,15 @@ export function World3D({
       ;(scene as any).__handleInteractPress = handleInteractPress
 
       const onKeyDown = (e: KeyboardEvent) => {
+        // Achado do review automático do Copilot: resetar `keysDown`/`jumpRequested` quando
+        // `setup()` termina (ver comentário perto de `inputReady`) só cobre teclas de MOVIMENTO,
+        // que só são consumidas depois, no loop de física. A tecla `E` chama
+        // `handleInteractPress()` de forma SÍNCRONA, aqui mesmo — apertar `E` durante a tela de
+        // carregamento executava a ação de interagir contra uma cena ainda incompleta (avatar,
+        // carro, etc. podem nem existir ainda), risco real de exceção não tratada (trava o loop de
+        // física inteiro, mesmo comentário já documentado onde `handleInteractPress` é definida).
+        // `inert` não ajuda aqui — só afeta a subárvore do DOM, não listeners de `window`.
+        if (!inputReady) return
         const target = e.target as HTMLElement | null
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
         const key = e.key.toLowerCase()
@@ -11549,7 +12080,46 @@ export function World3D({
       }
     }
 
-    setup()
+    // Achado do review automático do Copilot: o auto-tune (mais abaixo) agora roda pra QUALQUER
+    // classificação de `gpuTier`, não só "fraco" — mas seu primeiro ciclo era agendado 6s depois
+    // de CHAMAR `setup()`, não depois dele TERMINAR (`await HavokPhysics()` + `Promise.all` de 18
+    // GLBs). Se o carregamento passar de 6s, a primeira amostra mede a cena ainda incompleta e
+    // pode gravar um aparelho FORTE numa escala baixa (`firstCycle` aceita o alvo da 1ª amostra
+    // sem gradualismo). `setupSettled` sinaliza o fim de verdade pro agendamento do 1º ciclo.
+    let setupSettled = false
+    // Achado do review automático do Copilot: `.finally()` rodava tanto no sucesso quanto numa
+    // REJEIÇÃO (falha real carregando Havok/algum GLB) — sinalizava "pronto" e liberava a UI numa
+    // cena quebrada, além de deixar a rejeição sem `.catch`/`.then` de verdade (unhandled
+    // rejection). `.then(sucesso, falha)` trata os dois caminhos explicitamente: só o sucesso marca
+    // `setupReady`; a falha fica fail-closed (`setupFailed`, ver comentário perto da declaração —
+    // a tela de carregamento continua visível, agora com mensagem de erro em vez de "carregando").
+    // `setupSettled` (só a variável local, usada pro agendamento do auto-tune) marca fim em AMBOS
+    // os casos — o auto-tune medir FPS de uma cena com falha de asset não é o problema que essa
+    // variável existe pra evitar, só a UI/interatividade precisa ficar fail-closed.
+    setup().then(
+      () => {
+        setupSettled = true
+        // Achado do review automático do Copilot: `onKeyDown` (ver comentário perto de
+        // `inputReady`, declarado no topo do efeito) só processa teclas a partir daqui — antes
+        // disso, o handler inteiro retorna cedo, então nenhuma tecla apertada durante o
+        // carregamento chega a ser latched em `keysDown`/`jumpRequested` OU a disparar
+        // `handleInteractPress()` de forma síncrona contra uma cena ainda incompleta.
+        inputReady = true
+        if (!disposed) setSetupReady(true)
+      },
+      (error) => {
+        console.error('Falha ao carregar o mundo 3D:', error)
+        if (disposed) return
+        setSetupFailed(true)
+        // Achado do review automático do Copilot (2 rodadas — a 1ª correção só parava o render
+        // loop e os timers do auto-tune, deixando listeners globais de teclado/pointer e o
+        // contexto WebGL vivos indefinidamente atrás da tela de erro, já que o componente continua
+        // montado de propósito pra exibir `setupFailed`, então o cleanup do efeito nunca disparava
+        // sozinho nesse caminho): chama o MESMO teardown do desmonte de verdade — seguro de chamar
+        // aqui e de novo depois no cleanup real do efeito, a função vira no-op na segunda chamada.
+        teardown?.()
+      },
+    )
 
     engine.runRenderLoop(() => {
       if (!disposed) scene.render()
@@ -11621,8 +12191,24 @@ export function World3D({
     }
     let fpsAutoTuneInterval: number | null = null
     let fpsAutoTuneTimeout: number | null = null
-    if (isLowEndDevice) {
-      let currentTier = 1 // nível moderado inicial (ver `engine.setHardwareScalingLevel` mais acima)
+    // Achado do review automático do Copilot: declarado no escopo do EFEITO (não dentro do bloco
+    // `{...}` mais abaixo) pra ficar acessível à limpeza no `return` no fim do efeito — sem isso,
+    // desmontar o componente antes de `setupSettled` virar `true` (sobretudo com a aba em segundo
+    // plano, que atrasa/limita até `setInterval`) deixava o polling rodando até um tick futuro
+    // eventualmente notar `disposed` e se auto-limpar, em vez de parar já no cleanup.
+    let waitForSetupInterval: number | null = null
+    // Achado do review automático do Copilot: antes só rodava com `isLowEndDevice` (aparelho
+    // classificado fraco pelo benchmark de GPU, ver `benchmarkIsWeakGpu`), mas esse benchmark mede
+    // só desenho de GPU numa cena pequena fora da tela — um aparelho com GPU forte mas CPU/física
+    // fraca pode ser classificado "forte" (sem essa rede de segurança) e nunca ter a resolução
+    // ajustada se o FPS real (com física de verdade, área do mapa mais pesada, etc.) cair. Roda
+    // pra QUALQUER classificação agora — a rede de segurança nunca faz mal num aparelho realmente
+    // forte (só confirma que a escala pode ficar em 1.0 e não mexe em nada).
+    {
+      // `indexOf` em vez de um valor fixo: aparelho "forte" começa em 1.0 (índice 0, nunca
+      // chamou `engine.setHardwareScalingLevel(1.15)` mais acima), aparelho "fraco" começa em
+      // 1.15 (índice 1) — precisa refletir o valor REAL já aplicado, não assumir sempre o mesmo.
+      let currentTier = Math.max(0, SCALING_TIERS.indexOf(engine.getHardwareScalingLevel()))
       let firstCycle = true
       const runAutoTuneCycle = () => {
         if (disposed) return
@@ -11659,13 +12245,34 @@ export function World3D({
       // Espera 6s antes do PRIMEIRO ciclo (não só entre ciclos) — sem isso mediria FPS ainda
       // durante o carregamento inicial (física/glTF/texturas), que é enganosamente baixo e não
       // representa o jogo já rodando de verdade.
-      fpsAutoTuneTimeout = window.setTimeout(runAutoTuneCycle, 6000)
+      //
+      // Achado do review automático do Copilot: os 6s contavam a partir de CHAMAR `setup()`, não
+      // de `setup()` TERMINAR — sondar `setupSettled` (ver comentário perto de `setup()` acima)
+      // garante que o relógio de 6s só começa depois do carregamento pesado (Havok+18 GLBs) já ter
+      // acabado de verdade, não importa quanto tempo ele leve.
+      waitForSetupInterval = window.setInterval(() => {
+        if (disposed) {
+          if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
+          return
+        }
+        if (!setupSettled) return
+        if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
+        fpsAutoTuneTimeout = window.setTimeout(runAutoTuneCycle, 6000)
+      }, 500)
     }
 
-    return () => {
+    // Achado do review automático do Copilot: atribuído aqui (fim do efeito, onde todos os
+    // listeners/observers abaixo já existem de verdade), mas DECLARADO cedo (`let teardown`, perto
+    // de `disposed`) — a rejeição de `setup()` (bem acima) chama a MESMA função em vez de duplicar
+    // uma versão parcial da limpeza. `if (disposed) return` no topo é a garantia de idempotência:
+    // chamado uma vez pela falha e de novo no desmonte de verdade depois, só a PRIMEIRA chamada
+    // faz alguma coisa.
+    teardown = () => {
+      if (disposed) return
       disposed = true
       if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
       if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
+      if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
       if (petAgingInterval !== null) window.clearInterval(petAgingInterval)
       window.removeEventListener('resize', onResize)
       canvas.removeEventListener('pointerdown', onCameraPointerDown)
@@ -11679,8 +12286,14 @@ export function World3D({
       scene.dispose()
       engine.dispose()
     }
+
+    return () => teardown?.()
+    // `gpuTier` é a única dependência real: o efeito só roda de verdade quando o benchmark
+    // termina (`'weak'`/`'strong'`) — antes disso (`'pending'`) o guard acima já retornou sem
+    // montar nada. Continua rodando só UMA VEZ (mesmo padrão de antes, quando a dependência era
+    // `[]`), já que `gpuTier` não muda de novo depois de resolvido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [gpuTier])
 
   function handleJoystickChange(vector: { x: number; y: number }) {
     joystickRef.current = vector
@@ -11790,7 +12403,15 @@ export function World3D({
   // dele — um usuário de teclado conseguia dar Tab por dentro de um modal visualmente aberto e
   // cair nos botões escondidos atrás. `inert` no HUD inteiro resolve isso numa mudança central,
   // sem precisar de um focus-trap manual em cada um dos 12 painéis.
-  const hudInert = suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
+  // Achado do review automático do Copilot: nem o benchmark de GPU nem o resto de `setup()`
+  // assíncrono depois dele (Havok+18 GLBs) tinham suas bridges (`__recenterCamera`,
+  // `handleTouchInteractPress`, `placingFurnitureRequestId`/`coopAnswerSignalId` etc.) registradas
+  // ainda — tocar um desses botões durante TODO esse carregamento descartava a ação em silêncio.
+  // Reaproveita o MESMO mecanismo de `inert` já usado pra modais — `!setupReady` (`false` desde
+  // antes do benchmark começar até `setup()` de verdade terminar, ver comentário perto de sua
+  // declaração) desabilita toda a UI que depende da cena (canvas/joystick/botões de toque, ver
+  // `inert={hudInert}` abaixo) durante a janela inteira, em vez de proteger handler por handler.
+  const hudInert = !setupReady || suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
 
   return (
     <div className="world3d-container">
@@ -11798,6 +12419,18 @@ export function World3D({
           precisa de `inert` junto com o HUD — senão dá pra Tab escapar de um modal aberto direto
           pro canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). */}
       <canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />
+      {/* Achado do review automático do Copilot: sem isto, o benchmark de GPU + o resto de setup()
+          assíncrono (Havok+18 GLBs) rodavam sem feedback nenhum — o canvas já montado, mas vazio,
+          podia parecer travado por vários segundos num aparelho lento. Mesma aparência do
+          `.world-loading` de App.tsx (Suspense do carregamento do MÓDULO), pra não ter uma troca
+          brusca de visual entre as duas fases de carregamento. */}
+      {/* Achado do review automático do Copilot: div comum não anuncia nada pra leitor de tela —
+          quem usa um não tinha como saber por que o canvas/HUD ficaram sem resposta. */}
+      {!setupReady && (
+        <div className="world3d-setup-loading" role="status" aria-live="polite">
+          {setupFailed ? 'Não foi possível carregar o mundo. Tente recarregar a página.' : 'Carregando o mundo 3D…'}
+        </div>
+      )}
       {/* Achado do review automático do Copilot: este botão fica fora de `HudHeader`/`.hud-overlay`,
           então não herdava `inert` da lista de controles logo abaixo — com um modal aberto
           (chat/ranking/mochila/seletor de planeta/portão parental), o toggle continuava focável e
