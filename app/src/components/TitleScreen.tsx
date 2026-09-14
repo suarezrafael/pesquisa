@@ -45,7 +45,14 @@ export function TitleScreen({ onPlay }: TitleScreenProps) {
           `/familia` (`target="_blank"`, classe `.nickname-generate-btn`). */}
       <div className="title-parent-band">
         <p>Responsável por quem vai jogar?</p>
-        <a href="/familia" target="_blank" rel="noopener noreferrer" className="nickname-generate-btn" onClick={trackParentAreaClick}>
+        <a
+          href="/familia"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="nickname-generate-btn"
+          aria-label="Área dos responsáveis (abre em nova aba)"
+          onClick={trackParentAreaClick}
+        >
           Área dos responsáveis
         </a>
       </div>

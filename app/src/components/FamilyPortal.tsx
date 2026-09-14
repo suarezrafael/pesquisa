@@ -200,11 +200,11 @@ function FamilyValueProp({ onContinue }: { onContinue: () => void }) {
 
       <p className="subtitle">
         Detalhes completos na{' '}
-        <a href="/privacidade" target="_blank" rel="noopener noreferrer">
+        <a href="/privacidade" target="_blank" rel="noopener noreferrer" aria-label="Política de Privacidade (abre em nova aba)">
           Política de Privacidade
         </a>{' '}
         e nos{' '}
-        <a href="/termos" target="_blank" rel="noopener noreferrer">
+        <a href="/termos" target="_blank" rel="noopener noreferrer" aria-label="Termos de Uso (abre em nova aba)">
           Termos de Uso
         </a>
         .
@@ -377,11 +377,11 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
         {mode === 'sign-up' && (
           <p className="field-hint legal-consent-hint">
             Ao criar conta, você concorda com os{' '}
-            <a href="/termos" target="_blank" rel="noopener noreferrer">
+            <a href="/termos" target="_blank" rel="noopener noreferrer" aria-label="Termos de Uso (abre em nova aba)">
               Termos de Uso
             </a>{' '}
             e a{' '}
-            <a href="/privacidade" target="_blank" rel="noopener noreferrer">
+            <a href="/privacidade" target="_blank" rel="noopener noreferrer" aria-label="Política de Privacidade (abre em nova aba)">
               Política de Privacidade
             </a>
             .
