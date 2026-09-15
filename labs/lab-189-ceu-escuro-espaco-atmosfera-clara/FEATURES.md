@@ -114,6 +114,14 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-188, prio
   composição funciona como esperado: com `spaceT = 0` (fora do voo espacial), o código deste lab não
   toca em `fogDensity` nenhuma vez, deixando o valor inteiramente a cargo do sistema de clima já
   existente. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos após a mudança.
+- **Rodada 2** (2026-09-15): 1 achado "suppressed" (0 comentários novos gerados) — **repete a rodada
+  1, sem informação nova**. O achado cita literalmente `scene.clearColor = Color4.Lerp(...)`/
+  `scene.fogColor = Color3.Lerp(...)` como o código atual, mas isso já foi substituído por
+  `LerpToRef` na rodada 1 (confirmado direto no código: `grep -n "scene.clearColor\|scene.fogColor"
+  World3D.tsx` mostra só as duas linhas com `LerpToRef`, nenhuma com `Lerp` simples) — provavelmente
+  a rodada comparou contra um snapshot do diff anterior à correção. "Comments generated: 0 new"
+  confere com essa leitura (o próprio Copilot não trata como achado novo). Nenhuma mudança de código
+  nesta rodada — já está corrigido.
 
 - Simulação astronômica real, cutscene longa, novo sistema de clima espacial (explicitamente fora
   de escopo no próprio item do backlog).
