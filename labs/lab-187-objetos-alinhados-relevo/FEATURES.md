@@ -161,6 +161,9 @@ decidir o que precisa de correção de verdade — mesmo padrão "investigar ant
   não afirma o contrário). A piscina (`poolCenterPos`), sim, usa `groundSurfacePosition(poolUp,
   0.25)` — mas isso é outro objeto, num outro trecho do `FEATURES.md`. Nenhuma mudança feita; o
   texto já estava correto pro objeto que de fato descreve.
+- **Rodada 5** (2026-09-15) — **convergência**: "Approval recommended", 0 comentários novos
+  gerados, nenhum achado (nem suppressed). Rodada de confirmação depois da rodada 4 (que só teve um
+  falso positivo, sem mudança de código) — encerra o ciclo de review deste PR.
 
 ## Fora de escopo (explicitamente adiado)
 
