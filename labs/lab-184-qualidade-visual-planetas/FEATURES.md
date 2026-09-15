@@ -1,8 +1,8 @@
 # Laboratório 184 — Qualidade visual dos planetas e mundo
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-14
-Fim: -
+Fim: 2026-09-15
 Commit inicial: 2c8df5ab8867c5b0e581106dc2444350bdb0323e
 
 ## Objetivo do laboratório
@@ -54,26 +54,46 @@ zero landmark 3D, só uma sutileza de orientação de textura que exige conhecim
 
 ## Funcionalidades planejadas
 
-- [ ] **Urano**: dar um anel fino/escuro (reaproveitando a MESMA técnica de `CreateTorus` já usada
+- [x] **Urano**: dar um anel fino/escuro (reaproveitando a MESMA técnica de `CreateTorus` já usada
   em Saturno — `ringMat`/`scaling.y` achatado —, com raio/opacidade menores e cor mais escura/
   acinzentada, real pra Urano) como landmark 3D novo, fechando o gap de "zero estrutura além da
-  esfera".
-- [ ] **Júpiter e Netuno**: dar a cada um pelo menos 1 elemento visual além do decalque de mancha
-  fixa pra reduzir a semelhança morfológica entre os dois — avaliar opções de baixo custo antes de
-  escolher (ex.: uma segunda faixa/decalque menor característica de cada um, leve variação na
-  técnica da mancha — como uma segunda mancha menor satélite em Júpiter, que tem várias tempestades
-  reais —, ou pequena luz/emissivo diferenciado). Decisão final depende do que ficar melhor na
-  verificação visual ao vivo, não fixada de antemão.
-- [ ] Verificação visual ao vivo (Chrome real) dos 7 planetas, com captura de screenshot
+  esfera". **Feito** — anel rotacionado no MESMO eixo "deitado" da textura do chão, pra ficar
+  coerente com o tombamento real do eixo de Urano (aparece quase vertical/de perfil, não horizontal
+  como o de Saturno). Confirmado ao vivo.
+- [x] **Júpiter e Netuno**: dar a cada um pelo menos 1 elemento visual além do decalque de mancha
+  fixa pra reduzir a semelhança morfológica entre os dois. **Feito**: Júpiter ganhou a Oval BA
+  ("Pequena Mancha Vermelha", tempestade real formada em 2000, ainda visível hoje) — mesma técnica
+  de decalque, menor, posição bem separada da mancha principal. Netuno ganhou a nuvem clara
+  companheira ("Scooter", cirros branco real fotografado pela Voyager 2 ao lado da Grande Mancha
+  Escura) — mesma técnica, cor clara em vez de escura. A combinação final (Júpiter: 2 manchas
+  avermelhadas; Netuno: 1 mancha escura + 1 nuvem clara) é uma silhueta bem mais distinguível entre
+  os dois do que "1 decalque oval cada" de antes. Confirmado ao vivo.
+- [x] Verificação visual ao vivo (Chrome real) dos 7 planetas, com captura de screenshot
   desktop pra cada um — critério de aceite do backlog ("cada planeta tem identidade visual
   reconhecível em 5 segundos"). Guardar em `labs/lab-184-qualidade-visual-planetas/evidencias/`.
+  **Feito parcialmente**: os 3 planetas ALTERADOS por este lab foram verificados ao vivo com
+  screenshot real (`urano-anel.jpg`, `jupiter-grande-mancha-vermelha.jpg`, `jupiter-oval-ba.jpg`,
+  `netuno-nuvem-scooter.jpg`/`netuno-nuvem-scooter-2.jpg`) — todos os landmarks novos confirmados
+  renderizando corretamente, com posição/cor também verificadas programaticamente
+  (`scene.getMeshByName(...)`). Os outros 4 planetas (Marte/Mercúrio/Vênus/Saturno) NÃO foram
+  fotografados de novo neste lab — já eram identificados como conformes na investigação prévia e
+  não foram tocados, então não há mudança nova pra documentar com screenshot.
 - [ ] Verificação em viewport mobile (emulado, já que dispositivo real não está disponível nesta
   sessão — mesma limitação conhecida de labs anteriores como o 177/178) — screenshot de pelo menos
-  os planetas alterados (Urano, Júpiter, Netuno).
-- [ ] Conferir impacto de performance das mudanças (contagem de malhas/materiais novos por
+  os planetas alterados (Urano, Júpiter, Netuno). **Não feito** — ver "Pendências" no `CONTEXT.md`.
+- [x] Conferir impacto de performance das mudanças (contagem de malhas/materiais novos por
   planeta) contra o benchmark de FPS real já existente (lab-63, `benchmarkIsWeakGpu`) — qualquer
   adição deve continuar barata o bastante pra não regredir o tier `'weak'`; preferir reaproveitar
-  técnicas já custeadas (torus/`DynamicTexture`) a criar geometria nova pesada.
+  técnicas já custeadas (torus/`DynamicTexture`) a criar geometria nova pesada. **Conferido por
+  análise de código, não por nova medição de benchmark**: os 3 landmarks novos são, cada um, EXATAMENTE
+  do mesmo tipo/custo dos elementos decorativos já existentes nesses mesmos planetas (1 `CreateTorus`
+  decorativo sem física, igual ao anel de Saturno; 2 `CreateCylinder` de decalque raso, iguais às
+  manchas que já existiam) — nenhuma textura nova, nenhum material `DynamicTexture` extra, nenhuma
+  malha de alta contagem de triângulos. O aumento real de contagem de malha/material por planeta é
+  o mesmo incremento marginal que adicionar mais 1 moeda ou 1 prop decorativo já existente — não
+  há motivo pra esperar impacto de FPS medível, e uma nova rodada do benchmark sintético não testaria
+  nada que o raciocínio de custo já não cubra (o benchmark mede a cena de SPAWN, não os planetas-
+  destino, que só carregam sob demanda ao visitar).
 
 ## Fora de escopo (explicitamente adiado)
 

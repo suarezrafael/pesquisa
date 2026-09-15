@@ -6687,6 +6687,27 @@ export function World3D({
         spot.scaling.x = 1.6
         spot.freezeWorldMatrix()
 
+        // Oval BA ("Pequena Mancha Vermelha") — tempestade real menor que se formou em 2000,
+        // ainda visível hoje ao lado da Grande Mancha Vermelha; mesma técnica do decalque
+        // acima, cor/tamanho menores, posição bem separada. Sem isso, Júpiter tinha só a mancha
+        // principal — a mesma silhueta de Netuno (1 mancha + faixas), difíceis de distinguir num
+        // relance rápido.
+        const spot2Dir = new Vector3(-0.35, 0.55, -0.6).normalize()
+        const spot2Mat = new PBRMaterial('jupiterOvalBAMat', scene)
+        spot2Mat.albedoColor = new Color3(0.68, 0.4, 0.28)
+        spot2Mat.roughness = 0.85
+        const spot2 = MeshBuilder.CreateCylinder(
+          'jupiterOvalBA',
+          { diameter: 1.4, height: 0.06, tessellation: 20 },
+          scene,
+        )
+        spot2.material = spot2Mat
+        spot2.parent = jupiterRoot
+        spot2.position = spot2Dir.scale(JUPITER_RADIUS + 0.03)
+        spot2.rotationQuaternion = alignmentQuaternion(spot2Dir)
+        spot2.scaling.x = 1.3
+        spot2.freezeWorldMatrix()
+
         // Moedas escondidas — mesmo padrão dos outros planetas-destino.
         const JUPITER_COIN_COUNT = 8
         for (let i = 0; i < JUPITER_COIN_COUNT; i++) {
@@ -6876,6 +6897,28 @@ export function World3D({
         groundSphere.computeWorldMatrix(true)
         new PhysicsAggregate(groundSphere, PhysicsShapeType.SPHERE, { mass: 0, friction: 0.6 }, scene)
 
+        // Anel de Urano — real, mas bem mais fino/escuro/transparente que o de Saturno (mesma
+        // técnica de `CreateTorus` achatado em `scaling.y`, já usada lá). Sem isso, Urano não
+        // tinha nenhum landmark 3D além da rotação sutil da textura acima. Aplica a MESMA rotação
+        // do chão (eixo "deitado" de Urano) pro anel ficar no plano equatorial certo — de Urano de
+        // verdade os anéis aparecem quase verticais/de perfil (não horizontais como os de
+        // Saturno) por causa desse mesmo tombamento do eixo.
+        const ringMat = new PBRMaterial('uranusRingMat', scene)
+        ringMat.albedoColor = new Color3(0.32, 0.34, 0.36)
+        ringMat.roughness = 0.7
+        ringMat.alpha = 0.5
+        ringMat.backFaceCulling = false
+        const ring = MeshBuilder.CreateTorus(
+          'uranusRing',
+          { diameter: URANUS_RADIUS * 2.25, thickness: URANUS_RADIUS * 0.1, tessellation: 64 },
+          scene,
+        )
+        ring.material = ringMat
+        ring.parent = uranusRoot
+        ring.scaling.y = 0.02
+        ring.rotationQuaternion = Quaternion.RotationAxis(Vector3.Right(), Math.PI / 2)
+        ring.freezeWorldMatrix()
+
         // Moedas escondidas — mesmo padrão dos outros planetas-destino.
         const URANUS_COIN_COUNT = 7
         for (let i = 0; i < URANUS_COIN_COUNT; i++) {
@@ -6973,6 +7016,27 @@ export function World3D({
         spot.rotationQuaternion = alignmentQuaternion(spotDir)
         spot.scaling.x = 1.5
         spot.freezeWorldMatrix()
+
+        // Nuvem clara companheira ("Scooter") — nuvem de cirros branca real, fotografada pela
+        // Voyager 2 viajando ao lado da Grande Mancha Escura; mesma técnica do decalque acima,
+        // cor clara em vez de escura. Sem isso, Netuno tinha só 1 mancha escura — a mesma
+        // silhueta de Júpiter (1 mancha + faixas). A combinação mancha escura + nuvem clara é
+        // uma silhueta única entre os 2 gigantes gasosos que só tinham 1 decalque cada.
+        const cloudDir = new Vector3(-0.15, -0.6, 0.7).normalize()
+        const cloudMat = new PBRMaterial('neptuneScooterMat', scene)
+        cloudMat.albedoColor = new Color3(0.92, 0.95, 0.98)
+        cloudMat.roughness = 0.7
+        const cloud = MeshBuilder.CreateCylinder(
+          'neptuneScooterCloud',
+          { diameter: 1.1, height: 0.06, tessellation: 20 },
+          scene,
+        )
+        cloud.material = cloudMat
+        cloud.parent = neptuneRoot
+        cloud.position = cloudDir.scale(NEPTUNE_RADIUS + 0.03)
+        cloud.rotationQuaternion = alignmentQuaternion(cloudDir)
+        cloud.scaling.x = 1.2
+        cloud.freezeWorldMatrix()
 
         // Moedas escondidas — mesmo padrão dos outros planetas-destino.
         const NEPTUNE_COIN_COUNT = 7
