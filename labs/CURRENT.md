@@ -1,5 +1,17 @@
 # Laboratório atual
 
+Em andamento: labs/lab-187-objetos-alinhados-relevo/ — auditar objetos estáticos do planeta
+principal (casa, loja, escolas, rua, piscina, props/landmarks) contra o relevo real e corrigir
+qualquer caso concreto de objeto enterrado/flutuando. Origem: `docs/gameplay-market-expansion-backlog.md`,
+"Lab 202" no documento (renumerado pra lab-187 na sequência real do repo) — próximo item recomendado
+depois do lab-186, prioridade P0. Investigação prévia já achou que casa/loja/escolinha/props do
+planeta principal JÁ usam posicionamento real (`terrainGroundRadial`+`terrainHeight`, corrigido em
+labs anteriores 28/59/95/134) — o candidato mais provável a bug ainda vivo é a rua (só fórmula
+analítica + margem fixa calibrada num relevo anterior, nunca reverificada), além de landmarks
+ainda não auditados (parkour, baús, segredos, estação UFO, morro de Marte, etc.). Verificação ao
+vivo é o próximo passo antes de decidir o que corrigir de verdade. Ver
+`labs/lab-187-objetos-alinhados-relevo/FEATURES.md`.
+
 Último concluído: labs/lab-186-ranking-nao-bloqueia-arrasto/ — canvas não fica `inert` com ranking/
 chat/mochila abertos. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 201" no documento
 (renumerado pra lab-186 na sequência real do repo) — primeiro item da recomendação priorizada do
