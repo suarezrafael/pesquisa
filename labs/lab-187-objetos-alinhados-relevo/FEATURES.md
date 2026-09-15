@@ -65,21 +65,39 @@ decidir o que precisa de correção de verdade — mesmo padrão "investigar ant
 
 ## Funcionalidades planejadas
 
-- [ ] Verificação ao vivo (Chrome real): voltar de foguete/andando e fotografar casa, loja,
-  piscina (borda), e pelo menos 4 pontos distribuídos da volta da rua (não só theta≈0°) — confirmar
-  se algum objeto está visivelmente enterrado/flutuando HOJE, não só historicamente.
-- [ ] Auditar landmarks ainda não verificados contra relevo real: parkour, baús de tesouro,
-  segredos visuais, estação UFO, entrada de caverna, morro de Marte, cacto do deserto.
-- [ ] Consolidar o padrão repetido `dir.scale(terrainGroundRadial(dir, terrainHeight(dir)))` (casa/
-  loja/escolinha/props) num helper único nomeado — reduz duplicação, facilita auditoria futura
-  (referência: `docs/prompts/04-manutencao-clean-code.md`, duplicação/nomeação).
-- [ ] Se a verificação ao vivo confirmar um caso real de objeto mal posicionado (rua, piscina, ou
-  outro landmark), corrigir com o mesmo padrão de raycast real já usado por casa/loja/escolinha/
-  props, documentando o achado concreto (não uma correção especulativa).
-- [ ] Remover o diagnóstico de debug morto `buriedHouseReport` (`houseBase`, ~linha 8121) se a
-  investigação confirmar que não é mais necessário (comentário do próprio código já indica isso).
-- [ ] Confirmar que física/trigger de interação continuam alinhados ao visual em qualquer objeto
-  que for reposicionado (critério de aceite do backlog).
+- [x] Verificação ao vivo (Chrome real): script de raycast físico real (mesmo `HavokPlugin.raycast`
+  usado pelo próprio jogo) contra os 96 pontos do laço inteiro da rua — gap sempre positivo (mín.
+  0.089, máx. 0.213), zero pontos enterrados; diagnóstico já embutido no HUD de debug (`CASA:1.10`,
+  `ENTERRADAS:q01(0.90)...q30(0.72)`) confirmou casa e as 30 escolas do planeta principal também
+  sempre com folga positiva. Nenhum objeto crítico está enterrado/flutuando hoje — o relato do
+  backlog, historicamente real (labs 28/59/95/134), não reproduz no relevo atual.
+- [x] Auditar landmarks ainda não verificados contra relevo real: parkour (plataformas erguidas bem
+  acima da âncora, sem risco), torre/desafio em dupla/carteira/ponte/posto de combustível/placa/
+  gato empoleirado/foguete/espada/arma a laser (todos já usavam `terrainGroundRadial`+
+  `terrainHeight` no ponto de partida, agora via `groundSurfacePosition`). Baús de tesouro/segredos
+  visuais/estação UFO/entrada de caverna/morro de Marte ficaram fora (são de planetas-destino
+  secundários, "fora de escopo" abaixo). Lagoa não pôde ser verificada ao vivo nesta sessão (não
+  chegou a ser renderizada com o dispositivo detectado como fraco no ambiente de automação — mesma
+  classe de limitação de ferramental já conhecida de outros labs) — código usa o mesmo padrão
+  fórmula+margem da rua (`terrainHeight(pondUp) + 0.3`), que a verificação da rua já validou como
+  seguro.
+- [x] Consolidado o padrão repetido `dir.scale(terrainGroundRadial(dir, terrainHeight(dir)) [+
+  offset])` — achado real: eram **15 call sites**, não os 4 estimados na investigação prévia (casa,
+  loja, escolinha ×30, props ×2, rochas de montanha, torre, piscina, foguete ×2, espada, arma a
+  laser, carteira, desafio em dupla, ponte, posto de combustível, placa, gato empoleirado). Extraído
+  `groundSurfacePosition(dir, extraOffset?)` logo depois de `terrainGroundRadial` (mesmo escopo de
+  closure, já que depende de `havokPlugin`). Comportamento idêntico verificado ao vivo antes/depois
+  (mesmo `CASA:1.10`, mesmo gap mín./máx. da rua). Casos de LEITURA de valor bruto (diagnósticos
+  `buriedHouseReport`/`buriedSchoolReport`, `terrainVarianceNearbyReal`, cálculo por quadro do pet)
+  ficaram de propósito FORA do helper — precisam do radial escalar puro, não de um `Vector3`.
+- [x] Nenhum objeto mal posicionado encontrado pra corrigir de verdade (ver achado acima) — a
+  correção real acabou sendo a padronização do helper, não reposicionamento.
+- [x] `buriedHouseReport` **mantido**, não removido — investigação achou que seu comentário "REMOVER
+  depois de confirmar causa raiz real" está desatualizado: o diagnóstico é renderizado no HUD de
+  debug até hoje, deliberadamente (lab-67, contador sempre visível mesmo em produção), lado a lado
+  com `buriedSchoolReport` — não um dado morto esquecido. Comentário corrigido pra refletir isso.
+- [x] Física/trigger de interação inalterados (a correção é só a extração de uma função com o MESMO
+  cálculo — nenhum objeto mudou de posição).
 
 ## Fora de escopo (explicitamente adiado)
 
