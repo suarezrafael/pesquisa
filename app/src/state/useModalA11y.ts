@@ -89,6 +89,12 @@ export function useModalA11y(onClose: () => void) {
     // pro último — mesmo padrão de focus trap de diálogo modal.
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
+        // Achado do review automático do Copilot: cada instância registra seu PRÓPRIO listener
+        // de `keydown` — com dois painéis montados ao mesmo tempo, um único Esc disparava os DOIS
+        // `onClose`, fechando ambos de uma vez. Só a instância do TOPO da pilha (o painel mais
+        // recentemente aberto) reage ao Esc; as instâncias mais abaixo na pilha ignoram, mesmo o
+        // listener delas também tendo disparado pro mesmo evento.
+        if (activeModalRoots[activeModalRoots.length - 1] !== rootRef.current) return
         onCloseRef.current()
         return
       }
@@ -125,7 +131,20 @@ export function useModalA11y(onClose: () => void) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       if (root) unregisterModalRoot(root)
-      previouslyFocused?.focus()
+      // Achado do review automático do Copilot: com painéis concorrentes, o painel de BAIXO podia
+      // fechar primeiro (fora da ordem LIFO natural) — restaurar `previouslyFocused` incondicional
+      // roubava o foco do painel de CIMA (ainda aberto) de volta pro que veio antes de ambos; e
+      // quando o painel de cima fechasse depois, o `previouslyFocused` DELE apontava pra raiz do
+      // painel de baixo, já removida do DOM — `.focus()` num nó desconectado é um no-op, perdendo
+      // o foco de vez em vez de devolver pro abridor original. Se ainda sobrar algum painel na
+      // pilha depois de remover este, o foco pertence a ele (o novo topo), não ao que veio antes
+      // de QUALQUER painel abrir; só restaura `previouslyFocused` quando a pilha esvazia de
+      // verdade (o normal, um painel só) — e só se o nó restaurado ainda estiver no documento.
+      if (activeModalRoots.length > 0) {
+        activeModalRoots[activeModalRoots.length - 1].focus()
+      } else if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus()
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

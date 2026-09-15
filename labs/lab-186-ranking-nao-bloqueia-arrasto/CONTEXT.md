@@ -200,6 +200,28 @@ documento pro escopo completo desse item.
   código. Corrigido removendo a afirmação incorreta. Também atualizada a descrição da PR no GitHub,
   que ainda só mencionava excluir `chatOpen`/`rankingOpen` (sem `bagOpen`) e não mencionava o
   mecanismo de registro compartilhado de foco.
+- **Rodada 6** (2026-09-15): 2 achados reais, ambos decorrentes da mesma lacuna — a rodada 5
+  tornou o REDIRECIONAMENTO de foco (quando o alvo escapa de todos os painéis) consciente da
+  pilha compartilhada, mas o Esc e a restauração de foco ao fechar continuavam ingênuos, por
+  instância. (1) Cada instância de `useModalA11y` ainda registra seu PRÓPRIO listener de
+  `keydown` — com dois painéis montados ao mesmo tempo (ex. chat + ranking), um único Esc disparava
+  os DOIS `handleKeyDown`, chamando os dois `onClose` e fechando ambos de uma vez, quando só o
+  painel do topo deveria fechar. Corrigido: o branch do Esc agora checa
+  `if (activeModalRoots[activeModalRoots.length - 1] !== rootRef.current) return` antes de chamar
+  `onCloseRef.current()` — só a instância cujo root é o topo da pilha reage, as demais ignoram o
+  mesmo evento. (2) Com painéis concorrentes fechando fora da ordem LIFO (o de baixo primeiro), a
+  limpeza restaurava `previouslyFocused` incondicionalmente — isso roubava o foco do painel de CIMA
+  (ainda aberto) de volta pro elemento anterior a AMBOS os painéis; e quando o painel de cima
+  fechasse depois, o `previouslyFocused` DELE apontava pra raiz do painel de baixo, já removida do
+  DOM (`.focus()` num nó desconectado é no-op), perdendo o foco de vez em vez de devolvê-lo ao
+  abridor original. Corrigido: a limpeza agora prioriza o novo topo da pilha
+  (`if (activeModalRoots.length > 0) { activeModalRoots[activeModalRoots.length - 1].focus() }`) e
+  só cai para `previouslyFocused` quando a pilha esvazia de verdade, e mesmo assim só se
+  `document.contains(previouslyFocused)` (nó ainda anexado ao documento). Verificado que o caso de
+  painel único (o caminho mais comum, único coberto pela suíte de testes automatizados) continua
+  idêntico: pilha vira vazia ao fechar o único painel, cai no `else if`, restaura o elemento que
+  tinha foco antes de abrir. `npx tsc -b`, `npm run test` (208/208) e `npm run build` limpos após
+  a mudança.
 
 ## Estado do repositório ao final
 
