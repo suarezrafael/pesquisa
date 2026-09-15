@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-190-preview-fixo-lojinha-scroll/ — preview fixo na lojinha durante scroll.
+Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 205" no documento (renumerado pra lab-190
+na sequência real do repo) — próximo item recomendado depois do lab-189. Ver
+`labs/lab-190-preview-fixo-lojinha-scroll/FEATURES.md` pro objetivo e investigação prévia
+(`.avatar-preview-3d-wrap` sem `sticky` dentro do scroll de `.avatar-shop-modal`, e o `.modal-close`
+com o mesmo problema em potencial).
+
 Último concluído: labs/lab-189-ceu-escuro-espaco-atmosfera-clara/ — céu escuro no espaço e claro na
 atmosfera. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 204" no documento (renumerado
 pra lab-189 na sequência real do repo) — próximo item recomendado depois do lab-188, prioridade
