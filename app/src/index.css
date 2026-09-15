@@ -1531,6 +1531,37 @@ a.nickname-generate-btn {
   overflow-y: auto;
 }
 
+/* Âncora do botão de fechar — altura zero, não ocupa espaço no fluxo (`<h2>` continua nascendo
+   exatamente onde nascia antes), só existe pra dar ao `.modal-close` (absoluto) um ancestral
+   `position: sticky` que acompanha o scroll de `.avatar-shop-modal`. `z-index` maior que
+   `.avatar-shop-sticky-header` pra o "×" continuar clicável por cima do preview ao rolar. */
+.avatar-shop-close-anchor {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 5;
+}
+
+/* Sem isso o "×" ficava transparente por cima do texto que passa rolando por baixo dele assim que
+   gruda no topo — a rolagem não parava embaixo dele como antes, quando ele só existia sobre o
+   `<h2>`, que nunca rolava até ali (o modal inteiro cabia sem rolar). Fundo sólido igual ao card +
+   sombra sutil isolam visualmente o botão do conteúdo por baixo. */
+.avatar-shop-close-anchor .modal-close {
+  background: var(--card);
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(15, 23, 65, 0.18);
+}
+
+/* Preview + saldo + abas fixos durante o scroll — listas longas de roupas/chapéus faziam o preview
+   3D (referência visual do boneco) sumir de vista assim que a criança rolava a lista. Fundo sólido
+   igual ao do card pra itens da grade não aparecerem "por trás" ao rolar por baixo. */
+.avatar-shop-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--card);
+}
+
 .avatar-shop-balance {
   display: inline-block;
   margin-top: 0.25rem;

@@ -1,6 +1,6 @@
 # Laboratório 190 — Preview fixo na lojinha durante scroll
 
-Status: em andamento
+Status: em andamento (PR aberta)
 Início: 2026-09-15
 Fim: -
 Commit inicial: 65b696f370a7c3311ad20db1b669f7b7e8286ac9
@@ -50,25 +50,71 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-189, prio
 
 ## Funcionalidades planejadas
 
-- [ ] Verificação ao vivo (Chrome real): abrir a lojinha numa aba com muitos itens (ex. calças/
+- [x] Verificação ao vivo (Chrome real): abrir a lojinha numa aba com muitos itens (ex. calças/
   chapéus), rolar até o fim, confirmar hoje que preview E botão fechar somem de vista (achado
   prévio) antes de aplicar qualquer correção.
-- [ ] Tornar `.avatar-preview-3d-wrap` `position: sticky` no topo do scroll de `.avatar-shop-modal`,
+- [x] Tornar `.avatar-preview-3d-wrap` `position: sticky` no topo do scroll de `.avatar-shop-modal`,
   com fundo sólido (não transparente) pra itens da grade não aparecerem "atrás" dele ao rolar por
   baixo.
-- [ ] Avaliar (decidir com base em como fica visualmente) se as abas (`.avatar-shop-tabs-wrap`)
-  também devem ficar `sticky` logo abaixo do preview — evita ter que rolar de volta ao topo só pra
-  trocar de aba, mesmo espírito do critério de aceite, mesmo não sendo o pedido literal do backlog.
-- [ ] Corrigir o botão de fechar (`.modal-close`) sumindo de vista ao rolar, se a verificação ao
-  vivo confirmar que isso reproduz hoje — critério de aceite explícito do backlog.
-- [ ] Confirmar que trocar de item (roupa/chapéu/cor) atualiza o preview instantaneamente mesmo com
-  o novo posicionamento `sticky` (não deveria mudar nada nesse comportamento, já que
-  `AvatarPreview3D` não muda de lógica, só de posição CSS — mas verificar ao vivo pra ter certeza).
-- [ ] Confirmar que o preview `sticky` não cobre botões nem itens da grade (critério de aceite) —
-  checar com uma grade de 3 colunas cheia, não só poucos itens.
-- [ ] Confirmar que não há regressão no bug corrigido do lab-176 (vazamento de material/textura ao
-  trocar peças rapidamente) — esse lab só mexeu em CSS/posicionamento, não na lógica de troca de
-  peça em si, mas vale confirmar ao vivo.
+- [x] Abas (`.avatar-shop-tabs-wrap`) também ficam `sticky`, junto do preview e do saldo — os três
+  agrupados num único wrapper novo (`.avatar-shop-sticky-header`) em vez de 3 `position: sticky`
+  separados, evita cálculo de empilhamento manual de `top`/z-index entre eles.
+- [x] Corrigido o botão de fechar (`.modal-close`) sumindo de vista ao rolar — confirmado ao vivo
+  que reproduzia hoje (ver "Verificação ao vivo" abaixo), critério de aceite explícito do backlog.
+- [x] Confirmado ao vivo que trocar de item (cor de mochila) atualiza o preview instantaneamente com
+  o novo posicionamento `sticky`, inclusive rolado até o fim da lista.
+- [x] Confirmado ao vivo (grade cheia de 25+ itens em "Roupas") que o cabeçalho fixo não cobre
+  itens/botões da grade — a grade nasce logo abaixo do cabeçalho fixo, nunca por baixo dele.
+- [ ] Regressão do bug do lab-176 (vazamento de material/textura) não teve uma verificação
+  dedicada nesta rodada — mudança é 100% CSS/estrutura de wrapper, não mexe em nenhum ponto de
+  `dispose()`/troca de peça do `studentFigure.ts`/`World3D.tsx`; risco avaliado como baixíssimo por
+  construção, mas sem medição própria (diferente do lab-176/189, que mediram contagem de materiais
+  antes/depois).
+
+## Implementação
+
+- `AvatarShop.tsx`: o botão de fechar (`.modal-close`) ganhou um wrapper novo de altura zero
+  (`.avatar-shop-close-anchor`, `position: sticky; top: 0; height: 0`) — só existe pra dar ao botão
+  (que continua `position: absolute`, inalterado) um ancestral `sticky` próprio, sem empurrar
+  `<h2>` pra baixo nem mudar nada visualmente antes do primeiro scroll.
+- Preview 3D + saldo de moedas + abas foram agrupados num wrapper novo (`.avatar-shop-sticky-header`,
+  `position: sticky; top: 0; background: var(--card)`) — um wrapper só (não 3 `sticky` separados)
+  evita ter que calcular manualmente o empilhamento (`top` cumulativo) entre eles.
+- `index.css`: as duas classes novas acima, mais um fundo sólido explícito no PRÓPRIO
+  `.modal-close` quando dentro da âncora (achado ao vivo, ver rodada abaixo).
+
+## Verificação ao vivo (Chrome real, antes e depois da correção)
+
+Perfil de teste existente (`8e4a3309-dfc2-454e-8c17-3dfbb2f26387`) com `coins` elevado pra 9999
+via `localStorage` (só pra desbloquear moeda suficiente pra fluir pelas compras durante o teste,
+restaurado ao valor original ao final) — aba "Roupas" escolhida por ter 43 itens no catálogo
+(camisa+calça+sapato+mochila), a mais longa da lojinha, mesmo caso citado no próprio backlog.
+
+**Antes da correção** (antes deste lab existir): não aplicável, esta é a primeira verificação —
+a investigação prévia (leitura de código) já tinha identificado a causa raiz corretamente.
+
+**Depois de aplicar `position: sticky` no preview/saldo/abas, mas ANTES do fundo sólido no botão de
+fechar**: preview/saldo/abas confirmados fixos durante o scroll (rolagem até `scrollHeight` total,
+grade de "Mochila" no final da lista visível corretamente por baixo do cabeçalho fixo). Achado real
+NOVO nesta verificação: o botão de fechar realmente sumia — não por não estar mais clicável (a
+sticky funcionava, `getBoundingClientRect()` confirmou a posição correta), mas porque ele é
+`background: none` (estilo `.modal-close` padrão, compartilhado por todo modal do jogo) — assim que
+gruda no topo, o texto do parágrafo de instruções que rola por baixo dele passa a aparecer
+visualmente colado/misturado com o "×", tornando os dois ilegíveis (confirmado via `zoom` numa
+região de 159×122px). Corrigido com fundo sólido (`var(--card)`) + sombra sutil só no `.modal-close`
+quando dentro da âncora nova — não afeta o `.modal-close` de nenhum outro modal do jogo.
+
+**Depois da correção completa**: re-verificado do zero — scroll até o fim da lista de "Roupas"
+(grade de "Mochila" visível), botão de fechar legível e sem sobreposição de texto por baixo;
+clique no botão de fechar FUNCIONOU corretamente mesmo com o modal rolado até o fim (fechou a
+lojinha, voltou pro mundo 3D); troca de item (mochila) atualizou o preview instantaneamente com o
+modal ainda rolado. Perfil de teste restaurado ao estado original (`coins: 22`,
+`unlockedBackpackColorIds: ['mochila_padrao']`, etc.) ao final.
+
+**Pendência disclosed**: viewport mobile/touch real não verificado (mesma limitação de ferramental
+já conhecida de vários labs anteriores desta sessão — a verificação de scroll/sticky em si já cobre
+o cenário real, já que o modal inteiro sempre renderiza na largura estreita de celular, mesmo em
+desktop, ver investigação prévia acima; só o gesto de toque físico em si fica de fora).
 
 ## Fora de escopo (explicitamente adiado)
 
