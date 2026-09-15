@@ -1,15 +1,37 @@
 # Laboratório atual
 
-Em andamento: labs/lab-184-qualidade-visual-planetas/ — qualidade visual dos planetas e mundo
-(passe de art direction nos 7 planetas-destino existentes: materiais, escala, iluminação,
-landmarks, silhuetas — não um redesenho completo, só lacunas concretas). Investigação prévia já
-achou que 5 dos 7 planetas têm identidade visual sólida (Marte, Mercúrio, Vênus, Saturno);
-Júpiter/Netuno são quase gêmeos morfológicos (faixas + 1 decalque oval cada) e Urano é o mais fraco
-(zero landmark 3D). Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 184", item 10 da
-ordem sugerida, próximo item recomendado após o lab-183. Ver
-`labs/lab-184-qualidade-visual-planetas/FEATURES.md`.
+Último concluído: labs/lab-184-qualidade-visual-planetas/ — qualidade visual dos planetas e mundo.
+Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 184", item 10 da ordem sugerida,
+próximo item recomendado após o lab-183. Passe de art direction nos 7 planetas-destino existentes
+(`World3D.tsx`) — não um redesenho completo, só lacunas concretas. Investigação prévia achou que 4
+dos 7 já tinham identidade visual sólida (Marte, Mercúrio, Vênus, Saturno; o planeta principal
+também já estava conforme, mas fica fora dessa contagem de 7 por não ser um destino de viagem) —
+os outros 3 tinham achados reais: **Urano ganhou um anel** (mesma técnica `CreateTorus` do anel de
+Saturno, mais fino/escuro/transparente, orientado no mesmo eixo "deitado" já aplicado ao chão de
+Urano — aparece quase vertical/de perfil, como os anéis reais); **Júpiter ganhou a Oval BA**
+(segunda mancha vermelha, tempestade real desde 2000) e **Netuno ganhou a nuvem clara companheira
+"Scooter"** (cirros branco real da Voyager 2), fechando o gap de os dois gigantes gasosos serem
+morfologicamente quase gêmeos (faixas + 1 decalque oval cada). **PR #65 teve 4 rodadas de review
+automático do Copilot** — rodada 1 achou um bug real de posicionamento (a Oval BA ficava a ~158°
+da Grande Mancha Vermelha, praticamente no hemisfério oposto do planeta — um pouso normal só
+revelava uma das duas manchas, corrigido pra ~39° de separação, mesmo hemisfério visível) mais
+nits de documentação; rodadas 2-3 corrigiram imprecisões na própria documentação (contagem "5 dos
+7" que misturava o planeta principal com os destinos de verdade, e a frase "reaproveitam
+materiais/geometria já pagos" que não deixava claro que os 3 landmarks SÃO `PBRMaterial`/malhas
+novos, só a técnica é reaproveitada); rodada 4 veio limpa (só repetiu a pendência mobile já
+conhecida, sem achado novo). `npx tsc -b` limpo; testes: app 208/208 (inalterado — mudança é
+geometria/material 3D puro); `npm run build` sem regressão de bundle. **Verificado ao vivo via
+Chrome real** (viagem de foguete real aos 3 planetas alterados, screenshots em
+`labs/lab-184-qualidade-visual-planetas/evidencias/`); verificação em viewport mobile não feita
+(mesma limitação de ferramental já conhecida dos labs 177/178). Ver
+`labs/lab-184-qualidade-visual-planetas/CONTEXT.md` pro histórico completo rodada a rodada.
+**Merge confirmado**: PR #65 mesclada em `main` no commit `374d2ba` (2026-09-15, squash). CI de
+`main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-183-auditoria-vitrine-assinatura/ — auditoria da vitrine adulta de
+Antes desse: labs/lab-183-auditoria-vitrine-assinatura/ — auditoria da vitrine adulta de
 assinatura. Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 183", item 9 da ordem
 sugerida, próximo item recomendado após o lab-182. Auditoria (não feature nova) de `TitleScreen.tsx`,
 `AvatarShop.tsx`, `MyHousePanel.tsx`, `FamilyPortal.tsx` (`FamilyValueProp`/`Dashboard`/
