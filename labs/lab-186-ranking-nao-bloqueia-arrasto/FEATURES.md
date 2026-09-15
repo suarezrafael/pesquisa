@@ -43,9 +43,11 @@ em `World3D.tsx`, ~linha 3083):
   (não só nos filhos focáveis) — então o canvas inteiro, incluindo toda a área livre do planeta,
   fica não-interativo pra clique/arrasto real enquanto QUALQUER gatilho de `hudInert` está ativo,
   não só os modais de tela cheia onde isso faz sentido (não tem área livre visível atrás deles).
-  `chat`/`ranking` são os ÚNICOS dois gatilhos que NÃO são um `.modal-overlay` de tela cheia — são
-  uma caixinha pequena ancorada num canto, com bastante área livre do canvas visível ao redor.
-  Confirmado ao vivo: `canvas.inert === true` com o ranking aberto (antes da correção).
+  `chat`/`ranking`/`bag` (mochila) são os ÚNICOS três gatilhos que NÃO são um `.modal-overlay` de
+  tela cheia — os três usam `.chat-panel`, uma caixinha pequena ancorada num canto, com bastante
+  área livre do canvas visível ao redor (`bagOpen` só foi identificado como parte desse grupo na
+  2ª rodada de review, ver `CONTEXT.md`). Confirmado ao vivo: `canvas.inert === true` com o
+  ranking aberto (antes da correção).
 
 ## Funcionalidades planejadas
 
@@ -61,8 +63,10 @@ em `World3D.tsx`, ~linha 3083):
   contra um elemento `inert`. A confiança na correção vem da leitura da especificação HTML (`inert`
   documentado como desabilitando eventos de ponteiro no elemento) e da mudança de estado
   verificável (`canvas.inert` volta a `false` com ranking/chat abertos, depois da correção).
-- [x] **Corrigido**: `canvasInert` novo (exclui `chatOpen`/`rankingOpen` de `hudInert`) usado só no
-  atributo `inert` do `<canvas>`; `hudInert` (com os dois gatilhos) continua valendo pra tudo mais
+- [x] **Corrigido**: `canvasInert` = `fullScreenInert` (só os 4 gatilhos de tela cheia, fatorados
+  numa base compartilhada com `hudInert` — achado da 2ª rodada de review, ver `CONTEXT.md`), usado
+  só no atributo `inert` do `<canvas>`; `hudInert` (com os 3 gatilhos de painel pequeno) continua
+  valendo pra tudo mais
   (`hudInertRef`, supressão de teclado/joystick de movimento no loop de física, e o resto do HUD de
   toque) — critérios de aceite do backlog atendidos por construção: painel continua sendo um
   elemento DOM normal (não-inert) capturando seus próprios cliques; canvas fora do painel volta a

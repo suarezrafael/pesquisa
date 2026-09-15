@@ -16,26 +16,33 @@ planetPickerOpen || showParentalGate`. O atributo HTML `inert`, por especificaç
 E EVENTOS DE PONTEIRO no elemento inteiro (não só em filhos focáveis) — então o `<canvas>` inteiro
 ficava não-interativo pra clique/arrasto sempre que QUALQUER gatilho de `hudInert` estava ativo.
 Isso é o comportamento certo pros gatilhos que são um `.modal-overlay` de tela cheia (nada visível
-atrás deles pra interagir mesmo) — mas `chatOpen`/`rankingOpen` são os ÚNICOS DOIS gatilhos que NÃO
-são tela cheia: usam `.chat-panel` (`position: absolute`, uma caixinha pequena ancorada num canto),
-deixando bastante área livre do canvas visível ao redor. Confirmado ao vivo:
+atrás deles pra interagir mesmo) — mas `chatOpen`/`rankingOpen`/`bagOpen` (mochila) são os ÚNICOS
+TRÊS gatilhos que NÃO são tela cheia: usam `.chat-panel` (`position: absolute`, uma caixinha
+pequena ancorada num canto), deixando bastante área livre do canvas visível ao redor
+(`bagOpen`/`WeaponBagPanel` só foi identificado como parte desse grupo na 2ª rodada de review — a
+investigação inicial olhou só `RankingPanel`/`ChatPanel`). Confirmado ao vivo:
 `document.querySelector('canvas').inert === true` com o ranking aberto, antes da correção.
 
-**Correção**: `canvasInert` novo, derivado de `hudInert` mas excluindo `chatOpen`/`rankingOpen`,
-usado SÓ no atributo `inert` do `<canvas>`. `hudInert` em si não muda — continua sendo usado (via
-`hudInertRef`) pra suprimir teclado/joystick de movimento no loop de física durante os 7 gatilhos,
-incluindo chat/ranking (achado dos labs 182/183 desta mesma sessão, não relacionado a este). Ou
-seja: o avatar continua sem se mover atrás do painel de chat/ranking (comportamento já correto,
-inalterado), mas o `<canvas>` em si volta a aceitar ponteiro/arrasto na área livre enquanto só
-chat/ranking estão abertos.
+**Correção**: `fullScreenInert` novo, isolando só os gatilhos que SÃO tela cheia de verdade
+(`!setupReady || suspendTriggers || planetPickerOpen || showParentalGate`) — é a base tanto de
+`hudInert = fullScreenInert || chatOpen || rankingOpen || bagOpen` (usado, via `hudInertRef`, pra
+suprimir teclado/joystick de movimento durante os 6 gatilhos, achado dos labs 182/183 desta mesma
+sessão, não relacionado a este) quanto de `canvasInert = fullScreenInert` (usado SÓ no atributo
+`inert` do `<canvas>`). Ou seja: o avatar continua sem se mover atrás de qualquer um dos painéis
+pequenos (comportamento já correto, inalterado), mas o `<canvas>` em si volta a aceitar ponteiro/
+arrasto na área livre enquanto só chat/ranking/mochila estão abertos. Fatorar as duas fórmulas a
+partir da MESMA base (`fullScreenInert`) — em vez de escrever a lista de gatilhos de tela cheia
+duas vezes, uma pra cada variável — foi um achado da 2ª rodada de review (a duplicação inicial já
+tinha um bug de verdade, ver "Review automático" abaixo).
 
 **Por que isso não reabre o bug original do `inert`** (lab-121: "Tab escapava de um modal aberto
-direto pro canvas"): `RankingPanel`/`ChatPanel` já usam o hook compartilhado `useModalA11y`
-(`state/useModalA11y.ts`), que tem seu próprio focus trap de Tab (hardenizado em várias rodadas de
-review nos labs 182/183 desta mesma sessão) — a prevenção de Tab escapar já é responsabilidade
-dessa camada, independente do `inert` do canvas. Excluir só esses dois gatilhos do `canvasInert`
-não reintroduz o escape de Tab; os outros 5 gatilhos (`.modal-overlay` de tela cheia) continuam
-com o canvas `inert`, cobrindo o resto dos casos exatamente como antes.
+direto pro canvas"): `RankingPanel`/`ChatPanel`/`WeaponBagPanel` já usam o hook compartilhado
+`useModalA11y` (`state/useModalA11y.ts`), que tem seu próprio focus trap de Tab (hardenizado em
+várias rodadas de review nos labs 182/183 desta mesma sessão, e ganhou um listener de `focusin`
+nesta 1ª rodada de review deste lab — ver abaixo) — a prevenção de escape de foco já é
+responsabilidade dessa camada, independente do `inert` do canvas. Excluir os três gatilhos de
+`canvasInert` não reintroduz o escape; os outros 4 gatilhos de tela cheia continuam com o canvas
+`inert`, cobrindo o resto dos casos exatamente como antes.
 
 `npx tsc -b` limpo; testes: app 208/208 (inalterado — mudança é 1 variável derivada + 1 prop JSX,
 sem lógica de domínio). `npm run build` sem regressão de bundle.
@@ -111,6 +118,22 @@ documento pro escopo completo desse item.
   cheia direto (`!setupReady || suspendTriggers || bagOpen || planetPickerOpen ||
   showParentalGate`), nunca envolvendo chat/ranking na fórmula, em vez de partir de `hudInert` e
   tentar "subtrair" os dois depois.
+- **Rodada 2**: 3 achados reais. (1) **O mais importante**: `WeaponBagPanel` (mochila) TAMBÉM é uma
+  caixinha pequena ancorada num canto (`className="chat-panel bag-panel"`, `.bag-panel { top:
+  4.6rem; left: 1rem; ... }`, sem nenhum `.modal-overlay`) — exatamente a mesma classe de gap de
+  chat/ranking, só que a investigação inicial deste lab (que olhou só `RankingPanel`/`ChatPanel`)
+  não pegou. `bagOpen` continuava na lista de gatilhos de `canvasInert` da rodada 1, então abrir a
+  mochila ainda deixava o canvas `inert`, bloqueando arrasto na área livre — o próprio bug que este
+  lab existe pra corrigir, só que num painel diferente. Corrigido removendo `bagOpen` de
+  `canvasInert`. (2) `hudInert`/`canvasInert` duplicavam a lista de gatilhos de tela cheia em dois
+  lugares escritos à mão — risco real de divergência futura se alguém adicionasse um gatilho novo
+  só numa das duas listas (reabrindo vazamento de input OU bloqueando o mundo à toa). Corrigido
+  fatorando `fullScreenInert` compartilhado, do qual as duas derivam
+  (`hudInert = fullScreenInert || chatOpen || rankingOpen || bagOpen`,
+  `canvasInert = fullScreenInert`). (3) O comentário JSX acima do `<canvas>` (do lab-121) ainda
+  dizia que `inert` era sempre necessário "junto com o HUD" pra todo modal, sem mencionar a exceção
+  nova de chat/ranking/mochila — contradizia o invariante atual. Corrigido descrevendo os dois
+  casos (tela cheia continua com `inert`; painel pequeno não, com o motivo).
 
 ## Estado do repositório ao final
 
