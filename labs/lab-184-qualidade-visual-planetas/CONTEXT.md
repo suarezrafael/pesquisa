@@ -163,6 +163,10 @@ perguntar ao usuário a próxima prioridade.
   descrição da PR no GitHub ainda não tinha sido atualizada com a contagem corrigida da rodada 2
   ("5 dos 7" incluindo o planeta principal) — reconciliada junto com a mesma correção de
   materiais/malhas novos vs. técnica reaproveitada.
+- **Rodada 4**: 0 achados novos — veredito "precisa de revisão humana" repetindo só a pendência
+  já registrada (verificação mobile), sem nenhum comentário novo (0 inline, 0 no corpo). Mesmo
+  padrão já visto em labs anteriores (ex. lab-177/PR #52, rodadas 4/6) quando a única pendência
+  restante é uma limitação de ferramental já disclosed — tratado como convergido, sem ação nova.
 
 ## Estado do repositório ao final
 
