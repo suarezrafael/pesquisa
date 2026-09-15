@@ -1,5 +1,17 @@
 import { useEffect, useRef } from 'react'
 
+// Achado do review automático do Copilot: painéis pequenos (chat/ranking/mochila) podem ficar
+// abertos AO MESMO TEMPO (estados independentes em `World3D.tsx`) — cada um chama este hook,
+// então cada um registraria seu PRÓPRIO listener de `focusin`. Com dois painéis montados, um
+// clique dentro do painel A dispara um `focusin` cujo alvo está FORA da raiz do painel B; o
+// listener de B devolve o foco pra raiz de B, o que dispara outro `focusin` cujo alvo (a raiz de
+// B) está fora da raiz de A, e o listener de A devolve o foco pra raiz de A — indefinidamente,
+// travando os dois painéis num “ping-pong” de foco. Um registro COMPARTILHADO de raízes
+// atualmente montadas resolve isso: cada instância checa contra TODAS as raízes ativas (não só a
+// própria); se o alvo já está dentro de QUALQUER painel aberto, ninguém precisa fazer nada (a
+// troca de foco entre dois painéis abertos ao mesmo tempo é legítima, não um escape).
+const activeModalRoots = new Set<HTMLElement>()
+
 // lab-121 (acessibilidade [SHOULD], docs/prompts/02-design-profissional.md §3): usado por todo
 // painel/modal 2D do jogo. Três coisas de navegação por teclado que nenhum painel tinha: (1) Esc
 // fecha, (2) o foco entra no painel ao abrir (sem isso, um usuário de teclado não tem indicação de
@@ -27,6 +39,7 @@ export function useModalA11y(onClose: () => void) {
     if (!rootRef.current?.contains(document.activeElement)) {
       rootRef.current?.focus()
     }
+    if (rootRef.current) activeModalRoots.add(rootRef.current)
 
     // Achado do review automático do Copilot: Esc fechava e o foco inicial entrava no painel, mas
     // nada impedia Tab de escapar PRA FORA dele enquanto aberto — um usuário de teclado conseguia
@@ -72,15 +85,21 @@ export function useModalA11y(onClose: () => void) {
     function handleFocusIn(e: FocusEvent) {
       if (!rootRef.current) return
       const target = e.target as Node | null
-      if (target && !rootRef.current.contains(target)) {
-        rootRef.current.focus()
+      if (!target) return
+      // Só redireciona se o alvo estiver fora de TODOS os painéis abertos no momento — se ele já
+      // está dentro de outro painel (ex. o usuário clicou de um painel pro outro, os dois abertos
+      // ao mesmo tempo), isso é uma troca de foco legítima entre dois modais, não um escape.
+      for (const root of activeModalRoots) {
+        if (root.contains(target)) return
       }
+      rootRef.current.focus()
     }
     window.addEventListener('focusin', handleFocusIn)
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('focusin', handleFocusIn)
+      if (rootRef.current) activeModalRoots.delete(rootRef.current)
       previouslyFocused?.focus()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

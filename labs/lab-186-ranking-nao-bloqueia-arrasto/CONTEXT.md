@@ -26,7 +26,7 @@ investigação inicial olhou só `RankingPanel`/`ChatPanel`). Confirmado ao vivo
 **Correção**: `fullScreenInert` novo, isolando só os gatilhos que SÃO tela cheia de verdade
 (`!setupReady || suspendTriggers || planetPickerOpen || showParentalGate`) — é a base tanto de
 `hudInert = fullScreenInert || chatOpen || rankingOpen || bagOpen` (usado, via `hudInertRef`, pra
-suprimir teclado/joystick de movimento durante os 6 gatilhos, achado dos labs 182/183 desta mesma
+suprimir teclado/joystick de movimento durante os 7 gatilhos, achado dos labs 182/183 desta mesma
 sessão, não relacionado a este) quanto de `canvasInert = fullScreenInert` (usado SÓ no atributo
 `inert` do `<canvas>`). Ou seja: o avatar continua sem se mover atrás de qualquer um dos painéis
 pequenos (comportamento já correto, inalterado), mas o `<canvas>` em si volta a aceitar ponteiro/
@@ -49,11 +49,11 @@ sem lógica de domínio). `npm run build` sem regressão de bundle.
 
 ## Decisões técnicas tomadas
 
-- **Não remover `inert` do canvas por completo, só excluir 2 dos 7 gatilhos.** Os outros 5
-  (`!setupReady`, `suspendTriggers`, `bagOpen`, `planetPickerOpen`, `showParentalGate`) são todos
-  `.modal-overlay` de tela cheia de verdade — não têm área livre visível atrás deles, então
-  `inert` no canvas inteiro continua correto e necessário ali (previne Tab escapar E qualquer
-  clique fantasma atrás de um overlay opaco).
+- **Não remover `inert` do canvas por completo, só excluir 3 dos 7 gatilhos.** Os outros 4
+  (`!setupReady`, `suspendTriggers`, `planetPickerOpen`, `showParentalGate` — `fullScreenInert`)
+  são todos `.modal-overlay` de tela cheia de verdade — não têm área livre visível atrás deles,
+  então `inert` no canvas inteiro continua correto e necessário ali (previne Tab escapar E
+  qualquer clique fantasma atrás de um overlay opaco).
 - **Não mexer em `onCameraPointerDown`/`onCameraPointerMove` etc.** A investigação prévia (leitura
   desses handlers, documentada no `FEATURES.md`) já mostrou que eles não têm nenhuma lógica de
   bloqueio — o problema estava inteiramente na camada HTML/`inert` do canvas, uma camada ACIMA
@@ -134,6 +134,29 @@ documento pro escopo completo desse item.
   dizia que `inert` era sempre necessário "junto com o HUD" pra todo modal, sem mencionar a exceção
   nova de chat/ranking/mochila — contradizia o invariante atual. Corrigido descrevendo os dois
   casos (tela cheia continua com `inert`; painel pequeno não, com o motivo).
+- **Rodada 3**: 2 achados reais. (1) **O mais sério**: `chat`/`ranking`/`mochila` têm estados
+  independentes em `World3D.tsx` — nada impede, em tese, dois estarem abertos ao mesmo tempo. Com
+  dois painéis montados, cada um registra seu PRÓPRIO listener de `focusin` na `window`; um clique
+  dentro do painel A dispara um `focusin` cujo alvo está fora da raiz do painel B, o listener de B
+  devolve o foco pra raiz de B, o que dispara outro `focusin` cujo alvo (a raiz de B) está fora da
+  raiz de A, e o listener de A devolve o foco pra raiz de A — um "ping-pong" que podia travar os
+  dois painéis (ou estourar a pilha). Corrigido com um registro COMPARTILHADO (`Set` no escopo do
+  módulo, fora do hook) de todas as raízes de painel atualmente montadas — cada instância registra
+  a própria raiz ao montar/desmontar, e o `handleFocusIn` só redireciona quando o alvo está fora de
+  TODAS as raízes ativas (não só a própria); se o alvo já está dentro de QUALQUER painel aberto,
+  ninguém precisa fazer nada — a troca de foco entre dois modais abertos ao mesmo tempo é
+  legítima, não um escape. **Verificado ao vivo** que o caso de um painel só continua funcionando
+  do mesmo jeito depois da reescrita (clique real no canvas com só o ranking aberto, foco
+  confirmado voltando pra raiz do painel); o cenário de dois painéis abertos ao mesmo tempo não foi
+  reproduzido ao vivo nesta sessão (a UI atual fecha ranking ao abrir chat — mutuamente exclusivos
+  na prática hoje —, e o botão da mochila só aparece com espada/arma já coletadas, não presentes no
+  perfil de teste), mas a correção foi verificada por raciocínio passo a passo do algoritmo (rastreado
+  manualmente: a checagem contra o registro compartilhado garante terminação em no máximo 1 salto
+  extra por painel, nunca um loop infinito, independente de quantos painéis estejam montados).
+  (2) Contagem errada no `CONTEXT.md`: "6 gatilhos" onde o certo é 7 (`fullScreenInert`, que já
+  soma 4, mais `chatOpen`/`rankingOpen`/`bagOpen`) — corrigido, junto com uma contagem antiga da
+  rodada 1 ("2 dos 7"/"outros 5") que também tinha ficado desatualizada depois da rodada 2 (agora é
+  "3 dos 7"/"outros 4").
 
 ## Estado do repositório ao final
 
