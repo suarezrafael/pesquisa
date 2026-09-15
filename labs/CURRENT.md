@@ -1,13 +1,36 @@
 # Laboratório atual
 
-Em andamento: labs/lab-183-auditoria-vitrine-assinatura/ — auditoria da vitrine adulta de
-assinatura (não é construir nada novo: auditar `TitleScreen`/`AvatarShop`/`/familia`/relatório de
-exemplo/CTA adulto/textos de item premium contra a experiência infantil, corrigindo só lacunas
-concretas). Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 183", item 9 da ordem
-sugerida, próximo item recomendado após o lab-182. Ver
-`labs/lab-183-auditoria-vitrine-assinatura/FEATURES.md`.
+Último concluído: labs/lab-183-auditoria-vitrine-assinatura/ — auditoria da vitrine adulta de
+assinatura. Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 183", item 9 da ordem
+sugerida, próximo item recomendado após o lab-182. Auditoria (não feature nova) de `TitleScreen.tsx`,
+`AvatarShop.tsx`, `MyHousePanel.tsx`, `FamilyPortal.tsx` (`FamilyValueProp`/`Dashboard`/
+`ParentalGateScreen`) e `PairingScreen.tsx` contra o critério: criança nunca vê checkout/preço/
+urgência; adulto continua vendo preço, benefícios, cancelamento e a regra de aprendizagem sempre
+grátis. Todo o conteúdo/copy auditado já estava conforme (nenhuma menção transacional em superfície
+infantil, texto do bônus do evento semanal do lab-182 confirmado atualizado); os achados reais
+corrigidos foram de acessibilidade/consistência, não de copy: os 7 links `target="_blank"` do app
+(2 em `PairingScreen.tsx`, 1 em `TitleScreen.tsx`, 4 em `FamilyPortal.tsx`) ganharam `rel="noopener
+noreferrer"` consistente (nenhum era um furo de segurança ativo — `rel="noreferrer"` sozinho já
+bloqueia `window.opener` em navegador atualizado, mas a convenção do repo desde o lab-161/166 usa
+`noopener` explícito) e `aria-label` anunciando "abre em nova aba" pra usuário de leitor de tela.
+`docs/event-catalog.md` ganhou uma nota reconciliando a métrica `checkout_started_from_parent_area`
+do backlog com o evento real `checkout_started` (já cobre o critério por construção, mas ainda não
+é exposto em `weeklyFunnel`/`GET /admin/metrics` — gap de exposição registrado, não de
+instrumentação). **PR #64 teve 4 rodadas de review automático do Copilot** — rodadas 1-3 com
+achados reais de precisão de documentação (citação errada de seção do backlog, contagem aritmética
+errada de links, parágrafo desatualizado após uma correção anterior, e uma correção de escopo
+genuína: o `aria-label` de nova aba tinha sido aplicado só em `PairingScreen.tsx` por decisão
+inicial de não expandir o diff, revertida quando o review apontou que `TitleScreen`/`FamilyPortal`
+SÃO superfícies auditadas por este mesmo lab). Rodada 4 veio limpa ("Approval recommended"). `npx
+tsc -b` limpo; testes: app 208/208 (inalterado, este lab não mexe em lógica de domínio); `npm run
+build` sem regressão de bundle. Ver `labs/lab-183-auditoria-vitrine-assinatura/CONTEXT.md` pro
+histórico completo rodada a rodada. **Merge confirmado**: PR #64 mesclada em `main` no commit
+`4bd43ac` (2026-09-14, squash). CI de `main` verde nos 3 workflows; deploy de produção confirmado:
+Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-182-eventos-semanais/ — eventos semanais saudáveis. Origem:
+Antes desse: labs/lab-182-eventos-semanais/ — eventos semanais saudáveis. Origem:
 `docs/growth-retention-monetization-backlog.md`, "Lab 182", item 8 da ordem sugerida, próximo item
 recomendado após o lab-181. Objetivo educativo/ambiental novo no sistema de evento semanal já
 existente (`data/weeklyEvents.ts`): completar pelo menos 1 dos 3 desafios ambientais do lab-180
