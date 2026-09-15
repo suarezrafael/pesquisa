@@ -1,5 +1,16 @@
 # Laboratório atual
 
+Em andamento: labs/lab-186-ranking-nao-bloqueia-arrasto/ — investigar e, se ainda reproduzível,
+corrigir o relato de que o painel de ranking aberto bloqueia clique/arrasto na área livre do
+planeta. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 201" no documento (renumerado
+pra lab-186 na sequência real do repo) — primeiro item da recomendação priorizada do documento, e
+o único backlog de código ainda não mapeado depois dos outros dois backlogs (growth-retention e
+market-metrics) terem se esgotado no lab-184. Leitura prévia do código (`RankingPanel.tsx`,
+`onCameraPointerDown` em `World3D.tsx`) já sugere que o bug pode não ser mais reproduzível (o
+painel é uma caixa pequena ancorada no canto, não um backdrop de tela cheia, e o giro de câmera
+não checa `rankingOpen` em lugar nenhum) — precisa de verificação ao vivo antes de decidir o que
+corrigir. Ver `labs/lab-186-ranking-nao-bloqueia-arrasto/FEATURES.md`.
+
 Último concluído: labs/lab-184-qualidade-visual-planetas/ — qualidade visual dos planetas e mundo.
 Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 184", item 10 da ordem sugerida,
 próximo item recomendado após o lab-183. Passe de art direction nos 7 planetas-destino existentes
