@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Em andamento: labs/lab-184-qualidade-visual-planetas/ — qualidade visual dos planetas e mundo
+(passe de art direction nos 7 planetas-destino existentes: materiais, escala, iluminação,
+landmarks, silhuetas — não um redesenho completo, só lacunas concretas). Investigação prévia já
+achou que 5 dos 7 planetas têm identidade visual sólida (Marte, Mercúrio, Vênus, Saturno);
+Júpiter/Netuno são quase gêmeos morfológicos (faixas + 1 decalque oval cada) e Urano é o mais fraco
+(zero landmark 3D). Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 184", item 10 da
+ordem sugerida, próximo item recomendado após o lab-183. Ver
+`labs/lab-184-qualidade-visual-planetas/FEATURES.md`.
+
 Último concluído: labs/lab-183-auditoria-vitrine-assinatura/ — auditoria da vitrine adulta de
 assinatura. Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 183", item 9 da ordem
 sugerida, próximo item recomendado após o lab-182. Auditoria (não feature nova) de `TitleScreen.tsx`,
