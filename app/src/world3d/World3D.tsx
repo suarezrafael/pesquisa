@@ -3696,13 +3696,13 @@ export function World3D({
           const planet = DESTINATION_PLANETS[arrivedPlanetId]
           currentPlanetId = arrivedPlanetId
           currentWorldCenter = planet.center
-          // Achado do review automático do Copilot: `destinationPlanetGroundRadial` faz um raycast
-          // físico de verdade — desnecessário (e caro, chamado todo quadro pelo pet e por outros
-          // usos de `currentGroundBaseFn`, ver `groundDist`/`airHeight` mais abaixo) nos outros 5
-          // planetas-destino, que são esferas uniformes: um raycast contra uma esfera perfeita
-          // sempre volta exatamente `planet.radius`, o mesmo resultado do raio fixo, só mais caro.
-          // Só Marte tem relevo de verdade (morros com colisor `MESH`, mesmo raciocínio já usado
-          // pro combate — "Só Marte tem inimigo" — em `handleInteractPress`, mais abaixo).
+          // `destinationPlanetGroundRadial` faz um raycast físico de verdade — desnecessário (e
+          // caro, chamado todo quadro pelo pet e por outros usos de `currentGroundBaseFn`, ver
+          // `groundBase`/`airHeight` mais abaixo) nos outros 6 planetas-destino, que são esferas
+          // uniformes: um raycast contra uma esfera perfeita sempre volta exatamente
+          // `planet.radius`, o mesmo resultado do raio fixo, só mais caro. Só Marte tem relevo de
+          // verdade (morros com colisor `MESH`, mesmo raciocínio já usado pro combate — "Só Marte
+          // tem inimigo" — em `handleInteractPress`, mais abaixo).
           currentGroundBaseFn =
             arrivedPlanetId === 'marte'
               ? (localUp) => destinationPlanetGroundRadial(localUp, planet.radius)
@@ -4368,10 +4368,10 @@ export function World3D({
       // verdade neles) — o avatar (corpo físico Havok) sobe fisicamente, mas o pet (cinemático,
       // sem física, reposicionado por fórmula todo quadro) ficava preso no nível de base do
       // planeta: visualmente enterrado dentro do morro exatamente quando o avatar sobe nele. Só
-      // Marte usa esta função (ver `landRocket`) — os outros 5 planetas-destino são esferas
+      // Marte usa esta função (ver `landRocket`) — os outros 6 planetas-destino são esferas
       // uniformes, sem custo de raycast nenhum.
-      // Achado do review automático do Copilot: a primeira versão aceitava QUALQUER acerto (chão,
-      // morro OU rocha) como "a superfície certa" — mas as rochas de Marte têm um colisor-esfera
+      // Aceitar QUALQUER acerto (chão, morro OU rocha) como "a superfície certa" está errado — as
+      // rochas de Marte têm um colisor-esfera
       // invisível deliberadamente aproximado (`MARS_ROCK_COLLIDER_PROTRUSION`, dimensionado só pra
       // bloquear esbarrão lateral, "pequeno o bastante pra não virar plataforma" — nunca pensado
       // pra representar altura de verdade), então um raio que raspasse numa rocha reportaria uma
@@ -10750,7 +10750,12 @@ export function World3D({
           // simplesmente não acontecia, de forma intermitente e sem erro nenhum. Consumido (e
           // zerado) a cada quadro, então nunca fica um pulo "pendente" esperando o jogador
           // aterrissar.
-          const groundDist = currentGroundBaseFn(localUp) + AVATAR_RADIUS + 0.05
+          // `currentGroundBaseFn` chamada uma única vez e reaproveitada abaixo (`groundBase`) —
+          // em Marte ela faz um raycast físico de verdade; chamar de novo mais adiante pra
+          // reposicionar a figura visual (mesmo `localUp`, mesmo resultado) duplicaria o custo à
+          // toa, já que nada muda `localUp` entre as duas leituras neste quadro.
+          const groundBase = currentGroundBaseFn(localUp)
+          const groundDist = groundBase + AVATAR_RADIUS + 0.05
 
           // Bug real relatado pelo usuário: "o parkour só funciona o primeiro pulo, depois que
           // estou em cima do degrau o pulo não funciona". Causa: `grounded` comparava só contra
@@ -10860,12 +10865,12 @@ export function World3D({
             // altura usa a mesma fórmula de "grudar no chão" de sempre.
             studentFigure.root.position.set(
               pos.x,
-              currentWorldCenter.y + currentGroundBaseFn(localUp) + 0.02 + airHeight,
+              currentWorldCenter.y + groundBase + 0.02 + airHeight,
               pos.z,
             )
           } else {
             studentFigure.root.position.copyFrom(
-              currentWorldCenter.add(localUp.scale(currentGroundBaseFn(localUp) + 0.02 + airHeight))
+              currentWorldCenter.add(localUp.scale(groundBase + 0.02 + airHeight))
             )
           }
 

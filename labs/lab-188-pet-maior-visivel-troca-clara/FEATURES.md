@@ -100,11 +100,11 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-187, prio
 
 - **Rodada 1** (2026-09-15): 2 achados reais. (1) **Performance**: `destinationPlanetGroundRadial`
   fazia um raycast físico de verdade TODO QUADRO (usado pelo pet e por outras leituras de
-  `currentGroundBaseFn`, ex. distância ao chão do avatar) mesmo nos 5 planetas-destino que são
+  `currentGroundBaseFn`, ex. distância ao chão do avatar) mesmo nos 6 planetas-destino que são
   esferas uniformes — ali o resultado é sempre `planet.radius`, idêntico ao raio fixo antigo, só que
   mais caro (raycast físico + alocação de vetores por nada). Corrigido: `currentGroundBaseFn` só usa
   a versão com raycast quando `arrivedPlanetId === 'marte'` (único planeta-destino com relevo de
-  verdade); os outros 5 continuam com `() => planet.radius`, mesmo padrão de exceção específica de
+  verdade); os outros 6 continuam com `() => planet.radius`, mesmo padrão de exceção específica de
   Marte já usado no combate (`handleInteractPress`, "Só Marte tem inimigo"). (2) **Correção real**:
   a primeira versão aceitava QUALQUER acerto de raycast como "a superfície certa" — mas as rochas de
   Marte têm um colisor-esfera invisível deliberadamente aproximado
@@ -120,3 +120,20 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-187, prio
   de verdade, só passou a ignorar rochas). Também removidas 3 referências a "lab-188" em comentários
   de `app/src` (regra MUST de `docs/prompts/04-manutencao-clean-code.md`). `npx tsc -b`, `npm run
   test` (209/209) e `npm run build` limpos após as mudanças.
+- **Rodada 2** (2026-09-15): 4 achados reais. (1)/(2) Dois comentários novos (rodada 1) tinham a
+  frase "Achado do review automático do Copilot" — a regra MUST de comentários
+  (`docs/prompts/04-manutencao-clean-code.md`) proíbe qualquer referência à sessão de IA no código,
+  não só o número do laboratório/PR (já removidos numa rodada anterior deste mesmo lab); apesar de
+  ser um padrão usado extensamente em labs anteriores desta sessão sem nunca ter sido sinalizado, a
+  regra é clara e a correção é a certa — reescritos os dois comentários pra descrever só a razão
+  técnica, sem atribuição de origem. (3) **Achado próprio de contagem**: o comentário e o
+  `FEATURES.md` diziam "outros 5 planetas-destino", mas `DESTINATION_PLANETS` lista 6 além de Marte
+  (Mercúrio, Vênus, Júpiter, Saturno, Urano, Netuno) — corrigido nos dois lugares (código e este
+  arquivo) e na descrição da PR no GitHub, que tinha o mesmo erro. (4) **Performance, achado real**:
+  em Marte, `currentGroundBaseFn` (com raycast) era chamado 2× pro avatar (checagem de `groundDist`
+  e reposicionamento visual, ambas com o MESMO `localUp` no mesmo quadro — sem motivo pra recalcular)
+  mais 1× pro pet (direção diferente, `petUp`, não pode compartilhar). Corrigido capturando o
+  resultado da primeira chamada (`groundBase`) numa variável e reaproveitando na segunda, reduzindo
+  de 3 pra 2 raycasts por quadro em Marte. **Reverificado ao vivo de novo, mesmo morro**: avatar
+  1.378 unidade acima do raio-base, pet 1.243 unidade acima — comportamento intacto depois da
+  otimização. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos após as mudanças.
