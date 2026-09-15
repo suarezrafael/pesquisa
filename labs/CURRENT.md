@@ -1,18 +1,40 @@
 # Laboratório atual
 
-Em andamento: labs/lab-187-objetos-alinhados-relevo/ — auditar objetos estáticos do planeta
-principal (casa, loja, escolas, rua, piscina, props/landmarks) contra o relevo real e corrigir
-qualquer caso concreto de objeto enterrado/flutuando. Origem: `docs/gameplay-market-expansion-backlog.md`,
+Último concluído: labs/lab-187-objetos-alinhados-relevo/ — padroniza helper de posicionamento pelo
+relevo real, nenhum objeto enterrado encontrado. Origem: `docs/gameplay-market-expansion-backlog.md`,
 "Lab 202" no documento (renumerado pra lab-187 na sequência real do repo) — próximo item recomendado
-depois do lab-186, prioridade P0. Investigação prévia já achou que casa/loja/escolinha/props do
-planeta principal JÁ usam posicionamento real (`terrainGroundRadial`+`terrainHeight`, corrigido em
-labs anteriores 28/59/95/134) — o candidato mais provável a bug ainda vivo é a rua (só fórmula
-analítica + margem fixa calibrada num relevo anterior, nunca reverificada), além de landmarks
-ainda não auditados (parkour, baús, segredos, estação UFO, morro de Marte, etc.). Verificação ao
-vivo é o próximo passo antes de decidir o que corrigir de verdade. Ver
-`labs/lab-187-objetos-alinhados-relevo/FEATURES.md`.
+depois do lab-186, prioridade P0. **Investigação ao vivo (não só leitura de código)**: raycast
+físico real (`HavokPlugin.raycast`, mesmo mecanismo do jogo) contra o loop inteiro da rua (96
+pontos) — gap sempre positivo (mín. 0.089, máx. 0.213), zero pontos enterrados; diagnósticos já
+embutidos no HUD de debug (`CASA:1.10`, `ENTERRADAS:q01(0.90)...q30(0.72)`) confirmaram casa e as
+30 escolas do planeta principal também sempre com folga positiva. **O relato do backlog
+(piscina/casas/rua enterrados), historicamente real (corrigido nos labs 28/59/95/134), não
+reproduz no relevo atual.** **Achado real**: o padrão `dir.scale(terrainGroundRadial(dir,
+terrainHeight(dir)))` estava duplicado em **19 call sites** (contagem verificada por `grep`, depois
+de 2 tentativas erradas ao longo do review — 6 e depois 15) — casa, loja, 30 escolas, props ×2,
+rochas de montanha, torre, torre de quiz, piscina, foguete ×2, espada, arma a laser, carteira,
+desafio em dupla, ponte, posto de combustível, placa, gato empoleirado. Consolidado num helper novo
+`groundSurfacePosition(dir, extraOffset?)`, comportamento idêntico verificado ao vivo antes/depois.
+Corrigido também um comentário desatualizado em `buriedSchoolReport` (contradizia a explicação já
+corrigida em `buriedHouseReport` — os dois são diagnósticos permanentes desde o lab-67, renderizados
+juntos no mesmo HUD, não dados mortos esquecidos). **PR #67 teve 5 rodadas de review automático do
+Copilot** (2 delas erro de ferramenta do Copilot, sem achados) — rodadas 1-3 corrigiram a contagem
+de call sites em 3 lugares diferentes (comentário do código, `FEATURES.md`, descrição da PR) até
+chegar no número certo verificado por `grep`; rodada 4 teve 1 achado avaliado e **descartado como
+falso positivo** (o review confundiu lagoa/`pond`, ainda fórmula-só por design, com piscina/`pool`,
+já convertida — dois objetos diferentes no código, confirmado por leitura direta); rodada 5 veio
+limpa ("Approval recommended", 0 achados novos). `npx tsc -b` limpo; testes: app 208/208
+(inalterado — refactor puro, mesmo cálculo); `npm run build` sem regressão de bundle. Pendência
+disclosed: lagoa não pôde ser verificada ao vivo nesta sessão (não renderizou com o dispositivo
+detectado como fraco no ambiente de automação); mobile/touch também não verificado. Ver
+`labs/lab-187-objetos-alinhados-relevo/FEATURES.md` pro histórico completo rodada a rodada.
+**Merge confirmado**: PR #67 mesclada em `main` no commit `705419c` (2026-09-15, squash). CI de
+`main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-186-ranking-nao-bloqueia-arrasto/ — canvas não fica `inert` com ranking/
+Antes desse: labs/lab-186-ranking-nao-bloqueia-arrasto/ — canvas não fica `inert` com ranking/
 chat/mochila abertos. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 201" no documento
 (renumerado pra lab-186 na sequência real do repo) — primeiro item da recomendação priorizada do
 documento, e o único backlog de código ainda não mapeado depois dos outros dois backlogs
