@@ -141,6 +141,14 @@ decidir o que precisa de correção de verdade — mesmo padrão "investigar ant
   (19 lugares, lista completa) e o `FEATURES.md` (mesma correção + nota explicando a contagem
   verificada por `grep`, pra não repetir o mesmo erro de contar "de cabeça" uma terceira vez).
   `npx tsc -b`, `npm run test` (208/208) e `npm run build` limpos após a mudança.
+- **Rodada 3** (2026-09-15; precisou de 2 tentativas — a 1ª retornou erro de ferramenta do
+  Copilot, sem achados; a 2ª é a que segue): "Approval recommended" com 1 achado real. A descrição
+  da PR no GitHub (texto separado do `FEATURES.md`, nunca atualizado nas rodadas 1-2) ainda dizia
+  "15 call sites" com a lista antiga — desatualizada em relação ao código e ao `FEATURES.md`, já
+  corrigidos. Corrigida a descrição da PR pra "19 call sites" com a lista completa (incluindo torre
+  de quiz) e uma nota explícita mencionando as duas contagens erradas anteriores (6 e 15), pra
+  deixar claro que o número final foi verificado por `grep`, não estimado. Nenhuma mudança de
+  código nesta rodada — só a descrição da PR (GitHub) e este registro.
 
 ## Fora de escopo (explicitamente adiado)
 
