@@ -122,6 +122,24 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-188, prio
   a rodada comparou contra um snapshot do diff anterior à correção. "Comments generated: 0 new"
   confere com essa leitura (o próprio Copilot não trata como achado novo). Nenhuma mudança de código
   nesta rodada — já está corrigido.
+- **Rodada 3** (2026-09-15): 2 achados reais, "suppressed" (0 comentários novos gerados) mas
+  avaliados na mesma. (1) O `PBRMaterial` do starfield nunca definia `albedoColor` explicitamente —
+  o branco padrão participaria do resultado final mesmo em modo `unlit` (sem textura de albedo pra
+  variar por texel), tingindo a cúpula inteira de um branco/cinza uniforme por baixo dos pontos
+  emissivos em vez de deixar o fundo preto entre as estrelas. A verificação ao vivo da rodada 1 já
+  tinha mostrado um céu escuro com estrelas nítidas (não um branco lavado), o que sugeria que o
+  problema já não se manifestava na prática nesta versão do Babylon — mas corrigir é de graça e
+  remove qualquer ambiguidade: `starfieldMat.albedoColor = Color3.Black()` adicionado
+  explicitamente. (2) **Achado real, não ambíguo**: `visibility = 0` só afeta a mistura de alpha —
+  a malha continuava entrando na lista de render/traversal do Babylon TODO QUADRO mesmo invisível,
+  mesmo durante 100% do tempo jogando na superfície de qualquer planeta (a viagem espacial é uma
+  fração pequena do tempo total de jogo). Corrigido com `starfieldDome.setEnabled(false)` na
+  criação (em vez de só `visibility = 0`) e alternando `setEnabled(spaceT > 0)` junto com
+  `visibility` no laço de voo. **Reverificado ao vivo, mesmo voo até Marte**: `isEnabled()` `false`
+  antes de embarcar, `true` durante o cruzeiro (com screenshot confirmando o mesmo céu escuro
+  nítido com estrelas de antes — nenhuma mudança visual, só de custo de desenho), `false` de novo
+  depois de pousar. Sem erro no console. `npx tsc -b`, `npm run test` (209/209) e `npm run build`
+  limpos após as mudanças.
 
 - Simulação astronômica real, cutscene longa, novo sistema de clima espacial (explicitamente fora
   de escopo no próprio item do backlog).

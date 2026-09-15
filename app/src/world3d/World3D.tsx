@@ -3069,8 +3069,20 @@ export function World3D({
     starfieldDome.isPickable = false
     starfieldDome.visibility = 0
     starfieldDome.receiveShadows = false
+    // Desabilitada por padrão (não só `visibility = 0`) — `visibility` sozinha só afeta o alpha
+    // de mistura, a malha continua entrando na lista de render/traversal do Babylon todo quadro
+    // mesmo invisível; como o cruzeiro espacial é uma fração pequena do tempo de jogo total,
+    // `setEnabled` evita o custo de desenho da cúpula (grande, ainda que barata) na esmagadora
+    // maioria do tempo (jogando na superfície de qualquer planeta). Alternada de volta a `true`
+    // no laço de voo do foguete, junto com `visibility`, sempre que a transição está ativa.
+    starfieldDome.setEnabled(false)
     const starfieldMat = new PBRMaterial('starfieldMat', scene)
     starfieldMat.unlit = true
+    // `albedoColor` explicitamente preto — sem isso, o branco padrão do PBRMaterial participaria
+    // do resultado final mesmo em modo `unlit` (sem textura de albedo pra variar por texel), o
+    // que tingiria a cúpula inteira de um branco/cinza uniforme por baixo dos pontos emissivos em
+    // vez de deixar o fundo preto entre as estrelas.
+    starfieldMat.albedoColor = Color3.Black()
     starfieldMat.emissiveTexture = starTexture
     starfieldMat.emissiveColor = Color3.White()
     starfieldMat.backFaceCulling = false
@@ -12042,6 +12054,7 @@ export function World3D({
           scene.environmentIntensity += (SPACE_ENV_INTENSITY - scene.environmentIntensity) * spaceT
           hemiLight.intensity += (SPACE_HEMI_INTENSITY - hemiLight.intensity) * spaceT
           sunLight.intensity += (SPACE_SUN_INTENSITY - sunLight.intensity) * spaceT
+          starfieldDome.setEnabled(spaceT > 0)
           starfieldDome.visibility = spaceT
 
           const { position: shipPos, tangent: shipTangent } = sampleFlightArc(
