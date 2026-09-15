@@ -1,16 +1,45 @@
 import { useEffect, useRef } from 'react'
 
 // Achado do review automático do Copilot: painéis pequenos (chat/ranking/mochila) podem ficar
-// abertos AO MESMO TEMPO (estados independentes em `World3D.tsx`) — cada um chama este hook,
-// então cada um registraria seu PRÓPRIO listener de `focusin`. Com dois painéis montados, um
-// clique dentro do painel A dispara um `focusin` cujo alvo está FORA da raiz do painel B; o
-// listener de B devolve o foco pra raiz de B, o que dispara outro `focusin` cujo alvo (a raiz de
-// B) está fora da raiz de A, e o listener de A devolve o foco pra raiz de A — indefinidamente,
-// travando os dois painéis num “ping-pong” de foco. Um registro COMPARTILHADO de raízes
-// atualmente montadas resolve isso: cada instância checa contra TODAS as raízes ativas (não só a
-// própria); se o alvo já está dentro de QUALQUER painel aberto, ninguém precisa fazer nada (a
-// troca de foco entre dois painéis abertos ao mesmo tempo é legítima, não um escape).
-const activeModalRoots = new Set<HTMLElement>()
+// abertos AO MESMO TEMPO (estados independentes em `World3D.tsx`). Duas rodadas de tentativa de
+// consertar isso com um listener de `focusin` POR INSTÂNCIA (uma pra cada painel) mostraram que a
+// abordagem em si tem um problema estrutural: com N listeners independentes reagindo ao MESMO
+// evento, quem "vence" e pra onde o foco vai depende só da ordem de registro, não de qual painel
+// é o mais recente/visível — e um painel que acabou de abrir podia perder seu próprio foco inicial
+// pro painel anterior antes mesmo de se registrar. A solução de verdade é UM ÚNICO listener
+// compartilhado (não um por painel) mais uma PILHA ordenada (não um `Set`) de raízes montadas — o
+// topo da pilha é sempre o painel mais recentemente aberto, e é ele (só ele) quem recupera o foco
+// quando o alvo escapa de todos os painéis abertos.
+const activeModalRoots: HTMLElement[] = []
+let sharedFocusInListener: ((e: FocusEvent) => void) | null = null
+
+function handleSharedFocusIn(e: FocusEvent) {
+  const target = e.target as Node | null
+  if (!target) return
+  // Se o alvo já está dentro de QUALQUER painel aberto (não só o do topo), é uma troca de foco
+  // legítima entre dois modais abertos ao mesmo tempo — ninguém precisa fazer nada.
+  for (const root of activeModalRoots) {
+    if (root.contains(target)) return
+  }
+  activeModalRoots[activeModalRoots.length - 1]?.focus()
+}
+
+function registerModalRoot(root: HTMLElement) {
+  activeModalRoots.push(root)
+  if (!sharedFocusInListener) {
+    sharedFocusInListener = handleSharedFocusIn
+    window.addEventListener('focusin', sharedFocusInListener)
+  }
+}
+
+function unregisterModalRoot(root: HTMLElement) {
+  const index = activeModalRoots.indexOf(root)
+  if (index !== -1) activeModalRoots.splice(index, 1)
+  if (activeModalRoots.length === 0 && sharedFocusInListener) {
+    window.removeEventListener('focusin', sharedFocusInListener)
+    sharedFocusInListener = null
+  }
+}
 
 // lab-121 (acessibilidade [SHOULD], docs/prompts/02-design-profissional.md §3): usado por todo
 // painel/modal 2D do jogo. Três coisas de navegação por teclado que nenhum painel tinha: (1) Esc
@@ -33,19 +62,24 @@ export function useModalA11y(onClose: () => void) {
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null
+    // Achado do review automático do Copilot: capturado numa variável local (não relido de
+    // `rootRef.current` depois) — o React pode zerar `ref.current` de um nó sendo desmontado ANTES
+    // da limpeza deste efeito rodar (comportamento documentado de `useEffect`), o que faria
+    // `unregisterModalRoot(rootRef.current)` nunca achar o nó de verdade na pilha compartilhada.
+    const root = rootRef.current
+    // Achado do review automático do Copilot: registra a raiz na pilha compartilhada ANTES de
+    // focar — se outro painel já estiver aberto quando este monta, focar a própria raiz primeiro
+    // dispara um `focusin` síncrono cujo alvo (esta raiz nova) ainda não estaria na pilha
+    // compartilhada; o listener do painel JÁ aberto trataria isso como "escape" e devolveria o
+    // foco pra si mesmo, roubando o foco inicial do painel recém-aberto antes mesmo dele se
+    // registrar.
+    if (root) registerModalRoot(root)
     // Alguns painéis (ex. PairingScreen) já têm `autoFocus` num campo de formulário específico —
     // se o foco já está DENTRO do painel quando este efeito roda, não roubar de volta pro elemento
     // raiz; só move o foco quando nada dentro do painel já pegou o foco sozinho.
     if (!rootRef.current?.contains(document.activeElement)) {
       rootRef.current?.focus()
     }
-    // Achado do review automático do Copilot: capturado numa variável local (não relido de
-    // `rootRef.current` na limpeza) — o React pode zerar `ref.current` de um nó sendo desmontado
-    // ANTES da limpeza deste efeito rodar (comportamento documentado de `useEffect`), o que faria
-    // `if (rootRef.current) activeModalRoots.delete(rootRef.current)` nunca remover o nó de
-    // verdade, deixando `activeModalRoots` crescer sem limite a cada abrir/fechar de painel.
-    const root = rootRef.current
-    if (root) activeModalRoots.add(root)
 
     // Achado do review automático do Copilot: Esc fechava e o foco inicial entrava no painel, mas
     // nada impedia Tab de escapar PRA FORA dele enquanto aberto — um usuário de teclado conseguia
@@ -80,32 +114,17 @@ export function useModalA11y(onClose: () => void) {
       }
     }
     window.addEventListener('keydown', handleKeyDown)
-
-    // Achado do review automático do Copilot: o trap de Tab acima só intercepta Tab quando o
-    // foco JÁ está dentro do painel — um CLIQUE de mouse num elemento focável fora da raiz (ex.
-    // o `<canvas>` do jogo, focável por padrão pelo Babylon.js) rouba o foco pra lá diretamente,
-    // sem passar pelo trap nenhuma vez; a partir dali, o próximo Tab segue a ordem padrão do
-    // documento e escapa do painel. Um listener de `focusin` pega esse caso (e qualquer outro
-    // "foco pulou pra fora por fora do teclado") e devolve o foco pra raiz do painel
-    // imediatamente.
-    function handleFocusIn(e: FocusEvent) {
-      if (!rootRef.current) return
-      const target = e.target as Node | null
-      if (!target) return
-      // Só redireciona se o alvo estiver fora de TODOS os painéis abertos no momento — se ele já
-      // está dentro de outro painel (ex. o usuário clicou de um painel pro outro, os dois abertos
-      // ao mesmo tempo), isso é uma troca de foco legítima entre dois modais, não um escape.
-      for (const root of activeModalRoots) {
-        if (root.contains(target)) return
-      }
-      rootRef.current.focus()
-    }
-    window.addEventListener('focusin', handleFocusIn)
+    // Achado do review automático do Copilot: o trap de Tab acima só intercepta Tab quando o foco
+    // JÁ está dentro do painel — um CLIQUE de mouse num elemento focável fora da raiz (ex. o
+    // `<canvas>` do jogo, focável por padrão pelo Babylon.js) rouba o foco pra lá diretamente, sem
+    // passar pelo trap nenhuma vez; a partir dali, o próximo Tab segue a ordem padrão do documento
+    // e escapa do painel. O listener COMPARTILHADO de `focusin` (registrado em
+    // `registerModalRoot`, acima) pega esse caso — e qualquer outro "foco pulou pra fora por fora
+    // do teclado" — devolvendo o foco pro painel do TOPO da pilha (o mais recentemente aberto).
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('focusin', handleFocusIn)
-      if (root) activeModalRoots.delete(root)
+      if (root) unregisterModalRoot(root)
       previouslyFocused?.focus()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

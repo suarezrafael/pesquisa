@@ -148,11 +148,16 @@ documento pro escopo completo desse item.
   legítima, não um escape. **Verificado ao vivo** que o caso de um painel só continua funcionando
   do mesmo jeito depois da reescrita (clique real no canvas com só o ranking aberto, foco
   confirmado voltando pra raiz do painel); o cenário de dois painéis abertos ao mesmo tempo não foi
-  reproduzido ao vivo nesta sessão (a UI atual fecha ranking ao abrir chat — mutuamente exclusivos
-  na prática hoje —, e o botão da mochila só aparece com espada/arma já coletadas, não presentes no
-  perfil de teste), mas a correção foi verificada por raciocínio passo a passo do algoritmo (rastreado
-  manualmente: a checagem contra o registro compartilhado garante terminação em no máximo 1 salto
-  extra por painel, nunca um loop infinito, independente de quantos painéis estejam montados).
+  reproduzido ao vivo nesta sessão. **Correção da própria rodada 3**: um teste ao vivo anterior
+  parecia mostrar ranking fechando sozinho ao abrir o chat, mas isso NÃO é garantido pelo código —
+  `onOpenChat`/`onOpenRanking` (`World3D.tsx`) só chamam `setChatOpen(true)`/`setRankingOpen(true)`
+  cada um, nenhum fecha o outro painel, e o CSS compartilhado (`.chat-panel`) comporta os dois
+  simultaneamente sem problema (achado da rodada 5 do review, corrigindo esta mesma frase). O botão
+  da mochila também só aparece com espada/arma já coletadas, não presentes no perfil de teste — daí
+  o cenário de dois painéis simultâneos continuar sem reprodução ao vivo. A correção foi verificada
+  por raciocínio passo a passo do algoritmo (rastreado manualmente: a checagem contra o registro
+  compartilhado garante terminação em no máximo 1 salto extra por painel, nunca um loop infinito,
+  independente de quantos painéis estejam montados).
   (2) Contagem errada no `CONTEXT.md`: "6 gatilhos" onde o certo é 7 (`fullScreenInert`, que já
   soma 4, mais `chatOpen`/`rankingOpen`/`bagOpen`) — corrigido, junto com uma contagem antiga da
   rodada 1 ("2 dos 7"/"outros 5") que também tinha ficado desatualizada depois da rodada 2 (agora é
@@ -168,6 +173,33 @@ documento pro escopo completo desse item.
   UMA VEZ no início do efeito (no registro, quando é garantidamente não-nulo) e usando essa
   variável do closure tanto no `.add()` quanto no `.delete()` da limpeza, em vez de reler
   `rootRef.current` nos dois momentos.
+- **Rodada 5**: 4 achados (1 sem detalhe novo — "previously missed", código não alterado desde a
+  última leitura, sem ação possível) + 3 reais. (1) **O mais importante, arquitetural**: as
+  rodadas 3-4 tentaram consertar o problema com um listener de `focusin` POR INSTÂNCIA (um por
+  painel), mas isso tem uma falha estrutural própria — com N listeners independentes reagindo ao
+  MESMO evento, quem "vence" e pra onde o foco vai depende só da ordem de registro dos hooks, não
+  de qual painel é o mais recente/visível; pior, um painel que acabava de MONTAR chamava
+  `rootRef.current.focus()` ANTES de se registrar no `Set` compartilhado — se outro painel já
+  estivesse aberto, o `focusin` síncrono disparado por esse `.focus()` seria tratado pelo listener
+  do painel JÁ existente como "escape total" (a raiz nova ainda não estava no registro), e esse
+  listener devolvia o foco pra SI MESMO, roubando o foco inicial do painel recém-aberto antes dele
+  conseguir manter o próprio foco. Corrigido com uma reescrita arquitetural: `activeModalRoots`
+  virou uma PILHA ordenada (`HTMLElement[]`, não mais um `Set`) e existe um ÚNICO listener de
+  `focusin` compartilhado (registrado só quando o primeiro painel monta, removido quando o último
+  desmonta) em vez de um por instância — o listener redireciona sempre pro painel do TOPO da pilha
+  (o mais recentemente aberto), nunca pra "qualquer um que aconteça de rodar seu próprio código".
+  Isso também resolve, de quebra, o achado #2 do review (foco inicial perdido — registrar a raiz na
+  pilha ANTES de focá-la garante que o `focusin` do próprio `.focus()` já encontra a raiz nova no
+  registro). **Verificado ao vivo** que o caso de painel único continua funcionando exatamente
+  igual depois da reescrita (mesmo teste de clique real no canvas + `document.activeElement`
+  confirmado na raiz do painel). (3) A frase "a UI atual fecha ranking ao abrir chat — mutuamente
+  exclusivos na prática hoje" (registrada na rodada 3) não é garantida pelo código —
+  `onOpenChat`/`onOpenRanking` só chamam `setChatOpen(true)`/`setRankingOpen(true)` cada um, nenhum
+  fecha o outro painel, e `.chat-panel` comporta os dois ao mesmo tempo sem problema de CSS; um
+  teste ao vivo anterior que pareceu mostrar essa exclusão mútua não reflete uma garantia real do
+  código. Corrigido removendo a afirmação incorreta. Também atualizada a descrição da PR no GitHub,
+  que ainda só mencionava excluir `chatOpen`/`rankingOpen` (sem `bagOpen`) e não mencionava o
+  mecanismo de registro compartilhado de foco.
 
 ## Estado do repositório ao final
 
