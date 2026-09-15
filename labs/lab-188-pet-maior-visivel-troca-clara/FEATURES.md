@@ -137,3 +137,19 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-187, prio
   de 3 pra 2 raycasts por quadro em Marte. **Reverificado ao vivo de novo, mesmo morro**: avatar
   1.378 unidade acima do raio-base, pet 1.243 unidade acima — comportamento intacto depois da
   otimização. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos após as mudanças.
+- **Rodada 3** (2026-09-15): 2 achados reais. (1) `destinationPlanetGroundRadial` retornava
+  `fallbackRadius` na PRIMEIRA falha de raycast (`!hasHit`), diferente de `terrainGroundRadial`
+  acima, que tenta de novo (`continue`) até 12 vezes — um "nenhum acerto" bem na chegada a Marte
+  (`buildMarsIfNeeded` acabou de criar os colisores) não é prova de que não há planeta ali, é mais
+  provável ser o Havok ainda aquecendo (mesmo raciocínio já documentado em `terrainGroundRadial`).
+  Sem o retry, um quadro azarado logo na chegada colocaria o pet/avatar de volta no raio-base por um
+  instante. Corrigido trocando `return fallbackRadius` por `continue` no caso de falha, igual ao
+  padrão já usado. (2) Um comentário (perto do cálculo do pet) dizia que "em planeta-destino também
+  é raycast físico real" de forma genérica, mas só Marte usa `destinationPlanetGroundRadial` — os
+  outros 6 continuam com o raio fixo (achado da rodada 1). Corrigido deixando a exceção de Marte
+  explícita no comentário, não implícita. Sem verificação ao vivo nova nesta rodada: a correção (1)
+  só afeta o caso raro de falha transitória de raycast (mesmo mecanismo já testado indiretamente em
+  `terrainGroundRadial` por várias sessões anteriores), sem mudança observável no caminho normal
+  (raycast bem-sucedido, que é o que a verificação ao vivo já cobriu nas rodadas anteriores); a
+  correção (2) é só documentação. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos
+  após as mudanças.

@@ -4398,7 +4398,11 @@ export function World3D({
         for (let attempt = 0; attempt < 12; attempt++) {
           destinationGroundRaycastResult.reset()
           havokPlugin.raycast(from, to, destinationGroundRaycastResult)
-          if (!destinationGroundRaycastResult.hasHit) return fallbackRadius
+          // Mesmo cuidado de `terrainGroundRadial` acima: um "nenhum acerto" bem na chegada a
+          // Marte (`buildMarsIfNeeded` acabou de criar os colisores) não é prova de que não há
+          // planeta ali — mais provável ser o Havok ainda aquecendo. Tenta de novo dentro do
+          // mesmo orçamento de tentativas em vez de desistir na primeira falha.
+          if (!destinationGroundRaycastResult.hasHit) continue
           if (DESTINATION_GROUND_MESH_NAMES.has(destinationGroundRaycastResult.body?.transformNode?.name ?? '')) {
             return destinationGroundRaycastResult.hitPointWorld.subtract(currentWorldCenter).length()
           }
@@ -10680,10 +10684,12 @@ export function World3D({
               // que pode estar em QUALQUER relevo do planeta principal — usa o mesmo raycast
               // físico real (`terrainGroundRadial`) já usado pras escolinhas/casa. Nos outros
               // contextos usa `currentGroundBaseFn`: dentro de casa é exato por construção (sala
-              // plana, sem relevo formulado pra divergir); em planeta-destino também é raycast
-              // físico real desde `destinationPlanetGroundRadial` (achado real: Marte tem morros
-              // de verdade — colisor `MESH`, o avatar sobe fisicamente — que um raio fixo nunca
-              // acompanharia; ver comentário perto da definição, junto de `terrainGroundRadial`).
+              // plana, sem relevo formulado pra divergir); em planeta-destino é raio fixo
+              // (`planet.radius`) pros 6 sem relevo, ou raycast físico real
+              // (`destinationPlanetGroundRadial`) só em Marte — único com morros de verdade,
+              // colisor `MESH`, que o avatar sobe fisicamente e um raio fixo nunca acompanharia
+              // (ver `landRocket` e o comentário perto da definição, junto de
+              // `terrainGroundRadial`).
               const petGroundBase =
                 currentPlanetId === null && !insideHouseInterior
                   ? terrainGroundRadial(petUp, terrainHeight(petUp))
