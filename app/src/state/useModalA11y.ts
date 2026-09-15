@@ -104,10 +104,19 @@ export function useModalA11y(onClose: () => void) {
       if (e.key === 'Escape') {
         // Achado do review automático do Copilot: cada instância registra seu PRÓPRIO listener
         // de `keydown` — com dois painéis montados ao mesmo tempo, um único Esc disparava os DOIS
-        // `onClose`, fechando ambos de uma vez. Só a instância do TOPO da pilha (o painel mais
-        // recentemente aberto) reage ao Esc; as instâncias mais abaixo na pilha ignoram, mesmo o
-        // listener delas também tendo disparado pro mesmo evento.
-        if (activeModalRoots[activeModalRoots.length - 1] !== rootRef.current) return
+        // `onClose`, fechando ambos de uma vez. Só UMA instância deve reagir ao Esc.
+        // Achado do review automático do Copilot (rodada 9): essa instância não é necessariamente
+        // a do TOPO da pilha (mais recentemente aberta) — o listener compartilhado de `focusin`
+        // (achado da rodada 5, acima) permite o foco ficar legitimamente num painel de BAIXO
+        // enquanto outro está aberto por cima (é assim que chat+ranking coexistem). Se o usuário
+        // está de fato interagindo com o painel de baixo (foco real nele) e aperta Esc, fechar o
+        // painel do TOPO (que ele nem está usando) é o comportamento errado. Fecha a raiz que
+        // CONTÉM `document.activeElement` (o painel com foco de verdade); só cai pro topo da
+        // pilha se o foco não estiver dentro de nenhum painel ativo (não devia acontecer com o
+        // listener de `focusin` funcionando, mas é um fallback seguro).
+        const focusedRoot = activeModalRoots.find((candidate) => candidate.contains(document.activeElement))
+        const escapeTarget = focusedRoot ?? activeModalRoots[activeModalRoots.length - 1]
+        if (escapeTarget !== rootRef.current) return
         onCloseRef.current()
         return
       }

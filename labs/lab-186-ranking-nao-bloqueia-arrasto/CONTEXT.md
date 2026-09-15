@@ -296,6 +296,25 @@ documento pro escopo completo desse item.
   uma mudança em 18 componentes. Documentado como dívida real e explícita em "Pendências / dívidas
   conhecidas" (não escondido), em vez de uma correção apressada e mal verificada. Nenhuma mudança de
   código nesta rodada — só documentação (`CONTEXT.md`).
+- **Rodada 9** (2026-09-15; a review em si precisou de 2 tentativas — a 1ª retornou "Copilot
+  encountered an error and was unable to review this pull request", sem achados; a 2ª, pedida de
+  novo, é a que segue): 2 achados, "suppressed" (0 comentários novos gerados), mas avaliados na
+  mesma. (1) **Repete o achado de exclusividade da rodada 8** ("Previously missed... in code that
+  hasn't changed since the last review") — já disclosed em "Pendências / dívidas conhecidas", sem
+  informação nova; nenhuma ação (convergência parcial, mesmo padrão do lab-184 rodada 4). (2) **Achado
+  real novo**: a rodada 6 fez Esc fechar só a raiz do TOPO da pilha (por ordem de montagem) — mas o
+  listener compartilhado de `focusin` (rodada 5) permite o foco ficar legitimamente num painel de
+  BAIXO enquanto outro está aberto por cima (é assim que chat+ranking coexistem). Se dois painéis
+  estão abertos (ex. chat primeiro, ranking depois — ranking é o topo por ordem de montagem) e o
+  usuário está de fato usando o de BAIXO (chat, com foco real nele), apertar Esc fechava o de CIMA
+  (ranking, que ele nem estava usando) em vez do que ele estava interagindo. Corrigido: o branch do
+  Esc agora busca a raiz que CONTÉM `document.activeElement` (`activeModalRoots.find(candidate =>
+  candidate.contains(document.activeElement))`) e usa essa como alvo — só cai pro topo da pilha
+  (comportamento antigo) se o foco não estiver dentro de painel nenhum (fallback de segurança, não
+  devia acontecer com o listener de `focusin` funcionando). Verificado que o caso de painel único
+  continua idêntico (só há uma raiz possível, com ou sem foco real nela — o próprio painel sempre
+  contém `document.activeElement` depois do foco inicial do efeito). `npx tsc -b`, `npm run test`
+  (208/208) e `npm run build` limpos após a mudança.
 
 ## Estado do repositório ao final
 
