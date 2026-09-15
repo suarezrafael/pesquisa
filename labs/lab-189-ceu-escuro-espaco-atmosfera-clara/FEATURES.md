@@ -140,6 +140,13 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-188, prio
   nítido com estrelas de antes — nenhuma mudança visual, só de custo de desenho), `false` de novo
   depois de pousar. Sem erro no console. `npx tsc -b`, `npm run test` (209/209) e `npm run build`
   limpos após as mudanças.
+- **Rodada 4** (2026-09-15) — **convergência**: "Needs a closer look" no título, mas 0 comentários
+  novos gerados e nenhum comentário inline (confirmado via `gh api .../comments`, só o único
+  comentário da rodada 1 no histórico inteiro) — o corpo da review só repete as duas pendências já
+  disclosed no próprio `FEATURES.md` (viagem de volta não verificada ao vivo separadamente,
+  verificação mobile/touch não feita), sem nenhum achado de código novo. Mesmo critério de
+  convergência já usado em rodadas equivalentes de labs anteriores desta sessão (repetir uma
+  limitação já disclosed, 0 comentários novos = convergido).
 
 - Simulação astronômica real, cutscene longa, novo sistema de clima espacial (explicitamente fora
   de escopo no próprio item do backlog).
