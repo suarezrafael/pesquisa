@@ -55,22 +55,36 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-187, prio
 
 ## Funcionalidades planejadas
 
-- [ ] Verificação ao vivo (Chrome real): comparar escala do pet equipado lado a lado com o avatar
-  (screenshot) — confirmar se "parece pequeno" é real hoje antes de aumentar a escala.
-- [ ] Corrigir o pet ficando preso ao raio fixo `planet.radius` em planetas-destino com relevo real
-  (Marte) — usar o mesmo raycast físico (`terrainGroundRadial`-equivalente) já usado pro planeta
-  principal, ou uma alternativa que funcione contra o colisor `MESH` de qualquer planeta-destino,
-  não só a fórmula/raio fixo.
-- [ ] Aumentar escala visual do pet adulto/idoso (hoje 1.0) com um limite por espécie, se a
-  verificação ao vivo confirmar que o tamanho atual realmente lê como "pequeno demais".
-- [ ] Reavaliar `PET_SIDE_DISTANCE` (offset lateral) proporcionalmente a qualquer aumento de
-  escala — verificar ao vivo que o pet maior não tampa a visão da câmera nem atrapalha clique em
-  objetos/NPCs próximos.
-- [ ] Verificar ao vivo a troca de pet no painel: confirmar que o pet no MUNDO 3D reflete a troca
-  imediatamente (não só a tag do painel) e decidir se falta algum feedback adicional.
-- [ ] Confirmar que o pet continua visível/legível em viewport mobile (critério de aceite do
-  backlog) — dentro da limitação de ferramental já conhecida (sem emulação de dispositivo real
-  nesta sessão).
+- [x] Verificação ao vivo (Chrome real): medido via bounding box real no console — pet adulto
+  (escala 1.0) tinha só ~21% da altura do avatar (gato 20.7%, cachorro 22.4%) — confirmado
+  "pequeno demais", não uma percepção equivocada do backlog.
+- [x] Corrigido o pet ficando preso ao raio fixo `planet.radius` em planetas-destino com relevo
+  real (Marte) — novo helper `destinationPlanetGroundRadial` (raycast físico real, mesmo padrão de
+  `terrainGroundRadial`) substitui o raio fixo. **Verificado ao vivo, ponta a ponta**: voou de
+  verdade até Marte, subiu um morro real (`marsHillRoot`), e mediu a posição do avatar E do pet
+  contra o centro do planeta — avatar ficou 1.38 unidade ACIMA do raio-base (7.38 vs. 6.0, prova de
+  que está de verdade em cima do morro); o pet ficou 1.18 unidade acima do raio-base (7.18),
+  acompanhando de perto a elevação do avatar — com o código antigo, o pet ficaria travado
+  EXATAMENTE no raio-base (6.0), 1,18-1,38 unidade abaixo de onde deveria, visualmente enterrado no
+  morro.
+- [x] Aumentado a escala visual do pet adulto/idoso com limite por espécie
+  (`PET_SPECIES_SCALE_MULTIPLIER`, `data/pets.ts`): gato 1.6×, cachorro 1.8× — multiplicadores
+  diferentes porque a malha-base de cada espécie (`buildGato`/`buildCachorro`) já tem proporções
+  diferentes entre si. Progressão relativa por estágio (`petStageScale`, filhote/jovem menores que
+  adulto) preservada, só multiplicada por cima (`petVisualScale`, novo, testado em
+  `progression.test.ts`). **Verificado ao vivo**: gato e cachorro comparados lado a lado com o
+  avatar antes/depois — nitidamente mais visíveis, sem parecer desproporcional.
+- [x] Reavaliado `PET_SIDE_DISTANCE` (0.65 → 1.0) — medido ao vivo que o cachorro (maior
+  multiplicador) tinha ~0.65 de extensão lateral própria a partir do seu centro, igual à distância
+  antiga, causando sobreposição visual real com o avatar (confirmado por screenshot antes da
+  correção). **Verificado ao vivo depois da correção**: boa separação visual, sem sobreposição, com
+  os dois pets (gato e cachorro).
+- [x] Verificado ao vivo a troca de pet no painel: clicar "Escolher" atualiza a tag "✓ Ativo"
+  IMEDIATAMENTE no painel (sem precisar fechar/reabrir) e o pet no MUNDO 3D troca de verdade ao
+  fechar o painel (confirmado por screenshot antes/depois) — já conta como feedback claro; nenhuma
+  mudança de código necessária aqui.
+- [ ] Verificação em viewport mobile/touch real não feita — mesma limitação de ferramental já
+  conhecida de vários labs anteriores desta sessão.
 
 ## Fora de escopo (explicitamente adiado)
 
@@ -81,3 +95,88 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-187, prio
   si.
 - Verificação em viewport mobile/touch real — mesma limitação de ferramental já conhecida de vários
   labs anteriores desta sessão.
+
+## Review automático do Copilot (PR #68)
+
+- **Rodada 1** (2026-09-15): 2 achados reais. (1) **Performance**: `destinationPlanetGroundRadial`
+  fazia um raycast físico de verdade TODO QUADRO (usado pelo pet e por outras leituras de
+  `currentGroundBaseFn`, ex. distância ao chão do avatar) mesmo nos 6 planetas-destino que são
+  esferas uniformes — ali o resultado é sempre `planet.radius`, idêntico ao raio fixo antigo, só que
+  mais caro (raycast físico + alocação de vetores por nada). Corrigido: `currentGroundBaseFn` só usa
+  a versão com raycast quando `arrivedPlanetId === 'marte'` (único planeta-destino com relevo de
+  verdade); os outros 6 continuam com `() => planet.radius`, mesmo padrão de exceção específica de
+  Marte já usado no combate (`handleInteractPress`, "Só Marte tem inimigo"). (2) **Correção real**:
+  a primeira versão aceitava QUALQUER acerto de raycast como "a superfície certa" — mas as rochas de
+  Marte têm um colisor-esfera invisível deliberadamente aproximado
+  (`MARS_ROCK_COLLIDER_PROTRUSION`), dimensionado só pra bloquear esbarrão lateral, não pra
+  representar altura de verdade; um raio que raspasse numa rocha reportaria uma superfície
+  ligeiramente desalinhada da malha visível. Corrigido reaproveitando o mesmo padrão de
+  `terrainGroundRadial` (retry-e-pula): só aceita o acerto se o mesh for a esfera-base do planeta
+  (`secondPlanetGround`/`mercuryGround`/etc.) ou a malha real do morro
+  (`marsHillMain`/`marsHillShoulder`); qualquer outro acerto (rocha, cacto, etc.) avança o raio pra
+  além dele. **Verificado ao vivo de novo, ponta a ponta**: voou até Marte, subiu o mesmo morro de
+  antes — avatar 1.379 unidade acima do raio-base, pet 1.194 unidade acima (praticamente idêntico à
+  medição da rodada anterior, 1.38/1.18 — confirma que o filtro de mesh não quebrou o caso do morro
+  de verdade, só passou a ignorar rochas). Também removidas 3 referências a "lab-188" em comentários
+  de `app/src` (regra MUST de `docs/prompts/04-manutencao-clean-code.md`). `npx tsc -b`, `npm run
+  test` (209/209) e `npm run build` limpos após as mudanças.
+- **Rodada 2** (2026-09-15): 4 achados reais. (1)/(2) Dois comentários novos (rodada 1) tinham a
+  frase "Achado do review automático do Copilot" — a regra MUST de comentários
+  (`docs/prompts/04-manutencao-clean-code.md`) proíbe qualquer referência à sessão de IA no código,
+  não só o número do laboratório/PR (já removidos numa rodada anterior deste mesmo lab); apesar de
+  ser um padrão usado extensamente em labs anteriores desta sessão sem nunca ter sido sinalizado, a
+  regra é clara e a correção é a certa — reescritos os dois comentários pra descrever só a razão
+  técnica, sem atribuição de origem. (3) **Achado próprio de contagem**: o comentário e o
+  `FEATURES.md` diziam "outros 5 planetas-destino", mas `DESTINATION_PLANETS` lista 6 além de Marte
+  (Mercúrio, Vênus, Júpiter, Saturno, Urano, Netuno) — corrigido nos dois lugares (código e este
+  arquivo) e na descrição da PR no GitHub, que tinha o mesmo erro. (4) **Performance, achado real**:
+  em Marte, `currentGroundBaseFn` (com raycast) era chamado 2× pro avatar (checagem de `groundDist`
+  e reposicionamento visual, ambas com o MESMO `localUp` no mesmo quadro — sem motivo pra recalcular)
+  mais 1× pro pet (direção diferente, `petUp`, não pode compartilhar). Corrigido capturando o
+  resultado da primeira chamada (`groundBase`) numa variável e reaproveitando na segunda, reduzindo
+  de 3 pra 2 raycasts por quadro em Marte. **Reverificado ao vivo de novo, mesmo morro**: avatar
+  1.378 unidade acima do raio-base, pet 1.243 unidade acima — comportamento intacto depois da
+  otimização. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos após as mudanças.
+- **Rodada 3** (2026-09-15): 2 achados reais. (1) `destinationPlanetGroundRadial` retornava
+  `fallbackRadius` na PRIMEIRA falha de raycast (`!hasHit`), diferente de `terrainGroundRadial`
+  acima, que tenta de novo (`continue`) até 12 vezes — um "nenhum acerto" bem na chegada a Marte
+  (`buildMarsIfNeeded` acabou de criar os colisores) não é prova de que não há planeta ali, é mais
+  provável ser o Havok ainda aquecendo (mesmo raciocínio já documentado em `terrainGroundRadial`).
+  Sem o retry, um quadro azarado logo na chegada colocaria o pet/avatar de volta no raio-base por um
+  instante. Corrigido trocando `return fallbackRadius` por `continue` no caso de falha, igual ao
+  padrão já usado. (2) Um comentário (perto do cálculo do pet) dizia que "em planeta-destino também
+  é raycast físico real" de forma genérica, mas só Marte usa `destinationPlanetGroundRadial` — os
+  outros 6 continuam com o raio fixo (achado da rodada 1). Corrigido deixando a exceção de Marte
+  explícita no comentário, não implícita. Sem verificação ao vivo nova nesta rodada: a correção (1)
+  só afeta o caso raro de falha transitória de raycast (mesmo mecanismo já testado indiretamente em
+  `terrainGroundRadial` por várias sessões anteriores), sem mudança observável no caminho normal
+  (raycast bem-sucedido, que é o que a verificação ao vivo já cobriu nas rodadas anteriores); a
+  correção (2) é só documentação. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos
+  após as mudanças.
+- **Rodada 4** (2026-09-15): 2 achados reais — um deles reverte parte da própria rodada 3. (1)
+  **Achado sobre o teste**: `petVisualScale('adulto', 'gato')` era comparado contra
+  `petStageScale('adulto') * PET_SPECIES_SCALE_MULTIPLIER.gato` — uma TAUTOLOGIA, já que o valor
+  "esperado" vem da MESMA constante que a implementação lê; se `PET_SPECIES_SCALE_MULTIPLIER.gato`
+  fosse alterado de volta pra `1.0` por engano, o teste continuaria passando (só confirma que a
+  multiplicação em si funciona, não que os números certos — 1.6×/1.8× — estão configurados).
+  Corrigido comparando contra os valores fixos `1.6`/`1.8` diretamente, sem depender da constante;
+  removida a importação de `PET_SPECIES_SCALE_MULTIPLIER` no teste, que ficou sem uso. (2) **Achado
+  real sobre a correção da rodada 3**: o `continue` no caso de `!hasHit` repete o MESMO `from`/`to`
+  até 12 vezes, mas nada muda entre duas chamadas síncronas de `raycast` sem um passo de física real
+  entre elas — repetir o mesmo raio 12 vezes só multiplica o custo sem poder mudar o resultado
+  (diferente do outro `continue`, que avança `from` de verdade a cada tentativa). A diferença chave
+  em relação a `terrainGroundRadial` (cujo retry EM SI tem a mesma característica, mas nunca foi
+  sinalizado): aquela função posiciona objetos ESTÁTICOS uma vez só — se falhar ali, o objeto fica
+  errado pra sempre, por isso insistir na hora se justifica; `destinationPlanetGroundRadial` é
+  chamada TODO QUADRO (pet/avatar em movimento contínuo) — uma falha transitória se autocorrige
+  sozinha no quadro seguinte, sem precisar de 12 tentativas inúteis no mesmo quadro. Revertido pra
+  `return fallbackRadius` imediato no caso de falha (como estava antes da rodada 3), com um
+  comentário novo explicando por que essa função É diferente de `terrainGroundRadial` nesse aspecto
+  específico — mantendo o `continue` que de fato muda `from` (pular rocha) intacto. Sem verificação
+  ao vivo nova: nenhuma das duas correções muda o caminho normal (raycast bem-sucedido de primeira),
+  já coberto nas rodadas 1-2. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos após as
+  mudanças.
+- **Rodada 5** (2026-09-15) — **convergência**: "Approval recommended", 0 comentários novos
+  gerados, nenhum achado. Encerra o ciclo de review deste PR depois de 4 rodadas com achados reais
+  (contagem de planetas, referência à sessão de IA em comentário, cache de raycast por quadro,
+  retry-na-falha revertido, teste tautológico corrigido).

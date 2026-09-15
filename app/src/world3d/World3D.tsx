@@ -87,7 +87,7 @@ import {
   petAgeYears,
   petLifecycleStage,
   petStageFor,
-  petStageScale,
+  petVisualScale,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
 import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted, trackPlanetInteractionCompleted } from '../productAnalytics'
@@ -281,7 +281,12 @@ const PET_FOLLOW_LERP_SPEED = 3
 // lab-168 (bug real reportado pelo usuário: pet só perseguia o rastro EXATO de trás do jogador,
 // sem nunca se comportar como os bichinhos que já vagam pelo planeta — coelho/gato/etc., que
 // pulam e viram na direção do movimento). Alvo agora é um ponto ao LADO do jogador, não atrás.
-const PET_SIDE_DISTANCE = 0.65 // unidades de distância lateral do jogador
+// Aumentado de 0.65 pra 1.0 junto com o aumento de escala do pet
+// (`PET_SPECIES_SCALE_MULTIPLIER`) — medido ao vivo que o cachorro (a espécie com o maior
+// multiplicador, 1.8×) tem ~0.65 de extensão lateral própria a partir do seu centro; com a
+// distância antiga (0.65, igual à extensão do próprio pet), o corpo do pet alcançava de volta até
+// o avatar, sobrepondo visualmente as duas malhas.
+const PET_SIDE_DISTANCE = 1.0 // unidades de distância lateral do jogador
 const PET_HOP_SPEED = 9 // mesma faixa (8-11) usada pelos bichinhos terrestres (`hopSpeed`)
 // Orçamento de rede do multiplayer (lab-85, docs/prompts/05-escala-e-viabilidade.md achado G1):
 // antes, `sendState` disparava incondicionalmente a cada 0,12s (8,33 msg/s por jogador) — a cota
@@ -3691,7 +3696,17 @@ export function World3D({
           const planet = DESTINATION_PLANETS[arrivedPlanetId]
           currentPlanetId = arrivedPlanetId
           currentWorldCenter = planet.center
-          currentGroundBaseFn = () => planet.radius
+          // `destinationPlanetGroundRadial` faz um raycast físico de verdade — desnecessário (e
+          // caro, chamado todo quadro pelo pet e por outros usos de `currentGroundBaseFn`, ver
+          // `groundBase`/`airHeight` mais abaixo) nos outros 6 planetas-destino, que são esferas
+          // uniformes: um raycast contra uma esfera perfeita sempre volta exatamente
+          // `planet.radius`, o mesmo resultado do raio fixo, só mais caro. Só Marte tem relevo de
+          // verdade (morros com colisor `MESH`, mesmo raciocínio já usado pro combate — "Só Marte
+          // tem inimigo" — em `handleInteractPress`, mais abaixo).
+          currentGroundBaseFn =
+            arrivedPlanetId === 'marte'
+              ? (localUp) => destinationPlanetGroundRadial(localUp, planet.radius)
+              : () => planet.radius
           teleportAvatarTo(planet.center, offsetLandingUp(planet.landingUp, planet.radius, 1.8), currentGroundBaseFn)
           // lab-185: só na chegada de verdade ao destino — desistir no meio do caminho e pousar
           // de volta na origem (`!arrivedAtDestination`) não é uma "viagem completada".
@@ -4345,6 +4360,60 @@ export function World3D({
           from = terrainRaycastResult.hitPointWorld.subtract(rayDir.scale(0.01))
         }
         return PLANET_RADIUS + formulaHeight
+      }
+
+      // Achado real: `currentGroundBaseFn` usava só um raio FIXO (`planet.radius`) em
+      // planetas-destino — nunca muda, mesmo se o avatar estiver em cima de um morro de verdade.
+      // Marte tem morros com colisor `MESH` real (`buildMarsHill`, corrigido pro avatar SUBIR de
+      // verdade neles) — o avatar (corpo físico Havok) sobe fisicamente, mas o pet (cinemático,
+      // sem física, reposicionado por fórmula todo quadro) ficava preso no nível de base do
+      // planeta: visualmente enterrado dentro do morro exatamente quando o avatar sobe nele. Só
+      // Marte usa esta função (ver `landRocket`) — os outros 6 planetas-destino são esferas
+      // uniformes, sem custo de raycast nenhum.
+      // Aceitar QUALQUER acerto (chão, morro OU rocha) como "a superfície certa" está errado — as
+      // rochas de Marte têm um colisor-esfera
+      // invisível deliberadamente aproximado (`MARS_ROCK_COLLIDER_PROTRUSION`, dimensionado só pra
+      // bloquear esbarrão lateral, "pequeno o bastante pra não virar plataforma" — nunca pensado
+      // pra representar altura de verdade), então um raio que raspasse numa rocha reportaria uma
+      // superfície ligeiramente acima/desalinhada da malha visível. Mesmo padrão de
+      // `terrainGroundRadial` acima: PULA qualquer acerto que não seja a esfera-base do planeta ou
+      // a malha real do morro, avançando o raio pra além dele, até achar uma superfície de verdade.
+      const destinationGroundRaycastResult = new PhysicsRaycastResult()
+      const DESTINATION_GROUND_MESH_NAMES = new Set([
+        'secondPlanetGround',
+        'mercuryGround',
+        'venusGround',
+        'jupiterGround',
+        'saturnGround',
+        'uranusGround',
+        'neptuneGround',
+        'marsHillMain',
+        'marsHillShoulder',
+      ])
+      function destinationPlanetGroundRadial(dir: Vector3, fallbackRadius: number): number {
+        if (!havokPlugin) return fallbackRadius
+        const to = currentWorldCenter.add(dir.scale(fallbackRadius - 2))
+        const rayDir = dir.clone().normalize()
+        let from = currentWorldCenter.add(dir.scale(fallbackRadius + 6))
+        for (let attempt = 0; attempt < 12; attempt++) {
+          destinationGroundRaycastResult.reset()
+          havokPlugin.raycast(from, to, destinationGroundRaycastResult)
+          // Diferente de `terrainGroundRadial` acima: um "nenhum acerto" aqui NÃO tenta de novo
+          // com o mesmo raio — nada muda entre duas chamadas síncronas de `raycast` na mesma
+          // volta do laço (sem passo de física real entre elas), então repetir o mesmo `from`/`to`
+          // 12 vezes só multiplicaria o custo sem mudar o resultado. A diferença real é que esta
+          // função é chamada TODO QUADRO (pet/avatar em movimento contínuo), ao contrário de
+          // `terrainGroundRadial`, usada pra posicionar objetos estáticos UMA vez só — se aquela
+          // falhar ali, o objeto fica errado pra sempre, por isso precisa insistir na hora. Aqui,
+          // uma falha transitória (Havok ainda aquecendo logo após `buildMarsIfNeeded`) se
+          // autocorrige sozinha no quadro seguinte, sem custo de repetir 12 vezes no mesmo quadro.
+          if (!destinationGroundRaycastResult.hasHit) return fallbackRadius
+          if (DESTINATION_GROUND_MESH_NAMES.has(destinationGroundRaycastResult.body?.transformNode?.name ?? '')) {
+            return destinationGroundRaycastResult.hitPointWorld.subtract(currentWorldCenter).length()
+          }
+          from = destinationGroundRaycastResult.hitPointWorld.subtract(rayDir.scale(0.01))
+        }
+        return fallbackRadius
       }
 
       // `dir.scale(terrainGroundRadial(dir, terrainHeight(dir)))` era repetido de próprio punho em
@@ -9853,10 +9922,10 @@ export function World3D({
         const careStage = petStageFor(progressRef.current.petCareCounts[equippedId] ?? 0)
         const ageYears = petAgeYears(progressRef.current, equippedId, new Date().toISOString())
         const stage = petLifecycleStage(careStage, ageYears)
-        const scale = petStageScale(stage)
+        const scale = petVisualScale(stage, pet.species)
         const baseFurColor = new Color3(...pet.furColorRgb)
         // Único sinal visual de "idoso" — pelo mais grisalho, mesmo corpo/tamanho de um adulto
-        // (`petStageScale`) — nunca some, nunca fica doente, nunca reduz.
+        // (`petVisualScale`) — nunca some, nunca fica doente, nunca reduz.
         const furColor = stage === 'idoso' ? Color3.Lerp(baseFurColor, new Color3(0.8, 0.8, 0.8), 0.45) : baseFurColor
         const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
         root.scaling.setAll(scale)
@@ -10619,8 +10688,13 @@ export function World3D({
               // ESTÁTICA (uma vez, ao construir); o pet se move todo quadro seguindo o jogador,
               // que pode estar em QUALQUER relevo do planeta principal — usa o mesmo raycast
               // físico real (`terrainGroundRadial`) já usado pras escolinhas/casa. Nos outros
-              // contextos (planeta-destino, dentro de casa) mantém `currentGroundBaseFn`, que já
-              // é exato ali (raio fixo/sala plana, sem relevo formulado pra divergir).
+              // contextos usa `currentGroundBaseFn`: dentro de casa é exato por construção (sala
+              // plana, sem relevo formulado pra divergir); em planeta-destino é raio fixo
+              // (`planet.radius`) pros 6 sem relevo, ou raycast físico real
+              // (`destinationPlanetGroundRadial`) só em Marte — único com morros de verdade,
+              // colisor `MESH`, que o avatar sobe fisicamente e um raio fixo nunca acompanharia
+              // (ver `landRocket` e o comentário perto da definição, junto de
+              // `terrainGroundRadial`).
               const petGroundBase =
                 currentPlanetId === null && !insideHouseInterior
                   ? terrainGroundRadial(petUp, terrainHeight(petUp))
@@ -10687,7 +10761,12 @@ export function World3D({
           // simplesmente não acontecia, de forma intermitente e sem erro nenhum. Consumido (e
           // zerado) a cada quadro, então nunca fica um pulo "pendente" esperando o jogador
           // aterrissar.
-          const groundDist = currentGroundBaseFn(localUp) + AVATAR_RADIUS + 0.05
+          // `currentGroundBaseFn` chamada uma única vez e reaproveitada abaixo (`groundBase`) —
+          // em Marte ela faz um raycast físico de verdade; chamar de novo mais adiante pra
+          // reposicionar a figura visual (mesmo `localUp`, mesmo resultado) duplicaria o custo à
+          // toa, já que nada muda `localUp` entre as duas leituras neste quadro.
+          const groundBase = currentGroundBaseFn(localUp)
+          const groundDist = groundBase + AVATAR_RADIUS + 0.05
 
           // Bug real relatado pelo usuário: "o parkour só funciona o primeiro pulo, depois que
           // estou em cima do degrau o pulo não funciona". Causa: `grounded` comparava só contra
@@ -10797,12 +10876,12 @@ export function World3D({
             // altura usa a mesma fórmula de "grudar no chão" de sempre.
             studentFigure.root.position.set(
               pos.x,
-              currentWorldCenter.y + currentGroundBaseFn(localUp) + 0.02 + airHeight,
+              currentWorldCenter.y + groundBase + 0.02 + airHeight,
               pos.z,
             )
           } else {
             studentFigure.root.position.copyFrom(
-              currentWorldCenter.add(localUp.scale(currentGroundBaseFn(localUp) + 0.02 + airHeight))
+              currentWorldCenter.add(localUp.scale(groundBase + 0.02 + airHeight))
             )
           }
 

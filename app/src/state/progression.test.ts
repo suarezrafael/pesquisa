@@ -35,6 +35,7 @@ import {
   petLifecycleStage,
   petStageFor,
   petStageScale,
+  petVisualScale,
   selectEnvironmentalChallengeQuest,
   seriesForLevel,
   skillBreakdown,
@@ -1200,6 +1201,18 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
     expect(petStageScale('jovem')).toBeLessThan(petStageScale('adulto'))
     expect(petStageScale('adulto')).toBe(1)
     expect(petStageScale('idoso')).toBe(1)
+  })
+
+  it('petVisualScale multiplica a progressão relativa de estágio pelo limite da espécie', () => {
+    // Valores fixos (não derivados de `PET_SPECIES_SCALE_MULTIPLIER`) — se o multiplicador de
+    // alguma espécie voltar a 1.0 por engano, este teste tem que falhar, não só confirmar que a
+    // multiplicação em si está correta.
+    expect(petVisualScale('adulto', 'gato')).toBe(1.6)
+    expect(petVisualScale('adulto', 'cachorro')).toBe(1.8)
+    // filhote continua proporcionalmente menor que adulto DA MESMA espécie, mesmo com o
+    // multiplicador de espécie por cima — a progressão relativa de `petStageScale` não muda.
+    expect(petVisualScale('filhote', 'gato')).toBeLessThan(petVisualScale('adulto', 'gato'))
+    expect(petVisualScale('filhote', 'cachorro')).toBeLessThan(petVisualScale('adulto', 'cachorro'))
   })
 })
 
