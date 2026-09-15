@@ -65,7 +65,7 @@ import {
 } from './progression'
 import { emptyProgress } from './storage'
 import { findFurnitureById } from '../data/furniture'
-import { PET_CATALOG, PET_SPECIES_SCALE_MULTIPLIER } from '../data/pets'
+import { PET_CATALOG } from '../data/pets'
 import { quests } from '../data/quests'
 import { planetQuests } from '../data/planetQuests'
 import type { Quest } from '../types'
@@ -1204,8 +1204,11 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
   })
 
   it('petVisualScale multiplica a progressão relativa de estágio pelo limite da espécie', () => {
-    expect(petVisualScale('adulto', 'gato')).toBe(petStageScale('adulto') * PET_SPECIES_SCALE_MULTIPLIER.gato)
-    expect(petVisualScale('adulto', 'cachorro')).toBe(petStageScale('adulto') * PET_SPECIES_SCALE_MULTIPLIER.cachorro)
+    // Valores fixos (não derivados de `PET_SPECIES_SCALE_MULTIPLIER`) — se o multiplicador de
+    // alguma espécie voltar a 1.0 por engano, este teste tem que falhar, não só confirmar que a
+    // multiplicação em si está correta.
+    expect(petVisualScale('adulto', 'gato')).toBe(1.6)
+    expect(petVisualScale('adulto', 'cachorro')).toBe(1.8)
     // filhote continua proporcionalmente menor que adulto DA MESMA espécie, mesmo com o
     // multiplicador de espécie por cima — a progressão relativa de `petStageScale` não muda.
     expect(petVisualScale('filhote', 'gato')).toBeLessThan(petVisualScale('adulto', 'gato'))

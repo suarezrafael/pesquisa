@@ -153,3 +153,26 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-187, prio
   (raycast bem-sucedido, que é o que a verificação ao vivo já cobriu nas rodadas anteriores); a
   correção (2) é só documentação. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos
   após as mudanças.
+- **Rodada 4** (2026-09-15): 2 achados reais — um deles reverte parte da própria rodada 3. (1)
+  **Achado sobre o teste**: `petVisualScale('adulto', 'gato')` era comparado contra
+  `petStageScale('adulto') * PET_SPECIES_SCALE_MULTIPLIER.gato` — uma TAUTOLOGIA, já que o valor
+  "esperado" vem da MESMA constante que a implementação lê; se `PET_SPECIES_SCALE_MULTIPLIER.gato`
+  fosse alterado de volta pra `1.0` por engano, o teste continuaria passando (só confirma que a
+  multiplicação em si funciona, não que os números certos — 1.6×/1.8× — estão configurados).
+  Corrigido comparando contra os valores fixos `1.6`/`1.8` diretamente, sem depender da constante;
+  removida a importação de `PET_SPECIES_SCALE_MULTIPLIER` no teste, que ficou sem uso. (2) **Achado
+  real sobre a correção da rodada 3**: o `continue` no caso de `!hasHit` repete o MESMO `from`/`to`
+  até 12 vezes, mas nada muda entre duas chamadas síncronas de `raycast` sem um passo de física real
+  entre elas — repetir o mesmo raio 12 vezes só multiplica o custo sem poder mudar o resultado
+  (diferente do outro `continue`, que avança `from` de verdade a cada tentativa). A diferença chave
+  em relação a `terrainGroundRadial` (cujo retry EM SI tem a mesma característica, mas nunca foi
+  sinalizado): aquela função posiciona objetos ESTÁTICOS uma vez só — se falhar ali, o objeto fica
+  errado pra sempre, por isso insistir na hora se justifica; `destinationPlanetGroundRadial` é
+  chamada TODO QUADRO (pet/avatar em movimento contínuo) — uma falha transitória se autocorrige
+  sozinha no quadro seguinte, sem precisar de 12 tentativas inúteis no mesmo quadro. Revertido pra
+  `return fallbackRadius` imediato no caso de falha (como estava antes da rodada 3), com um
+  comentário novo explicando por que essa função É diferente de `terrainGroundRadial` nesse aspecto
+  específico — mantendo o `continue` que de fato muda `from` (pular rocha) intacto. Sem verificação
+  ao vivo nova: nenhuma das duas correções muda o caminho normal (raycast bem-sucedido de primeira),
+  já coberto nas rodadas 1-2. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos após as
+  mudanças.

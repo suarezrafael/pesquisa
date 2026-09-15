@@ -4398,11 +4398,16 @@ export function World3D({
         for (let attempt = 0; attempt < 12; attempt++) {
           destinationGroundRaycastResult.reset()
           havokPlugin.raycast(from, to, destinationGroundRaycastResult)
-          // Mesmo cuidado de `terrainGroundRadial` acima: um "nenhum acerto" bem na chegada a
-          // Marte (`buildMarsIfNeeded` acabou de criar os colisores) não é prova de que não há
-          // planeta ali — mais provável ser o Havok ainda aquecendo. Tenta de novo dentro do
-          // mesmo orçamento de tentativas em vez de desistir na primeira falha.
-          if (!destinationGroundRaycastResult.hasHit) continue
+          // Diferente de `terrainGroundRadial` acima: um "nenhum acerto" aqui NÃO tenta de novo
+          // com o mesmo raio — nada muda entre duas chamadas síncronas de `raycast` na mesma
+          // volta do laço (sem passo de física real entre elas), então repetir o mesmo `from`/`to`
+          // 12 vezes só multiplicaria o custo sem mudar o resultado. A diferença real é que esta
+          // função é chamada TODO QUADRO (pet/avatar em movimento contínuo), ao contrário de
+          // `terrainGroundRadial`, usada pra posicionar objetos estáticos UMA vez só — se aquela
+          // falhar ali, o objeto fica errado pra sempre, por isso precisa insistir na hora. Aqui,
+          // uma falha transitória (Havok ainda aquecendo logo após `buildMarsIfNeeded`) se
+          // autocorrige sozinha no quadro seguinte, sem custo de repetir 12 vezes no mesmo quadro.
+          if (!destinationGroundRaycastResult.hasHit) return fallbackRadius
           if (DESTINATION_GROUND_MESH_NAMES.has(destinationGroundRaycastResult.body?.transformNode?.name ?? '')) {
             return destinationGroundRaycastResult.hitPointWorld.subtract(currentWorldCenter).length()
           }
