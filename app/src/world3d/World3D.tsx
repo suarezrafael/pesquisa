@@ -6689,10 +6689,13 @@ export function World3D({
 
         // Oval BA ("Pequena Mancha Vermelha") — tempestade real menor que se formou em 2000,
         // ainda visível hoje ao lado da Grande Mancha Vermelha; mesma técnica do decalque
-        // acima, cor/tamanho menores, posição bem separada. Sem isso, Júpiter tinha só a mancha
-        // principal — a mesma silhueta de Netuno (1 mancha + faixas), difíceis de distinguir num
-        // relance rápido.
-        const spot2Dir = new Vector3(-0.35, 0.55, -0.6).normalize()
+        // acima, cor/tamanho menores. Sem isso, Júpiter tinha só a mancha principal — a mesma
+        // silhueta de Netuno (1 mancha + faixas), difíceis de distinguir num relance rápido.
+        // Achado do review automático: a direção precisa ficar no MESMO hemisfério visível de
+        // `spotDir` (só ~39° de separação, não os ~158° de antes) — bem afastada o bastante pra
+        // as duas manchas não se sobreporem, mas perto o bastante pra aparecerem juntas numa
+        // exploração normal a partir do pouso, não só do lado oposto do planeta.
+        const spot2Dir = new Vector3(0.85, 0.2, 0.4).normalize()
         const spot2Mat = new PBRMaterial('jupiterOvalBAMat', scene)
         spot2Mat.albedoColor = new Color3(0.68, 0.4, 0.28)
         spot2Mat.roughness = 0.85

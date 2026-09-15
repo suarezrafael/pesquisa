@@ -69,7 +69,7 @@ lógica de domínio isolável, mesma classe de mudança dos labs 113/114 que cri
   concreto e verificável pra cada escolha de cor/posição.
 - **Não medir o benchmark de FPS de novo.** Os landmarks novos são do MESMO tipo/custo exato de
   elementos decorativos que já existiam nesses planetas (mais 1 torus decorativo, mais 2 decalques
-  rasos) — o aumento de contagem de malha é uma fração do que already existe por planeta. Rodar o
+  rasos) — o aumento de contagem de malha é uma fração do que já existe por planeta. Rodar o
   benchmark sintético de novo não testaria nada de relevante (ele mede a cena de SPAWN, não os
   planetas-destino, que só carregam sob demanda ao visitar) — análise de código já é suficiente
   confiança pra essa escala de mudança.
@@ -116,6 +116,25 @@ que já foi mapeado nos labs 176-184 (a "ordem sugerida" do documento, seção 1
 laboratório de código). Sugestão: revisar `docs/growth-retention-monetization-backlog.md` (seções
 7-8) e `docs/market-metrics-engagement-backlog.md` por qualquer item ainda não mapeado num lab, ou
 perguntar ao usuário a próxima prioridade.
+
+## Review automático do Copilot (PR #65)
+
+- **Rodada 1** (2 reviews consecutivas do mesmo pedido, tratadas juntas): 4 achados reais. (1) O
+  mais sério: `spot2Dir` (Oval BA de Júpiter) ficava a ~158° da direção da Grande Mancha Vermelha
+  (praticamente no hemisfério oposto do planeta) — como a câmera em terceira pessoa só mostra o
+  hemisfério local ao redor do jogador, um pouso normal em Júpiter só revelava UMA das duas
+  manchas por vez, quebrando o objetivo de uma silhueta "2 manchas" reconhecível de relance.
+  Corrigido reposicionando `spot2Dir` de `(-0.35, 0.55, -0.6)` pra `(0.85, 0.2, 0.4)` — agora ~39°
+  de separação da mancha principal, longe o bastante pra não sobrepor os dois decalques, perto o
+  bastante pra aparecerem juntos numa exploração normal a partir do pouso. (2) Uma palavra em
+  inglês ("already") no meio de uma frase em português no `CONTEXT.md` — corrigida pra "já". (3)
+  O checklist do `FEATURES.md` marcava "[x] verificação dos 7 planetas" mas só 3 foram
+  fotografados de verdade — dividido em 2 itens separados (3 alterados = feito com evidência; os
+  outros 4, não tocados por este lab, explicitamente marcados como não re-verificados, com a
+  justificativa de que o critério do backlog se aplica a um lab que mexe nos 7, não a este). (4)
+  O item de performance dizia "conferir... contra o benchmark de FPS real", mas o texto logo
+  abaixo já deixava claro que nenhum benchmark foi rodado de novo, só análise de código —
+  reescrita a frase do próprio checklist pra bater com o que foi realmente feito.
 
 ## Estado do repositório ao final
 

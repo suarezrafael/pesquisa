@@ -68,24 +68,30 @@ zero landmark 3D, só uma sutileza de orientação de textura que exige conhecim
   Escura) — mesma técnica, cor clara em vez de escura. A combinação final (Júpiter: 2 manchas
   avermelhadas; Netuno: 1 mancha escura + 1 nuvem clara) é uma silhueta bem mais distinguível entre
   os dois do que "1 decalque oval cada" de antes. Confirmado ao vivo.
-- [x] Verificação visual ao vivo (Chrome real) dos 7 planetas, com captura de screenshot
-  desktop pra cada um — critério de aceite do backlog ("cada planeta tem identidade visual
-  reconhecível em 5 segundos"). Guardar em `labs/lab-184-qualidade-visual-planetas/evidencias/`.
-  **Feito parcialmente**: os 3 planetas ALTERADOS por este lab foram verificados ao vivo com
-  screenshot real (`urano-anel.jpg`, `jupiter-grande-mancha-vermelha.jpg`, `jupiter-oval-ba.jpg`,
+- [x] Verificação visual ao vivo (Chrome real) dos 3 planetas ALTERADOS por este lab, com captura
+  de screenshot desktop pra cada um — critério de aceite do backlog ("cada planeta tem identidade
+  visual reconhecível em 5 segundos") aplicado só aos landmarks novos. Guardar em
+  `labs/lab-184-qualidade-visual-planetas/evidencias/`. **Feito**: screenshot real
+  (`urano-anel.jpg`, `jupiter-grande-mancha-vermelha.jpg`, `jupiter-oval-ba.jpg`,
   `netuno-nuvem-scooter.jpg`/`netuno-nuvem-scooter-2.jpg`) — todos os landmarks novos confirmados
   renderizando corretamente, com posição/cor também verificadas programaticamente
-  (`scene.getMeshByName(...)`). Os outros 4 planetas (Marte/Mercúrio/Vênus/Saturno) NÃO foram
-  fotografados de novo neste lab — já eram identificados como conformes na investigação prévia e
-  não foram tocados, então não há mudança nova pra documentar com screenshot.
+  (`scene.getMeshByName(...)`).
+- [ ] Verificação visual ao vivo dos outros 4 planetas-destino (Marte/Mercúrio/Vênus/Saturno) —
+  **não feito, e não é uma pendência real**: já eram identificados como conformes na investigação
+  prévia e não foram tocados por este lab, então não há mudança nova pra fotografar; o critério
+  "screenshot dos 7 planetas" do backlog se aplica a um lab que MEXE nos 7, não a este, que só
+  mexeu em 3. Mantido como item separado (em vez de reescrever o critério do backlog) só pra
+  deixar explícito que esses 4 não foram re-verificados nesta rodada.
 - [ ] Verificação em viewport mobile (emulado, já que dispositivo real não está disponível nesta
   sessão — mesma limitação conhecida de labs anteriores como o 177/178) — screenshot de pelo menos
   os planetas alterados (Urano, Júpiter, Netuno). **Não feito** — ver "Pendências" no `CONTEXT.md`.
 - [x] Conferir impacto de performance das mudanças (contagem de malhas/materiais novos por
-  planeta) contra o benchmark de FPS real já existente (lab-63, `benchmarkIsWeakGpu`) — qualquer
-  adição deve continuar barata o bastante pra não regredir o tier `'weak'`; preferir reaproveitar
-  técnicas já custeadas (torus/`DynamicTexture`) a criar geometria nova pesada. **Conferido por
-  análise de código, não por nova medição de benchmark**: os 3 landmarks novos são, cada um, EXATAMENTE
+  planeta) por análise de código (custo relativo às técnicas já existentes) em vez de rodar o
+  benchmark de FPS real (lab-63, `benchmarkIsWeakGpu`) de novo — qualquer adição deve continuar
+  barata o bastante pra não regredir o tier `'weak'`; preferir reaproveitar técnicas já custeadas
+  (torus/`DynamicTexture`) a criar geometria nova pesada. **Conferido por análise de código, NÃO por
+  nova medição de benchmark** (ver decisão técnica abaixo do porquê disso ser suficiente): os 3
+  landmarks novos são, cada um, EXATAMENTE
   do mesmo tipo/custo dos elementos decorativos já existentes nesses mesmos planetas (1 `CreateTorus`
   decorativo sem física, igual ao anel de Saturno; 2 `CreateCylinder` de decalque raso, iguais às
   manchas que já existiam) — nenhuma textura nova, nenhum material `DynamicTexture` extra, nenhuma
