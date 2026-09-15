@@ -57,7 +57,7 @@ em `World3D.tsx`, ~linha 3083):
   o clique/arrasto sintético da ferramenta de automação girou a câmera mesmo com `inert=true`,
   sugerindo que o mecanismo de input de baixo nível usado pela automação também não respeita
   `inert` da mesma forma que um clique real de hardware respeitaria) — nenhum dos dois métodos
-  desta sessão consegue confirmar com certeza o comportamento de UM CLIQUE REAL de mouse/touque
+  desta sessão consegue confirmar com certeza o comportamento de UM CLIQUE REAL de mouse/toque
   contra um elemento `inert`. A confiança na correção vem da leitura da especificação HTML (`inert`
   documentado como desabilitando eventos de ponteiro no elemento) e da mudança de estado
   verificável (`canvas.inert` volta a `false` com ranking/chat abertos, depois da correção).

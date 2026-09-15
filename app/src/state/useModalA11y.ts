@@ -62,8 +62,25 @@ export function useModalA11y(onClose: () => void) {
     }
     window.addEventListener('keydown', handleKeyDown)
 
+    // Achado do review automático do Copilot: o trap de Tab acima só intercepta Tab quando o
+    // foco JÁ está dentro do painel — um CLIQUE de mouse num elemento focável fora da raiz (ex.
+    // o `<canvas>` do jogo, focável por padrão pelo Babylon.js) rouba o foco pra lá diretamente,
+    // sem passar pelo trap nenhuma vez; a partir dali, o próximo Tab segue a ordem padrão do
+    // documento e escapa do painel. Um listener de `focusin` pega esse caso (e qualquer outro
+    // "foco pulou pra fora por fora do teclado") e devolve o foco pra raiz do painel
+    // imediatamente.
+    function handleFocusIn(e: FocusEvent) {
+      if (!rootRef.current) return
+      const target = e.target as Node | null
+      if (target && !rootRef.current.contains(target)) {
+        rootRef.current.focus()
+      }
+    }
+    window.addEventListener('focusin', handleFocusIn)
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('focusin', handleFocusIn)
       previouslyFocused?.focus()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

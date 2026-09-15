@@ -55,7 +55,7 @@ sem lógica de domínio). `npm run build` sem regressão de bundle.
 
 ## Pendências / dívidas conhecidas
 
-- **Verificação de arrasto real (mouse/touque) não confirmada de forma conclusiva por automação
+- **Verificação de arrasto real (mouse/toque) não confirmada de forma conclusiva por automação
   de navegador** — achado ambiental novo desta sessão, registrado aqui pra futuras sessões de QA
   visual: `canvas.dispatchEvent(new PointerEvent(...))` disparado direto via JS IGNORA `inert`
   por completo (mesma classe de bypass já documentada nesta sessão pra `.click()` ignorar
@@ -86,6 +86,31 @@ Próximo item da "Recomendação priorizada" (seção 7) de `docs/gameplay-marke
 depois deste: **Lab 202 - Objetos do mundo alinhados ao relevo** (numeração do documento —
 renumerar pra sequência real do repo ao iniciar, mesma convenção deste lab). Ver seção 4 do
 documento pro escopo completo desse item.
+
+## Review automático do Copilot (PR #66)
+
+- **Rodada 1**: 3 achados reais (mais 2 nits de ortografia corrigidos: "mouse/touque" →
+  "mouse/toque" no `CONTEXT.md`/`FEATURES.md`). (1) **O mais sério**: tirar o `<canvas>` do
+  `inert` enquanto chat/ranking está aberto reabria uma VARIANTE do bug original que o `inert`
+  resolvia (lab-121) — um CLIQUE de mouse no canvas (focável por padrão pelo Babylon.js) rouba o
+  foco pra lá diretamente, sem passar pelo trap de Tab de `useModalA11y` nenhuma vez (o trap só
+  intercepta Tab quando o foco JÁ está dentro do painel); a partir do canvas focado, o próximo Tab
+  segue a ordem padrão do documento e escapa do painel — pior que o bug original, porque nem
+  precisa de teclado pra iniciar o escape, só um clique. Corrigido no hook COMPARTILHADO
+  `useModalA11y.ts` (beneficia todo painel que usa o hook, não só ranking/chat): um listener de
+  `focusin` detecta qualquer foco pousando FORA da raiz do painel e devolve pra raiz
+  imediatamente — fecha esse caminho de escape (e qualquer outro "foco pulou pra fora sem passar
+  pelo teclado") de uma vez, na mesma camada que já resolve os outros casos de Tab. **Verificado
+  ao vivo**: clique real na área livre do canvas com o ranking aberto — `document.activeElement`
+  confirmado sendo a raiz do painel, não o canvas (screenshot em
+  `evidencias/focus-nao-escapa-do-canvas.jpg`). (2) `canvasInert = hudInert && !chatOpen &&
+  !rankingOpen` tinha um bug lógico: se ranking/chat estivesse aberto AO MESMO TEMPO que um
+  gatilho de tela cheia (ex. `suspendTriggers`, uma missão ativa), a exclusão derrubava
+  `canvasInert` pra `false` mesmo com o overlay de tela cheia por cima — deixando o canvas
+  clicável por trás dele. Corrigido reconstruindo `canvasInert` listando só os gatilhos de tela
+  cheia direto (`!setupReady || suspendTriggers || bagOpen || planetPickerOpen ||
+  showParentalGate`), nunca envolvendo chat/ranking na fórmula, em vez de partir de `hudInert` e
+  tentar "subtrair" os dois depois.
 
 ## Estado do repositório ao final
 

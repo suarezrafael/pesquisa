@@ -12532,7 +12532,14 @@ export function World3D({
   // gatilhos daqui não reabre aquele bug — supressão de teclado/joystick de movimento continua
   // valendo pros dois via `hudInertRef` (usado no loop de física), só o `<canvas>` em si volta a
   // aceitar ponteiro/arrasto fora da caixinha.
-  const canvasInert = hudInert && !chatOpen && !rankingOpen
+  //
+  // Achado do review automático do Copilot: `hudInert && !chatOpen && !rankingOpen` tinha um bug
+  // lógico — se ranking/chat estivesse aberto AO MESMO TEMPO que um gatilho de tela cheia (ex.
+  // `suspendTriggers`, uma missão ativa), a exclusão derrubava `canvasInert` pra `false` mesmo com
+  // o overlay de tela cheia por cima, deixando o canvas clicável por trás dele. Reconstruído
+  // listando só os gatilhos de tela cheia direto (nunca envolve chat/ranking), em vez de partir de
+  // `hudInert` e tentar "subtrair" os dois depois.
+  const canvasInert = !setupReady || suspendTriggers || bagOpen || planetPickerOpen || showParentalGate
 
   return (
     <div className="world3d-container">
