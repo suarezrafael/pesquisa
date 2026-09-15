@@ -1,5 +1,16 @@
 # Laboratório atual
 
+Em andamento: labs/lab-189-ceu-escuro-espaco-atmosfera-clara/ — céu escuro no espaço e claro na
+atmosfera. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 204" no documento (renumerado
+pra lab-189 na sequência real do repo) — próximo item recomendado depois do lab-188, prioridade
+P0/P1. Investigação prévia já confirmou o problema: `scene.clearColor`/`fogColor` são definidos UMA
+ÚNICA VEZ na criação da cena (sempre o mesmo azul-claro) e nunca mudam durante o voo — não existe
+nenhum starfield/skybox. A máquina de estado de voo já existente (`drivingRocket.progress`, com
+`ROCKET_LAUNCH_HOLD_END`/`ROCKET_LANDING_FLIP_START` já demarcando decolagem/cruzeiro/pouso) dá a
+base pra interpolar a transição. Risco real identificado: `fogDensity` já é modulado por chuva todo
+quadro, precisa compor em vez de sobrescrever. Ver
+`labs/lab-189-ceu-escuro-espaco-atmosfera-clara/FEATURES.md`.
+
 Último concluído: labs/lab-188-pet-maior-visivel-troca-clara/ — pet maior, visível e com troca
 clara. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 203" no documento (renumerado pra
 lab-188 na sequência real do repo) — próximo item recomendado depois do lab-187, prioridade P0/P1.
