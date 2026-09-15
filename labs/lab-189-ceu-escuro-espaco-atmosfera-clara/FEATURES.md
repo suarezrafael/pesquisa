@@ -96,7 +96,24 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-188, prio
   esbarrou em identificar a posição certa do foguete de volta em Marte (limitação de tempo desta
   sessão, não um problema de código).
 
-## Fora de escopo (explicitamente adiado)
+## Review automático do Copilot (PR #69)
+
+- **Rodada 1** (2026-09-15): 1 achado real. `scene.clearColor = Color4.Lerp(...)`/`scene.fogColor =
+  Color3.Lerp(...)` alocavam um objeto `Color4`/`Color3` NOVO a cada quadro, durante os ~9 segundos
+  inteiros de voo — o mesmo tipo de lixo de GC que o próprio loop de física já evita de propósito em
+  outro lugar (`Vector3.LerpToRef` no acompanhamento do pet, achado de review de um lab anterior).
+  Corrigido trocando por `Color4.LerpToRef`/`Color3.LerpToRef`, escrevendo direto nos objetos já
+  existentes (`scene.clearColor`/`scene.fogColor`, atribuídos uma única vez na criação da cena, nunca
+  substituídos por um objeto novo em nenhum outro lugar) em vez de criar um novo a cada quadro.
+  **Reverificado ao vivo, mesmo voo até Marte**: valores numéricos idênticos aos da primeira
+  verificação (clearColor exatamente `(0.03, 0.03, 0.08)` no meio do cruzeiro, de volta a `(0.65,
+  0.82, 0.93)` depois de pousar) — comportamento visual inalterado, só sem a alocação por quadro.
+  Achado extra da reverificação (não um bug, uma confirmação): depois de pousar, `fogDensity` estava
+  em 0.035 (não 0.018) — bateu exatamente `RAIN_FOG_DENSITY`, ou seja, estava chovendo de verdade
+  nesse instante (evento de clima independente, não relacionado a este lab) — confirma que a
+  composição funciona como esperado: com `spaceT = 0` (fora do voo espacial), o código deste lab não
+  toca em `fogDensity` nenhuma vez, deixando o valor inteiramente a cargo do sistema de clima já
+  existente. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos após a mudança.
 
 - Simulação astronômica real, cutscene longa, novo sistema de clima espacial (explicitamente fora
   de escopo no próprio item do backlog).

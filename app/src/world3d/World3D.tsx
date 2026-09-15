@@ -12036,8 +12036,8 @@ export function World3D({
           const spaceT =
             holdFlipHoldCurve(drivingRocket.progress, ROCKET_LAUNCH_HOLD_END, SPACE_FADE_IN_END) *
             (1 - holdFlipHoldCurve(drivingRocket.progress, SPACE_FADE_OUT_START, ROCKET_LANDING_FLIP_START))
-          scene.clearColor = Color4.Lerp(SKY_COLOR_ATMOSPHERE, SKY_COLOR_SPACE, spaceT)
-          scene.fogColor = Color3.Lerp(FOG_COLOR_ATMOSPHERE, FOG_COLOR_SPACE, spaceT)
+          Color4.LerpToRef(SKY_COLOR_ATMOSPHERE, SKY_COLOR_SPACE, spaceT, scene.clearColor)
+          Color3.LerpToRef(FOG_COLOR_ATMOSPHERE, FOG_COLOR_SPACE, spaceT, scene.fogColor)
           scene.fogDensity += (SPACE_FOG_DENSITY - scene.fogDensity) * spaceT
           scene.environmentIntensity += (SPACE_ENV_INTENSITY - scene.environmentIntensity) * spaceT
           hemiLight.intensity += (SPACE_HEMI_INTENSITY - hemiLight.intensity) * spaceT
