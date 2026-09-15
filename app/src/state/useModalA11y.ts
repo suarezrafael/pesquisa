@@ -12,6 +12,12 @@ import { useEffect, useRef } from 'react'
 // quando o alvo escapa de todos os painéis abertos.
 const activeModalRoots: HTMLElement[] = []
 let sharedFocusInListener: ((e: FocusEvent) => void) | null = null
+// Achado do review automático do Copilot: o foco de "antes de qualquer painel abrir" só pode ser
+// capturado quando a pilha está vazia (senão captura o painel de baixo, que pode fechar e sair do
+// DOM antes do painel de cima) — guardado à parte de `previouslyFocused` (por instância) porque
+// com painéis concorrentes fechando fora de ordem LIFO, o `previouslyFocused` de quem fecha por
+// último não é o elemento certo pra restaurar (ver `registerModalRoot`/limpeza abaixo).
+let stackOriginFocus: HTMLElement | null = null
 
 function handleSharedFocusIn(e: FocusEvent) {
   const target = e.target as Node | null
@@ -24,7 +30,14 @@ function handleSharedFocusIn(e: FocusEvent) {
   activeModalRoots[activeModalRoots.length - 1]?.focus()
 }
 
-function registerModalRoot(root: HTMLElement) {
+function registerModalRoot(root: HTMLElement, previouslyFocused: HTMLElement | null) {
+  // Achado do review automático do Copilot: só grava `stackOriginFocus` quando este é o PRIMEIRO
+  // painel a abrir (pilha ainda vazia) — se já tem painel aberto, `previouslyFocused` desta
+  // instância é o painel de baixo (que pode fechar antes deste), não o elemento de antes de
+  // qualquer painel; sobrescrever aqui perderia o alvo de restauração certo.
+  if (activeModalRoots.length === 0) {
+    stackOriginFocus = previouslyFocused
+  }
   activeModalRoots.push(root)
   if (!sharedFocusInListener) {
     sharedFocusInListener = handleSharedFocusIn
@@ -73,7 +86,7 @@ export function useModalA11y(onClose: () => void) {
     // compartilhada; o listener do painel JÁ aberto trataria isso como "escape" e devolveria o
     // foco pra si mesmo, roubando o foco inicial do painel recém-aberto antes mesmo dele se
     // registrar.
-    if (root) registerModalRoot(root)
+    if (root) registerModalRoot(root, previouslyFocused)
     // Alguns painéis (ex. PairingScreen) já têm `autoFocus` num campo de formulário específico —
     // se o foco já está DENTRO do painel quando este efeito roda, não roubar de volta pro elemento
     // raiz; só move o foco quando nada dentro do painel já pegou o foco sozinho.
@@ -133,17 +146,24 @@ export function useModalA11y(onClose: () => void) {
       if (root) unregisterModalRoot(root)
       // Achado do review automático do Copilot: com painéis concorrentes, o painel de BAIXO podia
       // fechar primeiro (fora da ordem LIFO natural) — restaurar `previouslyFocused` incondicional
-      // roubava o foco do painel de CIMA (ainda aberto) de volta pro que veio antes de ambos; e
-      // quando o painel de cima fechasse depois, o `previouslyFocused` DELE apontava pra raiz do
-      // painel de baixo, já removida do DOM — `.focus()` num nó desconectado é um no-op, perdendo
-      // o foco de vez em vez de devolver pro abridor original. Se ainda sobrar algum painel na
-      // pilha depois de remover este, o foco pertence a ele (o novo topo), não ao que veio antes
-      // de QUALQUER painel abrir; só restaura `previouslyFocused` quando a pilha esvazia de
-      // verdade (o normal, um painel só) — e só se o nó restaurado ainda estiver no documento.
+      // roubava o foco do painel de CIMA (ainda aberto) de volta pro que veio antes de ambos. Se
+      // ainda sobrar algum painel na pilha depois de remover este, o foco pertence a ele (o novo
+      // topo).
       if (activeModalRoots.length > 0) {
         activeModalRoots[activeModalRoots.length - 1].focus()
-      } else if (previouslyFocused && document.contains(previouslyFocused)) {
-        previouslyFocused.focus()
+        return
+      }
+      // Achado do review automático do Copilot (rodada 7): quando a pilha esvazia de verdade, o
+      // elemento certo pra restaurar é o que tinha foco ANTES DO PRIMEIRO painel da pilha abrir
+      // (`stackOriginFocus`) — não o `previouslyFocused` DESTA instância. Se este painel não foi o
+      // primeiro a abrir (ex.: painel de baixo fechou primeiro, o de cima por último), o
+      // `previouslyFocused` dele aponta pra raiz do painel de baixo, já removida do DOM nesse
+      // ponto — `.focus()` num nó desconectado é um no-op, perdendo o foco de vez em vez de
+      // devolver pro abridor original de toda a pilha.
+      const originFocus = stackOriginFocus
+      stackOriginFocus = null
+      if (originFocus && document.contains(originFocus)) {
+        originFocus.focus()
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

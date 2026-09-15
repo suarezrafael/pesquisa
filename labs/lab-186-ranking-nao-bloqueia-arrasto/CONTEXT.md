@@ -44,8 +44,10 @@ responsabilidade dessa camada, independente do `inert` do canvas. Excluir os tr�
 `canvasInert` não reintroduz o escape; os outros 4 gatilhos de tela cheia continuam com o canvas
 `inert`, cobrindo o resto dos casos exatamente como antes.
 
-`npx tsc -b` limpo; testes: app 208/208 (inalterado — mudança é 1 variável derivada + 1 prop JSX,
-sem lógica de domínio). `npm run build` sem regressão de bundle.
+`npx tsc -b` limpo; testes: app 208/208 (inalterado — a raiz do bug em si é 1 variável derivada + 1
+prop JSX, sem lógica de domínio; mas o PR também inclui a reescrita do focus trap compartilhado em
+`state/useModalA11y.ts`, feita ao longo de várias rodadas de review — ver "Review automático" mais
+abaixo). `npm run build` sem regressão de bundle.
 
 ## Decisões técnicas tomadas
 
@@ -108,9 +110,13 @@ documento pro escopo completo desse item.
   `focusin` detecta qualquer foco pousando FORA da raiz do painel e devolve pra raiz
   imediatamente — fecha esse caminho de escape (e qualquer outro "foco pulou pra fora sem passar
   pelo teclado") de uma vez, na mesma camada que já resolve os outros casos de Tab. **Verificado
-  ao vivo**: clique real na área livre do canvas com o ranking aberto — `document.activeElement`
-  confirmado sendo a raiz do painel, não o canvas (screenshot em
-  `evidencias/focus-nao-escapa-do-canvas.jpg`). (2) `canvasInert = hudInert && !chatOpen &&
+  ao vivo** (achado do review automático do Copilot na rodada 7: esta verificação usa a ferramenta
+  de automação do navegador — clique sintético, não hardware real; ver a limitação já registrada em
+  "Pendências / dívidas conhecidas" acima sobre os dois métodos de automação desta sessão não
+  confirmarem com certeza o comportamento de um clique real — corrigido o rótulo aqui pra não
+  contradizer aquela seção): clique sintético (automação do navegador) na área livre do canvas com
+  o ranking aberto — `document.activeElement` confirmado sendo a raiz do painel, não o canvas
+  (screenshot em `evidencias/focus-nao-escapa-do-canvas.jpg`). (2) `canvasInert = hudInert && !chatOpen &&
   !rankingOpen` tinha um bug lógico: se ranking/chat estivesse aberto AO MESMO TEMPO que um
   gatilho de tela cheia (ex. `suspendTriggers`, uma missão ativa), a exclusão derrubava
   `canvasInert` pra `false` mesmo com o overlay de tela cheia por cima — deixando o canvas
@@ -222,6 +228,30 @@ documento pro escopo completo desse item.
   idêntico: pilha vira vazia ao fechar o único painel, cai no `else if`, restaura o elemento que
   tinha foco antes de abrir. `npx tsc -b`, `npm run test` (208/208) e `npm run build` limpos após
   a mudança.
+- **Rodada 7** (2026-09-15): 1 achado real de código + 2 achados de precisão de documentação
+  (marcados "suppressed" pelo Copilot, mas corrigidos assim mesmo por serem genuínos). **Código**:
+  a rodada 6 corrigiu o Esc fechando todos os painéis, mas a restauração de foco ao fechar ainda
+  usava `previouslyFocused` POR INSTÂNCIA como fallback quando a pilha esvaziava — com painéis
+  concorrentes fechando fora de ordem LIFO (o de baixo primeiro), o painel de CIMA herda o foco
+  corretamente (rodada 6), mas quando ELE fecha depois, o `previouslyFocused` DELE aponta pra raiz
+  do painel de baixo, já removida do DOM nesse ponto — `.focus()` num nó desconectado é um no-op,
+  perdendo o foco de vez em vez de devolvê-lo ao abridor original de toda a pilha (ex.: o botão que
+  abriu o chat, não algum estado intermediário entre chat e ranking). Corrigido com uma variável de
+  módulo nova, `stackOriginFocus`, gravada em `registerModalRoot` só quando a pilha está
+  REALMENTE vazia no momento do registro (ou seja, só pelo primeiro painel da pilha, nunca
+  sobrescrita por um painel que abre com outro já no ar) — a limpeza agora usa `stackOriginFocus`
+  (resetado a `null` assim que consumido, pra não reter referência a um nó já desmontado) em vez de
+  `previouslyFocused`, e só quando a pilha esvazia de verdade. Verificado que o caso de painel único
+  continua idêntico (pilha só tem 1 elemento, então esse é o primeiro E o último, `stackOriginFocus`
+  é gravado e consumido pela mesma instância). **Documentação** (2 achados, ambos no `CONTEXT.md`):
+  (1) a linha do resumo dizia que a mudança era só "1 variável derivada + 1 prop JSX", subestimando
+  o escopo real do PR depois de 6 rodadas de reescrita do focus trap compartilhado — corrigida pra
+  mencionar a reescrita de `useModalA11y.ts`. (2) a rodada 1 descreveu a verificação do
+  `focusin` como "clique real", contradizendo a seção "Pendências / dívidas conhecidas" (que já
+  registrava, desde a investigação inicial, que nenhum dos dois métodos de automação de navegador
+  desta sessão confirma com certeza o comportamento de um clique real de hardware) — corrigido o
+  rótulo pra "clique sintético (automação do navegador)", consistente com a limitação já disclosed.
+  `npx tsc -b`, `npm run test` (208/208) e `npm run build` limpos após a mudança.
 
 ## Estado do repositório ao final
 
