@@ -71,10 +71,16 @@ decidir o que precisa de correção de verdade — mesmo padrão "investigar ant
   `ENTERRADAS:q01(0.90)...q30(0.72)`) confirmou casa e as 30 escolas do planeta principal também
   sempre com folga positiva. Nenhum objeto crítico está enterrado/flutuando hoje — o relato do
   backlog, historicamente real (labs 28/59/95/134), não reproduz no relevo atual.
-- [x] Auditar landmarks ainda não verificados contra relevo real: parkour (plataformas erguidas bem
-  acima da âncora, sem risco), torre/desafio em dupla/carteira/ponte/posto de combustível/placa/
-  gato empoleirado/foguete/espada/arma a laser (todos já usavam `terrainGroundRadial`+
-  `terrainHeight` no ponto de partida, agora via `groundSurfacePosition`). Baús de tesouro/segredos
+- [x] Auditar landmarks ainda não verificados contra relevo real: **parkour** — os 4 percursos
+  (`PARKOUR_ANCHOR_UP`/`PARKOUR2_ANCHOR_UP`/`PARKOUR3_ANCHOR_UP`/`PARKOUR4_ANCHOR_UP`,
+  `World3D.tsx:5341,5395,5457,5518`) usam só `PLANET_RADIUS + terrainHeight(...)` na âncora — SEM
+  raycast — mas cada plataforma sobe em passos fixos a partir dela (mínimo +0.5 já na primeira),
+  bem acima de qualquer erro típico de fórmula-vs-malha medido nesta investigação (rua: até 0,11);
+  auditado e deixado como está de propósito (sem risco real), **não convertido** pro helper (só os
+  itens abaixo foram). **Convertidos pro helper**: torre/desafio em dupla/carteira/ponte/posto de
+  combustível/placa/gato empoleirado/foguete/espada/arma a laser (todos já usavam
+  `terrainGroundRadial`+`terrainHeight` no ponto de partida, agora via `groundSurfacePosition`).
+  Baús de tesouro/segredos
   visuais/estação UFO/entrada de caverna/morro de Marte ficaram fora (são de planetas-destino
   secundários, "fora de escopo" abaixo). Lagoa não pôde ser verificada ao vivo nesta sessão (não
   chegou a ser renderizada com o dispositivo detectado como fraco no ambiente de automação — mesma
@@ -98,6 +104,30 @@ decidir o que precisa de correção de verdade — mesmo padrão "investigar ant
   com `buriedSchoolReport` — não um dado morto esquecido. Comentário corrigido pra refletir isso.
 - [x] Física/trigger de interação inalterados (a correção é só a extração de uma função com o MESMO
   cálculo — nenhum objeto mudou de posição).
+
+## Review automático do Copilot (PR #67)
+
+- **Rodada 1** (2026-09-15; a review em si precisou de 2 tentativas — a 1ª retornou "Copilot
+  encountered an error and was unable to review this pull request", sem achados; a 2ª, pedida de
+  novo, é a que segue): "Approval recommended" com 2 achados "suppressed" (não bloqueantes, mas
+  avaliados na mesma por serem reais). (1) O comentário atualizado de `buriedHouseReport`
+  (dizendo que o diagnóstico é mantido de propósito, não um dado morto) deixou o comentário GÊMEO
+  de `buriedSchoolReport` (~linha 7675, ainda rotulado "diagnóstico TEMPORÁRIO... REMOVER depois de
+  confirmar a causa raiz real") contradizendo a mesma explicação — os dois são renderizados juntos
+  na MESMA linha do HUD de debug, então uma nota de manutenção só corrigida de um lado é
+  inconsistente. Corrigido reescrevendo o comentário de `buriedSchoolReport` no mesmo tom
+  (permanente, motivo lab-67, referência cruzada ao irmão). (2) A frase do `FEATURES.md` sobre
+  landmarks auditados agrupava "parkour" na mesma oração que "já usavam `terrainGroundRadial`+
+  `terrainHeight`... agora via `groundSurfacePosition`" — mas os 4 percursos de parkour usam só
+  `PLANET_RADIUS + terrainHeight(...)` na âncora (SEM raycast) e não foram convertidos pro helper
+  (com razão: cada plataforma já sobe bem acima da âncora em passos fixos, sem risco real) —
+  a frase dava a entender, por engano, que parkour tinha sido convertido também. Corrigido
+  separando claramente "parkour: auditado, não convertido, sem risco" de "os demais: convertidos".
+  **Achado adicional, não do review**: o comentário original do `groundSurfacePosition` (extraído
+  antes deste ciclo de review) ainda dizia "6 lugares", desatualizado depois da consolidação final
+  de 15 call sites — corrigido junto (achado próprio, não do Copilot, encontrado ao revisar o
+  entorno do achado #1). `npx tsc -b`, `npm run test` (208/208) e `npm run build` limpos após as
+  mudanças.
 
 ## Fora de escopo (explicitamente adiado)
 

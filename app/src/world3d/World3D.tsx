@@ -4347,12 +4347,12 @@ export function World3D({
         return PLANET_RADIUS + formulaHeight
       }
 
-      // lab-187 (`docs/gameplay-market-expansion-backlog.md`, "Lab 202" — padronizar helper de
-      // posicionamento pela normal radial e altura real do terreno): `dir.scale(terrainGroundRadial(dir,
-      // terrainHeight(dir)))` era repetido de próprio punho em 6 lugares (props, escolas, casa,
-      // loja, torre, piscina) — mesmo cálculo, sem um nome único, risco real de alguém escrever só
-      // metade da combinação (ex. só `terrainHeight`, sem o raycast) num objeto novo por engano.
-      // `extraOffset` cobre os casos com uma folga a mais somada depois do raycast (piscina: 0.25).
+      // `dir.scale(terrainGroundRadial(dir, terrainHeight(dir)))` era repetido de próprio punho em
+      // 15 lugares (props, rochas de montanha, escolas, casa, loja, torre, piscina, foguete,
+      // espada, arma a laser, carteira, desafio em dupla, ponte, posto de combustível, placa, gato
+      // empoleirado) — mesmo cálculo, sem um nome único, risco real de alguém escrever só metade da
+      // combinação (ex. só `terrainHeight`, sem o raycast) num objeto novo por engano. `extraOffset`
+      // cobre os casos com uma folga a mais somada depois do raycast (piscina: 0.25).
       function groundSurfacePosition(dir: Vector3, extraOffset = 0): Vector3 {
         return dir.scale(terrainGroundRadial(dir, terrainHeight(dir)) + extraOffset)
       }
@@ -7672,14 +7672,18 @@ export function World3D({
         activationBeaconMat = beaconMat
       }
 
-      // lab-95 (diagnóstico TEMPORÁRIO, produção): o usuário reportou escolinhas ainda enterradas
-      // mesmo depois da correção de `SCHOOL_UPS`, e o navegador de automação não reproduziu o
-      // problema em nenhuma das 30 escolas testadas — pra conseguir um dado real do APARELHO do
-      // usuário sem precisar de ferramentas de desenvolvedor (só um print do HUD, que já é sempre
-      // visível, lab-67), calcula aqui, uma vez, quais escolas (se alguma) ficam com a parede
-      // abaixo do nível real do terreno (mesmo método de `terrainGroundRadial`/`settleMeshOnTerrain`
-      // usado pra posicionar de verdade) e mostra o resultado no HUD de debug. REMOVER depois de
-      // confirmar a causa raiz real.
+      // lab-95: o usuário reportou escolinhas ainda enterradas mesmo depois da correção de
+      // `SCHOOL_UPS`, e o navegador de automação não reproduziu o problema em nenhuma das 30
+      // escolas testadas — pra conseguir um dado real do APARELHO do usuário sem precisar de
+      // ferramentas de desenvolvedor (só um print do HUD, que já é sempre visível, lab-67), calcula
+      // aqui, uma vez, quais escolas (se alguma) ficam com a parede abaixo do nível real do terreno
+      // (mesmo método de `terrainGroundRadial`/`settleMeshOnTerrain` usado pra posicionar de
+      // verdade) e mostra o resultado no HUD de debug. Causa raiz confirmada e corrigida no próprio
+      // lab-95 (`findFlatterUpReal`, ver `schoolUps` acima) — mantido de propósito como
+      // monitoramento permanente (lab-67), lado a lado com `buriedHouseReport`, não um diagnóstico
+      // esquecido pra remover — esta contagem ficava com uma nota de "REMOVER" desatualizada,
+      // contradizendo o irmão `buriedHouseReport`, já corrigido pra refletir que os dois são
+      // mantidos permanentemente.
       const buriedSchoolReport = (() => {
         const bad: string[] = []
         for (const { quest, base } of portalMeshes) {
@@ -8119,9 +8123,9 @@ export function World3D({
       // (busca por terreno mais plano, `findFlatterUpReal` acima) — mantido de propósito como
       // monitoramento permanente (lab-67: contador de FPS sempre visível, mesmo em produção, pedido
       // do usuário "preciso de informações de FPS na tela em produção"), lado a lado com
-      // `buriedSchoolReport`, não um diagnóstico esquecido pra remover (achado do lab-187: o
-      // comentário antigo dizia "REMOVER depois de confirmar causa raiz", mas o valor continua
-      // renderizado no HUD de debug até hoje — ver `debugRef.current.textContent` mais abaixo).
+      // `buriedSchoolReport`, não um diagnóstico esquecido pra remover — o comentário antigo dizia
+      // "REMOVER depois de confirmar causa raiz", mas o valor continua renderizado no HUD de debug
+      // até hoje, ver `debugRef.current.textContent` mais abaixo.
       const buriedHouseReport = (() => {
         const rootPos = houseBase.getAbsolutePosition()
         const dir = rootPos.clone().normalize()
