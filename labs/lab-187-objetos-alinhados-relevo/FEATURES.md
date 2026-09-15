@@ -149,6 +149,18 @@ decidir o que precisa de correção de verdade — mesmo padrão "investigar ant
   de quiz) e uma nota explícita mencionando as duas contagens erradas anteriores (6 e 15), pra
   deixar claro que o número final foi verificado por `grep`, não estimado. Nenhuma mudança de
   código nesta rodada — só a descrição da PR (GitHub) e este registro.
+- **Rodada 4** (2026-09-15): "Approval recommended", 1 achado "suppressed" (0 comentários novos
+  gerados) — avaliado e **descartado como falso positivo** depois de checar o código de verdade.
+  O comentário afirmava que a descrição da Lagoa no `FEATURES.md` (linha 89, `pondUp`/
+  `terrainHeight(pondUp) + 0.3`) estava errada porque "`poolCenterPos` usa
+  `groundSurfacePosition(poolUp, 0.25)`" — mas **lagoa (`pond`/`pondUp`) e piscina
+  (`pool`/`poolUp`) são dois recursos DIFERENTES no código**, cada um com seu próprio cálculo de
+  posição. Confirmado direto no código (`grep -n "pondCenterPos\s*=" World3D.tsx`):
+  `pondCenterPos = pondUp.scale(PLANET_RADIUS + terrainHeight(pondUp) + 0.3)` continua exatamente
+  como descrito — a lagoa não foi convertida pro helper (nunca foi, de propósito, e o `FEATURES.md`
+  não afirma o contrário). A piscina (`poolCenterPos`), sim, usa `groundSurfacePosition(poolUp,
+  0.25)` — mas isso é outro objeto, num outro trecho do `FEATURES.md`. Nenhuma mudança feita; o
+  texto já estava correto pro objeto que de fato descreve.
 
 ## Fora de escopo (explicitamente adiado)
 
