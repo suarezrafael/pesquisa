@@ -54,24 +54,99 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-188, prio
 
 ## Funcionalidades planejadas
 
-- [ ] Interpolar `scene.clearColor`/`scene.fogColor` com base em `drivingRocket.progress`: azul-claro
-  de sempre perto das duas pontas (decolagem/pouso, usando `ROCKET_LAUNCH_HOLD_END`/
-  `ROCKET_LANDING_FLIP_START` como referência), escuro/estrelado no meio (cruzeiro espacial) — sem
-  flash brusco (transição suave, não degrau).
-- [ ] Adicionar elemento visual de "espaço" (estrelas) durante o cruzeiro — critério de aceite do
-  backlog exige que o fundo escuro seja "legível como espaço", não só uma cor sólida escura.
-- [ ] Restaurar o céu/fog corretamente ao pousar em QUALQUER planeta (incluindo volta pro planeta
-  principal) — mesma cor de sempre, sem depender de qual foi o destino (achado prévio: céu já é
-  global/compartilhado, não precisa de cor por planeta).
-- [ ] Garantir que a modulação de fog por chuva (`rainAmount`, já existente) continue funcionando
-  sem conflito — compor as duas fontes de fog em vez de uma sobrescrever a outra
-  incondicionalmente.
-- [ ] Verificar ao vivo se a iluminação HDRI/ambiente também precisa de ajuste durante o voo (ou se
-  só escurecer o fundo já basta) — decidir com base em screenshot real, não suposição.
+- [x] Interpolado `scene.clearColor`/`scene.fogColor` com base em `drivingRocket.progress`,
+  reaproveitando `holdFlipHoldCurve` (a mesma função já usada pro "flip" de pouso) duas vezes —
+  sobe de 0 a 1 até `SPACE_FADE_IN_END` (0.35), desce de 1 a 0 depois de `SPACE_FADE_OUT_START`
+  (0.65) — sem flash brusco, transição suave ancorada nas mesmas fronteiras de fase
+  (`ROCKET_LAUNCH_HOLD_END`/`ROCKET_LANDING_FLIP_START`) já usadas pra decolagem/pouso.
+- [x] Adicionado starfield: cúpula grande (`infiniteDistance`, técnica padrão de skybox) com
+  textura de pontos brancos pintada uma única vez num canvas (mesma técnica de `DynamicTexture` já
+  usada pras chamas do foguete/gota de chuva), material `PBRMaterial` com `unlit = true` (sem
+  depender de luz de cena, que fica bem escura durante o voo). Visibilidade ligada direto ao mesmo
+  fator de transição (`spaceT`).
+- [x] **Verificado ao vivo, ponta a ponta**: voou de verdade até Marte via `__handleInteractPress` +
+  seletor + acelerador simulado. No meio do cruzeiro: `clearColor` bateu EXATAMENTE
+  `SKY_COLOR_SPACE` (0.03, 0.03, 0.08), `fogDensity` em 0.001, `environmentIntensity` em 0.15 —
+  screenshot confirma céu azul-marinho escuro com pontinhos brancos espalhados, foguete/estação
+  alienígena claramente legíveis contra o fundo (critério de aceite atendido: "legível como
+  espaço", não só uma cor sólida). Depois de pousar em Marte: `clearColor` voltou EXATAMENTE pro
+  azul-claro original (0.65, 0.82, 0.93), `fogDensity`/`environmentIntensity` de volta à base,
+  `starfieldDome.visibility` de volta a 0 — screenshot confirma céu claro normal na superfície.
+  Sem erro nenhum no console durante o voo inteiro.
+- [x] Restauração ao pousar não depende do destino (achado prévio confirmado): a transição volta
+  sempre pros MESMOS valores base (`SKY_COLOR_ATMOSPHERE`/`FOG_COLOR_ATMOSPHERE`/`BASE_*`), qualquer
+  que seja o planeta de chegada — sem cor por planeta, como já esperado.
+- [x] Composição com a modulação de fog/luz por chuva: o bloco de clima roda ANTES do bloco de voo
+  no mesmo quadro (confirmado lendo o código — linha do clima vem antes da linha do foguete no
+  arquivo) — a transição espacial soma por CIMA do valor que o clima acabou de escrever
+  (`scene.fogDensity += (SPACE_FOG_DENSITY - scene.fogDensity) * spaceT`, mesmo padrão pras 3
+  intensidades de luz), em vez de sobrescrever incondicionalmente — as duas fontes compõem.
+- [x] Iluminação HDRI/ambiente: decidido ajustar junto (`environmentIntensity`/`hemiLight`/
+  `sunLight`, mesmas 3 variáveis que a chuva já modula, reaproveitando o padrão existente) — a
+  verificação ao vivo confirmou que só escurecer `clearColor` sem isso deixaria o foguete
+  "iluminado de dia" contra um fundo escuro; com o ajuste, o resultado ficou coerente (ver
+  screenshot).
 - [ ] Confirmar que a transição não derruba FPS em mobile (critério de aceite do backlog) — dentro
-  da limitação de ferramental já conhecida (sem emulação de dispositivo real nesta sessão).
+  da limitação de ferramental já conhecida (sem emulação de dispositivo real nesta sessão). Custo
+  adicionado é baixo por construção: 1 malha extra (sem física/sombra), nenhuma textura nova
+  recarregada por quadro (pintada uma única vez no início).
+- [ ] Viagem de VOLTA (planeta-destino → principal) não foi verificada ao vivo separadamente — usa
+  exatamente o MESMO bloco de código/mesma leitura de `drivingRocket.progress`, sem nenhum branch
+  distinto pra direção da viagem, então funciona por construção; a tentativa de reproduzir ao vivo
+  esbarrou em identificar a posição certa do foguete de volta em Marte (limitação de tempo desta
+  sessão, não um problema de código).
 
-## Fora de escopo (explicitamente adiado)
+## Review automático do Copilot (PR #69)
+
+- **Rodada 1** (2026-09-15): 1 achado real. `scene.clearColor = Color4.Lerp(...)`/`scene.fogColor =
+  Color3.Lerp(...)` alocavam um objeto `Color4`/`Color3` NOVO a cada quadro, durante os ~9 segundos
+  inteiros de voo — o mesmo tipo de lixo de GC que o próprio loop de física já evita de propósito em
+  outro lugar (`Vector3.LerpToRef` no acompanhamento do pet, achado de review de um lab anterior).
+  Corrigido trocando por `Color4.LerpToRef`/`Color3.LerpToRef`, escrevendo direto nos objetos já
+  existentes (`scene.clearColor`/`scene.fogColor`, atribuídos uma única vez na criação da cena, nunca
+  substituídos por um objeto novo em nenhum outro lugar) em vez de criar um novo a cada quadro.
+  **Reverificado ao vivo, mesmo voo até Marte**: valores numéricos idênticos aos da primeira
+  verificação (clearColor exatamente `(0.03, 0.03, 0.08)` no meio do cruzeiro, de volta a `(0.65,
+  0.82, 0.93)` depois de pousar) — comportamento visual inalterado, só sem a alocação por quadro.
+  Achado extra da reverificação (não um bug, uma confirmação): depois de pousar, `fogDensity` estava
+  em 0.035 (não 0.018) — bateu exatamente `RAIN_FOG_DENSITY`, ou seja, estava chovendo de verdade
+  nesse instante (evento de clima independente, não relacionado a este lab) — confirma que a
+  composição funciona como esperado: com `spaceT = 0` (fora do voo espacial), o código deste lab não
+  toca em `fogDensity` nenhuma vez, deixando o valor inteiramente a cargo do sistema de clima já
+  existente. `npx tsc -b`, `npm run test` (209/209) e `npm run build` limpos após a mudança.
+- **Rodada 2** (2026-09-15): 1 achado "suppressed" (0 comentários novos gerados) — **repete a rodada
+  1, sem informação nova**. O achado cita literalmente `scene.clearColor = Color4.Lerp(...)`/
+  `scene.fogColor = Color3.Lerp(...)` como o código atual, mas isso já foi substituído por
+  `LerpToRef` na rodada 1 (confirmado direto no código: `grep -n "scene.clearColor\|scene.fogColor"
+  World3D.tsx` mostra só as duas linhas com `LerpToRef`, nenhuma com `Lerp` simples) — provavelmente
+  a rodada comparou contra um snapshot do diff anterior à correção. "Comments generated: 0 new"
+  confere com essa leitura (o próprio Copilot não trata como achado novo). Nenhuma mudança de código
+  nesta rodada — já está corrigido.
+- **Rodada 3** (2026-09-15): 2 achados reais, "suppressed" (0 comentários novos gerados) mas
+  avaliados na mesma. (1) O `PBRMaterial` do starfield nunca definia `albedoColor` explicitamente —
+  o branco padrão participaria do resultado final mesmo em modo `unlit` (sem textura de albedo pra
+  variar por texel), tingindo a cúpula inteira de um branco/cinza uniforme por baixo dos pontos
+  emissivos em vez de deixar o fundo preto entre as estrelas. A verificação ao vivo da rodada 1 já
+  tinha mostrado um céu escuro com estrelas nítidas (não um branco lavado), o que sugeria que o
+  problema já não se manifestava na prática nesta versão do Babylon — mas corrigir é de graça e
+  remove qualquer ambiguidade: `starfieldMat.albedoColor = Color3.Black()` adicionado
+  explicitamente. (2) **Achado real, não ambíguo**: `visibility = 0` só afeta a mistura de alpha —
+  a malha continuava entrando na lista de render/traversal do Babylon TODO QUADRO mesmo invisível,
+  mesmo durante 100% do tempo jogando na superfície de qualquer planeta (a viagem espacial é uma
+  fração pequena do tempo total de jogo). Corrigido com `starfieldDome.setEnabled(false)` na
+  criação (em vez de só `visibility = 0`) e alternando `setEnabled(spaceT > 0)` junto com
+  `visibility` no laço de voo. **Reverificado ao vivo, mesmo voo até Marte**: `isEnabled()` `false`
+  antes de embarcar, `true` durante o cruzeiro (com screenshot confirmando o mesmo céu escuro
+  nítido com estrelas de antes — nenhuma mudança visual, só de custo de desenho), `false` de novo
+  depois de pousar. Sem erro no console. `npx tsc -b`, `npm run test` (209/209) e `npm run build`
+  limpos após as mudanças.
+- **Rodada 4** (2026-09-15) — **convergência**: "Needs a closer look" no título, mas 0 comentários
+  novos gerados e nenhum comentário inline (confirmado via `gh api .../comments`, só o único
+  comentário da rodada 1 no histórico inteiro) — o corpo da review só repete as duas pendências já
+  disclosed no próprio `FEATURES.md` (viagem de volta não verificada ao vivo separadamente,
+  verificação mobile/touch não feita), sem nenhum achado de código novo. Mesmo critério de
+  convergência já usado em rodadas equivalentes de labs anteriores desta sessão (repetir uma
+  limitação já disclosed, 0 comentários novos = convergido).
 
 - Simulação astronômica real, cutscene longa, novo sistema de clima espacial (explicitamente fora
   de escopo no próprio item do backlog).
