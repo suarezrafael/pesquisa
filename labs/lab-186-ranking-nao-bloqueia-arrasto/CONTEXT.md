@@ -157,6 +157,17 @@ documento pro escopo completo desse item.
   soma 4, mais `chatOpen`/`rankingOpen`/`bagOpen`) — corrigido, junto com uma contagem antiga da
   rodada 1 ("2 dos 7"/"outros 5") que também tinha ficado desatualizada depois da rodada 2 (agora é
   "3 dos 7"/"outros 4").
+- **Rodada 4**: 1 achado real. `if (rootRef.current) activeModalRoots.delete(rootRef.current)` na
+  limpeza do efeito podia falhar silenciosamente — o React pode zerar `ref.current` de um nó sendo
+  DESMONTADO antes da função de limpeza de um `useEffect` (não `useLayoutEffect`) rodar, um
+  comportamento documentado da biblioteca; se isso acontecer, a checagem `if (rootRef.current)`
+  nunca é verdadeira, o `delete` nunca roda, e o nó desmontado fica registrado em
+  `activeModalRoots` PRA SEMPRE — abrir/fechar qualquer painel repetidamente faria o `Set` crescer
+  sem limite, retendo referências de subárvores DOM já removidas (vazamento de memória) e tornando
+  o laço de `handleFocusIn` cada vez mais caro. Corrigido capturando `const root = rootRef.current`
+  UMA VEZ no início do efeito (no registro, quando é garantidamente não-nulo) e usando essa
+  variável do closure tanto no `.add()` quanto no `.delete()` da limpeza, em vez de reler
+  `rootRef.current` nos dois momentos.
 
 ## Estado do repositório ao final
 

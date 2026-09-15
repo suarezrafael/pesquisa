@@ -39,7 +39,13 @@ export function useModalA11y(onClose: () => void) {
     if (!rootRef.current?.contains(document.activeElement)) {
       rootRef.current?.focus()
     }
-    if (rootRef.current) activeModalRoots.add(rootRef.current)
+    // Achado do review automático do Copilot: capturado numa variável local (não relido de
+    // `rootRef.current` na limpeza) — o React pode zerar `ref.current` de um nó sendo desmontado
+    // ANTES da limpeza deste efeito rodar (comportamento documentado de `useEffect`), o que faria
+    // `if (rootRef.current) activeModalRoots.delete(rootRef.current)` nunca remover o nó de
+    // verdade, deixando `activeModalRoots` crescer sem limite a cada abrir/fechar de painel.
+    const root = rootRef.current
+    if (root) activeModalRoots.add(root)
 
     // Achado do review automático do Copilot: Esc fechava e o foco inicial entrava no painel, mas
     // nada impedia Tab de escapar PRA FORA dele enquanto aberto — um usuário de teclado conseguia
@@ -99,7 +105,7 @@ export function useModalA11y(onClose: () => void) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('focusin', handleFocusIn)
-      if (rootRef.current) activeModalRoots.delete(rootRef.current)
+      if (root) activeModalRoots.delete(root)
       previouslyFocused?.focus()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
