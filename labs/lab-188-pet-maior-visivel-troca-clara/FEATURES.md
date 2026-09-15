@@ -55,22 +55,36 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-187, prio
 
 ## Funcionalidades planejadas
 
-- [ ] Verificação ao vivo (Chrome real): comparar escala do pet equipado lado a lado com o avatar
-  (screenshot) — confirmar se "parece pequeno" é real hoje antes de aumentar a escala.
-- [ ] Corrigir o pet ficando preso ao raio fixo `planet.radius` em planetas-destino com relevo real
-  (Marte) — usar o mesmo raycast físico (`terrainGroundRadial`-equivalente) já usado pro planeta
-  principal, ou uma alternativa que funcione contra o colisor `MESH` de qualquer planeta-destino,
-  não só a fórmula/raio fixo.
-- [ ] Aumentar escala visual do pet adulto/idoso (hoje 1.0) com um limite por espécie, se a
-  verificação ao vivo confirmar que o tamanho atual realmente lê como "pequeno demais".
-- [ ] Reavaliar `PET_SIDE_DISTANCE` (offset lateral) proporcionalmente a qualquer aumento de
-  escala — verificar ao vivo que o pet maior não tampa a visão da câmera nem atrapalha clique em
-  objetos/NPCs próximos.
-- [ ] Verificar ao vivo a troca de pet no painel: confirmar que o pet no MUNDO 3D reflete a troca
-  imediatamente (não só a tag do painel) e decidir se falta algum feedback adicional.
-- [ ] Confirmar que o pet continua visível/legível em viewport mobile (critério de aceite do
-  backlog) — dentro da limitação de ferramental já conhecida (sem emulação de dispositivo real
-  nesta sessão).
+- [x] Verificação ao vivo (Chrome real): medido via bounding box real no console — pet adulto
+  (escala 1.0) tinha só ~21% da altura do avatar (gato 20.7%, cachorro 22.4%) — confirmado
+  "pequeno demais", não uma percepção equivocada do backlog.
+- [x] Corrigido o pet ficando preso ao raio fixo `planet.radius` em planetas-destino com relevo
+  real (Marte) — novo helper `destinationPlanetGroundRadial` (raycast físico real, mesmo padrão de
+  `terrainGroundRadial`) substitui o raio fixo. **Verificado ao vivo, ponta a ponta**: voou de
+  verdade até Marte, subiu um morro real (`marsHillRoot`), e mediu a posição do avatar E do pet
+  contra o centro do planeta — avatar ficou 1.38 unidade ACIMA do raio-base (7.38 vs. 6.0, prova de
+  que está de verdade em cima do morro); o pet ficou 1.18 unidade acima do raio-base (7.18),
+  acompanhando de perto a elevação do avatar — com o código antigo, o pet ficaria travado
+  EXATAMENTE no raio-base (6.0), 1,18-1,38 unidade abaixo de onde deveria, visualmente enterrado no
+  morro.
+- [x] Aumentado a escala visual do pet adulto/idoso com limite por espécie
+  (`PET_SPECIES_SCALE_MULTIPLIER`, `data/pets.ts`): gato 1.6×, cachorro 1.8× — multiplicadores
+  diferentes porque a malha-base de cada espécie (`buildGato`/`buildCachorro`) já tem proporções
+  diferentes entre si. Progressão relativa por estágio (`petStageScale`, filhote/jovem menores que
+  adulto) preservada, só multiplicada por cima (`petVisualScale`, novo, testado em
+  `progression.test.ts`). **Verificado ao vivo**: gato e cachorro comparados lado a lado com o
+  avatar antes/depois — nitidamente mais visíveis, sem parecer desproporcional.
+- [x] Reavaliado `PET_SIDE_DISTANCE` (0.65 → 1.0) — medido ao vivo que o cachorro (maior
+  multiplicador) tinha ~0.65 de extensão lateral própria a partir do seu centro, igual à distância
+  antiga, causando sobreposição visual real com o avatar (confirmado por screenshot antes da
+  correção). **Verificado ao vivo depois da correção**: boa separação visual, sem sobreposição, com
+  os dois pets (gato e cachorro).
+- [x] Verificado ao vivo a troca de pet no painel: clicar "Escolher" atualiza a tag "✓ Ativo"
+  IMEDIATAMENTE no painel (sem precisar fechar/reabrir) e o pet no MUNDO 3D troca de verdade ao
+  fechar o painel (confirmado por screenshot antes/depois) — já conta como feedback claro; nenhuma
+  mudança de código necessária aqui.
+- [ ] Verificação em viewport mobile/touch real não feita — mesma limitação de ferramental já
+  conhecida de vários labs anteriores desta sessão.
 
 ## Fora de escopo (explicitamente adiado)
 

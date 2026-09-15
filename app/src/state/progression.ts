@@ -21,7 +21,7 @@ import {
   WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
   type WeeklyEvent,
 } from '../data/weeklyEvents'
-import { PET_CATALOG } from '../data/pets'
+import { PET_CATALOG, PET_SPECIES_SCALE_MULTIPLIER, type PetSpecies } from '../data/pets'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
 export function xpForLevel(level: number): number {
@@ -1083,6 +1083,15 @@ export function petStageScale(stage: PetStage): number {
   if (stage === 'adulto' || stage === 'idoso') return 1
   if (stage === 'jovem') return 0.8
   return 0.55
+}
+
+// lab-188: escala final aplicada de verdade (`World3D.tsx`, `rebuildPet`) — multiplica a
+// progressão relativa por estágio (`petStageScale`, intocada) pelo limite de cada espécie
+// (`PET_SPECIES_SCALE_MULTIPLIER`), então um filhote continua proporcionalmente menor que um
+// adulto DA MESMA espécie, mas cada espécie parte de um tamanho-base maior que o `1` original
+// (achado ao vivo: pet adulto media ~21% da altura do avatar, lido como "pequeno demais").
+export function petVisualScale(stage: PetStage, species: PetSpecies): number {
+  return petStageScale(stage) * PET_SPECIES_SCALE_MULTIPLIER[species]
 }
 
 // lab-169 (pedido do usuário: "ciclo de vida normal, incrementando os anos por dias" — depois de

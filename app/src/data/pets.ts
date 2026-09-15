@@ -54,3 +54,15 @@ export const PET_CATALOG: PetOption[] = [
 export function findPetById(id: string): PetOption | undefined {
   return PET_CATALOG.find((p) => p.id === id)
 }
+
+// lab-188 (achado ao vivo: medido via bounding box real no Chrome, pet adulto ficava com ~21% da
+// altura do avatar — bem menor do que o "companheiro visível" que o backlog pede). Multiplicador
+// aplicado POR CIMA da escala relativa de estágio já existente (`petStageScale`, que continua
+// intocada — filhote/jovem seguem proporcionalmente menores que o adulto da mesma espécie). Cada
+// espécie tem seu próprio limite porque a malha de base (`buildGato`/`buildCachorro`) já tem
+// proporções diferentes entre si — um multiplicador único deixaria uma das duas espécies grande
+// demais ou pequena demais em relação à outra.
+export const PET_SPECIES_SCALE_MULTIPLIER: Record<PetSpecies, number> = {
+  gato: 1.6,
+  cachorro: 1.8,
+}
