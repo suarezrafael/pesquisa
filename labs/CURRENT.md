@@ -1,17 +1,45 @@
 # Laboratório atual
 
-Em andamento: labs/lab-186-ranking-nao-bloqueia-arrasto/ — investigar e, se ainda reproduzível,
-corrigir o relato de que o painel de ranking aberto bloqueia clique/arrasto na área livre do
-planeta. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 201" no documento (renumerado
-pra lab-186 na sequência real do repo) — primeiro item da recomendação priorizada do documento, e
-o único backlog de código ainda não mapeado depois dos outros dois backlogs (growth-retention e
-market-metrics) terem se esgotado no lab-184. Leitura prévia do código (`RankingPanel.tsx`,
-`onCameraPointerDown` em `World3D.tsx`) já sugere que o bug pode não ser mais reproduzível (o
-painel é uma caixa pequena ancorada no canto, não um backdrop de tela cheia, e o giro de câmera
-não checa `rankingOpen` em lugar nenhum) — precisa de verificação ao vivo antes de decidir o que
-corrigir. Ver `labs/lab-186-ranking-nao-bloqueia-arrasto/FEATURES.md`.
+Último concluído: labs/lab-186-ranking-nao-bloqueia-arrasto/ — canvas não fica `inert` com ranking/
+chat/mochila abertos. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 201" no documento
+(renumerado pra lab-186 na sequência real do repo) — primeiro item da recomendação priorizada do
+documento, e o único backlog de código ainda não mapeado depois dos outros dois backlogs
+(growth-retention e market-metrics) terem se esgotado no lab-184. **Causa raiz real** (achada só
+depois de olhar o próprio `<canvas>`, não os handlers de câmera): `<canvas inert={hudInert} />`
+desabilitava foco E EVENTOS DE PONTEIRO no elemento inteiro sempre que `chatOpen`/`rankingOpen`/
+`bagOpen` estava ativo — os únicos 3 gatilhos de `hudInert` que NÃO são um `.modal-overlay` de tela
+cheia (usam `.chat-panel`, caixinha pequena ancorada num canto, com bastante área livre do canvas
+visível ao redor). **Correção**: `fullScreenInert` novo isola só os 4 gatilhos que SÃO tela cheia
+de verdade; `canvasInert = fullScreenInert` (só no atributo `inert` do canvas) e `hudInert =
+fullScreenInert || chatOpen || rankingOpen || bagOpen` (inalterado em efeito prático — continua
+suprimindo teclado/joystick de movimento via `hudInertRef`). Isso reabriu uma VARIANTE do bug do
+lab-121 (Tab escapando pro canvas), corrigida no hook compartilhado `useModalA11y.ts` (usado por
+~18 painéis/modais do jogo): um único listener de `focusin` compartilhado (não mais um por
+instância) devolve o foco pro painel do TOPO de uma PILHA ordenada de raízes montadas sempre que o
+foco escapa de todas elas — permite chat/ranking/mochila coexistirem sem o "ping-pong" de foco que
+uma tentativa anterior (listener por instância) tinha. **PR #66 teve 10 rodadas de review
+automático do Copilot** — destaques: Esc fechando TODOS os painéis abertos ao mesmo tempo em vez
+de só um (corrigido escopando ao topo da pilha, depois refinado pra fechar o painel que
+REALMENTE tem `document.activeElement`, não só o topo por ordem de montagem — necessário porque
+dois painéis coexistentes podem ter o foco de verdade no de BAIXO); restauração de foco ao fechar
+perdendo o alvo quando painéis fecham fora de ordem LIFO (corrigido com `stackOriginFocus`, uma
+variável de módulo gravada só quando a pilha estava REALMENTE vazia no registro, em vez do
+`previouslyFocused` por instância). **Limitação real, disclosed e deliberadamente NÃO corrigida**:
+o listener compartilhado trata qualquer painel ativo como destino de foco legítimo — certo pro
+caso que resolve (chat/ranking/mochila coexistindo entre si), errado quando um modal de tela cheia
+de verdade (`ParentalGateModal`/`PlanetPickerPanel`) coexiste com um painel pequeno (confirmado
+alcançável: mochila + seletor de planeta, e AvatarShop + chat, ambos por z-index maior do painel
+pequeno). Corrigir direito exige auditar os ~18 consumidores do hook pra sinalizar exclusividade —
+escopo maior que este lab, registrado como dívida real pra um laboratório futuro dedicado. `npx tsc
+-b` limpo; testes: app 208/208 (inalterado); `npm run build` sem regressão de bundle. Ver
+`labs/lab-186-ranking-nao-bloqueia-arrasto/CONTEXT.md` pro histórico completo rodada a rodada.
+**Merge confirmado**: PR #66 mesclada em `main` no commit `8dadd91` (2026-09-15, squash). CI de
+`main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-184-qualidade-visual-planetas/ — qualidade visual dos planetas e mundo.
+Antes desse: labs/lab-184-qualidade-visual-planetas/ — qualidade visual dos planetas e mundo.
 Origem: `docs/growth-retention-monetization-backlog.md`, "Lab 184", item 10 da ordem sugerida,
 próximo item recomendado após o lab-183. Passe de art direction nos 7 planetas-destino existentes
 (`World3D.tsx`) — não um redesenho completo, só lacunas concretas. Investigação prévia achou que 4
