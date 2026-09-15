@@ -80,6 +80,34 @@ abaixo). `npm run build` sem regressão de bundle.
   (`canvas.inert`) foi confirmado mudando de `true` pra `false` com ranking/chat abertos, antes e
   depois da correção — a MUDANÇA DE ESTADO em si é verificável mesmo quando o EFEITO fim-a-fim não
   é. Ver `evidencias/ranking-canvas-nao-inert.jpg`.
+- **`useModalA11y` não distingue painel "exclusivo" (modal de tela cheia) de painel "coexistente"
+  (chat/ranking/mochila)** — achado real do review automático do Copilot na rodada 8, deliberadamente
+  NÃO corrigido nesta rodada (ver justificativa abaixo). O listener compartilhado de `focusin`
+  (rodada 5) trata QUALQUER raiz registrada na pilha como destino de foco legítimo — correto pro
+  caso que ele foi desenhado pra resolver (chat/ranking/mochila coexistindo entre si), mas errado
+  quando uma das raízes é um modal de tela cheia de verdade (`ParentalGateModal`/`PlanetPickerPanel`,
+  ambos também usam `useModalA11y`) coexistindo com uma pequena: um modal de tela cheia deveria ser
+  exclusivo (nada mais devia reter foco enquanto ele está aberto). **Confirmado como alcançável no
+  código** (não é só teórico): `bagOpen` (mochila) não tem nenhum acoplamento com
+  `planetPickerOpen` — nada fecha a mochila quando `setPlanetPickerOpen(true)` roda (ao embarcar num
+  foguete sem planeta selecionado, `World3D.tsx` ~linha 4194) — e `.chat-panel` (mochila,
+  `z-index: 20`) renderiza ACIMA de `.modal-overlay` (seletor de planeta, `z-index: 10`), então a
+  mochila ficaria clicável por cima do modal do seletor. (`showParentalGate` é diferente: sempre
+  fecha a si mesmo ANTES de `chatOpen`/`rankingOpen` abrirem de verdade — `openMultiplayerFeature`/
+  `handleParentalGateAuthorize`, ~linhas 12486-12501 — então essa combinação específica não é
+  alcançável.) **Por que não corrigido agora**: a correção correta exige um sinal explícito de
+  "este painel é exclusivo" que `useModalA11y` hoje não tem — adicionar isso bem feito significa
+  auditar TODOS os ~18 consumidores do hook (`CoopChallengeToast`, `DailyLoginToast`,
+  `MarsRewardToast`, `PairingScreen`, `ParentalGateModal`, `QuestModal`, `RewardToast`,
+  `WeeklyEventPanel`, `AchievementsPanel`, `AvatarShop`, `ChatPanel`, `FriendsPanel`,
+  `MyHousePanel`, `PetPanel`, `PlanetPickerPanel`, `PlayerPublicProfileView`, `QuestListOverlay`,
+  `RankingPanel`, `WeaponBagPanel`) pra classificar cada um como modal de tela cheia exclusivo vs.
+  painel pequeno coexistente vs. toast transitório (que provavelmente não deveria ser nem uma coisa
+  nem outra) — um escopo bem maior que o deste laboratório (canvas/chat/ranking/mochila) e sem
+  cobertura de teste automatizado pra UI (a suíte Vitest só cobre lógica de domínio) nem
+  verificação ao vivo viável pra 18 componentes nesta sessão. Registrado aqui como dívida real pra
+  um laboratório futuro dedicado (auditoria de exclusividade dos consumidores de `useModalA11y`),
+  em vez de arriscar uma mudança grande e mal verificada.
 - **Verificação em viewport mobile/touch não feita** — mesma limitação de ferramental já conhecida
   dos labs 177/178/184.
 
@@ -252,6 +280,22 @@ documento pro escopo completo desse item.
   desta sessão confirma com certeza o comportamento de um clique real de hardware) — corrigido o
   rótulo pra "clique sintético (automação do navegador)", consistente com a limitação já disclosed.
   `npx tsc -b`, `npm run test` (208/208) e `npm run build` limpos após a mudança.
+- **Rodada 8** (2026-09-15): 1 achado real, marcado "suppressed" pelo Copilot ("Comments generated:
+  0 new" — sinal de confiança menor que os achados postados nas rodadas anteriores) e deliberadamente
+  NÃO corrigido com código nesta rodada. O listener compartilhado de `focusin` trata qualquer raiz
+  registrada como destino de foco legítimo — certo pro caso que resolve (chat/ranking/mochila
+  coexistindo), errado quando uma delas é um modal de tela cheia de verdade
+  (`ParentalGateModal`/`PlanetPickerPanel`, que também usam `useModalA11y`) coexistindo com uma
+  pequena. Investigado e CONFIRMADO alcançável pra `bagOpen` + `planetPickerOpen` (nada fecha a
+  mochila ao abrir o seletor de planeta, e `.chat-panel` tem `z-index` maior que `.modal-overlay` —
+  a mochila renderizaria por cima do modal); investigado e DESCARTADO pra `showParentalGate` (sempre
+  fecha a si mesmo antes de `chatOpen`/`rankingOpen` abrirem de verdade, nunca coexiste com eles).
+  Corrigir direito exige um sinal explícito de exclusividade que o hook não tem, o que por sua vez
+  exige auditar os ~18 consumidores de `useModalA11y` pra classificar cada um — escopo bem maior que
+  este laboratório e sem cobertura de teste (automatizado ou ao vivo) viável nesta sessão pra validar
+  uma mudança em 18 componentes. Documentado como dívida real e explícita em "Pendências / dívidas
+  conhecidas" (não escondido), em vez de uma correção apressada e mal verificada. Nenhuma mudança de
+  código nesta rodada — só documentação (`CONTEXT.md`).
 
 ## Estado do repositório ao final
 
