@@ -1,18 +1,42 @@
 # Laboratório atual
 
-Em andamento: labs/lab-188-pet-maior-visivel-troca-clara/ — aumentar escala visual do pet
-(limite por espécie), corrigir posicionamento pra nunca ficar enterrado, revisar offset de
-acompanhamento e melhorar o feedback de troca no painel. Origem:
-`docs/gameplay-market-expansion-backlog.md`, "Lab 203" no documento (renumerado pra lab-188 na
-sequência real do repo) — próximo item recomendado depois do lab-187, prioridade P0/P1.
-Investigação prévia já achou um candidato forte e concreto: o pet é puramente cinemático (nunca um
-corpo físico) e usa um raio FIXO (`planet.radius`) em planetas-destino — Marte tem morros com
-colisor `MESH` real que o avatar sobe fisicamente (lab-177), então o pet ficaria visualmente
-enterrado/abaixo do avatar exatamente ao subir um morro de Marte. Escala/offset/feedback do painel
-precisam de verificação ao vivo antes de decidir o que mudar. Ver
-`labs/lab-188-pet-maior-visivel-troca-clara/FEATURES.md`.
+Último concluído: labs/lab-188-pet-maior-visivel-troca-clara/ — pet maior, visível e com troca
+clara. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 203" no documento (renumerado pra
+lab-188 na sequência real do repo) — próximo item recomendado depois do lab-187, prioridade P0/P1.
+**Achado real, concreto**: o pet é puramente CINEMÁTICO (reposicionado por fórmula todo quadro,
+nunca um corpo físico) e usava um raio FIXO (`planet.radius`) em planetas-destino. Marte tem morros
+reais com colisor `MESH` que o avatar sobe fisicamente (lab-177) — o pet ficava preso no raio base
+do planeta, visualmente enterrado no morro exatamente quando o avatar subia nele. **Corrigido**:
+novo helper `destinationPlanetGroundRadial` (raycast físico real, mesmo padrão de
+`terrainGroundRadial`), usado só em Marte (os outros 6 planetas-destino continuam com o raio fixo,
+esferas uniformes sem relevo — raycast ali daria o mesmo resultado, só mais caro), filtrando por
+nome de mesh pra pular os colisores aproximados das rochas de Marte. **Verificado ao vivo, ponta a
+ponta, 3 vezes** (voo real até Marte + subida num morro real via teleporte físico + medição): avatar
+~1.38 unidade acima do raio-base, pet ~1.2 unidade acima, acompanhando de perto em todas as medições
+— com o código antigo, o pet ficaria travado exatamente no raio-base. Escala visual do pet aumentada
+com limite por espécie (`PET_SPECIES_SCALE_MULTIPLIER`: gato 1.6×, cachorro 1.8×) — medido ao vivo
+via bounding box real que o pet adulto tinha só ~21% da altura do avatar; `PET_SIDE_DISTANCE`
+aumentado de 0.65 pra 1.0 pra evitar sobreposição visual com o pet maior. Feedback de troca de pet
+no painel verificado ao vivo como já imediato (tag "✓ Ativo" atualiza na hora, pet no mundo 3D troca
+ao fechar) — nenhuma mudança de código necessária ali. **PR #68 teve 5 rodadas de review automático
+do Copilot**, 4 delas com achados reais — destaque: dois comentários novos citavam "achado do
+review automático do Copilot", violando a regra MUST de `docs/prompts/04-manutencao-clean-code.md`
+contra qualquer referência à sessão de IA no código (não só número de lab/PR) — um padrão usado
+extensamente em labs anteriores desta sessão sem nunca ter sido sinalizado antes; outros achados
+reais: contagem errada de planetas-destino (5→6), raycast duplicado no mesmo quadro (cacheado),
+teste tautológico (corrigido com valores fixos), e um retry-na-falha de raycast adicionado numa
+rodada e corretamente revertido na seguinte depois de uma análise mais profunda mostrar que era
+inútil (função chamada todo quadro, ao contrário da estática `terrainGroundRadial`). `npx tsc -b`
+limpo; testes: app 209/209 (1 novo, `petVisualScale`); `npm run build` sem regressão de bundle.
+Pendência disclosed: verificação em viewport mobile/touch real não feita. Ver
+`labs/lab-188-pet-maior-visivel-troca-clara/FEATURES.md` pro histórico completo rodada a rodada.
+**Merge confirmado**: PR #68 mesclada em `main` no commit `e9296d7` (2026-09-15, squash). CI de
+`main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-187-objetos-alinhados-relevo/ — padroniza helper de posicionamento pelo
+Antes desse: labs/lab-187-objetos-alinhados-relevo/ — padroniza helper de posicionamento pelo
 relevo real, nenhum objeto enterrado encontrado. Origem: `docs/gameplay-market-expansion-backlog.md`,
 "Lab 202" no documento (renumerado pra lab-187 na sequência real do repo) — próximo item recomendado
 depois do lab-186, prioridade P0. **Investigação ao vivo (não só leitura de código)**: raycast
