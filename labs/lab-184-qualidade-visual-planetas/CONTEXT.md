@@ -8,8 +8,11 @@ Commit inicial → final: 2c8df5ab8867c5b0e581106dc2444350bdb0323e..(commit dest
 Passe de art direction nos 7 planetas-destino (`World3D.tsx`), seguindo o escopo literal do
 backlog ("materiais, escala, iluminação, landmarks, silhuetas... não redesenho completo, só
 lacunas concretas"). Investigação prévia (leitura das 7 funções `build*IfNeeded`, documentada em
-`FEATURES.md`) achou que 5 dos 7 já tinham identidade visual sólida (Marte, Mercúrio, Vênus,
-Saturno, planeta principal) — só 2 gaps concretos justificavam código novo:
+`FEATURES.md`) achou que 4 dos 7 planetas-destino já tinham identidade visual sólida (Marte,
+Mercúrio, Vênus, Saturno) — o planeta principal (onde a criança nasce, FORA da lista de 7
+"destino") também já estava conforme, mas não faz parte dessa contagem. Isso deixou 3 dos 7
+planetas-destino com um achado real: Urano (sem landmark 3D nenhum) e o par Júpiter/Netuno
+(morfologicamente quase gêmeos) — 2 gaps concretos justificaram código novo:
 
 - **Urano ganhou um anel** (`ring`/`ringMat`, dentro de `buildUranusIfNeeded`) — antes deste lab,
   Urano era o único planeta-destino sem NENHUM landmark 3D, só uma rotação sutil de textura (o
@@ -104,9 +107,12 @@ lógica de domínio isolável, mesma classe de mudança dos labs 113/114 que cri
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
-- Nenhuma das planejadas — verificação mobile ficou como pendência registrada acima, não como
-  item descartado (o `FEATURES.md` original já previa essa possibilidade dada a limitação
-  conhecida de ferramental).
+- **Verificação em viewport mobile** (item do `FEATURES.md` original, `[ ]` — continua não
+  concluída) — as ferramentas de automação de navegador desta sessão não expõem emulação de
+  dispositivo/viewport móvel de forma confiável pra este jogo (canvas WebGL), mesma limitação
+  conhecida dos labs 177/178. Não migra pro próximo lab como item de escopo (os 3 landmarks são
+  geometria simples sem dependência de resolução, risco de regressão mobile considerado baixo) —
+  fica só registrada como não verificada, não como pendência ativa a resolver.
 
 ## O que o próximo laboratório deve desenvolver
 
@@ -135,6 +141,17 @@ perguntar ao usuário a próxima prioridade.
   O item de performance dizia "conferir... contra o benchmark de FPS real", mas o texto logo
   abaixo já deixava claro que nenhum benchmark foi rodado de novo, só análise de código —
   reescrita a frase do próprio checklist pra bater com o que foi realmente feito.
+- **Rodada 2**: 2 achados reais, ambos de precisão da própria documentação da rodada 1. (1) A
+  seção "Funcionalidades planejadas que NÃO foram concluídas" dizia "Nenhuma das planejadas" mas
+  o `FEATURES.md` continua com a verificação mobile marcada `[ ]` — contradição real entre as
+  duas seções; corrigido listando a verificação mobile explicitamente aqui como não concluída
+  (mas não migrada como pendência ativa, pelo mesmo motivo já registrado: risco baixo, limitação
+  de ferramental já conhecida). (2) O parágrafo de abertura contava "5 dos 7" planetas conformes
+  incluindo o planeta principal na lista — mas o planeta principal está EXPLICITAMENTE fora da
+  contagem de "7 planetas-destino" (é o planeta de nascimento, não um destino de viagem), então a
+  conta certa é 4 dos 7 destinos conformes (Marte/Mercúrio/Vênus/Saturno) + o planeta principal
+  separadamente (já conforme, mas fora dessa lista de 7). Corrigido o parágrafo de abertura pra
+  separar as duas contagens.
 
 ## Estado do repositório ao final
 
