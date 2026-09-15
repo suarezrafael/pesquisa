@@ -12518,15 +12518,39 @@ export function World3D({
   // antes do benchmark começar até `setup()` de verdade terminar, ver comentário perto de sua
   // declaração) desabilita toda a UI que depende da cena (canvas/joystick/botões de toque, ver
   // `inert={hudInert}` abaixo) durante a janela inteira, em vez de proteger handler por handler.
-  const hudInert = !setupReady || suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
+  // `chat`/`ranking`/`bag` (mochila) são os únicos três gatilhos que NÃO são um `.modal-overlay`
+  // de tela cheia — os três usam `.chat-panel` (posicionamento absoluto, uma caixinha pequena
+  // ancorada num canto), com bastante área livre do canvas visível ao redor. `fullScreenInert`
+  // isola só os gatilhos que SÃO tela cheia de verdade (nada visível atrás deles pra interagir
+  // mesmo) — é a base de `canvasInert` abaixo, e evita a duplicação de lista que já existia
+  // aqui antes (achado do review automático do Copilot: duas listas de gatilhos escritas à mão em
+  // lugares diferentes divergem fácil se alguém adicionar um gatilho novo só numa delas).
+  const fullScreenInert = !setupReady || suspendTriggers || planetPickerOpen || showParentalGate
+  const hudInert = fullScreenInert || chatOpen || rankingOpen || bagOpen
   hudInertRef.current = hudInert
+  // Deixar o `<canvas>` inteiro `inert` enquanto chat/ranking/mochila está aberto (como `hudInert`
+  // sozinho faria) desabilitava ARRASTO DE CÂMERA/JOYSTICK na área livre inteira, não só na
+  // caixinha do painel — muito mais amplo do que o necessário, e a causa provável do relato de
+  // "ranking bloqueia arrasto do planeta" (`docs/gameplay-market-expansion-backlog.md`, "Lab
+  // 201"). O motivo original do `inert` no canvas (Tab escapando pro canvas, comentário abaixo) já
+  // é coberto separadamente pelo focus trap de `useModalA11y` (usado pelos três painéis, com um
+  // listener de `focusin` que devolve o foco pra raiz do painel se ele escapar por CLIQUE — achado
+  // de uma rodada anterior do review automático), então excluir os três gatilhos daqui não reabre
+  // aquele bug — supressão de teclado/joystick de movimento continua valendo pros três via
+  // `hudInertRef` (usado no loop de física), só o `<canvas>` em si volta a aceitar ponteiro/
+  // arrasto fora das caixinhas.
+  const canvasInert = fullScreenInert
 
   return (
     <div className="world3d-container">
-      {/* lab-121: o Babylon.js torna o canvas focável (captura teclado do jogo), então ele também
-          precisa de `inert` junto com o HUD — senão dá pra Tab escapar de um modal aberto direto
-          pro canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). */}
-      <canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />
+      {/* lab-121: o Babylon.js torna o canvas focável (captura teclado do jogo). Pra gatilhos de
+          tela cheia (`fullScreenInert`), `inert` no canvas continua junto com o HUD — nada visível
+          atrás pra interagir mesmo, e sem isso dá pra Tab escapar de um modal aberto direto pro
+          canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). Já
+          chat/ranking/mochila (caixinhas pequenas, não tela cheia) deixam o canvas propositalmente
+          NÃO-inert — o escape de Tab pra esses três é coberto por um caminho diferente, o focus
+          trap de `useModalA11y` (comentário acima de `canvasInert`). */}
+      <canvas ref={canvasRef} className="world3d-canvas" inert={canvasInert} />
       {/* Achado do review automático do Copilot: sem isto, o benchmark de GPU + o resto de setup()
           assíncrono (Havok+18 GLBs) rodavam sem feedback nenhum — o canvas já montado, mas vazio,
           podia parecer travado por vários segundos num aparelho lento. Mesma aparência do
