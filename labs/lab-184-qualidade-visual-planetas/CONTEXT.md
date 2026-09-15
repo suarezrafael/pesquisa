@@ -34,8 +34,11 @@ planetas-destino com um achado real: Urano (sem landmark 3D nenhum) e o par Júp
   superfície) já usada pelas manchas principais — nenhuma técnica nova.
 
 Todos os 3 landmarks novos são estritamente decorativos (sem `PhysicsAggregate`, mesma convenção
-do anel de Saturno e das manchas existentes) e reaproveitam materiais/geometria já pagos no
-arquivo — nenhuma textura nova, nenhum asset externo, nenhuma malha de alta contagem de triângulos.
+do anel de Saturno e das manchas existentes) e reaproveitam a MESMA TÉCNICA/TIPO de geometria já
+paga no arquivo (`PBRMaterial` + `CreateTorus`/`CreateCylinder`, os mesmos tipos usados pro anel
+de Saturno e pelas manchas existentes) — cada um É um `PBRMaterial` e uma malha NOVOS (instâncias
+próprias, não reaproveitadas de outro planeta), mas nenhuma textura nova, nenhum asset externo,
+nenhuma malha de alta contagem de triângulos.
 
 **Verificado ao vivo, com screenshot real, os 3 planetas alterados** — ver
 `labs/lab-184-qualidade-visual-planetas/evidencias/`:
@@ -152,6 +155,14 @@ perguntar ao usuário a próxima prioridade.
   conta certa é 4 dos 7 destinos conformes (Marte/Mercúrio/Vênus/Saturno) + o planeta principal
   separadamente (já conforme, mas fora dessa lista de 7). Corrigido o parágrafo de abertura pra
   separar as duas contagens.
+- **Rodada 3**: 2 achados reais. (1) A frase "reaproveitam materiais/geometria já pagos no
+  arquivo" era enganosa — o código cria, sim, 3 `PBRMaterial`/malhas NOVOS (`uranusRing`,
+  `jupiterOvalBA`, `neptuneScooterCloud`), só a TÉCNICA/TIPO é reaproveitada (mesmo padrão
+  `PBRMaterial` + `CreateTorus`/`CreateCylinder` já usado pro anel de Saturno e pelas manchas
+  existentes), não os objetos em si; corrigido pra deixar essa distinção explícita. (2) A
+  descrição da PR no GitHub ainda não tinha sido atualizada com a contagem corrigida da rodada 2
+  ("5 dos 7" incluindo o planeta principal) — reconciliada junto com a mesma correção de
+  materiais/malhas novos vs. técnica reaproveitada.
 
 ## Estado do repositório ao final
 
