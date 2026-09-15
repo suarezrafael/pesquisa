@@ -107,7 +107,14 @@ abaixo). `npm run build` sem regressão de bundle.
   cobertura de teste automatizado pra UI (a suíte Vitest só cobre lógica de domínio) nem
   verificação ao vivo viável pra 18 componentes nesta sessão. Registrado aqui como dívida real pra
   um laboratório futuro dedicado (auditoria de exclusividade dos consumidores de `useModalA11y`),
-  em vez de arriscar uma mudança grande e mal verificada.
+  em vez de arriscar uma mudança grande e mal verificada. **Segundo exemplo concreto** (achado do
+  review automático do Copilot na rodada 10, mesma causa raiz, não uma correção separada):
+  `AvatarShop` (gatilho de proximidade) também abre com `ChatPanel` já aberto sem fechá-lo —
+  `fullScreenInert`/`hudInert` (`World3D.tsx` ~linha 12529) só afetam canvas/HUD, nunca os painéis
+  pequenos irmãos, então o mesmo `z-index` mais alto de `.chat-panel` deixaria o chat clicável por
+  cima de qualquer painel de tela cheia que abrisse enquanto ele está aberto — não só
+  mochila+seletor de planeta (já confirmado acima), mas qualquer combinação de painel pequeno +
+  painel de tela cheia. Reforça o mesmo achado, não muda o escopo da correção adiada.
 - **Verificação em viewport mobile/touch não feita** — mesma limitação de ferramental já conhecida
   dos labs 177/178/184.
 
@@ -315,6 +322,19 @@ documento pro escopo completo desse item.
   continua idêntico (só há uma raiz possível, com ou sem foco real nela — o próprio painel sempre
   contém `document.activeElement` depois do foco inicial do efeito). `npx tsc -b`, `npm run test`
   (208/208) e `npm run build` limpos após a mudança.
+- **Rodada 10** (2026-09-15) — **convergência**: 2 achados, ambos "suppressed" (0 comentários
+  novos gerados), ambos a MESMA causa raiz já disclosed (exclusividade de `useModalA11y`), nenhum
+  exigindo mudança de código nova. (1) O achado de exclusividade em si, de novo marcado "Previously
+  missed... in code that hasn't changed since the last review" — sem informação nova. (2) Um SEGUNDO
+  exemplo concreto do mesmo problema (`World3D.tsx` ~linha 12529): `AvatarShop` (gatilho de
+  proximidade) também pode abrir com `ChatPanel` já aberto, sem fechá-lo — reforça que o gap é
+  genérico (qualquer painel pequeno + qualquer painel de tela cheia), não específico de
+  mochila+seletor de planeta como o exemplo original. Documentado como reforço do MESMO achado já
+  disclosed em "Pendências / dívidas conhecidas" (não uma correção separada) — nenhuma mudança de
+  código. Nenhum achado genuinamente novo nesta rodada; a única categoria de achado real restante
+  (exclusividade) já está transparentemente registrada como dívida pra um laboratório futuro
+  dedicado. Tratado como convergência (mesmo critério da rodada 4 do lab-184): rodada repete achado
+  já disclosed com 0 comentários novos gerados.
 
 ## Estado do repositório ao final
 
