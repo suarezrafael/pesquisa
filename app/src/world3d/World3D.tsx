@@ -324,6 +324,29 @@ const RAIN_HEMI_INTENSITY = 0.16
 const BASE_SUN_INTENSITY = 1.0
 const RAIN_SUN_INTENSITY = 0.5
 
+// Céu escuro no espaço (voo de foguete entre planetas) e claro na atmosfera — hoje `clearColor`/
+// `fogColor` eram definidos uma única vez na criação da cena e nunca mudavam durante o voo, então
+// a viagem espacial mostrava o MESMO céu azul-claro do chão do início ao fim. `SKY_COLOR_ATMOSPHERE`/
+// `FOG_COLOR_ATMOSPHERE` capturam os valores originais (usados na criação da cena, ver logo abaixo)
+// — servem de ponto de partida/chegada da transição, não um valor novo. Fog/luz de espaço quase
+// zerados (sem atmosfera pra espalhar luz), mas não pretos de vez — o foguete e o avatar continuam
+// precisando ficar legíveis durante o cruzeiro (critério de aceite do backlog).
+const SKY_COLOR_ATMOSPHERE = new Color4(0.65, 0.82, 0.93, 1)
+const SKY_COLOR_SPACE = new Color4(0.03, 0.03, 0.08, 1)
+const FOG_COLOR_ATMOSPHERE = new Color3(0.65, 0.82, 0.93)
+const FOG_COLOR_SPACE = new Color3(0.03, 0.03, 0.08)
+const SPACE_FOG_DENSITY = 0.001
+const SPACE_ENV_INTENSITY = 0.15
+const SPACE_HEMI_INTENSITY = 0.05
+const SPACE_SUN_INTENSITY = 0.2
+// Fronteiras da transição, ancoradas nas MESMAS duas fases já usadas pra animação de decolagem/
+// pouso (`ROCKET_LAUNCH_HOLD_END`/`ROCKET_LANDING_FLIP_START`, ver comentário longo perto do laço
+// de voo) — a tela já escurece só depois de sair da plataforma de decolagem, e já volta ao claro
+// antes de começar a manobra de "flip" de pouso (a criança vê a atmosfera de destino clareando
+// ENQUANTO a nave ainda está virando pra pousar, não depois).
+const SPACE_FADE_IN_END = 0.35
+const SPACE_FADE_OUT_START = 0.65
+
 // Raio (lab-14): clareamento rápido da cena (flash aditivo de luz), não um objeto/bolt visual
 // desenhado — mais barato e já vende bem o efeito. `lightningFlash` sobe pra 1 no instante do
 // raio e decai linearmente até 0 em `LIGHTNING_DECAY_TIME` segundos.
@@ -3005,15 +3028,53 @@ export function World3D({
       ;(window as any).__scene = scene
       ;(window as any).__engine = engine
     }
-    scene.clearColor = new Color4(0.65, 0.82, 0.93, 1)
+    scene.clearColor = SKY_COLOR_ATMOSPHERE.clone()
     scene.fogMode = Scene.FOGMODE_EXP2
     scene.fogDensity = BASE_FOG_DENSITY
-    scene.fogColor = new Color3(0.65, 0.82, 0.93)
+    scene.fogColor = FOG_COLOR_ATMOSPHERE.clone()
 
     // Câmera totalmente controlada por código (sem input próprio) — reposicionada a cada
     // quadro pra acompanhar a bola e a curvatura local do planeta.
     const camera = new UniversalCamera('camera', new Vector3(0, PLANET_RADIUS + CAMERA_HEIGHT, -CAMERA_DISTANCE), scene)
     camera.minZ = 0.1
+
+    // Estrelas do voo espacial — cúpula grande com textura de pontos brancos pintada uma única
+    // vez num canvas (mesma técnica de `DynamicTexture` já usada pras chamas do foguete/gota de
+    // chuva). `infiniteDistance` (técnica padrão de skybox do Babylon) mantém a cúpula sempre
+    // centrada na câmera sem precisar reposicionar manualmente todo quadro. Invisível
+    // (`visibility = 0`) o resto do tempo — só aparece durante o cruzeiro espacial (ver `spaceT`
+    // no laço de voo do foguete, mais abaixo) — sem física/sombra, custo de desenho desprezível.
+    const starTexture = new DynamicTexture('starfieldTex', { width: 512, height: 512 }, scene, false)
+    const starCtx = starTexture.getContext() as CanvasRenderingContext2D
+    starCtx.fillStyle = 'black'
+    starCtx.fillRect(0, 0, 512, 512)
+    starCtx.fillStyle = 'white'
+    for (let i = 0; i < 800; i++) {
+      const sx = Math.random() * 512
+      const sy = Math.random() * 512
+      const radius = Math.random() < 0.15 ? 1.6 : 0.8
+      starCtx.globalAlpha = 0.5 + Math.random() * 0.5
+      starCtx.beginPath()
+      starCtx.arc(sx, sy, radius, 0, Math.PI * 2)
+      starCtx.fill()
+    }
+    starCtx.globalAlpha = 1
+    starTexture.update()
+    const starfieldDome = MeshBuilder.CreateSphere(
+      'starfieldDome',
+      { diameter: 600, segments: 12, sideOrientation: Mesh.BACKSIDE },
+      scene,
+    )
+    starfieldDome.infiniteDistance = true
+    starfieldDome.isPickable = false
+    starfieldDome.visibility = 0
+    starfieldDome.receiveShadows = false
+    const starfieldMat = new PBRMaterial('starfieldMat', scene)
+    starfieldMat.unlit = true
+    starfieldMat.emissiveTexture = starTexture
+    starfieldMat.emissiveColor = Color3.White()
+    starfieldMat.backFaceCulling = false
+    starfieldDome.material = starfieldMat
 
     // Câmera livre via arrastar o dedo/mouse — dentro de casa desde o lab-138 (giro+inclinação+
     // zoom), e desde o lab-153 TAMBÉM do lado de fora (só giro, ver `outdoorDrag` abaixo). O resto
@@ -11964,6 +12025,25 @@ export function World3D({
             0,
             Math.min(1, drivingRocket.progress + rocketThrottle * ROCKET_FLIGHT_SPEED * dt),
           )
+          // Céu escuro no espaço, claro na atmosfera — `holdFlipHoldCurve` (já usada pro "flip"
+          // de pouso, acima) reaproveitada duas vezes: sobe de 0 a 1 até `SPACE_FADE_IN_END`
+          // (saindo da atmosfera de origem), desce de 1 a 0 depois de `SPACE_FADE_OUT_START`
+          // (entrando na atmosfera de destino) — multiplicar as duas dá o platô de "espaço
+          // profundo" no meio do cruzeiro sem precisar de uma curva nova. Aplicado por CIMA do
+          // que a chuva/raio já escreveram neste mesmo quadro (o laço de clima roda antes deste
+          // bloco) — soma com o clima em vez de sobrescrever, então as duas fontes compõem em
+          // vez de brigar pelo mesmo campo.
+          const spaceT =
+            holdFlipHoldCurve(drivingRocket.progress, ROCKET_LAUNCH_HOLD_END, SPACE_FADE_IN_END) *
+            (1 - holdFlipHoldCurve(drivingRocket.progress, SPACE_FADE_OUT_START, ROCKET_LANDING_FLIP_START))
+          scene.clearColor = Color4.Lerp(SKY_COLOR_ATMOSPHERE, SKY_COLOR_SPACE, spaceT)
+          scene.fogColor = Color3.Lerp(FOG_COLOR_ATMOSPHERE, FOG_COLOR_SPACE, spaceT)
+          scene.fogDensity += (SPACE_FOG_DENSITY - scene.fogDensity) * spaceT
+          scene.environmentIntensity += (SPACE_ENV_INTENSITY - scene.environmentIntensity) * spaceT
+          hemiLight.intensity += (SPACE_HEMI_INTENSITY - hemiLight.intensity) * spaceT
+          sunLight.intensity += (SPACE_SUN_INTENSITY - sunLight.intensity) * spaceT
+          starfieldDome.visibility = spaceT
+
           const { position: shipPos, tangent: shipTangent } = sampleFlightArc(
             drivingRocket.p0,
             drivingRocket.c1,

@@ -54,22 +54,47 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-188, prio
 
 ## Funcionalidades planejadas
 
-- [ ] Interpolar `scene.clearColor`/`scene.fogColor` com base em `drivingRocket.progress`: azul-claro
-  de sempre perto das duas pontas (decolagem/pouso, usando `ROCKET_LAUNCH_HOLD_END`/
-  `ROCKET_LANDING_FLIP_START` como referência), escuro/estrelado no meio (cruzeiro espacial) — sem
-  flash brusco (transição suave, não degrau).
-- [ ] Adicionar elemento visual de "espaço" (estrelas) durante o cruzeiro — critério de aceite do
-  backlog exige que o fundo escuro seja "legível como espaço", não só uma cor sólida escura.
-- [ ] Restaurar o céu/fog corretamente ao pousar em QUALQUER planeta (incluindo volta pro planeta
-  principal) — mesma cor de sempre, sem depender de qual foi o destino (achado prévio: céu já é
-  global/compartilhado, não precisa de cor por planeta).
-- [ ] Garantir que a modulação de fog por chuva (`rainAmount`, já existente) continue funcionando
-  sem conflito — compor as duas fontes de fog em vez de uma sobrescrever a outra
-  incondicionalmente.
-- [ ] Verificar ao vivo se a iluminação HDRI/ambiente também precisa de ajuste durante o voo (ou se
-  só escurecer o fundo já basta) — decidir com base em screenshot real, não suposição.
+- [x] Interpolado `scene.clearColor`/`scene.fogColor` com base em `drivingRocket.progress`,
+  reaproveitando `holdFlipHoldCurve` (a mesma função já usada pro "flip" de pouso) duas vezes —
+  sobe de 0 a 1 até `SPACE_FADE_IN_END` (0.35), desce de 1 a 0 depois de `SPACE_FADE_OUT_START`
+  (0.65) — sem flash brusco, transição suave ancorada nas mesmas fronteiras de fase
+  (`ROCKET_LAUNCH_HOLD_END`/`ROCKET_LANDING_FLIP_START`) já usadas pra decolagem/pouso.
+- [x] Adicionado starfield: cúpula grande (`infiniteDistance`, técnica padrão de skybox) com
+  textura de pontos brancos pintada uma única vez num canvas (mesma técnica de `DynamicTexture` já
+  usada pras chamas do foguete/gota de chuva), material `PBRMaterial` com `unlit = true` (sem
+  depender de luz de cena, que fica bem escura durante o voo). Visibilidade ligada direto ao mesmo
+  fator de transição (`spaceT`).
+- [x] **Verificado ao vivo, ponta a ponta**: voou de verdade até Marte via `__handleInteractPress` +
+  seletor + acelerador simulado. No meio do cruzeiro: `clearColor` bateu EXATAMENTE
+  `SKY_COLOR_SPACE` (0.03, 0.03, 0.08), `fogDensity` em 0.001, `environmentIntensity` em 0.15 —
+  screenshot confirma céu azul-marinho escuro com pontinhos brancos espalhados, foguete/estação
+  alienígena claramente legíveis contra o fundo (critério de aceite atendido: "legível como
+  espaço", não só uma cor sólida). Depois de pousar em Marte: `clearColor` voltou EXATAMENTE pro
+  azul-claro original (0.65, 0.82, 0.93), `fogDensity`/`environmentIntensity` de volta à base,
+  `starfieldDome.visibility` de volta a 0 — screenshot confirma céu claro normal na superfície.
+  Sem erro nenhum no console durante o voo inteiro.
+- [x] Restauração ao pousar não depende do destino (achado prévio confirmado): a transição volta
+  sempre pros MESMOS valores base (`SKY_COLOR_ATMOSPHERE`/`FOG_COLOR_ATMOSPHERE`/`BASE_*`), qualquer
+  que seja o planeta de chegada — sem cor por planeta, como já esperado.
+- [x] Composição com a modulação de fog/luz por chuva: o bloco de clima roda ANTES do bloco de voo
+  no mesmo quadro (confirmado lendo o código — linha do clima vem antes da linha do foguete no
+  arquivo) — a transição espacial soma por CIMA do valor que o clima acabou de escrever
+  (`scene.fogDensity += (SPACE_FOG_DENSITY - scene.fogDensity) * spaceT`, mesmo padrão pras 3
+  intensidades de luz), em vez de sobrescrever incondicionalmente — as duas fontes compõem.
+- [x] Iluminação HDRI/ambiente: decidido ajustar junto (`environmentIntensity`/`hemiLight`/
+  `sunLight`, mesmas 3 variáveis que a chuva já modula, reaproveitando o padrão existente) — a
+  verificação ao vivo confirmou que só escurecer `clearColor` sem isso deixaria o foguete
+  "iluminado de dia" contra um fundo escuro; com o ajuste, o resultado ficou coerente (ver
+  screenshot).
 - [ ] Confirmar que a transição não derruba FPS em mobile (critério de aceite do backlog) — dentro
-  da limitação de ferramental já conhecida (sem emulação de dispositivo real nesta sessão).
+  da limitação de ferramental já conhecida (sem emulação de dispositivo real nesta sessão). Custo
+  adicionado é baixo por construção: 1 malha extra (sem física/sombra), nenhuma textura nova
+  recarregada por quadro (pintada uma única vez no início).
+- [ ] Viagem de VOLTA (planeta-destino → principal) não foi verificada ao vivo separadamente — usa
+  exatamente o MESMO bloco de código/mesma leitura de `drivingRocket.progress`, sem nenhum branch
+  distinto pra direção da viagem, então funciona por construção; a tentativa de reproduzir ao vivo
+  esbarrou em identificar a posição certa do foguete de volta em Marte (limitação de tempo desta
+  sessão, não um problema de código).
 
 ## Fora de escopo (explicitamente adiado)
 
