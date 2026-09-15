@@ -4347,6 +4347,17 @@ export function World3D({
         return PLANET_RADIUS + formulaHeight
       }
 
+      // `dir.scale(terrainGroundRadial(dir, terrainHeight(dir)))` era repetido de próprio punho em
+      // 19 lugares (props ×2, rochas de montanha, foguete ×2, espada, arma a laser, escolas, casa,
+      // loja, torre, torre de quiz, carteira, desafio em dupla, ponte, posto de combustível, placa,
+      // gato empoleirado, piscina) — mesmo cálculo, sem um nome único, risco real de alguém
+      // escrever só metade da combinação (ex. só `terrainHeight`, sem o raycast) num objeto novo
+      // por engano. `extraOffset` cobre os casos com uma folga a mais somada depois do raycast
+      // (piscina: 0.25).
+      function groundSurfacePosition(dir: Vector3, extraOffset = 0): Vector3 {
+        return dir.scale(terrainGroundRadial(dir, terrainHeight(dir)) + extraOffset)
+      }
+
       // A câmera de 3ª pessoa sempre foi um offset fixo atrás/acima do alvo, sem checar se esse
       // ponto cai dentro de terreno/parede/rocha — inofensivo em chão plano, mas com o relevo
       // mais alto do planeta principal e os morros de planetas secundários (lab-177) a câmera
@@ -4882,7 +4893,7 @@ export function World3D({
         // recebido esta correção, só escolas/torre/rochas de montanha dedicadas; com montanhas
         // maiores e mais numerosas, MUITO mais provável de um prop comum cair perto de uma
         // borda íngreme onde a fórmula erra bastante da malha renderizada de verdade).
-        const pos = localUp.scale(terrainGroundRadial(localUp, terrainHeight(localUp)))
+        const pos = groundSurfacePosition(localUp)
         const scale = 1.3 + ((i * 7) % 5) * 0.18
         const spin = (i * GOLDEN_ANGLE * 5) % (Math.PI * 2)
 
@@ -5000,7 +5011,7 @@ export function World3D({
             .scale(Math.cos(angle) * wanderRadius)
             .add(desertTangentB.scale(Math.sin(angle) * wanderRadius))
           const localUp = DESERT_CENTER_DIR.add(offset).normalize()
-          const pos = localUp.scale(terrainGroundRadial(localUp, terrainHeight(localUp)))
+          const pos = groundSurfacePosition(localUp)
           const scale = 1.0 + ((i * 7) % 5) * 0.15
           const spin = (i * GOLDEN_ANGLE * 5) % (Math.PI * 2)
 
@@ -5062,8 +5073,7 @@ export function World3D({
           const wanderRadius = plateau.radius * radiusFrac
           const offset = tangentA.scale(Math.cos(angle) * wanderRadius).add(tangentB.scale(Math.sin(angle) * wanderRadius))
           const localUp = plateau.dir.add(offset).normalize()
-          const groundRadial = terrainGroundRadial(localUp, terrainHeight(localUp))
-          const pos = localUp.scale(groundRadial)
+          const pos = groundSurfacePosition(localUp)
           const scale = 2.6 + ((ri * 7 + pi * 5) % 5) * 0.3 // bem maior que props/rochas normais
           const spin = (ri * GOLDEN_ANGLE * 5 + pi) % (Math.PI * 2)
 
@@ -5937,7 +5947,7 @@ export function World3D({
       // ~3 unidades mais perto da origem do que o avatar recém-teleportado pro mesmo lugar).
       {
         const rocketRoot = buildRocket(scene, shadowGenerator)
-        rocketRoot.position = ROCKET_LAUNCH_DIR.scale(terrainGroundRadial(ROCKET_LAUNCH_DIR, terrainHeight(ROCKET_LAUNCH_DIR)))
+        rocketRoot.position = groundSurfacePosition(ROCKET_LAUNCH_DIR)
         rocketRoot.rotationQuaternion = alignmentQuaternion(ROCKET_LAUNCH_DIR)
 
         const rocketColliderDiameter = 2.6
@@ -5946,9 +5956,7 @@ export function World3D({
           { diameter: rocketColliderDiameter, height: 3 },
           scene,
         )
-        rocketCollider.position = ROCKET_LAUNCH_DIR.scale(
-          terrainGroundRadial(ROCKET_LAUNCH_DIR, terrainHeight(ROCKET_LAUNCH_DIR)) + 1.4,
-        )
+        rocketCollider.position = groundSurfacePosition(ROCKET_LAUNCH_DIR, 1.4)
         rocketCollider.rotationQuaternion = alignmentQuaternion(ROCKET_LAUNCH_DIR)
         rocketCollider.isVisible = false
         new PhysicsAggregate(rocketCollider, PhysicsShapeType.CYLINDER, { mass: 0 }, scene)
@@ -5973,9 +5981,7 @@ export function World3D({
       // visíveis de longe enquanto o jogador explora o planeta principal.
       {
         const swordRoot = buildSword(scene, shadowGenerator)
-        swordRoot.position = SWORD_LOCATION_DIR.scale(
-          terrainGroundRadial(SWORD_LOCATION_DIR, terrainHeight(SWORD_LOCATION_DIR)),
-        )
+        swordRoot.position = groundSurfacePosition(SWORD_LOCATION_DIR)
         const swordLabel = new TextBlock('swordLabel', '🗡️ Espada')
         swordLabel.color = 'white'
         swordLabel.fontSize = mobileFontSize(18)
@@ -5989,7 +5995,7 @@ export function World3D({
       }
       {
         const gunRoot = buildLaserGun(scene, shadowGenerator)
-        gunRoot.position = GUN_LOCATION_DIR.scale(terrainGroundRadial(GUN_LOCATION_DIR, terrainHeight(GUN_LOCATION_DIR)))
+        gunRoot.position = groundSurfacePosition(GUN_LOCATION_DIR)
         const gunLabel = new TextBlock('gunLabel', '🔫 Arma a laser')
         gunLabel.color = 'white'
         gunLabel.fontSize = mobileFontSize(18)
@@ -7536,8 +7542,7 @@ export function World3D({
         // (lab-26, só `q21`) ou a fórmula de ângulo áureo já afastada de rampa de platô íngreme
         // demais.
         const localUp = schoolUps[index]
-        const groundRadial = terrainGroundRadial(localUp, terrainHeight(localUp))
-        const surfacePos = localUp.scale(groundRadial)
+        const surfacePos = groundSurfacePosition(localUp)
 
         const base = new TransformNode(`school-${quest.id}`, scene)
         base.position = surfacePos
@@ -7668,14 +7673,18 @@ export function World3D({
         activationBeaconMat = beaconMat
       }
 
-      // lab-95 (diagnóstico TEMPORÁRIO, produção): o usuário reportou escolinhas ainda enterradas
-      // mesmo depois da correção de `SCHOOL_UPS`, e o navegador de automação não reproduziu o
-      // problema em nenhuma das 30 escolas testadas — pra conseguir um dado real do APARELHO do
-      // usuário sem precisar de ferramentas de desenvolvedor (só um print do HUD, que já é sempre
-      // visível, lab-67), calcula aqui, uma vez, quais escolas (se alguma) ficam com a parede
-      // abaixo do nível real do terreno (mesmo método de `terrainGroundRadial`/`settleMeshOnTerrain`
-      // usado pra posicionar de verdade) e mostra o resultado no HUD de debug. REMOVER depois de
-      // confirmar a causa raiz real.
+      // lab-95: o usuário reportou escolinhas ainda enterradas mesmo depois da correção de
+      // `SCHOOL_UPS`, e o navegador de automação não reproduziu o problema em nenhuma das 30
+      // escolas testadas — pra conseguir um dado real do APARELHO do usuário sem precisar de
+      // ferramentas de desenvolvedor (só um print do HUD, que já é sempre visível, lab-67), calcula
+      // aqui, uma vez, quais escolas (se alguma) ficam com a parede abaixo do nível real do terreno
+      // (mesmo método de `terrainGroundRadial`/`settleMeshOnTerrain` usado pra posicionar de
+      // verdade) e mostra o resultado no HUD de debug. Causa raiz confirmada e corrigida no próprio
+      // lab-95 (`findFlatterUpReal`, ver `schoolUps` acima) — mantido de propósito como
+      // monitoramento permanente (lab-67), lado a lado com `buriedHouseReport`, não um diagnóstico
+      // esquecido pra remover — esta contagem ficava com uma nota de "REMOVER" desatualizada,
+      // contradizendo o irmão `buriedHouseReport`, já corrigido pra refletir que os dois são
+      // mantidos permanentemente.
       const buriedSchoolReport = (() => {
         const bad: string[] = []
         for (const { quest, base } of portalMeshes) {
@@ -7711,8 +7720,7 @@ export function World3D({
       // (0,1,0)`, definido mais acima), deslocada o bastante pra não competir com o ponto de
       // chegada.
       const deskUp = new Vector3(0.35, 1, 0.12).normalize()
-      const deskGroundRadial = terrainGroundRadial(deskUp, terrainHeight(deskUp))
-      const deskSurfacePos = deskUp.scale(deskGroundRadial)
+      const deskSurfacePos = groundSurfacePosition(deskUp)
 
       const deskBase = new TransformNode('carteira-estudos', scene)
       deskBase.position = deskSurfacePos
@@ -7783,8 +7791,7 @@ export function World3D({
       // de um". Objeto FIXO e único, mesmo padrão de posicionamento da carteira (`settleMeshOnTerrain`
       // real, não a fórmula analítica sozinha).
       const coopUp = new Vector3(-0.15, 0.4, -0.9).normalize()
-      const coopGroundRadial = terrainGroundRadial(coopUp, terrainHeight(coopUp))
-      const coopSurfacePos = coopUp.scale(coopGroundRadial)
+      const coopSurfacePos = groundSurfacePosition(coopUp)
 
       const coopBase = new TransformNode('desafio-em-dupla', scene)
       coopBase.position = coopSurfacePos
@@ -7859,8 +7866,7 @@ export function World3D({
       // Ponte (lógica) — dois pilares baixos + tabuleiro, mesmo espírito de "objeto pequeno fixo"
       // da carteira/desafio em dupla.
       const bridgeUp = new Vector3(0.85, 0.3, -0.4).normalize()
-      const bridgeGroundRadial = terrainGroundRadial(bridgeUp, terrainHeight(bridgeUp))
-      const bridgeSurfacePos = bridgeUp.scale(bridgeGroundRadial)
+      const bridgeSurfacePos = groundSurfacePosition(bridgeUp)
 
       const bridgeBase = new TransformNode('ponte-logica', scene)
       bridgeBase.position = bridgeSurfacePos
@@ -7932,8 +7938,7 @@ export function World3D({
       // folga real acima do limiar de 5,3, sem afastar tanto a ponto de deixar de parecer "perto
       // do foguete" (mesma ordem de grandeza de outros marcos secundários deste planeta).
       const rocketFuelUp = ROCKET_LAUNCH_DIR.add(new Vector3(0.38, 0.16, -0.3)).normalize()
-      const rocketFuelGroundRadial = terrainGroundRadial(rocketFuelUp, terrainHeight(rocketFuelUp))
-      const rocketFuelSurfacePos = rocketFuelUp.scale(rocketFuelGroundRadial)
+      const rocketFuelSurfacePos = groundSurfacePosition(rocketFuelUp)
 
       const rocketFuelBase = new TransformNode('posto-abastecimento-matematica', scene)
       rocketFuelBase.position = rocketFuelSurfacePos
@@ -7993,8 +7998,7 @@ export function World3D({
       // Placa decifrável (leitura) — poste + tabuleiro, mesmo espírito de "totem pequeno" das
       // escolinhas, só que sem professor.
       const plaqueUp = new Vector3(-0.7, -0.2, 0.65).normalize()
-      const plaqueGroundRadial = terrainGroundRadial(plaqueUp, terrainHeight(plaqueUp))
-      const plaqueSurfacePos = plaqueUp.scale(plaqueGroundRadial)
+      const plaqueSurfacePos = groundSurfacePosition(plaqueUp)
 
       const plaqueBase = new TransformNode('placa-leitura', scene)
       plaqueBase.position = plaqueSurfacePos
@@ -8085,8 +8089,7 @@ export function World3D({
       const HOUSE_FOOTPRINT_ANGULAR_RADIUS = 1.2 / PLANET_RADIUS
       const HOUSE_SAFE_TERRAIN_VARIANCE = 0.6
       const houseUp = findFlatterUpReal(houseCandidateUp, HOUSE_FOOTPRINT_ANGULAR_RADIUS, HOUSE_SAFE_TERRAIN_VARIANCE)
-      const houseGroundRadial = terrainGroundRadial(houseUp, terrainHeight(houseUp))
-      const houseSurfacePos = houseUp.scale(houseGroundRadial)
+      const houseSurfacePos = groundSurfacePosition(houseUp)
 
       const houseBase = new TransformNode('minha-casa', scene)
       houseBase.position = houseSurfacePos
@@ -8117,7 +8120,13 @@ export function World3D({
       // lab-95) — pedido do usuário no lab-134 ("acho que a causa é a casa estar enterrada na
       // terra"): checar num dado real do APARELHO dele (só um print do HUD, sem ferramenta de
       // desenvolvedor) em vez de confiar só na verificação ao vivo em outro aparelho, que já não
-      // reproduziu o mesmo resultado antes. REMOVER depois de confirmar a causa raiz real.
+      // reproduziu o mesmo resultado antes. Causa raiz confirmada e corrigida no próprio lab-134
+      // (busca por terreno mais plano, `findFlatterUpReal` acima) — mantido de propósito como
+      // monitoramento permanente (lab-67: contador de FPS sempre visível, mesmo em produção, pedido
+      // do usuário "preciso de informações de FPS na tela em produção"), lado a lado com
+      // `buriedSchoolReport`, não um diagnóstico esquecido pra remover — o comentário antigo dizia
+      // "REMOVER depois de confirmar causa raiz", mas o valor continua renderizado no HUD de debug
+      // até hoje, ver `debugRef.current.textContent` mais abaixo.
       const buriedHouseReport = (() => {
         const rootPos = houseBase.getAbsolutePosition()
         const dir = rootPos.clone().normalize()
@@ -9064,7 +9073,7 @@ export function World3D({
       // piscina/parkour/rua) — ~37° de folga do vizinho mais próximo.
       const SHOP_ANCHOR_UP = new Vector3(0.9158133708598268, 0.24868988716485496, 0.3153398322069272).normalize()
       const shopBase = new TransformNode('shopBase', scene)
-      shopBase.position = SHOP_ANCHOR_UP.scale(terrainGroundRadial(SHOP_ANCHOR_UP, terrainHeight(SHOP_ANCHOR_UP)))
+      shopBase.position = groundSurfacePosition(SHOP_ANCHOR_UP)
       shopBase.rotationQuaternion = alignmentQuaternion(SHOP_ANCHOR_UP)
 
       const SHOP_WIDTH = 3.0
@@ -9207,8 +9216,7 @@ export function World3D({
       // pra posicionar sem flutuar/afundar.
       const TOWER_ANCHOR_UP = new Vector3(-0.6323378682909753, -0.7313537016191705, -0.2554810823782512).normalize()
       const towerBase = new TransformNode('towerBase', scene)
-      const towerGroundRadial = terrainGroundRadial(TOWER_ANCHOR_UP, terrainHeight(TOWER_ANCHOR_UP))
-      towerBase.position = TOWER_ANCHOR_UP.scale(towerGroundRadial)
+      towerBase.position = groundSurfacePosition(TOWER_ANCHOR_UP)
       towerBase.rotationQuaternion = alignmentQuaternion(TOWER_ANCHOR_UP)
 
       const TOWER_WIDTH = 3.2
@@ -9414,8 +9422,7 @@ export function World3D({
       // rua + a metade da fachada do prédio) pra ficar ao lado, não em cima.
       const QT_ANCHOR_UP = new Vector3(0.05574, 0.78801, -0.61313).normalize()
       const quizTowerBase = new TransformNode('quizTowerBase', scene)
-      const qtGroundRadial = terrainGroundRadial(QT_ANCHOR_UP, terrainHeight(QT_ANCHOR_UP))
-      quizTowerBase.position = QT_ANCHOR_UP.scale(qtGroundRadial)
+      quizTowerBase.position = groundSurfacePosition(QT_ANCHOR_UP)
       // Bug real reportado pelo usuário: "não consigo entrar no prédio, não tem porta" — a porta
       // existia (fisicamente aberta, confirmado com raycast), mas `alignmentQuaternion` sozinho
       // deixava a fachada (porta, z local negativo) virada 177,6° em relação à rua — ou seja,
@@ -9791,7 +9798,7 @@ export function World3D({
       PLATEAU_CENTERS.forEach((plateau, i) => {
         const up = plateau.dir
         const catRoot = buildGato(scene, shadowGenerator, PERCHED_CAT_COLORS[i % PERCHED_CAT_COLORS.length])
-        catRoot.position.copyFrom(up.scale(terrainGroundRadial(up, terrainHeight(up)) + 0.02))
+        catRoot.position.copyFrom(groundSurfacePosition(up, 0.02))
         catRoot.rotationQuaternion = alignmentQuaternion(up)
         perchedCats.push({ root: catRoot, up, phase: Math.random() * Math.PI * 2 })
       })
@@ -9935,7 +9942,7 @@ export function World3D({
         // segmentos) pode divergir da curva suave da bacia perto da borda do smoothstep, o que
         // bastava pra deixar a água ligeiramente alta/baixa demais em relação ao chão real ao
         // redor.
-        poolCenterPos = poolUp.scale(terrainGroundRadial(poolUp, terrainHeight(poolUp)) + 0.25)
+        poolCenterPos = groundSurfacePosition(poolUp, 0.25)
         poolForward = Vector3.Cross(poolUp, Vector3.Right()).normalize()
         poolRight = Vector3.Cross(poolUp, poolForward).normalize()
         const poolRadius = 1.1
