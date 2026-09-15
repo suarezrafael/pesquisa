@@ -12520,13 +12520,26 @@ export function World3D({
   // `inert={hudInert}` abaixo) durante a janela inteira, em vez de proteger handler por handler.
   const hudInert = !setupReady || suspendTriggers || chatOpen || rankingOpen || bagOpen || planetPickerOpen || showParentalGate
   hudInertRef.current = hudInert
+  // Achado: `chat`/`ranking` são os únicos dois gatilhos de `hudInert` que NÃO são um
+  // `.modal-overlay` de tela cheia — são uma caixinha pequena ancorada num canto (`.chat-panel`),
+  // com bastante área livre do canvas visível ao redor. Deixar o `<canvas>` inteiro `inert`
+  // enquanto qualquer um dos dois está aberto (como `hudInert` fazia) desabilitava ARRASTO DE
+  // CÂMERA/JOYSTICK na área livre inteira, não só na caixinha — muito mais amplo do que o
+  // necessário, e a causa provável do relato de "ranking bloqueia arrasto do planeta"
+  // (`docs/gameplay-market-expansion-backlog.md`, "Lab 201"). O motivo original do `inert` no
+  // canvas (Tab escapando pro canvas, comentário abaixo) já é coberto separadamente pelo focus
+  // trap de `useModalA11y` (usado por `RankingPanel`/`ChatPanel`), então excluir só esses dois
+  // gatilhos daqui não reabre aquele bug — supressão de teclado/joystick de movimento continua
+  // valendo pros dois via `hudInertRef` (usado no loop de física), só o `<canvas>` em si volta a
+  // aceitar ponteiro/arrasto fora da caixinha.
+  const canvasInert = hudInert && !chatOpen && !rankingOpen
 
   return (
     <div className="world3d-container">
       {/* lab-121: o Babylon.js torna o canvas focável (captura teclado do jogo), então ele também
           precisa de `inert` junto com o HUD — senão dá pra Tab escapar de um modal aberto direto
           pro canvas (confirmado ao vivo: sem isso, Tab dentro de um modal caía no `<canvas>`). */}
-      <canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />
+      <canvas ref={canvasRef} className="world3d-canvas" inert={canvasInert} />
       {/* Achado do review automático do Copilot: sem isto, o benchmark de GPU + o resto de setup()
           assíncrono (Havok+18 GLBs) rodavam sem feedback nenhum — o canvas já montado, mas vazio,
           podia parecer travado por vários segundos num aparelho lento. Mesma aparência do

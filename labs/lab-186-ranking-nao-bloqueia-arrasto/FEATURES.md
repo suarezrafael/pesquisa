@@ -1,8 +1,8 @@
 # Laboratório 186 — Modal de ranking não bloqueia arrasto do planeta
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-15
-Fim: -
+Fim: 2026-09-15
 Commit inicial: 768b9f3ca7669afb6c033ea3709b082176308eac
 
 ## Objetivo do laboratório
@@ -36,27 +36,38 @@ em `World3D.tsx`, ~linha 3083):
   (metade direita), sem nenhuma condição de "painel aberto". `rankingOpen` só entra em `hudInert`,
   que gate teclado/joystick de MOVIMENTO (achado dos labs 182/183 desta mesma sessão), não o giro
   de câmera por arrasto do mouse/touch.
-- **Achado**: por leitura estática, nada no código atual bloqueia arrasto na área livre do canvas
-  enquanto o ranking está aberto — o único jeito de um clique "ser sequestrado" seria ele cair
-  DENTRO da caixa de 320px do próprio painel (comportamento esperado, não um bug). Isso sugere que
-  o relato do backlog (escrito depois do lab-177) pode já estar resolvido por mudanças posteriores
-  não relacionadas (ex. a padronização de `.chat-panel` como caixa pequena, não backdrop) — mas
-  isso PRECISA ser confirmado ao vivo antes de decidir o que corrigir, já que leitura estática não
-  garante ausência de bug de verdade (ex. CSS herdado de um container pai, ou comportamento
-  diferente em mobile/touch que a leitura não captura).
+- **Achado real (encontrado só depois de olhar o `<canvas>` em si, não os handlers de câmera)**:
+  `<canvas ref={canvasRef} className="world3d-canvas" inert={hudInert} />` — o CANVAS INTEIRO
+  recebe o atributo HTML `inert` sempre que `hudInert` é `true`, e `rankingOpen`/`chatOpen` fazem
+  parte de `hudInert`. Por spec, `inert` desabilita foco E EVENTOS DE PONTEIRO no elemento inteiro
+  (não só nos filhos focáveis) — então o canvas inteiro, incluindo toda a área livre do planeta,
+  fica não-interativo pra clique/arrasto real enquanto QUALQUER gatilho de `hudInert` está ativo,
+  não só os modais de tela cheia onde isso faz sentido (não tem área livre visível atrás deles).
+  `chat`/`ranking` são os ÚNICOS dois gatilhos que NÃO são um `.modal-overlay` de tela cheia — são
+  uma caixinha pequena ancorada num canto, com bastante área livre do canvas visível ao redor.
+  Confirmado ao vivo: `canvas.inert === true` com o ranking aberto (antes da correção).
 
 ## Funcionalidades planejadas
 
-- [ ] Verificação ao vivo (Chrome real): abrir o ranking, tentar arrastar em várias áreas do canvas
-  (perto do painel, longe dele, dentro do painel) tanto com mouse (desktop) quanto simulando touch
-  se possível. Confirmar se a câmera gira normalmente fora da caixa do painel.
-- [ ] Se REPRODUZÍVEL: corrigir seguindo os critérios de aceite do backlog — com ranking aberto,
-  clicar/arrastar dentro do painel ainda rola/seleciona o ranking; clicar/arrastar na área livre
-  do planeta gira a câmera normalmente; fechar a modal por botão/atalho continua funcionando;
-  mobile não perde toque do painel nem do mundo.
-- [ ] Se NÃO reproduzível: documentar como já resolvido (achado negativo, sem código novo) e
-  registrar a leitura de código acima como a evidência, mesmo padrão já usado neste projeto pra
-  achados de auditoria sem ação necessária (ex. lab-183).
+- [x] Verificação ao vivo (Chrome real): abrir o ranking e ler `canvas.inert` direto no
+  `window.__scene`/DOM — confirmado `true` com o ranking aberto (achado real, ver acima).
+  Tentativas de medir o efeito exato num arrasto simulado via automação deram resultados
+  inconsistentes entre os dois métodos disponíveis (despachar `PointerEvent` direto no canvas via
+  JS ignora `inert` por completo, do mesmo jeito que `.click()` ignora `pointer-events: none`; já
+  o clique/arrasto sintético da ferramenta de automação girou a câmera mesmo com `inert=true`,
+  sugerindo que o mecanismo de input de baixo nível usado pela automação também não respeita
+  `inert` da mesma forma que um clique real de hardware respeitaria) — nenhum dos dois métodos
+  desta sessão consegue confirmar com certeza o comportamento de UM CLIQUE REAL de mouse/touque
+  contra um elemento `inert`. A confiança na correção vem da leitura da especificação HTML (`inert`
+  documentado como desabilitando eventos de ponteiro no elemento) e da mudança de estado
+  verificável (`canvas.inert` volta a `false` com ranking/chat abertos, depois da correção).
+- [x] **Corrigido**: `canvasInert` novo (exclui `chatOpen`/`rankingOpen` de `hudInert`) usado só no
+  atributo `inert` do `<canvas>`; `hudInert` (com os dois gatilhos) continua valendo pra tudo mais
+  (`hudInertRef`, supressão de teclado/joystick de movimento no loop de física, e o resto do HUD de
+  toque) — critérios de aceite do backlog atendidos por construção: painel continua sendo um
+  elemento DOM normal (não-inert) capturando seus próprios cliques; canvas fora do painel volta a
+  aceitar ponteiro; fechar o painel continua funcionando (não mexido); mobile não verificado (ver
+  pendência).
 
 ## Fora de escopo (explicitamente adiado)
 
