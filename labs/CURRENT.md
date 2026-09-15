@@ -1,5 +1,17 @@
 # Laboratório atual
 
+Em andamento: labs/lab-188-pet-maior-visivel-troca-clara/ — aumentar escala visual do pet
+(limite por espécie), corrigir posicionamento pra nunca ficar enterrado, revisar offset de
+acompanhamento e melhorar o feedback de troca no painel. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 203" no documento (renumerado pra lab-188 na
+sequência real do repo) — próximo item recomendado depois do lab-187, prioridade P0/P1.
+Investigação prévia já achou um candidato forte e concreto: o pet é puramente cinemático (nunca um
+corpo físico) e usa um raio FIXO (`planet.radius`) em planetas-destino — Marte tem morros com
+colisor `MESH` real que o avatar sobe fisicamente (lab-177), então o pet ficaria visualmente
+enterrado/abaixo do avatar exatamente ao subir um morro de Marte. Escala/offset/feedback do painel
+precisam de verificação ao vivo antes de decidir o que mudar. Ver
+`labs/lab-188-pet-maior-visivel-troca-clara/FEATURES.md`.
+
 Último concluído: labs/lab-187-objetos-alinhados-relevo/ — padroniza helper de posicionamento pelo
 relevo real, nenhum objeto enterrado encontrado. Origem: `docs/gameplay-market-expansion-backlog.md`,
 "Lab 202" no documento (renumerado pra lab-187 na sequência real do repo) — próximo item recomendado
