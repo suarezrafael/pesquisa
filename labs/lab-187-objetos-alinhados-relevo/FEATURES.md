@@ -88,9 +88,14 @@ decidir o que precisa de correção de verdade — mesmo padrão "investigar ant
   fórmula+margem da rua (`terrainHeight(pondUp) + 0.3`), que a verificação da rua já validou como
   seguro.
 - [x] Consolidado o padrão repetido `dir.scale(terrainGroundRadial(dir, terrainHeight(dir)) [+
-  offset])` — achado real: eram **15 call sites**, não os 4 estimados na investigação prévia (casa,
-  loja, escolinha ×30, props ×2, rochas de montanha, torre, piscina, foguete ×2, espada, arma a
-  laser, carteira, desafio em dupla, ponte, posto de combustível, placa, gato empoleirado). Extraído
+  offset])` — achado real: eram **19 call sites** (contagem verificada com
+  `grep -n "groundSurfacePosition(" World3D.tsx`, descontando a própria definição), não os 4
+  estimados na investigação prévia: casa, loja, escolinha (×30, um único call site dentro do laço),
+  props ×2 (scatter geral + deserto), rochas de montanha, torre, **torre de quiz**
+  (`quizTowerBase`/`QT_ANCHOR_UP`, achado de contagem do review — tinha ficado fora desta lista por
+  engano, embora já convertida no código desde a extração original), piscina, foguete ×2 (corpo +
+  colisor), espada, arma a laser, carteira, desafio em dupla, ponte, posto de combustível, placa,
+  gato empoleirado. Extraído
   `groundSurfacePosition(dir, extraOffset?)` logo depois de `terrainGroundRadial` (mesmo escopo de
   closure, já que depende de `havokPlugin`). Comportamento idêntico verificado ao vivo antes/depois
   (mesmo `CASA:1.10`, mesmo gap mín./máx. da rua). Casos de LEITURA de valor bruto (diagnósticos
@@ -128,6 +133,14 @@ decidir o que precisa de correção de verdade — mesmo padrão "investigar ant
   de 15 call sites — corrigido junto (achado próprio, não do Copilot, encontrado ao revisar o
   entorno do achado #1). `npx tsc -b`, `npm run test` (208/208) e `npm run build` limpos após as
   mudanças.
+- **Rodada 2** (2026-09-15): 1 achado real. A contagem "15 call sites" (escrita na rodada 1, ela
+  mesma uma correção do "6 lugares" original) ainda estava errada — contagem real, verificada com
+  `grep -n "groundSurfacePosition(" World3D.tsx` descontando a definição: **19 call sites**. A lista
+  enumerada também esquecia a torre de quiz (`quizTowerBase`/`QT_ANCHOR_UP`) — já convertida no
+  código desde a extração original, só nunca listada. Corrigido o comentário em `World3D.tsx`
+  (19 lugares, lista completa) e o `FEATURES.md` (mesma correção + nota explicando a contagem
+  verificada por `grep`, pra não repetir o mesmo erro de contar "de cabeça" uma terceira vez).
+  `npx tsc -b`, `npm run test` (208/208) e `npm run build` limpos após a mudança.
 
 ## Fora de escopo (explicitamente adiado)
 

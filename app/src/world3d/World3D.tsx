@@ -4348,11 +4348,12 @@ export function World3D({
       }
 
       // `dir.scale(terrainGroundRadial(dir, terrainHeight(dir)))` era repetido de próprio punho em
-      // 15 lugares (props, rochas de montanha, escolas, casa, loja, torre, piscina, foguete,
-      // espada, arma a laser, carteira, desafio em dupla, ponte, posto de combustível, placa, gato
-      // empoleirado) — mesmo cálculo, sem um nome único, risco real de alguém escrever só metade da
-      // combinação (ex. só `terrainHeight`, sem o raycast) num objeto novo por engano. `extraOffset`
-      // cobre os casos com uma folga a mais somada depois do raycast (piscina: 0.25).
+      // 19 lugares (props ×2, rochas de montanha, foguete ×2, espada, arma a laser, escolas, casa,
+      // loja, torre, torre de quiz, carteira, desafio em dupla, ponte, posto de combustível, placa,
+      // gato empoleirado, piscina) — mesmo cálculo, sem um nome único, risco real de alguém
+      // escrever só metade da combinação (ex. só `terrainHeight`, sem o raycast) num objeto novo
+      // por engano. `extraOffset` cobre os casos com uma folga a mais somada depois do raycast
+      // (piscina: 0.25).
       function groundSurfacePosition(dir: Vector3, extraOffset = 0): Vector3 {
         return dir.scale(terrainGroundRadial(dir, terrainHeight(dir)) + extraOffset)
       }
