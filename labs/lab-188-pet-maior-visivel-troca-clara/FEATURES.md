@@ -95,3 +95,28 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-187, prio
   si.
 - Verificação em viewport mobile/touch real — mesma limitação de ferramental já conhecida de vários
   labs anteriores desta sessão.
+
+## Review automático do Copilot (PR #68)
+
+- **Rodada 1** (2026-09-15): 2 achados reais. (1) **Performance**: `destinationPlanetGroundRadial`
+  fazia um raycast físico de verdade TODO QUADRO (usado pelo pet e por outras leituras de
+  `currentGroundBaseFn`, ex. distância ao chão do avatar) mesmo nos 5 planetas-destino que são
+  esferas uniformes — ali o resultado é sempre `planet.radius`, idêntico ao raio fixo antigo, só que
+  mais caro (raycast físico + alocação de vetores por nada). Corrigido: `currentGroundBaseFn` só usa
+  a versão com raycast quando `arrivedPlanetId === 'marte'` (único planeta-destino com relevo de
+  verdade); os outros 5 continuam com `() => planet.radius`, mesmo padrão de exceção específica de
+  Marte já usado no combate (`handleInteractPress`, "Só Marte tem inimigo"). (2) **Correção real**:
+  a primeira versão aceitava QUALQUER acerto de raycast como "a superfície certa" — mas as rochas de
+  Marte têm um colisor-esfera invisível deliberadamente aproximado
+  (`MARS_ROCK_COLLIDER_PROTRUSION`), dimensionado só pra bloquear esbarrão lateral, não pra
+  representar altura de verdade; um raio que raspasse numa rocha reportaria uma superfície
+  ligeiramente desalinhada da malha visível. Corrigido reaproveitando o mesmo padrão de
+  `terrainGroundRadial` (retry-e-pula): só aceita o acerto se o mesh for a esfera-base do planeta
+  (`secondPlanetGround`/`mercuryGround`/etc.) ou a malha real do morro
+  (`marsHillMain`/`marsHillShoulder`); qualquer outro acerto (rocha, cacto, etc.) avança o raio pra
+  além dele. **Verificado ao vivo de novo, ponta a ponta**: voou até Marte, subiu o mesmo morro de
+  antes — avatar 1.379 unidade acima do raio-base, pet 1.194 unidade acima (praticamente idêntico à
+  medição da rodada anterior, 1.38/1.18 — confirma que o filtro de mesh não quebrou o caso do morro
+  de verdade, só passou a ignorar rochas). Também removidas 3 referências a "lab-188" em comentários
+  de `app/src` (regra MUST de `docs/prompts/04-manutencao-clean-code.md`). `npx tsc -b`, `npm run
+  test` (209/209) e `npm run build` limpos após as mudanças.

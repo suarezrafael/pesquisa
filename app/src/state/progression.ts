@@ -1085,7 +1085,7 @@ export function petStageScale(stage: PetStage): number {
   return 0.55
 }
 
-// lab-188: escala final aplicada de verdade (`World3D.tsx`, `rebuildPet`) — multiplica a
+// Escala final aplicada de verdade (`World3D.tsx`, `rebuildPet`) — multiplica a
 // progressão relativa por estágio (`petStageScale`, intocada) pelo limite de cada espécie
 // (`PET_SPECIES_SCALE_MULTIPLIER`), então um filhote continua proporcionalmente menor que um
 // adulto DA MESMA espécie, mas cada espécie parte de um tamanho-base maior que o `1` original

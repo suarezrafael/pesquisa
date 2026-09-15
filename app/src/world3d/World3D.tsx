@@ -281,7 +281,7 @@ const PET_FOLLOW_LERP_SPEED = 3
 // lab-168 (bug real reportado pelo usuário: pet só perseguia o rastro EXATO de trás do jogador,
 // sem nunca se comportar como os bichinhos que já vagam pelo planeta — coelho/gato/etc., que
 // pulam e viram na direção do movimento). Alvo agora é um ponto ao LADO do jogador, não atrás.
-// lab-188: aumentado de 0.65 pra 1.0 junto com o aumento de escala do pet
+// Aumentado de 0.65 pra 1.0 junto com o aumento de escala do pet
 // (`PET_SPECIES_SCALE_MULTIPLIER`) — medido ao vivo que o cachorro (a espécie com o maior
 // multiplicador, 1.8×) tem ~0.65 de extensão lateral própria a partir do seu centro; com a
 // distância antiga (0.65, igual à extensão do próprio pet), o corpo do pet alcançava de volta até
@@ -3696,7 +3696,17 @@ export function World3D({
           const planet = DESTINATION_PLANETS[arrivedPlanetId]
           currentPlanetId = arrivedPlanetId
           currentWorldCenter = planet.center
-          currentGroundBaseFn = (localUp) => destinationPlanetGroundRadial(localUp, planet.radius)
+          // Achado do review automático do Copilot: `destinationPlanetGroundRadial` faz um raycast
+          // físico de verdade — desnecessário (e caro, chamado todo quadro pelo pet e por outros
+          // usos de `currentGroundBaseFn`, ver `groundDist`/`airHeight` mais abaixo) nos outros 5
+          // planetas-destino, que são esferas uniformes: um raycast contra uma esfera perfeita
+          // sempre volta exatamente `planet.radius`, o mesmo resultado do raio fixo, só mais caro.
+          // Só Marte tem relevo de verdade (morros com colisor `MESH`, mesmo raciocínio já usado
+          // pro combate — "Só Marte tem inimigo" — em `handleInteractPress`, mais abaixo).
+          currentGroundBaseFn =
+            arrivedPlanetId === 'marte'
+              ? (localUp) => destinationPlanetGroundRadial(localUp, planet.radius)
+              : () => planet.radius
           teleportAvatarTo(planet.center, offsetLandingUp(planet.landingUp, planet.radius, 1.8), currentGroundBaseFn)
           // lab-185: só na chegada de verdade ao destino — desistir no meio do caminho e pousar
           // de volta na origem (`!arrivedAtDestination`) não é uma "viagem completada".
@@ -4357,23 +4367,44 @@ export function World3D({
       // Marte tem morros com colisor `MESH` real (`buildMarsHill`, corrigido pro avatar SUBIR de
       // verdade neles) — o avatar (corpo físico Havok) sobe fisicamente, mas o pet (cinemático,
       // sem física, reposicionado por fórmula todo quadro) ficava preso no nível de base do
-      // planeta: visualmente enterrado dentro do morro exatamente quando o avatar sobe nele.
-      // Diferente de `terrainGroundRadial` acima (que precisa PULAR colisores decorativos pra
-      // achar o mesh do planeta principal especificamente, entre vários outros objetos no
-      // caminho), aqui o primeiro acerto contando de fora pra dentro já é a resposta certa —
-      // "o que estiver por cima" (chão, morro ou até uma rocha) é exatamente a superfície onde um
-      // objeto deveria se apoiar, sem precisar filtrar por nome. Funciona igual pros outros 5
-      // planetas-destino (esferas uniformes sem elevação) — o primeiro acerto ali é sempre a
-      // própria esfera-base, no mesmo raio que `fallbackRadius` já dava.
+      // planeta: visualmente enterrado dentro do morro exatamente quando o avatar sobe nele. Só
+      // Marte usa esta função (ver `landRocket`) — os outros 5 planetas-destino são esferas
+      // uniformes, sem custo de raycast nenhum.
+      // Achado do review automático do Copilot: a primeira versão aceitava QUALQUER acerto (chão,
+      // morro OU rocha) como "a superfície certa" — mas as rochas de Marte têm um colisor-esfera
+      // invisível deliberadamente aproximado (`MARS_ROCK_COLLIDER_PROTRUSION`, dimensionado só pra
+      // bloquear esbarrão lateral, "pequeno o bastante pra não virar plataforma" — nunca pensado
+      // pra representar altura de verdade), então um raio que raspasse numa rocha reportaria uma
+      // superfície ligeiramente acima/desalinhada da malha visível. Mesmo padrão de
+      // `terrainGroundRadial` acima: PULA qualquer acerto que não seja a esfera-base do planeta ou
+      // a malha real do morro, avançando o raio pra além dele, até achar uma superfície de verdade.
       const destinationGroundRaycastResult = new PhysicsRaycastResult()
+      const DESTINATION_GROUND_MESH_NAMES = new Set([
+        'secondPlanetGround',
+        'mercuryGround',
+        'venusGround',
+        'jupiterGround',
+        'saturnGround',
+        'uranusGround',
+        'neptuneGround',
+        'marsHillMain',
+        'marsHillShoulder',
+      ])
       function destinationPlanetGroundRadial(dir: Vector3, fallbackRadius: number): number {
         if (!havokPlugin) return fallbackRadius
-        const from = currentWorldCenter.add(dir.scale(fallbackRadius + 6))
         const to = currentWorldCenter.add(dir.scale(fallbackRadius - 2))
-        destinationGroundRaycastResult.reset()
-        havokPlugin.raycast(from, to, destinationGroundRaycastResult)
-        if (!destinationGroundRaycastResult.hasHit) return fallbackRadius
-        return destinationGroundRaycastResult.hitPointWorld.subtract(currentWorldCenter).length()
+        const rayDir = dir.clone().normalize()
+        let from = currentWorldCenter.add(dir.scale(fallbackRadius + 6))
+        for (let attempt = 0; attempt < 12; attempt++) {
+          destinationGroundRaycastResult.reset()
+          havokPlugin.raycast(from, to, destinationGroundRaycastResult)
+          if (!destinationGroundRaycastResult.hasHit) return fallbackRadius
+          if (DESTINATION_GROUND_MESH_NAMES.has(destinationGroundRaycastResult.body?.transformNode?.name ?? '')) {
+            return destinationGroundRaycastResult.hitPointWorld.subtract(currentWorldCenter).length()
+          }
+          from = destinationGroundRaycastResult.hitPointWorld.subtract(rayDir.scale(0.01))
+        }
+        return fallbackRadius
       }
 
       // `dir.scale(terrainGroundRadial(dir, terrainHeight(dir)))` era repetido de próprio punho em
