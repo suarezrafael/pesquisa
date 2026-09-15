@@ -1,17 +1,42 @@
 # Laboratório atual
 
-Em andamento: labs/lab-189-ceu-escuro-espaco-atmosfera-clara/ — céu escuro no espaço e claro na
+Último concluído: labs/lab-189-ceu-escuro-espaco-atmosfera-clara/ — céu escuro no espaço e claro na
 atmosfera. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 204" no documento (renumerado
 pra lab-189 na sequência real do repo) — próximo item recomendado depois do lab-188, prioridade
-P0/P1. Investigação prévia já confirmou o problema: `scene.clearColor`/`fogColor` são definidos UMA
-ÚNICA VEZ na criação da cena (sempre o mesmo azul-claro) e nunca mudam durante o voo — não existe
-nenhum starfield/skybox. A máquina de estado de voo já existente (`drivingRocket.progress`, com
-`ROCKET_LAUNCH_HOLD_END`/`ROCKET_LANDING_FLIP_START` já demarcando decolagem/cruzeiro/pouso) dá a
-base pra interpolar a transição. Risco real identificado: `fogDensity` já é modulado por chuva todo
-quadro, precisa compor em vez de sobrescrever. Ver
-`labs/lab-189-ceu-escuro-espaco-atmosfera-clara/FEATURES.md`.
+P0/P1. **Achado real, confirma o backlog**: `scene.clearColor`/`fogColor` eram definidos UMA ÚNICA
+VEZ na criação da cena (sempre o mesmo azul-claro) e nunca mudavam durante o voo — não existia
+nenhum starfield/skybox, então a viagem espacial mostrava exatamente o mesmo céu do chão do início
+ao fim. **Corrigido**: transição suave ancorada na máquina de estado de voo já existente
+(`drivingRocket.progress`), reaproveitando `holdFlipHoldCurve` (a mesma função já usada pro "flip"
+de pouso) duas vezes pra criar um platô de "espaço profundo" no meio do cruzeiro — `clearColor`/
+`fogColor`/`fogDensity`/`environmentIntensity`/luzes interpolam entre atmosfera e espaço, compondo
+por CIMA da modulação de fog/luz por chuva já existente (soma, não sobrescreve). Adicionado um
+starfield (cúpula `infiniteDistance`, técnica padrão de skybox, com textura de pontos pintada uma
+única vez num canvas — mesma técnica já usada nas chamas do foguete). **Verificado ao vivo, ponta a
+ponta**: voou de verdade até Marte — no meio do cruzeiro, `clearColor`/`fogDensity`/
+`environmentIntensity` bateram exatamente os valores de espaço configurados (screenshot confirma
+céu escuro com estrelas nitidamente legíveis, foguete/estação alienígena visíveis contra o fundo);
+depois de pousar, tudo de volta exatamente aos valores originais de atmosfera. **PR #69 teve 4
+rodadas de review automático do Copilot** — rodada 1 achou um problema real de performance
+(`Color4.Lerp`/`Color3.Lerp` alocavam objeto novo TODO quadro durante o voo inteiro, corrigido com
+`LerpToRef`, mesmo padrão de evitar lixo de GC já usado no acompanhamento do pet); rodada 2 repetiu
+o mesmo achado citando código já corrigido (stale, sem ação); rodada 3 achou dois reais — o
+starfield usava só `visibility = 0` (não remove a malha da lista de render do Babylon, ficava
+desenhada todo quadro mesmo fora do voo — a esmagadora maioria do tempo de jogo), corrigido com
+`setEnabled`, e um `albedoColor` preto explícito adicionado por precaução (defensivo, a verificação
+ao vivo já mostrava o resultado correto antes disso); rodada 4 veio limpa, só repetindo pendências
+já disclosed (viagem de volta/mobile não verificadas ao vivo separadamente). `npx tsc -b` limpo;
+testes: app 209/209 (inalterado, mudança é visual/engine puro); `npm run build` sem regressão de
+bundle. Pendências disclosed: viagem de VOLTA (planeta-destino → principal) não verificada
+separadamente (mesmo bloco de código, sem branch por direção, funciona por construção);
+verificação mobile/touch não feita. Ver `labs/lab-189-ceu-escuro-espaco-atmosfera-clara/FEATURES.md`
+pro histórico completo rodada a rodada. **Merge confirmado**: PR #69 mesclada em `main` no commit
+`a5e03bc` (2026-09-15, squash). CI de `main` verde nos 3 workflows; deploy de produção confirmado:
+Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-188-pet-maior-visivel-troca-clara/ — pet maior, visível e com troca
+Antes desse: labs/lab-188-pet-maior-visivel-troca-clara/ — pet maior, visível e com troca
 clara. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 203" no documento (renumerado pra
 lab-188 na sequência real do repo) — próximo item recomendado depois do lab-187, prioridade P0/P1.
 **Achado real, concreto**: o pet é puramente CINEMÁTICO (reposicionado por fórmula todo quadro,
