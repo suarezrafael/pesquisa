@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Em andamento: labs/lab-192-preview-3d-pets/ — preview 3D de verdade na lojinha de pets. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 206 - Pets premium de qualidade, roupas e
+máscaras" — próximo item recomendado depois do lab-191. Esse item do backlog embute 3 pedaços
+independentes (catálogo mais rico, cosméticos de pet, preview claro) — este lab escolhe só o
+preview como fatia inicial (pré-requisito real dos outros dois, que ficam pra labs futuros). Ver
+`labs/lab-192-preview-3d-pets/FEATURES.md` pro objetivo e investigação prévia (`buildGato`/
+`buildCachorro` já são funções puras, extração pro mesmo padrão de `studentFigure.ts` é direta).
+
 Último concluído: labs/lab-191-troca-segura-nickname/ — troca segura de nickname depois do
 onboarding. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 207" no documento — próximo
 item recomendado depois do lab-190. **Achado real, confirma o backlog**: o gerador/filtro seguro
