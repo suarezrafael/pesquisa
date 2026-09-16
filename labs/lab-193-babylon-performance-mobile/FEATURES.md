@@ -1,6 +1,6 @@
 # Laboratório 193 — Auditoria de performance Babylon.js em mobile
 
-Status: em andamento (PR convergida — rodada 2 do review pulada por decisão do usuário, aguardando confirmação de merge)
+Status: em andamento (PR #73 já mesclada; rodada 2 do review chegou após o merge com achados reais — corrigidos numa PR de acompanhamento)
 Início: 2026-09-16
 Fim: -
 Commit inicial: 6993f0c08c79b0f0587e2f085586af690b582eaf
@@ -59,10 +59,14 @@ anterior, dentro do esperado):
 - [x] Nova função `window.__perf.sample(durationMs)` — coleta amostras quadro a quadro por N
   milissegundos (padrão 15000) e devolve um JSON com médias e percentis (p5/p1) de FPS/frame time,
   pronto pra colar num relatório, sem precisar do DevTools Performance tab.
-- [x] Documentar baseline medido ao vivo (parcial — ver "Verificação ao vivo" e a limitação de
-  ferramental abaixo; não foi possível cobrir as 5 cenas planejadas com números confiáveis).
-- [x] Classificar, com base nos contadores reais coletados, onde a arquitetura atual concentra
-  trabalho por quadro (ver "Achados ao vivo").
+- [ ] Documentar baseline medido ao vivo — **não concluído**: a limitação de ferramental (ver
+  "Verificação ao vivo" abaixo) impediu cobrir as 5 cenas planejadas com números confiáveis;
+  baseline real contra um Android físico fica pendente pra quando houver aparelho disponível.
+- [ ] Classificar, com base nos contadores reais, se o gargalo dominante em cada cena é CPU/draw
+  calls/GPU/física/GUI — **não concluído pelo mesmo motivo do item anterior** (sem baseline
+  confiável por cena, não há dado pra classificar gargalo nenhum; ver "Achados ao vivo" pros bugs
+  reais encontrados testando a instrumentação, que é uma coisa diferente de uma classificação de
+  gargalo por cena).
 - [x] Aplicar a otimização pequena e seguramente justificável por leitura de código completa
   (`scene.skipPointerMovePicking`); as demais candidatas do documento urgente foram avaliadas e
   **não aplicadas nesta sessão** por falta de dado real que as justifique (ver "Otimizações
@@ -232,7 +236,82 @@ do padrão desta sessão (2-10 min nas labs anteriores) e sem sinal de erro/time
 segunda tentativa de solicitação foi deduplicada pelo GitHub (não gerou um novo evento
 `review_requested` na timeline da PR, confirmado via API). Consultado o usuário via
 `AskUserQuestion`; decisão: seguir pro merge sem esperar a rodada 2, tratando a rodada 1 (que já
-achou e corrigiu 3 bugs reais na instrumentação nova) como suficiente.
+achou e corrigiu 3 bugs reais na instrumentação nova) como suficiente. **A rodada 2 na verdade
+terminou 7 minutos antes do merge** (`13:13:07`, merge em `13:20:58`) — só não apareceu a tempo na
+consulta feita via `gh pr view --json reviews` (propagação da API, mesmo comando que segundos depois
+já mostrava as 2 rodadas). Achados corrigidos numa PR de acompanhamento pós-merge, ver seção
+seguinte.
+
+## Achados pós-merge (rodada 2, chegou depois do merge de PR #73)
+
+3 achados reais + 1 achado de documentação, todos corrigidos; 1 achado investigado e rejeitado como
+falso positivo:
+
+1. **Percentil com off-by-one em tamanhos de amostra comuns (real, o mais sério dos 3)**: a fórmula
+   original (`floor(n * p)` como índice 0-based) errava o rank — com 20 quadros,
+   `floor(20 * 0.95) = 19` cai no ÚLTIMO elemento (índice 19 de um array de 20, ou seja, o rank
+   100%), não no p95. Corrigido com nearest-rank padrão (`rank = ceil(n * p)`, 1-indexado,
+   `sorted[rank - 1]`). Verificado isoladamente: `percentileAt([1..20], 0.95)` agora devolve `19`
+   (não `20`).
+2. **`engine.getFps()` não é uma leitura por quadro (real)**: o próprio arquivo já documentava
+   (comentário do benchmark de GPU, linhas ~2239-2245, de um lab anterior) que esse é um contador
+   interno do Babylon atualizado periodicamente, não a cada `onAfterRender` — empilhar o mesmo valor
+   repetido várias vezes numa janela mascara exatamente a travadela que p1/p5 deveriam capturar.
+   Corrigido derivando o FPS de cada amostra a partir de `1000 / frameTimeCounter.current` (esse sim
+   um valor genuinamente por quadro — confirmado lendo o código-fonte real do
+   `@babylonjs/core` instalado: `beginMonitoring()`/`endMonitoring()` do `frameTimeCounter` rodam em
+   `onBeforeAnimationsObservable`/`onAfterRenderObservable`, um par por quadro). Verificado ao vivo
+   que `fps.avg` bate matematicamente com `1000 / frameTimeMs.avg` na mesma janela.
+3. **`window.__perf` não era limpo no desmonte do componente (real, mas de baixo impacto prático)**:
+   depois de desmontar a cena (fechar/trocar de tela), o global continuava vivo referenciando
+   `scene`/`engine` já destruídos; chamar `sample()` nesse intervalo (antes da próxima montagem
+   terminar seu próprio `setup()`, que demora segundos por causa dos GLBs/Havok) devolvia um
+   relatório vazio sem aviso. Corrigido com `(scene as any).__cleanupPerf`, chamado no `teardown`,
+   que só apaga `window.__perf` se ele ainda for o MESMO objeto publicado por esta instância — evita
+   que o desmonte de um mount velho apague o `__perf` de um mount mais novo que já tenha terminado
+   primeiro (mesma classe de corrida do `StrictMode` da rodada 1). Verificado por rastreamento do
+   código (não há um jeito prático de forçar essa corrida específica via automação de navegador sem
+   StrictMode real).
+4. **Checklist marcando `[x]` num item que o próprio texto admite incompleto (documentação)**: os 2
+   itens de "Documentar baseline"/"Classificar gargalo por cena" estavam marcados concluídos citando
+   a limitação de ferramental como se fosse só uma nota de rodapé — corrigido pra `[ ]` com o texto
+   deixando claro que não foram cumpridos, evitando um checklist mentiroso.
+5. **`EngineInstrumentation`/`SceneInstrumentation` não são descartados explicitamente no
+   `teardown` — investigado e REJEITADO como falso positivo**: confirmado lendo o código-fonte real
+   do `@babylonjs/core` instalado que `scene.dispose()` já limpa TODOS os observables que
+   `SceneInstrumentation` registra (`onAfterRenderObservable`, `onBeforeActiveMeshesEvaluationObservable`,
+   etc. — `scene.pure.js` linhas ~4762-4780) e `engine.dispose()` já limpa
+   `onBeginFrameObservable`/`onEndFrameObservable` (`abstractEngine.pure.js` linhas 1580-1581), que é
+   exatamente onde `EngineInstrumentation.captureGPUFrameTime` se registra — mesma classe de
+   verificação (código-fonte real, não só documentação) já usada no lab-192 pra um achado parecido.
+   Sem chamada a `.dispose()` explícita, os objetos `SceneInstrumentation`/`EngineInstrumentation`
+   em si só viram lixo de GC comum (sem listener pendurado, já que os observables donos foram
+   limpos) — não uma "instrumentação acumulando entre remounts" como a rodada 2 descreveu.
+
+`npx tsc -b` limpo; testes: app 213/213 (inalterado); `npm run build` sem regressão. Verificado ao
+vivo via Chrome real (nova rodada de captura de `sample()`, incluindo o cálculo de percentil
+isolado). PR de acompanhamento (#74) aberta separada da PR #73 (já mesclada), seguindo o mesmo ciclo
+de review/CI/confirmação de merge.
+
+**Rodada 3 (na PR #74, achou 2 problemas reais e mais fundamentais na própria correção da rodada
+2)**: a correção anterior trocou `engine.getFps()` (contador periódico) por
+`1000 / frameTimeCounter.current` — resolvia a "leitura repetida", mas `frameTimeCounter` mede a
+duração do TRABALHO de Babylon por quadro (bracket entre `onBeforeAnimations`/`onAfterRender`), não
+o intervalo de relógio real entre quadros; um quadro que renderiza em 4ms dentro de um orçamento de
+16.67ms (60 FPS reais) reportaria 250 FPS, não 60 — errado sempre que o motor não está no limite da
+GPU/CPU (a maioria do tempo de jogo real). Corrigido usando `engine.getDeltaTime()`
+(`instantaneousFrameTime` do `PerformanceMonitor` interno, atualizado a cada `beginFrame()` de
+verdade — confirmado no código-fonte do `@babylonjs/core`: `_measureFps()`, chamado de dentro de
+`beginFrame()`, grava tanto o FPS médio quanto o delta instantâneo na MESMA chamada, mas só o delta
+é por quadro de verdade). Um segundo achado, mais sutil: mesmo com o delta certo, calcular
+`fps.avg` como a MÉDIA das razões `1000/delta[i]` de cada amostra superestima o FPS real quando o
+tempo por quadro varia (dois quadros de 10ms+20ms: média das razões = (100+50)/2 = 75 FPS, mas o FPS
+real da janela é 2 quadros / 0.030s = 66.67) — o mesmo erro clássico de tirar média aritmética de
+taxas em vez de agregar primeiro e converter depois. Corrigido agregando (`mean`/`percentileAt`)
+sobre os DELTAS em ms e só convertendo em FPS no fim (`msToFps`), com `min`/`p5`/`p1` de FPS
+mapeados pro `max`/95º/99º percentil de DELTA (quadro mais longo = FPS mais baixo), não o mesmo
+percentil aplicado direto num array já convertido. Verificado isoladamente contra o exemplo exato do
+review (`mean([10, 20]) → msToFps → 66.67`, batendo com `2 / 0.030`) e ao vivo via `sample()` real.
 
 ## Lista priorizada de otimizações maiores (labs futuros, não implementadas aqui)
 

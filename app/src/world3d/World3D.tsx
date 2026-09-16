@@ -12304,7 +12304,7 @@ export function World3D({
           return Promise.reject(new Error('Já existe uma amostragem __perf.sample em andamento.'))
         }
         const startedAt = performance.now()
-        const fpsSamples: number[] = []
+        const deltaTimeSamples: number[] = []
         const frameTimeSamples: number[] = []
         const drawCallsSamples: number[] = []
         const activeMeshesSamples: number[] = []
@@ -12317,8 +12317,22 @@ export function World3D({
         const gpuFrameTimeSamples: number[] = []
 
         const observer = scene.onAfterRenderObservable.add(() => {
-          fpsSamples.push(engine.getFps())
-          frameTimeSamples.push(instrumentation.frameTimeCounter.current)
+          // Achado do review automático do Copilot (2 rodadas): `engine.getFps()` é o mesmo
+          // contador interno atualizado periodicamente (não a cada quadro) já documentado no
+          // benchmark de GPU logo acima no arquivo — descartado. A 1ª tentativa de correção usava
+          // `frameTimeCounter` (duração do TRABALHO de Babylon por quadro, entre
+          // `onBeforeAnimations`/`onAfterRender`), mas isso não é o intervalo de relógio real entre
+          // quadros — um quadro que renderiza em 4ms dentro de um orçamento de 16.67ms (60 FPS)
+          // reportaria 250 FPS, não 60. `engine.getDeltaTime()` (`instantaneousFrameTime` do
+          // `PerformanceMonitor`, atualizado a cada `beginFrame()` de verdade — confirmado no
+          // código-fonte do `@babylonjs/core`) é o intervalo de relógio real por quadro, o valor
+          // certo pra derivar FPS. Guardado em ms bruto (não convertido em FPS ainda) — a MÉDIA de
+          // FPS precisa ser `1000 / média(delta)`, não a média de `1000/delta` de cada amostra (que
+          // superestima: duas amostras de 10ms+20ms dão média de delta 15ms → 66.67 FPS de verdade,
+          // mas a média das razões dá (100+50)/2 = 75 FPS, errado).
+          deltaTimeSamples.push(engine.getDeltaTime())
+          const frameTimeMs = instrumentation.frameTimeCounter.current
+          frameTimeSamples.push(frameTimeMs)
           drawCallsSamples.push(instrumentation.drawCallsCounter.current)
           activeMeshesSamples.push(scene.getActiveMeshes().length)
           activeMeshesEvalSamples.push(instrumentation.activeMeshesEvaluationTimeCounter.current)
@@ -12344,22 +12358,22 @@ export function World3D({
           const values = finite(arr)
           return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0
         }
-        const minOrZero = (arr: number[]) => {
-          const values = finite(arr)
-          return values.length ? Math.min(...values) : 0
-        }
-        // Percentil genérico sobre os valores finitos ordenados — usado tanto pro "pior" 1%/5% de
-        // FPS (p baixo, ponta de baixo do array) quanto pro "pior" 5% de frame time (p=0.95, ponta
-        // de cima) — é o mesmo cálculo, só muda qual ponta interessa. Achado do review automático
-        // do Copilot: sem amostra finita nenhuma (janela inteira travada em segundo plano, caso já
+        // Percentil genérico sobre os valores finitos ordenados — usado pro "pior" 5%/1% de DELTA
+        // (p=0.95/0.99, ponta de cima — quadro mais longo = FPS mais baixo, convertido só depois em
+        // `msToFps`) e pro "pior" 5% de frame time (mesmo p=0.95). Achado do review automático do
+        // Copilot: sem amostra finita nenhuma (janela inteira travada em segundo plano, caso já
         // disclosed neste lab), devolvia `Infinity` — que vira `null` ao serializar em JSON, em vez
         // de um relatório ainda utilizável — por isso o fallback explícito em 0, igual `mean`.
+        // Achado do review automático do Copilot: a fórmula anterior (`floor(n * p)`) errava o
+        // rank em tamanhos de amostra comuns — com 20 quadros, `floor(20 * 0.95) = 19` cai no
+        // ÚLTIMO elemento (0-indexado, rank 100%), não no p95; nearest-rank
+        // (`ceil(n * p)`, 1-indexado) é o método padrão e não tem esse desvio.
         const percentileAt = (arr: number[], p: number) => {
           const values = finite(arr)
           if (!values.length) return 0
           const sorted = [...values].sort((a, b) => a - b)
-          const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * p)))
-          return sorted[idx]
+          const rank = Math.min(sorted.length, Math.max(1, Math.ceil(sorted.length * p)))
+          return sorted[rank - 1]
         }
 
         return new Promise((resolve) => {
@@ -12374,9 +12388,17 @@ export function World3D({
             scene.onAfterRenderObservable.remove(observer)
             window.clearTimeout(timeoutId)
             cancelActiveSample = null
+            // FPS derivado do DELTA agregado, não da média das razões individuais — achado do
+            // review automático do Copilot: `mean(1000/delta[i])` superestima o FPS médio quando o
+            // tempo por quadro varia (dois quadros de 10ms+20ms: a média das razões dá (100+50)/2 =
+            // 75 FPS, mas o FPS real da janela é 2 quadros / 0.030s = 66.67). Converte só depois de
+            // agregar o delta em ms — `min`/`p5`/`p1` de FPS (pior caso) correspondem ao maior/95º/
+            // 99º percentil de DELTA (quadro mais longo = FPS mais baixo), não ao mesmo percentil
+            // aplicado direto num array já convertido pra FPS.
+            const msToFps = (ms: number) => (ms > 0 ? 1000 / ms : 0)
             resolve({
               durationMs: round(performance.now() - startedAt),
-              sampleCount: fpsSamples.length,
+              sampleCount: deltaTimeSamples.length,
               hardwareScalingLevel: engine.getHardwareScalingLevel(),
               gpuTier,
               isLowEndDevice,
@@ -12384,10 +12406,10 @@ export function World3D({
               quality: currentQualityLabel(),
               totalMeshes: scene.meshes.length,
               fps: {
-                avg: round(mean(fpsSamples)),
-                min: round(minOrZero(fpsSamples)),
-                p5: round(percentileAt(fpsSamples, 0.05)),
-                p1: round(percentileAt(fpsSamples, 0.01)),
+                avg: round(msToFps(mean(deltaTimeSamples))),
+                min: round(msToFps(Math.max(...finite(deltaTimeSamples), 0))),
+                p5: round(msToFps(percentileAt(deltaTimeSamples, 0.95))),
+                p1: round(msToFps(percentileAt(deltaTimeSamples, 0.99))),
               },
               frameTimeMs: {
                 avg: round(mean(frameTimeSamples)),
@@ -12417,7 +12439,15 @@ export function World3D({
       // mount real (GLBs vêm do cache do navegador na 2ª vez, ordem de conclusão não é garantida) —
       // os números liam sempre zero/parado, confundindo qualquer medição manual.
       if (disposed) return
-      ;(window as any).__perf = {
+      // Achado do review automático do Copilot: nada limpava `window.__perf` no desmonte — depois
+      // de fechar/trocar de tela, o global continuava vivo apontando pra `scene`/`engine`
+      // desmontados, e `sample()` chamado nesse intervalo (antes da próxima montagem terminar seu
+      // próprio `setup()`, que demora segundos) devolvia um relatório vazio/morto sem aviso.
+      // `__cleanupPerf` só apaga se `window.__perf` ainda for O MESMO objeto publicado por ESTA
+      // instância — evita que o desmonte de um mount velho apague o `__perf` de um mount mais novo
+      // que talvez já tenha terminado seu próprio `setup()` primeiro (mesma classe de corrida do
+      // `StrictMode` já tratada na guarda `if (disposed) return` acima).
+      const perfHandle = {
         fps: () => Math.round(engine.getFps()),
         drawCalls: () => instrumentation.drawCallsCounter.current,
         physicsTimeMs: () => instrumentation.physicsTimeCounter.current.toFixed(2),
@@ -12436,6 +12466,10 @@ export function World3D({
         isSmallScreen: () => isSmallScreen,
         quality: () => currentQualityLabel(),
         sample,
+      }
+      ;(window as any).__perf = perfHandle
+      ;(scene as any).__cleanupPerf = () => {
+        if ((window as any).__perf === perfHandle) delete (window as any).__perf
       }
     }
 
@@ -12642,6 +12676,7 @@ export function World3D({
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
       ;(scene as any).__cancelPerfSample?.()
+      ;(scene as any).__cleanupPerf?.()
       sceneRef.current = null
       scene.dispose()
       engine.dispose()
