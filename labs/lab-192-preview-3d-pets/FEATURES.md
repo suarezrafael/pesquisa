@@ -126,6 +126,36 @@ Perfil de teste existente (`92b92cd2-...`, já tinha "Gato Laranja" adotado e eq
 **Pendência disclosed**: viewport mobile/touch real não verificado (mesma limitação de ferramental
 já conhecida de vários labs anteriores desta sessão).
 
+## Review automático do Copilot (PR #72)
+
+**Rodada 1** — 1 comentário gerado (falso positivo, investigado e descartado) + 1 suprimido (real,
+corrigido):
+
+- **Falso positivo, investigado e descartado**: o comentário gerado pedia pra descartar
+  explicitamente `scene`/`shadowGenerator` na limpeza de desmontagem (além de `engine.dispose()`).
+  Verificado contra o CÓDIGO-FONTE de verdade do `@babylonjs/core` instalado (não só a
+  documentação): `AbstractEngine.dispose()` (`abstractEngine.pure.js`) já itera `this.scenes` e
+  chama `scene.dispose()` em cada uma; `Scene.dispose()` (`scene.pure.js`) já chama
+  `_disposeList(this.lights)`, que dispara `Light.dispose()`; `Light.dispose()`
+  (`Lights/light.js`) já itera `this._shadowGenerators` e chama `shadowGenerator.dispose()` em
+  cada um. A cadeia inteira (engine → cena → luz → shadow generator) já é coberta só por
+  `engine.dispose()` — o MESMO padrão já usado por `AvatarPreview3D.tsx` (nunca descarta
+  `scene`/`shadowGenerator` separadamente também, e está em produção sem esse problema há vários
+  labs). Nenhuma mudança de código.
+- **Real, grave, corrigido (achado suprimido)**: a troca de pet DENTRO de uma mesma sessão do
+  preview (não a desmontagem) chamava só `petRootRef.current?.dispose(false, true)` — o MESMO
+  vazamento já documentado (e corrigido) pro preview de avatar no lab-176 (`disposeStudentFigure`):
+  `dispose(false, true)` libera material/textura recursivamente, mas NUNCA remove as malhas da
+  `renderList` do `ShadowGenerator`. Achado irônico: meu próprio comentário no código já CITAVA
+  essa lição do lab-176 — só não implementei de fato a correção. Corrigido com uma função nova
+  `disposePetFigure` (`petFigure.ts`) que remove cada malha filha do `ShadowGenerator`
+  (`removeShadowCaster`) antes de descartar a raiz — mesmo espírito de `disposeStudentFigure`,
+  reaproveitável por qualquer consumidor futuro de `buildGato`/`buildCachorro` (inclusive um
+  cosmético de pet, se um lab futuro precisar reconstruir a figura com frequência). Verificado ao
+  vivo, medindo `shadowGenerator.getShadowMap().renderList.length` antes/depois de 3 trocas de pet
+  em sequência (gato 5 malhas → gato 5 → cachorro 6 → cachorro 6): a contagem bate EXATAMENTE com o
+  pet atual a cada troca, nunca acumula a do anterior.
+
 ## Fora de escopo (explicitamente adiado — cada um do tamanho de um lab futuro)
 
 - Cosméticos de pet (roupa, coleira, chapéu, capa, máscara) — pedaço (b) do backlog, precisa do

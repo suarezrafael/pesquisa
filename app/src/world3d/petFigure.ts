@@ -94,3 +94,16 @@ export function buildCachorro(scene: Scene, shadowGenerator: ShadowGenerator, fu
 
   return root
 }
+
+// `buildGato`/`buildCachorro` registram toda malha filha no `ShadowGenerator` via
+// `addShadowCaster` — `root.dispose(false, true)` sozinho libera material/textura recursivamente,
+// mas NUNCA remove essas malhas da `renderList` do gerador (mesmo achado do lab-176 pro boneco,
+// `disposeStudentFigure`). Quem reconstrói o pet repetidamente no mesmo `ShadowGenerator` (o
+// preview da lojinha, que troca de pet a cada seleção) precisa chamar isto ANTES de descartar a
+// raiz antiga, senão a render list acumula referências mortas a cada troca.
+export function disposePetFigure(root: TransformNode, shadowGenerator: ShadowGenerator): void {
+  for (const mesh of root.getChildMeshes()) {
+    shadowGenerator.removeShadowCaster(mesh)
+  }
+  root.dispose(false, true)
+}

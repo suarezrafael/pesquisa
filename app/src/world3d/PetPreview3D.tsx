@@ -16,7 +16,7 @@ import {
 } from '@babylonjs/core'
 import { findPetById } from '../data/pets'
 import { petVisualScale, type PetStage } from '../state/progression'
-import { buildCachorro, buildGato } from './petFigure'
+import { buildCachorro, buildGato, disposePetFigure } from './petFigure'
 
 interface PetPreview3DProps {
   petId: string
@@ -124,11 +124,7 @@ export function PetPreview3D({ petId, stage }: PetPreview3DProps) {
     const shadowGenerator = shadowGeneratorRef.current
     if (!scene || !shadowGenerator) return
 
-    // `dispose(false, true)` libera material/textura recursivamente E remove as malhas da
-    // `renderList` do `ShadowGenerator` deste preview — sem o segundo argumento, referências
-    // mortas se acumulariam a cada troca de pet (mesma classe de vazamento já corrigida pro
-    // preview de avatar no lab-176, ver `disposeStudentFigure`).
-    petRootRef.current?.dispose(false, true)
+    if (petRootRef.current) disposePetFigure(petRootRef.current, shadowGenerator)
     petRootRef.current = null
 
     const pet = findPetById(petId)
