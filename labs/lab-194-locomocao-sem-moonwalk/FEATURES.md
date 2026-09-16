@@ -1,6 +1,6 @@
 # Laboratório 194 — Locomoção sem moonwalk
 
-Status: em andamento (PR aberta, aguardando review automático do Copilot)
+Status: em andamento (PR convergida — review automático travou/deu erro de ferramenta, seguindo sem esperar por decisão do usuário)
 Início: 2026-09-16
 Fim: -
 Commit inicial: 6d2bb02a26c97c364dc17348399c04f83f17a2d5
@@ -121,6 +121,14 @@ de comando, dá `0.5`; com a velocidade livre real medida ao vivo (~7.5, igual a
 do próprio Havok, não uma hipótese. Mesma classe de limitação de ferramental já disclosed em vários
 labs anteriores desta sessão (verificação em dispositivo/cenário real específico não reproduzível
 via automação de navegador).
+
+## Review automático do Copilot
+
+Rodada 1 voltou com erro de ferramenta ("Copilot encountered an error and was unable to review this
+pull request"), sem nenhum achado — falha técnica, não um veredito sobre o código. Re-solicitada;
+a 2ª tentativa ficou pendente por mais de 20 minutos sem concluir (mesmo padrão de atraso já
+disclosed nos labs 193/194 anteriores desta sessão). Consultado o usuário via `AskUserQuestion`:
+seguir pro merge sem esperar mais, dado o CI verde e a verificação ao vivo já feita.
 
 ## Fora de escopo (explicitamente adiado)
 
