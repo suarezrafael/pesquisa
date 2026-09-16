@@ -8,6 +8,7 @@ import {
   DynamicTexture,
   Effect,
   Engine,
+  EngineInstrumentation,
   GlowLayer,
   HavokPlugin,
   HDRCubeTexture,
@@ -2942,6 +2943,12 @@ export function World3D({
       ;(window as any).__scene = scene
       ;(window as any).__engine = engine
     }
+    // Nenhum código deste jogo usa `scene.pick`/`onPointerObservable`/hover do Babylon —
+    // interação usa raycast físico direto (`havokPlugin.raycast`) e arrasto de câmera lê eventos de
+    // ponteiro crus do canvas (confirmado por busca no arquivo inteiro, zero ocorrências de
+    // qualquer um dos três). Sem essa flag, o Babylon roda uma varredura de picking na cena INTEIRA
+    // a cada `pointermove` (mouse/touch) por padrão, sempre à toa aqui.
+    scene.skipPointerMovePicking = true
     scene.clearColor = SKY_COLOR_ATMOSPHERE.clone()
     scene.fogMode = Scene.FOGMODE_EXP2
     scene.fogDensity = BASE_FOG_DENSITY
@@ -12267,6 +12274,149 @@ export function World3D({
       const instrumentation = new SceneInstrumentation(scene)
       instrumentation.capturePhysicsTime = true
       instrumentation.captureFrameTime = true
+      instrumentation.captureRenderTime = true
+      instrumentation.captureActiveMeshesEvaluationTime = true
+      instrumentation.captureParticlesRenderTime = true
+      instrumentation.captureRenderTargetsRenderTime = true
+      instrumentation.captureCameraRenderTime = true
+      const engineInstrumentation = new EngineInstrumentation(engine)
+      // No-op em navegadores sem a extensão de GPU timer query (ex.: a maioria dos Android em
+      // WebGL1) — `gpuFrameTimeCounter` simplesmente fica em 0, sem lançar erro.
+      engineInstrumentation.captureGPUFrameTime = true
+
+      // Achado do review automático do Copilot: a auto-sintonia de resolução (mais abaixo) muda
+      // `hardwareScalingLevel` pra QUALQUER classificação de `gpuTier`, não só "fraco" — um
+      // aparelho "forte" reduzido a 1.6 pelo auto-tune continuava relatando "alta" aqui, porque o
+      // rótulo olhava só a classificação inicial do benchmark, nunca o estado atual da escala.
+      const currentQualityLabel = () => {
+        const scaling = engine.getHardwareScalingLevel()
+        if (scaling > 1) return `reduzida (auto-tune, escala ${scaling.toFixed(2)})`
+        return isLowEndDevice ? 'baixa (aparelho fraco)' : 'alta'
+      }
+
+      // `sample(durationMs)` junta leituras quadro a quadro por uma janela (padrão 15s) e devolve
+      // médias/percentis prontos pra colar num relatório — sem isso, cada número do
+      // window.__perf.* acima só dá o valor DE UM INSTANTE, obrigando a ficar lendo o console
+      // repetidamente e anotando à mão pra ter uma noção de tendência/pior caso.
+      let cancelActiveSample: (() => void) | null = null
+      const sample = (durationMs = 15000): Promise<Record<string, unknown>> => {
+        if (cancelActiveSample) {
+          return Promise.reject(new Error('Já existe uma amostragem __perf.sample em andamento.'))
+        }
+        const startedAt = performance.now()
+        const fpsSamples: number[] = []
+        const frameTimeSamples: number[] = []
+        const drawCallsSamples: number[] = []
+        const activeMeshesSamples: number[] = []
+        const activeMeshesEvalSamples: number[] = []
+        const renderTimeSamples: number[] = []
+        const cameraRenderTimeSamples: number[] = []
+        const particlesRenderTimeSamples: number[] = []
+        const renderTargetsRenderTimeSamples: number[] = []
+        const physicsTimeSamples: number[] = []
+        const gpuFrameTimeSamples: number[] = []
+
+        const observer = scene.onAfterRenderObservable.add(() => {
+          fpsSamples.push(engine.getFps())
+          frameTimeSamples.push(instrumentation.frameTimeCounter.current)
+          drawCallsSamples.push(instrumentation.drawCallsCounter.current)
+          activeMeshesSamples.push(scene.getActiveMeshes().length)
+          activeMeshesEvalSamples.push(instrumentation.activeMeshesEvaluationTimeCounter.current)
+          renderTimeSamples.push(instrumentation.renderTimeCounter.current)
+          cameraRenderTimeSamples.push(instrumentation.cameraRenderTimeCounter.current)
+          particlesRenderTimeSamples.push(instrumentation.particlesRenderTimeCounter.current)
+          renderTargetsRenderTimeSamples.push(instrumentation.renderTargetsRenderTimeCounter.current)
+          physicsTimeSamples.push(instrumentation.physicsTimeCounter.current)
+          // A extensão de timer query da GPU devolve nanossegundos (WebGL EXT_disjoint_timer_query
+          // e o timestamp-query do WebGPU), diferente de todos os outros contadores acima (que já
+          // vêm em ms via `Tools.StartPerformanceCounter`/`performance.now()`) — sem essa conversão
+          // o valor lido era ~10 milhões "ms" (na real, ~10ms reais).
+          gpuFrameTimeSamples.push(engineInstrumentation.gpuFrameTimeCounter.current / 1e6)
+        })
+
+        const round = (n: number) => Math.round(n * 100) / 100
+        // `engine.getFps()` devolve Infinity quando o delta do quadro é 0 (achado ao vivo: um
+        // quadro assim bastava pra virar NaN a média inteira, sem quebrar min/p1/p5 — que olham só
+        // a ponta baixa do array ordenado, nunca a Infinity da ponta alta) — filtrado antes de
+        // qualquer estatística, não só na média.
+        const finite = (arr: number[]) => arr.filter((n) => Number.isFinite(n))
+        const mean = (arr: number[]) => {
+          const values = finite(arr)
+          return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0
+        }
+        const minOrZero = (arr: number[]) => {
+          const values = finite(arr)
+          return values.length ? Math.min(...values) : 0
+        }
+        // Percentil genérico sobre os valores finitos ordenados — usado tanto pro "pior" 1%/5% de
+        // FPS (p baixo, ponta de baixo do array) quanto pro "pior" 5% de frame time (p=0.95, ponta
+        // de cima) — é o mesmo cálculo, só muda qual ponta interessa. Achado do review automático
+        // do Copilot: sem amostra finita nenhuma (janela inteira travada em segundo plano, caso já
+        // disclosed neste lab), devolvia `Infinity` — que vira `null` ao serializar em JSON, em vez
+        // de um relatório ainda utilizável — por isso o fallback explícito em 0, igual `mean`.
+        const percentileAt = (arr: number[], p: number) => {
+          const values = finite(arr)
+          if (!values.length) return 0
+          const sorted = [...values].sort((a, b) => a - b)
+          const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * p)))
+          return sorted[idx]
+        }
+
+        return new Promise((resolve) => {
+          // Achado do review automático do Copilot: sem essa cancelação, desmontar o componente
+          // (fechar a aba, trocar de planeta) no meio de uma amostragem deixava o `setTimeout`
+          // vivo — ele disparava depois, contra uma cena já destruída, e resolvia um relatório
+          // alegando ter coberto a janela inteira quando só tinha quadros de antes do desmonte.
+          // `finish()` agora é compartilhada entre o caminho normal (timeout) e o cancelamento
+          // (`teardown`, via `(scene as any).__cancelPerfSample`) e reporta a duração REAL decorrida
+          // em vez do `durationMs` pedido quando termina cedo.
+          const finish = () => {
+            scene.onAfterRenderObservable.remove(observer)
+            window.clearTimeout(timeoutId)
+            cancelActiveSample = null
+            resolve({
+              durationMs: round(performance.now() - startedAt),
+              sampleCount: fpsSamples.length,
+              hardwareScalingLevel: engine.getHardwareScalingLevel(),
+              gpuTier,
+              isLowEndDevice,
+              isSmallScreen,
+              quality: currentQualityLabel(),
+              totalMeshes: scene.meshes.length,
+              fps: {
+                avg: round(mean(fpsSamples)),
+                min: round(minOrZero(fpsSamples)),
+                p5: round(percentileAt(fpsSamples, 0.05)),
+                p1: round(percentileAt(fpsSamples, 0.01)),
+              },
+              frameTimeMs: {
+                avg: round(mean(frameTimeSamples)),
+                p95: round(percentileAt(frameTimeSamples, 0.95)),
+                max: round(Math.max(...frameTimeSamples, 0)),
+              },
+              drawCalls: { avg: round(mean(drawCallsSamples)), max: Math.max(...drawCallsSamples, 0) },
+              activeMeshes: { avg: round(mean(activeMeshesSamples)), max: Math.max(...activeMeshesSamples, 0) },
+              activeMeshesEvaluationTimeMs: round(mean(activeMeshesEvalSamples)),
+              renderTimeMs: round(mean(renderTimeSamples)),
+              cameraRenderTimeMs: round(mean(cameraRenderTimeSamples)),
+              particlesRenderTimeMs: round(mean(particlesRenderTimeSamples)),
+              renderTargetsRenderTimeMs: round(mean(renderTargetsRenderTimeSamples)),
+              physicsTimeMs: round(mean(physicsTimeSamples)),
+              gpuFrameTimeMs: round(mean(gpuFrameTimeSamples)),
+            })
+          }
+          const timeoutId = window.setTimeout(finish, durationMs)
+          cancelActiveSample = finish
+        })
+      }
+      ;(scene as any).__cancelPerfSample = () => cancelActiveSample?.()
+
+      // Achado ao vivo: sem essa guarda, a dupla montagem do StrictMode em dev (mesmo
+      // problema já conhecido do benchmark de GPU, comentário mais acima) deixava o `window.__perf`
+      // apontando pra engine/cena de um mount JÁ DESMONTADO se seu `setup()` terminasse DEPOIS do
+      // mount real (GLBs vêm do cache do navegador na 2ª vez, ordem de conclusão não é garantida) —
+      // os números liam sempre zero/parado, confundindo qualquer medição manual.
+      if (disposed) return
       ;(window as any).__perf = {
         fps: () => Math.round(engine.getFps()),
         drawCalls: () => instrumentation.drawCallsCounter.current,
@@ -12274,6 +12424,18 @@ export function World3D({
         frameTimeMs: () => instrumentation.frameTimeCounter.current.toFixed(2),
         activeMeshes: () => scene.getActiveMeshes().length,
         totalMeshes: () => scene.meshes.length,
+        activeMeshesEvaluationTimeMs: () => instrumentation.activeMeshesEvaluationTimeCounter.current.toFixed(2),
+        renderTimeMs: () => instrumentation.renderTimeCounter.current.toFixed(2),
+        cameraRenderTimeMs: () => instrumentation.cameraRenderTimeCounter.current.toFixed(2),
+        particlesRenderTimeMs: () => instrumentation.particlesRenderTimeCounter.current.toFixed(2),
+        renderTargetsRenderTimeMs: () => instrumentation.renderTargetsRenderTimeCounter.current.toFixed(2),
+        gpuFrameTimeMs: () => (engineInstrumentation.gpuFrameTimeCounter.current / 1e6).toFixed(2),
+        hardwareScalingLevel: () => engine.getHardwareScalingLevel(),
+        gpuTier: () => gpuTier,
+        isLowEndDevice: () => isLowEndDevice,
+        isSmallScreen: () => isSmallScreen,
+        quality: () => currentQualityLabel(),
+        sample,
       }
     }
 
@@ -12479,6 +12641,7 @@ export function World3D({
       canvas.removeEventListener('wheel', onCameraWheel)
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
+      ;(scene as any).__cancelPerfSample?.()
       sceneRef.current = null
       scene.dispose()
       engine.dispose()

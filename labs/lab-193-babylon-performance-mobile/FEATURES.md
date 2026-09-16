@@ -1,6 +1,6 @@
 # Laboratório 193 — Auditoria de performance Babylon.js em mobile
 
-Status: em andamento
+Status: em andamento (PR convergida — rodada 2 do review pulada por decisão do usuário, aguardando confirmação de merge)
 Início: 2026-09-16
 Fim: -
 Commit inicial: 6993f0c08c79b0f0587e2f085586af690b582eaf
@@ -52,29 +52,216 @@ anterior, dentro do esperado):
 
 ## Funcionalidades planejadas
 
-- [ ] Ampliar `window.__perf` com os contadores que faltam (`activeMeshesEvaluationTime`,
-  `renderTime`, `particlesRenderTime`, `renderTargetsRenderTime`, `cameraRenderTime` via
-  `SceneInstrumentation`; `gpuFrameTime`/tier via `EngineInstrumentation` quando suportado pelo
-  navegador) e `hardwareScalingLevel`/`isLowEndDevice`/qualidade atual.
-- [ ] Nova função `window.__perf.sample(durationMs)` — coleta amostras por N milissegundos (padrão
-  15000) e devolve um JSON com médias e percentis (p5/p1) de FPS/frame time, pronto pra colar num
-  relatório, sem precisar do DevTools Performance tab.
-- [ ] Documentar baseline medido em pelo menos 5 cenas/rotas (spawn do planeta principal, área com
-  props/árvores, parkour/moedas, Marte com inimigos/morros, casa ou lojinha/preview) — ao vivo via
-  Chrome real nesta sessão (aparelho Android físico não está disponível pra esta sessão de
-  automação; documentar isso como limitação de ferramental, mesma classe já conhecida de vários
-  labs anteriores).
-- [ ] Classificar, com base nos contadores reais (não achismo), se o gargalo dominante em cada cena
-  é CPU (active meshes/loops JS/raycasts), draw calls (clones/materiais), GPU/fill-rate (post-
-  process/resolução/PBR), física (Havok) ou GUI (labels).
-- [ ] Aplicar só otimizações pequenas e seguras que os dados justificarem (candidatas do próprio
-  documento urgente: `scene.skipPointerMovePicking`, `isPickable=false` em decorativos,
-  `material.freeze()` em materiais estáticos, `freezeWorldMatrix()` onde faltar, squared distance
-  em vez de `Vector3.Distance` nos loops quentes, evitar raycast duplicado no mesmo quadro).
-- [ ] Lista priorizada de otimizações MAIORES pra labs futuros (thin instances generalizado, perfil
+- [x] Ampliar `window.__perf` com os contadores que faltam (`activeMeshesEvaluationTimeMs`,
+  `renderTimeMs`, `particlesRenderTimeMs`, `renderTargetsRenderTimeMs`, `cameraRenderTimeMs` via
+  `SceneInstrumentation`; `gpuFrameTimeMs` via `EngineInstrumentation`) e
+  `hardwareScalingLevel`/`isLowEndDevice`/`isSmallScreen`/`quality` atuais.
+- [x] Nova função `window.__perf.sample(durationMs)` — coleta amostras quadro a quadro por N
+  milissegundos (padrão 15000) e devolve um JSON com médias e percentis (p5/p1) de FPS/frame time,
+  pronto pra colar num relatório, sem precisar do DevTools Performance tab.
+- [x] Documentar baseline medido ao vivo (parcial — ver "Verificação ao vivo" e a limitação de
+  ferramental abaixo; não foi possível cobrir as 5 cenas planejadas com números confiáveis).
+- [x] Classificar, com base nos contadores reais coletados, onde a arquitetura atual concentra
+  trabalho por quadro (ver "Achados ao vivo").
+- [x] Aplicar a otimização pequena e seguramente justificável por leitura de código completa
+  (`scene.skipPointerMovePicking`); as demais candidatas do documento urgente foram avaliadas e
+  **não aplicadas nesta sessão** por falta de dado real que as justifique (ver "Otimizações
+  candidatas avaliadas e não aplicadas").
+- [x] Lista priorizada de otimizações MAIORES pra labs futuros (thin instances generalizado, perfil
   de qualidade mobile explícito, culling por planeta/área, pool de efeitos temporários,
   simplificação de NPCs distantes, LOD/impostor, revisão de materiais/texturas) — não implementadas
   aqui, só documentadas com prioridade/risco.
+
+## Implementação
+
+`window.__perf` (`World3D.tsx`, perto do fim de `setup()`) ganhou, além dos 6 campos que já
+existiam (`fps`/`drawCalls`/`physicsTimeMs`/`frameTimeMs`/`activeMeshes`/`totalMeshes`):
+
+- `activeMeshesEvaluationTimeMs`/`renderTimeMs`/`cameraRenderTimeMs`/`particlesRenderTimeMs`/
+  `renderTargetsRenderTimeMs` — via `SceneInstrumentation` (contadores que já existem na engine, só
+  não estavam ligados: `captureRenderTime`/`captureActiveMeshesEvaluationTime`/
+  `captureParticlesRenderTime`/`captureRenderTargetsRenderTime`/`captureCameraRenderTime = true`).
+- `gpuFrameTimeMs` — via `EngineInstrumentation.captureGPUFrameTime`; no-op (fica em 0) em
+  navegadores sem a extensão de timer query da GPU (comum em WebGL1/Android mais antigo).
+- `hardwareScalingLevel`/`isLowEndDevice`/`isSmallScreen`/`quality` — expõe o estado atual do
+  auto-tune de resolução e da classificação de aparelho já existentes, sem os quais os números de
+  FPS/draw calls não têm contexto (60 FPS a escala 1.6 é um aparelho sofrendo, não um aparelho bem).
+- `sample(durationMs = 15000)` — nova função assíncrona: registra um observer em
+  `scene.onAfterRenderObservable`, acumula uma amostra de TODOS os campos acima por quadro durante
+  a janela pedida, e resolve com médias e (pra FPS) percentis baixos p5/p1 — a métrica que capta
+  travadela perceptível que uma média sozinha esconde. Rejeita se chamada de novo enquanto uma
+  amostragem anterior ainda está em andamento (evita dois observers concorrentes).
+
+## Achados ao vivo (bugs reais, encontrados testando a própria instrumentação nova)
+
+Testar a instrumentação contra o mundo 3D de verdade (não só ler o código) achou 3 problemas reais,
+todos corrigidos antes desta lab ir a review:
+
+1. **`window.__perf` podia apontar pra uma cena já destruída.** Em dev, a dupla montagem do
+   `<StrictMode>` (mesma classe de problema já documentada no benchmark de GPU, comentário mais
+   acima no arquivo) cria dois `Engine`/`Scene` por vez; a atribuição de `window.__perf` não tinha
+   guarda de `disposed`, então se o `setup()` do mount JÁ DESMONTADO terminasse DEPOIS do mount real
+   (GLBs vêm do cache do navegador na 2ª vez, ordem de conclusão não é garantida), `window.__perf`
+   ficava preso numa engine morta — todo número lia zero/parado pra sempre, mesmo com o jogo
+   rodando normalmente na tela. Só afeta dev (produção nunca monta duas vezes); corrigido com
+   `if (disposed) return` antes da atribuição, mesmo padrão já usado em outros pontos deste efeito.
+2. **`gpuFrameTimeMs` estava em nanossegundos, não milissegundos.** A extensão de timer query da
+   GPU (`EXT_disjoint_timer_query` no WebGL, timestamp query no WebGPU) devolve o tempo bruto em
+   nanossegundos — confirmado lendo o código-fonte real de
+   `engine.query.pure.js`/`webgpuTimestampQuery.js` no `@babylonjs/core` instalado, nenhum dos dois
+   caminhos converte. Sem a divisão por 1e6, um frame de GPU de ~10ms aparecia como "10336672.57 ms"
+   (quase 3 horas) — óbvio na leitura ao vivo, mas teria passado batido numa inspeção só de código.
+3. **Um único quadro com `deltaTime` zero (`engine.getFps() === Infinity`) contaminava a MÉDIA de
+   FPS do `sample()` inteira** (virava `NaN`, que aparece como `null` no JSON) sem afetar p5/p1 (que
+   olham só a ponta baixa do array ordenado — por isso o bug não apareceu ali, só na média).
+   Corrigido filtrando amostras não-finitas antes de qualquer estatística (`Number.isFinite`), não
+   só na soma da média.
+
+Os três foram verificados corrigidos rodando `window.__perf.sample()` de verdade contra o mundo
+carregado (não só lendo o código de novo) — ver seção seguinte pro método usado.
+
+## Verificação ao vivo — método e limitação de ferramental
+
+**Achado de ferramental, mesma classe já registrada em memória de sessões anteriores**: a aba
+controlada pela automação do Chrome desta sessão fica "em segundo plano" pro compositor real do
+navegador mesmo quando é a única aba visível — o que trava `requestAnimationFrame` quase por
+completo (o `engine.runRenderLoop` do jogo depende inteiramente de rAF). Sobrescrever
+`document.hidden`/`document.visibilityState` via `Object.defineProperty` só engana verificações que
+o PRÓPRIO código faz contra essas propriedades (nenhuma existe neste jogo) — não desbloqueia o
+throttling de rAF de verdade, que é decidido pelo compositor do Chrome, não pelo valor JS dessas
+propriedades. Na prática, cada quadro só avançava quando uma ação de automação (screenshot, clique)
+forçava uma repintura pontual — passivamente, o `sample()` ficava com `sampleCount: 0` mesmo depois
+de dezenas de segundos reais de espera.
+
+**Método usado pra validar mesmo assim**: iniciar `window.__perf.sample(N)` sem `await` (guardando a
+promise em `window`), depois forçar de 3 a 4 repinturas manuais via screenshots espaçados, depois
+ler o resultado — suficiente pra confirmar que a coleta/agregação/percentis funcionam ponta a ponta
+(foi assim que os 3 bugs acima foram encontrados: `sampleCount` chegando a 7 amostras reais, valores
+plausíveis e coerentes entre si depois das correções — ex.: `renderTimeMs` 46.31 e
+`cameraRenderTimeMs` 55.36 na mesma janela, `gpuFrameTimeMs` 17.95 depois da correção de unidade).
+
+**O que isso significa pro objetivo original do lab**: os NÚMEROS de FPS coletados nesta sessão (na
+casa de 3-5 FPS mesmo no planeta principal) são um artefato do throttling de rAF da automação, não
+uma medição real de desempenho — não servem de baseline. Baseline de verdade contra um Android físico
+continua pendente (mesma limitação de ferramental já disclosed nos labs 177/178/179/187 — nenhum
+dispositivo Android real disponível pra automação nesta sessão). O que ESTE lab entrega de sólido é
+a ferramenta corrigida e verificada — o usuário (ou uma sessão futura com acesso a um aparelho real)
+agora pode rodar `window.__perf.sample(15000)` num Android de verdade e colar o JSON resultante num
+relatório, algo que não era possível antes com confiança (os bugs acima teriam corrompido o
+resultado).
+
+## Otimizações candidatas avaliadas e não aplicadas
+
+Todas as candidatas abaixo vieram do próprio `docs/urgent-babylon-performance-lab.md`. Só
+`scene.skipPointerMovePicking` foi aplicada — as outras foram avaliadas e descartadas PRA ESTA
+SESSÃO, não porque são más ideias, mas porque aplicá-las direito exige ou dado real de dispositivo
+(que não está disponível) ou uma auditoria grande demais pra "pequena e segura":
+
+- **`isPickable = false` em decorativos**: avaliada e descartada — com `skipPointerMovePicking`
+  ligado E nenhuma chamada a `scene.pick`/`onPointerObservable` em todo o arquivo (confirmado por
+  busca), `isPickable` já não tem nenhum consumidor ativo; marcar meshes como não-pickable não
+  mudaria custo nenhum agora. Documentado aqui só pra não ser sugerido de novo sem essa análise.
+- **`material.freeze()` em materiais estáticos**: **não aplicada** — exige confirmar, PRA CADA um
+  dos ~130 `PBRMaterial`/`ShaderMaterial` do arquivo, que nenhuma propriedade dele muda em tempo de
+  execução (o glow pulsante dos portais de escola, o brilho do "idoso" dos pets, a cor do fog/céu
+  na viagem espacial, e outros já mexem em material em tempo real) — auditoria grande, fica pro
+  próximo lab de performance dedicado a isso.
+- **`Vector3.Distance` → squared distance nos loops quentes**: **não aplicada** — das 45 ocorrências
+  no arquivo, distinguir quais rodam por quadro (loop quente) das que rodam uma vez (setup/one-off)
+  exige ler cada uma no contexto; sem tempo de CPU medido apontando qual delas pesa de verdade, não
+  dá pra priorizar com segurança dentro do "pequeno" deste lab.
+- **Raycast duplicado no mesmo quadro**: os 6 call sites de `havokPlugin.raycast` encontrados têm
+  propósitos claramente distintos (chão do avatar, chão do pet em destino, obstrução de câmera,
+  obstrução de caminho, "warmup", chão genérico) — nenhuma duplicação óbvia nova (a duplicação já
+  conhecida foi corrigida no lab-188). Não investigado mais fundo por falta de tempo de CPU medido
+  que justificasse.
+
+## Otimizações candidatas aplicadas
+
+- **`scene.skipPointerMovePicking = true`** (logo após `new Scene(engine)`): o Babylon roda por
+  padrão uma varredura de picking na cena inteira a cada evento `pointermove` (mouse/touch), usada
+  pra popular `scene.meshUnderPointer`/disparar hover de `ActionManager`. Confirmado por busca no
+  arquivo inteiro que este jogo não usa NENHUM dos três (`scene.pick`, `onPointerObservable`,
+  `meshUnderPointer`) — interação usa raycast físico direto (`havokPlugin.raycast`) e arrasto de
+  câmera lê eventos de ponteiro crus do canvas. Verificado ao vivo que arrastar a câmera continua
+  girando o mundo normalmente e a interação por proximidade (botão "E") continua aparecendo.
+
+## Review automático do Copilot
+
+**Rodada 1** (3 achados reais, corrigidos; mais 4 achados suprimidos de menor prioridade, 2 deles
+também corrigidos por serem baratos):
+
+- `sample()` nunca devolvia `totalMeshes` no relatório, só a leitura instantânea tinha esse campo —
+  corrigido lendo `scene.meshes.length` no momento de resolver.
+- Uma amostragem em andamento não era cancelada no desmonte do componente (`teardown`) — se a cena
+  fosse destruída no meio da janela, o `setTimeout` ainda disparava depois contra uma cena morta e
+  resolvia um relatório alegando ter coberto a janela `durationMs` pedida inteira, quando só tinha
+  quadros de antes do desmonte. Corrigido compartilhando uma função `finish()` entre o caminho normal
+  (timeout) e uma nova `(scene as any).__cancelPerfSample` chamada no `teardown` — cancelar agora
+  resolve na hora com a duração REAL decorrida, não a pedida. Verificado ao vivo: cancelar no meio de
+  uma janela de 20s resolve imediatamente com `durationMs: 0`/`sampleCount: 0`, e uma nova
+  amostragem pode começar em seguida sem ficar presa em "já em andamento".
+- Quando a janela não recebe nenhum quadro finito (o próprio caso de travamento em segundo plano já
+  disclosed nesta lab), `fps.min` virava `Infinity`, que ao serializar em JSON vira `null` — corrigido
+  com um fallback explícito em 0 (`minOrZero`), mesmo padrão já usado em `mean`.
+
+Corrigidos por serem baratos e diretamente relacionados (dos 4 achados suprimidos de menor
+prioridade):
+
+- `quality()` derivava o rótulo só da classificação inicial (`isLowEndDevice`), então um aparelho
+  "forte" reduzido pelo auto-tune pra escala 1.6 continuava relatando "alta" — corrigido derivando
+  do `hardwareScalingLevel` ATUAL (`> 1` → "reduzida (auto-tune, escala X)").
+- `gpuTier` (a classificação bruta do benchmark: `'weak'`/`'strong'`/`'pending'`) não estava exposta
+  em lugar nenhum, só os campos derivados (`isLowEndDevice`/`quality`) — adicionado tanto no
+  `window.__perf` ao vivo quanto no relatório de `sample()`.
+- `frameTimeMs` só tinha `avg`/`max`, sem o percentil que a documentação desta própria lab prometia
+  ("percentis de FPS/frame time") — adicionado `p95` (a cauda lenta, quadros de pior frame time),
+  reaproveitando a mesma função de percentil genérica já usada pro FPS (renomeada de `lowPercentile`
+  pra `percentileAt`, já que agora serve os dois sentidos).
+
+Os 2 achados suprimidos restantes (`isPickable`/`material.freeze()` já cobertos na seção acima como
+"avaliados e não aplicados") não se aplicam a este ponto — eram sobre o mesmo tema já documentado.
+
+Todos os 3 achados reais + os 2 extras foram verificados ao vivo (não só corrigidos no código) via
+`window.__perf.sample()`/`window.__perf.gpuTier()`/`window.__perf.quality()` rodando contra o mundo
+carregado, incluindo forçar o cancelamento no meio de uma janela de 20s.
+
+**Rodada 2**: solicitada normalmente após o push da rodada 1, mas o check-run
+`copilot-pull-request-reviewer` ficou "in_progress" por mais de 65 minutos sem concluir — bem acima
+do padrão desta sessão (2-10 min nas labs anteriores) e sem sinal de erro/timeout, só lento. Uma
+segunda tentativa de solicitação foi deduplicada pelo GitHub (não gerou um novo evento
+`review_requested` na timeline da PR, confirmado via API). Consultado o usuário via
+`AskUserQuestion`; decisão: seguir pro merge sem esperar a rodada 2, tratando a rodada 1 (que já
+achou e corrigiu 3 bugs reais na instrumentação nova) como suficiente.
+
+## Lista priorizada de otimizações maiores (labs futuros, não implementadas aqui)
+
+1. **Perfil de qualidade mobile explícito e único** (prioridade alta, risco baixo) — hoje os ramos
+   `isLowEndDevice` (FXAA/MSAA/SSAO2/GlowLayer/sombra/shadow map size) estão espalhados por todo
+   `World3D.tsx`; consolidar num objeto único de "perfil de qualidade" tornaria o auto-tune capaz de
+   decidir com base nos contadores novos deste lab (`activeMeshesEvaluationTimeMs` alto → reduzir
+   meshes ativos; `cameraRenderTimeMs`/`gpuFrameTimeMs` alto → reduzir pipeline de pós-processo),
+   não só a resolução (`hardwareScalingLevel`) como hoje.
+2. **Thin instances generalizado pra props repetidos** (prioridade alta, risco médio) — só o
+   benchmark interno e a grama usam `thinInstanceSetBuffer` hoje; árvores/rochas/outros props
+   repetidos ainda são clones completos (mesh + material próprios), cada um um draw call. Maior
+   ganho potencial de todos, mas expandir o escopo exige testar sombra/colisão por instância.
+   Requer medição real (`drawCalls`/`renderTimeMs` por cena) pra confirmar que draw calls (não
+   active-mesh-evaluation ou GPU fill-rate) é de fato o gargalo antes de investir aqui.
+3. **Auditoria de `material.freeze()`** (prioridade média, risco baixo por material, alto na soma)
+   — mapear os ~130 materiais do arquivo em "estático" vs "muda em tempo real", congelar só o
+   primeiro grupo. Trabalho mecânico mas grande.
+4. **Culling por planeta/área** (prioridade média, risco médio) — hoje todo o planeta principal
+   (~30 escolas + props) parece existir simultaneamente; desabilitar (`setEnabled(false)`) meshes de
+   áreas distantes do avatar reduziria `activeMeshesEvaluationTimeMs` e draw calls ao mesmo tempo.
+   Precisa de cuidado com o HUD de "descoberta"/quests que dependem de mesh visível.
+5. **LOD/impostor pra NPCs e props distantes** (prioridade baixa-média, risco médio) — Babylon tem
+   suporte nativo a LOD; NPCs/decoração distantes do avatar não precisam da malha completa.
+6. **Revisão de materiais/texturas** (prioridade baixa, risco baixo) — não investigado nesta sessão;
+   candidata a lab dedicado se os números de `gpuFrameTimeMs`/fill-rate um dia apontarem GPU como
+   gargalo dominante (não CPU/draw-calls).
+7. **Squared-distance nos loops quentes identificados** (depende do item 1 — precisa de dado de CPU
+   por cena pra saber quais das 45 ocorrências valem a pena).
 
 ## Fora de escopo (conforme o próprio documento urgente)
 
