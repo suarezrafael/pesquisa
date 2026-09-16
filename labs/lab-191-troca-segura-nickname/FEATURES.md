@@ -434,6 +434,25 @@ literal do achado já disclosed de identidades legadas sem segredo, sem mudança
   completa). Mantida a mesma decisão da rodada 6: narrow, autocorrige na próxima interação, custo de
   corrigir desproporcional ao risco — ver rodada 6 pro raciocínio completo.
 
+**Rodada 8** — 0 comentários novos, 5 suprimidos (1 marcado "previously missed"; os outros 3 são
+repetições/expansões de decisões já avaliadas nas rodadas 6-7 — corrida do `ensureRegistered` em
+voo, ordem de deploy do registro não-idempotente, e o painel não reavaliar o relógio sozinho
+enquanto fica aberto — mantidas sem mudança, mesmo raciocínio já registrado). Dos 2 restantes,
+ambos genuinamente acionáveis e de baixo custo:
+
+- **Real, corrigido (simplificação)**: a pré-checagem de cooldown em JS (`canChangeNickname` contra
+  `new Date()` do Worker) rodava ANTES do `UPDATE` atômico, que já reavalia o cooldown de verdade
+  contra o `now()` do PRÓPRIO Postgres na sua cláusula `where`. Ter duas fontes de "agora" (relógio
+  do Worker vs. relógio do banco) podia, bem na fronteira exata dos 7 dias, recusar com 429 uma
+  troca que o banco já aceitaria. Corrigido removendo a pré-checagem redundante — só o
+  `UPDATE` decide, via `updated.length === 0`. Reverificado ao vivo: cooldown continua bloqueando
+  corretamente uma segunda troca imediata.
+- **Real, corrigido**: a validação de resposta aceitava `nicknameChangedAt` AUSENTE (`undefined`)
+  como equivalente a `null` ("nunca trocou") — mas o contrato do servidor sempre manda esse campo
+  nos dois ramos, então a ausência dele indica uma resposta malformada, não a falta de troca
+  anterior. Corrigido exigindo o campo explicitamente presente (`null` ou uma data válida), nunca
+  ausente.
+
 ## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
 
 - Nome real, bio livre, imagem enviada, nickname totalmente livre sem filtro algum.

@@ -16,7 +16,6 @@ import Stripe from 'stripe'
 import {
   buildWeeklyProgressEmail,
   calculateNpsScore,
-  canChangeNickname,
   NICKNAME_CHANGE_COOLDOWN_DAYS,
   friendResponseStatus,
   generatePairingCode,
@@ -969,9 +968,11 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     if (current[0].nickname === trimmed) {
       return Response.json({ changed: false, nickname: trimmed, nicknameChangedAt: current[0].nickname_changed_at })
     }
-    if (!canChangeNickname(current[0].nickname_changed_at, new Date().toISOString())) {
-      return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
-    }
+    // Sem pré-checagem de cooldown aqui antes do `UPDATE` — a cláusula `where` dele é a checagem
+    // atômica de verdade contra o `now()` do PRÓPRIO Postgres. Uma pré-checagem em JS usando
+    // `new Date()` do Worker introduziria uma segunda fonte de "agora", com seu próprio relógio,
+    // que podia divergir por alguns milissegundos do `now()` do banco bem na fronteira exata dos 7
+    // dias — recusando com 429 uma troca que o banco já aceitaria.
     const updated = (await sql`
       update player_identities set nickname = ${trimmed}, nickname_changed_at = now()
       where id = ${playerId}

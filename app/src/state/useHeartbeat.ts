@@ -114,15 +114,20 @@ export async function sendImmediateNicknameChange(
       // devolve um 204 comum (sem corpo algum), que passaria por `res.ok` mas nunca de fato mudou o
       // nickname no banco; tratar isso como sucesso gravaria um nome/cooldown local que diverge de
       // vez do que está salvo de verdade.
+      // O contrato do servidor manda `nicknameChangedAt` nos dois ramos (`changed: true` e
+      // `changed: false`, ver `handleHeartbeat`) — nunca omite o campo. `undefined` (ausente)
+      // não é tratado como equivalente a `null` (presente, mas "nunca trocou"): uma resposta
+      // parcial que tenha `changed`/`nickname` mas OMITA este campo é tratada como malformada,
+      // não como "sem troca anterior" — a diferença importa porque aceitar `undefined` apagaria o
+      // cooldown local com uma resposta incompleta.
       const nicknameChangedAt = body?.nicknameChangedAt
       const nicknameChangedAtValid =
-        nicknameChangedAt === undefined ||
         nicknameChangedAt === null ||
         (typeof nicknameChangedAt === 'string' && !Number.isNaN(new Date(nicknameChangedAt).getTime()))
       if (typeof body?.changed !== 'boolean' || typeof body.nickname !== 'string' || !nicknameChangedAtValid) {
         return { ok: false, error: 'não foi possível confirmar a troca — tente de novo' }
       }
-      return { ok: true, changed: body.changed, nickname: body.nickname, nicknameChangedAt: nicknameChangedAt ?? null }
+      return { ok: true, changed: body.changed, nickname: body.nickname, nicknameChangedAt }
     }
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     return { ok: false, error: body?.error ?? 'não foi possível trocar agora' }
