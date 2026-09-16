@@ -1,13 +1,47 @@
 # Laboratório atual
 
-Em andamento: labs/lab-194-locomocao-sem-moonwalk/ — corrige o "moonwalk" trocando o driver do
-ciclo de caminhada local de `throttle` bruto pra velocidade tangencial física real
-(`body.getLinearVelocity()`), mesmo padrão já usado pro avatar remoto desde o lab-55. Origem:
+Último concluído: labs/lab-194-locomocao-sem-moonwalk/ — corrige o "moonwalk" do avatar. Origem:
 `docs/gameplay-market-expansion-backlog.md`, "Lab 192 - Locomoção sem moonwalk" (renumerado pra
-lab-194) — próximo item depois do lab-193, seguindo a ordem do próprio documento urgente. Ver
-`labs/lab-194-locomocao-sem-moonwalk/FEATURES.md` pro objetivo/investigação prévia completos.
+lab-194, já que lab-192/193 já estavam ocupados) — próximo item depois do lab-193, seguindo a
+ordem do próprio documento urgente. **Causa raiz real, achada lendo o código**: o ciclo de
+caminhada/corrida do avatar LOCAL avançava por `Math.abs(throttle)` (input bruto do jogador), não
+pela velocidade tangencial FÍSICA REAL — em movimento livre os dois coincidem, mas quando uma
+colisão (parede/obstáculo) impede o deslocamento real, o input continua no máximo enquanto a
+velocidade real cai, e as pernas continuam animando no ritmo máximo com o avatar parado: o
+moonwalk relatado. **Achado que confirmou a direção certa**: o avatar REMOTO (multiplayer) já
+resolve o mesmo problema desde o lab-55, medindo distância real percorrida em vez de usar
+throttle — o padrão certo já existia no próprio codebase, só não tinha sido aplicado ao avatar
+local. **Corrigido**: `speedRatio = min(1, tangentialSpeed/currentSpeed)` substitui
+`Math.abs(throttle)` na fórmula do ciclo de passada, onde `tangentialSpeed` vem de `currentVel`
+(`body.getLinearVelocity()`, já lido no início do bloco de física ANTES de ser sobrescrito pelo
+alvo do quadro atual — reflete o resultado físico real do quadro anterior, incluindo qualquer
+colisão). `moving`/som de passo continuam ligados ao `throttle` bruto de propósito, pra parar a
+pose na hora ao soltar a tecla. Removido do escopo por já estar correto: "alinhar corpo com
+velocidade tangencial" (o controle já é "estilo carrinho" — corpo e direção de movimento nunca
+divergem, por construção). `npx tsc -b` limpo; testes: app 213/213 (inalterado — mudança é
+engine/animação, sem lógica de domínio); `npm run build` sem regressão de bundle. **Verificado ao
+vivo via Chrome real** (forçando `engine._deltaTime` + `scene.render()` manual pra avançar quadros
+de forma determinística): andar/correr livre (`speedRatio` bate com `throttle`, ~0.976 vs 1.0);
+curvas (arco suave, pernas alternando normalmente); pulo e aterrissagem (parábola suave, sem
+congelar/`NaN`). **Pendência disclosed**: colisão real contra parede/obstáculo não foi reproduzida
+ao vivo nesta sessão — tentativas de teleportar o avatar contra colisores físicos reais
+(`houseWalls`, `propCollider-6`, ambos com `physicsBody` confirmado) não resultaram num bloqueio
+observável dentro do orçamento de quadros simulados (mundo esférico com curvatura real dificulta
+mirar às cegas; avatar contornou ou atravessou sem resistência aparente). Compensado verificando a
+fórmula isoladamente contra os 3 casos (bloqueado→`0`, meio bloqueado→`0.5`, livre→`~1`) — a
+garantia de que `body.getLinearVelocity()` reflete o estado pós-colisão é uma propriedade do
+próprio motor de física (Havok), não uma hipótese testada. **PR #76 teve 1 rodada de review
+automático com erro de ferramenta** ("Copilot encountered an error...", sem achado nenhum — falha
+técnica, não veredito); uma 2ª tentativa ficou pendente por mais de 20 minutos sem concluir (mesmo
+padrão de atraso já disclosed no lab-193) — consultado o usuário via `AskUserQuestion`, decisão:
+seguir pro merge sem esperar mais. Ver `labs/lab-194-locomocao-sem-moonwalk/FEATURES.md` pro
+histórico completo. **Merge confirmado**: PR #76 mesclada em `main` no commit `e4c2593`
+(2026-09-16, squash), confirmado via `AskUserQuestion`. CI de `main` verde nos 3 workflows; deploy
+de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-193-babylon-performance-mobile/ — instrumentação real de performance
+Antes desse: labs/lab-193-babylon-performance-mobile/ — instrumentação real de performance
 Babylon.js em mobile (P0, urgente). Origem: pedido urgente do usuário via arquivo em
 `docs/urgent-babylon-performance-lab.md` (descoberto na árvore de trabalho, não pelo chat, enquanto
 o lab-192 abaixo estava em andamento) e um adendo correspondente em

@@ -1,8 +1,8 @@
 # Laboratório 194 — Locomoção sem moonwalk
 
-Status: em andamento (PR convergida — review automático travou/deu erro de ferramenta, seguindo sem esperar por decisão do usuário)
+Status: concluído (PR #76 mesclada e implantada em produção)
 Início: 2026-09-16
-Fim: -
+Fim: 2026-09-16
 Commit inicial: 6d2bb02a26c97c364dc17348399c04f83f17a2d5
 
 ## Objetivo do laboratório
