@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Em andamento: labs/lab-193-babylon-performance-mobile/ — auditoria de performance Babylon.js em
+mobile (P0, urgente). Origem: pedido urgente do usuário via arquivo em `docs/urgent-babylon-performance-lab.md`
+(descoberto na árvore de trabalho, não pelo chat, enquanto o lab-192 abaixo estava em andamento) e
+um adendo correspondente em `docs/gameplay-market-expansion-backlog.md`. Confirmado com o usuário
+via `AskUserQuestion` que a ordem correta era: terminar o lab-192 (preview de pets, já em
+andamento) primeiro, depois iniciar este como **lab-193** (próximo número real livre, seguindo a
+própria regra do documento urgente) — lab-192 concluído e mergeado, ver histórico completo abaixo.
+Ver `labs/lab-193-babylon-performance-mobile/FEATURES.md` pro objetivo/escopo/investigação prévia
+completos.
+
 Último concluído: labs/lab-192-preview-3d-pets/ — preview 3D de verdade na lojinha de pets.
 Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 206 - Pets premium de qualidade, roupas e
 máscaras" — próximo item recomendado depois do lab-191. Esse item do backlog embute 3 pedaços
@@ -36,15 +46,6 @@ histórico completo rodada a rodada. **Merge confirmado**: PR #72 mesclada em `m
 Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
 (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
 (`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
-
-**Nota importante pra quem retomar este projeto**: existe um lab urgente P0 pendente de início,
-descrito em `docs/urgent-babylon-performance-lab.md` (auditoria de performance Babylon.js —
-Android modesto caindo a ~15 FPS) — chegou como um arquivo novo na árvore de trabalho enquanto este
-lab estava em andamento (não commitado ainda; `docs/gameplay-market-expansion-backlog.md` também
-tem um adendo urgente correspondente, ainda não commitado). Confirmado com o usuário via
-`AskUserQuestion` que a ordem correta é: terminar o lab em andamento primeiro (feito acima), depois
-iniciar o urgente como **lab-193** (próximo número real livre, seguindo a própria regra do
-documento urgente).
 
 Último concluído: labs/lab-191-troca-segura-nickname/ — troca segura de nickname depois do
 onboarding. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 207" no documento — próximo

@@ -4,6 +4,21 @@ Data: 2026-09-11
 Branch base: `main`, apos lab-176 mergeado. No momento desta escrita, o lab-177 estava em andamento
 em outro branch/worktree.
 
+## Adendo urgente 2026-09-16 - Performance Babylon.js mobile
+
+Antes de continuar a ordem normal deste backlog, executar o lab urgente descrito em
+`docs/urgent-babylon-performance-lab.md`. Motivo: o jogo roda perto de 60 FPS em notebooks com
+Chrome, mas o usuario reportou FPS muito baixo em aparelhos Android modestos, incluindo Redmi Pad 2
+em torno de 15 FPS. Este lab deve revisar o uso do Babylon.js com base na documentacao oficial,
+medir gargalos reais da cena principal e gerar um plano de otimizacao com dados antes de mexer em
+features novas.
+
+Nota (2026-09-16, durante a execucao): `lab-192` ja estava em andamento (preview 3D de pets,
+tambem prioritario) quando este adendo foi lido — confirmado com o usuario via `AskUserQuestion`
+que a ordem correta e terminar o lab em andamento primeiro, depois usar
+`labs/lab-193-babylon-performance-mobile/` para este lab urgente (proximo numero real livre) e
+adiar a locomocao sem moonwalk para o numero seguinte. A prioridade e P0.
+
 Este documento amplia `docs/growth-retention-monetization-backlog.md` com foco em tres perguntas:
 
 1. Quais elementos jogaveis de produtos de sucesso podem aumentar retencao infantil?
