@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { loadPlayerId } from './storage'
+import { getOrCreateDeviceId, loadPlayerId } from './storage'
 import { resolveHouseSyncSnapshot } from './progression'
 import type { Profile, Progress } from '../types'
 
@@ -71,6 +71,12 @@ export function sendImmediateHouseVisibility(visible: boolean, progress: Progres
 // docs/prompts/01-seguranca.md §3) e o painel precisa mostrar isso pra criança. Sem `playerId`
 // (perfil nunca abriu o painel de Amigos) não há nada pra sincronizar agora — a troca local já
 // aconteceu, e o próximo `ensureRegistered` vai registrar com o nome já atualizado.
+//
+// Manda `deviceId` junto — prova de posse checada no servidor contra `player_identities.device_id`
+// (nunca exposto por `/players/search`/`/players/:id/public-profile`, só o dono de verdade sabe o
+// próprio). Sem isso, qualquer jogador que descobrisse o `playerId` de outra criança via busca por
+// nickname (rota pública) poderia renomear o perfil dela — o `playerId` sozinho não prova posse,
+// só identifica QUAL linha mudar.
 export async function sendImmediateNicknameChange(nickname: string): Promise<{ ok: boolean; error?: string }> {
   const playerId = loadPlayerId()
   if (!playerId) return { ok: true }
@@ -78,7 +84,7 @@ export async function sendImmediateNicknameChange(nickname: string): Promise<{ o
     const res = await fetch(`${ACCOUNTS_API_URL}/players/heartbeat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId, nickname }),
+      body: JSON.stringify({ playerId, nickname, deviceId: getOrCreateDeviceId() }),
     })
     if (res.status === 204) return { ok: true }
     const body = (await res.json().catch(() => null)) as { error?: string } | null

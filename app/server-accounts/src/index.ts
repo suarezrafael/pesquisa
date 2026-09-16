@@ -17,6 +17,7 @@ import {
   buildWeeklyProgressEmail,
   calculateNpsScore,
   canChangeNickname,
+  NICKNAME_CHANGE_COOLDOWN_DAYS,
   friendResponseStatus,
   generatePairingCode,
   hasActiveFriendship,
@@ -856,6 +857,7 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
         housePlacements?: unknown
         houseVisible?: unknown
         nickname?: unknown
+        deviceId?: unknown
       }
     | null
   // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
@@ -919,12 +921,20 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   const sql = neon(env.DATABASE_URL)
 
   // Só a chamada IMEDIATA de `sendImmediateNicknameChange` manda este campo (nunca o tick
-  // periódico, ver `state/useHeartbeat.ts`), então não precisa coexistir com os outros campos
-  // opcionais acima na prática. Cooldown reforçado aqui contra a linha de verdade no banco (não
-  // confia no `nicknameChangedAt` que o cliente mandaria, nem manda) — `docs/prompts/01-seguranca.md`
-  // §3.
-  let nickname: string | null = null
-  let nicknameChangedAt: string | null = null
+  // periódico, ver `state/useHeartbeat.ts`) — tratado num caminho totalmente separado do UPDATE
+  // genérico abaixo, então não precisa coexistir com os outros campos opcionais na prática.
+  //
+  // `playerId` sozinho (devolvido por `/players/search`, público) não prova posse — sem checar
+  // mais nada, qualquer jogador que descobrisse o `playerId` de outra criança por busca poderia
+  // renomear o perfil dela. `deviceId` (nunca exposto por `/players/search`/
+  // `/players/:id/public-profile`, só o dono de verdade sabe o próprio) precisa bater com
+  // `player_identities.device_id` antes de qualquer escrita.
+  //
+  // A gravação em si é CONDICIONAL (não um SELECT de checagem seguido de um UPDATE incondicional
+  // separado) — a cláusula `where` do próprio UPDATE reavalia o cooldown contra a linha de verdade
+  // no exato momento da escrita, travada por linha pelo Postgres; duas requisições concorrentes
+  // pra o mesmo jogador não conseguem as duas passar (a segunda vê o `nickname_changed_at` já
+  // atualizado pela primeira e falha a condição).
   if (body.nickname !== undefined) {
     if (typeof body.nickname !== 'string') {
       return Response.json({ error: 'nickname inválido' }, { status: 400 })
@@ -933,18 +943,33 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     if (!isNicknameAllowed(trimmed)) {
       return Response.json({ error: 'nickname não permitido' }, { status: 400 })
     }
-    const current = (await sql`
-      select nickname, nickname_changed_at from player_identities where id = ${playerId}
-    `) as { nickname: string; nickname_changed_at: string | null }[]
-    if (current.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
-    if (current[0].nickname !== trimmed) {
-      const nowIso = new Date().toISOString()
-      if (!canChangeNickname(current[0].nickname_changed_at, nowIso)) {
-        return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
-      }
-      nickname = trimmed
-      nicknameChangedAt = nowIso
+    if (typeof body.deviceId !== 'string' || !isValidUuid(body.deviceId)) {
+      return Response.json({ error: 'deviceId inválido' }, { status: 400 })
     }
+    const current = (await sql`
+      select nickname, nickname_changed_at, device_id from player_identities where id = ${playerId}
+    `) as { nickname: string; nickname_changed_at: string | null; device_id: string }[]
+    if (current.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
+    if (current[0].device_id !== body.deviceId) {
+      return Response.json({ error: 'não autorizado' }, { status: 403 })
+    }
+    if (current[0].nickname === trimmed) {
+      return new Response(null, { status: 204 })
+    }
+    if (!canChangeNickname(current[0].nickname_changed_at, new Date().toISOString())) {
+      return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
+    }
+    const updated = (await sql`
+      update player_identities set nickname = ${trimmed}, nickname_changed_at = now()
+      where id = ${playerId}
+        and device_id = ${body.deviceId}
+        and (nickname_changed_at is null or now() - nickname_changed_at >= (${NICKNAME_CHANGE_COOLDOWN_DAYS} || ' days')::interval)
+      returning id
+    `) as { id: string }[]
+    if (updated.length === 0) {
+      return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
+    }
+    return new Response(null, { status: 204 })
   }
 
   const rows = (await sql`
@@ -954,9 +979,7 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
       badges = coalesce(${badgesJson}::jsonb, badges),
       house_furniture_ids = coalesce(${houseFurnitureIdsJson}::jsonb, house_furniture_ids),
       house_placements = coalesce(${housePlacementsJson}::jsonb, house_placements),
-      house_visible = coalesce(${houseVisible}::boolean, house_visible),
-      nickname = coalesce(${nickname}, nickname),
-      nickname_changed_at = coalesce(${nicknameChangedAt}::timestamptz, nickname_changed_at)
+      house_visible = coalesce(${houseVisible}::boolean, house_visible)
     where id = ${playerId} returning id
   `) as { id: string }[]
   if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })

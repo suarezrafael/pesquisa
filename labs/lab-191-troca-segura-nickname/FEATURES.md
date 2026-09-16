@@ -170,7 +170,63 @@ busca no backend que o registro usa o nome JÁ TROCADO, não o original — a pr
 ranking(próprio jogador)/multiplayer não precisou de nenhuma mudança de código, por construção
 (investigação prévia já confirmada, ver acima).
 
-## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
+## Review automático do Copilot (PR #71)
+
+**Rodada 1** — 2 comentários gerados (ambos reais, sérios) + 4 suprimidos:
+
+- **Real, grave, corrigido**: o desenho original autorizava a troca só pelo `playerId` — que
+  `GET /players/search` devolve pra QUALQUER chamador que busque um nickname. Sem prova de posse,
+  qualquer jogador que descobrisse o `playerId` de outra criança (bastava buscar o nick dela)
+  conseguia renomear o perfil dela sem consentimento — risco de bullying/impersonação citado no
+  próprio item do backlog, e mais grave que o resto do heartbeat (equipped_look/badges/casa já
+  tinham esse mesmo problema estrutural, mas trocar a IDENTIDADE pública de outra criança é mais
+  sério). Corrigido reaproveitando `player_identities.device_id` (já existe desde o lab-159, NUNCA
+  exposto por `/players/search`/`/players/:id/public-profile` — confirmado lendo o código: essas
+  rotas só selecionam `id`/`nickname`/`avatar_emoji`/etc., nunca `device_id`) como prova de posse:
+  `sendImmediateNicknameChange` passa a mandar o `deviceId` do próprio aparelho, e o servidor recusa
+  com 403 se não bater com a linha. Verificado ao vivo (`wrangler dev` contra produção): registrado
+  um jogador "vítima", um segundo `deviceId` "atacante" tentando renomear a vítima recebeu 403 e o
+  nickname da vítima permaneceu intocado; o dono de verdade (deviceId correto) renomeou com sucesso
+  (204). Não foi criado nenhum segredo/token novo — `device_id` já cumpria esse papel implicitamente
+  desde que essas rotas foram desenhadas, só nunca tinha sido usado como prova de posse.
+- **Real, corrigido**: a checagem de cooldown lia `nickname_changed_at` num `SELECT` separado do
+  `UPDATE` que vinha depois — duas requisições concorrentes pro mesmo jogador podiam ler o mesmo
+  valor, passar as duas, e gravar nomes diferentes dentro da mesma janela de 7 dias. Corrigido
+  tornando a gravação CONDICIONAL: a cláusula `where` do próprio `UPDATE` reavalia o cooldown contra
+  a linha de verdade no momento exato da escrita (travamento de linha padrão do Postgres pra
+  `UPDATE` fecha a janela de corrida — a segunda transação concorrente só executa depois da primeira
+  liberar o lock, e nesse momento já vê o `nickname_changed_at` atualizado, falhando a condição).
+- **Real, corrigido (achado suprimido)**: depois de um 204 do servidor, o código gravava
+  `nicknameChangedAt` local com um NOVO `new Date().toISOString()` (relógio diferente do `now()`
+  usado pelo servidor) — bem na fronteira exata dos 7 dias, essa leitura local levemente atrasada em
+  relação ao servidor podia fazer o próprio `renameNickname` (que repetia a checagem de cooldown por
+  "defesa em profundidade") recusar uma troca que o SERVIDOR já tinha aprovado, deixando o HUD preso
+  no nome antigo. Corrigido removendo a checagem de cooldown redundante de dentro de
+  `renameNickname` — quem decide de verdade é o servidor (`App.tsx` só chama isto depois da
+  confirmação), repetir a checagem local não protege nada a mais e podia causar exatamente esse tipo
+  de divergência.
+- **Real, corrigido (achado suprimido)**: o campo de apelido não estava dentro de um `<form>`,
+  então apertar Enter depois de digitar não fazia nada — quebra o fluxo esperado de teclado, e
+  diferente do `Onboarding.tsx` (mesmo campo, já usa `<form onSubmit>`). Corrigido envolvendo o
+  campo/gerador/salvar num `<form>` com `onSubmit`, botão salvar virou `type="submit"` (gerador
+  continua `type="button"`, não deve disparar submit).
+- **Real, mas não corrigido nesta rodada (achado suprimido)**: corrida estreita no PRIMEIRO
+  registro — `ensureRegistered` é assíncrono; se a criança fechar o painel de Amigos e abrir o de
+  troca de apelido ANTES da resposta do registro chegar, `loadPlayerId()` ainda devolve `null`,
+  `sendImmediateNicknameChange` devolve sucesso trivial (nada pra sincronizar ainda) — mas o
+  registro em voo, que já tinha capturado o nome ANTIGO no corpo da requisição, termina segundos
+  depois com o nome desatualizado. Avaliado e não corrigido: exige serializar registro+troca (fila/
+  mutex) pra uma janela de corrida de poucas centenas de milissegundos, que exige uma ação bem
+  específica da criança (abrir Amigos, fechar, trocar de apelido, tudo em menos de um round-trip de
+  rede) — e se acontecer, autocorrige na PRÓXIMA troca de apelido ou heartbeat qualquer. Custo de
+  corrigir desproporcional ao risco real; disclosed como limitação conhecida, não corrigido.
+- **Real, mas não corrigido nesta rodada (achado suprimido)**: a resposta 429 de cooldown não
+  inclui o `nickname_changed_at` de verdade do banco — se o relógio local do painel estiver
+  dessincronizado do servidor (ex.: troca feita em outro aparelho/sessão), a mensagem de erro fica
+  genérica em vez de mostrar o número exato de dias. Avaliado como cosmético (o painel já bloqueia
+  proativamente ANTES de chegar nesse caso, usando o próprio `nicknameChangedAt` local — este 429
+  só é alcançável no mesmo cenário raro de dessincronização entre aparelhos/sessões do achado
+  anterior); não corrigido nesta rodada.
 
 - Nome real, bio livre, imagem enviada, nickname totalmente livre sem filtro algum.
 - Histórico público de nomes antigos (nenhum registro do nick anterior é exposto a terceiros).

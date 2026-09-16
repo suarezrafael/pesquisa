@@ -36,7 +36,8 @@ export function NicknamePanel({ profile, onSave, onClose }: NicknamePanelProps) 
   const nicknameBlocked = trimmedName.length > 0 && !isNicknameAllowed(trimmedName)
   const unchanged = trimmedName === profile.name.trim()
 
-  async function handleSave() {
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
     if (!trimmedName || nicknameBlocked || onCooldown || unchanged) return
     setSaving(true)
     setError(null)
@@ -76,40 +77,41 @@ export function NicknamePanel({ profile, onSave, onClose }: NicknamePanelProps) 
           </p>
         )}
 
-        <label className="field">
-          <span>Novo apelido</span>
-          <div className="nickname-row">
-            <input
-              value={name}
-              onChange={(e) => setName(sanitizeNicknameChars(e.target.value).slice(0, 20))}
-              maxLength={20}
-              disabled={onCooldown}
-              autoFocus
-            />
-            <button
-              type="button"
-              className="nickname-generate-btn"
-              onClick={() => setName(generateNickname())}
-              aria-label="Gerar apelido aleatório"
-              disabled={onCooldown}
-            >
-              🎲 Gerar
-            </button>
-          </div>
-          {nicknameBlocked && (
-            <small className="field-hint field-hint-error">Esse apelido não pode ser usado — tente outro.</small>
-          )}
-          {error && <small className="field-hint field-hint-error">{error}</small>}
-        </label>
+        <form onSubmit={handleSave}>
+          <label className="field">
+            <span>Novo apelido</span>
+            <div className="nickname-row">
+              <input
+                value={name}
+                onChange={(e) => setName(sanitizeNicknameChars(e.target.value).slice(0, 20))}
+                maxLength={20}
+                disabled={onCooldown}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="nickname-generate-btn"
+                onClick={() => setName(generateNickname())}
+                aria-label="Gerar apelido aleatório"
+                disabled={onCooldown}
+              >
+                🎲 Gerar
+              </button>
+            </div>
+            {nicknameBlocked && (
+              <small className="field-hint field-hint-error">Esse apelido não pode ser usado — tente outro.</small>
+            )}
+            {error && <small className="field-hint field-hint-error">{error}</small>}
+          </label>
 
-        <button
-          type="button"
-          className="primary-button"
-          onClick={handleSave}
-          disabled={!trimmedName || nicknameBlocked || onCooldown || unchanged || saving}
-        >
-          {saving ? 'Salvando…' : 'Salvar novo apelido'}
-        </button>
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={!trimmedName || nicknameBlocked || onCooldown || unchanged || saving}
+          >
+            {saving ? 'Salvando…' : 'Salvar novo apelido'}
+          </button>
+        </form>
       </div>
     </div>
   )

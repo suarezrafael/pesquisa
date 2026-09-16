@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { Profile } from '../types'
 import { createProfileSlot, loadProfile, saveProfile } from './storage'
 import { trackCosmeticEquipped } from '../productAnalytics'
-import { canChangeNickname } from './progression'
 import {
   BACKPACK_COLOR_CATALOG,
   HAIR_SHAPE_CATALOG,
@@ -52,13 +51,14 @@ export function useProfile() {
   }
 
   // Troca de apelido depois do onboarding — reaproveita o MESMO filtro/formato de
-  // `nicknameFilter.ts` já usado ali; o chamador (`NicknamePanel.tsx`) já validou formato/cooldown
-  // antes de chegar aqui, mas repete a checagem de cooldown (não confia só na UI que chamou) antes
-  // de gravar qualquer coisa localmente.
+  // `nicknameFilter.ts` já usado ali. Quem decide de verdade é o SERVIDOR (`App.tsx` só chama isto
+  // depois de `sendImmediateNicknameChange` confirmar) — sem repetir a checagem de cooldown aqui: um
+  // relógio local levemente diferente do relógio do servidor, bem na fronteira exata dos 7 dias,
+  // podia fazer esta função recusar uma troca que o servidor JÁ tinha aprovado, deixando o HUD
+  // preso no nome antigo mesmo com o backend já atualizado.
   function renameNickname(name: string, nowIso: string) {
     setProfile((prev) => {
       if (!prev) return prev
-      if (!canChangeNickname(prev.nicknameChangedAt, nowIso)) return prev
       const next: Profile = { ...prev, name, nicknameChangedAt: nowIso }
       saveProfile(next)
       return next
