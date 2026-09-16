@@ -339,7 +339,7 @@ na API depois — mesmo padrão de atraso das rodadas anteriores.
    ruim em 20, `worstCount = 1` sempre aponta pro próprio outlier, nunca pro vizinho bom mais
    próximo. Verificado isoladamente: `worstAt([10 × 19, 100], 0.05)` devolve `100` (o outlier),
    enquanto o nearest-rank anterior devolvia `10` (perdia o outlier completamente).
-3. **Nota da Rodada 2 ficou desatardada depois da Rodada 3 trocar a fonte do FPS de novo**:
+3. **Nota da Rodada 2 ficou desatualizada depois da Rodada 3 trocar a fonte do FPS de novo**:
    corrigida com uma nota explícita (ver item 2 da Rodada 2 acima) em vez de reescrever a história.
 4. **Descrição da PR #74 citava a fonte antiga (`frameTimeCounter`) depois da Rodada 3 já ter
    trocado pra `engine.getDeltaTime()` dentro da mesma PR**: não corrigido (PR já mesclada quando o
@@ -349,7 +349,21 @@ na API depois — mesmo padrão de atraso das rodadas anteriores.
 vivo via Chrome real e isoladamente (`worstAt`/filtro de delta 0) contra os exemplos do próprio
 review.
 
-## Lista priorizada de otimizações maiores (labs futuros, não implementadas aqui)
+**Rodada 5 (última desta lab — ver nota abaixo)**: 1 achado trivial corrigido (typo "desatardada" →
+"desatualizada", já corrigido acima) e 1 achado de nomenclatura avaliado e mantido como está:
+`frameTimeMs.p95` usa `worstAt` (limite do pior 5%, a mesma semântica de "1% low"/"5% low" já usada
+em `fps.p1`/`fps.p5`), não o percentil padrão nearest-rank que o nome "p95" tecnicamente sugere —
+com `[10×19, 100]`, devolve `100` (o outlier), não o 19º valor que um p95 padrão devolveria. Mantido
+de propósito: pra detectar travadela real (o objetivo desta instrumentação), o limite do pior 5% é
+mais útil que o percentil padrão, que pode esconder exatamente o outlier raro que se quer achar —
+mesma razão que motivou trocar de percentil padrão pra `worstAt` na rodada 4. O nome do campo
+(`p95`) ficou tecnicamente impreciso, mas renomear mudaria o formato do relatório sem ganho real.
+
+**Encerrando o ciclo de review aqui**: esta é a 4ª rodada consecutiva de achados nesta mesma função
+(`sample()`), cada uma mais sutil que a anterior. Consultado o usuário via `AskUserQuestion` sobre
+continuar o ciclo até convergência plena (2 rodadas seguidas sem achado novo, o padrão desta sessão)
+ou encerrar aqui — decisão: encerrar depois desta PR, tratando `window.__perf`/`sample()` como uma
+ferramenta de debug/dev que não precisa de perfeição estatística, não lógica de negócio.
 
 1. **Perfil de qualidade mobile explícito e único** (prioridade alta, risco baixo) — hoje os ramos
    `isLowEndDevice` (FXAA/MSAA/SSAO2/GlowLayer/sombra/shadow map size) estão espalhados por todo
