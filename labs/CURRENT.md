@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-191-troca-segura-nickname/ — troca segura de nickname. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 207" no documento — próximo item recomendado
+depois do lab-190. Ver `labs/lab-191-troca-segura-nickname/FEATURES.md` pro objetivo e investigação
+prévia (gerador/filtro já existem só pro onboarding; a lacuna real é a falta de uma função de
+troca depois, e a sincronização com `player_identities` no backend, que hoje só registra uma vez e
+nunca atualiza).
+
 Último concluído: labs/lab-190-preview-fixo-lojinha-scroll/ — preview fixo na lojinha durante
 scroll. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 205" no documento (renumerado pra
 lab-190 na sequência real do repo) — próximo item recomendado depois do lab-189. **Achado real,
