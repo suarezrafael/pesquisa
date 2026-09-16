@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import { AVATAR_CATALOG } from '../data/avatars'
 import { HAT_CATALOG } from '../data/hats'
 import { GLASSES_CATALOG } from '../data/glasses'
@@ -217,6 +217,16 @@ export function AvatarShop({
 }: AvatarShopProps) {
   const [tab, setTab] = useState<ShopTab>('avatares')
   const modalRef = useModalA11y(onClose)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Sem isso, trocar de aba rolado no fim de uma lista longa abre a aba nova já no fim dela — antes
+  // as abas rolavam junto com a lista e só ficavam alcançáveis perto do topo; agora, fixas no
+  // cabeçalho, dá pra trocar de qualquer ponto do scroll, o que tornou esse caso alcançável de
+  // verdade.
+  function handleTabClick(nextTab: ShopTab) {
+    setTab(nextTab)
+    scrollRef.current?.scrollTo({ top: 0 })
+  }
 
   return (
     <div
@@ -227,10 +237,16 @@ export function AvatarShop({
       ref={modalRef}
       tabIndex={-1}
     >
-      <div className="modal avatar-shop-modal">
-        <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
-          ×
-        </button>
+      <div className="modal avatar-shop-modal" ref={scrollRef}>
+        {/* Âncora de altura zero — só existe pra dar ao botão de fechar um ancestral
+            `position: sticky` próprio, sem empurrar `<h2>` pra baixo nem mudar o visual quando o
+            modal ainda não rolou. Sem isso, o botão (absoluto) fica posicionado em relação ao
+            `.avatar-shop-modal` que rola por baixo dele e some de vista ao descer a lista. */}
+        <div className="avatar-shop-close-anchor">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
+            ×
+          </button>
+        </div>
         <h2>Lojinha de avatares</h2>
         <p className="subtitle">
           Troque as moedas que você coletou por novos personagens. Itens com 👑 são exclusivos de
@@ -239,38 +255,42 @@ export function AvatarShop({
 
         {/* Preview 3D (lab-87, pedido do usuário: "mostrar um menu com um preview 3D do avatar e
             do boneco") — reflete a combinação EQUIPADA agora, atualiza sozinho assim que algo é
-            trocado em qualquer aba (o motor 3D vive à parte, ver AvatarPreview3D.tsx). */}
-        <div className="avatar-preview-3d-wrap">
-          <Suspense fallback={<div className="avatar-preview-3d-canvas avatar-preview-3d-loading" />}>
-            <AvatarPreview3D
-              avatarEmoji={profile.avatarEmoji}
-              hatId={profile.equippedHatId}
-              shirtColorId={profile.equippedShirtColorId}
-              pantsColorId={profile.equippedPantsColorId}
-              shoeColorId={profile.equippedShoeColorId}
-              backpackColorId={profile.equippedBackpackColorId}
-              hairShapeId={profile.equippedHairShapeId}
-              glassesId={profile.equippedGlassesId}
-            />
-          </Suspense>
-        </div>
+            trocado em qualquer aba (o motor 3D vive à parte, ver AvatarPreview3D.tsx).
+            Fixo durante o scroll junto com o saldo e as abas — sem isso a criança perdia a
+            referência visual do boneco ao rolar listas longas de roupas/chapéus. */}
+        <div className="avatar-shop-sticky-header">
+          <div className="avatar-preview-3d-wrap">
+            <Suspense fallback={<div className="avatar-preview-3d-canvas avatar-preview-3d-loading" />}>
+              <AvatarPreview3D
+                avatarEmoji={profile.avatarEmoji}
+                hatId={profile.equippedHatId}
+                shirtColorId={profile.equippedShirtColorId}
+                pantsColorId={profile.equippedPantsColorId}
+                shoeColorId={profile.equippedShoeColorId}
+                backpackColorId={profile.equippedBackpackColorId}
+                hairShapeId={profile.equippedHairShapeId}
+                glassesId={profile.equippedGlassesId}
+              />
+            </Suspense>
+          </div>
 
-        <div className="hub-coins avatar-shop-balance">🪙 {progress.coins}</div>
+          <div className="hub-coins avatar-shop-balance">🪙 {progress.coins}</div>
 
-        <div className="avatar-shop-tabs-wrap">
-          <div className="avatar-shop-tabs" role="tablist">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.id}
-                className={`avatar-shop-tab ${tab === t.id ? 'active' : ''}`}
-                onClick={() => setTab(t.id)}
-              >
-                <span aria-hidden="true">{t.emoji}</span> {t.label}
-              </button>
-            ))}
+          <div className="avatar-shop-tabs-wrap">
+            <div className="avatar-shop-tabs" role="tablist">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  className={`avatar-shop-tab ${tab === t.id ? 'active' : ''}`}
+                  onClick={() => handleTabClick(t.id)}
+                >
+                  <span aria-hidden="true">{t.emoji}</span> {t.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
