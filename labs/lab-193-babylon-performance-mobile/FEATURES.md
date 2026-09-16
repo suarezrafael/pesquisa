@@ -186,6 +186,46 @@ SESSÃO, não porque são más ideias, mas porque aplicá-las direito exige ou d
   câmera lê eventos de ponteiro crus do canvas. Verificado ao vivo que arrastar a câmera continua
   girando o mundo normalmente e a interação por proximidade (botão "E") continua aparecendo.
 
+## Review automático do Copilot
+
+**Rodada 1** (3 achados reais, corrigidos; mais 4 achados suprimidos de menor prioridade, 2 deles
+também corrigidos por serem baratos):
+
+- `sample()` nunca devolvia `totalMeshes` no relatório, só a leitura instantânea tinha esse campo —
+  corrigido lendo `scene.meshes.length` no momento de resolver.
+- Uma amostragem em andamento não era cancelada no desmonte do componente (`teardown`) — se a cena
+  fosse destruída no meio da janela, o `setTimeout` ainda disparava depois contra uma cena morta e
+  resolvia um relatório alegando ter coberto a janela `durationMs` pedida inteira, quando só tinha
+  quadros de antes do desmonte. Corrigido compartilhando uma função `finish()` entre o caminho normal
+  (timeout) e uma nova `(scene as any).__cancelPerfSample` chamada no `teardown` — cancelar agora
+  resolve na hora com a duração REAL decorrida, não a pedida. Verificado ao vivo: cancelar no meio de
+  uma janela de 20s resolve imediatamente com `durationMs: 0`/`sampleCount: 0`, e uma nova
+  amostragem pode começar em seguida sem ficar presa em "já em andamento".
+- Quando a janela não recebe nenhum quadro finito (o próprio caso de travamento em segundo plano já
+  disclosed nesta lab), `fps.min` virava `Infinity`, que ao serializar em JSON vira `null` — corrigido
+  com um fallback explícito em 0 (`minOrZero`), mesmo padrão já usado em `mean`.
+
+Corrigidos por serem baratos e diretamente relacionados (dos 4 achados suprimidos de menor
+prioridade):
+
+- `quality()` derivava o rótulo só da classificação inicial (`isLowEndDevice`), então um aparelho
+  "forte" reduzido pelo auto-tune pra escala 1.6 continuava relatando "alta" — corrigido derivando
+  do `hardwareScalingLevel` ATUAL (`> 1` → "reduzida (auto-tune, escala X)").
+- `gpuTier` (a classificação bruta do benchmark: `'weak'`/`'strong'`/`'pending'`) não estava exposta
+  em lugar nenhum, só os campos derivados (`isLowEndDevice`/`quality`) — adicionado tanto no
+  `window.__perf` ao vivo quanto no relatório de `sample()`.
+- `frameTimeMs` só tinha `avg`/`max`, sem o percentil que a documentação desta própria lab prometia
+  ("percentis de FPS/frame time") — adicionado `p95` (a cauda lenta, quadros de pior frame time),
+  reaproveitando a mesma função de percentil genérica já usada pro FPS (renomeada de `lowPercentile`
+  pra `percentileAt`, já que agora serve os dois sentidos).
+
+Os 2 achados suprimidos restantes (`isPickable`/`material.freeze()` já cobertos na seção acima como
+"avaliados e não aplicados") não se aplicam a este ponto — eram sobre o mesmo tema já documentado.
+
+Todos os 3 achados reais + os 2 extras foram verificados ao vivo (não só corrigidos no código) via
+`window.__perf.sample()`/`window.__perf.gpuTier()`/`window.__perf.quality()` rodando contra o mundo
+carregado, incluindo forçar o cancelamento no meio de uma janela de 20s.
+
 ## Lista priorizada de otimizações maiores (labs futuros, não implementadas aqui)
 
 1. **Perfil de qualidade mobile explícito e único** (prioridade alta, risco baixo) — hoje os ramos
