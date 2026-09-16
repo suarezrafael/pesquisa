@@ -19,6 +19,7 @@ interface HudHeaderProps {
   onOpenShop: () => void
   onOpenPets: () => void
   onOpenFriends: () => void
+  onOpenNicknamePanel: () => void
   muted: boolean
   onToggleMute: () => void
   onOpenChat: () => void
@@ -47,6 +48,7 @@ export function HudHeader({
   onOpenShop,
   onOpenPets,
   onOpenFriends,
+  onOpenNicknamePanel,
   muted,
   onToggleMute,
   onOpenChat,
@@ -125,6 +127,9 @@ export function HudHeader({
           aria-label="Vincular assinatura da família"
         >
           🔗
+        </button>
+        <button type="button" className="help-button" onClick={onOpenNicknamePanel} aria-label="Trocar apelido">
+          ✏️
         </button>
         <button type="button" className="help-button" onClick={onSwitchProfile} aria-label="Trocar perfil">
           🔁

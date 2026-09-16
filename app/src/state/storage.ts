@@ -49,6 +49,9 @@ function multiplayerConsentKey(id: string): string {
 function playerIdKey(id: string): string {
   return `jogo-educativo:playerId:${id}`
 }
+function playerSecretKey(id: string): string {
+  return `jogo-educativo:playerSecret:${id}`
+}
 
 function loadRoster(): ProfileRosterEntry[] {
   const raw = localStorage.getItem(PROFILE_LIST_KEY)
@@ -218,6 +221,7 @@ export function loadProfile(): Profile | null {
       equippedBackpackColorId: null,
       equippedHairShapeId: null,
       equippedGlassesId: null,
+      nicknameChangedAt: null,
       ...(JSON.parse(raw) as Partial<Profile>),
     } as Profile
   } catch {
@@ -346,6 +350,23 @@ export function savePlayerId(playerId: string): void {
   const id = getActiveProfileId()
   if (!id) return
   localStorage.setItem(playerIdKey(id), playerId)
+}
+
+// Troca segura de nickname depois do onboarding — segredo devolvido só uma vez, na resposta de
+// `POST /players/register`, guardado por PERFIL (mesmo espírito de `playerIdKey` acima). Prova
+// posse de UM perfil específico pro servidor — diferente de `getOrCreateDeviceId()` (por
+// APARELHO, compartilhado por todos os perfis do mesmo tablet, lab-108), que não isolaria dois
+// irmãos jogando no mesmo aparelho um do outro.
+export function loadPlayerSecret(): string | null {
+  const id = getActiveProfileId()
+  if (!id) return null
+  return localStorage.getItem(playerSecretKey(id))
+}
+
+export function savePlayerSecret(playerSecret: string): void {
+  const id = getActiveProfileId()
+  if (!id) return
+  localStorage.setItem(playerSecretKey(id), playerSecret)
 }
 
 // lab-99, resto de G11 (prompt.md §12: D1/D7 retention, tempo médio por sessão, quests

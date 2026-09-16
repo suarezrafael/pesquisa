@@ -16,6 +16,7 @@ import Stripe from 'stripe'
 import {
   buildWeeklyProgressEmail,
   calculateNpsScore,
+  NICKNAME_CHANGE_COOLDOWN_DAYS,
   friendResponseStatus,
   generatePairingCode,
   hasActiveFriendship,
@@ -570,9 +571,13 @@ async function handlePlayerRegister(request: Request, env: Env): Promise<Respons
   const rows = (await sql`
     insert into player_identities (nickname, avatar_emoji, device_id)
     values (${nickname}, ${avatarEmoji}, ${deviceId})
-    returning id
-  `) as { id: string }[]
-  return Response.json({ playerId: rows[0].id })
+    returning id, player_secret
+  `) as { id: string; player_secret: string }[]
+  // `playerSecret` só existe AQUI — nunca devolvido por nenhuma outra rota (busca, perfil público,
+  // amigos). `device_id` é por APARELHO (compartilhado entre perfis do mesmo tablet, lab-108) e não
+  // prova posse de UM perfil específico; este segredo é a prova de posse de verdade, usado só pela
+  // troca de nickname (`handleHeartbeat`).
+  return Response.json({ playerId: rows[0].id, playerSecret: rows[0].player_secret })
 }
 
 const PLAYER_SEARCH_ATTEMPT_LIMIT = 8
@@ -854,6 +859,8 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
         houseFurnitureIds?: unknown
         housePlacements?: unknown
         houseVisible?: unknown
+        nickname?: unknown
+        secret?: unknown
       }
     | null
   // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
@@ -915,6 +922,70 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   }
 
   const sql = neon(env.DATABASE_URL)
+
+  // Só a chamada IMEDIATA de `sendImmediateNicknameChange` manda este campo (nunca o tick
+  // periódico, ver `state/useHeartbeat.ts`) — tratado num caminho totalmente separado do UPDATE
+  // genérico abaixo, então não precisa coexistir com os outros campos opcionais na prática.
+  //
+  // `playerId` sozinho (devolvido por `/players/search`, público) não prova posse — sem checar
+  // mais nada, qualquer jogador que descobrisse o `playerId` de outra criança por busca poderia
+  // renomear o perfil dela. `deviceId` NÃO serve como prova de posse aqui: é por APARELHO, não por
+  // PERFIL (lab-108, `storage.ts` `getOrCreateDeviceId`) — dois irmãos no mesmo tablet compartilham
+  // o mesmo `deviceId`, então um deles poderia renomear o perfil do outro. `player_secret`
+  // (devolvido só uma vez, na resposta de `POST /players/register`) é o segredo de verdade,
+  // escopado ao PERFIL, nunca exposto por nenhuma outra rota.
+  //
+  // A gravação em si é CONDICIONAL (não um SELECT de checagem seguido de um UPDATE incondicional
+  // separado) — a cláusula `where` do próprio UPDATE reavalia o cooldown contra a linha de verdade
+  // no exato momento da escrita, travada por linha pelo Postgres; duas requisições concorrentes
+  // pra o mesmo jogador não conseguem as duas passar (a segunda vê o `nickname_changed_at` já
+  // atualizado pela primeira e falha a condição).
+  if (body.nickname !== undefined) {
+    if (typeof body.nickname !== 'string') {
+      return Response.json({ error: 'nickname inválido' }, { status: 400 })
+    }
+    const trimmed = body.nickname.trim()
+    if (!isNicknameAllowed(trimmed)) {
+      return Response.json({ error: 'nickname não permitido' }, { status: 400 })
+    }
+    if (typeof body.secret !== 'string' || !isValidUuid(body.secret)) {
+      return Response.json({ error: 'secret inválido' }, { status: 400 })
+    }
+    const current = (await sql`
+      select nickname, nickname_changed_at, player_secret from player_identities where id = ${playerId}
+    `) as { nickname: string; nickname_changed_at: string | null; player_secret: string }[]
+    if (current.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
+    if (current[0].player_secret !== body.secret) {
+      return Response.json({ error: 'não autorizado' }, { status: 403 })
+    }
+    // `changed: false` no corpo (não um 204 vazio igual ao caso de troca de verdade) — sem
+    // distinguir os dois, o cliente não tem como saber se DEVE gravar um `nicknameChangedAt` novo
+    // localmente. Alcançável quando outra sessão/aba do MESMO perfil já trocou pro nome que esta
+    // está tentando mandar de novo (o próprio painel só desabilita "Salvar" pra nome igual ao que
+    // ELE conhece localmente — pode divergir do servidor). `nickname`/`nicknameChangedAt` vêm
+    // JUNTO em ambos os ramos (não só `changed`) pra a aba que fez a chamada reconciliar o próprio
+    // estado local com a linha de verdade do banco, mesmo no caso de no-op.
+    if (current[0].nickname === trimmed) {
+      return Response.json({ changed: false, nickname: trimmed, nicknameChangedAt: current[0].nickname_changed_at })
+    }
+    // Sem pré-checagem de cooldown aqui antes do `UPDATE` — a cláusula `where` dele é a checagem
+    // atômica de verdade contra o `now()` do PRÓPRIO Postgres. Uma pré-checagem em JS usando
+    // `new Date()` do Worker introduziria uma segunda fonte de "agora", com seu próprio relógio,
+    // que podia divergir por alguns milissegundos do `now()` do banco bem na fronteira exata dos 7
+    // dias — recusando com 429 uma troca que o banco já aceitaria.
+    const updated = (await sql`
+      update player_identities set nickname = ${trimmed}, nickname_changed_at = now()
+      where id = ${playerId}
+        and player_secret = ${body.secret}
+        and (nickname_changed_at is null or now() - nickname_changed_at >= (${NICKNAME_CHANGE_COOLDOWN_DAYS}::text || ' days')::interval)
+      returning id, nickname_changed_at
+    `) as { id: string; nickname_changed_at: string }[]
+    if (updated.length === 0) {
+      return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
+    }
+    return Response.json({ changed: true, nickname: trimmed, nicknameChangedAt: updated[0].nickname_changed_at })
+  }
+
   const rows = (await sql`
     update player_identities set
       last_seen_at = now(),

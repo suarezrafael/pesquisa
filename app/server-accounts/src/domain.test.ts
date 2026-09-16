@@ -13,6 +13,7 @@ import {
   isAtDeviceLimit,
   isEntitlementActive,
   isEventNewerThan,
+  canChangeNickname,
   isNicknameAllowed,
   isOnlineNow,
   isPairingCodeUsable,
@@ -582,6 +583,28 @@ describe('isNicknameAllowed (lab-159) — mesma cópia de app/src/data/nicknameF
 
   it('recusa nickname absurdamente longo', () => {
     expect(isNicknameAllowed('a'.repeat(41))).toBe(false)
+  })
+})
+
+describe('canChangeNickname — mesma cópia de app/src/state/progression.ts', () => {
+  it('permite a primeira troca (nunca trocou antes)', () => {
+    expect(canChangeNickname(null, '2026-09-16T00:00:00.000Z')).toBe(true)
+  })
+
+  it('bloqueia antes dos 7 dias completos', () => {
+    expect(canChangeNickname('2026-09-10T12:00:00.000Z', '2026-09-17T11:59:59.000Z')).toBe(false)
+  })
+
+  it('libera exatamente aos 7 dias corridos', () => {
+    expect(canChangeNickname('2026-09-10T23:00:00.000Z', '2026-09-17T23:00:00.000Z')).toBe(true)
+  })
+
+  it('não libera só por ter atravessado 7 datas de calendário UTC (6 dias e 1 hora de verdade)', () => {
+    expect(canChangeNickname('2026-09-10T23:00:00.000Z', '2026-09-17T00:00:00.000Z')).toBe(false)
+  })
+
+  it('data corrompida não trava a criança pra sempre — falha aberta (permite)', () => {
+    expect(canChangeNickname('data-invalida', '2026-09-16T00:00:00.000Z')).toBe(true)
   })
 })
 

@@ -1238,3 +1238,18 @@ export function applyPetDailyChallengeCompleted(progress: Progress, nowIso: stri
     coins: PET_DAILY_CHALLENGE_COINS,
   }
 }
+
+// Troca de apelido depois do onboarding — cooldown de dias corridos (não dia civil UTC como
+// `utcDayNumber`/`feedPet` acima): a intenção aqui é "não deixa confundir os amigos trocando de
+// nick toda hora", uma janela de tempo decorrido de verdade, não "virou a meia-noite UTC uma vez"
+// (que deixaria passar duas trocas com menos de 1h de intervalo, se caíssem em lados opostos da
+// virada do dia). Mesma constante e mesma função (client e `server-accounts/src/domain.ts`) —
+// nenhum dos dois lados pode confiar só no outro (docs/prompts/01-seguranca.md §3).
+export const NICKNAME_CHANGE_COOLDOWN_DAYS = 7
+
+export function canChangeNickname(nicknameChangedAt: string | null, nowIso: string): boolean {
+  if (nicknameChangedAt === null) return true
+  const elapsedMs = new Date(nowIso).getTime() - new Date(nicknameChangedAt).getTime()
+  if (Number.isNaN(elapsedMs)) return true
+  return elapsedMs >= NICKNAME_CHANGE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+}

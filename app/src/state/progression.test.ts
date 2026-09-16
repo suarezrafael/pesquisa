@@ -21,6 +21,7 @@ import {
   BADGE_ALL_DONE,
   BADGE_COOP_FIRST,
   BADGE_FIRST_QUEST,
+  canChangeNickname,
   equipPet,
   feedPet,
   furnitureQuantity,
@@ -1594,5 +1595,35 @@ describe('nextPlanetDiscovery (lab-181)', () => {
     // planetDiscoverySlots/nextPlanetDiscovery não recebem nem checam entitlementActive — a
     // ausência do parâmetro na assinatura JÁ é a garantia; este teste documenta a intenção.
     expect(nextPlanetDiscovery(emptyProgress)).toEqual(nextPlanetDiscovery({ ...emptyProgress }))
+  })
+})
+
+describe('canChangeNickname — cooldown de troca de apelido', () => {
+  it('permite a primeira troca (nunca trocou antes)', () => {
+    expect(canChangeNickname(null, '2026-09-16T00:00:00.000Z')).toBe(true)
+  })
+
+  it('bloqueia antes dos 7 dias completos', () => {
+    const changedAt = '2026-09-10T12:00:00.000Z'
+    const almostSevenDays = '2026-09-17T11:59:59.000Z'
+    expect(canChangeNickname(changedAt, almostSevenDays)).toBe(false)
+  })
+
+  it('libera exatamente aos 7 dias corridos, não por dia civil UTC', () => {
+    const changedAt = '2026-09-10T23:00:00.000Z'
+    // exatamente 7×24h (168h) depois, no mesmo horário do dia — o limite exato da janela
+    const sevenDaysLater = '2026-09-17T23:00:00.000Z'
+    expect(canChangeNickname(changedAt, sevenDaysLater)).toBe(true)
+
+    // Caso que distingue de verdade "7 dias corridos" de "atravessou 7 datas do calendário UTC":
+    // daqui até `2026-09-17T00:00:00.000Z` são 7 datas de calendário (10→17), mas só 6 dias e 1
+    // hora decorridos de verdade (menos de 168h) — uma implementação por dia civil aceitaria isto
+    // incorretamente; a implementação por tempo decorrido tem que continuar bloqueando.
+    const sixDaysOneHourLater = '2026-09-17T00:00:00.000Z'
+    expect(canChangeNickname(changedAt, sixDaysOneHourLater)).toBe(false)
+  })
+
+  it('data corrompida não trava a criança pra sempre — falha aberta (permite)', () => {
+    expect(canChangeNickname('data-invalida', '2026-09-16T00:00:00.000Z')).toBe(true)
   })
 })

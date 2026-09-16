@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { loadPlayerId, savePlayerId } from './storage'
+import { getActiveProfileId, loadPlayerId, savePlayerId, savePlayerSecret } from './storage'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 
@@ -35,6 +35,13 @@ export function usePlayerIdentity() {
     if (inFlightRef.current) return null
     inFlightRef.current = true
     setRegistering(true)
+    // Capturado ANTES do fetch assíncrono — `savePlayerId`/`savePlayerSecret` resolvem o perfil por
+    // `getActiveProfileId()` no MOMENTO em que são chamadas, não em que o registro começou. Se a
+    // criança trocar de perfil (lab-108, tablet compartilhado) enquanto esta chamada ainda está em
+    // voo, gravar sem checar isso escreveria o `playerId`/segredo do perfil ANTIGO no slot do
+    // perfil NOVO — o segredo de um irmão vazando pro slot do outro, que passaria a poder renomear
+    // a identidade dele.
+    const profileIdAtCallTime = getActiveProfileId()
     try {
       const res = await fetch(`${ACCOUNTS_API_URL}/players/register`, {
         method: 'POST',
@@ -42,8 +49,18 @@ export function usePlayerIdentity() {
         body: JSON.stringify({ nickname, avatarEmoji, deviceId }),
       })
       if (!res.ok) return null
-      const body = (await res.json()) as { playerId: string }
+      const body = (await res.json().catch(() => null)) as { playerId?: unknown; playerSecret?: unknown } | null
+      // Os dois campos precisam ser string de verdade antes de gravar qualquer um — um Worker
+      // ANTIGO durante um rollout devolveria só `{ playerId }` (sem `playerSecret`, ainda sem
+      // suporte a troca de nickname). `localStorage.setItem` converte QUALQUER valor pra string,
+      // então `savePlayerSecret(undefined)` gravaria a string literal "undefined" (verdadeira,
+      // não-nula) em vez de nada — depois do Worker atualizar, `loadPlayerSecret()` devolveria essa
+      // string lixo, todo `POST /players/heartbeat` com nickname recusaria com 403 pra sempre, e o
+      // `playerId` já salvo impede um novo registro que corrigiria isso.
+      if (typeof body?.playerId !== 'string' || typeof body.playerSecret !== 'string') return null
+      if (getActiveProfileId() !== profileIdAtCallTime) return null
       savePlayerId(body.playerId)
+      savePlayerSecret(body.playerSecret)
       setPlayerId(body.playerId)
       return body.playerId
     } catch {

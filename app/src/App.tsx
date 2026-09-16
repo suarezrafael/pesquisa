@@ -12,6 +12,7 @@ import { CoopChallengeToast } from './components/CoopChallengeToast'
 import { QuestListOverlay } from './world3d/QuestListOverlay'
 import { AchievementsPanel } from './world3d/AchievementsPanel'
 import { WeeklyEventPanel } from './components/WeeklyEventPanel'
+import { NicknamePanel } from './components/NicknamePanel'
 import { MyHousePanel } from './world3d/MyHousePanel'
 import { PetPanel } from './world3d/PetPanel'
 import { FriendsPanel } from './world3d/FriendsPanel'
@@ -19,7 +20,7 @@ import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
-import { useHeartbeat, sendImmediateHouseVisibility } from './state/useHeartbeat'
+import { useHeartbeat, sendImmediateHouseVisibility, sendImmediateNicknameChange } from './state/useHeartbeat'
 import type { PublicHouseSnapshot } from './state/usePlayerPublicProfile'
 import {
   trackFirstLearningChallenge,
@@ -96,6 +97,7 @@ function GameApp() {
     equipBackpackColor,
     equipHairShape,
     equipGlasses,
+    renameNickname,
   } = useProfile()
   const {
     progress,
@@ -214,6 +216,7 @@ function GameApp() {
   const [showMyHouse, setShowMyHouse] = useState(false)
   const [showPets, setShowPets] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
+  const [showNicknamePanel, setShowNicknamePanel] = useState(false)
   // Snapshot capturado no INSTANTE do clique (`onOpenWeeklyEvent` abaixo), não um booleano simples
   // — achado do review automático do Copilot: `weeklyEvent`/`weeklyEventObjectiveDone` (calculados
   // no corpo do componente, recalculados a CADA re-render) podiam divergir entre o clique no badge
@@ -599,6 +602,7 @@ function GameApp() {
           onOpenMyHouse={() => setShowMyHouse(true)}
           onOpenPets={() => setShowPets(true)}
           onOpenFriends={() => setShowFriends(true)}
+          onOpenNicknamePanel={() => setShowNicknamePanel(true)}
           onUnlockMarsReward={handleUnlockMarsReward}
           onFoundMarsCoinPot={foundMarsCoinPot}
           onFindTreasureChest={foundTreasureChest}
@@ -635,6 +639,7 @@ function GameApp() {
             showMyHouse ||
             showPets ||
             showFriends ||
+            showNicknamePanel ||
             showMarsReward ||
             weeklyEventPanel !== null ||
             dailyLoginReward !== null
@@ -714,6 +719,29 @@ function GameApp() {
           event={weeklyEventPanel.event}
           status={weeklyEventPanel.status}
           onClose={() => setWeeklyEventPanel(null)}
+        />
+      )}
+
+      {showNicknamePanel && profile && (
+        <NicknamePanel
+          profile={profile}
+          onClose={() => setShowNicknamePanel(false)}
+          onSave={async (name) => {
+            // Servidor decide de verdade (cooldown reforçado contra a linha real do banco) — só
+            // grava local depois de confirmado, pra nunca deixar `profile.nicknameChangedAt`
+            // divergir do que o backend aceitou (achado de projeto: um `renameNickname` local
+            // otimista, seguido de uma recusa do servidor, deixaria a criança achando que trocou
+            // quando na verdade só o ranking/HUD/multiplayer locais mudaram, não os amigos).
+            // Sempre reconcilia com `result.nickname`/`result.nicknameChangedAt` (a linha de
+            // verdade devolvida pelo servidor, não `name`/`new Date()` otimistas daqui) — inclusive
+            // num no-op (`changed: false`, outra aba do mesmo perfil já tinha trocado pro mesmo
+            // nome): sem reconciliar aí também, o HUD desta aba ficava preso no nome antigo mesmo
+            // com o servidor já correto, e um `nicknameChangedAt` novo local destrancaria um
+            // cooldown que o servidor não consumiu de verdade.
+            const result = await sendImmediateNicknameChange(name)
+            if (result.ok) renameNickname(result.nickname ?? name, result.nicknameChangedAt ?? null)
+            return result
+          }}
         />
       )}
 

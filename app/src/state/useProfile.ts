@@ -44,9 +44,25 @@ export function useProfile() {
       equippedBackpackColorId: null,
       equippedHairShapeId: null,
       equippedGlassesId: null,
+      nicknameChangedAt: null,
     }
     saveProfile(next)
     setProfile(next)
+  }
+
+  // Troca de apelido depois do onboarding — reaproveita o MESMO filtro/formato de
+  // `nicknameFilter.ts` já usado ali. Quem decide de verdade é o SERVIDOR (`App.tsx` só chama isto
+  // depois de `sendImmediateNicknameChange` confirmar) — sem repetir a checagem de cooldown aqui: um
+  // relógio local levemente diferente do relógio do servidor, bem na fronteira exata dos 7 dias,
+  // podia fazer esta função recusar uma troca que o servidor JÁ tinha aprovado, deixando o HUD
+  // preso no nome antigo mesmo com o backend já atualizado.
+  function renameNickname(name: string, nicknameChangedAt: string | null) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      const next: Profile = { ...prev, name, nicknameChangedAt }
+      saveProfile(next)
+      return next
+    })
   }
 
   function equipAvatar(avatarEmoji: string) {
@@ -144,5 +160,6 @@ export function useProfile() {
     equipBackpackColor,
     equipHairShape,
     equipGlasses,
+    renameNickname,
   }
 }
