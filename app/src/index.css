@@ -1547,6 +1547,12 @@ a.nickname-generate-btn {
    `<h2>`, que nunca rolava até ali (o modal inteiro cabia sem rolar). Fundo sólido igual ao card +
    sombra sutil isolam visualmente o botão do conteúdo por baixo. */
 .avatar-shop-close-anchor .modal-close {
+  /* A âncora vive DENTRO do padding do `.modal` (1.5rem/1.25rem) — sem compensar `top`/`right` aqui,
+     o botão herdaria esse padding como um recuo A MAIS (ele antes era medido direto da borda do
+     `.avatar-shop-modal`, que absolutos ignoram por padrão), descendo/deslocando visivelmente na
+     primeira visualização, antes de qualquer scroll. */
+  top: calc(0.1rem - 1.5rem);
+  right: calc(0.2rem - 1.25rem);
   background: var(--card);
   border-radius: 999px;
   box-shadow: 0 1px 4px rgba(15, 23, 65, 0.18);
@@ -1732,6 +1738,15 @@ a.nickname-generate-btn {
   background: var(--accent);
   color: var(--ink);
   cursor: pointer;
+}
+
+/* Sem isso, navegar pelo teclado (Tab) pra um item perto do topo da grade rolava ele só até a
+   borda do container, deixando o botão fisicamente embaixo do cabeçalho fixo (preview/saldo/abas)
+   — visível pro mouse, mas fora de vista pra quem navega só com teclado. Reserva a MESMA altura do
+   cabeçalho fixo (medida ao vivo: ~282px reais) só dentro da lojinha — outros modais reaproveitam
+   esta mesma classe de botão sem ter cabeçalho fixo algum, não devem herdar essa reserva. */
+.avatar-shop-modal .avatar-shop-action {
+  scroll-margin-top: 18rem;
 }
 
 .avatar-shop-action.buy {

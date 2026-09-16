@@ -116,6 +116,52 @@ já conhecida de vários labs anteriores desta sessão — a verificação de sc
 o cenário real, já que o modal inteiro sempre renderiza na largura estreita de celular, mesmo em
 desktop, ver investigação prévia acima; só o gesto de toque físico em si fica de fora).
 
+## Review automático do Copilot (PR #70)
+
+**Rodada 1** — 1 comentário gerado + 3 suprimidos, todos avaliados individualmente contra o código
+e o comportamento real (não só o texto do review):
+
+- **Real, corrigido**: o comentário gerado apontou que `.avatar-shop-close-anchor` (âncora nova do
+  botão de fechar) vive DENTRO do padding do `.modal` (1.5rem/1.25rem) — sem compensar, o botão
+  herdaria esse padding como recuo extra (antes, sendo filho direto de `.avatar-shop-modal`, ele era
+  medido da borda do card, que elementos absolutos ignoram por padrão). Verificado ao vivo via
+  `getBoundingClientRect()` ANTES da correção: botão a 25.6px do topo do modal (esperado: 1.6px) e
+  a 38.2px da borda direita (esperado: ~3-5px) — confirma exatamente a magnitude apontada pelo
+  review. Corrigido com `top`/`right` compensando o padding (`calc(0.1rem - 1.5rem)` /
+  `calc(0.2rem - 1.25rem)`). Reverificado ao vivo: topo bate exato (1.6px); direita ficou com um
+  resíduo de ~15px a mais que o original — rastreado até a barra de rolagem clássica do Windows/
+  Chrome desktop (~15-17px), que reduz a largura de conteúdo disponível pra um elemento de fluxo
+  normal (a âncora) mas NÃO reduz a "padding box" que um elemento absoluto usa como referência (o
+  botão original, antes deste lab, ignorava esse recorte). Em dispositivos com barra de rolagem
+  overlay (a maioria dos celulares/tablets — o público real do jogo), esse resíduo é zero. Aceito como resíduo cosmético desktop-only, não perseguido further (exigiria JS/
+  `ResizeObserver` pra medir a barra de verdade, desproporcional ao ganho).
+- **Real, corrigido (achado suprimido, mas avaliado como válido)**: navegar só por teclado (Tab) até
+  um botão perto do topo da grade rolava ele só até a borda do container, deixando-o fisicamente
+  embaixo do cabeçalho fixo (visível pro mouse, invisível pra quem navega só com teclado) — um
+  problema real de acessibilidade, coerente com o critério `[MUST]` de
+  `docs/prompts/02-design-profissional.md`. Corrigido com `scroll-margin-top` (18rem, medido ao
+  vivo como a altura real do cabeçalho fixo) em `.avatar-shop-modal .avatar-shop-action` — escopado
+  só à lojinha, já que outros painéis reaproveitam a mesma classe de botão sem ter cabeçalho fixo
+  algum. Verificado ao vivo: focar um botão no fim da lista de "Roupas" agora rola o suficiente pra
+  deixá-lo visível claramente ABAIXO do cabeçalho fixo (~180px de folga), não mais escondido.
+- **Real, mas não corrigido nesta rodada (achado suprimido)**: em telas de toque, um arrasto vertical
+  que comece exatamente sobre o canvas do preview (`touch-action: none`, usado pro giro da câmera)
+  não rola mais o modal — antes deste lab isso só acontecia enquanto o preview ainda não tinha
+  rolado pra fora de vista; agora é permanente, já que o preview fica sempre fixo no topo. Avaliado
+  e não corrigido: (a) a maior parte da largura do modal fora do canvas de 180px continua
+  perfeitamente arrastável, (b) o MESMO trade-off já existe hoje em produção sempre que o preview
+  está visível na tela (não é um comportamento novo, só passa a ser permanente em vez de temporário),
+  (c) sem um dispositivo de toque real pra testar (limitação de ferramental já conhecida de vários
+  labs anteriores desta sessão), uma mudança às cegas no gesto do preview arrisca quebrar o giro de
+  câmera que já funciona. Disclosed como trade-off aceito, não como bug ignorado.
+- **Real, mas não corrigido nesta rodada (achado suprimido)**: em viewports muito baixos (celular
+  em paisagem), o cabeçalho fixo (~282px) pode se aproximar ou exceder a altura útil do modal
+  (`max-height: 80vh`), deixando pouco ou nenhum espaço pra grade de itens. Este é exatamente o
+  risco que o próprio backlog (`docs/gameplay-market-expansion-backlog.md`, "Lab 205") já nomeava
+  como "avaliar" antes de resolver de forma definitiva — sem um dispositivo/emulador real de
+  viewport baixo (mesma limitação de ferramental de vários labs anteriores), não há como validar
+  com confiança uma correção de media query às cegas. Disclosed como risco conhecido, não corrigido.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Novo catálogo de cosméticos, checkout, mudança de entitlement (explicitamente fora de escopo no
