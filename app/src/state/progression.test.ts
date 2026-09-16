@@ -1611,7 +1611,7 @@ describe('canChangeNickname — cooldown de troca de apelido', () => {
 
   it('libera exatamente aos 7 dias corridos, não por dia civil UTC', () => {
     const changedAt = '2026-09-10T23:00:00.000Z'
-    // menos de 24h de diferença de calendário, mas exatamente 7*24h decorridas
+    // exatamente 7×24h (168h) depois, no mesmo horário do dia — o limite exato da janela
     const sevenDaysLater = '2026-09-17T23:00:00.000Z'
     expect(canChangeNickname(changedAt, sevenDaysLater)).toBe(true)
 

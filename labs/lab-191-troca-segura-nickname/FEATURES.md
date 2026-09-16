@@ -299,6 +299,24 @@ corrida de registro já disclosed, sem mudança):
   implementado o merge transacional dos dois caminhos, custo desproporcional a um cenário que não
   ocorre com o cliente atual; registrado aqui como restrição de design, não bug latente.
 
+**Rodada 4** — 1 comentário gerado + 3 suprimidos (1 marcado "previously missed" — repetição
+literal do achado já disclosed de perfis registrados antes da migração do segredo ficarem sem
+sincronizar pra sempre; nenhuma mudança nesta rodada, permanece uma limitação aceita e documentada):
+
+- **Real, corrigido**: `sendImmediateNicknameChange` tratava `res.ok` como sucesso e usava
+  `body?.changed ?? true` — durante uma janela de rollout com uma versão ANTIGA do Worker ainda
+  respondendo (sem suporte a `nickname` no heartbeat), essa versão antiga ignora o campo e devolve
+  um 204 comum sem corpo, que passaria por `res.ok` e cairia no fallback `?? true`, fazendo o
+  cliente gravar um nome/cooldown local que nunca foi persistido de verdade no banco — divergência
+  silenciosa entre local e servidor. Corrigido exigindo `changed` explicitamente booleano no corpo;
+  resposta ambígua (sem corpo, corpo malformado, ou campo ausente) agora é tratada como falha
+  (`ok: false`), nunca como sucesso presumido. Reverificado ao vivo: o caminho feliz continua
+  devolvendo `{"changed":true}` corretamente.
+- **Real, corrigido (achado suprimido)**: o comentário do teste de cooldown dizia "menos de 24h de
+  diferença de calendário" pros instantes `2026-09-10T23:00` e `2026-09-17T23:00` — que na verdade
+  têm 7 dias de diferença de calendário (a intenção era descrever "mesmo horário do dia", não a
+  distância de calendário). Corrigido pra descrever o caso com precisão.
+
 ## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
 
 - Nome real, bio livre, imagem enviada, nickname totalmente livre sem filtro algum.

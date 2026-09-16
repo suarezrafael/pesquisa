@@ -99,7 +99,15 @@ export async function sendImmediateNicknameChange(
     })
     if (res.ok) {
       const body = (await res.json().catch(() => null)) as { changed?: boolean } | null
-      return { ok: true, changed: body?.changed ?? true }
+      // `changed` precisa vir explícito no corpo — nunca assume sucesso quando ambíguo. Um Worker
+      // ANTIGO durante um rollout (backend ainda sem suporte a `nickname`) ignora esse campo e
+      // devolve um 204 comum (sem corpo algum), que passaria por `res.ok` mas nunca de fato mudou o
+      // nickname no banco; tratar isso como sucesso gravaria um nome/cooldown local que diverge de
+      // vez do que está salvo de verdade.
+      if (typeof body?.changed !== 'boolean') {
+        return { ok: false, error: 'não foi possível confirmar a troca — tente de novo' }
+      }
+      return { ok: true, changed: body.changed }
     }
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     return { ok: false, error: body?.error ?? 'não foi possível trocar agora' }
