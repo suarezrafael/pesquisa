@@ -2,9 +2,10 @@
 // padrão de `hats.ts`/`avatars.ts`. Item de maior alavancagem de engajamento encontrado na
 // pesquisa de mercado desta sessão (relatório "Carta de Navegação") — o core loop do Adopt Me!:
 // adotar, cuidar, ver crescer. `species` só descreve QUAL bicho — quem monta a geometria 3D de
-// verdade é `world3d/World3D.tsx` (`buildGato`/`buildCachorro`, já existentes desde os labs de
-// bichos do planeta, reaproveitados sem geometria nova), conforme
-// docs/prompts/03-arquitetura-sistema.md §1.
+// verdade é `world3d/petFigure.ts` (`buildGato`/`buildCachorro`, já existentes desde os labs de
+// bichos do planeta, reaproveitados sem geometria nova — extraídas de `World3D.tsx` pra também
+// servir o preview da lojinha, `PetPreview3D.tsx`), conforme docs/prompts/03-arquitetura-sistema.md
+// §1.
 export type PetSpecies = 'gato' | 'cachorro'
 
 export interface PetOption {

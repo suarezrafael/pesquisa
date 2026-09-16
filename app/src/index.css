@@ -1602,6 +1602,36 @@ a.nickname-generate-btn {
   50% { opacity: 1; }
 }
 
+/* Preview 3D do pet equipado — mesmo espírito de `.avatar-preview-3d-*` acima, canvas menor
+   (pets são bichos pequenos, câmera do preview já fica bem mais perto). */
+.pet-preview-3d-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.pet-preview-3d-canvas {
+  width: 140px;
+  height: 140px;
+  border-radius: 20px;
+  background: radial-gradient(circle at 50% 35%, #eef2fc 0%, #dbe3f5 100%);
+  touch-action: none;
+  outline: none;
+}
+
+.pet-preview-3d-loading {
+  animation: avatar-preview-pulse 1.2s ease-in-out infinite;
+}
+
+/* Sem pet equipado ainda — placeholder claro em vez de um preview vazio/quebrado. */
+.pet-preview-3d-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  opacity: 0.4;
+}
+
 /* Abas (lab-87) — mesmo visual de "pill" já usado noutros seletores do jogo, sem introduzir um
    componente novo de UI. Fade nas duas bordas (lab-91) — pista visual de "tem mais aba pra
    scrollar" em vez de cortar o texto da última aba no meio, achado testando em largura de
