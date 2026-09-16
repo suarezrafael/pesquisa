@@ -1,13 +1,54 @@
 # Laboratório atual
 
-Em andamento: labs/lab-191-troca-segura-nickname/ — troca segura de nickname. Origem:
-`docs/gameplay-market-expansion-backlog.md`, "Lab 207" no documento — próximo item recomendado
-depois do lab-190. Ver `labs/lab-191-troca-segura-nickname/FEATURES.md` pro objetivo e investigação
-prévia (gerador/filtro já existem só pro onboarding; a lacuna real é a falta de uma função de
-troca depois, e a sincronização com `player_identities` no backend, que hoje só registra uma vez e
-nunca atualiza).
+Último concluído: labs/lab-191-troca-segura-nickname/ — troca segura de nickname depois do
+onboarding. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 207" no documento — próximo
+item recomendado depois do lab-190. **Achado real, confirma o backlog**: o gerador/filtro seguro
+(`generateNickname`/`isNicknameAllowed`) já existiam, mas só pro onboarding — não havia nenhuma
+função nem UI pra trocar depois. Pior: `usePlayerIdentity.ensureRegistered` só registra o nickname
+no Neon UMA VEZ por perfil (`INSERT` simples, sem upsert) e nunca sincroniza trocas depois disso —
+amigos/busca/perfil público ficariam presos no nick antigo pra sempre. **Corrigido**: novo painel
+`NicknamePanel.tsx` (botão "✏️" no HUD) reaproveita o gerador/filtro do onboarding; `handleHeartbeat`
+ganhou um campo `nickname` opcional (só a chamada imediata do painel manda, nunca o tick
+periódico), com cooldown de 7 dias corridos (`canChangeNickname`, mesma constante/lógica testada
+nos dois lados) reforçado no servidor via `UPDATE` condicional (não uma checagem separada — fecha
+corrida entre requisições concorrentes por construção). HUD/ranking(próprio jogador)/multiplayer já
+refletiam qualquer troca de graça, por já lerem `profile.name` reativo — nenhuma mudança de código
+precisou ali. **PR #71 teve 9 rodadas de review automático do Copilot**, com 3 achados de segurança
+genuinamente graves corrigidos em sequência: (1) a correção inicial autorizava a troca só pelo
+`playerId`, que `/players/search` devolve pra qualquer chamador — qualquer jogador que descobrisse
+o id de outra criança podia renomeá-la; corrigido exigindo `device_id` como prova de posse; (2)
+achado seguinte: `device_id` é POR APARELHO, compartilhado por todos os perfis do mesmo tablet
+(lab-108) — um irmão podia renomear o outro; corrigido com um segredo de verdade ESCOPADO AO
+PERFIL (`player_secret`, migração `0015`, devolvido só uma vez no registro); (3) uma reconciliação
+de estado entre rodadas introduziu uma REGRESSÃO que resetava o cooldown a cada troca bem-sucedida
+pra perfis nunca registrados, permitindo trocar de apelido sem limite nenhum — corrigido
+imediatamente. Também corrigidos: uma corrida real que vazava a credencial de um perfil pro slot de
+outro se a criança trocasse de perfil (tablet compartilhado) enquanto um registro ainda estava em
+voo; um `"undefined"` literal gravado no `localStorage` por uma resposta incompleta de registro
+durante um deploy fora de ordem; submissão dupla por Enter; anúncio de erro pra leitor de tela;
+cast de tipo ausente numa expressão SQL; e uma pré-checagem de cooldown redundante removida em
+favor de confiar só no `UPDATE` atômico. **Convergência**: 2 rodadas seguidas (8 e 9) com 0
+comentários novos — os achados restantes são janelas de corrida sub-milissegundo autocorrigíveis, e
+identidades registradas ANTES da migração do segredo ficando com sincronização só local
+(população pequena e finita, disclosed 3 vezes, candidato a um laboratório futuro dedicado a um
+bootstrap seguro de segredo). Detecção de PII no nickname permanece fora de escopo por decisão de
+produto já tomada no lab-89, não revisitada. `npx tsc -b`/`--noEmit` limpos; testes: app 213/213 (4
+novos), server-accounts 154/154 (5 novos). `npm run build` sem regressão de bundle. **Verificado ao
+vivo, repetidamente, contra o banco de PRODUÇÃO real** (`wrangler dev` local a cada rodada de
+correção, e um smoke test final direto contra o Worker de produção depois do merge): registro,
+troca real, no-op, cooldown recusando com 429, tentativa de ataque com segredo errado recusada com
+403, e o cenário exato de dois perfis no mesmo `deviceId` (irmãos) — o atacante com o PRÓPRIO
+segredo não conseguiu renomear a vítima. Ver
+`labs/lab-191-troca-segura-nickname/FEATURES.md` pro histórico completo rodada a rodada (o mais
+longo desta sessão). **Merge confirmado**: PR #71 mesclada em `main` no commit `204456b`
+(2026-09-16, squash). Migrações `0014`/`0015` aplicadas em produção antes do merge. CI de `main`
+verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200) — testado ao vivo contra
+produção real depois do deploy, jogador de teste removido do banco ao final.
 
-Último concluído: labs/lab-190-preview-fixo-lojinha-scroll/ — preview fixo na lojinha durante
+Antes desse: labs/lab-190-preview-fixo-lojinha-scroll/ — preview fixo na lojinha durante
 scroll. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 205" no documento (renumerado pra
 lab-190 na sequência real do repo) — próximo item recomendado depois do lab-189. **Achado real,
 confirma o backlog**: preview 3D, saldo de moedas e abas rolavam junto com a lista de itens dentro
