@@ -1,6 +1,6 @@
 # Laboratório 193 — Auditoria de performance Babylon.js em mobile
 
-Status: em andamento (PR aberta, aguardando review automático do Copilot)
+Status: em andamento (PR convergida — rodada 2 do review pulada por decisão do usuário, aguardando confirmação de merge)
 Início: 2026-09-16
 Fim: -
 Commit inicial: 6993f0c08c79b0f0587e2f085586af690b582eaf
@@ -225,6 +225,14 @@ Os 2 achados suprimidos restantes (`isPickable`/`material.freeze()` já cobertos
 Todos os 3 achados reais + os 2 extras foram verificados ao vivo (não só corrigidos no código) via
 `window.__perf.sample()`/`window.__perf.gpuTier()`/`window.__perf.quality()` rodando contra o mundo
 carregado, incluindo forçar o cancelamento no meio de uma janela de 20s.
+
+**Rodada 2**: solicitada normalmente após o push da rodada 1, mas o check-run
+`copilot-pull-request-reviewer` ficou "in_progress" por mais de 65 minutos sem concluir — bem acima
+do padrão desta sessão (2-10 min nas labs anteriores) e sem sinal de erro/timeout, só lento. Uma
+segunda tentativa de solicitação foi deduplicada pelo GitHub (não gerou um novo evento
+`review_requested` na timeline da PR, confirmado via API). Consultado o usuário via
+`AskUserQuestion`; decisão: seguir pro merge sem esperar a rodada 2, tratando a rodada 1 (que já
+achou e corrigiu 3 bugs reais na instrumentação nova) como suficiente.
 
 ## Lista priorizada de otimizações maiores (labs futuros, não implementadas aqui)
 
