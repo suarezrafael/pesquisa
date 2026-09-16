@@ -51,8 +51,10 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-189, prio
 ## Funcionalidades planejadas
 
 - [x] Verificação ao vivo (Chrome real): abrir a lojinha numa aba com muitos itens (ex. calças/
-  chapéus), rolar até o fim, confirmar hoje que preview E botão fechar somem de vista (achado
-  prévio) antes de aplicar qualquer correção.
+  chapéus), rolar até o fim. A correção do preview já estava aplicada quando a verificação
+  começou (não houve uma rodada isolada medindo o bug original antes de qualquer código) — o
+  achado do botão de fechar sumindo de vista surgiu como efeito colateral observado NESSA mesma
+  verificação, não de um teste dedicado ao comportamento antigo (ver "Verificação ao vivo" abaixo).
 - [x] Tornar `.avatar-preview-3d-wrap` `position: sticky` no topo do scroll de `.avatar-shop-modal`,
   com fundo sólido (não transparente) pra itens da grade não aparecerem "atrás" dele ao rolar por
   baixo.
@@ -89,9 +91,6 @@ Perfil de teste existente (`8e4a3309-dfc2-454e-8c17-3dfbb2f26387`) com `coins` e
 via `localStorage` (só pra desbloquear moeda suficiente pra fluir pelas compras durante o teste,
 restaurado ao valor original ao final) — aba "Roupas" escolhida por ter 43 itens no catálogo
 (camisa+calça+sapato+mochila), a mais longa da lojinha, mesmo caso citado no próprio backlog.
-
-**Antes da correção** (antes deste lab existir): não aplicável, esta é a primeira verificação —
-a investigação prévia (leitura de código) já tinha identificado a causa raiz corretamente.
 
 **Depois de aplicar `position: sticky` no preview/saldo/abas, mas ANTES do fundo sólido no botão de
 fechar**: preview/saldo/abas confirmados fixos durante o scroll (rolagem até `scrollHeight` total,
@@ -133,8 +132,9 @@ e o comportamento real (não só o texto do review):
   Chrome desktop (~15-17px), que reduz a largura de conteúdo disponível pra um elemento de fluxo
   normal (a âncora) mas NÃO reduz a "padding box" que um elemento absoluto usa como referência (o
   botão original, antes deste lab, ignorava esse recorte). Em dispositivos com barra de rolagem
-  overlay (a maioria dos celulares/tablets — o público real do jogo), esse resíduo é zero. Aceito como resíduo cosmético desktop-only, não perseguido further (exigiria JS/
-  `ResizeObserver` pra medir a barra de verdade, desproporcional ao ganho).
+  overlay (a maioria dos celulares/tablets — o público real do jogo), esse resíduo é zero. Aceito
+  como resíduo cosmético desktop-only, não perseguido adiante (exigiria JS/`ResizeObserver` pra
+  medir a barra de verdade, desproporcional ao ganho).
 - **Real, corrigido (achado suprimido, mas avaliado como válido)**: navegar só por teclado (Tab) até
   um botão perto do topo da grade rolava ele só até a borda do container, deixando-o fisicamente
   embaixo do cabeçalho fixo (visível pro mouse, invisível pra quem navega só com teclado) — um
@@ -162,7 +162,39 @@ e o comportamento real (não só o texto do review):
   viewport baixo (mesma limitação de ferramental de vários labs anteriores), não há como validar
   com confiança uma correção de media query às cegas. Disclosed como risco conhecido, não corrigido.
 
-## Fora de escopo (explicitamente adiado)
+**Rodada 2** — 0 comentários novos, 6 suprimidos (2 repetiram achados já disclosed acima sem
+mudança — arrasto de toque sobre o preview, e viewport baixo; ambos permanecem cientes e não
+corrigidos pelo mesmo motivo já registrado). Dos 4 restantes, avaliados individualmente:
+
+- **Falso positivo, investigado e descartado**: o review alegou que o `top: calc(0.1rem - 1.5rem)`
+  (correção da rodada 1) empurra o botão de fechar PRA CIMA da borda visível do scrollport ao
+  rolar, fazendo-o "desaparecer depois de rolar mesmo estando visível na posição inicial". Testado
+  ao vivo contra essa alegação específica: `modal.scrollTop` ajustado pra 300 e depois pro máximo
+  (`scrollHeight`, ~2198px) — em ambos os casos, `getBoundingClientRect()` do botão confirma
+  `top: 93px` (dentro do `modal.top: 91.4px`, ou seja, DENTRO do scrollport, não acima) E
+  `document.elementFromPoint()` no centro do botão confirma que o próprio `.modal-close` é o
+  elemento realmente clicável naquele ponto (não coberto por outra coisa). O botão nunca some —
+  a alegação não reproduz. Nenhuma mudança de código.
+- **Real, corrigido**: `FEATURES.md` marcava como concluído (`[x]`) um item que descrevia uma
+  verificação "antes de aplicar qualquer correção" que na prática nunca aconteceu como uma etapa
+  isolada — a implementação (CSS/JSX) já estava escrita antes da primeira abertura do navegador
+  nesta rodada, e o achado do botão de fechar surgiu como efeito colateral observado durante a
+  verificação do preview, não de um teste dedicado ao comportamento antigo. Reescrito pra refletir
+  o que de fato aconteceu.
+- **Real, mas fora do que dá pra corrigir com confiança nesta sessão**: o `scroll-margin-top`
+  (correção da rodada 1) só afeta rolagem disparada por FOCO de teclado — durante rolagem manual
+  comum (roda do mouse/arrasto de toque), o cabeçalho fixo continua sendo desenhado por CIMA de
+  qualquer item da grade que passe por baixo dele, já que os dois vivem no MESMO container de
+  scroll. Tecnicamente correto: o `background` sólido do cabeçalho MASCARA visualmente a
+  sobreposição (os itens ficam escondidos atrás dele, não "por baixo" de forma transparente), mas
+  não impede que eles fiquem temporariamente inacessíveis ao mouse/toque enquanto passam por trás.
+  Isso é uma característica INERENTE de qualquer cabeçalho `sticky` sobre uma lista rolável (o
+  mesmo padrão já usado, por exemplo, em cabeçalhos fixos de tabela em qualquer app) — resolver de
+  verdade exigiria mover a GRADE pra um scroller secundário separado (o cabeçalho fora do scroll
+  container), uma mudança estrutural maior que o escopo deste lab, arriscando quebrar o fade
+  visual das abas (`.avatar-shop-tabs-wrap::before/::after`) e o comportamento de `overflow-y` já
+  testado. Avaliado como um trade-off aceito do padrão "cabeçalho fixo", não um bug introduzido por
+  engano — mas registrado aqui como dívida real, não descartado.
 
 - Novo catálogo de cosméticos, checkout, mudança de entitlement (explicitamente fora de escopo no
   próprio item do backlog).
