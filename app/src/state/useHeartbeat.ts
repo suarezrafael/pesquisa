@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { getOrCreateDeviceId, loadPlayerId } from './storage'
+import { loadPlayerId, loadPlayerSecret } from './storage'
 import { resolveHouseSyncSnapshot } from './progression'
 import type { Profile, Progress } from '../types'
 
@@ -72,19 +72,24 @@ export function sendImmediateHouseVisibility(visible: boolean, progress: Progres
 // (perfil nunca abriu o painel de Amigos) não há nada pra sincronizar agora — a troca local já
 // aconteceu, e o próximo `ensureRegistered` vai registrar com o nome já atualizado.
 //
-// Manda `deviceId` junto — prova de posse checada no servidor contra `player_identities.device_id`
-// (nunca exposto por `/players/search`/`/players/:id/public-profile`, só o dono de verdade sabe o
-// próprio). Sem isso, qualquer jogador que descobrisse o `playerId` de outra criança via busca por
-// nickname (rota pública) poderia renomear o perfil dela — o `playerId` sozinho não prova posse,
-// só identifica QUAL linha mudar.
+// Manda `secret` junto (`loadPlayerSecret`) — prova de posse checada no servidor contra
+// `player_identities.player_secret`, nunca exposto por nenhuma outra rota. Sem isso, qualquer
+// jogador que descobrisse o `playerId` de outra criança via busca por nickname (rota pública)
+// poderia renomear o perfil dela — o `playerId` sozinho não prova posse, só identifica QUAL linha
+// mudar. `getOrCreateDeviceId()` NÃO serve pra isso: é por APARELHO, compartilhado por todos os
+// perfis do mesmo tablet (lab-108), não isolaria dois irmãos jogando no mesmo aparelho.
+// Perfil registrado ANTES deste segredo existir (sem `loadPlayerSecret()` salvo localmente) cai no
+// mesmo caminho de "nada pra sincronizar agora" — a troca fica só local até uma tentativa futura,
+// mesma postura de degradação graciosa já aceita em outros pontos deste app.
 export async function sendImmediateNicknameChange(nickname: string): Promise<{ ok: boolean; error?: string }> {
   const playerId = loadPlayerId()
-  if (!playerId) return { ok: true }
+  const secret = loadPlayerSecret()
+  if (!playerId || !secret) return { ok: true }
   try {
     const res = await fetch(`${ACCOUNTS_API_URL}/players/heartbeat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId, nickname, deviceId: getOrCreateDeviceId() }),
+      body: JSON.stringify({ playerId, nickname, secret }),
     })
     if (res.status === 204) return { ok: true }
     const body = (await res.json().catch(() => null)) as { error?: string } | null

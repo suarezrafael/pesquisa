@@ -572,9 +572,13 @@ async function handlePlayerRegister(request: Request, env: Env): Promise<Respons
   const rows = (await sql`
     insert into player_identities (nickname, avatar_emoji, device_id)
     values (${nickname}, ${avatarEmoji}, ${deviceId})
-    returning id
-  `) as { id: string }[]
-  return Response.json({ playerId: rows[0].id })
+    returning id, player_secret
+  `) as { id: string; player_secret: string }[]
+  // `playerSecret` só existe AQUI — nunca devolvido por nenhuma outra rota (busca, perfil público,
+  // amigos). `device_id` é por APARELHO (compartilhado entre perfis do mesmo tablet, lab-108) e não
+  // prova posse de UM perfil específico; este segredo é a prova de posse de verdade, usado só pela
+  // troca de nickname (`handleHeartbeat`).
+  return Response.json({ playerId: rows[0].id, playerSecret: rows[0].player_secret })
 }
 
 const PLAYER_SEARCH_ATTEMPT_LIMIT = 8
@@ -857,7 +861,7 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
         housePlacements?: unknown
         houseVisible?: unknown
         nickname?: unknown
-        deviceId?: unknown
+        secret?: unknown
       }
     | null
   // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
@@ -926,9 +930,11 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   //
   // `playerId` sozinho (devolvido por `/players/search`, público) não prova posse — sem checar
   // mais nada, qualquer jogador que descobrisse o `playerId` de outra criança por busca poderia
-  // renomear o perfil dela. `deviceId` (nunca exposto por `/players/search`/
-  // `/players/:id/public-profile`, só o dono de verdade sabe o próprio) precisa bater com
-  // `player_identities.device_id` antes de qualquer escrita.
+  // renomear o perfil dela. `deviceId` NÃO serve como prova de posse aqui: é por APARELHO, não por
+  // PERFIL (lab-108, `storage.ts` `getOrCreateDeviceId`) — dois irmãos no mesmo tablet compartilham
+  // o mesmo `deviceId`, então um deles poderia renomear o perfil do outro. `player_secret`
+  // (devolvido só uma vez, na resposta de `POST /players/register`) é o segredo de verdade,
+  // escopado ao PERFIL, nunca exposto por nenhuma outra rota.
   //
   // A gravação em si é CONDICIONAL (não um SELECT de checagem seguido de um UPDATE incondicional
   // separado) — a cláusula `where` do próprio UPDATE reavalia o cooldown contra a linha de verdade
@@ -943,14 +949,14 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     if (!isNicknameAllowed(trimmed)) {
       return Response.json({ error: 'nickname não permitido' }, { status: 400 })
     }
-    if (typeof body.deviceId !== 'string' || !isValidUuid(body.deviceId)) {
-      return Response.json({ error: 'deviceId inválido' }, { status: 400 })
+    if (typeof body.secret !== 'string' || !isValidUuid(body.secret)) {
+      return Response.json({ error: 'secret inválido' }, { status: 400 })
     }
     const current = (await sql`
-      select nickname, nickname_changed_at, device_id from player_identities where id = ${playerId}
-    `) as { nickname: string; nickname_changed_at: string | null; device_id: string }[]
+      select nickname, nickname_changed_at, player_secret from player_identities where id = ${playerId}
+    `) as { nickname: string; nickname_changed_at: string | null; player_secret: string }[]
     if (current.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
-    if (current[0].device_id !== body.deviceId) {
+    if (current[0].player_secret !== body.secret) {
       return Response.json({ error: 'não autorizado' }, { status: 403 })
     }
     if (current[0].nickname === trimmed) {
@@ -962,8 +968,8 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     const updated = (await sql`
       update player_identities set nickname = ${trimmed}, nickname_changed_at = now()
       where id = ${playerId}
-        and device_id = ${body.deviceId}
-        and (nickname_changed_at is null or now() - nickname_changed_at >= (${NICKNAME_CHANGE_COOLDOWN_DAYS} || ' days')::interval)
+        and player_secret = ${body.secret}
+        and (nickname_changed_at is null or now() - nickname_changed_at >= (${NICKNAME_CHANGE_COOLDOWN_DAYS}::text || ' days')::interval)
       returning id
     `) as { id: string }[]
     if (updated.length === 0) {

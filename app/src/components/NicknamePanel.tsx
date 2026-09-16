@@ -38,7 +38,10 @@ export function NicknamePanel({ profile, onSave, onClose }: NicknamePanelProps) 
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
-    if (!trimmedName || nicknameBlocked || onCooldown || unchanged) return
+    // `saving` na guarda — sem isso, apertar Enter de novo enquanto a primeira troca ainda está em
+    // voo (o botão desabilitado não impede o `onSubmit` do form) disparava uma segunda chamada
+    // concorrente.
+    if (!trimmedName || nicknameBlocked || onCooldown || unchanged || saving) return
     setSaving(true)
     setError(null)
     const result = await onSave(trimmedName)
@@ -101,7 +104,15 @@ export function NicknamePanel({ profile, onSave, onClose }: NicknamePanelProps) 
             {nicknameBlocked && (
               <small className="field-hint field-hint-error">Esse apelido não pode ser usado — tente outro.</small>
             )}
-            {error && <small className="field-hint field-hint-error">{error}</small>}
+            {/* `role="alert"` — sem isso, a recusa do servidor (só aparece DEPOIS de uma espera
+                assíncrona, não na renderização inicial do campo) nunca era anunciada pra quem usa
+                leitor de tela, diferente da mensagem de formato inválido acima, que aparece
+                enquanto o campo já está com foco. */}
+            {error && (
+              <small className="field-hint field-hint-error" role="alert">
+                {error}
+              </small>
+            )}
           </label>
 
           <button

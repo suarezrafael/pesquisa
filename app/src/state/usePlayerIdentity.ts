@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { loadPlayerId, savePlayerId } from './storage'
+import { loadPlayerId, savePlayerId, savePlayerSecret } from './storage'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 
@@ -42,8 +42,9 @@ export function usePlayerIdentity() {
         body: JSON.stringify({ nickname, avatarEmoji, deviceId }),
       })
       if (!res.ok) return null
-      const body = (await res.json()) as { playerId: string }
+      const body = (await res.json()) as { playerId: string; playerSecret: string }
       savePlayerId(body.playerId)
+      savePlayerSecret(body.playerSecret)
       setPlayerId(body.playerId)
       return body.playerId
     } catch {

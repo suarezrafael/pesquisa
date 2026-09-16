@@ -115,8 +115,9 @@ como dependente de 203/pet já estar confiável, já resolvido no lab-188).
   calendário). Falha aberta (permite) se a data salva estiver corrompida. Testado
   (`progression.test.ts`).
 - `state/useProfile.ts`: `renameNickname(name, nowIso)` — atualiza `profile.name`+
-  `nicknameChangedAt` local e persiste; repete a checagem de cooldown antes de gravar (defesa em
-  profundidade, mesmo que o chamador já tenha validado).
+  `nicknameChangedAt` local e persiste, sem repetir validação de formato/cooldown (quem decide de
+  verdade é o servidor; `App.tsx` só chama isto depois de `sendImmediateNicknameChange` confirmar —
+  ver "Rodada 1" abaixo pro motivo de não duplicar a checagem aqui).
 - Novo componente `components/NicknamePanel.tsx` — mesmo gerador/filtro/UX do `Onboarding.tsx`
   (`generateNickname`/`sanitizeNicknameChars`/`isNicknameAllowed`), mais mensagem de cooldown
   restante quando bloqueado.
@@ -227,6 +228,43 @@ ranking(próprio jogador)/multiplayer não precisou de nenhuma mudança de códi
   proativamente ANTES de chegar nesse caso, usando o próprio `nicknameChangedAt` local — este 429
   só é alcançável no mesmo cenário raro de dessincronização entre aparelhos/sessões do achado
   anterior); não corrigido nesta rodada.
+
+**Rodada 2** — 1 comentário gerado + 5 suprimidos (1 marcado "previously missed", repetição da
+corrida de registro já disclosed acima, sem mudança):
+
+- **Real, grave, corrigido**: a correção da rodada 1 usou `device_id` como prova de posse — mas
+  `device_id` é POR APARELHO, não por PERFIL (`storage.ts`, `getOrCreateDeviceId`, lab-108: vários
+  perfis do mesmo tablet compartilham o mesmo id). Um irmão jogando no mesmo tablet enviaria o
+  MESMO `device_id` da vítima e passaria a checagem — a correção da rodada 1 fechava o ataque
+  "estranho descobre o playerId pela internet" mas deixava aberto o caso "irmão no mesmo aparelho".
+  Corrigido com um segredo de verdade ESCOPADO AO PERFIL: nova coluna `player_secret` (migração
+  `0015`, UUID gerado no registro), devolvida só na resposta de `POST /players/register` — nunca
+  por `/players/search`/`/players/:id/public-profile`/heartbeat comum. Guardada localmente por
+  perfil (`playerSecretKey`, mesmo padrão de `playerIdKey`). Verificado ao vivo reproduzindo
+  EXATAMENTE o cenário do achado: dois jogadores registrados com o MESMO `deviceId` (irmãos no
+  mesmo tablet) — o segundo tentando renomear o primeiro com o PRÓPRIO segredo (não o da vítima)
+  recebeu 403; o dono de verdade (segredo correto) renomeou com sucesso (204); cooldown e no-op
+  reverificados também, continuam corretos com o novo mecanismo. Perfis registrados ANTES desta
+  migração (sem segredo salvo localmente) degradam pro mesmo caminho de "nada pra sincronizar
+  agora" — a troca fica só local até uma tentativa futura, disclosed como limitação aceita (mesma
+  postura de degradação graciosa já usada em outros pontos deste app pra sincronização sem conta).
+- **Real, corrigido**: o `UPDATE` condicional da rodada 1 concatenava
+  `${NICKNAME_CHANGE_COOLDOWN_DAYS} || ' days'` sem `::text` explícito no parâmetro numérico —
+  mesmo padrão já usado (com o cast certo) em `handleAdminMetrics` pro NPS
+  (`${NPS_COOLDOWN_DAYS}::text || ' days'`, `index.ts` linha ~1746). Corrigido adicionando o mesmo
+  `::text` — apesar da verificação ao vivo da rodada 1 não ter reproduzido uma falha (o teste real
+  passou com 204), o padrão já estabelecido no arquivo pra exatamente este tipo de expressão usa o
+  cast explícito, e não há motivo real pra divergir.
+- **Real, corrigido (achado suprimido)**: apertar Enter de novo enquanto a primeira troca ainda
+  estava em voo disparava uma segunda chamada concorrente — o botão desabilitado não impede o
+  `onSubmit` do form via teclado, e a guarda de `handleSave` não considerava `saving`. Corrigido
+  incluindo `saving` na guarda.
+- **Real, corrigido (achado suprimido)**: a recusa do servidor (só aparece depois de uma espera
+  assíncrona) não tinha semântica de região viva — quem usa leitor de tela não era avisado da falha.
+  Corrigido com `role="alert"` no elemento de erro.
+- **Real, corrigido (achado suprimido)**: a descrição de `renameNickname` em "Implementação" acima
+  ainda afirmava que a função repetia a checagem de cooldown (verdade na rodada 1, removido na
+  rodada 1 pelo achado do relógio local — a DESCRIÇÃO não tinha sido atualizada junto). Corrigida.
 
 - Nome real, bio livre, imagem enviada, nickname totalmente livre sem filtro algum.
 - Histórico público de nomes antigos (nenhum registro do nick anterior é exposto a terceiros).
