@@ -1,8 +1,8 @@
 # Laboratório 193 — Auditoria de performance Babylon.js em mobile
 
-Status: em andamento (PR #73 já mesclada; rodada 2 do review chegou após o merge com achados reais — corrigidos numa PR de acompanhamento)
+Status: concluído (PR #73 + PR de acompanhamento #74, ambas mescladas e implantadas em produção)
 Início: 2026-09-16
-Fim: -
+Fim: 2026-09-16
 Commit inicial: 6993f0c08c79b0f0587e2f085586af690b582eaf
 
 ## Objetivo do laboratório

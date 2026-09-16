@@ -45,6 +45,28 @@ CI de `main` verde nos 3 workflows; deploy de produção confirmado: Vercel
 (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
 (`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
+**PR de acompanhamento #74 (pós-merge)**: a rodada 2 do review da PR #73 na verdade tinha terminado
+7 minutos antes do merge, só não propagou a tempo na API — trazia achados reais que motivaram uma PR
+separada: percentil com off-by-one em tamanhos de amostra comuns (`floor(n*p)` acertava o rank 100%
+em vez do p95 com 20 amostras — trocado por nearest-rank); `engine.getFps()` não é leitura por
+quadro (contador interno periódico). Uma 1ª correção trocou por `frameTimeCounter` (duração do
+TRABALHO por quadro, não o intervalo de relógio real — um quadro de 4ms num orçamento de 16.67ms/60
+FPS reportaria 250 FPS), que uma **rodada 3 do review nessa mesma PR de acompanhamento** apontou
+como ainda errado — corrigido de vez usando `engine.getDeltaTime()` (o delta real por quadro,
+confirmado no código-fonte do `@babylonjs/core`), com `fps.avg` agora agregando os deltas em ms
+antes de converter pra FPS (não a média das razões já convertidas, que superestima quando o tempo
+por quadro varia). Também corrigido: `window.__perf` não era limpo no desmonte do componente. Um
+achado (falta de `dispose()` explícito em `SceneInstrumentation`/`EngineInstrumentation`)
+investigado contra o código-fonte real e **rejeitado como falso positivo**
+(`scene.dispose()`/`engine.dispose()` já limpam todos os observables que essas classes registram).
+Rodada 2 dessa PR de acompanhamento travou de novo por ~30 min sem concluir (mesmo padrão da PR
+#73) — consultado o usuário via `AskUserQuestion`, decisão: seguir sem esperar. `npx tsc -b`/testes/
+build limpos ao longo de todas as 3 rodadas. **Merge confirmado**: PR #74 mesclada em `main` no
+commit `f1594d7` (2026-09-16, squash), confirmado via `AskUserQuestion`. CI de `main` verde nos 3
+workflows; deploy de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200),
+Cloudflare Pages (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
+
 **Nota pra quem retomar este projeto**: existe uma edição não commitada em
 `docs/gameplay-market-expansion-backlog.md` (nova entrada "PK XD" na tabela de concorrentes e labs
 212-217 propondo um "centro de jogos educativo" com mini-jogos de contar/soletrar/memória/lógica),
