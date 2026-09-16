@@ -1,16 +1,59 @@
 # Laboratório atual
 
-Em andamento: labs/lab-193-babylon-performance-mobile/ — auditoria de performance Babylon.js em
-mobile (P0, urgente). Origem: pedido urgente do usuário via arquivo em `docs/urgent-babylon-performance-lab.md`
-(descoberto na árvore de trabalho, não pelo chat, enquanto o lab-192 abaixo estava em andamento) e
-um adendo correspondente em `docs/gameplay-market-expansion-backlog.md`. Confirmado com o usuário
-via `AskUserQuestion` que a ordem correta era: terminar o lab-192 (preview de pets, já em
-andamento) primeiro, depois iniciar este como **lab-193** (próximo número real livre, seguindo a
-própria regra do documento urgente) — lab-192 concluído e mergeado, ver histórico completo abaixo.
-Ver `labs/lab-193-babylon-performance-mobile/FEATURES.md` pro objetivo/escopo/investigação prévia
-completos.
+Último concluído: labs/lab-193-babylon-performance-mobile/ — instrumentação real de performance
+Babylon.js em mobile (P0, urgente). Origem: pedido urgente do usuário via arquivo em
+`docs/urgent-babylon-performance-lab.md` (descoberto na árvore de trabalho, não pelo chat, enquanto
+o lab-192 abaixo estava em andamento) e um adendo correspondente em
+`docs/gameplay-market-expansion-backlog.md`. Confirmado com o usuário via `AskUserQuestion` que a
+ordem correta era: terminar o lab-192 (preview de pets) primeiro, depois iniciar este como
+**lab-193** (próximo número real livre, seguindo a própria regra do documento urgente).
+**Entregue**: `window.__perf` (`World3D.tsx`) ampliado com os contadores que faltavam da
+`SceneInstrumentation`/`EngineInstrumentation` (active meshes evaluation, render, camera render,
+particles, render targets, GPU frame time) e uma nova `sample(durationMs)` que agrega médias e
+percentis (p5/p1 de FPS, p95 de frame time) numa janela, em vez de só ler um valor de cada vez no
+console. **Achado real, testando a própria instrumentação nova contra o mundo carregado (não só
+lendo o código)**: 3 bugs genuínos antes mesmo de ir a review — `window.__perf` podia ficar preso
+numa cena já destruída pela dupla montagem do `StrictMode` em dev (sem guarda de `disposed`);
+`gpuFrameTimeCounter` vem em nanossegundos, não milissegundos (sem conversão, aparecia como "10
+milhões ms"); um único quadro com `deltaTime` zero contaminava a média inteira do `sample()` com
+`NaN`. Aplicado `scene.skipPointerMovePicking = true` (verificado por busca no arquivo inteiro que
+nada usa `scene.pick`/`onPointerObservable`/`meshUnderPointer`) — as demais otimizações candidatas
+do documento urgente (`isPickable`, `material.freeze()`, squared distance, raycast duplicado) foram
+avaliadas e **não aplicadas** por falta de dado real de dispositivo Android que as justifique,
+documentadas como lista priorizada pra labs futuros. **Limitação de ferramental real, disclosed**: a
+aba controlada pela automação do Chrome desta sessão trava `requestAnimationFrame` quase por
+completo mesmo sendo a única aba visível (mesma classe de problema já em memória de sessões
+anteriores) — não foi possível coletar um baseline de FPS confiável contra as 5 cenas planejadas;
+os bugs acima foram encontrados forçando repinturas manuais via screenshots espaçados (suficiente
+pra validar a lógica de agregação, não pra medir desempenho real). Baseline de verdade contra um
+Android físico continua pendente (mesma limitação disclosed nos labs 177/178/179/187). **PR #73
+teve 1 rodada de review automático do Copilot** com 3 achados reais corrigidos (relatório de
+`sample()` não incluía `totalMeshes`; uma amostragem em andamento não era cancelada no desmonte do
+componente, resolvendo tarde com `durationMs` alegando ter coberto a janela inteira; `fps.min` virava
+`Infinity`/`null` quando a janela não recebia nenhum quadro finito) mais 2 achados suprimidos de
+menor prioridade também corrigidos por serem baratos (`quality()` não refletia o auto-tune atual;
+faltava expor `gpuTier` bruto; `frameTimeMs` sem percentil, inconsistente com a própria documentação
+da lab). **Rodada 2 do review travou "in_progress" por mais de 65 minutos** (bem acima do padrão de
+2-10 min desta sessão, sem sinal de erro) — consultado o usuário via `AskUserQuestion`, decisão:
+seguir pro merge sem esperar, tratando a rodada 1 (já com 3 bugs reais corrigidos) como suficiente.
+`npx tsc -b` limpo; testes: app 213/213 (inalterado — mudança é engine/instrumentação, sem lógica de
+domínio); `npm run build` sem regressão de bundle (+0.12kB no chunk `World3D`). Ver
+`labs/lab-193-babylon-performance-mobile/FEATURES.md` pro histórico completo. **Merge confirmado**:
+PR #73 mesclada em `main` no commit `7469376` (2026-09-16, squash), confirmado via `AskUserQuestion`.
+CI de `main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-192-preview-3d-pets/ — preview 3D de verdade na lojinha de pets.
+**Nota pra quem retomar este projeto**: existe uma edição não commitada em
+`docs/gameplay-market-expansion-backlog.md` (nova entrada "PK XD" na tabela de concorrentes e labs
+212-217 propondo um "centro de jogos educativo" com mini-jogos de contar/soletrar/memória/lógica),
+descoberta na árvore de trabalho durante a execução deste lab, não autorada por esta sessão de IA e
+não endereçada a ela — puramente conteúdo de backlog, sem instrução embutida. Deixada intacta e sem
+commit, igual ao tratamento dado ao documento urgente antes deste lab; o usuário decide quando/se
+commitar.
+
+Último concluído (antes deste): labs/lab-192-preview-3d-pets/ — preview 3D de verdade na lojinha de pets.
 Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 206 - Pets premium de qualidade, roupas e
 máscaras" — próximo item recomendado depois do lab-191. Esse item do backlog embute 3 pedaços
 independentes (catálogo mais rico, cosméticos de pet, preview claro) — este lab escolheu só o
