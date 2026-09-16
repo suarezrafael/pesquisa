@@ -959,8 +959,13 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     if (current[0].player_secret !== body.secret) {
       return Response.json({ error: 'não autorizado' }, { status: 403 })
     }
+    // `changed: false` no corpo (não um 204 vazio igual ao caso de troca de verdade) — sem
+    // distinguir os dois, o cliente não tem como saber se DEVE gravar um `nicknameChangedAt` novo
+    // localmente. Alcançável só quando outra sessão/aba do MESMO perfil já trocou pro nome que
+    // esta está tentando mandar de novo (o próprio painel já desabilita "Salvar" pra nome igual ao
+    // que ELE conhece localmente).
     if (current[0].nickname === trimmed) {
-      return new Response(null, { status: 204 })
+      return Response.json({ changed: false })
     }
     if (!canChangeNickname(current[0].nickname_changed_at, new Date().toISOString())) {
       return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
@@ -975,7 +980,7 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     if (updated.length === 0) {
       return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
     }
-    return new Response(null, { status: 204 })
+    return Response.json({ changed: true })
   }
 
   const rows = (await sql`

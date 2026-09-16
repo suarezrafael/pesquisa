@@ -81,17 +81,26 @@ export function sendImmediateHouseVisibility(visible: boolean, progress: Progres
 // Perfil registrado ANTES deste segredo existir (sem `loadPlayerSecret()` salvo localmente) cai no
 // mesmo caminho de "nada pra sincronizar agora" — a troca fica só local até uma tentativa futura,
 // mesma postura de degradação graciosa já aceita em outros pontos deste app.
-export async function sendImmediateNicknameChange(nickname: string): Promise<{ ok: boolean; error?: string }> {
+// `changed` distingue uma troca de verdade de um no-op silencioso (o servidor já tinha exatamente
+// esse nickname salvo — alcançável se outra aba/sessão do MESMO perfil já tivesse trocado antes).
+// Sem essa distinção, gravar um `nicknameChangedAt` novo local num no-op destrancaria um cooldown
+// que o servidor não consumiu de verdade.
+export async function sendImmediateNicknameChange(
+  nickname: string,
+): Promise<{ ok: boolean; changed?: boolean; error?: string }> {
   const playerId = loadPlayerId()
   const secret = loadPlayerSecret()
-  if (!playerId || !secret) return { ok: true }
+  if (!playerId || !secret) return { ok: true, changed: true }
   try {
     const res = await fetch(`${ACCOUNTS_API_URL}/players/heartbeat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, nickname, secret }),
     })
-    if (res.status === 204) return { ok: true }
+    if (res.ok) {
+      const body = (await res.json().catch(() => null)) as { changed?: boolean } | null
+      return { ok: true, changed: body?.changed ?? true }
+    }
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     return { ok: false, error: body?.error ?? 'não foi possível trocar agora' }
   } catch {

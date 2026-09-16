@@ -12,7 +12,7 @@ import type { Profile } from '../types'
 
 interface NicknamePanelProps {
   profile: Profile
-  onSave: (name: string) => Promise<{ ok: boolean; error?: string }>
+  onSave: (name: string) => Promise<{ ok: boolean; changed?: boolean; error?: string }>
   onClose: () => void
 }
 

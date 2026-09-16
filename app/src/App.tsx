@@ -732,8 +732,11 @@ function GameApp() {
             // divergir do que o backend aceitou (achado de projeto: um `renameNickname` local
             // otimista, seguido de uma recusa do servidor, deixaria a criança achando que trocou
             // quando na verdade só o ranking/HUD/multiplayer locais mudaram, não os amigos).
+            // `changed` (não só `ok`) importa aqui: um no-op do servidor (outra aba do mesmo
+            // perfil já tinha trocado pro mesmo nome) não deve destrancar um cooldown novo local
+            // que o servidor não consumiu de verdade.
             const result = await sendImmediateNicknameChange(name)
-            if (result.ok) renameNickname(name, new Date().toISOString())
+            if (result.ok && result.changed) renameNickname(name, new Date().toISOString())
             return result
           }}
         />

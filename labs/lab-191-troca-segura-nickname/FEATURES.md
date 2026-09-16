@@ -139,13 +139,16 @@ como dependente de 203/pet já estar confiável, já resolvido no lab-188).
 - `server-accounts/src/domain.ts`: mesma função `canChangeNickname` + mesma constante do client —
   cópia proposital (não dá pra importar entre os pacotes deployáveis, mesmo padrão já usado por
   `isNicknameAllowed`). Testado (`domain.test.ts`).
-- `server-accounts/src/index.ts`: `handleHeartbeat` ganha um campo opcional `nickname` — só a
-  chamada IMEDIATA do painel manda esse campo (nunca o tick periódico de 60s, decisão de escopo
-  registrada acima). Quando presente e DIFERENTE do nickname já salvo: valida formato
+- `server-accounts/src/index.ts`: `handleHeartbeat` ganha um campo opcional `nickname`, tratado num
+  caminho SEPARADO (early return) do `UPDATE` genérico de `equippedLook`/`badges`/casa — quando
+  presente, a requisição INTEIRA é só sobre nickname, nunca chega no `UPDATE` genérico (`last_seen_at`
+  incluso). Só a chamada IMEDIATA do painel manda este campo, e nunca combinado com os outros (ver
+  "Rodada 3" abaixo — achado real sobre essa premissa, corrigido só na documentação, não no
+  comportamento). Quando presente e DIFERENTE do nickname já salvo: valida formato
   (`isNicknameAllowed`) e cooldown (`canChangeNickname` contra a linha real do banco) antes de
-  atualizar `nickname`+`nickname_changed_at`; recusa com 400 (formato) ou 429 (cooldown) sem tocar
-  em nenhum outro campo do heartbeat. Renomear pro MESMO nome já salvo é um no-op silencioso (não
-  reinicia o cooldown).
+  atualizar `nickname`+`nickname_changed_at`, devolvendo `{changed: true}`; recusa com 400 (formato),
+  403 (posse) ou 429 (cooldown). Renomear pro MESMO nome já salvo devolve `{changed: false}` sem
+  tocar no cooldown.
 
 ## Verificação ao vivo
 
@@ -265,6 +268,38 @@ corrida de registro já disclosed acima, sem mudança):
 - **Real, corrigido (achado suprimido)**: a descrição de `renameNickname` em "Implementação" acima
   ainda afirmava que a função repetia a checagem de cooldown (verdade na rodada 1, removido na
   rodada 1 pelo achado do relógio local — a DESCRIÇÃO não tinha sido atualizada junto). Corrigida.
+
+**Rodada 3** — 2 comentários gerados + 4 suprimidos (1 marcado "previously missed", repetição da
+corrida de registro já disclosed, sem mudança):
+
+- **Real, corrigido**: a resposta do servidor era um 204 vazio TANTO pra troca de verdade quanto
+  pro no-op (nome já igual) — o cliente não tinha como distinguir os dois casos, e gravava um
+  `nicknameChangedAt` novo local mesmo no no-op. Alcançável se outra aba/sessão do MESMO perfil já
+  tivesse trocado pro nome que esta está tentando mandar de novo (destrancaria um cooldown que o
+  servidor não consumiu de verdade — bloqueio local incorreto). Corrigido: a resposta agora é
+  `{changed: true}` ou `{changed: false}` (200, não mais 204 vazio); `App.tsx` só grava o cooldown
+  local quando `changed` é verdadeiro. Verificado ao vivo: troca de verdade devolve
+  `{"changed":true}`; repetir o MESMO nome logo em seguida devolve `{"changed":false}`.
+- **Real, corrigido (achado suprimido, cobertura de teste)**: os dois testes "libera exatamente aos
+  7 dias corridos" (client e servidor) usavam dois instantes que são AO MESMO TEMPO 7×24h decorridas
+  E 7 datas de calendário UTC adiante — não provam de verdade que a implementação é por tempo
+  decorrido e não por dia civil (uma implementação errada por dia civil passaria nos dois testes
+  igual). Corrigido acrescentando o caso que realmente distingue: mesmo `changedAt`, mas um `nowIso`
+  que atravessa 7 datas de calendário com só 6 dias e 1 hora reais decorridos — a implementação
+  correta continua bloqueando; uma regressão pra semântica de dia civil aceitaria incorretamente.
+  Adicionado nos dois lados (`progression.test.ts` e `domain.test.ts`).
+- **Real, mas fora do que corrigi nesta rodada (achado suprimido)**: o caminho de troca de nickname
+  faz um `return` antecipado ANTES do `UPDATE` genérico de `equippedLook`/`badges`/casa — se algum
+  chamador futuro combinasse `nickname` com esses outros campos na MESMA requisição, eles seriam
+  ignorados silenciosamente (incluindo `last_seen_at`). Confirmado que isso nunca acontece hoje:
+  `sendImmediateNicknameChange` (única chamadora deste campo) manda só
+  `{playerId, nickname, secret}`, nunca combinado com os outros campos opcionais. Corrigida só a
+  documentação (que overclaimava "não deixa os outros campos falharem", quando na prática a
+  requisição inteira é sobre nickname, não convive com os outros campos por design) — não
+  implementado o merge transacional dos dois caminhos, custo desproporcional a um cenário que não
+  ocorre com o cliente atual; registrado aqui como restrição de design, não bug latente.
+
+## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
 
 - Nome real, bio livre, imagem enviada, nickname totalmente livre sem filtro algum.
 - Histórico público de nomes antigos (nenhum registro do nick anterior é exposto a terceiros).

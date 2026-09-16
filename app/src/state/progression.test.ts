@@ -1614,6 +1614,13 @@ describe('canChangeNickname — cooldown de troca de apelido', () => {
     // menos de 24h de diferença de calendário, mas exatamente 7*24h decorridas
     const sevenDaysLater = '2026-09-17T23:00:00.000Z'
     expect(canChangeNickname(changedAt, sevenDaysLater)).toBe(true)
+
+    // Caso que distingue de verdade "7 dias corridos" de "atravessou 7 datas do calendário UTC":
+    // daqui até `2026-09-17T00:00:00.000Z` são 7 datas de calendário (10→17), mas só 6 dias e 1
+    // hora decorridos de verdade (menos de 168h) — uma implementação por dia civil aceitaria isto
+    // incorretamente; a implementação por tempo decorrido tem que continuar bloqueando.
+    const sixDaysOneHourLater = '2026-09-17T00:00:00.000Z'
+    expect(canChangeNickname(changedAt, sixDaysOneHourLater)).toBe(false)
   })
 
   it('data corrompida não trava a criança pra sempre — falha aberta (permite)', () => {
