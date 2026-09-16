@@ -495,6 +495,14 @@ export function isNicknameAllowed(name: string): boolean {
 // só por caírem em lados opostos da virada da meia-noite UTC.
 export const NICKNAME_CHANGE_COOLDOWN_DAYS = 7
 
+// Especificação da regra, não a checagem que roda de verdade no request de troca — essa é a
+// cláusula `where` do `UPDATE` condicional em `handleHeartbeat` (`index.ts`), que reavalia contra o
+// `now()` do PRÓPRIO Postgres pra fechar a corrida entre requisições concorrentes (ver comentário
+// lá). Esta função existe testável/isolada pra documentar a regra com clareza (mesma
+// responsabilidade da cópia em `app/src/state/progression.ts`, usada ali de verdade pela checagem
+// otimista da UI) — qualquer mudança na janela de dias ou na semântica "corridos vs. dia civil"
+// precisa manter as três formas (esta função, a cópia do client, e a expressão SQL) em sincronia
+// manual, já que não dá pra compartilhar código entre os runtimes/pacotes deployáveis.
 export function canChangeNickname(nicknameChangedAt: string | null, nowIso: string): boolean {
   if (nicknameChangedAt === null) return true
   const elapsedMs = new Date(nowIso).getTime() - new Date(nicknameChangedAt).getTime()

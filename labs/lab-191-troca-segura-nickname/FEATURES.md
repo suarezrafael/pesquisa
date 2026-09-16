@@ -1,6 +1,6 @@
 # Laboratório 191 — Troca segura de nickname
 
-Status: em andamento (PR aberta)
+Status: em andamento (PR convergida, aguardando confirmação de merge)
 Início: 2026-09-16
 Fim: -
 Commit inicial: 11871b3ab94168282b08b7c097670b897576f40d
@@ -452,6 +452,35 @@ ambos genuinamente acionáveis e de baixo custo:
   nos dois ramos, então a ausência dele indica uma resposta malformada, não a falta de troca
   anterior. Corrigido exigindo o campo explicitamente presente (`null` ou uma data válida), nunca
   ausente.
+
+**Rodada 9** — 0 comentários novos, 4 suprimidos:
+
+- **Real, corrigido (documentação)**: a rodada 8 removeu a pré-checagem em JS que USAVA
+  `canChangeNickname` no servidor — a função ficou exportada e testada, mas sem nenhum consumidor
+  real no caminho de produção (só a cláusula SQL do `UPDATE` decide de verdade agora). Isso criava
+  uma falsa sensação de cobertura: os testes de `canChangeNickname` continuariam verdes mesmo que a
+  condição SQL divergisse da regra pretendida. Avaliado: remover a função inteiramente perderia a
+  especificação testável e isolada da regra (útil como referência, exercitada pelos próprios
+  testes que documentam o comportamento esperado); reintroduzir como pré-checagem reabriria a corrida
+  de relógios já corrigida na rodada 8. Corrigido só o comentário, deixando claro que esta função é
+  uma ESPECIFICAÇÃO da regra (não o enforcement de verdade, que é só a cláusula SQL) e que qualquer
+  mudança na janela de dias precisa manter as duas formas em sincronia manual.
+- **Avaliado e mantido — decisão de produto já tomada numa sessão anterior, não revisitada aqui (3
+  achados suprimidos, mesma raiz)**: `isNicknameAllowed` não detecta PII formada só por letras/
+  espaço (nome completo, escola, endereço) — o filtro aceita qualquer coisa que passe no formato +
+  lista de bloqueio. Isso é uma limitação REAL e conhecida, mas é a MESMA validação já usada há
+  muito tempo no onboarding (`Onboarding.tsx`) — este lab reaproveita a validação existente sem
+  enfraquecê-la nem fortalecê-la, e a decisão de não implementar detecção de PII foi tomada
+  explicitamente no lab-89 ("decisão de produto confirmada com o usuário... detecção de PII foi
+  deixada de fora por decisão do usuário nesta sessão", já citado desde a investigação prévia deste
+  lab e na seção "Fora de escopo" abaixo). Não é uma lacuna introduzida por este lab, e revisitar
+  essa decisão de produto está fora do que uma rodada de review automático pode decidir sozinha —
+  precisaria de confirmação do usuário de verdade, não deste PR.
+
+**Convergência**: 2 rodadas seguidas (8 e 9) com 0 comentários novos, restando só achados já
+avaliados/disclosed em rodadas anteriores ou decisões de produto explicitamente fora de escopo —
+mesmo critério já usado em labs anteriores desta sessão (lab-184, lab-189) pra encerrar o ciclo de
+review.
 
 ## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
 
