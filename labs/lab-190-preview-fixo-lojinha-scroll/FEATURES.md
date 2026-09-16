@@ -1,6 +1,6 @@
 # Laboratório 190 — Preview fixo na lojinha durante scroll
 
-Status: em andamento (PR aberta)
+Status: em andamento (PR aprovada pelo review automático, aguardando confirmação de merge)
 Início: 2026-09-15
 Fim: -
 Commit inicial: 65b696f370a7c3311ad20db1b669f7b7e8286ac9
@@ -216,6 +216,12 @@ mesmo motivo já registrado). Dos 3 restantes, 2 são genuinamente novos:
   contradizendo o próprio trade-off já documentado na rodada 2 (rolagem manual pode mascarar itens
   temporariamente atrás do cabeçalho). Reescrito pra qualificar a afirmação como válida só pra
   posição inicial de cada rolagem, não durante o gesto de rolar em si.
+
+**Rodada 4** — 0 comentários novos, 2 suprimidos, ambos repetição literal de trade-offs já
+avaliados e disclosed nas rodadas 2-3 (arrasto de toque sobre o preview; viewport baixo/paisagem
+podendo deixar a grade sem área útil) — sem achado novo. Convergência: mesmo critério já usado em
+labs anteriores desta sessão (uma rodada que só repete pendências já documentadas, com 0
+comentários novos, encerra o ciclo de review).
 
 - Novo catálogo de cosméticos, checkout, mudança de entitlement (explicitamente fora de escopo no
   próprio item do backlog).
