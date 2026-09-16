@@ -1,12 +1,50 @@
 # Laboratório atual
 
-Em andamento: labs/lab-192-preview-3d-pets/ — preview 3D de verdade na lojinha de pets. Origem:
-`docs/gameplay-market-expansion-backlog.md`, "Lab 206 - Pets premium de qualidade, roupas e
+Último concluído: labs/lab-192-preview-3d-pets/ — preview 3D de verdade na lojinha de pets.
+Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 206 - Pets premium de qualidade, roupas e
 máscaras" — próximo item recomendado depois do lab-191. Esse item do backlog embute 3 pedaços
-independentes (catálogo mais rico, cosméticos de pet, preview claro) — este lab escolhe só o
-preview como fatia inicial (pré-requisito real dos outros dois, que ficam pra labs futuros). Ver
-`labs/lab-192-preview-3d-pets/FEATURES.md` pro objetivo e investigação prévia (`buildGato`/
-`buildCachorro` já são funções puras, extração pro mesmo padrão de `studentFigure.ts` é direta).
+independentes (catálogo mais rico, cosméticos de pet, preview claro) — este lab escolheu só o
+preview como fatia inicial (pré-requisito real dos outros dois, que ficam pra labs futuros).
+**Achado real, confirma o backlog**: o painel de pets (`PetPanel.tsx`) não tinha preview 3D
+NENHUM — só um emoji plano no mesmo grid do `AvatarShop.tsx`. **Corrigido**: `buildGato`/
+`buildCachorro` (já funções puras/autocontidas em `World3D.tsx`) extraídas pra `petFigure.ts`
+(mesmo motivo de `studentFigure.ts` existir separado), reaproveitadas por um `PetPreview3D.tsx`
+novo (mesmo padrão de `AvatarPreview3D.tsx` — motor Babylon próprio, sem física) que mostra o pet
+EQUIPADO no topo do painel. **PR #72 teve 3 rodadas de review automático do Copilot** — rodada 1
+achou um vazamento real de shadow caster ao trocar de pet dentro do preview (achado irônico: o
+comentário do código já CITAVA a lição do lab-176/`disposeStudentFigure` pra esse exato problema,
+só não tinha sido de fato aplicada — corrigido com `disposePetFigure` novo em `petFigure.ts`,
+reaproveitável por qualquer consumidor futuro); um achado gerado na mesma rodada (pedia pra
+descartar `scene`/`shadowGenerator` manualmente na desmontagem) foi investigado contra o
+CÓDIGO-FONTE de verdade do `@babylonjs/core` instalado (não só a documentação) e confirmado como
+falso positivo — `engine.dispose()` já cobre toda a cadeia (engine→cena→luz→shadow generator).
+Rodada 2 achou o cálculo de "pelo grisalho de idoso" duplicado entre `World3D.tsx` e o preview
+(unificado em `petFurColor`, `petFigure.ts`) e um `equippedPetId` inválido/corrompido montando um
+canvas vazio em vez do placeholder (corrigido validando contra `findPetById` antes de decidir).
+Rodada 3 veio com só 2 achados triviais (aria-label no canvas, um typo) — convergência confirmada
+com 2 rodadas seguidas sem achado novo. `npx tsc -b` limpo; testes: app 213/213 (inalterado, mudança
+é engine/UI, sem lógica de domínio); `npm run build` sem regressão de bundle. **Verificado ao vivo,
+repetidamente**: preview bate com o pet visto no mundo (mesma espécie/cor/escala, incluindo o
+blend de cor "idoso"); câmera/iluminação ajustadas ao vivo (raio inicial cortava o pet fora do
+quadro; sem HDRI o pet renderizava escuro, mesmo bug do lab-87 pro avatar); trocar de pet atualiza
+o preview instantaneamente; sem vazamento medido (`shadowGenerator.getShadowMap().renderList`)
+em várias trocas de pet em sequência; id inválido cai no placeholder corretamente. Pendência
+disclosed: viewport mobile/touch real não verificado (mesma limitação de ferramental já conhecida
+de vários labs anteriores desta sessão). Ver `labs/lab-192-preview-3d-pets/FEATURES.md` pro
+histórico completo rodada a rodada. **Merge confirmado**: PR #72 mesclada em `main` no commit
+`6e57912` (2026-09-16, squash). CI de `main` verde nos 3 workflows; deploy de produção confirmado:
+Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
+
+**Nota importante pra quem retomar este projeto**: existe um lab urgente P0 pendente de início,
+descrito em `docs/urgent-babylon-performance-lab.md` (auditoria de performance Babylon.js —
+Android modesto caindo a ~15 FPS) — chegou como um arquivo novo na árvore de trabalho enquanto este
+lab estava em andamento (não commitado ainda; `docs/gameplay-market-expansion-backlog.md` também
+tem um adendo urgente correspondente, ainda não commitado). Confirmado com o usuário via
+`AskUserQuestion` que a ordem correta é: terminar o lab em andamento primeiro (feito acima), depois
+iniciar o urgente como **lab-193** (próximo número real livre, seguindo a própria regra do
+documento urgente).
 
 Último concluído: labs/lab-191-troca-segura-nickname/ — troca segura de nickname depois do
 onboarding. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 207" no documento — próximo
