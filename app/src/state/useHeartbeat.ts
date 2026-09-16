@@ -81,16 +81,18 @@ export function sendImmediateHouseVisibility(visible: boolean, progress: Progres
 // Perfil registrado ANTES deste segredo existir (sem `loadPlayerSecret()` salvo localmente) cai no
 // mesmo caminho de "nada pra sincronizar agora" — a troca fica só local até uma tentativa futura,
 // mesma postura de degradação graciosa já aceita em outros pontos deste app.
-// `changed` distingue uma troca de verdade de um no-op silencioso (o servidor já tinha exatamente
-// esse nickname salvo — alcançável se outra aba/sessão do MESMO perfil já tivesse trocado antes).
-// Sem essa distinção, gravar um `nicknameChangedAt` novo local num no-op destrancaria um cooldown
-// que o servidor não consumiu de verdade.
+// `changed` distingue uma troca de verdade de um no-op (o servidor já tinha exatamente esse
+// nickname salvo — alcançável se outra aba/sessão do MESMO perfil já tivesse trocado antes). Sem
+// essa distinção, gravar um `nicknameChangedAt` novo local num no-op destrancaria um cooldown que o
+// servidor não consumiu de verdade. `nickname`/`nicknameChangedAt` vêm JUNTO nos dois casos — são a
+// linha de verdade do banco, não o que esta aba mandou — pra reconciliar o estado local mesmo no
+// no-op (sem isso, o HUD desta aba ficava preso no nome antigo mesmo com o servidor já correto).
 export async function sendImmediateNicknameChange(
   nickname: string,
-): Promise<{ ok: boolean; changed?: boolean; error?: string }> {
+): Promise<{ ok: boolean; changed?: boolean; nickname?: string; nicknameChangedAt?: string | null; error?: string }> {
   const playerId = loadPlayerId()
   const secret = loadPlayerSecret()
-  if (!playerId || !secret) return { ok: true, changed: true }
+  if (!playerId || !secret) return { ok: true, changed: true, nickname, nicknameChangedAt: null }
   try {
     const res = await fetch(`${ACCOUNTS_API_URL}/players/heartbeat`, {
       method: 'POST',
@@ -98,16 +100,18 @@ export async function sendImmediateNicknameChange(
       body: JSON.stringify({ playerId, nickname, secret }),
     })
     if (res.ok) {
-      const body = (await res.json().catch(() => null)) as { changed?: boolean } | null
+      const body = (await res.json().catch(() => null)) as
+        | { changed?: boolean; nickname?: string; nicknameChangedAt?: string | null }
+        | null
       // `changed` precisa vir explícito no corpo — nunca assume sucesso quando ambíguo. Um Worker
       // ANTIGO durante um rollout (backend ainda sem suporte a `nickname`) ignora esse campo e
       // devolve um 204 comum (sem corpo algum), que passaria por `res.ok` mas nunca de fato mudou o
       // nickname no banco; tratar isso como sucesso gravaria um nome/cooldown local que diverge de
       // vez do que está salvo de verdade.
-      if (typeof body?.changed !== 'boolean') {
+      if (typeof body?.changed !== 'boolean' || typeof body.nickname !== 'string') {
         return { ok: false, error: 'não foi possível confirmar a troca — tente de novo' }
       }
-      return { ok: true, changed: body.changed }
+      return { ok: true, changed: body.changed, nickname: body.nickname, nicknameChangedAt: body.nicknameChangedAt ?? null }
     }
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     return { ok: false, error: body?.error ?? 'não foi possível trocar agora' }

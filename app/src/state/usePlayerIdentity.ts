@@ -42,7 +42,15 @@ export function usePlayerIdentity() {
         body: JSON.stringify({ nickname, avatarEmoji, deviceId }),
       })
       if (!res.ok) return null
-      const body = (await res.json()) as { playerId: string; playerSecret: string }
+      const body = (await res.json().catch(() => null)) as { playerId?: unknown; playerSecret?: unknown } | null
+      // Os dois campos precisam ser string de verdade antes de gravar qualquer um — um Worker
+      // ANTIGO durante um rollout devolveria só `{ playerId }` (sem `playerSecret`, ainda sem
+      // suporte a troca de nickname). `localStorage.setItem` converte QUALQUER valor pra string,
+      // então `savePlayerSecret(undefined)` gravaria a string literal "undefined" (verdadeira,
+      // não-nula) em vez de nada — depois do Worker atualizar, `loadPlayerSecret()` devolveria essa
+      // string lixo, todo `POST /players/heartbeat` com nickname recusaria com 403 pra sempre, e o
+      // `playerId` já salvo impede um novo registro que corrigiria isso.
+      if (typeof body?.playerId !== 'string' || typeof body.playerSecret !== 'string') return null
       savePlayerId(body.playerId)
       savePlayerSecret(body.playerSecret)
       setPlayerId(body.playerId)

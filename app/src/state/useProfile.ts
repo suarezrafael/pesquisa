@@ -56,10 +56,10 @@ export function useProfile() {
   // relógio local levemente diferente do relógio do servidor, bem na fronteira exata dos 7 dias,
   // podia fazer esta função recusar uma troca que o servidor JÁ tinha aprovado, deixando o HUD
   // preso no nome antigo mesmo com o backend já atualizado.
-  function renameNickname(name: string, nowIso: string) {
+  function renameNickname(name: string, nicknameChangedAt: string | null) {
     setProfile((prev) => {
       if (!prev) return prev
-      const next: Profile = { ...prev, name, nicknameChangedAt: nowIso }
+      const next: Profile = { ...prev, name, nicknameChangedAt }
       saveProfile(next)
       return next
     })

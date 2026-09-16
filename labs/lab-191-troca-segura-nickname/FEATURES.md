@@ -317,6 +317,43 @@ sincronizar pra sempre; nenhuma mudança nesta rodada, permanece uma limitação
   têm 7 dias de diferença de calendário (a intenção era descrever "mesmo horário do dia", não a
   distância de calendário). Corrigido pra descrever o caso com precisão.
 
+**Rodada 5** — 1 comentário gerado + 4 suprimidos, sem nenhum marcado "previously missed" desta
+vez (mesmo o achado de perfis sem segredo local sendo, na prática, uma repetição literal do já
+disclosed nas rodadas 2/4 — tratado como tal abaixo, terceira vez que surge):
+
+- **Real, corrigido**: a resposta `{changed: false}` (no-op — outra aba/sessão do MESMO perfil já
+  tinha trocado pro nome pedido) não trazia o nickname/timestamp de verdade do banco — `App.tsx` só
+  chamava `renameNickname` quando `changed` era `true`, então no caso de no-op o HUD desta aba
+  ficava PRESO no nome antigo, mesmo com o servidor já correto (e sem essa reconciliação, também
+  sem saber qual `nicknameChangedAt` de verdade usar). Corrigido: a resposta do servidor agora inclui
+  `nickname`+`nicknameChangedAt` (a linha de verdade do banco) em AMBOS os ramos (`changed: true` e
+  `changed: false`, incluindo o `returning nickname_changed_at` no próprio `UPDATE` em vez de
+  assumir que o relógio do cliente bate com o `now()` do Postgres); `App.tsx` passou a reconciliar
+  sempre com esses valores, não mais com `name`/`new Date()` otimistas locais, mesmo no no-op.
+  Verificado ao vivo: uma troca de verdade e um no-op subsequente pro MESMO nome devolvem o mesmo
+  `nicknameChangedAt` de verdade nos dois casos.
+- **Real, corrigido (achado suprimido)**: `ensureRegistered` gravava `savePlayerSecret(body.playerSecret)`
+  sem checar o tipo — se um Worker ANTIGO durante uma janela de deploy (frontend/backend deployam
+  separado, sem garantia de ordem) devolvesse só `{playerId}` (sem `playerSecret`, versão anterior a
+  este lab), `localStorage.setItem` converteria `undefined` na STRING literal `"undefined"` —
+  depois do Worker atualizar, `loadPlayerSecret()` devolveria esse lixo (truthy, não-nulo), toda
+  troca de nickname seria recusada com 403 pra sempre, e o `playerId` já salvo impede um novo
+  registro que corrigiria isso. Corrigido validando que os DOIS campos são string de verdade antes
+  de gravar qualquer um — resposta incompleta agora é tratada como registro que falhou (nada
+  salvo), não como sucesso parcial.
+- **Real, mas repetido pela 3ª vez, permanece disclosed e não corrigido**: perfis registrados ANTES
+  da migração do segredo (`playerId` local sem `playerSecret` correspondente) continuam caindo no
+  caminho de "nada pra sincronizar agora" — `ensureRegistered` nunca re-registra um perfil que já
+  tem `playerId`, então não existe hoje nenhum caminho pra esses perfis obterem um segredo
+  retroativamente; a troca de nickname deles fica só local (HUD/ranking/multiplayer OK) mas nunca
+  chega aos amigos/busca. Dado que isso já foi avaliado 2 vezes antes (rodadas 2 e 4) com a mesma
+  conclusão — população afetada é pequena e finita (só quem usou o painel de Amigos entre o
+  lab-159 original e este lab; toda conta NOVA a partir daqui já nasce com segredo) — mas a
+  repetição pela 3ª vez sugere que vale a pena um laboratório futuro dedicado a um bootstrap seguro
+  de segredo pra identidades legadas, em vez de continuar reavaliando a mesma decisão a cada rodada
+  deste PR. Registrado aqui como dívida real pra um laboratório futuro (mesmo padrão já usado no
+  lab-186 pra uma limitação semelhante), não descartado.
+
 ## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
 
 - Nome real, bio livre, imagem enviada, nickname totalmente livre sem filtro algum.

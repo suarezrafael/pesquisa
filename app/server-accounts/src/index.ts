@@ -961,11 +961,13 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
     }
     // `changed: false` no corpo (não um 204 vazio igual ao caso de troca de verdade) — sem
     // distinguir os dois, o cliente não tem como saber se DEVE gravar um `nicknameChangedAt` novo
-    // localmente. Alcançável só quando outra sessão/aba do MESMO perfil já trocou pro nome que
-    // esta está tentando mandar de novo (o próprio painel já desabilita "Salvar" pra nome igual ao
-    // que ELE conhece localmente).
+    // localmente. Alcançável quando outra sessão/aba do MESMO perfil já trocou pro nome que esta
+    // está tentando mandar de novo (o próprio painel só desabilita "Salvar" pra nome igual ao que
+    // ELE conhece localmente — pode divergir do servidor). `nickname`/`nicknameChangedAt` vêm
+    // JUNTO em ambos os ramos (não só `changed`) pra a aba que fez a chamada reconciliar o próprio
+    // estado local com a linha de verdade do banco, mesmo no caso de no-op.
     if (current[0].nickname === trimmed) {
-      return Response.json({ changed: false })
+      return Response.json({ changed: false, nickname: trimmed, nicknameChangedAt: current[0].nickname_changed_at })
     }
     if (!canChangeNickname(current[0].nickname_changed_at, new Date().toISOString())) {
       return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
@@ -975,12 +977,12 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
       where id = ${playerId}
         and player_secret = ${body.secret}
         and (nickname_changed_at is null or now() - nickname_changed_at >= (${NICKNAME_CHANGE_COOLDOWN_DAYS}::text || ' days')::interval)
-      returning id
-    `) as { id: string }[]
+      returning id, nickname_changed_at
+    `) as { id: string; nickname_changed_at: string }[]
     if (updated.length === 0) {
       return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
     }
-    return Response.json({ changed: true })
+    return Response.json({ changed: true, nickname: trimmed, nicknameChangedAt: updated[0].nickname_changed_at })
   }
 
   const rows = (await sql`
