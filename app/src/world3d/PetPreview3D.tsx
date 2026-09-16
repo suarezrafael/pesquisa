@@ -136,5 +136,8 @@ export function PetPreview3D({ petId, stage }: PetPreview3DProps) {
     petRootRef.current = root
   }, [petId, stage])
 
-  return <canvas ref={canvasRef} className="pet-preview-3d-canvas" />
+  // `aria-label` — o canvas recebe `attachControl` (giro por arrasto), então é uma superfície
+  // interativa/focável; sem nome acessível, um leitor de tela só anunciaria "canvas", sem indicar
+  // que representa o pet equipado.
+  return <canvas ref={canvasRef} className="pet-preview-3d-canvas" aria-label="Preview 3D do pet equipado" />
 }

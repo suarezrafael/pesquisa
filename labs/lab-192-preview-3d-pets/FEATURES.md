@@ -1,6 +1,6 @@
 # Laboratório 192 — Preview 3D de verdade na lojinha de pets
 
-Status: em andamento
+Status: em andamento (PR convergida, aguardando confirmação de merge)
 Início: 2026-09-16
 Fim: -
 Commit inicial: 3ecf90ce75e33ce5cdc465b5145112377d3b3dc1
@@ -187,6 +187,19 @@ corrigido):
   limitação de design já presente em todo o `PetPanel.tsx`. Corrigir isso exigiria um timer
   periódico pro painel inteiro (não só o preview novo), escopo maior que este lab; disclosed, não
   corrigido.
+
+**Rodada 3** — 0 comentários novos, 2 suprimidos, ambos reais e corrigidos:
+
+- **Real, corrigido**: o `<canvas>` do preview recebe `attachControl` (giro por arrasto), então é
+  uma superfície interativa/focável, mas não tinha nome acessível — um leitor de tela anunciaria só
+  "canvas", sem indicar que representa o pet equipado (o placeholder de "nenhum pet" já tinha
+  `aria-label` da rodada 2, mas o estado COM pet equipado ainda não). Corrigido com
+  `aria-label="Preview 3D do pet equipado"`.
+- **Real, corrigido (typo)**: comentário com "ensima" em vez de "em cima" — corrigido.
+
+**Convergência**: 2 rodadas seguidas (2 e 3) com 0 comentários novos, restando só achados já
+avaliados/disclosed ou triviais — mesmo critério já usado em labs anteriores desta sessão
+(lab-184, lab-189, lab-191) pra encerrar o ciclo de review.
 
 ## Fora de escopo (explicitamente adiado — cada um do tamanho de um lab futuro)
 

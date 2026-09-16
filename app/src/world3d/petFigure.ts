@@ -16,7 +16,7 @@ export function petFurColor(furColorRgb: [number, number, number], stage: PetSta
   return stage === 'idoso' ? Color3.Lerp(baseFurColor, new Color3(0.8, 0.8, 0.8), 0.45) : baseFurColor
 }
 
-// Gatos (pedido do usuário: "mais gato e alguns gatos ficam ensima de tudo") — a maioria vaga
+// Gatos (pedido do usuário: "mais gato e alguns gatos ficam em cima de tudo") — a maioria vaga
 // pelo chão igual coelho/esquilo, alguns ficam parados no topo dos platôs/telhados (ver
 // `perchedCats` em `World3D.tsx`, fora da IA de vagar).
 export function buildGato(scene: Scene, shadowGenerator: ShadowGenerator, furColor: Color3): TransformNode {
