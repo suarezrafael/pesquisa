@@ -5,6 +5,16 @@
 // em vez de duplicar geometria/material. `World3D.tsx` importa daqui pro pet no jogo principal — o
 // comportamento lá não muda, só o arquivo onde a função mora.
 import { Color3, Mesh, MeshBuilder, PBRMaterial, type Scene, type ShadowGenerator, TransformNode, Vector3 } from '@babylonjs/core'
+import type { PetStage } from '../state/progression'
+
+// Único sinal visual de "idoso" — pelo mais grisalho, mesmo corpo/tamanho de um adulto
+// (`petVisualScale`, `progression.ts`) — nunca some, nunca fica doente, nunca reduz. Extraído pra
+// cá (em vez de repetir o cálculo em `World3D.tsx` E `PetPreview3D.tsx`) pra impedir os dois
+// lugares divergirem silenciosamente se a regra de blend mudar um dia.
+export function petFurColor(furColorRgb: [number, number, number], stage: PetStage): Color3 {
+  const baseFurColor = new Color3(...furColorRgb)
+  return stage === 'idoso' ? Color3.Lerp(baseFurColor, new Color3(0.8, 0.8, 0.8), 0.45) : baseFurColor
+}
 
 // Gatos (pedido do usuário: "mais gato e alguns gatos ficam ensima de tudo") — a maioria vaga
 // pelo chão igual coelho/esquilo, alguns ficam parados no topo dos platôs/telhados (ver

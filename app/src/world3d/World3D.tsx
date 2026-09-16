@@ -52,7 +52,7 @@ import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
-import { buildCachorro, buildGato } from './petFigure'
+import { buildCachorro, buildGato, petFurColor } from './petFigure'
 import { FURNITURE_CATALOG, findFurnitureById } from '../data/furniture'
 import { findPetById } from '../data/pets'
 import { findTreasureChestById } from '../data/treasureChests'
@@ -9910,10 +9910,7 @@ export function World3D({
         const ageYears = petAgeYears(progressRef.current, equippedId, new Date().toISOString())
         const stage = petLifecycleStage(careStage, ageYears)
         const scale = petVisualScale(stage, pet.species)
-        const baseFurColor = new Color3(...pet.furColorRgb)
-        // Único sinal visual de "idoso" — pelo mais grisalho, mesmo corpo/tamanho de um adulto
-        // (`petVisualScale`) — nunca some, nunca fica doente, nunca reduz.
-        const furColor = stage === 'idoso' ? Color3.Lerp(baseFurColor, new Color3(0.8, 0.8, 0.8), 0.45) : baseFurColor
+        const furColor = petFurColor(pet.furColorRgb, stage)
         const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
         root.scaling.setAll(scale)
         root.position.copyFrom(avatarMesh.position)

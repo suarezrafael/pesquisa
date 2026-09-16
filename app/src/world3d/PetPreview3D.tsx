@@ -16,7 +16,7 @@ import {
 } from '@babylonjs/core'
 import { findPetById } from '../data/pets'
 import { petVisualScale, type PetStage } from '../state/progression'
-import { buildCachorro, buildGato, disposePetFigure } from './petFigure'
+import { buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
 
 interface PetPreview3DProps {
   petId: string
@@ -130,11 +130,7 @@ export function PetPreview3D({ petId, stage }: PetPreview3DProps) {
     const pet = findPetById(petId)
     if (!pet) return
 
-    // Mesmo cálculo de "pelo grisalho" de `World3D.tsx` (`rebuildPet`) — único sinal visual de
-    // "idoso", nunca remove/substitui o pet.
-    const baseFurColor = new Color3(...pet.furColorRgb)
-    const furColor = stage === 'idoso' ? Color3.Lerp(baseFurColor, new Color3(0.8, 0.8, 0.8), 0.45) : baseFurColor
-
+    const furColor = petFurColor(pet.furColorRgb, stage)
     const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
     root.scaling.setAll(petVisualScale(stage, pet.species))
     petRootRef.current = root

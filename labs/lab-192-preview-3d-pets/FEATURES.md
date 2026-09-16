@@ -156,6 +156,38 @@ corrigido):
   em sequência (gato 5 malhas → gato 5 → cachorro 6 → cachorro 6): a contagem bate EXATAMENTE com o
   pet atual a cada troca, nunca acumula a do anterior.
 
+**Rodada 2** — 0 comentários novos, 4 suprimidos (1 marcado "previously missed"):
+
+- **Real, corrigido**: o cálculo de "pelo grisalho de idoso" estava DUPLICADO — uma cópia em
+  `World3D.tsx` (`rebuildPet`, o pet de verdade) e outra em `PetPreview3D.tsx` (copiada de lá) — se
+  a regra de blend mudasse num lugar só no futuro, o preview divergiria silenciosamente do pet
+  real. Corrigido extraindo `petFurColor(furColorRgb, stage)` pra `petFigure.ts` (mesmo módulo dos
+  builders), reaproveitada nos dois lugares. Verificado ao vivo: cor do pet "idoso" continua igual
+  depois da extração.
+- **Real, corrigido (achado suprimido)**: o placeholder "🐾" de "nenhum pet equipado" tinha
+  `aria-hidden="true"` no elemento INTEIRO — quem usa leitor de tela não tinha nenhuma pista de que
+  aquele espaço representa "sem pet", só o emoji visual. Corrigido com `role="img"` +
+  `aria-label="Nenhum pet equipado ainda"` no container, mantendo só o emoji em si como decorativo
+  (`aria-hidden` movido pra dentro). Verificado ao vivo via `getAttribute`.
+- **Real, corrigido (achado suprimido)**: `equippedPetId` só era checado por truthiness antes de
+  montar `PetPreview3D` — um id persistido inválido/corrompido (`Progress` salvo é validado em
+  formato, não em conteúdo, `storage.ts`) montaria o preview mesmo assim; internamente
+  `findPetById` devolveria `undefined` e o guard `if (!pet) return` desistiria de construir
+  qualquer malha, deixando um canvas vazio em vez do placeholder claro prometido. Corrigido
+  resolvendo `findPetById` ANTES de decidir qual dos dois estados renderizar — um id que não bate
+  com nenhum pet do catálogo cai no mesmo placeholder de "nenhum pet equipado". Verificado ao vivo
+  forçando um `equippedPetId` inexistente no catálogo: mostra o placeholder corretamente, não um
+  canvas vazio.
+- **Real, mas não corrigido nesta rodada (achado suprimido)**: o estágio do pet mostrado no preview
+  só é recalculado quando `PetPanel` renderiza de novo — se o painel ficar aberto atravessando a
+  fronteira exata de virar "idoso" (calculada por tempo real, não por interação), o preview fica
+  com a cor antiga até o próximo render. Avaliado: este é o MESMO comportamento já aceito pro resto
+  do painel (a própria grade de pets usa o mesmo `nowIso` de "um só agora por render", comentário
+  já existente no código antes deste lab) — não é uma regressão introduzida aqui, é a mesma
+  limitação de design já presente em todo o `PetPanel.tsx`. Corrigir isso exigiria um timer
+  periódico pro painel inteiro (não só o preview novo), escopo maior que este lab; disclosed, não
+  corrigido.
+
 ## Fora de escopo (explicitamente adiado — cada um do tamanho de um lab futuro)
 
 - Cosméticos de pet (roupa, coleira, chapéu, capa, máscara) — pedaço (b) do backlog, precisa do
