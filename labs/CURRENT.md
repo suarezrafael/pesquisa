@@ -67,6 +67,25 @@ workflows; deploy de produção confirmado: Vercel (`https://app-two-flax-92.ver
 Cloudflare Pages (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
 (`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
+**2ª PR de acompanhamento #75 (rodadas 4 e 5, mesmo padrão de review chegando minutos antes do
+merge anterior)**: mais 2 achados reais na correção da PR #74 — `engine.getDeltaTime()` pode devolver
+0 (primeiro quadro/leitura dupla), e `finite()` sozinho não filtra um 0 (é um número finito de
+verdade), diluindo a média de FPS; corrigido filtrando na própria coleta. E o percentil nearest-rank
+(correção da rodada 1) ainda errava o alvo pra "pior fração" quando o outlier é raro — com 20
+amostras e só 1 quadro ruim, `ceil(20*0.95)=19` cai no último quadro BOM, nunca no único ruim que
+"pior 5%" deveria capturar; substituído por uma função dedicada (`worstAt`) que conta os piores
+elementos a partir do topo do array ordenado, verificada isoladamente contra o exemplo exato do
+review. Uma 5ª rodada trouxe só um typo (corrigido) e um achado de nomenclatura
+(`frameTimeMs.p95` usa a semântica "pior 5%", não percentil padrão — avaliado e mantido de
+propósito, mesma razão de `fps.p1`/`fps.p5`). **Esta é a 4ª rodada consecutiva de achados na mesma
+função (`sample()`)** — consultado o usuário via `AskUserQuestion`, decisão: encerrar o ciclo de
+review automático depois desta PR, tratando `window.__perf` como ferramenta de debug/dev que não
+precisa de perfeição estatística. **Merge confirmado**: PR #75 mesclada em `main` no commit
+`7157c24` (2026-09-16, squash), confirmado via `AskUserQuestion`. CI de `main` verde nos 3
+workflows; deploy de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200),
+Cloudflare Pages (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
+
 **Nota pra quem retomar este projeto**: existe uma edição não commitada em
 `docs/gameplay-market-expansion-backlog.md` (nova entrada "PK XD" na tabela de concorrentes e labs
 212-217 propondo um "centro de jogos educativo" com mini-jogos de contar/soletrar/memória/lógica),
