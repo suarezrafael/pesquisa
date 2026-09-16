@@ -12317,8 +12317,15 @@ export function World3D({
         const gpuFrameTimeSamples: number[] = []
 
         const observer = scene.onAfterRenderObservable.add(() => {
-          fpsSamples.push(engine.getFps())
-          frameTimeSamples.push(instrumentation.frameTimeCounter.current)
+          // Achado do review automático do Copilot: `engine.getFps()` é o mesmo contador interno
+          // atualizado periodicamente (não a cada quadro) já documentado no benchmark de GPU logo
+          // acima no arquivo — empilhar esse valor a cada `onAfterRender` repete a mesma leitura
+          // várias vezes numa janela curta, mascarando exatamente a travadela que p1/p5 deveriam
+          // capturar. `frameTimeCounter` já é per-frame de verdade (`beginMonitoring`/
+          // `endMonitoring` em cada quadro) — deriva o FPS dali em vez de ler `engine.getFps()`.
+          const frameTimeMs = instrumentation.frameTimeCounter.current
+          fpsSamples.push(frameTimeMs > 0 ? 1000 / frameTimeMs : Infinity)
+          frameTimeSamples.push(frameTimeMs)
           drawCallsSamples.push(instrumentation.drawCallsCounter.current)
           activeMeshesSamples.push(scene.getActiveMeshes().length)
           activeMeshesEvalSamples.push(instrumentation.activeMeshesEvaluationTimeCounter.current)
@@ -12354,12 +12361,16 @@ export function World3D({
         // do Copilot: sem amostra finita nenhuma (janela inteira travada em segundo plano, caso já
         // disclosed neste lab), devolvia `Infinity` — que vira `null` ao serializar em JSON, em vez
         // de um relatório ainda utilizável — por isso o fallback explícito em 0, igual `mean`.
+        // Achado do review automático do Copilot: a fórmula anterior (`floor(n * p)`) errava o
+        // rank em tamanhos de amostra comuns — com 20 quadros, `floor(20 * 0.95) = 19` cai no
+        // ÚLTIMO elemento (0-indexado, rank 100%), não no p95; nearest-rank
+        // (`ceil(n * p)`, 1-indexado) é o método padrão e não tem esse desvio.
         const percentileAt = (arr: number[], p: number) => {
           const values = finite(arr)
           if (!values.length) return 0
           const sorted = [...values].sort((a, b) => a - b)
-          const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * p)))
-          return sorted[idx]
+          const rank = Math.min(sorted.length, Math.max(1, Math.ceil(sorted.length * p)))
+          return sorted[rank - 1]
         }
 
         return new Promise((resolve) => {
@@ -12417,7 +12428,15 @@ export function World3D({
       // mount real (GLBs vêm do cache do navegador na 2ª vez, ordem de conclusão não é garantida) —
       // os números liam sempre zero/parado, confundindo qualquer medição manual.
       if (disposed) return
-      ;(window as any).__perf = {
+      // Achado do review automático do Copilot: nada limpava `window.__perf` no desmonte — depois
+      // de fechar/trocar de tela, o global continuava vivo apontando pra `scene`/`engine`
+      // desmontados, e `sample()` chamado nesse intervalo (antes da próxima montagem terminar seu
+      // próprio `setup()`, que demora segundos) devolvia um relatório vazio/morto sem aviso.
+      // `__cleanupPerf` só apaga se `window.__perf` ainda for O MESMO objeto publicado por ESTA
+      // instância — evita que o desmonte de um mount velho apague o `__perf` de um mount mais novo
+      // que talvez já tenha terminado seu próprio `setup()` primeiro (mesma classe de corrida do
+      // `StrictMode` já tratada na guarda `if (disposed) return` acima).
+      const perfHandle = {
         fps: () => Math.round(engine.getFps()),
         drawCalls: () => instrumentation.drawCallsCounter.current,
         physicsTimeMs: () => instrumentation.physicsTimeCounter.current.toFixed(2),
@@ -12436,6 +12455,10 @@ export function World3D({
         isSmallScreen: () => isSmallScreen,
         quality: () => currentQualityLabel(),
         sample,
+      }
+      ;(window as any).__perf = perfHandle
+      ;(scene as any).__cleanupPerf = () => {
+        if ((window as any).__perf === perfHandle) delete (window as any).__perf
       }
     }
 
@@ -12642,6 +12665,7 @@ export function World3D({
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
       ;(scene as any).__cancelPerfSample?.()
+      ;(scene as any).__cleanupPerf?.()
       sceneRef.current = null
       scene.dispose()
       engine.dispose()
