@@ -65,8 +65,11 @@ próximo item da "Recomendação priorizada" (seção 7) depois do lab-189, prio
   que reproduzia hoje (ver "Verificação ao vivo" abaixo), critério de aceite explícito do backlog.
 - [x] Confirmado ao vivo que trocar de item (cor de mochila) atualiza o preview instantaneamente com
   o novo posicionamento `sticky`, inclusive rolado até o fim da lista.
-- [x] Confirmado ao vivo (grade cheia de 25+ itens em "Roupas") que o cabeçalho fixo não cobre
-  itens/botões da grade — a grade nasce logo abaixo do cabeçalho fixo, nunca por baixo dele.
+- [x] Confirmado ao vivo (grade cheia de 25+ itens em "Roupas") que a grade nasce logo abaixo do
+  cabeçalho fixo, nunca por baixo dele, NA POSIÇÃO INICIAL de cada rolagem — durante a rolagem em
+  si, itens passam transitoriamente por baixo do cabeçalho fixo (característica inerente de
+  qualquer cabeçalho `sticky` sobre a mesma lista rolável, ver "Rodada 2" abaixo, não um bug deste
+  lab).
 - [ ] Regressão do bug do lab-176 (vazamento de material/textura) não teve uma verificação
   dedicada nesta rodada — mudança é 100% CSS/estrutura de wrapper, não mexe em nenhum ponto de
   `dispose()`/troca de peça do `studentFigure.ts`/`World3D.tsx`; risco avaliado como baixíssimo por
@@ -195,6 +198,24 @@ corrigidos pelo mesmo motivo já registrado). Dos 4 restantes, avaliados individ
   visual das abas (`.avatar-shop-tabs-wrap::before/::after`) e o comportamento de `overflow-y` já
   testado. Avaliado como um trade-off aceito do padrão "cabeçalho fixo", não um bug introduzido por
   engano — mas registrado aqui como dívida real, não descartado.
+
+**Rodada 3** — 0 comentários novos, 6 suprimidos (3 marcados "previously missed" — repetição
+literal dos 3 trade-offs já disclosed na rodada 2: toque sobre o preview, viewport baixo, e
+cabeçalho mascarando itens durante rolagem manual — sem mudança de código, permanecem cientes pelo
+mesmo motivo já registrado). Dos 3 restantes, 2 são genuinamente novos:
+
+- **Real, corrigido**: como as abas agora ficam fixas (rodada anterior), dá pra trocar de aba de
+  QUALQUER ponto do scroll — antes deste lab, as abas só eram alcançáveis perto do topo (rolavam
+  junto com a lista), então esse caso não era prático de acontecer. Trocar de aba não zerava
+  `.avatar-shop-modal.scrollTop`, então sair de "Roupas" rolado até o fim pra "Avatares" abria a
+  aba nova já no fim dela, escondendo os primeiros itens. Corrigido com um `handleTabClick` novo em
+  `AvatarShop.tsx` que zera o scroll ao trocar de aba. Verificado ao vivo:
+  `.avatar-shop-modal.scrollTop` medido em 2198 (fim da lista de "Roupas"), cai pra 0 imediatamente
+  após clicar em "Avatares".
+- **Real, corrigido**: `FEATURES.md` afirmava que a grade "nunca" fica por baixo do cabeçalho fixo,
+  contradizendo o próprio trade-off já documentado na rodada 2 (rolagem manual pode mascarar itens
+  temporariamente atrás do cabeçalho). Reescrito pra qualificar a afirmação como válida só pra
+  posição inicial de cada rolagem, não durante o gesto de rolar em si.
 
 - Novo catálogo de cosméticos, checkout, mudança de entitlement (explicitamente fora de escopo no
   próprio item do backlog).

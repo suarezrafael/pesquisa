@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import { AVATAR_CATALOG } from '../data/avatars'
 import { HAT_CATALOG } from '../data/hats'
 import { GLASSES_CATALOG } from '../data/glasses'
@@ -217,6 +217,16 @@ export function AvatarShop({
 }: AvatarShopProps) {
   const [tab, setTab] = useState<ShopTab>('avatares')
   const modalRef = useModalA11y(onClose)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Sem isso, trocar de aba rolado no fim de uma lista longa abre a aba nova já no fim dela — antes
+  // as abas rolavam junto com a lista e só ficavam alcançáveis perto do topo; agora, fixas no
+  // cabeçalho, dá pra trocar de qualquer ponto do scroll, o que tornou esse caso alcançável de
+  // verdade.
+  function handleTabClick(nextTab: ShopTab) {
+    setTab(nextTab)
+    scrollRef.current?.scrollTo({ top: 0 })
+  }
 
   return (
     <div
@@ -227,7 +237,7 @@ export function AvatarShop({
       ref={modalRef}
       tabIndex={-1}
     >
-      <div className="modal avatar-shop-modal">
+      <div className="modal avatar-shop-modal" ref={scrollRef}>
         {/* Âncora de altura zero — só existe pra dar ao botão de fechar um ancestral
             `position: sticky` próprio, sem empurrar `<h2>` pra baixo nem mudar o visual quando o
             modal ainda não rolou. Sem isso, o botão (absoluto) fica posicionado em relação ao
@@ -275,7 +285,7 @@ export function AvatarShop({
                   role="tab"
                   aria-selected={tab === t.id}
                   className={`avatar-shop-tab ${tab === t.id ? 'active' : ''}`}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => handleTabClick(t.id)}
                 >
                   <span aria-hidden="true">{t.emoji}</span> {t.label}
                 </button>
