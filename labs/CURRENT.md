@@ -1,13 +1,49 @@
 # Laboratório atual
 
-Em andamento: labs/lab-190-preview-fixo-lojinha-scroll/ — preview fixo na lojinha durante scroll.
-Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 205" no documento (renumerado pra lab-190
-na sequência real do repo) — próximo item recomendado depois do lab-189. Ver
-`labs/lab-190-preview-fixo-lojinha-scroll/FEATURES.md` pro objetivo e investigação prévia
-(`.avatar-preview-3d-wrap` sem `sticky` dentro do scroll de `.avatar-shop-modal`, e o `.modal-close`
-com o mesmo problema em potencial).
+Último concluído: labs/lab-190-preview-fixo-lojinha-scroll/ — preview fixo na lojinha durante
+scroll. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 205" no documento (renumerado pra
+lab-190 na sequência real do repo) — próximo item recomendado depois do lab-189. **Achado real,
+confirma o backlog**: preview 3D, saldo de moedas e abas rolavam junto com a lista de itens dentro
+de `.avatar-shop-modal` (`overflow-y: auto`), sem nenhum `position: sticky` em lugar nenhum —
+listas longas (roupas/chapéus) faziam a criança perder a referência visual do boneco. **Corrigido**:
+preview+saldo+abas agrupados num wrapper novo (`.avatar-shop-sticky-header`, `position: sticky; top:
+0`, fundo sólido); botão de fechar ganhou uma âncora `sticky` de altura zero própria
+(`.avatar-shop-close-anchor`), escopada só à lojinha. `AvatarPreview3D`'s `runRenderLoop` já rodava
+continuamente independente de scroll — a correção não adiciona custo de render 3D novo, só CSS de
+posicionamento. **Verificado ao vivo, ponta a ponta** (aba "Roupas", 43 itens, a mais longa da
+lojinha): preview/saldo/abas/botão de fechar confirmados fixos rolando até o fim da lista; troca de
+item atualiza o preview instantaneamente com o modal rolado; fechar o modal funciona rolado até o
+fim. **PR #70 teve 4 rodadas de review automático do Copilot**, as 2 primeiras com achados reais —
+rodada 1: a âncora nova do botão de fechar vivia DENTRO do padding do `.modal`, deslocando o botão
+~24px/20px na primeira visualização (verificado ao vivo com `getBoundingClientRect()`, corrigido
+compensando `top`/`right` pelo padding do modal — ficou um resíduo cosmético de ~15px só em
+desktop com barra de rolagem clássica, zero em dispositivos com scrollbar overlay, aceito); e foco
+de teclado (Tab) num botão perto do topo da grade ficava escondido atrás do cabeçalho fixo,
+corrigido com `scroll-margin-top` escopado só à lojinha. Rodada 3 achou mais 1 real — trocar de aba
+(agora sempre alcançável, já que fixa) não zerava o scroll, abrindo a aba nova já rolada até o fim
+se a anterior estivesse assim; corrigido zerando o scroll no clique da aba, verificado ao vivo
+(`scrollTop` de 2198 cai pra 0). Um achado do review (rodada 2) foi **investigado e descartado como
+falso positivo** — a alegação de que o botão de fechar suportava desaparecer ao rolar não reproduziu
+em teste ao vivo direto (`getBoundingClientRect()` + `elementFromPoint()` em duas posições de
+scroll, incluindo o máximo). Dois trade-offs reais ficaram **disclosed e não corrigidos**, avaliados
+e aceitos conscientemente: arrasto de toque iniciado sobre o canvas do preview (`touch-action:
+none`) não rola mais o modal (antes só acontecia enquanto o preview ainda não tinha saído de vista;
+sem dispositivo de toque real pra testar uma correção às cegas com risco de quebrar o giro de
+câmera que já funciona); e em viewports muito baixos (celular em paisagem) o cabeçalho fixo
+(~282px) pode se aproximar da altura útil do modal (`80vh`) — exatamente o risco que o próprio
+backlog já pedia pra "avaliar", sem emulador de viewport baixo real pra validar uma correção.
+Rodada 4 veio limpa, repetindo só os 2 trade-offs já disclosed, sem achado novo. `npx tsc -b`
+limpo; testes: app 209/209 (inalterado, mudança é CSS/estrutura de wrapper, sem lógica de domínio);
+`npm run build` sem regressão de bundle. Pendência disclosed: verificação em viewport mobile/touch
+real não feita (mesma limitação de ferramental já conhecida de vários labs anteriores desta
+sessão). Ver `labs/lab-190-preview-fixo-lojinha-scroll/FEATURES.md` pro histórico completo rodada a
+rodada. **Merge confirmado**: PR #70 mesclada em `main` no commit `6c0c72a` (2026-09-16, squash). CI
+de `main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-189-ceu-escuro-espaco-atmosfera-clara/ — céu escuro no espaço e claro na
+Antes desse: labs/lab-189-ceu-escuro-espaco-atmosfera-clara/ — céu escuro no espaço e claro na
 atmosfera. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 204" no documento (renumerado
 pra lab-189 na sequência real do repo) — próximo item recomendado depois do lab-188, prioridade
 P0/P1. **Achado real, confirma o backlog**: `scene.clearColor`/`fogColor` eram definidos UMA ÚNICA
