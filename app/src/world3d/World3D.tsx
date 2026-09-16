@@ -12330,7 +12330,12 @@ export function World3D({
           // FPS precisa ser `1000 / média(delta)`, não a média de `1000/delta` de cada amostra (que
           // superestima: duas amostras de 10ms+20ms dão média de delta 15ms → 66.67 FPS de verdade,
           // mas a média das razões dá (100+50)/2 = 75 FPS, errado).
-          deltaTimeSamples.push(engine.getDeltaTime())
+          // Achado do review automático do Copilot: `engine.getDeltaTime()` pode devolver 0 (ex.:
+          // primeiro quadro, ou uma leitura dupla no mesmo tick) — um delta 0 não é "infinitamente
+          // rápido", é uma amostra inválida; incluí-la dilui a média (e `finite()` sozinho não pega
+          // esse caso, já que 0 é um número finito de verdade). Filtrado na coleta, não só depois.
+          const deltaTimeMs = engine.getDeltaTime()
+          if (deltaTimeMs > 0) deltaTimeSamples.push(deltaTimeMs)
           const frameTimeMs = instrumentation.frameTimeCounter.current
           frameTimeSamples.push(frameTimeMs)
           drawCallsSamples.push(instrumentation.drawCallsCounter.current)
@@ -12358,22 +12363,22 @@ export function World3D({
           const values = finite(arr)
           return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0
         }
-        // Percentil genérico sobre os valores finitos ordenados — usado pro "pior" 5%/1% de DELTA
-        // (p=0.95/0.99, ponta de cima — quadro mais longo = FPS mais baixo, convertido só depois em
-        // `msToFps`) e pro "pior" 5% de frame time (mesmo p=0.95). Achado do review automático do
-        // Copilot: sem amostra finita nenhuma (janela inteira travada em segundo plano, caso já
-        // disclosed neste lab), devolvia `Infinity` — que vira `null` ao serializar em JSON, em vez
-        // de um relatório ainda utilizável — por isso o fallback explícito em 0, igual `mean`.
-        // Achado do review automático do Copilot: a fórmula anterior (`floor(n * p)`) errava o
-        // rank em tamanhos de amostra comuns — com 20 quadros, `floor(20 * 0.95) = 19` cai no
-        // ÚLTIMO elemento (0-indexado, rank 100%), não no p95; nearest-rank
-        // (`ceil(n * p)`, 1-indexado) é o método padrão e não tem esse desvio.
-        const percentileAt = (arr: number[], p: number) => {
+        // Valor no limite do PIOR `fraction` da amostra (ex.: fraction=0.05 → pior 5%) — usado pro
+        // "pior" 5%/1% de DELTA (quadro mais longo = FPS mais baixo, convertido só depois em
+        // `msToFps`) e pro "pior" 5% de frame time. Achado do review automático do Copilot (2
+        // rodadas): a 1ª correção usava percentil padrão nearest-rank (`ceil(n*p)`, ponta de cima)
+        // pra resolver um off-by-one anterior, mas isso ainda erra o objetivo — com 20 amostras e só
+        // 1 quadro ruim, `ceil(20*0.95) = 19` cai no ÚLTIMO quadro BOM (19 de 20 já satisfazem "95%
+        // dos quadros ≤ este valor"), nunca apontando pro único quadro ruim que "pior 5%" deveria
+        // capturar. Contar `worstCount = ceil(n * fraction)` elementos A PARTIR DO TOPO do array
+        // ordenado (não um índice de percentil padrão) resolve isso: com 1 quadro ruim em 20,
+        // `worstCount = 1` sempre aponta pro próprio outlier, não pro vizinho bom mais próximo.
+        const worstAt = (arr: number[], fraction: number) => {
           const values = finite(arr)
           if (!values.length) return 0
           const sorted = [...values].sort((a, b) => a - b)
-          const rank = Math.min(sorted.length, Math.max(1, Math.ceil(sorted.length * p)))
-          return sorted[rank - 1]
+          const worstCount = Math.min(sorted.length, Math.max(1, Math.ceil(sorted.length * fraction)))
+          return sorted[sorted.length - worstCount]
         }
 
         return new Promise((resolve) => {
@@ -12408,12 +12413,12 @@ export function World3D({
               fps: {
                 avg: round(msToFps(mean(deltaTimeSamples))),
                 min: round(msToFps(Math.max(...finite(deltaTimeSamples), 0))),
-                p5: round(msToFps(percentileAt(deltaTimeSamples, 0.95))),
-                p1: round(msToFps(percentileAt(deltaTimeSamples, 0.99))),
+                p5: round(msToFps(worstAt(deltaTimeSamples, 0.05))),
+                p1: round(msToFps(worstAt(deltaTimeSamples, 0.01))),
               },
               frameTimeMs: {
                 avg: round(mean(frameTimeSamples)),
-                p95: round(percentileAt(frameTimeSamples, 0.95)),
+                p95: round(worstAt(frameTimeSamples, 0.05)),
                 max: round(Math.max(...frameTimeSamples, 0)),
               },
               drawCalls: { avg: round(mean(drawCallsSamples)), max: Math.max(...drawCallsSamples, 0) },
