@@ -257,11 +257,17 @@ falso positivo:
    (comentário do benchmark de GPU, linhas ~2239-2245, de um lab anterior) que esse é um contador
    interno do Babylon atualizado periodicamente, não a cada `onAfterRender` — empilhar o mesmo valor
    repetido várias vezes numa janela mascara exatamente a travadela que p1/p5 deveriam capturar.
-   Corrigido derivando o FPS de cada amostra a partir de `1000 / frameTimeCounter.current` (esse sim
-   um valor genuinamente por quadro — confirmado lendo o código-fonte real do
+   Corrigido (nesta rodada) derivando o FPS de cada amostra a partir de `1000 / frameTimeCounter.current`
+   (esse sim um valor genuinamente por quadro — confirmado lendo o código-fonte real do
    `@babylonjs/core` instalado: `beginMonitoring()`/`endMonitoring()` do `frameTimeCounter` rodam em
    `onBeforeAnimationsObservable`/`onAfterRenderObservable`, um par por quadro). Verificado ao vivo
-   que `fps.avg` bate matematicamente com `1000 / frameTimeMs.avg` na mesma janela.
+   que `fps.avg` bate matematicamente com `1000 / frameTimeMs.avg` na mesma janela. **Achado do
+   review automático do Copilot, numa rodada seguinte: esta nota ficou desatualizada** — a Rodada 3
+   (abaixo) trocou a fonte de novo, de `frameTimeCounter` pra `engine.getDeltaTime()`, porque
+   `frameTimeCounter` mede a duração do TRABALHO por quadro, não o intervalo de relógio real; depois
+   dessa troca, `fps.avg` NÃO bate mais com `1000 / frameTimeMs.avg` (são fontes diferentes de
+   propósito, ver Rodada 3). Este item fica registrado como estava no momento, só com esta nota de
+   correção pra não confundir quem ler na ordem.
 3. **`window.__perf` não era limpo no desmonte do componente (real, mas de baixo impacto prático)**:
    depois de desmontar a cena (fechar/trocar de tela), o global continuava vivo referenciando
    `scene`/`engine` já destruídos; chamar `sample()` nesse intervalo (antes da próxima montagem
@@ -313,7 +319,51 @@ mapeados pro `max`/95º/99º percentil de DELTA (quadro mais longo = FPS mais ba
 percentil aplicado direto num array já convertido. Verificado isoladamente contra o exemplo exato do
 review (`mean([10, 20]) → msToFps → 66.67`, batendo com `2 / 0.030`) e ao vivo via `sample()` real.
 
-## Lista priorizada de otimizações maiores (labs futuros, não implementadas aqui)
+**Rodada 4 (achou 2 problemas reais na PRÓPRIA correção da rodada 3, mais 2 achados de
+documentação)**: de novo terminou minutos antes do merge da PR de acompanhamento (#74) e só apareceu
+na API depois — mesmo padrão de atraso das rodadas anteriores.
+
+1. **Delta 0 não era filtrado na coleta (real)**: `engine.getDeltaTime()` pode devolver 0 (primeiro
+   quadro, ou duas leituras no mesmo tick) — um delta 0 não é "infinitamente rápido", é uma amostra
+   inválida, mas `finite()` sozinho não filtra (0 é um número finito de verdade) e incluí-lo dilui
+   `mean(deltaTimeSamples)` pra baixo, inflando o FPS médio reportado. Corrigido filtrando na
+   PRÓPRIA coleta (`if (deltaTimeMs > 0) deltaTimeSamples.push(deltaTimeMs)`), não só depois.
+2. **Percentil nearest-rank ainda errava o alvo pra "pior fração" com outlier raro (real, o mais
+   sutil dos 4 achados desta lab)**: a correção da rodada 1 trocou `floor(n*p)` por nearest-rank
+   (`ceil(n*p)`) pra resolver um off-by-one, mas nearest-rank ainda não é a ferramenta certa pra
+   "pior 5%/1%" quando o outlier é raro — com 20 amostras e só 1 quadro ruim, `ceil(20*0.95) = 19`
+   cai no ÚLTIMO quadro BOM (19 de 20 já satisfazem "95% dos quadros ≤ este valor" pela definição
+   padrão de percentil), nunca apontando pro único quadro ruim que "pior 5%" deveria capturar.
+   Corrigido substituindo por uma função dedicada (`worstAt`, não mais percentil padrão): conta
+   `worstCount = ceil(n * fraction)` elementos A PARTIR DO TOPO do array ordenado — com 1 quadro
+   ruim em 20, `worstCount = 1` sempre aponta pro próprio outlier, nunca pro vizinho bom mais
+   próximo. Verificado isoladamente: `worstAt([10 × 19, 100], 0.05)` devolve `100` (o outlier),
+   enquanto o nearest-rank anterior devolvia `10` (perdia o outlier completamente).
+3. **Nota da Rodada 2 ficou desatualizada depois da Rodada 3 trocar a fonte do FPS de novo**:
+   corrigida com uma nota explícita (ver item 2 da Rodada 2 acima) em vez de reescrever a história.
+4. **Descrição da PR #74 citava a fonte antiga (`frameTimeCounter`) depois da Rodada 3 já ter
+   trocado pra `engine.getDeltaTime()` dentro da mesma PR**: não corrigido (PR já mesclada quando o
+   achado chegou; a documentação de verdade — este arquivo — já está correta).
+
+`npx tsc -b` limpo; testes: app 213/213 (inalterado); `npm run build` sem regressão. Verificado ao
+vivo via Chrome real e isoladamente (`worstAt`/filtro de delta 0) contra os exemplos do próprio
+review.
+
+**Rodada 5 (última desta lab — ver nota abaixo)**: 1 achado trivial corrigido (typo "desatardada" →
+"desatualizada", já corrigido acima) e 1 achado de nomenclatura avaliado e mantido como está:
+`frameTimeMs.p95` usa `worstAt` (limite do pior 5%, a mesma semântica de "1% low"/"5% low" já usada
+em `fps.p1`/`fps.p5`), não o percentil padrão nearest-rank que o nome "p95" tecnicamente sugere —
+com `[10×19, 100]`, devolve `100` (o outlier), não o 19º valor que um p95 padrão devolveria. Mantido
+de propósito: pra detectar travadela real (o objetivo desta instrumentação), o limite do pior 5% é
+mais útil que o percentil padrão, que pode esconder exatamente o outlier raro que se quer achar —
+mesma razão que motivou trocar de percentil padrão pra `worstAt` na rodada 4. O nome do campo
+(`p95`) ficou tecnicamente impreciso, mas renomear mudaria o formato do relatório sem ganho real.
+
+**Encerrando o ciclo de review aqui**: esta é a 4ª rodada consecutiva de achados nesta mesma função
+(`sample()`), cada uma mais sutil que a anterior. Consultado o usuário via `AskUserQuestion` sobre
+continuar o ciclo até convergência plena (2 rodadas seguidas sem achado novo, o padrão desta sessão)
+ou encerrar aqui — decisão: encerrar depois desta PR, tratando `window.__perf`/`sample()` como uma
+ferramenta de debug/dev que não precisa de perfeição estatística, não lógica de negócio.
 
 1. **Perfil de qualidade mobile explícito e único** (prioridade alta, risco baixo) — hoje os ramos
    `isLowEndDevice` (FXAA/MSAA/SSAO2/GlowLayer/sombra/shadow map size) estão espalhados por todo
