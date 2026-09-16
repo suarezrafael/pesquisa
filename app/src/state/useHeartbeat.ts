@@ -92,7 +92,13 @@ export async function sendImmediateNicknameChange(
 ): Promise<{ ok: boolean; changed?: boolean; nickname?: string; nicknameChangedAt?: string | null; error?: string }> {
   const playerId = loadPlayerId()
   const secret = loadPlayerSecret()
-  if (!playerId || !secret) return { ok: true, changed: true, nickname, nicknameChangedAt: null }
+  // `nicknameChangedAt: new Date().toISOString()` aqui, NUNCA `null` — sem servidor pra reconciliar
+  // (perfil ainda não abriu Amigos, ou identidade legada sem segredo), o cooldown de 7 dias
+  // continua sendo aplicado só localmente (`canChangeNickname`, `NicknamePanel.tsx`); devolver
+  // `null` reiniciaria `profile.nicknameChangedAt` pra "nunca trocou" A CADA troca bem-sucedida,
+  // destrancando o painel imediatamente de novo — um jeito real de contornar o limite de frequência
+  // simplesmente nunca abrindo o painel de Amigos.
+  if (!playerId || !secret) return { ok: true, changed: true, nickname, nicknameChangedAt: new Date().toISOString() }
   try {
     const res = await fetch(`${ACCOUNTS_API_URL}/players/heartbeat`, {
       method: 'POST',

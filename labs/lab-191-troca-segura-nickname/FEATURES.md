@@ -114,9 +114,11 @@ como dependente de 203/pet já estar confiável, já resolvido no lab-188).
   intencional, ver comentário no código: cooldown de "não confundir os amigos", não um limite de
   calendário). Falha aberta (permite) se a data salva estiver corrompida. Testado
   (`progression.test.ts`).
-- `state/useProfile.ts`: `renameNickname(name, nowIso)` — atualiza `profile.name`+
-  `nicknameChangedAt` local e persiste, sem repetir validação de formato/cooldown (quem decide de
-  verdade é o servidor; `App.tsx` só chama isto depois de `sendImmediateNicknameChange` confirmar —
+- `state/useProfile.ts`: `renameNickname(name, nicknameChangedAt)` — atualiza `profile.name`+
+  `nicknameChangedAt` local e persiste com o valor RECEBIDO (a linha de verdade devolvida pelo
+  servidor, não um `new Date()` calculado aqui — ver "Rodada 5" abaixo), sem repetir validação de
+  formato/cooldown (quem decide de verdade é o servidor; `App.tsx` só chama isto depois de
+  `sendImmediateNicknameChange` confirmar —
   ver "Rodada 1" abaixo pro motivo de não duplicar a checagem aqui).
 - Novo componente `components/NicknamePanel.tsx` — mesmo gerador/filtro/UX do `Onboarding.tsx`
   (`generateNickname`/`sanitizeNicknameChars`/`isNicknameAllowed`), mais mensagem de cooldown
@@ -151,6 +153,17 @@ como dependente de 203/pet já estar confiável, já resolvido no lab-188).
   tocar no cooldown.
 
 ## Verificação ao vivo
+
+**Migrações**: `0014_player_nickname_changed_at.sql` e `0015_player_identity_secret.sql` já foram
+aplicadas em PRODUÇÃO (`npm run migrate`, verificado no momento de cada rodada em que foram
+criadas — antes do respectivo commit ser enviado). O Worker de produção só é atualizado depois do
+merge desta PR; não há janela real onde o código novo rode contra um schema sem as colunas.
+
+**Nota**: esta seção registra a verificação da RODADA 1, quando a resposta do heartbeat pra
+nickname ainda era um 204 vazio. Esse contrato mudou nas rodadas 2-5 (ownership por
+`player_secret`, depois `{changed, nickname, nicknameChangedAt}` em JSON 200) — ver o histórico de
+rodadas mais abaixo pra cada mudança e sua própria verificação ao vivo; o comportamento ATUAL é o
+descrito lá, não o 204 desta seção.
 
 **Backend, direto contra o banco de PRODUÇÃO real** (`wrangler dev` local na porta 8790, mesma
 técnica dos labs 175/185): registrados 2 jogadores de teste via `POST /players/register`. Confirmado
@@ -353,6 +366,46 @@ disclosed nas rodadas 2/4 — tratado como tal abaixo, terceira vez que surge):
   de segredo pra identidades legadas, em vez de continuar reavaliando a mesma decisão a cada rodada
   deste PR. Registrado aqui como dívida real pra um laboratório futuro (mesmo padrão já usado no
   lab-186 pra uma limitação semelhante), não descartado.
+
+**Rodada 6** — 3 comentários gerados + 2 suprimidos:
+
+- **Real, grave, corrigido**: a correção da rodada 5 (reconciliar `nicknameChangedAt` com o valor
+  devolvido pelo servidor) introduziu uma REGRESSÃO real — o caminho "sem `playerId`/`secret`"
+  (perfil nunca abriu Amigos, ou identidade legada) passou a devolver `nicknameChangedAt: null`
+  sempre, e `App.tsx` grava esse `null` local a CADA troca bem-sucedida — como `canChangeNickname(null,
+  ...)` sempre libera, isso reiniciava o cooldown pra "nunca trocou" toda vez, permitindo trocar de
+  apelido em loop sem nenhum limite de frequência, contornando exatamente o critério de aceite do
+  backlog que este lab existe pra cumprir. Corrigido voltando a usar `new Date().toISOString()`
+  nesse caminho específico (onde não há servidor pra reconciliar) — só o caminho COM servidor usa o
+  valor autoritativo devolvido. Verificado ao vivo: trocar de apelido sem nunca ter aberto o painel
+  de Amigos agora bloqueia corretamente por 7 dias no próprio painel, não reseta.
+- **Real, grave, corrigido**: `ensureRegistered` resolvia `savePlayerId`/`savePlayerSecret` pelo
+  perfil ATIVO no momento em que a resposta assíncrona chegava, não no momento em que a chamada
+  começou — se a criança trocasse de perfil (tablet compartilhado, lab-108) enquanto o registro
+  ainda estava em voo, o `playerId`+segredo do perfil ANTIGO seriam gravados no slot do perfil NOVO,
+  vazando a credencial de um irmão pro outro (que passaria a poder renomear a identidade do
+  primeiro). Corrigido capturando o perfil ativo ANTES do `fetch` e só gravando a resposta se o
+  perfil ainda for o mesmo quando ela chegar; caso contrário, descarta (mesmo tratamento de
+  "registro incompleto" já usado pra resposta malformada).
+- **Real, corrigido (documentação)**: a seção "Verificação ao vivo" registrava respostas 204 pro
+  heartbeat de nickname, desatualizada desde a rodada 3 (que mudou pra JSON 200 com `changed`).
+  Adicionada uma nota explícita no topo da seção apontando pro histórico de rodadas como fonte do
+  comportamento atual, sem reescrever o registro histórico da rodada 1 (que descrevia o
+  comportamento real DAQUELE momento). Corrigida também a assinatura documentada de
+  `renameNickname` (dizia `nowIso`, o parâmetro real desde a rodada 5 é o `nicknameChangedAt`
+  autoritativo devolvido pelo servidor).
+- **Real, mas fora do que corrigi nesta rodada (achado suprimido)**: o `SELECT` que embasa a
+  resposta `{changed: false}` não está travado — se outra sessão renomear a MESMA identidade entre
+  esse `SELECT` e a resposta, o payload devolvido carrega nickname/timestamp já desatualizados, e o
+  cliente reconciliaria pra um estado que não é mais o mais recente (autocorrige na PRÓXIMA
+  interação, já que a COLUNA no banco em si nunca fica errada — só a resposta desta requisição
+  específica). Avaliado como narrow/cosmético (exige duas trocas verdadeiramente simultâneas do
+  MESMO perfil) — corrigir de verdade exigiria travar a linha (`select ... for update`) ou uma
+  segunda leitura pós-escrita, custo desproporcional a uma janela de corrida sub-milissegundo que
+  se autocorrige sozinha; disclosed, não corrigido.
+- **Real, corrigido (achado suprimido, documentação)**: o plano de teste/FEATURES.md não deixava
+  explícito que as migrações `0014`/`0015` já tinham sido aplicadas em produção antes de cada commit
+  correspondente ser enviado — corrigido com uma nota explícita no topo de "Verificação ao vivo".
 
 ## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
 
