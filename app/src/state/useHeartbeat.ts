@@ -114,10 +114,15 @@ export async function sendImmediateNicknameChange(
       // devolve um 204 comum (sem corpo algum), que passaria por `res.ok` mas nunca de fato mudou o
       // nickname no banco; tratar isso como sucesso gravaria um nome/cooldown local que diverge de
       // vez do que está salvo de verdade.
-      if (typeof body?.changed !== 'boolean' || typeof body.nickname !== 'string') {
+      const nicknameChangedAt = body?.nicknameChangedAt
+      const nicknameChangedAtValid =
+        nicknameChangedAt === undefined ||
+        nicknameChangedAt === null ||
+        (typeof nicknameChangedAt === 'string' && !Number.isNaN(new Date(nicknameChangedAt).getTime()))
+      if (typeof body?.changed !== 'boolean' || typeof body.nickname !== 'string' || !nicknameChangedAtValid) {
         return { ok: false, error: 'não foi possível confirmar a troca — tente de novo' }
       }
-      return { ok: true, changed: body.changed, nickname: body.nickname, nicknameChangedAt: body.nicknameChangedAt ?? null }
+      return { ok: true, changed: body.changed, nickname: body.nickname, nicknameChangedAt: nicknameChangedAt ?? null }
     }
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     return { ok: false, error: body?.error ?? 'não foi possível trocar agora' }

@@ -407,6 +407,33 @@ disclosed nas rodadas 2/4 — tratado como tal abaixo, terceira vez que surge):
   explícito que as migrações `0014`/`0015` já tinham sido aplicadas em produção antes de cada commit
   correspondente ser enviado — corrigido com uma nota explícita no topo de "Verificação ao vivo".
 
+**Rodada 7** — 1 comentário gerado + 5 suprimidos (2 marcados "previously missed" — repetição
+literal do achado já disclosed de identidades legadas sem segredo, sem mudança):
+
+- **Real, corrigido**: a validação de resposta da rodada 6 checava `changed`/`nickname` mas não
+  validava `nicknameChangedAt` de verdade — um valor presente porém malformado (não uma data válida)
+  passaria como se fosse `null` ou uma data real. Corrigido validando explicitamente que o campo é
+  `undefined`, `null`, ou uma string que representa uma data parseável, antes de aceitar a resposta
+  como confirmada.
+- **Real, mas avaliado como fora de proporção pra este PR (achado suprimido)**: com a correção da
+  rodada 6 (`ensureRegistered` trata resposta incompleta como falha total, sem gravar nada), um
+  cenário de ORDEM DE DEPLOY invertida — frontend novo publicado ANTES do Worker (CI publica os
+  dois em jobs independentes, sem garantia de ordem) — faria cada tentativa de abrir Amigos durante
+  essa janela criar uma linha órfã em `player_identities` (o servidor antigo ainda insere) sem o
+  cliente jamais salvar o `playerId` correspondente, repetindo a cada tentativa até o Worker
+  atualizar. Nenhuma linha fica CORROMPIDA (mesma classe de achado que a rodada 6 corrigiu evitava)
+  — só linhas órfãs duplicadas, uma questão de ordem de deploy operacional, não um bug de código:
+  fazer o deploy do Worker (`server-accounts`) ANTES do frontend nesta PR específica evita a janela
+  por completo. `handlePlayerRegister` já não é idempotente por natureza (todo `INSERT` simples,
+  sem chave única por `deviceId`) — resolver isso de verdade é uma mudança de design maior que este
+  lab, não relacionada à troca de nickname em si; registrado aqui como nota operacional de rollout,
+  não como bug a corrigir no código.
+- **Real, mas já avaliado e mantido (achado suprimido, repetição expandida da rodada 6)**: a mesma
+  corrida de leitura sem lock no `SELECT` do caminho `changed: false`, desta vez com a observação de
+  que nem um `select ... for update` isolado bastaria (precisaria de uma transação serializável
+  completa). Mantida a mesma decisão da rodada 6: narrow, autocorrige na próxima interação, custo de
+  corrigir desproporcional ao risco — ver rodada 6 pro raciocínio completo.
+
 ## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
 
 - Nome real, bio livre, imagem enviada, nickname totalmente livre sem filtro algum.
