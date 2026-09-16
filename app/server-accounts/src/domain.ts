@@ -488,6 +488,20 @@ export function isNicknameAllowed(name: string): boolean {
   return !NICKNAME_BLOCKED_TERMS.some((term) => normalized.includes(term))
 }
 
+// Troca segura de nickname depois do onboarding — mesma cópia proposital de
+// `app/src/state/progression.ts` (mesma constante, mesma lógica): nenhum dos dois lados pode
+// confiar só no outro pra impedir troca em excesso (docs/prompts/01-seguranca.md §3). Cooldown de
+// dias CORRIDOS (não dia civil), pra não deixar passar duas trocas com menos de 1h de intervalo
+// só por caírem em lados opostos da virada da meia-noite UTC.
+export const NICKNAME_CHANGE_COOLDOWN_DAYS = 7
+
+export function canChangeNickname(nicknameChangedAt: string | null, nowIso: string): boolean {
+  if (nicknameChangedAt === null) return true
+  const elapsedMs = new Date(nowIso).getTime() - new Date(nicknameChangedAt).getTime()
+  if (Number.isNaN(elapsedMs)) return true
+  return elapsedMs >= NICKNAME_CHANGE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function isValidUuid(value: string): boolean {

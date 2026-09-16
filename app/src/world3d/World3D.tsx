@@ -167,6 +167,7 @@ interface World3DProps {
   onOpenShop: () => void
   onOpenPets: () => void
   onOpenFriends: () => void
+  onOpenNicknamePanel: () => void
   onOpenPairing: () => void
   onOpenAchievements: () => void
   onOpenWeeklyEvent: () => void
@@ -2464,6 +2465,7 @@ export function World3D({
   onOpenShop,
   onOpenPets,
   onOpenFriends,
+  onOpenNicknamePanel,
   onOpenPairing,
   onOpenAchievements,
   onOpenWeeklyEvent,
@@ -12767,6 +12769,7 @@ export function World3D({
         onOpenShop={onOpenShop}
         onOpenPets={onOpenPets}
         onOpenFriends={onOpenFriends}
+        onOpenNicknamePanel={onOpenNicknamePanel}
         muted={muted}
         onToggleMute={handleToggleMute}
         onOpenChat={() => openMultiplayerFeature(() => setChatOpen(true))}

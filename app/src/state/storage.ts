@@ -218,6 +218,7 @@ export function loadProfile(): Profile | null {
       equippedBackpackColorId: null,
       equippedHairShapeId: null,
       equippedGlassesId: null,
+      nicknameChangedAt: null,
       ...(JSON.parse(raw) as Partial<Profile>),
     } as Profile
   } catch {

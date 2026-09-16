@@ -1,6 +1,6 @@
 # Laboratório 191 — Troca segura de nickname
 
-Status: em andamento
+Status: em andamento (PR aberta)
 Início: 2026-09-16
 Fim: -
 Commit inicial: 11871b3ab94168282b08b7c097670b897576f40d
@@ -68,41 +68,107 @@ como dependente de 203/pet já estar confiável, já resolvido no lab-188).
 
 ## Funcionalidades planejadas
 
-- [ ] `types.ts`: novo campo `Profile.nicknameChangedAt: string | null` (instante ISO da última
+- [x] `types.ts`: novo campo `Profile.nicknameChangedAt: string | null` (instante ISO da última
   troca; `null` = nunca trocou, inclusive todo perfil salvo antes deste lab).
-- [ ] `state/progression.ts`: nova função pura `canChangeNickname(nicknameChangedAt, nowIso)` +
+- [x] `state/progression.ts`: nova função pura `canChangeNickname(nicknameChangedAt, nowIso)` +
   constante `NICKNAME_CHANGE_COOLDOWN_DAYS` (7 dias) — testada (`progression.test.ts`).
-- [ ] `state/useProfile.ts`: nova função `renameNickname(name)` — valida local primeiro
+- [x] `state/useProfile.ts`: nova função `renameNickname(name)` — valida local primeiro
   (`isNicknameAllowed` + `canChangeNickname`, falha rápida sem rede se bloqueado), atualiza
   `profile.name`+`nicknameChangedAt` e persiste, dispara sincronização imediata com o backend
   (best-effort, ver abaixo).
-- [ ] Novo componente `NicknamePanel.tsx` (modal, mesmo padrão `useModalA11y` dos outros painéis):
+- [x] Novo componente `NicknamePanel.tsx` (modal, mesmo padrão `useModalA11y` dos outros painéis):
   mostra nick atual, campo com o MESMO filtro/gerador do onboarding, mensagem de cooldown restante
   quando bloqueado, botão salvar.
-- [ ] `HudHeader.tsx`: nome (`<h1>{profile.name}</h1>`) ganha um botão "✏️" ao lado, abre o
-  `NicknamePanel` — novo prop `onOpenNicknamePanel`, plumbing por `App.tsx` igual aos outros
-  painéis (`useModalA11y`, `AskUserQuestion`-free, é ação reversível/local).
-- [ ] `state/useHeartbeat.ts`: nova função `sendImmediateNicknameChange(nickname)` (mesmo padrão de
+- [x] `HudHeader.tsx`: novo botão "✏️" na fileira de ícones do HUD (não inline no `<h1>` — ver
+  "Implementação" abaixo pro motivo), abre o `NicknamePanel` — novo prop `onOpenNicknamePanel`,
+  plumbing por `App.tsx` igual aos outros painéis (`useModalA11y`, ação reversível/local).
+- [x] `state/useHeartbeat.ts`: nova função `sendImmediateNicknameChange(nickname)` (mesmo padrão de
   `sendImmediateHouseVisibility`), MAS com resultado observável (`Promise<{ok:boolean; error?:
   string}>`, diferente do fire-and-forget das outras) — o painel precisa mostrar "só pode trocar de
   novo em N dias" se o SERVIDOR recusar (defesa real, não só a checagem local otimista).
-- [ ] `server-accounts/migrations/0014_player_nickname_changed_at.sql`: nova coluna
+- [x] `server-accounts/migrations/0014_player_nickname_changed_at.sql`: nova coluna
   `nickname_changed_at timestamptz` em `player_identities` (`null` = nunca trocou).
-- [ ] `server-accounts/src/domain.ts`: mesma função pura `canChangeNickname` do client (mesma
+- [x] `server-accounts/src/domain.ts`: mesma função pura `canChangeNickname` do client (mesma
   constante de dias) — testada (`domain.test.ts`).
-- [ ] `server-accounts/src/index.ts`: `handleHeartbeat` ganha um campo opcional `nickname` no corpo
+- [x] `server-accounts/src/index.ts`: `handleHeartbeat` ganha um campo opcional `nickname` no corpo
   — quando presente e DIFERENTE do nickname já salvo, valida formato (`isNicknameAllowed`,
   reaproveitado) + cooldown (`canChangeNickname` contra o `nickname_changed_at` atual da linha);
   se aprovado, `UPDATE ... SET nickname = ..., nickname_changed_at = now()`; se recusado, resposta
   de erro dedicada (não deixa os outros campos do MESMO heartbeat de badges/equipped_look/casa
   falharem por causa disso — mesmo princípio já usado pro `houseVisible` malformado).
-- [ ] Verificação ao vivo (Chrome real, banco de PRODUÇÃO real via `wrangler dev` local, mesma
+- [x] Verificação ao vivo (Chrome real, banco de PRODUÇÃO real via `wrangler dev` local, mesma
   técnica dos labs 175/185): registrar 2 jogadores de teste, trocar o nickname de um deles,
   confirmar que o outro consegue achar o nick NOVO via busca/perfil público, e que tentar trocar de
   novo antes do cooldown é recusado com mensagem clara.
-- [ ] Confirmar ao vivo que HUD/ranking(próprio jogador)/multiplayer refletem o nick novo
+- [x] Confirmar ao vivo que HUD/ranking(próprio jogador)/multiplayer refletem o nick novo
   IMEDIATAMENTE, sem depender do heartbeat (já é o comportamento hoje, por construção — só
   confirmar que a troca local não quebra isso).
+
+## Implementação
+
+- `types.ts`: `Profile.nicknameChangedAt: string | null` — instante ISO da última troca.
+- `state/storage.ts`: default `null` no `loadProfile()` (backward-compat, mesmo padrão dos outros
+  campos opcionais ali).
+- `state/progression.ts`: `canChangeNickname(nicknameChangedAt, nowIso)` + constante
+  `NICKNAME_CHANGE_COOLDOWN_DAYS = 7` (dias CORRIDOS via `Date.getTime()`, não `utcDayNumber` —
+  intencional, ver comentário no código: cooldown de "não confundir os amigos", não um limite de
+  calendário). Falha aberta (permite) se a data salva estiver corrompida. Testado
+  (`progression.test.ts`).
+- `state/useProfile.ts`: `renameNickname(name, nowIso)` — atualiza `profile.name`+
+  `nicknameChangedAt` local e persiste; repete a checagem de cooldown antes de gravar (defesa em
+  profundidade, mesmo que o chamador já tenha validado).
+- Novo componente `components/NicknamePanel.tsx` — mesmo gerador/filtro/UX do `Onboarding.tsx`
+  (`generateNickname`/`sanitizeNicknameChars`/`isNicknameAllowed`), mais mensagem de cooldown
+  restante quando bloqueado.
+- `world3d/HudHeader.tsx`: novo botão "✏️ Trocar apelido" na fileira de ícones do HUD (mesma classe
+  `.help-button`, MESMO piso de toque de 44px já auditado — descartada a ideia inicial de um ícone
+  inline no `<h1>` do nome por ficar pequeno demais nesse contexto compacto pra respeitar o piso de
+  acessibilidade sem redesenhar o cabeçalho inteiro).
+- `App.tsx`: novo estado `showNicknamePanel`, incluído em `suspendTriggers` (mesmo tratamento de
+  todo outro modal de tela cheia). `onSave` do painel orquestra: chama o servidor primeiro
+  (`sendImmediateNicknameChange`), só grava local (`renameNickname`) se o servidor confirmar —
+  nunca deixa o estado local divergir do que o backend realmente aceitou.
+- `state/useHeartbeat.ts`: `sendImmediateNicknameChange(nickname)` — mesmo padrão de
+  `sendImmediateHouseVisibility`, mas com resultado observável (`Promise`, não fire-and-forget) pra
+  o painel poder mostrar a recusa de cooldown vinda do servidor. Sem `playerId` (nunca abriu
+  Amigos), devolve sucesso trivial — nada pra sincronizar ainda, o próximo registro já usa o nome
+  atualizado.
+- `server-accounts/migrations/0014_player_nickname_changed_at.sql`: nova coluna
+  `nickname_changed_at timestamptz` em `player_identities`.
+- `server-accounts/src/domain.ts`: mesma função `canChangeNickname` + mesma constante do client —
+  cópia proposital (não dá pra importar entre os pacotes deployáveis, mesmo padrão já usado por
+  `isNicknameAllowed`). Testado (`domain.test.ts`).
+- `server-accounts/src/index.ts`: `handleHeartbeat` ganha um campo opcional `nickname` — só a
+  chamada IMEDIATA do painel manda esse campo (nunca o tick periódico de 60s, decisão de escopo
+  registrada acima). Quando presente e DIFERENTE do nickname já salvo: valida formato
+  (`isNicknameAllowed`) e cooldown (`canChangeNickname` contra a linha real do banco) antes de
+  atualizar `nickname`+`nickname_changed_at`; recusa com 400 (formato) ou 429 (cooldown) sem tocar
+  em nenhum outro campo do heartbeat. Renomear pro MESMO nome já salvo é um no-op silencioso (não
+  reinicia o cooldown).
+
+## Verificação ao vivo
+
+**Backend, direto contra o banco de PRODUÇÃO real** (`wrangler dev` local na porta 8790, mesma
+técnica dos labs 175/185): registrados 2 jogadores de teste via `POST /players/register`. Confirmado
+via `curl`: (1) busca pelo nickname ORIGINAL encontra o jogador; (2) `POST /players/heartbeat` com
+um `nickname` novo devolve 204 e a busca pelo nome NOVO encontra o jogador, a busca pelo nome ANTIGO
+não encontra mais nada; (3) tentar trocar de novo imediatamente devolve 429 com mensagem clara, e o
+nickname permanece o mesmo (cooldown real, não só client-side); (4) reenviar o MESMO nickname já
+salvo devolve 204 sem consumir o cooldown; (5) nickname da lista de bloqueio devolve 400; (6)
+`GET /players/:id/public-profile` reflete o nome novo; (7) um heartbeat comum sem `nickname` nenhum
+continua funcionando (regressão checada). Jogadores de teste removidos do banco ao final de cada
+etapa.
+
+**UI completa, Chrome real** (Vite local temporariamente apontado pro `wrangler dev` acima via
+`VITE_ACCOUNTS_API_URL`, perfil de teste já existente no navegador — nome/estado restaurados ao
+final): abrir "✏️ Trocar apelido" mostra o painel com o nome atual pré-preenchido e "Salvar"
+desabilitado (nome igual); "🎲 Gerar" preenche um nome novo válido, habilita "Salvar"; salvar fecha
+o painel e atualiza o HUD instantaneamente com o nome novo; reabrir o painel imediatamente depois
+mostra a mensagem de cooldown ("pode trocar de novo em 7 dia(s)") com campo/gerador/salvar
+desabilitados; abrir o painel de Amigos DEPOIS da troca (primeiro registro do jogador) confirma via
+busca no backend que o registro usa o nome JÁ TROCADO, não o original — a propagação por HUD/
+ranking(próprio jogador)/multiplayer não precisou de nenhuma mudança de código, por construção
+(investigação prévia já confirmada, ver acima).
 
 ## Fora de escopo (explicitamente adiado, conforme o próprio item do backlog)
 

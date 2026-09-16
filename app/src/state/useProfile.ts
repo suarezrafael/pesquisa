@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Profile } from '../types'
 import { createProfileSlot, loadProfile, saveProfile } from './storage'
 import { trackCosmeticEquipped } from '../productAnalytics'
+import { canChangeNickname } from './progression'
 import {
   BACKPACK_COLOR_CATALOG,
   HAIR_SHAPE_CATALOG,
@@ -44,9 +45,24 @@ export function useProfile() {
       equippedBackpackColorId: null,
       equippedHairShapeId: null,
       equippedGlassesId: null,
+      nicknameChangedAt: null,
     }
     saveProfile(next)
     setProfile(next)
+  }
+
+  // Troca de apelido depois do onboarding — reaproveita o MESMO filtro/formato de
+  // `nicknameFilter.ts` já usado ali; o chamador (`NicknamePanel.tsx`) já validou formato/cooldown
+  // antes de chegar aqui, mas repete a checagem de cooldown (não confia só na UI que chamou) antes
+  // de gravar qualquer coisa localmente.
+  function renameNickname(name: string, nowIso: string) {
+    setProfile((prev) => {
+      if (!prev) return prev
+      if (!canChangeNickname(prev.nicknameChangedAt, nowIso)) return prev
+      const next: Profile = { ...prev, name, nicknameChangedAt: nowIso }
+      saveProfile(next)
+      return next
+    })
   }
 
   function equipAvatar(avatarEmoji: string) {
@@ -144,5 +160,6 @@ export function useProfile() {
     equipBackpackColor,
     equipHairShape,
     equipGlasses,
+    renameNickname,
   }
 }

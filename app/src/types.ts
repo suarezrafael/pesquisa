@@ -37,6 +37,10 @@ export interface Profile {
   // Óculos (lab-92) — eixo de customização independente, mesmo espírito do chapéu. null = nenhum
   // óculos equipado.
   equippedGlassesId: string | null
+  // Troca de apelido depois do onboarding — instante ISO da última troca, usado pro cooldown
+  // (`canChangeNickname`, `state/progression.ts`). null = nunca trocou (inclusive todo perfil
+  // salvo antes deste laboratório).
+  nicknameChangedAt: string | null
 }
 
 export interface Progress {

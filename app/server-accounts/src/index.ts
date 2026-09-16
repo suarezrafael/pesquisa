@@ -16,6 +16,7 @@ import Stripe from 'stripe'
 import {
   buildWeeklyProgressEmail,
   calculateNpsScore,
+  canChangeNickname,
   friendResponseStatus,
   generatePairingCode,
   hasActiveFriendship,
@@ -854,6 +855,7 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
         houseFurnitureIds?: unknown
         housePlacements?: unknown
         houseVisible?: unknown
+        nickname?: unknown
       }
     | null
   // Achado do review do Copilot (PR #35): `body.playerId` vem de JSON de input público — sem
@@ -915,6 +917,36 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   }
 
   const sql = neon(env.DATABASE_URL)
+
+  // Só a chamada IMEDIATA de `sendImmediateNicknameChange` manda este campo (nunca o tick
+  // periódico, ver `state/useHeartbeat.ts`), então não precisa coexistir com os outros campos
+  // opcionais acima na prática. Cooldown reforçado aqui contra a linha de verdade no banco (não
+  // confia no `nicknameChangedAt` que o cliente mandaria, nem manda) — `docs/prompts/01-seguranca.md`
+  // §3.
+  let nickname: string | null = null
+  let nicknameChangedAt: string | null = null
+  if (body.nickname !== undefined) {
+    if (typeof body.nickname !== 'string') {
+      return Response.json({ error: 'nickname inválido' }, { status: 400 })
+    }
+    const trimmed = body.nickname.trim()
+    if (!isNicknameAllowed(trimmed)) {
+      return Response.json({ error: 'nickname não permitido' }, { status: 400 })
+    }
+    const current = (await sql`
+      select nickname, nickname_changed_at from player_identities where id = ${playerId}
+    `) as { nickname: string; nickname_changed_at: string | null }[]
+    if (current.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
+    if (current[0].nickname !== trimmed) {
+      const nowIso = new Date().toISOString()
+      if (!canChangeNickname(current[0].nickname_changed_at, nowIso)) {
+        return Response.json({ error: 'aguarde alguns dias pra trocar de apelido de novo' }, { status: 429 })
+      }
+      nickname = trimmed
+      nicknameChangedAt = nowIso
+    }
+  }
+
   const rows = (await sql`
     update player_identities set
       last_seen_at = now(),
@@ -922,7 +954,9 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
       badges = coalesce(${badgesJson}::jsonb, badges),
       house_furniture_ids = coalesce(${houseFurnitureIdsJson}::jsonb, house_furniture_ids),
       house_placements = coalesce(${housePlacementsJson}::jsonb, house_placements),
-      house_visible = coalesce(${houseVisible}::boolean, house_visible)
+      house_visible = coalesce(${houseVisible}::boolean, house_visible),
+      nickname = coalesce(${nickname}, nickname),
+      nickname_changed_at = coalesce(${nicknameChangedAt}::timestamptz, nickname_changed_at)
     where id = ${playerId} returning id
   `) as { id: string }[]
   if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })

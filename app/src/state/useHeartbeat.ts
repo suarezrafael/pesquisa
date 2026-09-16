@@ -25,6 +25,7 @@ type HeartbeatBody = {
   houseFurnitureIds?: string[]
   housePlacements?: Record<string, { x: number; z: number; rotY: number }>
   houseVisible?: boolean
+  nickname?: string
 }
 
 function sendHeartbeat(body: HeartbeatBody): void {
@@ -62,6 +63,29 @@ export function sendImmediateHouseVisibility(visible: boolean, progress: Progres
     housePlacements: houseSnapshot.placements,
     houseVisible: visible,
   })
+}
+
+// Troca segura de nickname depois do onboarding — diferente das outras chamadas imediatas desta
+// função, o painel de troca precisa de uma resposta de verdade (não fire-and-forget): o servidor
+// pode recusar por cooldown (defesa real, não só a checagem otimista da UI —
+// docs/prompts/01-seguranca.md §3) e o painel precisa mostrar isso pra criança. Sem `playerId`
+// (perfil nunca abriu o painel de Amigos) não há nada pra sincronizar agora — a troca local já
+// aconteceu, e o próximo `ensureRegistered` vai registrar com o nome já atualizado.
+export async function sendImmediateNicknameChange(nickname: string): Promise<{ ok: boolean; error?: string }> {
+  const playerId = loadPlayerId()
+  if (!playerId) return { ok: true }
+  try {
+    const res = await fetch(`${ACCOUNTS_API_URL}/players/heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, nickname }),
+    })
+    if (res.status === 204) return { ok: true }
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    return { ok: false, error: body?.error ?? 'não foi possível trocar agora' }
+  } catch {
+    return { ok: false, error: 'sem conexão' }
+  }
 }
 
 // lab-162, Grupo B do backlog social (labs/lab-158-.../FEATURES.md) — mantém `last_seen_at`

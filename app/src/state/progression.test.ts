@@ -21,6 +21,7 @@ import {
   BADGE_ALL_DONE,
   BADGE_COOP_FIRST,
   BADGE_FIRST_QUEST,
+  canChangeNickname,
   equipPet,
   feedPet,
   furnitureQuantity,
@@ -1594,5 +1595,28 @@ describe('nextPlanetDiscovery (lab-181)', () => {
     // planetDiscoverySlots/nextPlanetDiscovery não recebem nem checam entitlementActive — a
     // ausência do parâmetro na assinatura JÁ é a garantia; este teste documenta a intenção.
     expect(nextPlanetDiscovery(emptyProgress)).toEqual(nextPlanetDiscovery({ ...emptyProgress }))
+  })
+})
+
+describe('canChangeNickname — cooldown de troca de apelido', () => {
+  it('permite a primeira troca (nunca trocou antes)', () => {
+    expect(canChangeNickname(null, '2026-09-16T00:00:00.000Z')).toBe(true)
+  })
+
+  it('bloqueia antes dos 7 dias completos', () => {
+    const changedAt = '2026-09-10T12:00:00.000Z'
+    const almostSevenDays = '2026-09-17T11:59:59.000Z'
+    expect(canChangeNickname(changedAt, almostSevenDays)).toBe(false)
+  })
+
+  it('libera exatamente aos 7 dias corridos, não por dia civil UTC', () => {
+    const changedAt = '2026-09-10T23:00:00.000Z'
+    // menos de 24h de diferença de calendário, mas exatamente 7*24h decorridas
+    const sevenDaysLater = '2026-09-17T23:00:00.000Z'
+    expect(canChangeNickname(changedAt, sevenDaysLater)).toBe(true)
+  })
+
+  it('data corrompida não trava a criança pra sempre — falha aberta (permite)', () => {
+    expect(canChangeNickname('data-invalida', '2026-09-16T00:00:00.000Z')).toBe(true)
   })
 })
