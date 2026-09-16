@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-194-locomocao-sem-moonwalk/ — corrige o "moonwalk" trocando o driver do
+ciclo de caminhada local de `throttle` bruto pra velocidade tangencial física real
+(`body.getLinearVelocity()`), mesmo padrão já usado pro avatar remoto desde o lab-55. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 192 - Locomoção sem moonwalk" (renumerado pra
+lab-194) — próximo item depois do lab-193, seguindo a ordem do próprio documento urgente. Ver
+`labs/lab-194-locomocao-sem-moonwalk/FEATURES.md` pro objetivo/investigação prévia completos.
+
 Último concluído: labs/lab-193-babylon-performance-mobile/ — instrumentação real de performance
 Babylon.js em mobile (P0, urgente). Origem: pedido urgente do usuário via arquivo em
 `docs/urgent-babylon-performance-lab.md` (descoberto na árvore de trabalho, não pelo chat, enquanto
