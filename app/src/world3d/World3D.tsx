@@ -10891,7 +10891,20 @@ export function World3D({
           if (sittingAtDesk) {
             // não mexe em nada — pose fica exatamente como o gatilho da carteira deixou.
           } else if (moving) {
-            walkPhase += dt * Math.abs(throttle) * (running ? RUN_CYCLE_SPEED : WALK_CYCLE_SPEED)
+            // Achado real investigando "moonwalk": usar `throttle` (input bruto) pra
+            // avançar o ciclo de passada deixava as pernas animando no ritmo máximo mesmo quando
+            // uma colisão (parede/obstáculo/degrau alto) impedia o deslocamento REAL — o jogador
+            // continuava segurando pra frente, mas o corpo físico não saía do lugar. `currentVel`
+            // (lido no início deste bloco, ANTES de `body.setLinearVelocity` sobrescrever com o
+            // alvo deste quadro) é o resultado físico de verdade do quadro anterior, já resolvido
+            // pela física — incluindo qualquer colisão. Mesmo princípio já usado pro avatar remoto
+            // desde o lab-55 (`remoteSpeed`, medido por distância percorrida): a animação segue o
+            // que o corpo REALMENTE fez, não o que o jogador pediu. `moving`/o gatilho de som de
+            // passo continuam ligados ao `throttle` de propósito — soltar a tecla ainda para a
+            // pose na hora, sem esperar a física "confirmar" a parada.
+            const tangentialSpeed = currentVel.subtract(localUp.scale(Vector3.Dot(currentVel, localUp))).length()
+            const speedRatio = Math.min(1, tangentialSpeed / currentSpeed)
+            walkPhase += dt * speedRatio * (running ? RUN_CYCLE_SPEED : WALK_CYCLE_SPEED)
             const swing = Math.sin(walkPhase) * LEG_SWING_MAX
             studentFigure.legPivotL.rotation.x = swing
             studentFigure.legPivotR.rotation.x = -swing
