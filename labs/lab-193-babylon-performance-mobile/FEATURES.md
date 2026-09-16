@@ -290,8 +290,28 @@ falso positivo:
 
 `npx tsc -b` limpo; testes: app 213/213 (inalterado); `npm run build` sem regressão. Verificado ao
 vivo via Chrome real (nova rodada de captura de `sample()`, incluindo o cálculo de percentil
-isolado). PR de acompanhamento aberta separada da PR #73 (já mesclada), seguindo o mesmo ciclo de
-review/CI/confirmação de merge.
+isolado). PR de acompanhamento (#74) aberta separada da PR #73 (já mesclada), seguindo o mesmo ciclo
+de review/CI/confirmação de merge.
+
+**Rodada 3 (na PR #74, achou 2 problemas reais e mais fundamentais na própria correção da rodada
+2)**: a correção anterior trocou `engine.getFps()` (contador periódico) por
+`1000 / frameTimeCounter.current` — resolvia a "leitura repetida", mas `frameTimeCounter` mede a
+duração do TRABALHO de Babylon por quadro (bracket entre `onBeforeAnimations`/`onAfterRender`), não
+o intervalo de relógio real entre quadros; um quadro que renderiza em 4ms dentro de um orçamento de
+16.67ms (60 FPS reais) reportaria 250 FPS, não 60 — errado sempre que o motor não está no limite da
+GPU/CPU (a maioria do tempo de jogo real). Corrigido usando `engine.getDeltaTime()`
+(`instantaneousFrameTime` do `PerformanceMonitor` interno, atualizado a cada `beginFrame()` de
+verdade — confirmado no código-fonte do `@babylonjs/core`: `_measureFps()`, chamado de dentro de
+`beginFrame()`, grava tanto o FPS médio quanto o delta instantâneo na MESMA chamada, mas só o delta
+é por quadro de verdade). Um segundo achado, mais sutil: mesmo com o delta certo, calcular
+`fps.avg` como a MÉDIA das razões `1000/delta[i]` de cada amostra superestima o FPS real quando o
+tempo por quadro varia (dois quadros de 10ms+20ms: média das razões = (100+50)/2 = 75 FPS, mas o FPS
+real da janela é 2 quadros / 0.030s = 66.67) — o mesmo erro clássico de tirar média aritmética de
+taxas em vez de agregar primeiro e converter depois. Corrigido agregando (`mean`/`percentileAt`)
+sobre os DELTAS em ms e só convertendo em FPS no fim (`msToFps`), com `min`/`p5`/`p1` de FPS
+mapeados pro `max`/95º/99º percentil de DELTA (quadro mais longo = FPS mais baixo), não o mesmo
+percentil aplicado direto num array já convertido. Verificado isoladamente contra o exemplo exato do
+review (`mean([10, 20]) → msToFps → 66.67`, batendo com `2 / 0.030`) e ao vivo via `sample()` real.
 
 ## Lista priorizada de otimizações maiores (labs futuros, não implementadas aqui)
 
