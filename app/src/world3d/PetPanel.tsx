@@ -4,12 +4,18 @@
 // (`.avatar-shop-grid`/`.avatar-shop-item`/`.avatar-shop-emoji`/`.avatar-shop-action`) — mesmo
 // espírito de qualquer outro catálogo comprável com moeda, só com um eixo de "equipar" a mais
 // (só UM pet segue o jogador pelo mundo por vez, mesmo padrão de chapéu/óculos).
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { PET_CATALOG } from '../data/pets'
 import { quests } from '../data/quests'
 import { petAgeYears, petLifecycleStage, petStageFor, utcDayNumber, type PetStage } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Progress, Quest } from '../types'
+
+// Carregado sob demanda, não no bundle principal — mesmo raciocínio de `AvatarPreview3D` em
+// `AvatarShop.tsx`: `PetPanel.tsx` é importado direto (não via `lazy()`) por `App.tsx`, então sem
+// isso abrir /familia, /termos ou /privacidade baixaria `@babylonjs/core` à toa, só por
+// `PetPreview3D` existir no grafo de imports estático.
+const PetPreview3D = lazy(() => import('./PetPreview3D').then((m) => ({ default: m.PetPreview3D })))
 
 interface PetPanelProps {
   progress: Progress
@@ -60,6 +66,14 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
   // precisa recalcular por pet nem se preocupar com o milissegundo exato do render).
   const nowIso = new Date().toISOString()
   const alreadyFedToday = doneToday(progress.lastPetFeedAt, nowIso)
+  // Mesmo cálculo de estágio já feito por item da grade abaixo, uma vez só pro pet EQUIPADO — o
+  // preview mostra o mesmo pet que a criança já vê seguindo ela no mundo, não uma seleção à parte.
+  const equippedStage = progress.equippedPetId
+    ? petLifecycleStage(
+        petStageFor(progress.petCareCounts[progress.equippedPetId] ?? 0),
+        petAgeYears(progress, progress.equippedPetId, nowIso),
+      )
+    : null
   // lab-174 (desafio educativo leve, docs/market-metrics-engagement-backlog.md item 6 da ordem
   // sugerida) — sorteado uma vez por abertura do painel, do mesmo banco de `data/quests.ts` já
   // usado pelo desafio cooperativo (lab-172), sem catálogo novo. Responder errado nunca bloqueia
@@ -98,6 +112,21 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
           dia pra ele crescer — filhote, depois jovem, depois adulto. Com o tempo de convivência,
           ele também fica um adulto idoso — mas continua com você pra sempre.
         </p>
+
+        {/* Preview 3D do pet EQUIPADO — mesmo espírito do preview de avatar em `AvatarShop.tsx`
+            (lab-87), fechando o critério de aceite "preview claro" do backlog de pets premium.
+            Sem pet equipado ainda, mostra um placeholder claro em vez de um preview vazio. */}
+        <div className="pet-preview-3d-wrap">
+          {progress.equippedPetId && equippedStage ? (
+            <Suspense fallback={<div className="pet-preview-3d-canvas pet-preview-3d-loading" />}>
+              <PetPreview3D petId={progress.equippedPetId} stage={equippedStage} />
+            </Suspense>
+          ) : (
+            <div className="pet-preview-3d-canvas pet-preview-3d-empty" aria-hidden="true">
+              🐾
+            </div>
+          )}
+        </div>
 
         <div className="avatar-shop-grid">
           {PET_CATALOG.map((pet) => {

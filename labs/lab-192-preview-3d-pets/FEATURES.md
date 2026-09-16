@@ -49,26 +49,82 @@ posicionamento do pet atual", já resolvido no lab-188).
 
 ## Funcionalidades planejadas
 
-- [ ] Extrair `buildGato`/`buildCachorro` de `World3D.tsx` pra um módulo novo
+- [x] Extrair `buildGato`/`buildCachorro` de `World3D.tsx` pra um módulo novo
   `world3d/petFigure.ts` (mesmo espírito de `studentFigure.ts`), exportadas — `World3D.tsx` passa
   a importar de lá em vez de definir localmente. Comportamento do pet no MUNDO principal não pode
   mudar (mesma função, só de lugar diferente).
-- [ ] Novo componente `PetPreview3D.tsx` (mesmo padrão de `AvatarPreview3D.tsx`: motor/cena/câmera
+- [x] Novo componente `PetPreview3D.tsx` (mesmo padrão de `AvatarPreview3D.tsx`: motor/cena/câmera
   próprios, `ArcRotateCamera` com giro automático, sem física, canvas pequeno) — mostra o pet
   EQUIPADO (`progress.equippedPetId`), usando `petVisualScale(stage, species)` (já existe,
   `progression.ts`) pra bater com o tamanho real do pet no mundo.
-- [ ] `PetPanel.tsx`: preview novo no topo do painel (mesmo lugar/espírito do preview do
+- [x] `PetPanel.tsx`: preview novo no topo do painel (mesmo lugar/espírito do preview do
   `AvatarShop.tsx`) — estado "nenhum pet equipado" quando `equippedPetId` é `null` (placeholder
   claro, não um preview vazio/quebrado).
-- [ ] Verificação ao vivo (Chrome real): abrir o painel de pets com um pet equipado, confirmar o
+- [x] Verificação ao vivo (Chrome real): abrir o painel de pets com um pet equipado, confirmar o
   preview bate com o pet visto no mundo (mesma espécie/cor/escala); trocar de pet equipado
   atualiza o preview instantaneamente; sem pet equipado mostra o placeholder, não quebra.
-- [ ] Confirmar ao vivo que a extração de `buildGato`/`buildCachorro` não mudou nada no
+- [x] Confirmar ao vivo que a extração de `buildGato`/`buildCachorro` não mudou nada no
   comportamento do pet no MUNDO principal (aparência, escala, sombra) — regressão zero esperada,
   já que é só mover a função de lugar.
-- [ ] Confirmar que o preview não vaza material/textura/shadow-caster ao trocar de pet repetidas
+- [x] Confirmar que o preview não vaza material/textura/shadow-caster ao trocar de pet repetidas
   vezes (mesma medição já feita pro preview de avatar no lab-176 — contagem de materiais antes/
   depois de vários ciclos).
+
+## Implementação
+
+- `world3d/petFigure.ts` (novo): `buildGato`/`buildCachorro` movidas verbatim de `World3D.tsx` —
+  eram funções puras (só recebiam `scene`/`shadowGenerator`/`furColor`), sem nenhum estado do
+  componente pra desembaraçar. `World3D.tsx` importa as duas de lá; os 5 call sites (bichos
+  selvagens vagando/empoleirados + o pet adotável de verdade) continuam idênticos.
+- `world3d/PetPreview3D.tsx` (novo): motor Babylon próprio (sem física/Havok), câmera
+  `ArcRotateCamera` com giro automático (raio 1.1, alvo `(0, 0.15, 0)` — ajustado ao vivo depois
+  de um raio inicial de 0.75 cortar o pet fora do quadro), luz ambiente HDRI (mesmo arquivo já
+  usado por `AvatarPreview3D.tsx`/mundo principal — achado ao vivo: sem isso o pet renderiza
+  ESCURO, mesmo bug já corrigido pro avatar no lab-87, "o avatar fica escuro"). Reconstrói o pet
+  (`dispose(false, true)` + rebuild) a cada troca de `petId`/`stage`, mesmo padrão de
+  `AvatarPreview3D.tsx`.
+- `world3d/PetPanel.tsx`: `PetPreview3D` importado via `lazy()` (mesmo motivo de
+  `AvatarPreview3D` em `AvatarShop.tsx` — `PetPanel.tsx` é importado direto por `App.tsx`, sem
+  lazy isso baixaria `@babylonjs/core` em rotas como `/familia` que nunca abrem o painel de pets).
+  Preview novo logo abaixo do subtítulo, mostrando o pet EQUIPADO com o mesmo cálculo de
+  estágio/idade já usado pela grade (`petStageFor`/`petAgeYears`/`petLifecycleStage`). Sem pet
+  equipado, mostra um placeholder "🐾" em vez de um preview vazio.
+- `data/pets.ts`: comentário de topo atualizado (referenciava o local antigo de
+  `buildGato`/`buildCachorro`).
+- `index.css`: `.pet-preview-3d-*` novo, mesmo espírito de `.avatar-preview-3d-*` mas menor (140px,
+  pets são bichos pequenos).
+
+## Verificação ao vivo (Chrome real)
+
+Perfil de teste existente (`92b92cd2-...`, já tinha "Gato Laranja" adotado e equipado — um gato
+"Idoso" de 46 anos de convivência, útil pra testar o blend de cor grisalha de idoso também).
+
+- **Achado real corrigido em duas rodadas de ajuste ao vivo**: com o raio de câmera inicial (0.75)
+  e o alvo `(0, 0.2, 0)` copiados sem ajuste do preview de avatar, o pet aparecia CORTADO no
+  quadro (só cabeça/orelha/rabo visíveis) — a escala de um pet (~0.3-0.4 unidades) é bem menor que
+  a de um boneco inteiro. Corrigido ao vivo testando valores direto no console
+  (`scene.activeCamera.radius`/`.target`) até achar um enquadramento que mostra o pet inteiro com
+  folga (raio 1.1, alvo `y: 0.15`) antes de fixar no código.
+- **Achado real corrigido**: o pet renderizava ESCURO (mesmo bug do lab-87 pro avatar) — confirmado
+  via `scene.getMaterialByName('gatoFur').albedoColor` retornando a cor CERTA (o blend grisalho de
+  idoso, matematicamente correto), provando que o problema era só iluminação (sem
+  `environmentTexture`, PBR sem reflexo/specular nenhum), não o cálculo de cor. Corrigido
+  adicionando o mesmo HDRI que `AvatarPreview3D.tsx` já usa.
+- Confirmado que o pet no MUNDO principal (fora do painel) segue renderizando idêntico depois da
+  extração — mesma cor grisalha de idoso, mesmas orelhas/rabo, sem diferença visual.
+- Confirmado que trocar de pet equipado (comprou e equipou "Cachorro Marrom", um filhote) atualiza
+  o preview instantaneamente — geometria/cor corretas pra cada espécie.
+- Confirmado, medindo `scene.materials.length`/`scene.meshes.length` antes/depois de 3 trocas de
+  pet em sequência (gato→cachorro→gato→cachorro), que a contagem fica ESTÁVEL (3 materiais: chão +
+  1 material do pet atual; nunca acumula material do pet anterior) — mesma técnica de verificação
+  já usada pro preview de avatar no lab-176.
+- Confirmado que sem pet equipado (`equippedPetId: null`) o painel mostra o placeholder "🐾" sem
+  quebrar.
+- Perfil de teste restaurado ao estado original (`coins: 699`, só "Gato Laranja" desbloqueado/
+  equipado) ao final.
+
+**Pendência disclosed**: viewport mobile/touch real não verificado (mesma limitação de ferramental
+já conhecida de vários labs anteriores desta sessão).
 
 ## Fora de escopo (explicitamente adiado — cada um do tamanho de um lab futuro)
 
