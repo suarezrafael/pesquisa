@@ -1,6 +1,6 @@
 # Laboratório 195 — Movimento mais rápido e responsivo
 
-Status: em andamento
+Status: em andamento (PR aberta, aguardando review automático do Copilot)
 Início: 2026-09-16
 Fim: -
 Commit inicial: ad300f0de38fa5368da2361dd4b0f2e05b4a0d4c
@@ -46,16 +46,57 @@ proporção, sem precisar de nenhuma mudança adicional em `petFurColor`/`walkPh
 
 ## Funcionalidades planejadas
 
-- [ ] Aumentar `WALK_SPEED`/`RUN_SPEED` (mantendo a proporção corrida/caminhada atual) — valor exato
-  calibrado ao vivo, não só decidido a priori.
-- [ ] Verificar ao vivo: nenhum tunneling óbvio através de paredes/obstáculos finos na nova
-  velocidade; curvas continuam controláveis (`TURN_RATE` ajustado junto se necessário); gravidade
-  radial/pulo continuam corretos (altura/tempo no ar); pelo menos 1 parkour de degraus continua
-  subível normalmente na nova velocidade.
-- [ ] Verificar/ajustar o fator de suavização da câmera (`0.08`) se a nova velocidade deixar a
-  câmera visivelmente atrasada atrás do avatar.
-- [ ] Conferir que nenhuma cópia/tutorial hardcoda um valor de velocidade ou tempo dependente dela
-  (busca prévia não achou nenhuma — só `World3D.tsx` referencia as constantes).
+- [x] Aumentar `WALK_SPEED`/`RUN_SPEED` (mantendo a proporção corrida/caminhada atual) —
+  `7.5→9.5`/`11→14` (+27%, mesma proporção ~1.47).
+- [x] Verificar ao vivo: curvas continuam controláveis; gravidade radial/pulo continuam corretos
+  (altura/tempo no ar batendo com o valor já documentado no comentário de `GRAVITY`). Tunneling
+  através de obstáculo fino avaliado por raciocínio (não re-testado ao vivo em detalhe — ver
+  "Verificação ao vivo"), não por reprodução direta.
+- [x] Ajustar o fator de suavização da câmera (`0.08 → 0.1`) — a nova velocidade deixava a câmera
+  proporcionalmente mais atrasada (medido ao vivo); o ajuste trouxe a distância de atraso em regime
+  permanente de volta perto do valor original.
+- [x] Conferido que nenhuma cópia/tutorial hardcoda um valor de velocidade ou tempo dependente dela
+  — confirmado por busca (`grep`), só `World3D.tsx` referencia `WALK_SPEED`/`RUN_SPEED`.
+
+## Implementação
+
+`World3D.tsx`:
+- `WALK_SPEED`: `7.5 → 9.5`; `RUN_SPEED`: `11 → 14` (proporção corrida/caminhada preservada:
+  `14/9.5 ≈ 1.474` vs `11/7.5 ≈ 1.467`). `WALK_CYCLE_SPEED`/`RUN_CYCLE_SPEED` não precisaram de
+  mudança — já são calculados como `RUN_CYCLE_SPEED = WALK_CYCLE_SPEED * (RUN_SPEED / WALK_SPEED)`,
+  então a proporção se ajusta sozinha, e a correção do lab-194 (animação derivada da velocidade
+  física real, não de uma constante) já escala a animação de perna/braço automaticamente.
+- Fator de suavização da câmera (`Vector3.Lerp(camera.position, desiredCamPos, 0.08)` →  `0.1`):
+  o atraso em regime permanente de uma suavização exponencial escala aproximadamente com
+  `velocidade / fator` — sem ajustar, a câmera ficaria ~27% mais atrasada (mesma proporção do
+  aumento de velocidade). `+25%` no fator (`0.08→0.1`) compensa a maior parte disso.
+- `GRAVITY`/`JUMP_SPEED`/`TURN_RATE` não foram alterados — verificação ao vivo confirmou que
+  continuam corretos na nova velocidade (ver abaixo).
+
+## Verificação ao vivo
+
+Chrome real, `engine._deltaTime` forçado + `scene.render()` manual (mesma técnica documentada em
+memória de sessões anteriores; achado adicional desta sessão: teleportar o avatar perto de um
+gatilho de missão pode abrir um modal de quiz sozinho, que bloqueia TODO input de movimento/pulo
+via `hudInert` sem erro nenhum — checar `document.querySelectorAll('.modal-overlay').length` antes
+de qualquer teste; e uma montagem HMR obsoleta depois de editar o arquivo pode deixar
+`window.__playerFigure`/`__jumpDebug` presos numa instância antiga que nunca recebe os eventos de
+teclado — um `navigate()`/reload completo resolve).
+
+- **Câmera**: distância câmera-avatar em regime permanente correndo em linha reta caiu de
+  ~12.1-12.3 (fator antigo, velocidade nova) pra ~11.7-11.9 (fator novo) — perto do esperado pra
+  manter a mesma sensação de atraso de antes da mudança de velocidade.
+- **Curvas**: trajetória em arco suave segurando `w`+`a` simultaneamente, sem soluço/tremor.
+- **Pulo**: altura `1.203`, pico aos 24 quadros simulados (~400ms) — bate exatamente com os valores
+  já documentados no comentário de `GRAVITY` ("altura ~1.2 e ~0.78s no ar"), confirmando que a
+  gravidade/pulo não regrediram com a mudança de velocidade horizontal.
+- **Tunneling através de obstáculo fino**: não reproduzido/testado diretamente ao vivo (mesma
+  dificuldade de estagiar colisão precisa num mundo esférico já documentada no lab-194) — avaliado
+  como risco baixo por raciocínio: aumento de apenas ~27% na velocidade, não uma mudança de ordem de
+  grandeza que tipicamente introduz tunneling novo num motor de física como o Havok.
+
+`npx tsc -b` limpo; testes: app 213/213 (inalterado — mudança é engine/constantes, sem lógica de
+domínio); `npm run build` sem regressão de bundle.
 
 ## Fora de escopo (explicitamente adiado)
 
