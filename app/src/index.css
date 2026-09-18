@@ -898,6 +898,36 @@ a.nickname-generate-btn {
   background: rgba(90, 60, 10, 0.85);
 }
 
+/* Hub de mini-jogos (backlog "Lab 209") — contagem regressiva antes do teleporte pro mini-jogo.
+   Mesmo espírito visual de `.mars-death-message` (centralizado, fundo escuro, z-index alto), só
+   que maior/mais chamativo (é um convite animado, não um aviso). */
+.minigame-countdown-overlay {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(20, 20, 25, 0.85);
+  color: white;
+  padding: 1.2rem 2rem;
+  border-radius: 16px;
+  text-align: center;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.minigame-countdown-title {
+  font-weight: 700;
+  font-size: clamp(0.9rem, 2.8vmin, 1.2rem);
+  margin: 0 0 0.4rem;
+}
+
+.minigame-countdown-number {
+  font-weight: 800;
+  font-size: clamp(2rem, 8vmin, 3.5rem);
+  margin: 0;
+  color: #ffd166;
+}
+
 .world3d-hint {
   position: absolute;
   bottom: 1.1rem;

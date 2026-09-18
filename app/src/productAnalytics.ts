@@ -215,6 +215,21 @@ export function trackLearningChallengeCompleted(kind: string): void {
   trackEvent('learning_challenge_completed', { kind })
 }
 
+// Backlog "Lab 209 - Hub de mini-jogos e teleport por botão no chão" — nomes exatos citados pelo
+// documento. `minigameId` identifica qual pedestal do hub (`"parkour1"`, `"ponte-logica"`).
+// `minigame_completed` dispara ao voltar pro hub pelo pedestal de retorno de QUALQUER dos dois
+// mini-jogos, não ao resolver o desafio internamente (parkour não tem estado de "resolvido"
+// persistido, e o quiz da ponte roda inteiramente noutro componente) — mede "fez a ida-e-volta
+// pelo hub", não "acertou a missão", mesmo espírito de aproximação já aceito em
+// `trackLearningChallengeStarted` acima (documentado explicitamente, não escondido).
+export function trackMinigameStarted(minigameId: string): void {
+  trackEvent('minigame_started', { minigameId })
+}
+
+export function trackMinigameCompleted(minigameId: string): void {
+  trackEvent('minigame_completed', { minigameId })
+}
+
 // Dispara ao EXPANDIR um planeta específico na lista do `AchievementsPanel.tsx` (sinal de
 // interesse real num planeta, distinto de só abrir o painel inteiro). Sem limite de "uma vez por
 // sessão": reabrir o mesmo planeta depois de fechar conta de novo.

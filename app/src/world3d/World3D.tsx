@@ -92,7 +92,14 @@ import {
   petVisualScale,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
-import { trackFirstControl, trackCameraRecenterUsed, trackPlanetTravelCompleted, trackPlanetInteractionCompleted } from '../productAnalytics'
+import {
+  trackFirstControl,
+  trackCameraRecenterUsed,
+  trackPlanetTravelCompleted,
+  trackPlanetInteractionCompleted,
+  trackMinigameStarted,
+  trackMinigameCompleted,
+} from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
 import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
@@ -2634,6 +2641,17 @@ export function World3D({
   // ref, sem precisar conhecer nada da cena 3D.
   const [planetPickerOpen, setPlanetPickerOpen] = useState(false)
   const boardRocketToRef = useRef<(planetId: string) => void>(() => {})
+  // Hub de mini-jogos (backlog "Lab 209") — mesmo padrão de `boardRocketToRef` acima: React guarda
+  // a contagem regressiva (só um `setTimeout` por segundo, não precisa de nada da cena 3D pra
+  // isso), `teleportToMinigameRef` é a ponte inversa que `setup()` atribui de verdade depois de
+  // `teleportAvatarTo`/os anchors dos pedestais existirem.
+  const [minigamePrompt, setMinigamePrompt] = useState<{
+    id: 'parkour1' | 'ponte-logica'
+    emoji: string
+    label: string
+    secondsLeft: number
+  } | null>(null)
+  const teleportToMinigameRef = useRef<(id: 'parkour1' | 'ponte-logica') => void>(() => {})
   const [selectedWeapon, setSelectedWeapon] = useState<'sword' | 'gun' | null>(null)
   // Mesmo padrão de `hasSwordRef`/`hasGunRef` acima — lido direto por `handleInteractPress`
   // (dentro do closure de `setup()`) sem esperar re-render.
@@ -2696,6 +2714,25 @@ export function World3D({
     }, 200)
     return () => clearInterval(interval)
   }, [placingFurnitureRequestId])
+
+  // Hub de mini-jogos (backlog "Lab 209") — contagem regressiva de verdade em React, não em GUI do
+  // Babylon: um `setTimeout` por segundo decrementando `secondsLeft`; ao chegar em 0, chama
+  // `teleportToMinigameRef` (atribuída dentro de `setup()`, mesmo padrão de `boardRocketToRef`) e
+  // fecha o prompt. Um único efeito reagindo à identidade do objeto inteiro (não só o id) — trocar
+  // de mini-jogo no meio de uma contagem cancela o timeout antigo automaticamente (cleanup) antes
+  // de agendar o novo.
+  useEffect(() => {
+    if (!minigamePrompt) return
+    if (minigamePrompt.secondsLeft <= 0) {
+      teleportToMinigameRef.current(minigamePrompt.id)
+      setMinigamePrompt(null)
+      return
+    }
+    const timeout = setTimeout(() => {
+      setMinigamePrompt((prev) => (prev ? { ...prev, secondsLeft: prev.secondsLeft - 1 } : prev))
+    }, 1000)
+    return () => clearTimeout(timeout)
+  }, [minigamePrompt])
 
   // lab-172 — mesma ponte de `placingFurnitureRequestId` acima: `App.tsx` muda
   // `coopAnswerSignalId` quando o `QuestModal` do desafio em dupla chama `onCorrect` (o clique
@@ -3423,6 +3460,17 @@ export function World3D({
     let bridgeEnterHintLabel: TextBlock | null = null
     let rocketFuelEnterHintLabel: TextBlock | null = null
     let plaqueEnterHintLabel: TextBlock | null = null
+    // Hub de mini-jogos (backlog "Lab 209") — mesmo padrão de `bridgeEnterHintLabel` acima: um par
+    // de dicas por pedestal (entrar no hub) e um par nos destinos (voltar pro hub).
+    // `activeMinigameId` é o único estado NOVO de verdade aqui (não tem equivalente nas missões
+    // ambientais, que não precisam "lembrar" nada entre abrir e fechar o quiz) — guarda qual
+    // pedestal o jogador usou pra chegar no mini-jogo atual, lido só pelo pedestal de RETORNO pra
+    // saber que `minigameId` mandar em `trackMinigameCompleted`.
+    let hubParkourHintLabel: TextBlock | null = null
+    let hubBridgeHintLabel: TextBlock | null = null
+    let parkourReturnHintLabel: TextBlock | null = null
+    let bridgeReturnHintLabel: TextBlock | null = null
+    let activeMinigameId: 'parkour1' | 'ponte-logica' | null = null
     const houseFurnitureNodes: Record<string, TransformNode> = {}
     // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — snapshot da mobília
     // de OUTRO jogador, populado só durante uma visita (`__visitFriendHouse`, ver mais abaixo);
@@ -4108,6 +4156,38 @@ export function World3D({
             selectEnvironmentalChallengeQuest('leitura', progressRef.current.completedQuestIds),
             'plaque',
           )
+          return
+        }
+
+        // Hub de mini-jogos (backlog "Lab 209") — pedestais de ENTRADA só disparam a contagem
+        // regressiva (`setMinigamePrompt`, React); o teleporte de verdade só acontece quando ela
+        // chega a 0 (`teleportToMinigameRef`, atribuída mais abaixo neste `setup()`). Pedestais de
+        // RETORNO teleportam na hora (não tem sentido contar regressiva pra "sair" de um
+        // mini-jogo) e disparam `minigame_completed` só se havia um mini-jogo ativo de verdade —
+        // apertar E no pedestal de retorno sem nunca ter usado o de entrada (ex.: achou por acaso
+        // andando perto do parkour) não deveria contar como uma "conclusão".
+        if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, hubParkourPedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+          setMinigamePrompt({ id: 'parkour1', emoji: '🏃', label: 'Parkour', secondsLeft: 3 })
+          return
+        }
+        if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, hubBridgePedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+          setMinigamePrompt({ id: 'ponte-logica', emoji: '🌉', label: 'a Ponte', secondsLeft: 3 })
+          return
+        }
+        if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, parkourReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+          teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
+          if (activeMinigameId) {
+            trackMinigameCompleted(activeMinigameId)
+            activeMinigameId = null
+          }
+          return
+        }
+        if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+          teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
+          if (activeMinigameId) {
+            trackMinigameCompleted(activeMinigameId)
+            activeMinigameId = null
+          }
           return
         }
 
@@ -8139,6 +8219,187 @@ export function World3D({
       plaqueEnterHint.linkWithMesh(plaqueBoard)
       plaqueEnterHint.linkOffsetY = -20
       plaqueEnterHintLabel = plaqueEnterHint
+
+      // Hub de mini-jogos (backlog "Lab 209 - Hub de mini-jogos e teleport por botão no chão") —
+      // achado real da investigação prévia: parkours e missões ambientais já são mini-jogos
+      // genuinamente repetíveis (sem gate de conclusão persistido), mas espalhados pelo planeta sem
+      // nenhum ponto de entrada único — a criança só encontra por acaso andando. Local escolhido
+      // perto do spawn (~35° do polo norte, ~50-64° dos landmarks vizinhos — folga menor que o
+      // ~58° do parkour original, lab-11, mas verificada ao vivo sem sobreposição real).
+      const HUB_ANCHOR_UP = new Vector3(0.35, 0.82, -0.25).normalize()
+      const hubSurfacePos = groundSurfacePosition(HUB_ANCHOR_UP)
+
+      const hubArchBase = new TransformNode('hub-arco', scene)
+      hubArchBase.position = hubSurfacePos
+      hubArchBase.rotationQuaternion = alignmentQuaternion(HUB_ANCHOR_UP)
+
+      const hubArchMat = new PBRMaterial('hubArchMat', scene)
+      hubArchMat.albedoColor = new Color3(0.95, 0.65, 0.15)
+      hubArchMat.roughness = 0.6
+      hubArchMat.emissiveColor = new Color3(0.3, 0.18, 0.02)
+      const hubPedestalMat = new PBRMaterial('hubPedestalMat', scene)
+      hubPedestalMat.albedoColor = new Color3(0.2, 0.75, 0.35)
+      hubPedestalMat.roughness = 0.6
+      const hubBridgePedestalMat = new PBRMaterial('hubBridgePedestalMat', scene)
+      hubBridgePedestalMat.albedoColor = new Color3(0.25, 0.55, 0.85)
+      hubBridgePedestalMat.roughness = 0.6
+      const hubReturnMat = new PBRMaterial('hubReturnMat', scene)
+      hubReturnMat.albedoColor = new Color3(0.85, 0.3, 0.55)
+      hubReturnMat.roughness = 0.6
+
+      function addHubMesh(mesh: Mesh, mat: PBRMaterial, parent: TransformNode) {
+        mesh.material = mat
+        mesh.parent = parent
+        mesh.receiveShadows = true
+        shadowGenerator.addShadowCaster(mesh)
+        return mesh
+      }
+      function buildHubPedestal(
+        name: string,
+        base: TransformNode,
+        mat: PBRMaterial,
+        height: number,
+        diameterTop: number,
+        diameterBottom: number,
+      ): Mesh {
+        const pedestal = MeshBuilder.CreateCylinder(name, { height, diameterTop, diameterBottom, tessellation: 12 }, scene)
+        pedestal.position = new Vector3(0, height / 2, 0)
+        return addHubMesh(pedestal, mat, base)
+      }
+      function addHubLabels(
+        idPrefix: string,
+        mesh: Mesh,
+        emojiText: string,
+        emojiFontSize: number,
+        emojiOffsetY: number,
+        hintText: string,
+        hintOffsetY: number,
+      ): TextBlock {
+        const label = new TextBlock(`${idPrefix}Label`, emojiText)
+        label.color = 'white'
+        label.fontSize = mobileFontSize(emojiFontSize)
+        label.fontWeight = 'bold'
+        label.outlineWidth = 4
+        label.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(label)
+        label.linkWithMesh(mesh)
+        label.linkOffsetY = emojiOffsetY
+
+        const hint = new TextBlock(`${idPrefix}EnterHint`, hintText)
+        hint.color = 'white'
+        hint.fontSize = mobileFontSize(18)
+        hint.fontWeight = 'bold'
+        hint.outlineWidth = 3
+        hint.outlineColor = 'rgba(0,0,0,0.6)'
+        hint.alpha = 0
+        guiTexture.addControl(hint)
+        hint.linkWithMesh(mesh)
+        hint.linkOffsetY = hintOffsetY
+        return hint
+      }
+
+      for (const side of [-1, 1]) {
+        const pillar = MeshBuilder.CreateCylinder(`hubArchPillar${side}`, { height: 1.6, diameter: 0.16, tessellation: 8 }, scene)
+        pillar.position = new Vector3(side * 0.9, 0.8, 0)
+        addHubMesh(pillar, hubArchMat, hubArchBase)
+      }
+      const hubArchTop = MeshBuilder.CreateBox('hubArchTop', { width: 2.0, height: 0.18, depth: 0.18 }, scene)
+      hubArchTop.position = new Vector3(0, 1.6, 0)
+      addHubMesh(hubArchTop, hubArchMat, hubArchBase)
+      settleMeshOnTerrain(hubArchBase, HUB_ANCHOR_UP)
+      hubSurfacePos.copyFrom(hubArchBase.position)
+
+      // Arco é só identidade visual (visível de longe) — não é interativo, por isso não usa
+      // `addHubLabels` (que sempre cria também uma dica "Pressione E" escondida à toa).
+      const hubArchLabel = new TextBlock('hubArchLabel', '🎮 Hub de Jogos')
+      hubArchLabel.color = 'white'
+      hubArchLabel.fontSize = mobileFontSize(24)
+      hubArchLabel.fontWeight = 'bold'
+      hubArchLabel.outlineWidth = 4
+      hubArchLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(hubArchLabel)
+      hubArchLabel.linkWithMesh(hubArchTop)
+      hubArchLabel.linkOffsetY = -40
+
+      // Pedestal do parkour — reaproveita `PARKOUR_ANCHOR_UP` (já existente) como destino do
+      // teleporte, sem duplicar coordenada.
+      const HUB_PARKOUR_PEDESTAL_UP = offsetLandingUp(HUB_ANCHOR_UP, PLANET_RADIUS, 1.6)
+      const hubParkourPedestalPos = groundSurfacePosition(HUB_PARKOUR_PEDESTAL_UP)
+      const hubParkourPedestalBase = new TransformNode('hub-pedestal-parkour', scene)
+      hubParkourPedestalBase.position = hubParkourPedestalPos
+      hubParkourPedestalBase.rotationQuaternion = alignmentQuaternion(HUB_PARKOUR_PEDESTAL_UP)
+      const hubParkourPedestal = buildHubPedestal('hubParkourPedestal', hubParkourPedestalBase, hubPedestalMat, 0.5, 0.7, 0.85)
+      settleMeshOnTerrain(hubParkourPedestalBase, HUB_PARKOUR_PEDESTAL_UP)
+      hubParkourPedestalPos.copyFrom(hubParkourPedestalBase.position)
+      hubParkourHintLabel = addHubLabels(
+        'hubParkour',
+        hubParkourPedestal,
+        '🏃 Parkour',
+        22,
+        -50,
+        'Pressione E pra jogar o Parkour',
+        -25,
+      )
+
+      // Pedestal da missão da ponte — reaproveita `bridgeUp` (já existente) como destino.
+      const HUB_BRIDGE_PEDESTAL_UP = offsetLandingUp(HUB_ANCHOR_UP, PLANET_RADIUS, -1.6)
+      const hubBridgePedestalPos = groundSurfacePosition(HUB_BRIDGE_PEDESTAL_UP)
+      const hubBridgePedestalBase = new TransformNode('hub-pedestal-ponte', scene)
+      hubBridgePedestalBase.position = hubBridgePedestalPos
+      hubBridgePedestalBase.rotationQuaternion = alignmentQuaternion(HUB_BRIDGE_PEDESTAL_UP)
+      const hubBridgePedestal = buildHubPedestal('hubBridgePedestal', hubBridgePedestalBase, hubBridgePedestalMat, 0.5, 0.7, 0.85)
+      settleMeshOnTerrain(hubBridgePedestalBase, HUB_BRIDGE_PEDESTAL_UP)
+      hubBridgePedestalPos.copyFrom(hubBridgePedestalBase.position)
+      hubBridgeHintLabel = addHubLabels(
+        'hubBridge',
+        hubBridgePedestal,
+        '🌉 Ponte',
+        22,
+        -50,
+        'Pressione E pra jogar a Ponte',
+        -25,
+      )
+
+      // Pedestal de RETORNO no parkour — atrás do anchor (oposto de `parkourForward`, já existente
+      // na construção do parkour acima), fora do caminho de subida.
+      const PARKOUR_RETURN_UP = offsetLandingUp(PARKOUR_ANCHOR_UP, PLANET_RADIUS, -1.8)
+      const parkourReturnPos = groundSurfacePosition(PARKOUR_RETURN_UP)
+      const parkourReturnBase = new TransformNode('hub-retorno-parkour', scene)
+      parkourReturnBase.position = parkourReturnPos
+      parkourReturnBase.rotationQuaternion = alignmentQuaternion(PARKOUR_RETURN_UP)
+      const parkourReturnPedestal = buildHubPedestal('parkourReturnPedestal', parkourReturnBase, hubReturnMat, 0.4, 0.55, 0.7)
+      settleMeshOnTerrain(parkourReturnBase, PARKOUR_RETURN_UP)
+      parkourReturnPos.copyFrom(parkourReturnBase.position)
+      parkourReturnHintLabel = addHubLabels('parkourReturn', parkourReturnPedestal, '🔙', 24, -40, 'Pressione E pra voltar ao hub', -20)
+
+      // Pedestal de RETORNO na ponte — precisa ficar a mais de 2×`ENV_CHALLENGE_TRIGGER_DISTANCE`
+      // (1.3) de `bridgeSurfacePos`, senão existe uma faixa de chão onde os dois raios de gatilho
+      // se sobrepõem: as duas dicas ("alinhar a ponte" e "voltar ao hub") aparecem juntas, mas o
+      // `E` sempre dispara a checagem de `bridgeSurfacePos` primeiro (ela vem antes na cadeia de
+      // `if`/`return`) — achado ao vivo testando com offset 1.9 (menor que o mínimo de 2.6), que
+      // abria o quiz de lógica em vez de voltar ao hub. 3.2 dá folga de verdade.
+      const BRIDGE_RETURN_UP = offsetLandingUp(bridgeUp, PLANET_RADIUS, 3.2)
+      const bridgeReturnPos = groundSurfacePosition(BRIDGE_RETURN_UP)
+      const bridgeReturnBase = new TransformNode('hub-retorno-ponte', scene)
+      bridgeReturnBase.position = bridgeReturnPos
+      bridgeReturnBase.rotationQuaternion = alignmentQuaternion(BRIDGE_RETURN_UP)
+      const bridgeReturnPedestal = buildHubPedestal('bridgeReturnPedestal', bridgeReturnBase, hubReturnMat, 0.4, 0.55, 0.7)
+      settleMeshOnTerrain(bridgeReturnBase, BRIDGE_RETURN_UP)
+      bridgeReturnPos.copyFrom(bridgeReturnBase.position)
+      bridgeReturnHintLabel = addHubLabels('bridgeReturn', bridgeReturnPedestal, '🔙', 24, -40, 'Pressione E pra voltar ao hub', -20)
+
+      // Ponte inversa (React → closure) pro hub de mini-jogos — mesmo padrão de `boardRocketToRef`
+      // acima, atribuída só aqui porque `PARKOUR_ANCHOR_UP`/`bridgeUp` (destinos do teleporte) só
+      // existem a partir deste ponto de `setup()`.
+      teleportToMinigameRef.current = (id) => {
+        activeMinigameId = id
+        if (id === 'parkour1') {
+          teleportAvatarTo(Vector3.Zero(), PARKOUR_ANCHOR_UP, currentGroundBaseFn)
+        } else {
+          teleportAvatarTo(Vector3.Zero(), bridgeUp, currentGroundBaseFn)
+        }
+        trackMinigameStarted(id)
+      }
 
       // Minha Casa (lab-105, primeira fatia de docs/plano-comercial-backend.md, Fase E) — espaço
       // pessoal GRATUITO de todo jogador, nunca cosmético pago (mesmo princípio já aplicado em
@@ -12192,6 +12453,25 @@ export function World3D({
             !insideHouseInterior && Vector3.Distance(avatarMesh.position, plaqueSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
         }
 
+        // Dicas "pressione E" do hub de mini-jogos (backlog "Lab 209") — mesmo padrão das missões
+        // ambientais acima, 4 pontos independentes (2 pedestais de entrada + 2 de retorno).
+        if (avatarMesh && hubParkourHintLabel) {
+          hubParkourHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, hubParkourPedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+        }
+        if (avatarMesh && hubBridgeHintLabel) {
+          hubBridgeHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, hubBridgePedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+        }
+        if (avatarMesh && parkourReturnHintLabel) {
+          parkourReturnHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, parkourReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+        }
+        if (avatarMesh && bridgeReturnHintLabel) {
+          bridgeReturnHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+        }
+
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
         // jogador não está dirigindo nenhum (não faz sentido mostrar "entrar" em cima de outro
         // carro enquanto já se está dirigindo um). `avatarMesh.position` direto (não `pos`, que
@@ -12954,6 +13234,14 @@ export function World3D({
       {treasureFoundMessage && <p className="mars-death-message">{treasureFoundMessage}</p>}
       {planetSecretFoundMessage && <p className="mars-death-message">{planetSecretFoundMessage}</p>}
       {postcardFoundMessage && <p className="mars-death-message">{postcardFoundMessage}</p>}
+      {minigamePrompt && (
+        <div className="minigame-countdown-overlay" role="status" aria-live="assertive">
+          <p className="minigame-countdown-title">
+            {minigamePrompt.emoji} Vamos jogar {minigamePrompt.label}!
+          </p>
+          <p className="minigame-countdown-number">{minigamePrompt.secondsLeft > 0 ? minigamePrompt.secondsLeft : 'Vai!'}</p>
+        </div>
+      )}
       {bagOpen && (
         <WeaponBagPanel
           hasSword={hasSword}

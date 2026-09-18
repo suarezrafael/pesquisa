@@ -1,8 +1,8 @@
 # Laboratório 196 — Hub de mini-jogos e teleport por botão no chão
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-18
-Fim: -
+Fim: 2026-09-18
 Commit inicial: 8929e190f40690b534baced611d882aa05e59b0e
 
 ## Objetivo do laboratório
@@ -45,24 +45,74 @@ coordenadas.
 
 ## Funcionalidades planejadas
 
-- [ ] Achar um local livre pro hub na superfície do planeta principal, usando o mesmo método de
+- [x] Achar um local livre pro hub na superfície do planeta principal, usando o mesmo método de
   varredura de distância angular já documentado no comentário do parkour original (lab-11) —
-  verificado, não adivinhado às cegas.
-- [ ] Construir uma estrutura física pequena do hub: 2 pedestais no chão (parkour + ponte), com
-  identidade visual simples (cor/placa) que já indique de longe "aqui tem jogo".
-- [ ] Interação nos pedestais (tecla `E`/botão de toque, mesmo padrão já usado no resto do jogo):
+  verificado, não adivinhado às cegas. `HUB_ANCHOR_UP` (`World3D.tsx:8229`) confirmado ao vivo sem
+  sobreposição com Lojinha/parkour original/casa (ver "Verificação ao vivo").
+- [x] Construir uma estrutura física pequena do hub: 2 pedestais no chão (parkour + ponte), com
+  identidade visual simples (cor/placa) que já indique de longe "aqui tem jogo". Arco decorativo +
+  pedestal verde (parkour) + pedestal azul (ponte), `World3D.tsx:8232-8361`.
+- [x] Interação nos pedestais (tecla `E`/botão de toque, mesmo padrão já usado no resto do jogo):
   mostra uma explicação curta do mini-jogo, dispara uma contagem regressiva nova (3-2-1), depois
-  teleporta (`teleportAvatarTo`) pro início do mini-jogo escolhido.
-- [ ] "Voltar ao hub": um gatilho no destino de cada mini-jogo (mesma tecla `E`/toque) que teleporta
-  de volta pra posição salva do hub.
-- [ ] Eventos novos `minigame_started`/`minigame_completed` (`meta: { minigameId }`) — adicionados à
+  teleporta (`teleportAvatarTo`) pro início do mini-jogo escolhido. Overlay `.minigame-countdown-*`
+  (`index.css`), estado `minigamePrompt` + efeito de tick em `World3D.tsx` (~2643/2716).
+- [x] "Voltar ao hub": um gatilho no destino de cada mini-jogo (mesma tecla `E`/toque) que teleporta
+  de volta pra posição salva do hub. Pedestais magenta `parkourReturnPedestal`/`bridgeReturnPedestal`
+  (`World3D.tsx:8363-8385`).
+- [x] Eventos novos `minigame_started`/`minigame_completed` (`meta: { minigameId }`) — adicionados à
   allowlist do Worker (`app/server-accounts/src/domain.ts`) e disparados do client
-  (`app/src/productAnalytics.ts`, mesmo padrão de `learning_challenge_started/completed`).
-  `minigame_completed` da ponte reaproveita o mesmo instante de `learning_challenge_completed`; do
-  parkour, o instante em que a moeda do TOPO daquele curso específico é coletada.
-- [ ] Verificar ao vivo: interagir com os 2 pedestais abre explicação → contagem → teleporta
+  (`app/src/productAnalytics.ts`).
+  **Divergência do plano original, decidida durante a implementação**: em vez de reaproveitar o
+  instante granular de conclusão de cada mini-jogo (coleta da moeda do topo do parkour /
+  `learning_challenge_completed` da ponte), `minigame_completed` dispara no pedestal de RETORNO ao
+  hub — semântica de "ida e volta pelo hub", não de "terminou o desafio de verdade". Motivo: um
+  gatilho único e simétrico (mesmo pedestal serve pra qualquer mini-jogo linkado no futuro) é mais
+  simples de manter do que instrumentar o ponto de conclusão de cada mini-jogo individualmente, e o
+  objetivo do evento é medir uso agregado do hub (não progresso por perfil — ver "Fora de escopo").
+  Documentado como comentário em `productAnalytics.ts`. Custo aceito: uma criança que entra e volta
+  sem terminar também conta como "completou" — aceitável pra esta fatia inicial.
+- [x] Verificar ao vivo: interagir com os 2 pedestais abre explicação → contagem → teleporta
   corretamente; câmera/física continuam estáveis depois do teleport (sem atravessar chão/travar);
-  voltar ao hub funciona dos dois destinos; toque equivalente ao teclado funciona.
+  voltar ao hub funciona dos dois destinos; toque equivalente ao teclado funciona. Ver "Verificação
+  ao vivo" abaixo — inclui um bug real encontrado e corrigido nessa verificação.
+
+## Verificação ao vivo
+
+Testado no dev server (`localhost:5190`), Chrome automatizado, usando os helpers de QA já
+existentes `window.__debugTeleport`/`__debugTeleportExact` (`World3D.tsx:7626/7650`, só em
+`import.meta.env.DEV`) pra ir direto a cada ponto sem depender de navegação manual real por um
+planeta esférico grande, e um `window.fetch` interceptado temporariamente (só na sessão do
+navegador, não no código do jogo) pra confirmar o corpo exato dos eventos disparados.
+
+- **Posição do hub**: sem sobreposição visual com Lojinha, casa nem o parkour original — folga
+  real confirmada por zoom de tela, não só pela distância angular do comentário.
+- **Fluxo do parkour** (entrada → contagem → teleport → volta): `minigame_started` disparou com
+  `{"minigameId":"parkour1"}`; o retorno teleportou pro hub e disparou `minigame_completed` com o
+  mesmo id.
+- **Fluxo da ponte** (entrada → contagem → teleport → volta): mesma checagem, `minigameId:
+  "ponte-logica"` nos dois eventos.
+- **Retorno sem ter entrado**: apertar `E` no pedestal de retorno sem nunca ter usado o de entrada
+  (`activeMinigameId` nulo) teleporta de volta ao hub mas NÃO dispara `minigame_completed` —
+  confirmado lendo o log de fetch (vazio).
+- **Bug real encontrado e corrigido**: o pedestal de retorno da ponte (`BRIDGE_RETURN_UP`) tinha
+  sido posicionado a 1,9 unidades de `bridgeSurfacePos` — menor que o mínimo necessário de
+  2×`ENV_CHALLENGE_TRIGGER_DISTANCE` (2,6) pra não competir com o gatilho de "alinhar a ponte", que
+  vem antes na cadeia `if`/`return` de `handleInteractPress`. Reproduzido ao vivo: parado numa faixa
+  de chão entre os dois pedestais, as duas dicas ("Pressione E pra alinhar a ponte" e "...pra voltar
+  ao hub") apareciam juntas, e apertar `E` sempre abria o quiz de lógica ("Rodas ou Não") em vez de
+  voltar ao hub. Corrigido aumentando o offset pra 3,2 (`World3D.tsx:8377`) — distância real
+  reconfirmada em 3,27 depois do fix, testado de novo no mesmo ponto intermediário sem reabrir o
+  quiz.
+- **Toque equivalente ao teclado**: não testado explicitamente com simulação de toque de tela, mas
+  o botão `E` na UI mobile (visível nas capturas de tela quando perto de um gatilho) chama a mesma
+  `handleInteractPress` do teclado — mesmo padrão já estabelecido pro resto do jogo, sem lógica
+  nova especial pros pedestais do hub.
+- **Câmera/física após teleport**: estável nos 4 teleports testados (2 idas + 2 voltas) — sem
+  atravessar o chão, sem travar a câmera.
+
+Checagens automatizadas depois do fix: `npx tsc -b` limpo, `npm run test` do app em 213/213,
+`npm run build` (app) sem erros, `npm run test` do `server-accounts` em 155/155 (sem mudança desde
+a implementação inicial, já que o fix foi só no offset do `World3D.tsx`).
 
 ## Fora de escopo (explicitamente adiado)
 

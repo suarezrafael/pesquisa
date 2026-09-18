@@ -199,6 +199,10 @@ const PRODUCT_EVENT_TYPES = new Set([
   'learning_challenge_completed',
   'album_planet_opened',
   'weekly_event_objective_completed',
+  // "Hub de mini-jogos e teleport por botão no chão" — nomes exatos citados pelo backlog, ver
+  // app/src/productAnalytics.ts.
+  'minigame_started',
+  'minigame_completed',
 ])
 
 export function isValidProductEventType(type: string): boolean {

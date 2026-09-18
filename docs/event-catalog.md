@@ -90,6 +90,8 @@ PR #55, 7ª rodada).
 | `learning_challenge_completed` | Resposta certa num dos 3 landmarks acima — credita XP/moeda de verdade via `completeQuest`, mesmo caminho de uma escolinha comum | `App.tsx`, `handleEnvironmentalChallengeCorrect` | `kind` (`"bridge"`, `"rocket_fuel"`, `"plaque"`) | 1x por tentativa concluída |
 | `album_planet_opened` | Expandir um planeta específico na lista nova "Planetas" do catálogo de conquistas (lab-181, "Circuito de descoberta e álbum de planetas") — sinal de interesse real num planeta, não só abrir o painel inteiro | `world3d/AchievementsPanel.tsx`, `togglePlanet` | `planetId` (um dos 7 planetas-destino) | 1x por expansão (reabrir o mesmo planeta conta de novo) |
 | `weekly_event_objective_completed` | Objetivo educativo/ambiental do evento semanal concedido (lab-182, "Eventos semanais saudáveis") — dispara só na PRIMEIRA vez em cada semana ISO que o bônus é de fato pago, mesmo completando vários desafios ambientais na mesma semana | `App.tsx`, `handleEnvironmentalChallengeCorrect` | — | 1x por semana ISO por perfil |
+| `minigame_started` | Fim da contagem regressiva de um pedestal do hub de mini-jogos, no instante do teleporte pro mini-jogo (backlog "Lab 209 - Hub de mini-jogos") | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`) | 1x por teleporte |
+| `minigame_completed` | Uso do pedestal de RETORNO ao hub a partir de um mini-jogo — mede "fez a ida-e-volta pelo hub", não "resolveu o desafio certo" (parkour não tem estado de conclusão persistido; o quiz da ponte roda noutro componente que este evento não observa) | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`) | 1x por retorno |
 
 ## Nível de agregação (lab-185)
 
