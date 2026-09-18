@@ -258,10 +258,12 @@ const GRAVITY = 16
 // modo, pra pernas/braços continuarem batendo no ritmo certo do passo (senão as pernas
 // "escorregam" — giram mais devagar que o deslocamento de verdade).
 // Backlog "Lab 208 - Movimento mais rápido e responsivo" (jogo sente devagar demais): +27%,
-// mesma proporção corrida/caminhada de antes (11/7.5 ≈ 14/9.5). Verificado ao vivo que não
-// introduz tunneling por obstáculo fino nem quebra o parkour de degraus existente — o próprio
-// comentário de `GRAVITY`/`JUMP_SPEED` abaixo já mostrava que mais velocidade horizontal só
-// aumenta a folga do alcance de pulo, nunca reduz.
+// mesma proporção corrida/caminhada de antes (11/7.5 ≈ 14/9.5). Verificado ao vivo que não quebra
+// o parkour de degraus existente (o próprio comentário de `GRAVITY`/`JUMP_SPEED` abaixo já mostrava
+// que mais velocidade horizontal só aumenta a folga do alcance de pulo, nunca reduz). Achado do
+// review automático do Copilot: tunneling através de obstáculo fino NÃO foi testado ao vivo, só
+// avaliado por raciocínio (aumento de só ~27%, não uma mudança de ordem de grandeza) — não afirmar
+// aqui que foi confirmado; ver `FEATURES.md` pra limitação completa.
 const WALK_SPEED = 9.5
 const RUN_SPEED = 14
 const JUMP_SPEED = 6.2 // velocidade radial (pra fora do planeta) aplicada ao pular

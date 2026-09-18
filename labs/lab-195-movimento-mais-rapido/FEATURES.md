@@ -49,9 +49,13 @@ proporção, sem precisar de nenhuma mudança adicional em `petFurColor`/`walkPh
 - [x] Aumentar `WALK_SPEED`/`RUN_SPEED` (mantendo a proporção corrida/caminhada atual) —
   `7.5→9.5`/`11→14` (+27%, mesma proporção ~1.47).
 - [x] Verificar ao vivo: curvas continuam controláveis; gravidade radial/pulo continuam corretos
-  (altura/tempo no ar batendo com o valor já documentado no comentário de `GRAVITY`). Tunneling
-  através de obstáculo fino avaliado por raciocínio (não re-testado ao vivo em detalhe — ver
-  "Verificação ao vivo"), não por reprodução direta.
+  (altura/tempo no ar batendo com o valor já documentado no comentário de `GRAVITY`).
+- [ ] Verificar ao vivo que a velocidade nova não introduz tunneling através de obstáculo fino —
+  **não concluído**: achado do review automático do Copilot apontou que o item anterior marcava
+  `[x]` um bloco que incluía esta checagem, mesmo o texto já dizendo que não foi reproduzida ao
+  vivo. Avaliada só por raciocínio (aumento de ~27%, não uma mudança de ordem de grandeza que
+  tipicamente introduz tunneling novo) — ver "Verificação ao vivo" pro detalhe; fica como pendência
+  real, não como algo verificado.
 - [x] Ajustar o fator de suavização da câmera (`0.08 → 0.1`) — a nova velocidade deixava a câmera
   proporcionalmente mais atrasada (medido ao vivo); o ajuste trouxe a distância de atraso em regime
   permanente de volta perto do valor original.
