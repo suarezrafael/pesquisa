@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Em andamento: labs/lab-195-movimento-mais-rapido/ — aumenta `WALK_SPEED`/`RUN_SPEED` do avatar
+(jogo sente "devagar demais" hoje), verificando ao vivo que curvas/pulo/parkour/câmera continuam
+funcionando. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 208 - Movimento mais rápido
+e responsivo" — próximo item da ordem recomendada depois do lab-194. Ver
+`labs/lab-195-movimento-mais-rapido/FEATURES.md` pro objetivo/investigação prévia completos.
+
 Último concluído: labs/lab-194-locomocao-sem-moonwalk/ — corrige o "moonwalk" do avatar. Origem:
 `docs/gameplay-market-expansion-backlog.md`, "Lab 192 - Locomoção sem moonwalk" (renumerado pra
 lab-194, já que lab-192/193 já estavam ocupados) — próximo item depois do lab-193, seguindo a
