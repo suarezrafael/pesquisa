@@ -2727,8 +2727,17 @@ export function World3D({
   // fecha o prompt. Um único efeito reagindo à identidade do objeto inteiro (não só o id) — trocar
   // de mini-jogo no meio de uma contagem cancela o timeout antigo automaticamente (cleanup) antes
   // de agendar o novo.
+  // Achado do review automático: sem checar `suspendTriggers`/`planetPickerOpen`/
+  // `showParentalGate` (as mesmas 3 condições de `fullScreenInert`, mais abaixo), um modal
+  // bloqueante abrindo NO MEIO da contagem (ex.: portão parental) não a cancelava — ao chegar em
+  // 0, ainda teleportava e disparava `minigame_started` por trás do modal. Cancela o prompt inteiro
+  // (sem teleportar) se qualquer um dos três ficar `true` enquanto a contagem está rodando.
   useEffect(() => {
     if (!minigamePrompt) return
+    if (suspendTriggers || planetPickerOpen || showParentalGate) {
+      setMinigamePrompt(null)
+      return
+    }
     if (minigamePrompt.secondsLeft <= 0) {
       teleportToMinigameRef.current(minigamePrompt.id)
       setMinigamePrompt(null)
@@ -2738,7 +2747,7 @@ export function World3D({
       setMinigamePrompt((prev) => (prev ? { ...prev, secondsLeft: prev.secondsLeft - 1 } : prev))
     }, 1000)
     return () => clearTimeout(timeout)
-  }, [minigamePrompt])
+  }, [minigamePrompt, suspendTriggers, planetPickerOpen, showParentalGate])
 
   // lab-172 — mesma ponte de `placingFurnitureRequestId` acima: `App.tsx` muda
   // `coopAnswerSignalId` quando o `QuestModal` do desafio em dupla chama `onCorrect` (o clique
@@ -8387,12 +8396,13 @@ export function World3D({
       parkourReturnPos.copyFrom(parkourReturnBase.position)
       parkourReturnHintLabel = addHubLabels('parkourReturn', parkourReturnPedestal, '🔙', 24, -40, 'Pressione E pra voltar ao hub', -20)
 
-      // Pedestal de RETORNO na ponte — precisa ficar a mais de 2×`ENV_CHALLENGE_TRIGGER_DISTANCE`
-      // (1.3) de `bridgeSurfacePos`, senão existe uma faixa de chão onde os dois raios de gatilho
-      // se sobrepõem: as duas dicas ("alinhar a ponte" e "voltar ao hub") aparecem juntas, mas o
-      // `E` sempre dispara a checagem de `bridgeSurfacePos` primeiro (ela vem antes na cadeia de
-      // `if`/`return`) — achado ao vivo testando com offset 1.9 (menor que o mínimo de 2.6), que
-      // abria o quiz de lógica em vez de voltar ao hub. 3.2 dá folga de verdade.
+      // Pedestal de RETORNO na ponte — `ENV_CHALLENGE_TRIGGER_DISTANCE` é 1.3; a distância até
+      // `bridgeSurfacePos` precisa passar de 2×1.3 = 2.6, senão existe uma faixa de chão onde os
+      // dois raios de gatilho se sobrepõem: as duas dicas ("alinhar a ponte" e "voltar ao hub")
+      // aparecem juntas, mas o `E` sempre dispara a checagem de `bridgeSurfacePos` primeiro (ela
+      // vem antes na cadeia de `if`/`return`) — achado ao vivo testando com offset 1.9 (menor que
+      // o mínimo de 2.6), que abria o quiz de lógica em vez de voltar ao hub. 3.2 dá folga de
+      // verdade.
       const BRIDGE_RETURN_UP = offsetLandingUp(bridgeUp, PLANET_RADIUS, 3.2)
       const bridgeReturnPos = groundSurfacePosition(BRIDGE_RETURN_UP)
       const bridgeReturnBase = new TransformNode('hub-retorno-ponte', scene)

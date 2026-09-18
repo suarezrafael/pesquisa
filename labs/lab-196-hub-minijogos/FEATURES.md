@@ -196,6 +196,42 @@ Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (i
 `npm run build` sem erros (`server-accounts` não mudou nesta rodada). Re-verificado ao vivo no
 Chrome real (caso de retorno incompatível + caso de retorno correto, ver item 1 acima).
 
+## Review automático — PR #79, rodada 3
+
+Achados que já tinham sido postados como comentários de linha na rodada 1 (mas não apareciam no
+resumo/"suppressed comments" que eu tinha lido — só a lista de comentários inline em si mostra
+esses dois; corrigido meu próprio processo de leitura de review daqui pra frente: sempre checar
+`gh api .../pulls/<N>/comments`, não só `.../reviews`) + 1 achado novo sobre consistência de docs:
+
+1. **Contagem regressiva não cancelava se um modal bloqueante abrisse no meio (real, corrigido)** —
+   o efeito de contagem só reagia a `minigamePrompt`; se `suspendTriggers`/`planetPickerOpen`/
+   `showParentalGate` (as mesmas 3 condições de `fullScreenInert`) ficassem `true` durante os 3s
+   (ex.: portão parental abrindo por outro motivo), a contagem seguia rodando e, ao chegar em 0,
+   ainda teleportava e disparava `minigame_started` por trás do modal. Corrigido: o efeito agora
+   cancela o prompt (sem teleportar) se qualquer uma das 3 condições ficar verdadeira
+   (`World3D.tsx`, useEffect da contagem). **Verificado ao vivo**: fluxo normal (sem nenhuma das 3
+   condições) continua completando a contagem e teleportando normalmente — sem regressão.
+   Cancelamento por modal real não foi reproduzido ao vivo (exigiria forçar `showParentalGate` de
+   fora do fluxo normal do jogo); avaliado como correto por leitura de código (mesmo padrão de
+   `fullScreenInert`, já testado em produção pra todo o resto do jogo).
+2. **Comentário com conta errada (real, corrigido)** — a frase "mais de 2×`ENV_CHALLENGE_TRIGGER_
+   DISTANCE` (1.3)" lia como se o limiar calculado fosse 1.3 (na verdade é 2.6). Reescrito pra
+   deixar a conta explícita: "2×1.3 = 2.6".
+3. **Status de `FEATURES.md` ("concluído") parece contradizer `labs/CURRENT.md` (avaliado, não é um
+   bug — convenção já estabelecida)** — checado o histórico real de commits (`git log --
+   labs/CURRENT.md`): em TODOS os labs anteriores (193, 194, 195), `labs/CURRENT.md` só é
+   atualizado num commit SEPARADO, feito DEPOIS do merge, chamado "confirma deploy em producao:
+   lab-NNN" — nunca dentro da própria PR do lab. `FEATURES.md` marcar "concluído" antes do merge
+   (quando a implementação e verificação ao vivo terminam) enquanto `CURRENT.md` ainda aponta pro
+   lab anterior é o fluxo NORMAL e intencional deste repositório, não uma inconsistência de
+   verdade — resolvido pelo mesmo commit de confirmação de deploy que todo lab já leva depois de
+   mergeado. Não alterado nesta PR; `labs/CURRENT.md` será atualizado no commit de confirmação de
+   deploy pós-merge, como sempre.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
+`npm run build` sem erros (`server-accounts` não mudou nesta rodada). Re-verificado ao vivo no
+Chrome real (fluxo normal da contagem sem regressão, ver item 1 acima).
+
 ## Fora de escopo (explicitamente adiado)
 
 - Mais de 2 pedestais/mini-jogos nesta fatia (a "Prédio dos Enigmas" — quiz surpresa repetível — e
