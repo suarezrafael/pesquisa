@@ -268,7 +268,17 @@ const WALK_SPEED = 9.5
 const RUN_SPEED = 14
 const JUMP_SPEED = 6.2 // velocidade radial (pra fora do planeta) aplicada ao pular
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
-const WALK_CYCLE_SPEED = 8.75 // rad/s de fase do ciclo de caminhada, por unidade de velocidade real
+// Achado do review automático do Copilot: `speedRatio` (onde `WALK_CYCLE_SPEED` é usado, no ciclo
+// de passada) é NORMALIZADO por `currentSpeed` — a full velocidade, o ciclo sempre avança a
+// `WALK_CYCLE_SPEED` rad/s, não importa o valor de `WALK_SPEED`. Isso significa que a fase por
+// METRO percorrido é `WALK_CYCLE_SPEED / WALK_SPEED` — um valor fixo (8.75 rad/s) com um
+// `WALK_SPEED` maior reduz essa razão, reintroduzindo o mesmo foot-sliding que o lab-194 corrigiu
+// (pernas ciclando devagar demais pra distância real percorrida). O lab-32 já tinha essa mesma
+// razão ao mudar `WALK_SPEED` 6→7.5 junto com 7→8.75 (7/6 = 8.75/7.5 ≈ 1.1667) — derivar
+// `WALK_CYCLE_SPEED` diretamente de `WALK_SPEED` (em vez de um literal solto) preserva essa razão
+// automaticamente em qualquer mudança de velocidade futura, sem depender de lembrar de recalcular.
+const WALK_CYCLE_PHASE_PER_SPEED = 7 / 6 // razão histórica (lab-32), preservada desde então
+const WALK_CYCLE_SPEED = WALK_CYCLE_PHASE_PER_SPEED * WALK_SPEED // rad/s de fase, por unidade de velocidade real
 const RUN_CYCLE_SPEED = WALK_CYCLE_SPEED * (RUN_SPEED / WALK_SPEED)
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
 // Relatado pelo usuário: "o boneco não dobra os joelhos pra andar". A fórmula antiga

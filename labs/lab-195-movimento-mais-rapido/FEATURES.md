@@ -102,6 +102,34 @@ teclado — um `navigate()`/reload completo resolve).
 `npx tsc -b` limpo; testes: app 213/213 (inalterado — mudança é engine/constantes, sem lógica de
 domínio); `npm run build` sem regressão de bundle.
 
+## Achado pós-merge (rodada 2 do review, chegou minutos antes do merge de PR #77)
+
+**Achado real e sério**: `WALK_CYCLE_SPEED = 8.75` continuou um literal solto depois de
+`WALK_SPEED` mudar `7.5→9.5`. Como `speedRatio` (lab-194) é NORMALIZADO por `currentSpeed`, a full
+velocidade o ciclo sempre avança a `WALK_CYCLE_SPEED` rad/s, independente do valor de `WALK_SPEED`
+— ou seja, a fase por METRO percorrido é `WALK_CYCLE_SPEED / WALK_SPEED`, e um `WALK_SPEED` maior
+sem ajustar `WALK_CYCLE_SPEED` REDUZ essa razão, reintroduzindo o mesmo foot-sliding que o lab-194
+tinha corrigido (pernas ciclando devagar demais pra distância real percorrida) — só que por uma
+causa diferente (constante desatualizada, não mais o throttle bruto). O review ainda citou um
+precedente real do próprio código: o lab-32 já tinha mudado `WALK_SPEED` `6→7.5` junto com
+`WALK_CYCLE_SPEED` `7→8.75`, mantendo a mesma razão (`7/6 = 8.75/7.5 ≈ 1.1667`) — esta lab quebrou
+esse precedente ao não replicar o ajuste.
+
+**Corrigido**: `WALK_CYCLE_SPEED` agora é DERIVADO de `WALK_SPEED` (`WALK_CYCLE_PHASE_PER_SPEED =
+7/6; WALK_CYCLE_SPEED = WALK_CYCLE_PHASE_PER_SPEED * WALK_SPEED`) em vez de um literal solto —
+preserva a razão automaticamente em qualquer mudança de velocidade futura, sem depender de lembrar
+de recalcular à mão. `RUN_CYCLE_SPEED` continua derivado de `WALK_CYCLE_SPEED` como antes, então
+segue a correção automaticamente.
+
+**Verificado ao vivo** (contagem de cruzamentos de zero de `legPivotL.rotation.x` sobre distância
+REAL percorrida, medida por soma de deltas quadro a quadro — não distância em linha reta do início
+ao fim, que subestima o percurso real numa trajetória curva): andando, `1.22` rad/unidade medido
+contra `1.1667` esperado; correndo, `1.153` rad/unidade — ambos dentro do ruído de quantização
+esperado de contar poucos cruzamentos discretos (12-17 no teste).
+
+`npx tsc -b`/testes/`npm run build` limpos. PR de acompanhamento aberta separada da PR #77 (já
+mesclada), mesmo ciclo de review/CI/confirmação de merge.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Vender velocidade, booster pago, vantagem premium (regra inegociável do projeto — nunca gating
