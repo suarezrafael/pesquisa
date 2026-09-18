@@ -1,12 +1,44 @@
 # Laboratório atual
 
-Em andamento: labs/lab-195-movimento-mais-rapido/ — aumenta `WALK_SPEED`/`RUN_SPEED` do avatar
-(jogo sente "devagar demais" hoje), verificando ao vivo que curvas/pulo/parkour/câmera continuam
-funcionando. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 208 - Movimento mais rápido
-e responsivo" — próximo item da ordem recomendada depois do lab-194. Ver
-`labs/lab-195-movimento-mais-rapido/FEATURES.md` pro objetivo/investigação prévia completos.
+Último concluído: labs/lab-195-movimento-mais-rapido/ — aumenta `WALK_SPEED`/`RUN_SPEED` do
+avatar (jogo sentia "devagar demais"). Origem: `docs/gameplay-market-expansion-backlog.md`,
+"Lab 208 - Movimento mais rápido e responsivo" — próximo item da ordem recomendada depois do
+lab-194. **Corrigido**: `WALK_SPEED` `7.5→9.5`, `RUN_SPEED` `11→14` (+27%, mesma proporção
+corrida/caminhada de antes). A animação de passada (lab-194, já derivada da velocidade física
+real) e `WALK_CYCLE_SPEED`/`RUN_CYCLE_SPEED` (calculados a partir da razão entre as duas
+constantes) escalam sozinhos, sem ajuste manual. Fator de suavização da câmera
+(`Vector3.Lerp(camera.position, desiredCamPos, 0.08)`) ajustado pra `0.1` — o atraso em regime
+permanente de uma suavização exponencial escala com velocidade/fator; sem o ajuste a câmera
+ficaria proporcionalmente mais atrasada atrás do avatar na velocidade nova (confirmado ao vivo:
+caiu de ~12.1-12.3 pra ~11.7-11.9, perto do valor original). `GRAVITY`/`JUMP_SPEED`/`TURN_RATE`
+não foram alterados — o próprio comentário já existente de `GRAVITY` já mostrava que mais
+velocidade horizontal só aumenta a folga de alcance de pulo do parkour, nunca reduz. `npx tsc -b`
+limpo; testes: app 213/213 (inalterado); `npm run build` sem regressão de bundle. **Verificado ao
+vivo via Chrome real**: curvas em arco suave sem soluço; pulo com altura `1.203` e pico aos 24
+quadros simulados (~400ms), batendo exatamente com os valores já documentados no comentário de
+`GRAVITY` ("altura ~1.2 e ~0.78s no ar") — confirma que a gravidade/pulo não regrediram.
+**Achado ao vivo (ferramental)**: teleportar o avatar perto de um gatilho de missão pode abrir um
+modal de quiz sozinho, bloqueando TODO input de movimento/pulo via `hudInert` sem erro nenhum —
+sempre checar `document.querySelectorAll('.modal-overlay').length` antes de testes; e uma
+montagem HMR obsoleta depois de editar o arquivo pode prender `window.__playerFigure`/
+`__jumpDebug` numa instância antiga que nunca recebe eventos de teclado — um reload completo
+resolve. **Pendência disclosed**: tunneling através de obstáculo fino na velocidade nova não foi
+reproduzido/testado ao vivo (mesma dificuldade de estagiar colisão precisa num mundo esférico já
+documentada no lab-194) — avaliado como risco baixo por raciocínio (aumento de só ~27%, não uma
+mudança de ordem de grandeza). **PR #77 teve 1 rodada de review automático com achado real**
+(o comentário do código e o checklist do `FEATURES.md` afirmavam ter "verificado" o tunneling
+quando na verdade só foi avaliado por raciocínio — corrigido separando o item verificado
+(curvas/gravidade/pulo) do item pendente (tunneling), sem inflar o que foi de fato testado); uma
+2ª rodada ficou pendente por ~19 minutos sem concluir (mesmo padrão de atraso já disclosed nos
+labs anteriores) — consultado o usuário via `AskUserQuestion`, decisão: seguir pro merge sem
+esperar mais. Ver `labs/lab-195-movimento-mais-rapido/FEATURES.md` pro histórico completo.
+**Merge confirmado**: PR #77 mesclada em `main` no commit `fa70551` (2026-09-18, squash),
+confirmado via `AskUserQuestion`. CI de `main` verde nos 3 workflows; deploy de produção
+confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-194-locomocao-sem-moonwalk/ — corrige o "moonwalk" do avatar. Origem:
+Antes desse: labs/lab-194-locomocao-sem-moonwalk/ — corrige o "moonwalk" do avatar. Origem:
 `docs/gameplay-market-expansion-backlog.md`, "Lab 192 - Locomoção sem moonwalk" (renumerado pra
 lab-194, já que lab-192/193 já estavam ocupados) — próximo item depois do lab-193, seguindo a
 ordem do próprio documento urgente. **Causa raiz real, achada lendo o código**: o ciclo de
