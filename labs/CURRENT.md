@@ -38,6 +38,37 @@ confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
 (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
 (`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
+**PR de acompanhamento #78 (pós-merge, 2 achados reais)**: rodada 2 da PR #77 chegou minutos antes
+do merge, só apareceu na API depois. **Achado 1**: `speedRatio` (lab-194) é normalizado por
+`currentSpeed`, então a full velocidade o ciclo de passada sempre avança a `WALK_CYCLE_SPEED` rad/s
+— fixo em `8.75` — independente de `WALK_SPEED`; aumentar `WALK_SPEED` sem ajustar essa constante
+reduz a fase por metro percorrido, reintroduzindo o mesmo foot-sliding do lab-194 (causa diferente:
+constante desatualizada, não mais o throttle bruto). O review citou um precedente real do próprio
+código: o lab-32 já tinha mudado `WALK_SPEED` `6→7.5` junto com `WALK_CYCLE_SPEED` `7→8.75`,
+mantendo a mesma razão (`7/6 ≈ 1.1667`) — esta lab quebrou o precedente. Corrigido derivando
+`WALK_CYCLE_SPEED` de `WALK_SPEED` (razão `7/6`) em vez de um literal solto, preservando a razão
+automaticamente em qualquer mudança futura. **Achado 2, na rodada seguinte**: `WALK_CYCLE_SPEED`
+também era usado (fator `0.7`) no ciclo de passada dos NPCs errantes, cujo `moveSpeed` é uma
+velocidade própria e fixa (`0.12-0.20`) sem nenhuma relação com `WALK_SPEED` do avatar — a correção
+do achado 1 faria a perna dos NPCs acelerar toda vez que a velocidade do AVATAR mudasse,
+reintroduzindo foot-sliding nos NPCs por acoplamento acidental de uma constante compartilhada.
+Corrigido com uma constante independente `NPC_WALK_CYCLE_SPEED = 6.125` (o valor exato que os NPCs
+já tinham antes desta lab), desacoplando o visual deles de qualquer ajuste futuro do avatar — a
+outra ocorrência compartilhada (avatar remoto/multiplayer) foi conferida e está correta como está,
+já que jogadores remotos usam as mesmas constantes sincronizadas pela rede. Ambos verificados ao
+vivo via Chrome real: contagem de cruzamentos de zero do ciclo de perna sobre distância REAL
+percorrida (soma de deltas quadro a quadro, não linha reta início-fim) deu `1.22`/`1.153`
+rad/unidade (andando/correndo) contra `1.1667` esperado; taxa de fase dos NPCs medida em `6.125`
+rad/s exata durante quadros de movimento real. Rodada 2 dessa PR de acompanhamento ficou pendente
+por ~19 min sem concluir (mesmo padrão de atraso já disclosed) — consultado o usuário via
+`AskUserQuestion`, decisão: seguir sem esperar. `npx tsc -b`/testes/build limpos em ambas as
+rodadas. Ver `labs/lab-195-movimento-mais-rapido/FEATURES.md` pro histórico completo. **Merge
+confirmado**: PR #78 mesclada em `main` no commit `11f6d66` (2026-09-18, squash), confirmado via
+`AskUserQuestion`. CI de `main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
+
 Antes desse: labs/lab-194-locomocao-sem-moonwalk/ — corrige o "moonwalk" do avatar. Origem:
 `docs/gameplay-market-expansion-backlog.md`, "Lab 192 - Locomoção sem moonwalk" (renumerado pra
 lab-194, já que lab-192/193 já estavam ocupados) — próximo item depois do lab-193, seguindo a

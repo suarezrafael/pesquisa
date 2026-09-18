@@ -1,6 +1,6 @@
 # Laboratório 195 — Movimento mais rápido e responsivo
 
-Status: em andamento (PR #77 mesclada; PR de acompanhamento #78 com 2 achados reais corrigidos — rodada 2 do review pendente por ~19 min, seguindo sem esperar por decisão do usuário)
+Status: concluído (PRs #77 e #78, ambas mescladas e implantadas em produção)
 Início: 2026-09-16
 Fim: 2026-09-18
 Commit inicial: ad300f0de38fa5368da2361dd4b0f2e05b4a0d4c
