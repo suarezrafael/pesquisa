@@ -1,6 +1,6 @@
 # Laboratório 195 — Movimento mais rápido e responsivo
 
-Status: em andamento (PR aberta, aguardando review automático do Copilot)
+Status: em andamento (PR convergida — rodada 2 do review pendente por ~19 min, seguindo sem esperar por decisão do usuário)
 Início: 2026-09-16
 Fim: -
 Commit inicial: ad300f0de38fa5368da2361dd4b0f2e05b4a0d4c
