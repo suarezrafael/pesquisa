@@ -73,8 +73,12 @@ coordenadas.
   sem terminar também conta como "completou" — aceitável pra esta fatia inicial.
 - [x] Verificar ao vivo: interagir com os 2 pedestais abre explicação → contagem → teleporta
   corretamente; câmera/física continuam estáveis depois do teleport (sem atravessar chão/travar);
-  voltar ao hub funciona dos dois destinos; toque equivalente ao teclado funciona. Ver "Verificação
-  ao vivo" abaixo — inclui um bug real encontrado e corrigido nessa verificação.
+  voltar ao hub funciona dos dois destinos. Ver "Verificação ao vivo" abaixo — inclui um bug real
+  encontrado e corrigido nessa verificação.
+  **Toque equivalente ao teclado**: NÃO verificado com simulação de toque de tela de verdade —
+  achado do review automático (rodada 2): este checklist marcava o item como feito, mas a própria
+  seção "Verificação ao vivo" já dizia o contrário. Corrigido aqui pra não afirmar mais do que foi
+  testado (ver raciocínio completo na seção de verificação).
 
 ## Verificação ao vivo
 
@@ -163,6 +167,34 @@ texto do review):
 Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
 `npm run test` `server-accounts` 157/157 (+2); `npm run build` sem erros; re-verificado ao vivo no
 Chrome real (guarda de spam do `E` + `hudInert` durante a contagem, ver item 4 acima).
+
+## Review automático — PR #79, rodada 2
+
+Copilot encontrou 3 achados novos:
+
+1. **`minigame_completed` podia gravar o `minigameId` errado (real, corrigido)** — os dois
+   pedestais de retorno só checavam `if (activeMinigameId)` (qualquer valor truthy), sem confirmar
+   que o pedestal pisado é o RETORNO DAQUELE mini-jogo específico. Como o planeta é uma esfera
+   única andável (sem gate entre regiões), dava pra entrar no parkour (`activeMinigameId =
+   'parkour1'`), andar até o pedestal de retorno DA PONTE (bem mais longe, mas fisicamente
+   alcançável a pé) e gravar `minigame_completed` com `"ponte-logica"` — o id errado. Corrigido:
+   cada pedestal de retorno agora exige `activeMinigameId === 'parkour1'` (ou `'ponte-logica'`,
+   respectivamente) antes de disparar e limpar o estado; um pedestal incompatível só teleporta de
+   volta ao hub, sem gravar nada nem mexer em `activeMinigameId` (`World3D.tsx`).
+   **Verificado ao vivo**: entrou no parkour, teleportou (via helper de QA) até o pedestal de
+   retorno DA PONTE — voltou ao hub, `window.fetch` interceptado confirmou log vazio (nenhum
+   evento). Foi então até o pedestal de retorno DO PARKOUR (o correto, com `activeMinigameId` ainda
+   `'parkour1'`, intacto pela tentativa incompatível) — voltou ao hub e disparou
+   `minigame_completed` com `{"minigameId":"parkour1"}`, confirmando que o fix não quebrou o
+   caminho correto.
+2. **Checklist do `FEATURES.md` inconsistente com a própria seção de verificação (real, corrigido)**
+   — o item "toque equivalente ao teclado funciona" estava marcado `[x]`, mas a seção "Verificação
+   ao vivo" já dizia explicitamente que isso não foi testado com simulação de toque de tela.
+   Corrigido: item reescrito pra não afirmar mais do que foi testado de verdade.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
+`npm run build` sem erros (`server-accounts` não mudou nesta rodada). Re-verificado ao vivo no
+Chrome real (caso de retorno incompatível + caso de retorno correto, ver item 1 acima).
 
 ## Fora de escopo (explicitamente adiado)
 

@@ -4186,7 +4186,11 @@ export function World3D({
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, parkourReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
           teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
-          if (activeMinigameId) {
+          // Achado do review automático: cada pedestal de retorno só deve confirmar a conclusão do
+          // mini-jogo QUE ELE PRÓPRIO representa — sem esta checagem, dava pra entrar num mini-jogo
+          // e sair andando (a pé, sem usar o pedestal certo) até o pedestal de retorno DO OUTRO
+          // mini-jogo, gravando `minigame_completed` com o id errado.
+          if (activeMinigameId === 'parkour1') {
             trackMinigameCompleted(activeMinigameId)
             activeMinigameId = null
           }
@@ -4194,7 +4198,8 @@ export function World3D({
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
           teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
-          if (activeMinigameId) {
+          // Mesmo raciocínio do pedestal de retorno do parkour acima.
+          if (activeMinigameId === 'ponte-logica') {
             trackMinigameCompleted(activeMinigameId)
             activeMinigameId = null
           }
