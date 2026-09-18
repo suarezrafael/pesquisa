@@ -33,6 +33,7 @@ import {
   isValidDestinationPlanetId,
   isValidPlanetInteractionKind,
   isValidLearningChallengeKind,
+  isValidMinigameId,
   isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
@@ -480,6 +481,14 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   if (type === 'album_planet_opened' && !isValidDestinationPlanetId(metaObjForValidation.planetId)) {
     return new Response(null, { status: 400 })
   }
+  // Mesmo raciocínio dos eventos acima: `minigame_started`/`minigame_completed` só fazem sentido
+  // com um `minigameId` válido (é o que identifica qual pedestal do hub gerou o evento).
+  if (
+    (type === 'minigame_started' || type === 'minigame_completed') &&
+    !isValidMinigameId(metaObjForValidation.minigameId)
+  ) {
+    return new Response(null, { status: 400 })
+  }
 
   // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
   // errado — os outros tipos LEGADOS (documentados em `docs/event-catalog.md` com `meta` livre ou
@@ -506,6 +515,9 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     } else if (type === 'album_planet_opened') {
       // já validado acima — só a chave permitida sobrevive.
       safeMeta = { planetId: metaObj.planetId }
+    } else if (type === 'minigame_started' || type === 'minigame_completed') {
+      // já validado acima — só a chave permitida sobrevive.
+      safeMeta = { minigameId: metaObj.minigameId }
     } else if (type === 'camera_recenter_used') {
       // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
       // (`docs/event-catalog.md`) não documenta NENHUM campo de `meta` — sem este branch, caía no
@@ -1825,6 +1837,11 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     learningChallengeCompleted: weeklyDevices('learning_challenge_completed'),
     albumPlanetOpened: weeklyDevices('album_planet_opened'),
     weeklyEventObjectiveCompleted: weeklyDevices('weekly_event_objective_completed'),
+    // Hub de mini-jogos ("Lab 209") — mesmo achado de lab-180 (PR #59) acima: sem isso, os eventos
+    // entram na allowlist e ficam gravados, mas invisíveis pra qualquer consumidor administrativo
+    // sem consulta direta ao banco.
+    minigameStarted: weeklyDevices('minigame_started'),
+    minigameCompleted: weeklyDevices('minigame_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

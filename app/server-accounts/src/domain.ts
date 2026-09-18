@@ -199,6 +199,10 @@ const PRODUCT_EVENT_TYPES = new Set([
   'learning_challenge_completed',
   'album_planet_opened',
   'weekly_event_objective_completed',
+  // "Hub de mini-jogos e teleport por botão no chão" — nomes exatos citados pelo backlog, ver
+  // app/src/productAnalytics.ts.
+  'minigame_started',
+  'minigame_completed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -287,6 +291,17 @@ const LEARNING_CHALLENGE_KINDS = new Set(['bridge', 'rocket_fuel', 'plaque'])
 
 export function isValidLearningChallengeKind(kind: unknown): kind is string {
   return typeof kind === 'string' && LEARNING_CHALLENGE_KINDS.has(kind)
+}
+
+// Hub de mini-jogos ("Lab 209 - Hub de mini-jogos e teleport por botão no chão") — qual mini-jogo
+// foi iniciado/concluído a partir do hub, mesmo espírito de `LEARNING_CHALLENGE_KINDS` acima:
+// conjunto FIXO no código-fonte (achado do review automático: `minigame_started`/
+// `minigame_completed` caíam no branch genérico de `handleTrackEvent`, sem essa validação — o
+// único sinal que esses dois eventos carregam é justamente este id).
+const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica'])
+
+export function isValidMinigameId(id: unknown): id is string {
+  return typeof id === 'string' && MINIGAME_IDS.has(id)
 }
 
 // lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de

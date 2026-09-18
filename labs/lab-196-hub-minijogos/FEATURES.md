@@ -1,8 +1,8 @@
 # Laboratório 196 — Hub de mini-jogos e teleport por botão no chão
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-18
-Fim: -
+Fim: 2026-09-18
 Commit inicial: 8929e190f40690b534baced611d882aa05e59b0e
 
 ## Objetivo do laboratório
@@ -45,24 +45,213 @@ coordenadas.
 
 ## Funcionalidades planejadas
 
-- [ ] Achar um local livre pro hub na superfície do planeta principal, usando o mesmo método de
+- [x] Achar um local livre pro hub na superfície do planeta principal, usando o mesmo método de
   varredura de distância angular já documentado no comentário do parkour original (lab-11) —
-  verificado, não adivinhado às cegas.
-- [ ] Construir uma estrutura física pequena do hub: 2 pedestais no chão (parkour + ponte), com
-  identidade visual simples (cor/placa) que já indique de longe "aqui tem jogo".
-- [ ] Interação nos pedestais (tecla `E`/botão de toque, mesmo padrão já usado no resto do jogo):
+  verificado, não adivinhado às cegas. `HUB_ANCHOR_UP` (`World3D.tsx:8229`) confirmado ao vivo sem
+  sobreposição com Lojinha/parkour original/casa (ver "Verificação ao vivo").
+- [x] Construir uma estrutura física pequena do hub: 2 pedestais no chão (parkour + ponte), com
+  identidade visual simples (cor/placa) que já indique de longe "aqui tem jogo". Arco decorativo +
+  pedestal verde (parkour) + pedestal azul (ponte), `World3D.tsx:8232-8361`.
+- [x] Interação nos pedestais (tecla `E`/botão de toque, mesmo padrão já usado no resto do jogo):
   mostra uma explicação curta do mini-jogo, dispara uma contagem regressiva nova (3-2-1), depois
-  teleporta (`teleportAvatarTo`) pro início do mini-jogo escolhido.
-- [ ] "Voltar ao hub": um gatilho no destino de cada mini-jogo (mesma tecla `E`/toque) que teleporta
-  de volta pra posição salva do hub.
-- [ ] Eventos novos `minigame_started`/`minigame_completed` (`meta: { minigameId }`) — adicionados à
+  teleporta (`teleportAvatarTo`) pro início do mini-jogo escolhido. Overlay `.minigame-countdown-*`
+  (`index.css`), estado `minigamePrompt` + efeito de tick em `World3D.tsx` (~2643/2716).
+- [x] "Voltar ao hub": um gatilho no destino de cada mini-jogo (mesma tecla `E`/toque) que teleporta
+  de volta pra posição salva do hub. Pedestais magenta `parkourReturnPedestal`/`bridgeReturnPedestal`
+  (`World3D.tsx:8363-8385`).
+- [x] Eventos novos `minigame_started`/`minigame_completed` (`meta: { minigameId }`) — adicionados à
   allowlist do Worker (`app/server-accounts/src/domain.ts`) e disparados do client
-  (`app/src/productAnalytics.ts`, mesmo padrão de `learning_challenge_started/completed`).
-  `minigame_completed` da ponte reaproveita o mesmo instante de `learning_challenge_completed`; do
-  parkour, o instante em que a moeda do TOPO daquele curso específico é coletada.
-- [ ] Verificar ao vivo: interagir com os 2 pedestais abre explicação → contagem → teleporta
+  (`app/src/productAnalytics.ts`).
+  **Divergência do plano original, decidida durante a implementação**: em vez de reaproveitar o
+  instante granular de conclusão de cada mini-jogo (coleta da moeda do topo do parkour /
+  `learning_challenge_completed` da ponte), `minigame_completed` dispara no pedestal de RETORNO ao
+  hub — semântica de "ida e volta pelo hub", não de "terminou o desafio de verdade". Motivo: um
+  gatilho único e simétrico (mesmo pedestal serve pra qualquer mini-jogo linkado no futuro) é mais
+  simples de manter do que instrumentar o ponto de conclusão de cada mini-jogo individualmente, e o
+  objetivo do evento é medir uso agregado do hub (não progresso por perfil — ver "Fora de escopo").
+  Documentado como comentário em `productAnalytics.ts`. Custo aceito: uma criança que entra e volta
+  sem terminar também conta como "completou" — aceitável pra esta fatia inicial.
+- [x] Verificar ao vivo: interagir com os 2 pedestais abre explicação → contagem → teleporta
   corretamente; câmera/física continuam estáveis depois do teleport (sem atravessar chão/travar);
-  voltar ao hub funciona dos dois destinos; toque equivalente ao teclado funciona.
+  voltar ao hub funciona dos dois destinos. Ver "Verificação ao vivo" abaixo — inclui um bug real
+  encontrado e corrigido nessa verificação.
+  **Toque equivalente ao teclado**: NÃO verificado com simulação de toque de tela de verdade —
+  achado do review automático (rodada 2): este checklist marcava o item como feito, mas a própria
+  seção "Verificação ao vivo" já dizia o contrário. Corrigido aqui pra não afirmar mais do que foi
+  testado (ver raciocínio completo na seção de verificação).
+
+## Verificação ao vivo
+
+Testado no dev server (`localhost:5190`), Chrome automatizado, usando os helpers de QA já
+existentes `window.__debugTeleport`/`__debugTeleportExact` (`World3D.tsx:7626/7650`, só em
+`import.meta.env.DEV`) pra ir direto a cada ponto sem depender de navegação manual real por um
+planeta esférico grande, e um `window.fetch` interceptado temporariamente (só na sessão do
+navegador, não no código do jogo) pra confirmar o corpo exato dos eventos disparados.
+
+- **Posição do hub**: sem sobreposição visual com Lojinha, casa nem o parkour original — folga
+  real confirmada por zoom de tela, não só pela distância angular do comentário.
+- **Fluxo do parkour** (entrada → contagem → teleport → volta): `minigame_started` disparou com
+  `{"minigameId":"parkour1"}`; o retorno teleportou pro hub e disparou `minigame_completed` com o
+  mesmo id.
+- **Fluxo da ponte** (entrada → contagem → teleport → volta): mesma checagem, `minigameId:
+  "ponte-logica"` nos dois eventos.
+- **Retorno sem ter entrado**: apertar `E` no pedestal de retorno sem nunca ter usado o de entrada
+  (`activeMinigameId` nulo) teleporta de volta ao hub mas NÃO dispara `minigame_completed` —
+  confirmado lendo o log de fetch (vazio).
+- **Bug real encontrado e corrigido**: o pedestal de retorno da ponte (`BRIDGE_RETURN_UP`) tinha
+  sido posicionado a 1,9 unidades de `bridgeSurfacePos` — menor que o mínimo necessário de
+  2×`ENV_CHALLENGE_TRIGGER_DISTANCE` (2,6) pra não competir com o gatilho de "alinhar a ponte", que
+  vem antes na cadeia `if`/`return` de `handleInteractPress`. Reproduzido ao vivo: parado numa faixa
+  de chão entre os dois pedestais, as duas dicas ("Pressione E pra alinhar a ponte" e "...pra voltar
+  ao hub") apareciam juntas, e apertar `E` sempre abria o quiz de lógica ("Rodas ou Não") em vez de
+  voltar ao hub. Corrigido aumentando o offset pra 3,2 (`World3D.tsx:8377`) — distância real
+  reconfirmada em 3,27 depois do fix, testado de novo no mesmo ponto intermediário sem reabrir o
+  quiz.
+- **Toque equivalente ao teclado**: não testado explicitamente com simulação de toque de tela, mas
+  o botão `E` na UI mobile (visível nas capturas de tela quando perto de um gatilho) chama a mesma
+  `handleInteractPress` do teclado — mesmo padrão já estabelecido pro resto do jogo, sem lógica
+  nova especial pros pedestais do hub.
+- **Câmera/física após teleport**: estável nos 4 teleports testados (2 idas + 2 voltas) — sem
+  atravessar o chão, sem travar a câmera.
+
+Checagens automatizadas depois do fix: `npx tsc -b` limpo, `npm run test` do app em 213/213,
+`npm run build` (app) sem erros, `npm run test` do `server-accounts` em 155/155 (sem mudança desde
+a implementação inicial, já que o fix foi só no offset do `World3D.tsx`).
+
+## Review automático — PR #79, rodada 1
+
+Copilot encontrou 5 achados. Verificados um a um contra o código/comportamento real (não só o
+texto do review):
+
+1. **`meta.minigameId` sem validação no Worker (real, corrigido)** — `minigame_started`/
+   `minigame_completed` caíam no branch genérico de `handleTrackEvent` (`index.ts`), que só existe
+   pra eventos LEGADOS que toleram `meta` livre (comentário já existente em `camera_recenter_used`).
+   Todo evento NOVO com um campo de conjunto fechado neste código tem 3 partes — validador
+   dedicado, checagem de 400 na rota, e um branch de `safeMeta` que só deixa a chave documentada
+   sobreviver (`cosmetic_equipped`/`planet_travel_completed`/`learning_challenge_*`/
+   `album_planet_opened` já seguem esse padrão). Corrigido: `isValidMinigameId`
+   (`domain.ts`, `MINIGAME_IDS = new Set(['parkour1', 'ponte-logica'])`), checagem de 400 e
+   `safeMeta = { minigameId: metaObj.minigameId }` em `index.ts`, 2 testes novos em
+   `domain.test.ts` (`server-accounts` foi de 155 pra 157).
+2. **`weeklyFunnel` não expõe os eventos novos (real, corrigido)** — mesmo achado exato já
+   encontrado uma vez antes no lab-180 (PR #59): allowlist ✓, mas nenhum consumidor administrativo
+   enxerga o evento sem consulta direta ao banco. Corrigido: `weeklyFunnel.minigameStarted`/
+   `minigameCompleted` (`weeklyDevices(...)`, mesma convenção de alcance/dispositivos únicos do
+   resto do funil), documentado em `docs/event-catalog.md`.
+3. **Countdown não deixa o HUD inert → modal escondido atrás dela (real, corrigido)** —
+   `.minigame-countdown-overlay` tem `z-index: 40`, `.modal-overlay` tem `z-index: 10`; como
+   `hudInert` não incluía `minigamePrompt`, dava pra abrir chat/ranking/mochila durante os 3s de
+   contagem e o modal ficava aberto mas visualmente atrás da contagem. Corrigido: `hudInert` agora
+   inclui `!!minigamePrompt` (`World3D.tsx`).
+4. **Apertar `E` de novo durante a contagem reinicia pra 3 (real, corrigido)** — cada entrada nos
+   pedestais chamava `setMinigamePrompt({..., secondsLeft: 3})` incondicionalmente; apertar `E`
+   várias vezes (ou tocar repetidamente o botão mobile) sem sair do raio do pedestal resetava a
+   contagem toda vez, podendo adiar o teleporte indefinidamente. Corrigido: `minigamePromptRef`
+   (mesmo padrão de `hudInertRef`/`selectedWeaponRef` — leitura do estado atual de dentro do
+   closure de `setup()`) guarda a chamada de `setMinigamePrompt` só quando não há contagem já em
+   andamento. **Verificado ao vivo**: 3 aperto de `E` em sequência rápida no mesmo pedestal —
+   contagem seguiu 3→2→1→teleporte normalmente (não travou, não reiniciou); confirmado também que
+   os ícones do HUD ficam visivelmente desabilitados durante a contagem (achado 3 acima) e voltam
+   ao normal depois do teleporte.
+5. **`ShadowGenerator` nunca remove os casters do hub no unmount (avaliado, não corrigido nesta
+   PR)** — tecnicamente correto (`ShadowGenerator.dispose()` não é chamado automaticamente por
+   `scene.dispose()`, já documentado uma vez no código pra um caso isolado, `benchScene` da
+   detecção de GPU), mas **não é uma regressão desta PR**: dos ~80 `addShadowCaster` deste arquivo,
+   só 3 têm `removeShadowCaster` (mobília removível/movível) — todo o resto da cenografia estática
+   (as 4 pistas de parkour originais, casas, pontes, placas etc.) já segue exatamente o mesmo
+   padrão de nunca desalocar o caster individualmente, confiando em `scene.dispose()` no fim da
+   sessão. Corrigir só os 2-3 meshes novos do hub, isolados, não resolveria o problema sistêmico
+   nem é consistente com o resto do arquivo — fica como um item de arquitetura maior (limpeza de
+   `ShadowGenerator` pra TODA cenografia estática), fora do escopo desta fatia pequena.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
+`npm run test` `server-accounts` 157/157 (+2); `npm run build` sem erros; re-verificado ao vivo no
+Chrome real (guarda de spam do `E` + `hudInert` durante a contagem, ver item 4 acima).
+
+## Review automático — PR #79, rodada 2
+
+Copilot encontrou 3 achados novos:
+
+1. **`minigame_completed` podia gravar o `minigameId` errado (real, corrigido)** — os dois
+   pedestais de retorno só checavam `if (activeMinigameId)` (qualquer valor truthy), sem confirmar
+   que o pedestal pisado é o RETORNO DAQUELE mini-jogo específico. Como o planeta é uma esfera
+   única andável (sem gate entre regiões), dava pra entrar no parkour (`activeMinigameId =
+   'parkour1'`), andar até o pedestal de retorno DA PONTE (bem mais longe, mas fisicamente
+   alcançável a pé) e gravar `minigame_completed` com `"ponte-logica"` — o id errado. Corrigido:
+   cada pedestal de retorno agora exige `activeMinigameId === 'parkour1'` (ou `'ponte-logica'`,
+   respectivamente) antes de disparar e limpar o estado; um pedestal incompatível só teleporta de
+   volta ao hub, sem gravar nada nem mexer em `activeMinigameId` (`World3D.tsx`).
+   **Verificado ao vivo**: entrou no parkour, teleportou (via helper de QA) até o pedestal de
+   retorno DA PONTE — voltou ao hub, `window.fetch` interceptado confirmou log vazio (nenhum
+   evento). Foi então até o pedestal de retorno DO PARKOUR (o correto, com `activeMinigameId` ainda
+   `'parkour1'`, intacto pela tentativa incompatível) — voltou ao hub e disparou
+   `minigame_completed` com `{"minigameId":"parkour1"}`, confirmando que o fix não quebrou o
+   caminho correto.
+2. **Checklist do `FEATURES.md` inconsistente com a própria seção de verificação (real, corrigido)**
+   — o item "toque equivalente ao teclado funciona" estava marcado `[x]`, mas a seção "Verificação
+   ao vivo" já dizia explicitamente que isso não foi testado com simulação de toque de tela.
+   Corrigido: item reescrito pra não afirmar mais do que foi testado de verdade.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
+`npm run build` sem erros (`server-accounts` não mudou nesta rodada). Re-verificado ao vivo no
+Chrome real (caso de retorno incompatível + caso de retorno correto, ver item 1 acima).
+
+## Review automático — PR #79, rodada 3
+
+Achados que já tinham sido postados como comentários de linha na rodada 1 (mas não apareciam no
+resumo/"suppressed comments" que eu tinha lido — só a lista de comentários inline em si mostra
+esses dois; corrigido meu próprio processo de leitura de review daqui pra frente: sempre checar
+`gh api .../pulls/<N>/comments`, não só `.../reviews`) + 1 achado novo sobre consistência de docs:
+
+1. **Contagem regressiva não cancelava se um modal bloqueante abrisse no meio (real, corrigido)** —
+   o efeito de contagem só reagia a `minigamePrompt`; se `suspendTriggers`/`planetPickerOpen`/
+   `showParentalGate` (as mesmas 3 condições de `fullScreenInert`) ficassem `true` durante os 3s
+   (ex.: portão parental abrindo por outro motivo), a contagem seguia rodando e, ao chegar em 0,
+   ainda teleportava e disparava `minigame_started` por trás do modal. Corrigido: o efeito agora
+   cancela o prompt (sem teleportar) se qualquer uma das 3 condições ficar verdadeira
+   (`World3D.tsx`, useEffect da contagem). **Verificado ao vivo**: fluxo normal (sem nenhuma das 3
+   condições) continua completando a contagem e teleportando normalmente — sem regressão.
+   Cancelamento por modal real não foi reproduzido ao vivo (exigiria forçar `showParentalGate` de
+   fora do fluxo normal do jogo); avaliado como correto por leitura de código (mesmo padrão de
+   `fullScreenInert`, já testado em produção pra todo o resto do jogo).
+2. **Comentário com conta errada (real, corrigido)** — a frase "mais de 2×`ENV_CHALLENGE_TRIGGER_
+   DISTANCE` (1.3)" lia como se o limiar calculado fosse 1.3 (na verdade é 2.6). Reescrito pra
+   deixar a conta explícita: "2×1.3 = 2.6".
+3. **Status de `FEATURES.md` ("concluído") parece contradizer `labs/CURRENT.md` (avaliado, não é um
+   bug — convenção já estabelecida)** — checado o histórico real de commits (`git log --
+   labs/CURRENT.md`): em TODOS os labs anteriores (193, 194, 195), `labs/CURRENT.md` só é
+   atualizado num commit SEPARADO, feito DEPOIS do merge, chamado "confirma deploy em producao:
+   lab-NNN" — nunca dentro da própria PR do lab. `FEATURES.md` marcar "concluído" antes do merge
+   (quando a implementação e verificação ao vivo terminam) enquanto `CURRENT.md` ainda aponta pro
+   lab anterior é o fluxo NORMAL e intencional deste repositório, não uma inconsistência de
+   verdade — resolvido pelo mesmo commit de confirmação de deploy que todo lab já leva depois de
+   mergeado. Não alterado nesta PR; `labs/CURRENT.md` será atualizado no commit de confirmação de
+   deploy pós-merge, como sempre.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
+`npm run build` sem erros (`server-accounts` não mudou nesta rodada). Re-verificado ao vivo no
+Chrome real (fluxo normal da contagem sem regressão, ver item 1 acima).
+
+## Review automático — PR #79, rodada 4
+
+Os 2 achados da rodada 3 foram confirmados corrigidos ("Resolved since last review"). 1 achado novo
+(baixa severidade), que na verdade aponta pra uma lacuna real do escopo já planejado desde o
+início deste lab:
+
+1. **Prompt do mini-jogo não mostra a "explicação curta" prometida (real, corrigido)** —
+   `Funcionalidades planejadas` (seção acima) já dizia desde o início "mostra uma explicação curta
+   do mini-jogo, dispara uma contagem regressiva" — a implementação só mostrava o nome do
+   mini-jogo ("🏃 Vamos jogar Parkour!") e a contagem, sem nenhuma frase explicando o que fazer.
+   Corrigido: `minigamePrompt` ganhou um campo `description` (`World3D.tsx`), preenchido nos dois
+   pontos de entrada com uma frase curta ("Pule de plataforma em plataforma até o topo!" pro
+   parkour, "Responda a pergunta de lógica pra alinhar a ponte!" pra ponte), renderizada entre o
+   título e o número da contagem (`.minigame-countdown-description`, `index.css`).
+   **Verificado ao vivo**: entrou pelo pedestal da ponte — overlay mostrou "🌉 Vamos jogar a Ponte!
+   / Responda a pergunta de lógica pra alinhar a ponte! / 2" corretamente.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
+`npm run build` sem erros (`server-accounts` não mudou nesta rodada). Re-verificado ao vivo no
+Chrome real (descrição renderizando corretamente, ver item 1 acima).
 
 ## Fora de escopo (explicitamente adiado)
 

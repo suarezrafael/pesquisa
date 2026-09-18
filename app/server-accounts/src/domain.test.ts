@@ -25,6 +25,7 @@ import {
   isValidDestinationPlanetId,
   isValidPlanetInteractionKind,
   isValidLearningChallengeKind,
+  isValidMinigameId,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
   sanitizeHouseFurnitureIds,
@@ -283,6 +284,11 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
 
   it('aceita o evento do objetivo semanal do lab-182', () => {
     expect(isValidProductEventType('weekly_event_objective_completed')).toBe(true)
+  })
+
+  it('aceita os eventos do hub de mini-jogos (backlog "Lab 209")', () => {
+    expect(isValidProductEventType('minigame_started')).toBe(true)
+    expect(isValidProductEventType('minigame_completed')).toBe(true)
   })
 })
 
@@ -721,6 +727,20 @@ describe('isValidLearningChallengeKind (lab-180, "Missões ambientais de aprendi
     expect(isValidLearningChallengeKind('')).toBe(false)
     expect(isValidLearningChallengeKind(123)).toBe(false)
     expect(isValidLearningChallengeKind(null)).toBe(false)
+  })
+})
+
+describe('isValidMinigameId (Hub de mini-jogos, backlog "Lab 209")', () => {
+  it('aceita os 2 mini-jogos linkados nesta fatia', () => {
+    expect(isValidMinigameId('parkour1')).toBe(true)
+    expect(isValidMinigameId('ponte-logica')).toBe(true)
+  })
+
+  it('recusa id fora do conjunto conhecido', () => {
+    expect(isValidMinigameId('parkour2')).toBe(false)
+    expect(isValidMinigameId('')).toBe(false)
+    expect(isValidMinigameId(123)).toBe(false)
+    expect(isValidMinigameId(null)).toBe(false)
   })
 })
 
