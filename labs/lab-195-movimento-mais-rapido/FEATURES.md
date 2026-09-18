@@ -66,10 +66,13 @@ proporção, sem precisar de nenhuma mudança adicional em `petFurColor`/`walkPh
 
 `World3D.tsx`:
 - `WALK_SPEED`: `7.5 → 9.5`; `RUN_SPEED`: `11 → 14` (proporção corrida/caminhada preservada:
-  `14/9.5 ≈ 1.474` vs `11/7.5 ≈ 1.467`). `WALK_CYCLE_SPEED`/`RUN_CYCLE_SPEED` não precisaram de
-  mudança — já são calculados como `RUN_CYCLE_SPEED = WALK_CYCLE_SPEED * (RUN_SPEED / WALK_SPEED)`,
-  então a proporção se ajusta sozinha, e a correção do lab-194 (animação derivada da velocidade
-  física real, não de uma constante) já escala a animação de perna/braço automaticamente.
+  `14/9.5 ≈ 1.474` vs `11/7.5 ≈ 1.467`). **Achado do review automático do Copilot (corrigido na
+  seção "Achado pós-merge" abaixo)**: a afirmação original aqui — de que `WALK_CYCLE_SPEED`/
+  `RUN_CYCLE_SPEED` não precisariam de mudança porque a correção do lab-194 já escala a animação
+  pela velocidade física real — estava ERRADA: `speedRatio` (lab-194) é normalizado por
+  `currentSpeed`, então o ciclo sempre avança a `WALK_CYCLE_SPEED` rad/s fixo em regime de
+  velocidade máxima, independente do valor de `WALK_SPEED`; aumentar `WALK_SPEED` sem ajustar essa
+  constante de fato reduzia a fase por metro percorrido. Ver "Achado pós-merge" pra correção real.
 - Fator de suavização da câmera (`Vector3.Lerp(camera.position, desiredCamPos, 0.08)` →  `0.1`):
   o atraso em regime permanente de uma suavização exponencial escala aproximadamente com
   `velocidade / fator` — sem ajustar, a câmera ficaria ~27% mais atrasada (mesma proporção do
@@ -155,12 +158,21 @@ batendo com o valor histórico.
 
 `npx tsc -b`/testes/`npm run build` limpos.
 
+**Rodada 3 do review (na PR #78, chegou minutos antes do merge)**: "Approval recommended" — só um
+nit de documentação (a seção "Implementação"/"Fora de escopo" acima ainda afirmava que
+`WALK_CYCLE_SPEED` não precisaria de mudança, contradizendo a própria correção desta lab), sem
+achado novo de código. Corrigido diretamente em `main` (commit doc-only, sem precisar de nova
+PR/CI/review — não toca em código de jogo).
+
 ## Fora de escopo (explicitamente adiado)
 
 - Vender velocidade, booster pago, vantagem premium (regra inegociável do projeto — nunca gating
   de gameplay por assinatura).
 - Redesenhar todo o controlador de movimento (fora de escopo explícito no próprio item do backlog).
-- Recalibrar `WALK_CYCLE_SPEED`/`RUN_CYCLE_SPEED`/animação — já escalam automaticamente pela
-  correção do lab-194 (velocidade física real), não precisam de mudança manual.
+- ~~Recalibrar `WALK_CYCLE_SPEED`/`RUN_CYCLE_SPEED`/animação~~ — **premissa errada, corrigida
+  depois do merge**: essa suposição original acabou sendo falsa (ver achado do review automático do
+  Copilot na seção "Achado pós-merge"); `WALK_CYCLE_SPEED` PRECISOU ser recalibrado. Mantido aqui
+  riscado só como registro de que a suposição inicial deste lab estava errada, não como item ainda
+  pendente.
 - Mudar `GRAVITY`/`JUMP_SPEED` (altura/tempo de pulo) a menos que a verificação ao vivo mostre que a
   nova velocidade horizontal quebra algum parkour existente.
