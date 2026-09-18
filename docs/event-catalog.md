@@ -204,6 +204,11 @@ decisão").
   existente (`handleAdminMetrics`, lab-185) — nada novo necessário aqui, o evento novo mede a
   CONCLUSÃO do objetivo, não a volta em si. "Feedback qualitativo infantil" (3ª métrica citada) é
   pesquisa com usuário real, fora de escopo de laboratório de código.
+- **Hub de mini-jogos** (backlog "Lab 209") — `minigame_started`/`minigame_completed`, lidos
+  semanalmente por `weeklyFunnel.minigameStarted`/`minigameCompleted` (mesma convenção de ALCANCE
+  do resto do funil: dispositivos únicos com ao menos 1 ocorrência nos últimos 7 dias corridos, não
+  uma contagem por perfil/sessão). `minigame_completed` mede "voltou ao hub depois de entrar", não
+  "resolveu o mini-jogo certo" — ver a coluna de descrição da tabela acima.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de

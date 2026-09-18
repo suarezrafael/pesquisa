@@ -114,6 +114,56 @@ Checagens automatizadas depois do fix: `npx tsc -b` limpo, `npm run test` do app
 `npm run build` (app) sem erros, `npm run test` do `server-accounts` em 155/155 (sem mudança desde
 a implementação inicial, já que o fix foi só no offset do `World3D.tsx`).
 
+## Review automático — PR #79, rodada 1
+
+Copilot encontrou 5 achados. Verificados um a um contra o código/comportamento real (não só o
+texto do review):
+
+1. **`meta.minigameId` sem validação no Worker (real, corrigido)** — `minigame_started`/
+   `minigame_completed` caíam no branch genérico de `handleTrackEvent` (`index.ts`), que só existe
+   pra eventos LEGADOS que toleram `meta` livre (comentário já existente em `camera_recenter_used`).
+   Todo evento NOVO com um campo de conjunto fechado neste código tem 3 partes — validador
+   dedicado, checagem de 400 na rota, e um branch de `safeMeta` que só deixa a chave documentada
+   sobreviver (`cosmetic_equipped`/`planet_travel_completed`/`learning_challenge_*`/
+   `album_planet_opened` já seguem esse padrão). Corrigido: `isValidMinigameId`
+   (`domain.ts`, `MINIGAME_IDS = new Set(['parkour1', 'ponte-logica'])`), checagem de 400 e
+   `safeMeta = { minigameId: metaObj.minigameId }` em `index.ts`, 2 testes novos em
+   `domain.test.ts` (`server-accounts` foi de 155 pra 157).
+2. **`weeklyFunnel` não expõe os eventos novos (real, corrigido)** — mesmo achado exato já
+   encontrado uma vez antes no lab-180 (PR #59): allowlist ✓, mas nenhum consumidor administrativo
+   enxerga o evento sem consulta direta ao banco. Corrigido: `weeklyFunnel.minigameStarted`/
+   `minigameCompleted` (`weeklyDevices(...)`, mesma convenção de alcance/dispositivos únicos do
+   resto do funil), documentado em `docs/event-catalog.md`.
+3. **Countdown não deixa o HUD inert → modal escondido atrás dela (real, corrigido)** —
+   `.minigame-countdown-overlay` tem `z-index: 40`, `.modal-overlay` tem `z-index: 10`; como
+   `hudInert` não incluía `minigamePrompt`, dava pra abrir chat/ranking/mochila durante os 3s de
+   contagem e o modal ficava aberto mas visualmente atrás da contagem. Corrigido: `hudInert` agora
+   inclui `!!minigamePrompt` (`World3D.tsx`).
+4. **Apertar `E` de novo durante a contagem reinicia pra 3 (real, corrigido)** — cada entrada nos
+   pedestais chamava `setMinigamePrompt({..., secondsLeft: 3})` incondicionalmente; apertar `E`
+   várias vezes (ou tocar repetidamente o botão mobile) sem sair do raio do pedestal resetava a
+   contagem toda vez, podendo adiar o teleporte indefinidamente. Corrigido: `minigamePromptRef`
+   (mesmo padrão de `hudInertRef`/`selectedWeaponRef` — leitura do estado atual de dentro do
+   closure de `setup()`) guarda a chamada de `setMinigamePrompt` só quando não há contagem já em
+   andamento. **Verificado ao vivo**: 3 aperto de `E` em sequência rápida no mesmo pedestal —
+   contagem seguiu 3→2→1→teleporte normalmente (não travou, não reiniciou); confirmado também que
+   os ícones do HUD ficam visivelmente desabilitados durante a contagem (achado 3 acima) e voltam
+   ao normal depois do teleporte.
+5. **`ShadowGenerator` nunca remove os casters do hub no unmount (avaliado, não corrigido nesta
+   PR)** — tecnicamente correto (`ShadowGenerator.dispose()` não é chamado automaticamente por
+   `scene.dispose()`, já documentado uma vez no código pra um caso isolado, `benchScene` da
+   detecção de GPU), mas **não é uma regressão desta PR**: dos ~80 `addShadowCaster` deste arquivo,
+   só 3 têm `removeShadowCaster` (mobília removível/movível) — todo o resto da cenografia estática
+   (as 4 pistas de parkour originais, casas, pontes, placas etc.) já segue exatamente o mesmo
+   padrão de nunca desalocar o caster individualmente, confiando em `scene.dispose()` no fim da
+   sessão. Corrigir só os 2-3 meshes novos do hub, isolados, não resolveria o problema sistêmico
+   nem é consistente com o resto do arquivo — fica como um item de arquitetura maior (limpeza de
+   `ShadowGenerator` pra TODA cenografia estática), fora do escopo desta fatia pequena.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
+`npm run test` `server-accounts` 157/157 (+2); `npm run build` sem erros; re-verificado ao vivo no
+Chrome real (guarda de spam do `E` + `hudInert` durante a contagem, ver item 4 acima).
+
 ## Fora de escopo (explicitamente adiado)
 
 - Mais de 2 pedestais/mini-jogos nesta fatia (a "Prédio dos Enigmas" — quiz surpresa repetível — e

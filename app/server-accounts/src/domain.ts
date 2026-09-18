@@ -293,6 +293,17 @@ export function isValidLearningChallengeKind(kind: unknown): kind is string {
   return typeof kind === 'string' && LEARNING_CHALLENGE_KINDS.has(kind)
 }
 
+// Hub de mini-jogos ("Lab 209 - Hub de mini-jogos e teleport por botão no chão") — qual mini-jogo
+// foi iniciado/concluído a partir do hub, mesmo espírito de `LEARNING_CHALLENGE_KINDS` acima:
+// conjunto FIXO no código-fonte (achado do review automático: `minigame_started`/
+// `minigame_completed` caíam no branch genérico de `handleTrackEvent`, sem essa validação — o
+// único sinal que esses dois eventos carregam é justamente este id).
+const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica'])
+
+export function isValidMinigameId(id: unknown): id is string {
+  return typeof id === 'string' && MINIGAME_IDS.has(id)
+}
+
 // lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de
 // atividade — ver decisão registrada em labs/lab-119-.../FEATURES.md) que o jogo sincroniza pra
 // viabilizar o relatório semanal por e-mail. Limites generosos mas finitos: nenhum jogador real

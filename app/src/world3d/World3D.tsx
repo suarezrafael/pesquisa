@@ -2652,6 +2652,12 @@ export function World3D({
     secondsLeft: number
   } | null>(null)
   const teleportToMinigameRef = useRef<(id: 'parkour1' | 'ponte-logica') => void>(() => {})
+  // Lido por `handleInteractPress` (dentro do closure de `setup()`) pra evitar reiniciar a
+  // contagem regressiva já em andamento — achado do review automático: sem essa checagem, apertar
+  // `E` de novo enquanto ainda dentro do raio do pedestal (segurar/tocar repetidamente) reseta
+  // `secondsLeft` pra 3 a cada aperto, podendo adiar o teleporte indefinidamente.
+  const minigamePromptRef = useRef<typeof minigamePrompt>(null)
+  minigamePromptRef.current = minigamePrompt
   const [selectedWeapon, setSelectedWeapon] = useState<'sword' | 'gun' | null>(null)
   // Mesmo padrão de `hasSwordRef`/`hasGunRef` acima — lido direto por `handleInteractPress`
   // (dentro do closure de `setup()`) sem esperar re-render.
@@ -4167,11 +4173,15 @@ export function World3D({
         // apertar E no pedestal de retorno sem nunca ter usado o de entrada (ex.: achou por acaso
         // andando perto do parkour) não deveria contar como uma "conclusão".
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, hubParkourPedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
-          setMinigamePrompt({ id: 'parkour1', emoji: '🏃', label: 'Parkour', secondsLeft: 3 })
+          if (!minigamePromptRef.current) {
+            setMinigamePrompt({ id: 'parkour1', emoji: '🏃', label: 'Parkour', secondsLeft: 3 })
+          }
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, hubBridgePedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
-          setMinigamePrompt({ id: 'ponte-logica', emoji: '🌉', label: 'a Ponte', secondsLeft: 3 })
+          if (!minigamePromptRef.current) {
+            setMinigamePrompt({ id: 'ponte-logica', emoji: '🌉', label: 'a Ponte', secondsLeft: 3 })
+          }
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, parkourReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
@@ -13143,7 +13153,11 @@ export function World3D({
   // aqui antes (achado do review automático do Copilot: duas listas de gatilhos escritas à mão em
   // lugares diferentes divergem fácil se alguém adicionar um gatilho novo só numa delas).
   const fullScreenInert = !setupReady || suspendTriggers || planetPickerOpen || showParentalGate
-  const hudInert = fullScreenInert || chatOpen || rankingOpen || bagOpen
+  // `minigamePrompt` (achado do review automático): sem isso, a criança podia abrir chat/ranking/
+  // mochila durante os 3s de contagem regressiva do hub de mini-jogos — o modal renderiza atrás do
+  // overlay da contagem (`.minigame-countdown-overlay` tem `z-index: 40`, `.modal-overlay` tem
+  // `z-index: 10`), então ficava aberto mas visualmente escondido até a contagem terminar.
+  const hudInert = fullScreenInert || chatOpen || rankingOpen || bagOpen || !!minigamePrompt
   hudInertRef.current = hudInert
   // Deixar o `<canvas>` inteiro `inert` enquanto chat/ranking/mochila está aberto (como `hudInert`
   // sozinho faria) desabilitava ARRASTO DE CÂMERA/JOYSTICK na área livre inteira, não só na
