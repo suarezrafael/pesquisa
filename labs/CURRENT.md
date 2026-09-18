@@ -1,12 +1,50 @@
 # Laboratório atual
 
-Em andamento: labs/lab-196-hub-minijogos/ — cria um hub físico com 2 pedestais (parkour + missão
-da ponte) que teleportam a criança até um mini-jogo já existente, com explicação + contagem
-regressiva, e permite voltar ao hub. Origem: `docs/gameplay-market-expansion-backlog.md`,
-"Lab 209 - Hub de mini-jogos e teleport por botão no chão" — próximo item depois do lab-195. Ver
-`labs/lab-196-hub-minijogos/FEATURES.md` pro objetivo/investigação prévia completos.
+Nenhum laboratório em andamento no momento — o próximo `lab start` decide o tema seguinte.
 
-Último concluído: labs/lab-195-movimento-mais-rapido/ — aumenta `WALK_SPEED`/`RUN_SPEED` do
+Último concluído: labs/lab-196-hub-minijogos/ — cria um hub físico com 2 pedestais (parkour +
+missão da ponte) que teleportam a criança até um mini-jogo já existente, com explicação curta +
+contagem regressiva, e pedestais de retorno pro hub. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 209 - Hub de mini-jogos e teleport por botão no
+chão" — próximo item depois do lab-195. **Entregue**: arco decorativo + pedestal verde (parkour,
+reaproveita `PARKOUR_ANCHOR_UP` já existente) e pedestal azul (ponte, reaproveita `bridgeUp` já
+existente) perto do spawn; interagir mostra uma explicação curta + conta regressiva 3-2-1 (overlay
+`.minigame-countdown-*` novo) antes de teleportar (`teleportAvatarTo`, padrão já testado no jogo);
+2 pedestais de retorno (magenta) teleportam de volta ao hub. Eventos novos `minigame_started`/
+`minigame_completed` (`meta: { minigameId }`) — `minigame_completed` mede "voltou ao hub depois de
+entrar", não "resolveu o desafio certo" (decisão de escopo documentada em `FEATURES.md`), agora
+exposto em `weeklyFunnel.minigameStarted`/`minigameCompleted`. **PR #79 teve 5 rodadas de review
+com 8 bugs reais encontrados e corrigidos** — 1 achado na minha própria verificação ao vivo (antes
+do review automático) e 7 do Copilot: (1) o pedestal de retorno da ponte ficava perto demais
+(offset 1.9, precisava de >2.6) do gatilho "alinhar a ponte", criando uma faixa onde o quiz de
+lógica abria em vez de voltar ao hub — corrigido pra 3.2; (2) `meta.minigameId` não era validado
+no Worker (agora `isValidMinigameId`, mesmo padrão de `cosmetic_equipped`/
+`learning_challenge_*`); (3) os eventos novos não apareciam no `weeklyFunnel`, mesmo achado exato
+já visto uma vez no lab-180; (4) a contagem regressiva não deixava o HUD `inert`, então um modal
+aberto durante ela ficava escondido atrás do overlay (`z-index` maior); (5) apertar `E` de novo
+durante a contagem reiniciava pra 3, podendo adiar o teleporte indefinidamente; (6) cada pedestal
+de retorno só checava "existe um mini-jogo ativo?" sem confirmar QUAL — dava pra entrar no parkour
+e gravar conclusão da ponte (ou vice-versa) andando até o pedestal de retorno errado; (7) a
+contagem não cancelava se um modal bloqueante (portão parental etc.) abrisse no meio dela — ainda
+teleportava e disparava o evento por trás do modal; (8) faltava a "explicação curta" do mini-jogo
+já prevista no escopo original (o prompt só mostrava o nome do jogo). `npx tsc -b` limpo; testes:
+app 213/213 (inalterado), `server-accounts` 155→157 (+2 novos); `npm run build` sem regressão.
+**Verificado ao vivo via Chrome real, repetidamente**: posição do hub sem sobreposição com Lojinha/
+casa/parkour original; fluxo completo entrada→contagem→teleport→retorno pro parkour e pra ponte,
+com os eventos corretos disparando (interceptando `window.fetch`); retorno sem ter entrado não
+finge uma conclusão falsa; retorno no pedestal ERRADO (mini-jogo trocado) não grava o id errado;
+contagem sobrevive a 3 apertos rápidos de `E` sem reiniciar; descrição do mini-jogo renderiza
+corretamente. Pendência disclosed: toque equivalente ao teclado não testado com simulação de toque
+de tela real (mesmo botão `E` mobile chama `handleInteractPress`, sem lógica nova — risco baixo);
+cancelamento da contagem por modal bloqueante avaliado por leitura de código, não reproduzido ao
+vivo. Ver `labs/lab-196-hub-minijogos/FEATURES.md` pro histórico completo rodada a rodada.
+**Merge confirmado**: PR #79 mesclada em `main` no commit `ecae7d2` (2026-09-18, merge commit,
+confirmado via `AskUserQuestion`). CI de `main` verde nos 3 workflows; deploy de produção
+confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
+
+Antes desse: labs/lab-195-movimento-mais-rapido/ — aumenta `WALK_SPEED`/`RUN_SPEED` do
 avatar (jogo sentia "devagar demais"). Origem: `docs/gameplay-market-expansion-backlog.md`,
 "Lab 208 - Movimento mais rápido e responsivo" — próximo item da ordem recomendada depois do
 lab-194. **Corrigido**: `WALK_SPEED` `7.5→9.5`, `RUN_SPEED` `11→14` (+27%, mesma proporção
