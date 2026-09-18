@@ -268,8 +268,28 @@ const WALK_SPEED = 9.5
 const RUN_SPEED = 14
 const JUMP_SPEED = 6.2 // velocidade radial (pra fora do planeta) aplicada ao pular
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
-const WALK_CYCLE_SPEED = 8.75 // rad/s de fase do ciclo de caminhada, por unidade de velocidade real
+// Achado do review automático do Copilot: `speedRatio` (onde `WALK_CYCLE_SPEED` é usado, no ciclo
+// de passada) é NORMALIZADO por `currentSpeed` — a full velocidade, o ciclo sempre avança a
+// `WALK_CYCLE_SPEED` rad/s, não importa o valor de `WALK_SPEED`. Isso significa que a fase por
+// METRO percorrido é `WALK_CYCLE_SPEED / WALK_SPEED` — um valor fixo (8.75 rad/s) com um
+// `WALK_SPEED` maior reduz essa razão, reintroduzindo o mesmo foot-sliding que o lab-194 corrigiu
+// (pernas ciclando devagar demais pra distância real percorrida). O lab-32 já tinha essa mesma
+// razão ao mudar `WALK_SPEED` 6→7.5 junto com 7→8.75 (7/6 = 8.75/7.5 ≈ 1.1667) — derivar
+// `WALK_CYCLE_SPEED` diretamente de `WALK_SPEED` (em vez de um literal solto) preserva essa razão
+// automaticamente em qualquer mudança de velocidade futura, sem depender de lembrar de recalcular.
+const WALK_CYCLE_PHASE_PER_SPEED = 7 / 6 // razão histórica (lab-32), preservada desde então
+const WALK_CYCLE_SPEED = WALK_CYCLE_PHASE_PER_SPEED * WALK_SPEED // rad/s de fase, por unidade de velocidade real
 const RUN_CYCLE_SPEED = WALK_CYCLE_SPEED * (RUN_SPEED / WALK_SPEED)
+// Achado do review automático do Copilot: `WALK_CYCLE_SPEED` também era usado (com um fator 0.7)
+// pro ciclo de passada dos NPCs errantes (`walkerNpcs`) — mas o `moveSpeed` DELES é uma velocidade
+// própria e fixa (0.12-0.20, sem nenhuma relação com `WALK_SPEED` do avatar). Derivar
+// `WALK_CYCLE_SPEED` de `WALK_SPEED` faria a perna dos NPCs acelerar (8.75→11.08 rad/s) toda vez
+// que a velocidade do AVATAR mudasse, mesmo o NPC continuando na mesma velocidade de sempre — o
+// mesmo foot-sliding que este lab está corrigindo pro avatar, reintroduzido nos NPCs por
+// acoplamento acidental. Constante própria, com o valor exato que os NPCs já tinham antes desta
+// lab (`8.75 * 0.7`, quando `WALK_CYCLE_SPEED` ainda era um literal solto) — desacopla o visual dos
+// NPCs de qualquer ajuste futuro de velocidade do avatar.
+const NPC_WALK_CYCLE_SPEED = 6.125 // rad/s de fase — histórico (era `WALK_CYCLE_SPEED * 0.7` com WALK_CYCLE_SPEED=8.75)
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
 // Relatado pelo usuário: "o boneco não dobra os joelhos pra andar". A fórmula antiga
 // (`max(0, sin(...))`) fazia o joelho dobrar só na METADE do ciclo (fase de "levantar a perna")
@@ -11871,7 +11891,7 @@ export function World3D({
           )
 
           if (moving) {
-            npc.walkPhase += dt * WALK_CYCLE_SPEED * 0.7
+            npc.walkPhase += dt * NPC_WALK_CYCLE_SPEED
             const swing = Math.sin(npc.walkPhase) * LEG_SWING_MAX
             npc.figure.legPivotL.rotation.x = swing
             npc.figure.legPivotR.rotation.x = -swing

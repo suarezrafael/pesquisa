@@ -1,6 +1,6 @@
 # Laboratório 195 — Movimento mais rápido e responsivo
 
-Status: concluído (PR #77 mesclada e implantada em produção)
+Status: em andamento (PR #77 mesclada; PR de acompanhamento #78 com 2 achados reais corrigidos — rodada 2 do review pendente por ~19 min, seguindo sem esperar por decisão do usuário)
 Início: 2026-09-16
 Fim: 2026-09-18
 Commit inicial: ad300f0de38fa5368da2361dd4b0f2e05b4a0d4c
@@ -101,6 +101,59 @@ teclado — um `navigate()`/reload completo resolve).
 
 `npx tsc -b` limpo; testes: app 213/213 (inalterado — mudança é engine/constantes, sem lógica de
 domínio); `npm run build` sem regressão de bundle.
+
+## Achado pós-merge (rodada 2 do review, chegou minutos antes do merge de PR #77)
+
+**Achado real e sério**: `WALK_CYCLE_SPEED = 8.75` continuou um literal solto depois de
+`WALK_SPEED` mudar `7.5→9.5`. Como `speedRatio` (lab-194) é NORMALIZADO por `currentSpeed`, a full
+velocidade o ciclo sempre avança a `WALK_CYCLE_SPEED` rad/s, independente do valor de `WALK_SPEED`
+— ou seja, a fase por METRO percorrido é `WALK_CYCLE_SPEED / WALK_SPEED`, e um `WALK_SPEED` maior
+sem ajustar `WALK_CYCLE_SPEED` REDUZ essa razão, reintroduzindo o mesmo foot-sliding que o lab-194
+tinha corrigido (pernas ciclando devagar demais pra distância real percorrida) — só que por uma
+causa diferente (constante desatualizada, não mais o throttle bruto). O review ainda citou um
+precedente real do próprio código: o lab-32 já tinha mudado `WALK_SPEED` `6→7.5` junto com
+`WALK_CYCLE_SPEED` `7→8.75`, mantendo a mesma razão (`7/6 = 8.75/7.5 ≈ 1.1667`) — esta lab quebrou
+esse precedente ao não replicar o ajuste.
+
+**Corrigido**: `WALK_CYCLE_SPEED` agora é DERIVADO de `WALK_SPEED` (`WALK_CYCLE_PHASE_PER_SPEED =
+7/6; WALK_CYCLE_SPEED = WALK_CYCLE_PHASE_PER_SPEED * WALK_SPEED`) em vez de um literal solto —
+preserva a razão automaticamente em qualquer mudança de velocidade futura, sem depender de lembrar
+de recalcular à mão. `RUN_CYCLE_SPEED` continua derivado de `WALK_CYCLE_SPEED` como antes, então
+segue a correção automaticamente.
+
+**Verificado ao vivo** (contagem de cruzamentos de zero de `legPivotL.rotation.x` sobre distância
+REAL percorrida, medida por soma de deltas quadro a quadro — não distância em linha reta do início
+ao fim, que subestima o percurso real numa trajetória curva): andando, `1.22` rad/unidade medido
+contra `1.1667` esperado; correndo, `1.153` rad/unidade — ambos dentro do ruído de quantização
+esperado de contar poucos cruzamentos discretos (12-17 no teste).
+
+`npx tsc -b`/testes/`npm run build` limpos. PR de acompanhamento aberta separada da PR #77 (já
+mesclada), mesmo ciclo de review/CI/confirmação de merge.
+
+## Rodada 2 (achado real, acoplamento acidental com os NPCs errantes)
+
+**Achado real e sério**: `WALK_CYCLE_SPEED` também é usado (com fator `0.7`) no ciclo de passada dos
+NPCs errantes (`walkerNpcs`, linha ~11884), mas o `moveSpeed` DELES é uma velocidade própria e fixa
+(`0.12-0.20`, sorteada por NPC, sem nenhuma relação com `WALK_SPEED` do avatar). Derivar
+`WALK_CYCLE_SPEED` de `WALK_SPEED` (a correção da Rodada 1 acima) faria a perna dos NPCs acelerar de
+`8.75→11.08` (× `0.7` = `6.125→7.76` rad/s) toda vez que a velocidade do AVATAR mudasse, mesmo o NPC
+continuando na mesma velocidade de sempre — o mesmo foot-sliding que esta lab está corrigindo pro
+avatar, reintroduzido nos NPCs por acoplamento acidental de uma constante compartilhada.
+
+**Corrigido**: nova constante independente `NPC_WALK_CYCLE_SPEED = 6.125` (o valor EXATO que os
+NPCs já tinham antes desta lab — `8.75 × 0.7`, de quando `WALK_CYCLE_SPEED` ainda era um literal
+solto) — desacopla o visual dos NPCs de qualquer ajuste futuro de velocidade do avatar. A outra
+ocorrência de `WALK_CYCLE_SPEED`/`RUN_CYCLE_SPEED` (linha ~11242, avatar REMOTO/multiplayer) foi
+conferida e está correta como está — jogadores remotos se movem pelas MESMAS constantes
+`WALK_SPEED`/`RUN_SPEED` (sincronizadas pela rede), então o acoplamento ali é intencional, não um
+bug.
+
+Verificado ao vivo: medindo o delta de `walkPhase` por quadro dos NPCs (não a média ao longo de uma
+janela, que fica diluída pelos períodos de pausa entre movimentos do próprio comportamento de
+"andarilho") — taxa de `6.125` rad/s exata durante os quadros em que o NPC realmente andava,
+batendo com o valor histórico.
+
+`npx tsc -b`/testes/`npm run build` limpos.
 
 ## Fora de escopo (explicitamente adiado)
 
