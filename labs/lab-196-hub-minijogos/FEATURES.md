@@ -232,6 +232,27 @@ Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (i
 `npm run build` sem erros (`server-accounts` não mudou nesta rodada). Re-verificado ao vivo no
 Chrome real (fluxo normal da contagem sem regressão, ver item 1 acima).
 
+## Review automático — PR #79, rodada 4
+
+Os 2 achados da rodada 3 foram confirmados corrigidos ("Resolved since last review"). 1 achado novo
+(baixa severidade), que na verdade aponta pra uma lacuna real do escopo já planejado desde o
+início deste lab:
+
+1. **Prompt do mini-jogo não mostra a "explicação curta" prometida (real, corrigido)** —
+   `Funcionalidades planejadas` (seção acima) já dizia desde o início "mostra uma explicação curta
+   do mini-jogo, dispara uma contagem regressiva" — a implementação só mostrava o nome do
+   mini-jogo ("🏃 Vamos jogar Parkour!") e a contagem, sem nenhuma frase explicando o que fazer.
+   Corrigido: `minigamePrompt` ganhou um campo `description` (`World3D.tsx`), preenchido nos dois
+   pontos de entrada com uma frase curta ("Pule de plataforma em plataforma até o topo!" pro
+   parkour, "Responda a pergunta de lógica pra alinhar a ponte!" pra ponte), renderizada entre o
+   título e o número da contagem (`.minigame-countdown-description`, `index.css`).
+   **Verificado ao vivo**: entrou pelo pedestal da ponte — overlay mostrou "🌉 Vamos jogar a Ponte!
+   / Responda a pergunta de lógica pra alinhar a ponte! / 2" corretamente.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 (inalterado);
+`npm run build` sem erros (`server-accounts` não mudou nesta rodada). Re-verificado ao vivo no
+Chrome real (descrição renderizando corretamente, ver item 1 acima).
+
 ## Fora de escopo (explicitamente adiado)
 
 - Mais de 2 pedestais/mini-jogos nesta fatia (a "Prédio dos Enigmas" — quiz surpresa repetível — e

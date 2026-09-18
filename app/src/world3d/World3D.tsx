@@ -2649,6 +2649,7 @@ export function World3D({
     id: 'parkour1' | 'ponte-logica'
     emoji: string
     label: string
+    description: string
     secondsLeft: number
   } | null>(null)
   const teleportToMinigameRef = useRef<(id: 'parkour1' | 'ponte-logica') => void>(() => {})
@@ -4183,13 +4184,25 @@ export function World3D({
         // andando perto do parkour) não deveria contar como uma "conclusão".
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, hubParkourPedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
           if (!minigamePromptRef.current) {
-            setMinigamePrompt({ id: 'parkour1', emoji: '🏃', label: 'Parkour', secondsLeft: 3 })
+            setMinigamePrompt({
+              id: 'parkour1',
+              emoji: '🏃',
+              label: 'Parkour',
+              description: 'Pule de plataforma em plataforma até o topo!',
+              secondsLeft: 3,
+            })
           }
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, hubBridgePedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
           if (!minigamePromptRef.current) {
-            setMinigamePrompt({ id: 'ponte-logica', emoji: '🌉', label: 'a Ponte', secondsLeft: 3 })
+            setMinigamePrompt({
+              id: 'ponte-logica',
+              emoji: '🌉',
+              label: 'a Ponte',
+              description: 'Responda a pergunta de lógica pra alinhar a ponte!',
+              secondsLeft: 3,
+            })
           }
           return
         }
@@ -13268,6 +13281,7 @@ export function World3D({
           <p className="minigame-countdown-title">
             {minigamePrompt.emoji} Vamos jogar {minigamePrompt.label}!
           </p>
+          <p className="minigame-countdown-description">{minigamePrompt.description}</p>
           <p className="minigame-countdown-number">{minigamePrompt.secondsLeft > 0 ? minigamePrompt.secondsLeft : 'Vai!'}</p>
         </div>
       )}

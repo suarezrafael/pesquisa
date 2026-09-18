@@ -921,6 +921,12 @@ a.nickname-generate-btn {
   margin: 0 0 0.4rem;
 }
 
+.minigame-countdown-description {
+  font-size: clamp(0.75rem, 2.2vmin, 0.95rem);
+  margin: 0 0 0.6rem;
+  opacity: 0.85;
+}
+
 .minigame-countdown-number {
   font-weight: 800;
   font-size: clamp(2rem, 8vmin, 3.5rem);
