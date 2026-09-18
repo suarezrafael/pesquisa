@@ -257,11 +257,18 @@ const GRAVITY = 16
 // acelerado). `*_CYCLE_SPEED` sobe na mesma proporção da velocidade de deslocamento em cada
 // modo, pra pernas/braços continuarem batendo no ritmo certo do passo (senão as pernas
 // "escorregam" — giram mais devagar que o deslocamento de verdade).
-const WALK_SPEED = 7.5
-const RUN_SPEED = 11
+// Backlog "Lab 208 - Movimento mais rápido e responsivo" (jogo sente devagar demais): +27%,
+// mesma proporção corrida/caminhada de antes (11/7.5 ≈ 14/9.5). Verificado ao vivo que não quebra
+// o parkour de degraus existente (o próprio comentário de `GRAVITY`/`JUMP_SPEED` abaixo já mostrava
+// que mais velocidade horizontal só aumenta a folga do alcance de pulo, nunca reduz). Achado do
+// review automático do Copilot: tunneling através de obstáculo fino NÃO foi testado ao vivo, só
+// avaliado por raciocínio (aumento de só ~27%, não uma mudança de ordem de grandeza) — não afirmar
+// aqui que foi confirmado; ver `FEATURES.md` pra limitação completa.
+const WALK_SPEED = 9.5
+const RUN_SPEED = 14
 const JUMP_SPEED = 6.2 // velocidade radial (pra fora do planeta) aplicada ao pular
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
-const WALK_CYCLE_SPEED = 8.75 // rad/s de fase do ciclo de caminhada, por unidade de throttle
+const WALK_CYCLE_SPEED = 8.75 // rad/s de fase do ciclo de caminhada, por unidade de velocidade real
 const RUN_CYCLE_SPEED = WALK_CYCLE_SPEED * (RUN_SPEED / WALK_SPEED)
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
 // Relatado pelo usuário: "o boneco não dobra os joelhos pra andar". A fórmula antiga
@@ -11091,10 +11098,14 @@ export function World3D({
             // diferença.
             const pathObstructed =
               !lastCameraClipWasObstructed && !insideHouseInterior && isPathObstructed(camera.position, desiredCamPos, body)
+            // Backlog "Lab 208": 0.08 → 0.10 junto com o aumento de WALK_SPEED/RUN_SPEED — o
+            // atraso de posição em regime permanente escala com velocidade/fator (≈ v/fator), então
+            // manter 0.08 com o avatar ~27% mais rápido deixaria a câmera proporcionalmente mais
+            // atrasada; +25% no fator mantém a distância de atraso perto da de antes.
             camera.position =
               lastCameraClipWasObstructed || pathObstructed
                 ? desiredCamPos
-                : Vector3.Lerp(camera.position, desiredCamPos, 0.08)
+                : Vector3.Lerp(camera.position, desiredCamPos, 0.1)
             camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
             camera.setTarget(pos)
           }
