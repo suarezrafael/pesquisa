@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Em andamento: labs/lab-196-hub-minijogos/ — cria um hub físico com 2 pedestais (parkour + missão
+da ponte) que teleportam a criança até um mini-jogo já existente, com explicação + contagem
+regressiva, e permite voltar ao hub. Origem: `docs/gameplay-market-expansion-backlog.md`,
+"Lab 209 - Hub de mini-jogos e teleport por botão no chão" — próximo item depois do lab-195. Ver
+`labs/lab-196-hub-minijogos/FEATURES.md` pro objetivo/investigação prévia completos.
+
 Último concluído: labs/lab-195-movimento-mais-rapido/ — aumenta `WALK_SPEED`/`RUN_SPEED` do
 avatar (jogo sentia "devagar demais"). Origem: `docs/gameplay-market-expansion-backlog.md`,
 "Lab 208 - Movimento mais rápido e responsivo" — próximo item da ordem recomendada depois do
