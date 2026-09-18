@@ -1,6 +1,13 @@
 # Laboratório atual
 
-Nenhum laboratório em andamento no momento — o próximo `lab start` decide o tema seguinte.
+Em andamento: labs/lab-197-centro-jogos-educativo/ — cria um prédio/saguão de jogos no planeta
+principal, com 4 placas/portais (Contar/Soletrar/Memória/Lógica) — reaproveita a arquitetura de
+interior/teleporte da casa do jogador (sala isolada própria, não a `HOUSE_INTERIOR_CENTER`
+pessoal). Só o portal Lógica tem mini-jogo de verdade nesta fatia (liga ao quiz da ponte já
+existente); os outros 3 aparecem bloqueados/"em breve" até os labs 213-216 construírem o template
+de arena e os mini-jogos de verdade. Origem: `docs/gameplay-market-expansion-backlog.md`,
+"Lab 212 - Centro de jogos educativo com saguão e portais" — próximo item depois do lab-196. Ver
+`labs/lab-197-centro-jogos-educativo/FEATURES.md` pro objetivo/investigação prévia completos.
 
 Último concluído: labs/lab-196-hub-minijogos/ — cria um hub físico com 2 pedestais (parkour +
 missão da ponte) que teleportam a criança até um mini-jogo já existente, com explicação curta +
