@@ -130,6 +130,31 @@ esperado de contar poucos cruzamentos discretos (12-17 no teste).
 `npx tsc -b`/testes/`npm run build` limpos. PR de acompanhamento aberta separada da PR #77 (já
 mesclada), mesmo ciclo de review/CI/confirmação de merge.
 
+## Rodada 2 (achado real, acoplamento acidental com os NPCs errantes)
+
+**Achado real e sério**: `WALK_CYCLE_SPEED` também é usado (com fator `0.7`) no ciclo de passada dos
+NPCs errantes (`walkerNpcs`, linha ~11884), mas o `moveSpeed` DELES é uma velocidade própria e fixa
+(`0.12-0.20`, sorteada por NPC, sem nenhuma relação com `WALK_SPEED` do avatar). Derivar
+`WALK_CYCLE_SPEED` de `WALK_SPEED` (a correção da Rodada 1 acima) faria a perna dos NPCs acelerar de
+`8.75→11.08` (× `0.7` = `6.125→7.76` rad/s) toda vez que a velocidade do AVATAR mudasse, mesmo o NPC
+continuando na mesma velocidade de sempre — o mesmo foot-sliding que esta lab está corrigindo pro
+avatar, reintroduzido nos NPCs por acoplamento acidental de uma constante compartilhada.
+
+**Corrigido**: nova constante independente `NPC_WALK_CYCLE_SPEED = 6.125` (o valor EXATO que os
+NPCs já tinham antes desta lab — `8.75 × 0.7`, de quando `WALK_CYCLE_SPEED` ainda era um literal
+solto) — desacopla o visual dos NPCs de qualquer ajuste futuro de velocidade do avatar. A outra
+ocorrência de `WALK_CYCLE_SPEED`/`RUN_CYCLE_SPEED` (linha ~11242, avatar REMOTO/multiplayer) foi
+conferida e está correta como está — jogadores remotos se movem pelas MESMAS constantes
+`WALK_SPEED`/`RUN_SPEED` (sincronizadas pela rede), então o acoplamento ali é intencional, não um
+bug.
+
+Verificado ao vivo: medindo o delta de `walkPhase` por quadro dos NPCs (não a média ao longo de uma
+janela, que fica diluída pelos períodos de pausa entre movimentos do próprio comportamento de
+"andarilho") — taxa de `6.125` rad/s exata durante os quadros em que o NPC realmente andava,
+batendo com o valor histórico.
+
+`npx tsc -b`/testes/`npm run build` limpos.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Vender velocidade, booster pago, vantagem premium (regra inegociável do projeto — nunca gating
