@@ -1,14 +1,41 @@
 # Laboratório atual
 
-Em andamento: labs/lab-203-parkour-arcade/ — melhorar o `parkour1` já existente (argolas pra
-atravessar, checkpoints sem punição por queda, cronômetro informativo, impulso temporário só dentro
-da arena, troféu de conclusão no álbum de conquistas). Decisão confirmada com o usuário via
-`AskUserQuestion`: só o `parkour1` (não constrói pedestais novos pra `parkour2`/`parkour3`, hoje
-inalcançáveis). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 210 - Parkour arcade com
-argolas, tesouros e power-ups justos" — próximo item depois do lab-202 (Lab 217). Ver
-`labs/lab-203-parkour-arcade/FEATURES.md` pra detalhe da investigação e do escopo.
+Último concluído: labs/lab-203-parkour-arcade/ — melhora o `parkour1` já existente (argolas pra
+atravessar entre cada par de plataformas consecutivas, 6 no total; checkpoints — a plataforma mais
+alta já pisada na corrida, nunca regride — com respawn sem punição ao cair, sem perder moeda/argola
+já coletada; cronômetro informativo, nunca afeta dificuldade/recompensa; impulso temporário de
+velocidade/pulo restrito à arena, condicionado a `activeMinigameId === 'parkour1'` checado
+continuamente, nunca vaza pro mundo aberto; troféu de domínio `BADGE_PARKOUR_MASTER`, concedido só
+com `ringsCollected === totalRings`, aparece de graça no álbum de conquistas já existente sem UI
+nova). Decisão confirmada com o usuário via `AskUserQuestion`: só o `parkour1` (não constrói
+pedestais novos pra `parkour2`/`parkour3`, hoje inalcançáveis). Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 210 - Parkour arcade com argolas, tesouros e
+power-ups justos" — próximo item depois do lab-202 (Lab 217). Eventos novos:
+`parkour_course_completed` (argolas coletadas/total/tempo/troféu) e `parkour_checkpoint_respawn`
+(índice do checkpoint) — cobrem "conclusões de parkour"/"tentativas por sessão/retry sem
+abandono"/"troféus conquistados" do backlog sem mudar a semântica já existente de
+`minigame_completed('parkour1')`. **PR #86 teve 4 rodadas de review com 6 bugs reais, todos do
+Copilot**: (1) `parkour_course_completed` não validava `ringsCollected <= totalRings` — corrigido no
+Worker; (2) `parkourStatusMessage` podia continuar visível no hub depois de sair do mini-jogo —
+corrigido limpando a mensagem no pedestal de retorno; (3) o gate do troféu usava `>=` em vez de
+igualdade estrita (`totalRings === 0` concederia o troféu sem nenhuma argola real) — corrigido; (4)
+2 `window.setTimeout` independentes (impulso 3s, troféu 4s) podiam se sobrepor e truncar a mensagem
+mais recente — corrigido com um handle único rastreado; (5) os 2 eventos novos ficaram de fora de
+`docs/event-catalog.md` — corrigido; (6) um comentário atribuía incorretamente a chamada de
+`parkourCourseCompleted` a `World3D.tsx` (é `App.tsx`, só quando todas as argolas foram coletadas) —
+corrigido o texto. `npx tsc -b` limpo; testes: app 257/257 (+3 de `progression.test.ts`),
+`server-accounts` 168/168 (+4 novos); `npm run build` sem regressão. **Sem verificação ao vivo — 6ª
+lab seguida**: o Chrome desta sessão travou de novo em `document.hidden === true`, confirmado com
+uma aba nova — compensado com verificação matemática manual da física de queda (detalhe em
+`FEATURES.md`), que confirmou a margem de queda (`-1.3`) nunca dispara por engano no spawn nem no
+pico de um pulo normal. Risco remanescente registrado com honestidade: posição exata de
+argolas/impulso não confirmada ao vivo. **Merge confirmado**: PR #86 mesclada (squash) em `main` no
+commit `df8070b` (2026-09-19, confirmado via `AskUserQuestion`). CI de `main` verde nos 3 workflows;
+deploy de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-202-progressao-album-recompensas/ — progresso por categoria
+Antes desse: labs/lab-202-progressao-album-recompensas/ — progresso por categoria
 (Contar/Soletrar/Memória/Lógica; `logica` conta o desafio da ponte pelos 2 caminhos que já
 existiam — portal do centro de jogos OU local físico original, lab-180 — mesmo `kind: 'bridge'`
 por baixo desde o lab-197, mesma habilidade praticada), troféus 3D visuais nos 4 portais do saguão
