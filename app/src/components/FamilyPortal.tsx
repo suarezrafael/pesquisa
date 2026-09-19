@@ -770,10 +770,16 @@ function ChildProgressPanel() {
   // Backlog "Lab 217" — mesmo padrão/trigger de `trackWeeklyReportPreviewViewed`
   // (`FamilyValueProp` acima): na montagem do componente que de fato mostra o resumo, não no
   // clique. Só dispara com um perfil de verdade pra ver (evita contar "visualizações" vazias do
-  // estado "nenhum progresso encontrado" logo abaixo).
+  // estado "nenhum progresso encontrado" logo abaixo). Achado do review automático do Copilot:
+  // `loadProfile()` devolve um objeto NOVO a cada render (mesmo com o mesmo perfil salvo) — usar
+  // `profile` direto na dependência reemitia o evento a cada re-render do `Dashboard` (ex.: ao
+  // atualizar `status` da assinatura), não só na montagem. `Boolean(profile)` é estável entre
+  // re-renders com o mesmo perfil, disparando só na transição real de "sem perfil" pra "com
+  // perfil" (1x por montagem de verdade).
+  const hasProfile = Boolean(profile)
   useEffect(() => {
-    if (profile) trackGameCenterProgressViewed()
-  }, [profile])
+    if (hasProfile) trackGameCenterProgressViewed()
+  }, [hasProfile])
 
   if (!profile) {
     return (

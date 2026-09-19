@@ -129,8 +129,6 @@ import {
   trackGameCenterReturned,
   trackMinigameRetried,
   trackMinigameExited,
-  trackMinigameTrophyEarned,
-  trackGameCenterWeeklyQuestCompleted,
 } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { GameCenterCategory, GameCenterTrophyTier, Profile, Progress, Quest } from '../types'
@@ -10302,14 +10300,17 @@ export function World3D({
       // atualiza os troféus visuais na hora (sem esperar a próxima entrada no saguão, ver
       // comentário em `onGameCenterMinigameCompleted` na declaração de `World3DProps`) e devolve o
       // texto de status já com o troféu/bônus anexado, se algum foi conquistado nesta vitória.
+      // Achado do review automático do Copilot: `trackMinigameTrophyEarned`/
+      // `trackGameCenterWeeklyQuestCompleted` NÃO disparam aqui — `App.tsx`
+      // (`handleGameCenterMinigameCompleted`) já dispara os dois antes de devolver o resultado;
+      // disparar de novo aqui duplicava os 2 eventos em cada troféu/missão semanal conquistados
+      // por estas 3 arenas (a lógica, tratada à parte em `App.tsx`, nunca teve essa duplicação).
       function handleGameCenterMinigameReward(
         category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>,
         baseStatusText: string,
       ): string {
         const { newTrophy, weeklyQuestRewardGranted, newCompletions } = onGameCenterMinigameCompletedRef.current(category)
         updateGameCenterTrophyVisual(category, newCompletions)
-        if (newTrophy) trackMinigameTrophyEarned(category, newTrophy)
-        if (weeklyQuestRewardGranted) trackGameCenterWeeklyQuestCompleted(new Date().toISOString())
         let text = baseStatusText
         if (newTrophy) {
           const tierLabel = newTrophy === 'ouro' ? '🏆 Ouro' : newTrophy === 'prata' ? '🥈 Prata' : '🥉 Bronze'

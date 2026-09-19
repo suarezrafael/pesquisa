@@ -564,10 +564,18 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       // não documentada sobreviver (mesmo raciocínio de `cosmetic_equipped`/`game_portal_selected`
       // acima), então restringe à única chave documentada.
       safeMeta = isPlausibleSessionDuration(metaObj.durationMs) ? { durationMs: metaObj.durationMs } : null
-    } else if (type === 'game_center_entered' || type === 'game_center_returned') {
+    } else if (
+      type === 'game_center_entered' ||
+      type === 'game_center_returned' ||
+      type === 'game_center_weekly_quest_completed' ||
+      type === 'game_center_progress_viewed'
+    ) {
       // mesmo raciocínio de `camera_recenter_used`/`weekly_event_objective_completed` abaixo:
-      // eventos novos deste lab, sem campo de `meta` documentado — não herdam a tolerância de
-      // `meta` livre dos eventos legados.
+      // eventos novos, sem campo de `meta` documentado — não herdam a tolerância de `meta` livre
+      // dos eventos legados. Achado do review automático do Copilot: os 2 eventos novos do Lab 217
+      // sem `meta` (`game_center_weekly_quest_completed`/`game_center_progress_viewed`) tinham
+      // ficado de fora deste branch, caindo no `else` genérico — qualquer objeto que o client
+      // mandasse era persistido sem restrição nenhuma.
       safeMeta = null
     } else if (type === 'camera_recenter_used') {
       // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`

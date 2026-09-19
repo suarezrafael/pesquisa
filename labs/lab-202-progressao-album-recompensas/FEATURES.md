@@ -126,6 +126,32 @@ se fica visualmente equilibrado ou se choca com o teto da sala. Reduzido (não e
 a malha pequena (0.32 de altura) e por cima do já existente `plaqueBoard` (que já tem margem
 vertical comprovada até o teto).
 
+## Rodada de review — Copilot (PR #85)
+
+3 achados, todos confirmados contra o código real e corrigidos:
+
+1. **Médio — 2 eventos novos sem `meta` caíam no branch genérico de sanitização**:
+   `game_center_weekly_quest_completed`/`game_center_progress_viewed` não estavam listados junto de
+   `game_center_entered`/`game_center_returned`/`camera_recenter_used` (`index.ts`) — caíam no
+   `else { safeMeta = metaObj }` genérico, gravando QUALQUER objeto que o client mandasse, sem
+   restrição nenhuma. Corrigido incluindo os 2 no mesmo branch `safeMeta = null`.
+2. **Médio — `game_center_progress_viewed` podia disparar de novo em re-renders do `Dashboard`**:
+   `loadProfile()` devolve um objeto NOVO a cada chamada (mesmo com o mesmo perfil salvo) — usar
+   `profile` direto como dependência do `useEffect` reemitia o evento a cada re-render (ex.:
+   `Dashboard` atualizando o status da assinatura), não só na montagem real, contrariando o próprio
+   contrato "1x por montagem" documentado no evento. Corrigido usando `Boolean(profile)` (primitivo
+   estável) como dependência.
+3. **Médio — `minigame_trophy_earned`/`game_center_weekly_quest_completed` disparavam 2x pras 3
+   arenas (memória/contar/soletrar)**: `App.tsx` (`handleGameCenterMinigameCompleted`) já dispara
+   os dois eventos antes de devolver o resultado pra `World3D.tsx` — mas `handleGameCenterMinigameReward`
+   disparava os MESMOS eventos de novo, com um `new Date().toISOString()` PRÓPRIO (timestamp
+   ligeiramente diferente do usado por `App.tsx`). Corrigido removendo a duplicata em
+   `World3D.tsx` — a lógica (tratada só em `App.tsx`) nunca teve essa duplicação, só as 3 arenas
+   que passam pelo callback duplo (crédito de progresso + atualização visual).
+
+`npx tsc -b`, `npm run test -- --run` (app 254/254, `server-accounts` 164/164) e `npm run build`
+continuam limpos depois das três correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Multiplayer, ranking global agressivo, recompensa paga (excluídos pelo próprio item do backlog).
