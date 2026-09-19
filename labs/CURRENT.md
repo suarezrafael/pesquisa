@@ -1,13 +1,37 @@
 # Laboratório atual
 
-Em andamento: labs/lab-204-trofeus-na-casa/ — fecha a única peça genuinamente aberta do backlog
-"Lab 211 - Troféus e sala/álbum de mini-jogos" (as outras duas já estavam satisfeitas pelos labs
-202/203): um pedestal de troféus decorativo dentro da casa pessoal, que abre o catálogo de
-conquistas já existente ao interagir. Decisão confirmada com o usuário via `AskUserQuestion`: fazer
-essa peça pequena em vez de pular pro Lab 191 (auditoria de FPS, bloqueado por depender de medição
-ao vivo indisponível nesta sessão). Ver `labs/lab-204-trofeus-na-casa/FEATURES.md` pra detalhe.
+Último concluído: labs/lab-204-trofeus-na-casa/ — fecha a única peça genuinamente aberta do backlog
+"Lab 211 - Troféus e sala/álbum de mini-jogos" (as outras duas — troféus por mini-jogo/parkour e
+exibição no álbum de conquistas — já estavam satisfeitas pelos labs 202/203): um pedestal de
+troféus fixo (não é mobília comprável, sempre presente) dentro da casa pessoal, num canto oposto ao
+balcão/porta, fora do anel de mobília comprada. Interagir abre o catálogo de conquistas já existente
+(`onOpenAchievementsRef`, mesmo painel/dados da carteira de estudos no mundo aberto) — nenhuma UI
+nova, nenhuma mudança em `App.tsx`. Bloqueado durante visita à casa de um amigo (mesmo raciocínio do
+balcão: mostraria as conquistas do visitante, não do dono da casa). Decorativo (2 taças fixas, não
+reflete contagem/tier real). Decisão confirmada com o usuário via `AskUserQuestion`: fazer essa peça
+pequena em vez de pular pro Lab 191 (auditoria de FPS, bloqueado por depender de medição ao vivo
+indisponível nesta sessão). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 211 - Troféus
+e sala/álbum de mini-jogos" — próximo item depois do lab-203 (Lab 210). **PR #87 teve 3 rodadas de
+review com 2 bugs reais, ambos do Copilot**: (1) o pedestal novo não entrava na validação de
+posicionamento manual de mobília (lab-136) — uma cama/mesa podia ser confirmada bem em cima dele
+apesar da posição inicial ter sido escolhida pra não colidir com nada — corrigido adicionando
+`HOUSE_TROPHY_SHELF_COLLISION` à lista de obstáculos fixos (`isCurrentFurniturePositionValid`); (2)
+essa validação só rodava num ARRASTE novo — uma posição já SALVA (de antes do pedestal existir, ou
+recebida num snapshot de visita) continuava sendo aplicada direto por `refreshHouseFurnitureVisuals`
+sem checagem nenhuma — corrigido validando a posição salva contra os obstáculos fixos antes de
+aplicá-la (cai no layout padrão em anel na renderização atual se inválida, sem migrar o dado
+persistido — decisão deliberada, documentada em `FEATURES.md`). `npx tsc -b` limpo; testes: app
+257/257 (sem mudança — só construção de cena/gatilho de proximidade, nenhuma lógica de domínio
+nova); `npm run build` sem regressão. **Sem verificação ao vivo — 7ª lab seguida**: o Chrome desta
+sessão travou de novo em `document.hidden === true`, confirmado com uma aba nova — posicionamento
+verificado só por geometria (fora do anel de mobília, longe de porta/spawn). **Merge confirmado**:
+PR #87 mesclada (squash) em `main` no commit `98348eb` (2026-09-19, confirmado via
+`AskUserQuestion`). CI de `main` verde; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-203-parkour-arcade/ — melhora o `parkour1` já existente (argolas pra
+Antes desse: labs/lab-203-parkour-arcade/ — melhora o `parkour1` já existente (argolas pra
 atravessar entre cada par de plataformas consecutivas, 6 no total; checkpoints — a plataforma mais
 alta já pisada na corrida, nunca regride — com respawn sem punição ao cair, sem perder moeda/argola
 já coletada; cronômetro informativo, nunca afeta dificuldade/recompensa; impulso temporário de
