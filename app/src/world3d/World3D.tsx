@@ -9849,6 +9849,11 @@ export function World3D({
             arenaCountingState = createCountingGame()
             setCountingTargetsVisible(true)
             renderCountingRound()
+            // Sem cronômetro (`timeLimitS: null`), nada mais reescreve o texto de status depois do
+            // fim do countdown (achado do review do Copilot: sem isto, o texto ficava congelado em
+            // "🔢 Contar — 0", o último quadro da própria contagem regressiva, até a criança
+            // acertar/errar a primeira rodada).
+            if (countingStatusLabel) countingStatusLabel.text = '🔢 Conte as estrelas e escolha a placa certa!'
           },
           resetState: () => {
             arenaCountingState = null
@@ -13457,8 +13462,13 @@ export function World3D({
             hintLabels[i].alpha = Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE ? 1 : 0
           }
         } else {
-          for (const label of gcMemoryCardHintLabel) label.alpha = 0
-          for (const label of gcCountingOptionHintLabel) label.alpha = 0
+          // Achado do review do Copilot: uma lista fixa de arrays aqui (uma por arena) quebra a
+          // promessa do template genérico — um mini-jogo novo exigiria lembrar de editar ESTE bloco
+          // também, fácil de esquecer (vazamento visual de dica presa). Percorre todas as arenas
+          // registradas em `arenaTargetHintLabels`, sem precisar conhecer os arrays específicos.
+          for (const hintLabels of Object.values(arenaTargetHintLabels)) {
+            for (const label of hintLabels ?? []) label.alpha = 0
+          }
         }
         // Mensagem de status/resultado da arena ATIVA (contagem, cronômetro, vitória/derrota) —
         // some se a criança se afastar da área da arena, em vez de ficar flutuando pra sempre

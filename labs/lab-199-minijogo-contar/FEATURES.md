@@ -124,6 +124,26 @@ um risco que o próprio design introduziu (não existia no lab-198, que só tinh
   mesma correspondência posição-na-fileira ↔ posição-no-array de opções, confirmado lendo os dois
   lados lado a lado.
 
+## Rodada de review — Copilot (PR #82)
+
+2 achados, ambos confirmados contra o código real e corrigidos:
+
+1. **Médio — status da arena Contar ficava congelado em "🔢 Contar — 0"**: sem cronômetro
+   (`timeLimitS: null`), nada reescrevia o texto do `statusLabel` depois do fim do countdown — na
+   memória isso nunca aparecia porque `tickArenaTimer` sobrescreve o texto 1s depois (com
+   "⏱️ 44s"), mas Contar não tem `tickArenaTimer` rodando. Corrigido: `beginAttempt` de Contar agora
+   define um texto de instrução ("🔢 Conte as estrelas e escolha a placa certa!") assim que a
+   tentativa começa — no lugar certo, já que é comportamento específico de arenas sem cronômetro,
+   não do controlador genérico.
+2. **Baixo — limpeza de hint labels ainda com uma lista fixa por arena**: o `else` que esconde as
+   dicas "Pressione E" fora do estado `playing` percorria `gcMemoryCardHintLabel`/
+   `gcCountingOptionHintLabel` na mão — quebra a promessa do template genérico (um mini-jogo novo
+   exigiria lembrar de editar esse bloco também). Corrigido percorrendo `arenaTargetHintLabels`
+   (já populado por cada arena) genericamente, sem conhecer os arrays específicos.
+
+`npx tsc -b`, `npm run test -- --run` (228/228) e `npm run build` continuam limpos depois das duas
+correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Comparar "mais/menos/igual" e sequências numéricas simples (v1 cobre só "contar e escolher o
