@@ -383,8 +383,10 @@ export function useProgress() {
     return result
   }
 
-  // Troféu de domínio do parkour (backlog "Lab 210") — chamado por `World3D.tsx` quando o jogador alcança o
-  // topo do percurso com todas as argolas coletadas. Mesmo formato funcional de
+  // Troféu de domínio do parkour (backlog "Lab 210") — chamado por `App.tsx`
+  // (`handleParkourCourseCompleted`) só quando o gate "todas as argolas" é satisfeito;
+  // `World3D.tsx` só REPORTA a conclusão do percurso (com ou sem todas as argolas), nunca chama
+  // isto diretamente. Mesmo formato funcional de
   // `coopChallengeCompleted` acima: `applyParkourCourseCompleted` só mexe em `badges`, nunca em
   // moeda/XP, então não tem o risco de composição descrito no comentário de
   // `weeklyEventObjectiveProgress` (que existe só por causa de MOEDA concedida em duas chamadas

@@ -154,6 +154,27 @@ totalRings` — na prática nunca diverge de `===` (o jogo nunca deixa `ringsCol
 sem nenhuma argola real. Corrigido com igualdade estrita + exigir `totalRings > 0`, deixando a regra
 explícita. `npx tsc -b`/testes/`build` seguem limpos.
 
+**Rodada 3**: "Findings: None" pra código novo, 3 achados sob "Previously missed" (código que não
+mudou desde a rodada anterior, reavaliado de novo), todos confirmados e corrigidos:
+
+1. **Médio — timeouts concorrentes podiam truncar a mensagem de status**: os 2 `window.setTimeout`
+   independentes (impulso 3s, troféu 4s) que limpam `parkourStatusMessage` podiam se sobrepor — se
+   o troféu fosse conquistado dentro da janela do timeout do impulso, o timeout do impulso limpava
+   a mensagem do troféu antes da hora (ou vice-versa). Corrigido com um handle único rastreado
+   (`parkourStatusMessageTimeout`) e uma função `showParkourStatusMessage(text, durationMs)` que
+   cancela qualquer timeout pendente antes de agendar o novo — só a mensagem MAIS RECENTE controla
+   quando se limpa.
+2. **Baixo — eventos novos ausentes do catálogo central**: `parkour_course_completed`/
+   `parkour_checkpoint_respawn` não tinham entrada em `docs/event-catalog.md`. Corrigido com 2
+   linhas na tabela + um parágrafo narrativo (mesmo formato das outras labs).
+3. **Baixo — comentário atribuía incorretamente a chamada a `World3D.tsx`**: o comentário de
+   `parkourCourseCompleted` (`useProgress.ts`) dizia "chamado por `World3D.tsx`", mas quem chama é
+   `App.tsx` (`handleParkourCourseCompleted`), só quando o gate "todas as argolas" é satisfeito —
+   `World3D.tsx` só REPORTA a conclusão. Corrigido o texto do comentário.
+
+`npx tsc -b`, `npm run test -- --run` (app 257/257) e `npm run build` seguem limpos depois das 3
+correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - `parkour2`/`parkour3` (escolha explícita do usuário nesta lab).

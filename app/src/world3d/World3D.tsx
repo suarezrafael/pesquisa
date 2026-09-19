@@ -3751,6 +3751,21 @@ export function World3D({
     let parkourBoostActiveUntil = 0
     let parkourTopReachedThisRun = false
     let parkourLastHudSecond = -1
+    // Achado do review automático do Copilot: dois `window.setTimeout` independentes (impulso 3s,
+    // troféu 4s) podiam se sobrepor — se o troféu fosse conquistado dentro da janela do timeout do
+    // impulso, o timeout do impulso limpava a mensagem do troféu antes da hora. `parkourStatusMessageTimeout`
+    // guarda o handle PENDENTE (se houver); `showParkourStatusMessage` cancela qualquer timeout
+    // anterior antes de agendar o novo, garantindo que só a mensagem MAIS RECENTE controla quando
+    // limpar.
+    let parkourStatusMessageTimeout: ReturnType<typeof window.setTimeout> | null = null
+    function showParkourStatusMessage(text: string, durationMs: number) {
+      if (parkourStatusMessageTimeout !== null) window.clearTimeout(parkourStatusMessageTimeout)
+      setParkourStatusMessage(text)
+      parkourStatusMessageTimeout = window.setTimeout(() => {
+        parkourStatusMessageTimeout = null
+        setParkourStatusMessage(null)
+      }, durationMs)
+    }
     const parkourPlatformPositions: Vector3[] = []
     const parkourRings: { mesh: Mesh; worldPos: Vector3; collected: boolean }[] = []
     const houseFurnitureNodes: Record<string, TransformNode> = {}
@@ -4546,7 +4561,13 @@ export function World3D({
             // Achado do review automático do Copilot: sem isto, uma mensagem de status disparada
             // pouco antes de sair (impulso coletado, troféu conquistado) continuava visível no HUB
             // até o próprio `setTimeout` de 3-4s expirar — vazando feedback do mini-jogo pra fora
-            // da arena.
+            // da arena. Cancela o timeout PENDENTE (se houver) — sem isto, ele ainda dispararia
+            // mais tarde e chamaria `setParkourStatusMessage(null)` de novo (inofensivo em si, mas
+            // deixaria `parkourStatusMessageTimeout` com um handle obsoleto).
+            if (parkourStatusMessageTimeout !== null) {
+              window.clearTimeout(parkourStatusMessageTimeout)
+              parkourStatusMessageTimeout = null
+            }
             setParkourStatusMessage(null)
           }
           return
@@ -12778,8 +12799,7 @@ export function World3D({
               parkourBoostCollectedThisRun = true
               parkourBoostMesh.setEnabled(false)
               parkourBoostActiveUntil = time + PARKOUR_BOOST_DURATION
-              setParkourStatusMessage('⚡ Impulso ativado!')
-              window.setTimeout(() => setParkourStatusMessage(null), 3000)
+              showParkourStatusMessage('⚡ Impulso ativado!', 3000)
             }
 
             // Checkpoint — a plataforma mais alta já pisada nesta corrida; nunca regride sozinho
@@ -12827,8 +12847,7 @@ export function World3D({
                   roundedElapsed,
                 )
                 if (newBadge) {
-                  setParkourStatusMessage('🏆 Troféu conquistado: Mestre do Parkour!')
-                  window.setTimeout(() => setParkourStatusMessage(null), 4000)
+                  showParkourStatusMessage('🏆 Troféu conquistado: Mestre do Parkour!', 4000)
                 }
               }
             }
