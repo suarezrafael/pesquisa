@@ -1,7 +1,8 @@
 # Laboratório 203 — Parkour arcade com argolas, checkpoints e troféu
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-19
+Fim: 2026-09-19
 Commit inicial: 33708c29d2870c1a62de2b31629c3e124098bc5e
 
 ## Objetivo do laboratório
