@@ -10000,6 +10000,7 @@ export function World3D({
           // atualiza o label da arena ATIVA (ver mais abaixo).
           const prevConfig = arenaConfigs[activeArenaId]
           prevConfig?.setTargetsVisible(false)
+          prevConfig?.resetState()
           if (prevConfig?.statusLabel) prevConfig.statusLabel.alpha = 0
         }
         if (arenaCountdownTimeout) clearTimeout(arenaCountdownTimeout)
@@ -13466,8 +13467,12 @@ export function World3D({
           // promessa do template genérico — um mini-jogo novo exigiria lembrar de editar ESTE bloco
           // também, fácil de esquecer (vazamento visual de dica presa). Percorre todas as arenas
           // registradas em `arenaTargetHintLabels`, sem precisar conhecer os arrays específicos.
-          for (const hintLabels of Object.values(arenaTargetHintLabels)) {
-            for (const label of hintLabels ?? []) label.alpha = 0
+          // `for...in` (não `Object.values`) de propósito — roda todo quadro, e `Object.values`
+          // alocaria um array novo a cada chamada (achado do review, 2ª rodada).
+          for (const key in arenaTargetHintLabels) {
+            const hintLabels = arenaTargetHintLabels[key as ArenaId]
+            if (!hintLabels) continue
+            for (const label of hintLabels) label.alpha = 0
           }
         }
         // Mensagem de status/resultado da arena ATIVA (contagem, cronômetro, vitória/derrota) —

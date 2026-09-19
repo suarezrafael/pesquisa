@@ -144,6 +144,24 @@ um risco que o próprio design introduziu (não existia no lab-198, que só tinh
 `npx tsc -b`, `npm run test -- --run` (228/228) e `npm run build` continuam limpos depois das duas
 correções.
 
+**2ª rodada (commit `e2cdd27`)**: os 2 achados acima aparecem marcados "Resolved since last
+review". 2 achados novos, ambos confirmados contra o código real e corrigidos:
+
+3. **Baixo — estado da arena anterior não era resetado ao trocar de arena** (achado sob "Previously
+   missed", já existia desde o primeiro commit): a limpeza inline em `beginArenaCountdown` ao
+   trocar de arena escondia os alvos/label da anterior, mas não chamava `resetState()` — o estado de
+   domínio antigo (`arenaMemoryState`/`arenaCountingState`) ficava vivo no closure sem necessidade
+   até alguém reabrir aquela arena. Não é um bug funcional (o próximo `beginAttempt` sobrescreve
+   tudo de qualquer forma), mas evita acúmulo desnecessário à toa — corrigido chamando
+   `prevConfig?.resetState()` junto do resto da limpeza.
+4. **Baixo — `Object.values(arenaTargetHintLabels)` alocava um array novo a cada quadro**: o `else`
+   que zera as dicas roda no loop de render (todo quadro fora do estado `playing`), e
+   `Object.values` cria um array novo em cada chamada — GC desnecessário num caminho quente.
+   Corrigido trocando por `for...in` sobre as chaves do objeto, sem alocação.
+
+`npx tsc -b`, `npm run test -- --run` (228/228) e `npm run build` continuam limpos depois das
+correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Comparar "mais/menos/igual" e sequências numéricas simples (v1 cobre só "contar e escolher o
