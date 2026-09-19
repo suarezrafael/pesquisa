@@ -146,6 +146,14 @@ generosa o bastante pra tolerar alguma imprecisão de posicionamento.
 `npx tsc -b`, `npm run test -- --run` (app 257/257, `server-accounts` 168/168) e `npm run build`
 continuam limpos depois das duas correções.
 
+**Rodada 2**: "Findings: None" pra código novo, mas um achado sob "Previously missed" (código que
+não mudou desde a rodada 1, só ficou visível de novo por reavaliação): `handleParkourCourseCompleted`
+(`App.tsx`) descrevia o gate como "só concede com todas as argolas" mas usava `ringsCollected >=
+totalRings` — na prática nunca diverge de `===` (o jogo nunca deixa `ringsCollected` passar de
+`parkourRings.length`), mas uma contagem anômala futura (`totalRings === 0`) concederia o troféu
+sem nenhuma argola real. Corrigido com igualdade estrita + exigir `totalRings > 0`, deixando a regra
+explícita. `npx tsc -b`/testes/`build` seguem limpos.
+
 ## Fora de escopo (explicitamente adiado)
 
 - `parkour2`/`parkour3` (escolha explícita do usuário nesta lab).

@@ -470,7 +470,11 @@ function GameApp() {
   // acima. `parkour_course_completed` dispara em TODA conclusão (mesmo sem todas as argolas), com
   // `trophyEarned` refletindo só se ESTA conclusão concedeu o emblema agora.
   function handleParkourCourseCompleted(ringsCollected: number, totalRings: number, elapsedSeconds: number) {
-    const allRingsCollected = ringsCollected >= totalRings
+    // Achado do review automático do Copilot: `>=` concederia o troféu numa contagem anômala
+    // (ex.: `totalRings === 0`) sem nenhuma argola de verdade — igualdade estrita + exigir
+    // `totalRings > 0` deixa a regra "todas as argolas" explícita e nunca satisfeita por um total
+    // degenerado.
+    const allRingsCollected = totalRings > 0 && ringsCollected === totalRings
     const { newBadge } = allRingsCollected ? parkourCourseCompleted() : { newBadge: false }
     trackParkourCourseCompleted(ringsCollected, totalRings, elapsedSeconds, newBadge)
     return { newBadge }
