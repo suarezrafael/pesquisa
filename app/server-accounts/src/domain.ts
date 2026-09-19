@@ -214,6 +214,13 @@ const PRODUCT_EVENT_TYPES = new Set([
   // app/src/productAnalytics.ts.
   'minigame_retried',
   'minigame_exited',
+  // "Progressao, album e recompensas do centro de jogos" — nomes exatos citados pelo backlog, ver
+  // app/src/productAnalytics.ts. `weekly_meaningful_play_learning_sessions` (métrica citada pelo
+  // backlog) não é um evento próprio — é `weeklyFunnel.weeklyMeaningfulPlayLearningSessions`,
+  // alcance semanal derivado de `game_center_weekly_quest_completed` (index.ts).
+  'minigame_trophy_earned',
+  'game_center_weekly_quest_completed',
+  'game_center_progress_viewed',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -320,13 +327,26 @@ export function isValidMinigameId(id: unknown): id is string {
 
 // Centro de jogos ("Lab 212 - Centro de jogos educativo com saguão e portais") — qual placa/portal
 // do saguão gerou o evento, mesmo espírito de `MINIGAME_IDS` acima: conjunto FIXO no código-fonte,
-// validado desde o primeiro commit (não como correção de review depois, lição do lab-196). Inclui
-// os 3 portais ainda BLOQUEADOS (`Contar`/`Soletrar`/`Memória`, sem mini-jogo de verdade nesta
-// fatia) — `game_portal_selected` dispara pra qualquer portal, travado ou não.
+// validado desde o primeiro commit (não como correção de review depois, lição do lab-196).
+// `game_portal_selected` dispara pra qualquer portal — os 4 já abrem algo de verdade desde o
+// lab-201 (memória/contar/soletrar/lógica).
 const GAME_CENTER_PORTAL_IDS = new Set(['contar', 'soletrar', 'memoria', 'logica'])
 
 export function isValidGameCenterPortalId(id: unknown): id is string {
   return typeof id === 'string' && GAME_CENTER_PORTAL_IDS.has(id)
+}
+
+// Progresso/troféus do centro de jogos ("Lab 217") — `category` de `minigame_trophy_earned`
+// reaproveita a MESMA allowlist de `GAME_CENTER_PORTAL_IDS` acima (é a mesma categoria/id, não um
+// conjunto paralelo que poderia divergir); `tier` é um conjunto novo e pequeno, validado à parte.
+export function isValidGameCenterCategory(category: unknown): category is string {
+  return isValidGameCenterPortalId(category)
+}
+
+const GAME_CENTER_TROPHY_TIERS = new Set(['bronze', 'prata', 'ouro'])
+
+export function isValidGameCenterTrophyTier(tier: unknown): tier is string {
+  return typeof tier === 'string' && GAME_CENTER_TROPHY_TIERS.has(tier)
 }
 
 // lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de

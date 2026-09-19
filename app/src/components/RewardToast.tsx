@@ -36,6 +36,11 @@ interface RewardToastProps {
   // objetivo semanal (mesmo padrão de `planetClearBonusCoins` acima — moeda ADICIONAL, primeira
   // vez em cada semana ISO).
   weeklyEventObjectiveBonusCoins?: number
+  // Backlog "Lab 217" — só vem preenchido quando esta resposta era o desafio de Lógica E a
+  // conclusão cruzou um troféu novo / concedeu o bônus da missão semanal do centro de jogos
+  // (objetivo SEPARADO do de cima — os dois podem aparecer na MESMA recompensa).
+  gameCenterTrophyEarned?: 'bronze' | 'prata' | 'ouro'
+  gameCenterWeeklyQuestBonusCoins?: number
   onContinue: () => void
 }
 
@@ -54,9 +59,13 @@ export function RewardToast({
   planetClearBonusXp,
   planetClearBonusCoins,
   weeklyEventObjectiveBonusCoins,
+  gameCenterTrophyEarned,
+  gameCenterWeeklyQuestBonusCoins,
   event,
   onContinue,
 }: RewardToastProps) {
+  const gameCenterTrophyLabel =
+    gameCenterTrophyEarned === 'ouro' ? '🏆 Ouro' : gameCenterTrophyEarned === 'prata' ? '🥈 Prata' : '🥉 Bronze'
   const hasBonus = event.xpMultiplier > 1 || event.coinMultiplier > 1
   const modalRef = useModalA11y(onContinue)
   return (
@@ -96,6 +105,14 @@ export function RewardToast({
         {!!weeklyEventObjectiveBonusCoins && (
           <p className="reward-bonus-line">
             🌱 Objetivo da semana concluído! +{weeklyEventObjectiveBonusCoins} moedas bônus!
+          </p>
+        )}
+        {gameCenterTrophyEarned && (
+          <p className="reward-bonus-line">Troféu {gameCenterTrophyLabel} de Lógica desbloqueado!</p>
+        )}
+        {!!gameCenterWeeklyQuestBonusCoins && (
+          <p className="reward-bonus-line">
+            🎮 Missão do centro de jogos concluída! +{gameCenterWeeklyQuestBonusCoins} moedas bônus!
           </p>
         )}
         {streakBonusCoins > 0 && (

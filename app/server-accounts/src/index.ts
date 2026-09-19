@@ -35,6 +35,8 @@ import {
   isValidLearningChallengeKind,
   isValidMinigameId,
   isValidGameCenterPortalId,
+  isValidGameCenterCategory,
+  isValidGameCenterTrophyTier,
   isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
@@ -499,6 +501,15 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   if (type === 'game_portal_selected' && !isValidGameCenterPortalId(metaObjForValidation.portalId)) {
     return new Response(null, { status: 400 })
   }
+  // Progresso/troféus do centro de jogos ("Lab 217") — `minigame_trophy_earned` só faz sentido com
+  // `category`/`tier` válidos (são os dois campos que identificam QUAL troféu foi conquistado).
+  if (
+    type === 'minigame_trophy_earned' &&
+    (!isValidGameCenterCategory(metaObjForValidation.category) ||
+      !isValidGameCenterTrophyTier(metaObjForValidation.tier))
+  ) {
+    return new Response(null, { status: 400 })
+  }
   // `time_to_first_minigame` (Lab 212) segue o mesmo raciocínio de `session_end`: o sinal "criança
   // chegou no primeiro mini-jogo" continua válido mesmo com uma duração implausível, então só o
   // campo suspeito é descartado (ver branch de `safeMeta` abaixo), não o evento inteiro — mesma
@@ -542,6 +553,9 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     } else if (type === 'game_portal_selected') {
       // já validado acima — só a chave permitida sobrevive.
       safeMeta = { portalId: metaObj.portalId }
+    } else if (type === 'minigame_trophy_earned') {
+      // já validado acima — só as 2 chaves permitidas sobrevivem.
+      safeMeta = { category: metaObj.category, tier: metaObj.tier }
     } else if (type === 'time_to_first_minigame') {
       // Mesmo raciocínio de `session_end` acima pra tolerar um `durationMs` implausível sem
       // recusar o evento inteiro (ver checagem de validação mais acima) — MAS, diferente de
@@ -550,10 +564,18 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       // não documentada sobreviver (mesmo raciocínio de `cosmetic_equipped`/`game_portal_selected`
       // acima), então restringe à única chave documentada.
       safeMeta = isPlausibleSessionDuration(metaObj.durationMs) ? { durationMs: metaObj.durationMs } : null
-    } else if (type === 'game_center_entered' || type === 'game_center_returned') {
+    } else if (
+      type === 'game_center_entered' ||
+      type === 'game_center_returned' ||
+      type === 'game_center_weekly_quest_completed' ||
+      type === 'game_center_progress_viewed'
+    ) {
       // mesmo raciocínio de `camera_recenter_used`/`weekly_event_objective_completed` abaixo:
-      // eventos novos deste lab, sem campo de `meta` documentado — não herdam a tolerância de
-      // `meta` livre dos eventos legados.
+      // eventos novos, sem campo de `meta` documentado — não herdam a tolerância de `meta` livre
+      // dos eventos legados. Achado do review automático do Copilot: os 2 eventos novos do Lab 217
+      // sem `meta` (`game_center_weekly_quest_completed`/`game_center_progress_viewed`) tinham
+      // ficado de fora deste branch, caindo no `else` genérico — qualquer objeto que o client
+      // mandasse era persistido sem restrição nenhuma.
       safeMeta = null
     } else if (type === 'camera_recenter_used') {
       // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
@@ -1888,6 +1910,14 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     gameCenterEntered: weeklyDevices('game_center_entered'),
     gamePortalSelected: weeklyDevices('game_portal_selected'),
     gameCenterReturned: weeklyDevices('game_center_returned'),
+    // Progresso/troféus/missão semanal do centro de jogos ("Lab 217") — mesmo achado de
+    // lab-180/lab-196 acima, exposto desde o primeiro commit. `weeklyMeaningfulPlayLearningSessions`
+    // é a métrica citada pelo backlog (`weekly_meaningful_play_learning_sessions`) — não é um
+    // evento próprio, é o ALCANCE semanal de `game_center_weekly_quest_completed` (dispositivos
+    // únicos que concluíram a missão "jogue 1 mini-jogo educativo" pelo menos uma vez).
+    minigameTrophyEarned: weeklyDevices('minigame_trophy_earned'),
+    gameCenterProgressViewed: weeklyDevices('game_center_progress_viewed'),
+    weeklyMeaningfulPlayLearningSessions: weeklyDevices('game_center_weekly_quest_completed'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

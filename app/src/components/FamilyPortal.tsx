@@ -2,15 +2,26 @@ import { useEffect, useState } from 'react'
 import { isAuthApiError } from '@neondatabase/neon-js/auth'
 import { authClient } from '../auth/neonAuthClient'
 import { loadLastPlayedAt, loadProfile, loadProgress } from '../state/storage'
-import { getLevel, skillBreakdown, xpIntoLevel } from '../state/progression'
+import { getLevel, skillBreakdown, xpIntoLevel, gameCenterTrophyTier } from '../state/progression'
 import { quests } from '../data/quests'
 import {
   trackCheckoutStarted,
   trackFamilyLandingViewed,
   trackParentSignupStarted,
   trackWeeklyReportPreviewViewed,
+  trackGameCenterProgressViewed,
 } from '../productAnalytics'
-import type { QuestType } from '../types'
+import type { GameCenterCategory, QuestType } from '../types'
+
+// Backlog "Lab 217" — rótulos de exibição das 4 categorias do centro de jogos, mesma ordem dos
+// portais no saguão (`World3D.tsx`).
+const GAME_CENTER_CATEGORY_LABELS: Record<GameCenterCategory, { emoji: string; label: string }> = {
+  contar: { emoji: '🔢', label: 'Contar' },
+  soletrar: { emoji: '🔤', label: 'Soletrar' },
+  memoria: { emoji: '🧠', label: 'Memória' },
+  logica: { emoji: '🧩', label: 'Lógica' },
+}
+const GAME_CENTER_CATEGORIES: GameCenterCategory[] = ['contar', 'soletrar', 'memoria', 'logica']
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
 const NEON_AUTH_URL = import.meta.env.VITE_NEON_AUTH_URL as string
@@ -756,6 +767,20 @@ const SKILL_TYPES: readonly QuestType[] = ['logica', 'matematica', 'leitura']
 function ChildProgressPanel() {
   const profile = loadProfile()
 
+  // Backlog "Lab 217" — mesmo padrão/trigger de `trackWeeklyReportPreviewViewed`
+  // (`FamilyValueProp` acima): na montagem do componente que de fato mostra o resumo, não no
+  // clique. Só dispara com um perfil de verdade pra ver (evita contar "visualizações" vazias do
+  // estado "nenhum progresso encontrado" logo abaixo). Achado do review automático do Copilot:
+  // `loadProfile()` devolve um objeto NOVO a cada render (mesmo com o mesmo perfil salvo) — usar
+  // `profile` direto na dependência reemitia o evento a cada re-render do `Dashboard` (ex.: ao
+  // atualizar `status` da assinatura), não só na montagem. `Boolean(profile)` é estável entre
+  // re-renders com o mesmo perfil, disparando só na transição real de "sem perfil" pra "com
+  // perfil" (1x por montagem de verdade).
+  const hasProfile = Boolean(profile)
+  useEffect(() => {
+    if (hasProfile) trackGameCenterProgressViewed()
+  }, [hasProfile])
+
   if (!profile) {
     return (
       <div className="pairing-code-box progress-panel">
@@ -839,6 +864,27 @@ function ChildProgressPanel() {
           ))}
         </p>
       )}
+      {/* Backlog "Lab 217" — habilidade praticada no centro de jogos (Contar/Soletrar/Memória/
+          Lógica), separado do mapa de habilidades das escolinhas acima (mini-jogos, não missões).
+          Contagem VITALÍCIA (não semanal) — mesma escolha de `skillEntries` acima, que também
+          mostra o total desde sempre, não só a semana corrente. */}
+      <div className="progress-panel-stats">
+        {GAME_CENTER_CATEGORIES.map((category) => {
+          const completions = progress.gameCenterCompletionsByCategory[category]
+          const tier = gameCenterTrophyTier(completions)
+          const tierEmoji = tier === 'ouro' ? '🏆' : tier === 'prata' ? '🥈' : tier === 'bronze' ? '🥉' : '—'
+          return (
+            <div key={category} className="progress-panel-stat">
+              <strong>
+                {tierEmoji} {completions}
+              </strong>
+              <span>
+                {GAME_CENTER_CATEGORY_LABELS[category].emoji} {GAME_CENTER_CATEGORY_LABELS[category].label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
       <p className="field-hint">
         {lastPlayedAt
           ? `Última vez jogado: ${new Date(lastPlayedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`

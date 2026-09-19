@@ -46,6 +46,14 @@ import {
   isWeeklyEventObjectiveDone,
   wouldGrantWeeklyEventObjectiveReward,
   weeklyEventObjectiveStatus,
+  applyGameCenterMinigameCompleted,
+  applyGameCenterWeeklyQuestProgress,
+  gameCenterTrophyProgressPrefix,
+  gameCenterTrophyTier,
+  GAME_CENTER_TROPHY_THRESHOLDS,
+  GAME_CENTER_WEEKLY_QUEST_REWARD_COINS,
+  isGameCenterWeeklyQuestDone,
+  wouldGrantGameCenterWeeklyQuestReward,
   SUBSCRIBER_COIN_MULTIPLIER,
   unlockAvatar,
   unlockBackpackColor,
@@ -1494,6 +1502,100 @@ describe('applyWeeklyEventObjectiveProgress/isWeeklyEventObjectiveDone (lab-182,
     const nowIso = '2026-09-08T12:00:00.000Z'
     const concluidoAgoraMesmo = applyWeeklyEventObjectiveProgress(emptyProgress, nowIso).progress
     expect(weeklyEventObjectiveStatus(concluidoAgoraMesmo, nowIso)).toBe('done')
+  })
+})
+
+describe('gameCenterTrophyTier/gameCenterTrophyProgressPrefix (backlog "Lab 217")', () => {
+  it('sem troféu abaixo do limiar de bronze', () => {
+    expect(gameCenterTrophyTier(0)).toBeNull()
+    expect(gameCenterTrophyTier(GAME_CENTER_TROPHY_THRESHOLDS.bronze - 1)).toBeNull()
+  })
+
+  it('limiares exatos: bronze, prata, ouro', () => {
+    expect(gameCenterTrophyTier(GAME_CENTER_TROPHY_THRESHOLDS.bronze)).toBe('bronze')
+    expect(gameCenterTrophyTier(GAME_CENTER_TROPHY_THRESHOLDS.prata - 1)).toBe('bronze')
+    expect(gameCenterTrophyTier(GAME_CENTER_TROPHY_THRESHOLDS.prata)).toBe('prata')
+    expect(gameCenterTrophyTier(GAME_CENTER_TROPHY_THRESHOLDS.ouro - 1)).toBe('prata')
+    expect(gameCenterTrophyTier(GAME_CENTER_TROPHY_THRESHOLDS.ouro)).toBe('ouro')
+    expect(gameCenterTrophyTier(GAME_CENTER_TROPHY_THRESHOLDS.ouro + 100)).toBe('ouro')
+  })
+
+  it('prefixo de progresso vazio sem nenhuma conclusão (não polui a primeira interação)', () => {
+    expect(gameCenterTrophyProgressPrefix(0)).toBe('')
+  })
+
+  it('prefixo mostra o troféu atual e o limiar do próximo', () => {
+    expect(gameCenterTrophyProgressPrefix(1)).toBe(`🥉 1/${GAME_CENTER_TROPHY_THRESHOLDS.prata} · `)
+    expect(gameCenterTrophyProgressPrefix(GAME_CENTER_TROPHY_THRESHOLDS.prata)).toBe(
+      `🥈 ${GAME_CENTER_TROPHY_THRESHOLDS.prata}/${GAME_CENTER_TROPHY_THRESHOLDS.ouro} · `,
+    )
+    expect(gameCenterTrophyProgressPrefix(GAME_CENTER_TROPHY_THRESHOLDS.ouro)).toBe('🏆 Ouro · ')
+  })
+})
+
+describe('applyGameCenterMinigameCompleted (backlog "Lab 217")', () => {
+  it('incrementa só a categoria certa, mantém as outras intactas', () => {
+    const { progress } = applyGameCenterMinigameCompleted(emptyProgress, 'contar')
+    expect(progress.gameCenterCompletionsByCategory.contar).toBe(1)
+    expect(progress.gameCenterCompletionsByCategory.memoria).toBe(0)
+  })
+
+  it('newTrophy só vem preenchido na conclusão que CRUZA um limiar novo', () => {
+    const primeira = applyGameCenterMinigameCompleted(emptyProgress, 'memoria')
+    expect(primeira.newTrophy).toBe('bronze') // 0 -> 1, cruza bronze
+
+    const segunda = applyGameCenterMinigameCompleted(primeira.progress, 'memoria')
+    expect(segunda.newTrophy).toBeNull() // 1 -> 2, ainda bronze, nada novo
+
+    // Avança até UMA conclusão antes do limiar de prata (a contagem já está em 2 aqui) — a
+    // PRÓXIMA chamada depois do loop é a que deve cruzar o limiar.
+    let progress = segunda.progress
+    for (let i = 2; i < GAME_CENTER_TROPHY_THRESHOLDS.prata - 1; i++) {
+      progress = applyGameCenterMinigameCompleted(progress, 'memoria').progress
+    }
+    expect(progress.gameCenterCompletionsByCategory.memoria).toBe(GAME_CENTER_TROPHY_THRESHOLDS.prata - 1)
+    const cruzaPrata = applyGameCenterMinigameCompleted(progress, 'memoria')
+    expect(cruzaPrata.newTrophy).toBe('prata')
+  })
+})
+
+describe('applyGameCenterWeeklyQuestProgress (backlog "Lab 217")', () => {
+  it('concede o bônus na primeira vez da semana, objetivo SEPARADO do evento semanal ambiental', () => {
+    const result = applyGameCenterWeeklyQuestProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    expect(result.rewardGranted).toBe(true)
+    expect(result.progress.coins).toBe(emptyProgress.coins + GAME_CENTER_WEEKLY_QUEST_REWARD_COINS)
+    expect(result.progress.gameCenterWeeklyQuestRewardedAtIso).toBe('2026-09-08T12:00:00.000Z')
+    // não mexe no objetivo semanal ambiental (campo diferente) — os dois são independentes.
+    expect(result.progress.weeklyEventObjectiveRewardedAtIso).toBe(emptyProgress.weeklyEventObjectiveRewardedAtIso)
+  })
+
+  it('não concede de novo na MESMA semana (idempotente)', () => {
+    const primeira = applyGameCenterWeeklyQuestProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    const segunda = applyGameCenterWeeklyQuestProgress(primeira.progress, '2026-09-10T12:00:00.000Z')
+    expect(segunda.rewardGranted).toBe(false)
+    expect(segunda.progress).toBe(primeira.progress)
+  })
+
+  it('concede de novo numa semana NOVA', () => {
+    const primeira = applyGameCenterWeeklyQuestProgress(emptyProgress, '2026-09-08T12:00:00.000Z')
+    const semanaSeguinte = applyGameCenterWeeklyQuestProgress(primeira.progress, '2026-09-15T12:00:00.000Z')
+    expect(semanaSeguinte.rewardGranted).toBe(true)
+  })
+
+  it('mesma guarda anti-recuo de relógio já usada no objetivo semanal ambiental', () => {
+    const adiantouRelogio = applyGameCenterWeeklyQuestProgress(emptyProgress, '2026-09-29T12:00:00.000Z')
+    expect(adiantouRelogio.rewardGranted).toBe(true)
+    const voltouRelogio = applyGameCenterWeeklyQuestProgress(adiantouRelogio.progress, '2026-09-08T12:00:00.000Z')
+    expect(voltouRelogio.rewardGranted).toBe(false)
+    expect(voltouRelogio.progress).toBe(adiantouRelogio.progress)
+  })
+
+  it('wouldGrantGameCenterWeeklyQuestReward/isGameCenterWeeklyQuestDone concordam com apply', () => {
+    expect(wouldGrantGameCenterWeeklyQuestReward(emptyProgress, '2026-09-08T12:00:00.000Z')).toBe(true)
+    expect(isGameCenterWeeklyQuestDone(emptyProgress, '2026-09-08T12:00:00.000Z')).toBe(false)
+    const concluido = applyGameCenterWeeklyQuestProgress(emptyProgress, '2026-09-08T12:00:00.000Z').progress
+    expect(isGameCenterWeeklyQuestDone(concluido, '2026-09-10T12:00:00.000Z')).toBe(true)
+    expect(wouldGrantGameCenterWeeklyQuestReward(concluido, '2026-09-10T12:00:00.000Z')).toBe(false)
   })
 })
 

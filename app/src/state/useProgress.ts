@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Progress, Quest } from '../types'
+import type { GameCenterCategory, GameCenterTrophyTier, Progress, Quest } from '../types'
 import { trackFirstReward, trackPlanetInteractionCompleted, trackQuestCompleted } from '../productAnalytics'
 import { loadProgress, saveProgress } from './storage'
 import { findTreasureChestById } from '../data/treasureChests'
@@ -44,6 +44,10 @@ import {
   syncWeeklyXpSnapshot as applySyncWeeklyXpSnapshot,
   applyWeeklyEventObjectiveProgress,
   wouldGrantWeeklyEventObjectiveReward,
+  applyGameCenterMinigameCompleted,
+  applyGameCenterWeeklyQuestProgress,
+  gameCenterTrophyTier,
+  wouldGrantGameCenterWeeklyQuestReward,
 } from './progression'
 
 export function useProgress() {
@@ -417,6 +421,36 @@ export function useProgress() {
     return true
   }
 
+  // Centro de jogos (backlog "Lab 217") — conclusão de qualquer arena (Contar/Soletrar/Memória) OU
+  // do desafio de Lógica (kind: 'bridge', ver App.tsx). Mesmo raciocínio de
+  // `weeklyEventObjectiveProgress` acima: decide o resultado (`newTrophy`/`weeklyQuestRewardGranted`)
+  // a partir do `progress` ESTÁVEL do closure, NUNCA de dentro do atualizador funcional — ler de
+  // volta um valor calculado lá dentro não é confiável se já existe outra atualização pendente na
+  // fila do React na mesma sincronia (`onCollectCoin` chamado logo antes, mesmo ciclo, é o caso
+  // real aqui: a arena sempre credita a moeda-base da vitória ANTES de chamar isto).
+  function gameCenterMinigameCompleted(
+    category: GameCenterCategory,
+    nowIso: string,
+  ): { newTrophy: GameCenterTrophyTier | null; weeklyQuestRewardGranted: boolean; newCompletions: number } {
+    const prevCount = progress.gameCenterCompletionsByCategory[category]
+    // `newCompletions` (não só `newTrophy`) devolvido pra quem chama: `setProgress` NÃO é síncrono
+    // (React agenda a atualização, não aplica na hora) — `progress`/`progressRef.current` só
+    // refletem esta conclusão no PRÓXIMO render. Quem chama (World3D.tsx) precisa da contagem NOVA
+    // pra atualizar o troféu visual na mesma visita, sem esperar o próximo render assentar.
+    const newCompletions = prevCount + 1
+    const prevTier = gameCenterTrophyTier(prevCount)
+    const nextTier = gameCenterTrophyTier(newCompletions)
+    const newTrophy = nextTier !== prevTier ? nextTier : null
+    const weeklyQuestRewardGranted = wouldGrantGameCenterWeeklyQuestReward(progress, nowIso)
+    setProgress((prev) => {
+      const completionResult = applyGameCenterMinigameCompleted(prev, category)
+      const questResult = applyGameCenterWeeklyQuestProgress(completionResult.progress, nowIso)
+      saveProgress(questResult.progress)
+      return questResult.progress
+    })
+    return { newTrophy, weeklyQuestRewardGranted, newCompletions }
+  }
+
   // Ranking local entre perfis (lab-157) — mesmo gatilho/formato de `touchLastPlayed`, uma vez
   // por sessão (ver `App.tsx`): reseta o snapshot de XP semanal se a semana real mudou desde a
   // última vez, sem mexer em nada se ainda é a mesma semana (ver `syncWeeklyXpSnapshot`).
@@ -461,5 +495,6 @@ export function useProgress() {
     toggleHouseVisible,
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
+    gameCenterMinigameCompleted,
   }
 }

@@ -294,3 +294,28 @@ export function trackAlbumPlanetOpened(planetId: string): void {
 export function trackWeeklyEventObjectiveCompleted(nowIso: string): void {
   trackEvent('weekly_event_objective_completed', undefined, nowIso)
 }
+
+// Backlog "Lab 217 - Progressao, album e recompensas do centro de jogos" — nomes exatos citados
+// pelo documento (`minigame_trophy_earned`, e `weekly_meaningful_play_learning_sessions` como
+// métrica derivada de `game_center_weekly_quest_completed`, ver `weeklyFunnel` no Worker).
+// `category`/`tier` são conjuntos FIXOS (`isValidGameCenterPortalId` já existente reaproveitado
+// pra `category`; `tier` validado à parte, `domain.ts`). Dispara só na conclusão EXATA que cruza
+// um limiar NOVO (`applyGameCenterMinigameCompleted`, `progression.ts`), nunca em toda vitória
+// acima do limiar já alcançado — evita inflar a métrica com repetição.
+export function trackMinigameTrophyEarned(category: string, tier: string): void {
+  trackEvent('minigame_trophy_earned', { category, tier })
+}
+
+// Missão semanal "jogue 1 mini-jogo educativo" (Lab 217) — MESMO padrão de
+// `trackWeeklyEventObjectiveCompleted` acima (evento SEPARADO, objetivo semanal diferente, mesmo
+// motivo de usar o `nowIso` que decidiu a concessão em vez de ler o relógio de novo aqui).
+export function trackGameCenterWeeklyQuestCompleted(nowIso: string): void {
+  trackEvent('game_center_weekly_quest_completed', undefined, nowIso)
+}
+
+// Dispara quando o responsável VÊ o resumo de habilidade praticada no centro de jogos
+// (`ChildProgressPanel`, `FamilyPortal.tsx`) — mesmo padrão/trigger de `trackWeeklyReportPreviewViewed`
+// (na transição de estado/montagem, não no clique, mesmo raciocínio anti-contagem-dupla).
+export function trackGameCenterProgressViewed(): void {
+  trackEvent('game_center_progress_viewed')
+}
