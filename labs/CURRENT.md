@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-200-minijogo-soletrar/ — segundo mini-jogo "de verdade" sobre o template de
+arena generalizado no lab-199 (Contar foi o primeiro): coletar letras flutuantes na ordem certa pra
+formar uma palavra de um catálogo controlado (sem cronômetro, recompensa real ao completar, mesmo
+padrão do Contar). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 215 - Mini-jogo de
+soletrar e leitura" — próximo item depois do lab-199 (Lab 214). Ver
+`labs/lab-200-minijogo-soletrar/FEATURES.md` pro objetivo/investigação prévia completos.
+
 Último concluído: labs/lab-199-minijogo-contar/ — primeiro mini-jogo "de verdade" de matemática
 inicial (contar quantidade) sobre o template de arena do lab-198, e generalização de verdade da
 máquina de estado da arena (decisão confirmada com o usuário via `AskUserQuestion`: no lab-198 só
