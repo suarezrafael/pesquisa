@@ -68,6 +68,22 @@ confirmadas ao vivo (ambiente de automação desta sessão trava em `document.hi
 com a mesma limitação). Reduzido por reusar a técnica exata do balcão de compras (já testada ao vivo
 em labs anteriores) e por manter distância generosa de qualquer geometria existente.
 
+## Rodada de review — Copilot (PR #87)
+
+1 achado, confirmado contra o código real e corrigido:
+
+1. **Médio — pedestal de troféus fora da validação de posicionamento de mobília**: o posicionamento
+   manual de mobília (lab-136, `isCurrentFurniturePositionValid`) só conhecia o balcão de compras
+   (`HOUSE_COUNTER_COLLISION`) como obstáculo FIXO — o pedestal novo não estava na lista, então uma
+   cama/mesa podia ser confirmada bem em cima dele apesar da posição inicial ter sido escolhida pra
+   não colidir com nada. Corrigido adicionando `HOUSE_TROPHY_SHELF_COLLISION` (mesma coordenada
+   local do pedestal, `HOUSE_ROOM_HALF_SIZE - 1.3`) à lista de obstáculos — e, na mesma correção,
+   `buildHouseInteriorIfNeeded` passou a LER a posição de `HOUSE_TROPHY_SHELF_COLLISION.x`/`.z` em
+   vez de recalculá-la separadamente, garantindo que as duas nunca possam divergir.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois da
+correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Tornar o pedestal um reflexo dinâmico de tier/contagem real de troféus (decisão deliberada — ver

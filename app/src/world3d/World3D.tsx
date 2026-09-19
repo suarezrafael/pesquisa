@@ -9109,15 +9109,22 @@ export function World3D({
       // Balcão de compras — obstáculo FIXO (nunca se move), centro da sala em coordenada local
       // (mesma posição de `counter.position` em `buildHouseInteriorIfNeeded`, `x=0, z=0`).
       const HOUSE_COUNTER_COLLISION = { x: 0, z: 0, radius: 0.9 }
+      // Pedestal de troféus (backlog "Lab 211") — mesmo raciocínio do balcão acima: obstáculo FIXO,
+      // mesma coordenada local usada em `buildHouseInteriorIfNeeded` (`trophyShelfX`/`trophyShelfZ`
+      // = `HOUSE_ROOM_HALF_SIZE - 1.3`). Achado do review automático do Copilot: sem isto, a
+      // validação de posicionamento manual de mobília (lab-136) não sabia que o pedestal existia —
+      // uma cama/mesa podia ser confirmada bem em cima dele, apesar do posicionamento inicial do
+      // pedestal ter sido escolhido pra não colidir com NADA.
+      const HOUSE_TROPHY_SHELF_COLLISION = { x: HOUSE_ROOM_HALF_SIZE - 1.3, z: -(HOUSE_ROOM_HALF_SIZE - 1.3), radius: 0.7 }
 
-      // Monta a lista de obstáculos (balcão + toda peça JÁ colocada, exceto a que está sendo
-      // movida) e delega a geometria pura pro módulo `houseCollision.ts` (lab-140, testável sem
-      // Babylon — ver os testes lá). A parede em si já é impossível de violar (o movimento durante
-      // o posicionamento trava a posição em `HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN`,
+      // Monta a lista de obstáculos (balcão + pedestal + toda peça JÁ colocada, exceto a que está
+      // sendo movida) e delega a geometria pura pro módulo `houseCollision.ts` (lab-140, testável
+      // sem Babylon — ver os testes lá). A parede em si já é impossível de violar (o movimento
+      // durante o posicionamento trava a posição em `HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN`,
       // ver o loop de física mais abaixo), então só falta cuidar de objeto-contra-objeto aqui.
       function isCurrentFurniturePositionValid(excludeKey: string, x: number, z: number): boolean {
         const movingRadius = collisionRadiusForKind(FURNITURE_VISUAL_KIND[excludeKey.split('#')[0]]?.kind)
-        const obstacles = [HOUSE_COUNTER_COLLISION]
+        const obstacles = [HOUSE_COUNTER_COLLISION, HOUSE_TROPHY_SHELF_COLLISION]
         for (const [key, piece] of Object.entries(houseFurnitureNodes)) {
           if (key === excludeKey) continue
           obstacles.push({
@@ -9560,9 +9567,11 @@ export function World3D({
 
         // Pedestal de PÉ (não uma prateleira presa na parede) — mesma técnica do balcão de compras
         // acima (caixa livre no chão), evita depender de ficar exatamente colado numa parede pra
-        // parecer "montado" corretamente.
-        const trophyShelfX = S - 1.3
-        const trophyShelfZ = -(S - 1.3)
+        // parecer "montado" corretamente. Coordenadas vêm de `HOUSE_TROPHY_SHELF_COLLISION` (não
+        // recalculadas aqui) — fonte única de verdade compartilhada com a validação de
+        // posicionamento de mobília (`isCurrentFurniturePositionValid`), nunca podem divergir.
+        const trophyShelfX = HOUSE_TROPHY_SHELF_COLLISION.x
+        const trophyShelfZ = HOUSE_TROPHY_SHELF_COLLISION.z
         const trophyShelf = MeshBuilder.CreateBox('houseTrophyShelf', { width: 0.9, height: 0.5, depth: 0.4 }, scene)
         trophyShelf.position = new Vector3(trophyShelfX, 0.25, trophyShelfZ)
         trophyShelf.material = trophyShelfMat
