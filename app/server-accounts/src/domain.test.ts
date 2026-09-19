@@ -298,6 +298,11 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
     expect(isValidProductEventType('game_portal_selected')).toBe(true)
     expect(isValidProductEventType('game_center_returned')).toBe(true)
   })
+
+  it('aceita os eventos do template de arena (backlog "Lab 213")', () => {
+    expect(isValidProductEventType('minigame_retried')).toBe(true)
+    expect(isValidProductEventType('minigame_exited')).toBe(true)
+  })
 })
 
 describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {
@@ -739,9 +744,10 @@ describe('isValidLearningChallengeKind (lab-180, "Missões ambientais de aprendi
 })
 
 describe('isValidMinigameId (Hub de mini-jogos, backlog "Lab 209")', () => {
-  it('aceita os 2 mini-jogos linkados nesta fatia', () => {
+  it('aceita os mini-jogos linkados até agora (hub + arena do centro de jogos)', () => {
     expect(isValidMinigameId('parkour1')).toBe(true)
     expect(isValidMinigameId('ponte-logica')).toBe(true)
+    expect(isValidMinigameId('memoria')).toBe(true)
   })
 
   it('recusa id fora do conjunto conhecido', () => {

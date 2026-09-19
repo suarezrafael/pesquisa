@@ -209,6 +209,11 @@ const PRODUCT_EVENT_TYPES = new Set([
   'game_center_entered',
   'game_portal_selected',
   'game_center_returned',
+  // "Template de arena educativa reutilizável" — nomes exatos citados pelo backlog (métricas
+  // esperadas: "eventos comuns de minigame_started/completed/retried/exited"), ver
+  // app/src/productAnalytics.ts.
+  'minigame_retried',
+  'minigame_exited',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -303,8 +308,10 @@ export function isValidLearningChallengeKind(kind: unknown): kind is string {
 // foi iniciado/concluído a partir do hub, mesmo espírito de `LEARNING_CHALLENGE_KINDS` acima:
 // conjunto FIXO no código-fonte (achado do review automático: `minigame_started`/
 // `minigame_completed` caíam no branch genérico de `handleTrackEvent`, sem essa validação — o
-// único sinal que esses dois eventos carregam é justamente este id).
-const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica'])
+// único sinal que esses dois eventos carregam é justamente este id). `'memoria'` (Lab 213 —
+// template de arena, prova de conceito) reaproveita o MESMO id em `minigame_started`/`completed`/
+// `retried`/`exited` — é o mesmo mini-jogo, iniciado pelo portal do centro de jogos (lab-197).
+const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica', 'memoria'])
 
 export function isValidMinigameId(id: unknown): id is string {
   return typeof id === 'string' && MINIGAME_IDS.has(id)
