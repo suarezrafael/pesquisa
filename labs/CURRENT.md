@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Em andamento: labs/lab-203-parkour-arcade/ — melhorar o `parkour1` já existente (argolas pra
+atravessar, checkpoints sem punição por queda, cronômetro informativo, impulso temporário só dentro
+da arena, troféu de conclusão no álbum de conquistas). Decisão confirmada com o usuário via
+`AskUserQuestion`: só o `parkour1` (não constrói pedestais novos pra `parkour2`/`parkour3`, hoje
+inalcançáveis). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 210 - Parkour arcade com
+argolas, tesouros e power-ups justos" — próximo item depois do lab-202 (Lab 217). Ver
+`labs/lab-203-parkour-arcade/FEATURES.md` pra detalhe da investigação e do escopo.
+
 Último concluído: labs/lab-202-progressao-album-recompensas/ — progresso por categoria
 (Contar/Soletrar/Memória/Lógica; `logica` conta o desafio da ponte pelos 2 caminhos que já
 existiam — portal do centro de jogos OU local físico original, lab-180 — mesmo `kind: 'bridge'`
