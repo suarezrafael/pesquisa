@@ -73,6 +73,7 @@ let sessionStartedAtMs: number | null = null
 let firstControlSent = false
 let firstLearningChallengeSent = false
 let firstRewardSent = false
+let firstMinigameSent = false
 
 // Perfis novos completam o ciclo "jogar + aprender + recompensa" dentro desta janela ou não
 // contam como ativados (docs/market-metrics-engagement-backlog.md §4, North Star).
@@ -117,6 +118,19 @@ export function trackFirstReward(isFirstQuestEver: boolean): void {
   if (isFirstQuestEver && durationMs <= ACTIVATION_WINDOW_MS) {
     trackEvent('activation_cycle_completed', { durationMs })
   }
+}
+
+// Backlog "Lab 212 - Centro de jogos educativo com saguão e portais" cita `time_to_first_minigame`
+// como métrica esperada — mesmo padrão de `trackFirstLearningChallenge` acima (uma vez por sessão,
+// tempo desde o início dela). Chamada de dentro de `trackMinigameStarted` (não de cada chamador
+// individual) pra cobrir TODO caminho que inicia um mini-jogo de verdade — hoje o hub (lab-196) e o
+// portal "Lógica" do centro de jogos (backlog "Lab 212"), qualquer um novo no futuro ganha o sinal
+// de graça.
+export function trackFirstMinigame(): void {
+  if (firstMinigameSent) return
+  firstMinigameSent = true
+  const durationMs = elapsedSinceSessionStartMs()
+  if (durationMs !== null) trackEvent('time_to_first_minigame', { durationMs })
 }
 
 // lab-166 (docs/market-metrics-engagement-backlog.md §6, "Lab 165" no documento) — funil de
@@ -224,10 +238,30 @@ export function trackLearningChallengeCompleted(kind: string): void {
 // `trackLearningChallengeStarted` acima (documentado explicitamente, não escondido).
 export function trackMinigameStarted(minigameId: string): void {
   trackEvent('minigame_started', { minigameId })
+  trackFirstMinigame()
 }
 
 export function trackMinigameCompleted(minigameId: string): void {
   trackEvent('minigame_completed', { minigameId })
+}
+
+// Backlog "Lab 212 - Centro de jogos educativo com saguão e portais" — nomes exatos citados pelo
+// documento. `game_center_entered`/`game_center_returned` não carregam `meta` (mesmo espírito de
+// `camera_recenter_used`/`weekly_event_objective_completed`: evento novo, sem campo documentado,
+// não herda a tolerância de `meta` livre dos eventos legados). `portalId` de
+// `trackGamePortalSelected` dispara pra QUALQUER portal, bloqueado ou não — mede "a criança
+// entendeu que aquele portal existe e o que ele é", não "conseguiu jogar" (só `Lógica` tem
+// mini-jogo de verdade nesta fatia; os outros 3 ainda não existem, ver `FEATURES.md`).
+export function trackGameCenterEntered(): void {
+  trackEvent('game_center_entered')
+}
+
+export function trackGamePortalSelected(portalId: string): void {
+  trackEvent('game_portal_selected', { portalId })
+}
+
+export function trackGameCenterReturned(): void {
+  trackEvent('game_center_returned')
 }
 
 // Dispara ao EXPANDIR um planeta específico na lista do `AchievementsPanel.tsx` (sinal de

@@ -34,6 +34,7 @@ import {
   isValidPlanetInteractionKind,
   isValidLearningChallengeKind,
   isValidMinigameId,
+  isValidGameCenterPortalId,
   isValidIsoDateOnly,
   isValidEquippedLook,
   isValidHouseFurnitureIds,
@@ -489,6 +490,17 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   ) {
     return new Response(null, { status: 400 })
   }
+  // Mesmo raciocínio dos eventos acima: `game_portal_selected` só faz sentido com um `portalId`
+  // válido (é o que identifica qual placa do saguão gerou o evento).
+  if (type === 'game_portal_selected' && !isValidGameCenterPortalId(metaObjForValidation.portalId)) {
+    return new Response(null, { status: 400 })
+  }
+  // `time_to_first_minigame` (Lab 212) segue o mesmo raciocínio de `session_end`: o sinal "criança
+  // chegou no primeiro mini-jogo" continua válido mesmo com uma duração implausível, então só o
+  // campo suspeito é descartado (ver branch de `safeMeta` abaixo), não o evento inteiro — mesma
+  // validação (`isPlausibleSessionDuration`) já usada ali. Os `time_to_first_*` mais antigos
+  // (`control`/`learning_challenge`/`reward`, lab-164) não têm essa validação — gap pré-existente,
+  // fora do escopo deste lab, não repetido aqui de propósito.
 
   // `session_end` é o único tipo com um campo de `meta` que a gente ainda tolera parcialmente
   // errado — os outros tipos LEGADOS (documentados em `docs/event-catalog.md` com `meta` livre ou
@@ -518,6 +530,18 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     } else if (type === 'minigame_started' || type === 'minigame_completed') {
       // já validado acima — só a chave permitida sobrevive.
       safeMeta = { minigameId: metaObj.minigameId }
+    } else if (type === 'game_portal_selected') {
+      // já validado acima — só a chave permitida sobrevive.
+      safeMeta = { portalId: metaObj.portalId }
+    } else if (type === 'time_to_first_minigame') {
+      // mesmo raciocínio de `session_end` acima — descarta um `durationMs` implausível em vez de
+      // recusar o evento inteiro (ver checagem de validação mais acima).
+      safeMeta = isPlausibleSessionDuration(metaObj.durationMs) ? metaObj : null
+    } else if (type === 'game_center_entered' || type === 'game_center_returned') {
+      // mesmo raciocínio de `camera_recenter_used`/`weekly_event_objective_completed` abaixo:
+      // eventos novos deste lab, sem campo de `meta` documentado — não herdam a tolerância de
+      // `meta` livre dos eventos legados.
+      safeMeta = null
     } else if (type === 'camera_recenter_used') {
       // achado do review automático do Copilot (13ª rodada): `camera_recenter_used`
       // (`docs/event-catalog.md`) não documenta NENHUM campo de `meta` — sem este branch, caía no
@@ -1797,6 +1821,7 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     firstControl: weeklyDevices('time_to_first_control'),
     firstLearningChallenge: weeklyDevices('time_to_first_learning_challenge'),
     firstReward: weeklyDevices('time_to_first_reward'),
+    firstMinigame: weeklyDevices('time_to_first_minigame'),
     activationCycleCompleted: weeklyDevices('activation_cycle_completed'),
     questCompleted: weeklyDevices('quest_completed'),
     parentAreaClick: weeklyDevices('parent_area_click'),
@@ -1842,6 +1867,11 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // sem consulta direta ao banco.
     minigameStarted: weeklyDevices('minigame_started'),
     minigameCompleted: weeklyDevices('minigame_completed'),
+    // Centro de jogos ("Lab 212") — mesmo achado de lab-180/lab-196 acima: exposto desde o
+    // primeiro commit, não como correção de review depois.
+    gameCenterEntered: weeklyDevices('game_center_entered'),
+    gamePortalSelected: weeklyDevices('game_portal_selected'),
+    gameCenterReturned: weeklyDevices('game_center_returned'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

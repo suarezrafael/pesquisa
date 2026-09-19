@@ -203,6 +203,12 @@ const PRODUCT_EVENT_TYPES = new Set([
   // app/src/productAnalytics.ts.
   'minigame_started',
   'minigame_completed',
+  'time_to_first_minigame',
+  // "Centro de jogos educativo com saguão e portais" — nomes exatos citados pelo backlog, ver
+  // app/src/productAnalytics.ts.
+  'game_center_entered',
+  'game_portal_selected',
+  'game_center_returned',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -302,6 +308,17 @@ const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica'])
 
 export function isValidMinigameId(id: unknown): id is string {
   return typeof id === 'string' && MINIGAME_IDS.has(id)
+}
+
+// Centro de jogos ("Lab 212 - Centro de jogos educativo com saguão e portais") — qual placa/portal
+// do saguão gerou o evento, mesmo espírito de `MINIGAME_IDS` acima: conjunto FIXO no código-fonte,
+// validado desde o primeiro commit (não como correção de review depois, lição do lab-196). Inclui
+// os 3 portais ainda BLOQUEADOS (`Contar`/`Soletrar`/`Memória`, sem mini-jogo de verdade nesta
+// fatia) — `game_portal_selected` dispara pra qualquer portal, travado ou não.
+const GAME_CENTER_PORTAL_IDS = new Set(['contar', 'soletrar', 'memoria', 'logica'])
+
+export function isValidGameCenterPortalId(id: unknown): id is string {
+  return typeof id === 'string' && GAME_CENTER_PORTAL_IDS.has(id)
 }
 
 // lab-119, Fase F: resumo MÍNIMO de progresso (nunca resposta de quest/apelido/avatar/horário de
