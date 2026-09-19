@@ -50,6 +50,13 @@ import HavokPhysics from '@babylonjs/havok'
 import { quests } from '../data/quests'
 import { selectEnvironmentalChallengeQuest } from '../state/progression'
 import { createMemoryGame, flipMemoryCard, isMemoryGameComplete, type MemoryGameState } from '../state/memoryGame'
+import {
+  COUNTING_ROUNDS_TO_WIN,
+  answerCountingRound,
+  createCountingGame,
+  isCountingGameComplete,
+  type CountingGameState,
+} from '../state/countingGame'
 import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
@@ -3504,22 +3511,75 @@ export function World3D({
       memoria: null,
       logica: null,
     }
-    // Arena de memória (backlog "Lab 213 - Template de arena educativa reutilizável") — prova de conceito
-    // do template: estado da tentativa atual vive aqui, direto no closure de `setup()` (mesmo
-    // padrão de `activeMinigameId`/`insideGameCenterInterior` — nenhum precisa de React, só o
-    // loop de física/interação lê e escreve). Roda DENTRO do saguão do centro de jogos já
-    // existente, sem sala/interior nova — ver "Decisão de arquitetura" em FEATURES.md.
-    const MEMORY_CARD_COUNT = 6
-    let arenaMemoryState: MemoryGameState | null = null
+    // Template de arena (backlog "Lab 213 - Template de arena educativa reutilizável") — estado da
+    // tentativa atual vive aqui, direto no closure de `setup()` (mesmo padrão de
+    // `activeMinigameId`/`insideGameCenterInterior` — nenhum precisa de React, só o loop de
+    // física/interação lê e escreve). Roda DENTRO do saguão do centro de jogos já existente, sem
+    // sala/interior nova — ver "Decisão de arquitetura" em `FEATURES.md` do lab-198.
+    // `ArenaId`/`activeArenaId`/`arenaConfigs` (Lab 214, generalização confirmada com o usuário):
+    // no lab-198 só os NOMES de `arenaPhase`/`arenaSecondsLeft` eram genéricos — a implementação
+    // inteira estava colada à memória (uma única arena possível por vez, sem noção de "qual
+    // jogo"). `ArenaConfig` é o contrato mínimo que cada mini-jogo novo preenche pra reaproveitar
+    // a contagem regressiva/cronômetro opcional/label de status já prontos: registrar um mini-jogo
+    // novo agora é "poucos pontos de código" (o próprio critério de aceite do lab-213) — um objeto
+    // de config + os alvos 3D dele, não uma segunda cópia de `beginArenaCountdown`/`tickArenaTimer`.
+    type ArenaId = 'memoria' | 'contar'
+    interface ArenaConfig {
+      label: string
+      timeLimitS: number | null
+      statusLabel: TextBlock | null
+      setTargetsVisible: (visible: boolean) => void
+      beginAttempt: () => void
+      resetState: () => void
+      onTimeout?: () => void
+    }
+    let activeArenaId: ArenaId | null = null
+    const arenaConfigs: Partial<Record<ArenaId, ArenaConfig>> = {}
+    // Cada mini-jogo registra aqui seus próprios alvos interativos (posição de gatilho + o quê
+    // fazer ao apertar `E` perto + a dica "Pressione E" de cada um) — o loop de física/interação e
+    // o loop de render (mais abaixo) leem só pelo `activeArenaId`, sem saber qual jogo é.
+    const arenaTargetPositions: Partial<Record<ArenaId, Vector3[]>> = {}
+    const arenaTargetInteract: Partial<Record<ArenaId, (index: number) => void>> = {}
+    const arenaTargetHintLabels: Partial<Record<ArenaId, TextBlock[]>> = {}
+    // Raio de gatilho compartilhado por qualquer alvo interativo de arena (carta de memória, placa
+    // de resposta de contar, etc.) — mais estrito que `GAME_CENTER_TRIGGER_DISTANCE` (placas de
+    // portal) de propósito, ver comentário em `handleInteractPress`.
+    const ARENA_TARGET_TRIGGER_DISTANCE = 0.4
+    // Helper único de posição de gatilho pra qualquer alvo de arena: SEMPRE a posição já elevada
+    // da malha (nunca uma posição em nível do chão calculada à parte). Achado Alto do review do
+    // Copilot no lab-198 (`gcMemoryCardPos` usava nível do chão, mas `avatarMesh.position` fica
+    // sempre elevado — o gap vertical sozinho já excedia o raio de gatilho, tornando as cartas
+    // impossíveis de virar em jogo normal): centralizar aqui evita reproduzir a mesma classe de bug
+    // em qualquer mini-jogo futuro que registre alvos novos.
+    function arenaTargetTriggerPos(mesh: Mesh): Vector3 {
+      const rootPos = gameCenterInteriorRootNode?.position ?? Vector3.Zero()
+      return rootPos.add(mesh.position)
+    }
     let arenaPhase: 'idle' | 'countdown' | 'playing' | 'success' | 'fail' = 'idle'
     let arenaSecondsLeft = 0
     let arenaCountdownTimeout: ReturnType<typeof setTimeout> | null = null
     let arenaTimerInterval: ReturnType<typeof setInterval> | null = null
+    // Memória (lab-198, prova de conceito do template) — estado/malhas específicos deste mini-jogo;
+    // registrados em `arenaConfigs.memoria`/`arenaTargetPositions.memoria` dentro de
+    // `buildGameCenterInteriorIfNeeded`.
+    const MEMORY_CARD_COUNT = 6
+    let arenaMemoryState: MemoryGameState | null = null
     const gcMemoryCardMeshes: Mesh[] = []
-    const gcMemoryCardPos: Vector3[] = []
     const gcMemoryCardLabels: TextBlock[] = []
     const gcMemoryCardHintLabel: TextBlock[] = []
     let gameCenterMemoryStatusLabel: TextBlock | null = null
+    // Contar (Lab 214) — mesmo espírito, registrado em `arenaConfigs.contar`/
+    // `arenaTargetPositions.contar`. `gcCountingStarMeshes` são só decorativos (não-interativos,
+    // pra criança contar visualmente); `gcCountingOptionMeshes`/`gcCountingOptionLabels` são as 3
+    // placas de resposta (interativas, mesmo padrão das cartas de memória).
+    const COUNTING_STAR_POOL_SIZE = 6
+    const COUNTING_OPTION_COUNT = 3
+    let arenaCountingState: CountingGameState | null = null
+    const gcCountingStarMeshes: Mesh[] = []
+    const gcCountingOptionMeshes: Mesh[] = []
+    const gcCountingOptionLabels: TextBlock[] = []
+    const gcCountingOptionHintLabel: TextBlock[] = []
+    let gameCenterCountingStatusLabel: TextBlock | null = null
     // lab-172 — mesmo padrão de `houseEnterHintLabel`, só que também exige um parceiro por perto
     // (ver uso no loop de física) — sozinho, o jogador nunca vê a dica, pra não convidar pra um
     // desafio que não dá pra completar sozinho.
@@ -4147,16 +4207,18 @@ export function World3D({
             exitGameCenterInterior()
             return
           }
-          // Cartas da arena de memória (backlog "Lab 213") ANTES dos portais de propósito — achado ao vivo:
-          // a placa "Lógica" fica perto o bastante de uma das cartas (~1,57 unidades, dentro de
-          // `GAME_CENTER_TRIGGER_DISTANCE` = 1.6) que apertar `E` ali abria o quiz da ponte em vez
-          // de virar a carta. `MEMORY_CARD_TRIGGER_DISTANCE` (0.4) é bem mais estrito que o raio de
-          // qualquer portal, então checar cartas primeiro nunca "rouba" um aperto de E que
-          // realmente era pra um portal distante — só resolve o conflito quando os dois coincidem.
-          if (arenaPhase === 'playing') {
-            for (let i = 0; i < gcMemoryCardPos.length; i++) {
-              if (Vector3.Distance(avatarMesh.position, gcMemoryCardPos[i]) < MEMORY_CARD_TRIGGER_DISTANCE) {
-                handleMemoryCardInteract(i)
+          // Alvos da arena ativa (cartas de memória, placas de Contar) ANTES dos portais de
+          // propósito (lab-198, achado ao vivo): a placa "Lógica" fica perto o bastante de uma das
+          // cartas de memória (~1,57 unidades, dentro de `GAME_CENTER_TRIGGER_DISTANCE` = 1.6) que
+          // apertar `E` ali abria o quiz da ponte em vez de virar a carta. `ARENA_TARGET_TRIGGER_DISTANCE`
+          // (0.4) é bem mais estrito que o raio de qualquer portal, então checar os alvos primeiro
+          // nunca "rouba" um aperto de E que realmente era pra um portal distante — só resolve o
+          // conflito quando os dois coincidem.
+          if (arenaPhase === 'playing' && activeArenaId) {
+            const targetPositions = arenaTargetPositions[activeArenaId] ?? []
+            for (let i = 0; i < targetPositions.length; i++) {
+              if (Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE) {
+                arenaTargetInteract[activeArenaId]?.(i)
                 return
               }
             }
@@ -7789,6 +7851,7 @@ export function World3D({
         // (`Math.random`), então não dá pra testar "achar o par certo" de fora sem enxergar o
         // estado. Só leitura (nenhum efeito na regra de jogo).
         ;(window as any).__debugMemoryState = () => ({ arenaPhase, arenaSecondsLeft, arenaMemoryState })
+        ;(window as any).__debugCountingState = () => ({ arenaPhase, arenaSecondsLeft, arenaCountingState, activeArenaId })
         // Gatilho de QA pra animação de golpe/tiro (lab-64) — o combate de verdade em Marte
         // resolve rápido demais (o jogador costuma morrer em poucos quadros) pra flagrar a
         // animação/VFX num teste automatizado por screenshot, ver "Pendências" no CONTEXT.md do
@@ -9363,10 +9426,10 @@ export function World3D({
       )
       const gameCenterSurfacePos = groundSurfacePosition(gameCenterUp)
       const GAME_CENTER_TRIGGER_DISTANCE = 1.6
-      // Menor que `GAME_CENTER_TRIGGER_DISTANCE` de propósito — as 6 cartas da arena de memória
-      // (backlog "Lab 213") ficam a só 0,75 uma da outra, bem mais perto entre si que os 4 portais do
-      // saguão.
-      const MEMORY_CARD_TRIGGER_DISTANCE = 0.4
+      // `ARENA_TARGET_TRIGGER_DISTANCE` (declarado no topo do closure, junto do resto do
+      // controlador genérico de arena) é menor que `GAME_CENTER_TRIGGER_DISTANCE` de propósito —
+      // os alvos de qualquer arena (cartas de memória, placas de Contar) ficam bem mais perto entre
+      // si que os 4 portais do saguão.
 
       const gameCenterBase = new TransformNode('centro-jogos', scene)
       gameCenterBase.position = gameCenterSurfacePos
@@ -9454,7 +9517,7 @@ export function World3D({
       // "entende pra qual tipo de mini-jogo vai" mesmo sem poder jogar ainda.
       const GAME_CENTER_PORTAL_IDS: GameCenterPortalId[] = ['contar', 'soletrar', 'memoria', 'logica']
       const GAME_CENTER_PORTAL_INFO: Record<GameCenterPortalId, { emoji: string; label: string; color: Color3; unlocked: boolean }> = {
-        contar: { emoji: '🔢', label: 'Contar', color: new Color3(0.2, 0.6, 0.85), unlocked: false },
+        contar: { emoji: '🔢', label: 'Contar', color: new Color3(0.2, 0.6, 0.85), unlocked: true },
         soletrar: { emoji: '🔤', label: 'Soletrar', color: new Color3(0.85, 0.55, 0.2), unlocked: false },
         memoria: { emoji: '🧠', label: 'Memória', color: new Color3(0.65, 0.3, 0.75), unlocked: true },
         logica: { emoji: '🧩', label: 'Lógica', color: new Color3(0.25, 0.7, 0.35), unlocked: true },
@@ -9606,15 +9669,16 @@ export function World3D({
         })
 
         // Cartas da arena de memória — construídas uma vez (mesmo padrão sob-demanda de toda esta
-        // função), escondidas (`setEnabled(false)`) até `beginMemoryArenaCountdown` revelar. Perto
-        // da própria placa "Memória", puxadas em direção ao centro da sala (mais perto do
-        // nascimento) pra ficarem visíveis assim que a criança olhar pra placa.
+        // função), escondidas (`setEnabled(false)`) até `beginArenaCountdown` revelar. Perto da
+        // própria placa "Memória", puxadas em direção ao centro da sala (mais perto do nascimento)
+        // pra ficarem visíveis assim que a criança olhar pra placa.
         const memoriaAnchorLocal = gameCenterPortalPos.memoria.subtract(interiorRoot.position)
         const MEMORY_CARD_COLUMNS = 3
         const MEMORY_CARD_SPACING = 0.75
         const memoryCardMat = new PBRMaterial('gcMemoryCardMat', scene)
         memoryCardMat.albedoColor = new Color3(0.3, 0.32, 0.4)
         memoryCardMat.roughness = 0.5
+        const gcMemoryCardPos: Vector3[] = []
         for (let i = 0; i < MEMORY_CARD_COUNT; i++) {
           const col = i % MEMORY_CARD_COLUMNS
           const row = Math.floor(i / MEMORY_CARD_COLUMNS)
@@ -9630,12 +9694,7 @@ export function World3D({
           card.setEnabled(false)
           shadowGenerator.addShadowCaster(card)
           gcMemoryCardMeshes[i] = card
-          // Usa `card.position` (já elevado +0.6, mesma referência de altura do avatar —
-          // `AVATAR_RADIUS + 0.05` = 0.6), não `cardLocalPos` (nível do chão): achado no review do
-          // Copilot que o gap vertical sozinho (0.6) já excedia `MEMORY_CARD_TRIGGER_DISTANCE`
-          // (0.4), tornando as cartas impossíveis de virar em jogo normal — só não aparecia nos
-          // testes ao vivo por causa do desvio de física/render já documentado nesta lab.
-          gcMemoryCardPos[i] = interiorRoot.position.add(card.position)
+          gcMemoryCardPos[i] = arenaTargetTriggerPos(card)
 
           const cardLabel = new TextBlock(`gcMemoryCardLabel-${i}`, '❓')
           cardLabel.color = 'white'
@@ -9675,6 +9734,131 @@ export function World3D({
         memoryStatusLabel.linkWithMesh(gcMemoryCardMeshes[1])
         memoryStatusLabel.linkOffsetY = -55
         gameCenterMemoryStatusLabel = memoryStatusLabel
+
+        arenaTargetPositions.memoria = gcMemoryCardPos
+        arenaTargetInteract.memoria = handleMemoryCardInteract
+        arenaTargetHintLabels.memoria = gcMemoryCardHintLabel
+        arenaConfigs.memoria = {
+          label: '🧠 Memória',
+          timeLimitS: MEMORY_TIME_LIMIT_S,
+          statusLabel: memoryStatusLabel,
+          setTargetsVisible: setMemoryCardsVisible,
+          beginAttempt: () => {
+            arenaMemoryState = createMemoryGame(MEMORY_SYMBOLS)
+            setMemoryCardsVisible(true)
+            for (const label of gcMemoryCardLabels) label.text = '❓'
+          },
+          resetState: () => {
+            arenaMemoryState = null
+          },
+          onTimeout: () => {
+            setMemoryCardsVisible(false)
+            memoryStatusLabel.text = '⏰ Tempo esgotado! Pressione E na placa pra tentar de novo'
+          },
+        }
+
+        // Estrelas/placas da arena de Contar (Lab 214) — mesmo padrão sob-demanda acima. Estrelas
+        // são só decorativas (nenhuma malha interativa, nenhum TextBlock vinculado — nada a "vazar"
+        // quando escondidas, ao contrário das cartas de memória); só as 3 placas de resposta são
+        // alvos de verdade, mesma interação de proximidade + `E`.
+        const contarAnchorLocal = gameCenterPortalPos.contar.subtract(interiorRoot.position)
+        const countingStarMat = new PBRMaterial('gcCountingStarMat', scene)
+        countingStarMat.albedoColor = new Color3(0.95, 0.8, 0.15)
+        countingStarMat.emissiveColor = new Color3(0.5, 0.4, 0.05)
+        countingStarMat.roughness = 0.4
+        const COUNTING_STAR_SPACING = 0.42
+        for (let i = 0; i < COUNTING_STAR_POOL_SIZE; i++) {
+          const star = MeshBuilder.CreateSphere(`gcCountingStar-${i}`, { diameter: 0.3 }, scene)
+          star.position = contarAnchorLocal.add(
+            new Vector3((i - (COUNTING_STAR_POOL_SIZE - 1) / 2) * COUNTING_STAR_SPACING, 0.6, 1.4),
+          )
+          star.material = countingStarMat
+          star.parent = interiorRoot
+          star.receiveShadows = true
+          star.setEnabled(false)
+          shadowGenerator.addShadowCaster(star)
+          gcCountingStarMeshes[i] = star
+        }
+
+        const countingOptionMat = new PBRMaterial('gcCountingOptionMat', scene)
+        countingOptionMat.albedoColor = new Color3(0.3, 0.32, 0.4)
+        countingOptionMat.roughness = 0.5
+        const COUNTING_OPTION_SPACING = 0.75
+        const gcCountingOptionPos: Vector3[] = []
+        for (let i = 0; i < COUNTING_OPTION_COUNT; i++) {
+          const optionLocalPos = contarAnchorLocal.add(
+            new Vector3((i - (COUNTING_OPTION_COUNT - 1) / 2) * COUNTING_OPTION_SPACING, 0, 2.4),
+          )
+
+          const option = MeshBuilder.CreateBox(`gcCountingOption-${i}`, { width: 0.55, height: 0.55, depth: 0.08 }, scene)
+          option.position = optionLocalPos.add(new Vector3(0, 0.6, 0))
+          option.material = countingOptionMat.clone(`gcCountingOptionMat-${i}`) as PBRMaterial
+          option.parent = interiorRoot
+          option.receiveShadows = true
+          option.setEnabled(false)
+          shadowGenerator.addShadowCaster(option)
+          gcCountingOptionMeshes[i] = option
+          gcCountingOptionPos[i] = arenaTargetTriggerPos(option)
+
+          const optionLabel = new TextBlock(`gcCountingOptionLabel-${i}`, '')
+          optionLabel.color = 'white'
+          optionLabel.fontSize = mobileFontSize(28)
+          optionLabel.fontWeight = 'bold'
+          optionLabel.outlineWidth = 3
+          optionLabel.outlineColor = 'rgba(0,0,0,0.6)'
+          optionLabel.alpha = 0
+          guiTexture.addControl(optionLabel)
+          optionLabel.linkWithMesh(option)
+          gcCountingOptionLabels[i] = optionLabel
+
+          const optionHint = new TextBlock(`gcCountingOptionHint-${i}`, 'Pressione E')
+          optionHint.color = 'white'
+          optionHint.fontSize = mobileFontSize(14)
+          optionHint.fontWeight = 'bold'
+          optionHint.outlineWidth = 2
+          optionHint.outlineColor = 'rgba(0,0,0,0.6)'
+          optionHint.alpha = 0
+          guiTexture.addControl(optionHint)
+          optionHint.linkWithMesh(option)
+          optionHint.linkOffsetY = 26
+          gcCountingOptionHintLabel[i] = optionHint
+        }
+
+        const countingStatusLabel = new TextBlock('gcCountingStatusLabel', '')
+        countingStatusLabel.color = 'white'
+        countingStatusLabel.fontSize = mobileFontSize(20)
+        countingStatusLabel.fontWeight = 'bold'
+        countingStatusLabel.outlineWidth = 4
+        countingStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
+        countingStatusLabel.alpha = 0
+        guiTexture.addControl(countingStatusLabel)
+        countingStatusLabel.linkWithMesh(gcCountingOptionMeshes[1])
+        countingStatusLabel.linkOffsetY = -55
+        gameCenterCountingStatusLabel = countingStatusLabel
+
+        arenaTargetPositions.contar = gcCountingOptionPos
+        arenaTargetInteract.contar = handleCountingOptionInteract
+        arenaTargetHintLabels.contar = gcCountingOptionHintLabel
+        // `timeLimitS: null` de propósito — backlog do Lab 214 é explícito: "sem tempo punitivo".
+        arenaConfigs.contar = {
+          label: '🔢 Contar',
+          timeLimitS: null,
+          statusLabel: countingStatusLabel,
+          setTargetsVisible: setCountingTargetsVisible,
+          beginAttempt: () => {
+            arenaCountingState = createCountingGame()
+            setCountingTargetsVisible(true)
+            renderCountingRound()
+            // Sem cronômetro (`timeLimitS: null`), nada mais reescreve o texto de status depois do
+            // fim do countdown (achado do review do Copilot: sem isto, o texto ficava congelado em
+            // "🔢 Contar — 0", o último quadro da própria contagem regressiva, até a criança
+            // acertar/errar a primeira rodada).
+            if (countingStatusLabel) countingStatusLabel.text = '🔢 Conte as estrelas e escolha a placa certa!'
+          },
+          resetState: () => {
+            arenaCountingState = null
+          },
+        }
       }
 
       function enterGameCenterInterior() {
@@ -9733,21 +9917,14 @@ export function World3D({
         pinchStartDistance = 0
         currentWorldCenter = savedOutsideCenter
         currentGroundBaseFn = savedOutsideGroundFn
-        // Template de arena (backlog "Lab 213"): só conta como "abandono" (`minigame_exited`) sair com uma
-        // tentativa REALMENTE em andamento — sair depois de já ter vencido/perdido (`success`/
-        // `fail`) não dispara nada, a criança já terminou aquela tentativa. Reseta o estado da
-        // arena sempre (mesmo sem disparar o evento) — critério de aceite do backlog "sair não
-        // deixa física/câmera/labels presos": sem isso, reentrar no saguão mais tarde encontraria
-        // as cartas de uma tentativa antiga, ou o cronômetro de fundo ainda rodando.
-        if (arenaPhase === 'playing') trackMinigameExited('memoria')
-        if (arenaCountdownTimeout) clearTimeout(arenaCountdownTimeout)
-        if (arenaTimerInterval) clearInterval(arenaTimerInterval)
-        arenaCountdownTimeout = null
-        arenaTimerInterval = null
-        arenaPhase = 'idle'
-        arenaMemoryState = null
-        setMemoryCardsVisible(false)
-        if (gameCenterMemoryStatusLabel) gameCenterMemoryStatusLabel.alpha = 0
+        // Template de arena (backlog "Lab 213"): `exitActiveArena` só conta como "abandono"
+        // (`minigame_exited`) sair com uma tentativa REALMENTE em andamento — sair depois de já ter
+        // vencido/perdido (`success`/`fail`) não dispara nada, a criança já terminou aquela
+        // tentativa. Reseta o estado da arena sempre (mesmo sem disparar o evento) — critério de
+        // aceite do backlog "sair não deixa física/câmera/labels presos": sem isso, reentrar no
+        // saguão mais tarde encontraria os alvos de uma tentativa antiga, ou o cronômetro de fundo
+        // ainda rodando.
+        exitActiveArena()
         teleportAvatarTo(
           savedOutsideCenter,
           offsetLandingUp(savedOutsideLocalUp, savedOutsideGroundFn(savedOutsideLocalUp), 2.5),
@@ -9764,10 +9941,12 @@ export function World3D({
       // independente de por onde a criança entrou. Não dispara `minigame_completed` aqui: não
       // existe pedestal de retorno neste caminho (o modal fecha sozinho ao responder), então não
       // há um "voltou" pra medir — `learning_challenge_completed` (já disparado pelo próprio fluxo
-      // do quiz) já cobre a conclusão de verdade pra quem quiser ler aquele evento. `Memória`
-      // (backlog "Lab 213") é a arena de verdade: primeira interação começa, uma depois de terminar tenta de
-      // novo — interação NO MEIO de uma tentativa (`countdown`/`playing`) não faz nada aqui, as
-      // cartas em si é que respondem (ver `handleMemoryCardInteract`).
+      // do quiz) já cobre a conclusão de verdade pra quem quiser ler aquele evento. `Memória`/
+      // `Contar` (backlog "Lab 213"/Lab 214) são arenas de verdade: primeira interação começa, uma
+      // depois de terminar tenta de novo — interação NO MEIO de uma tentativa (`countdown`/
+      // `playing`), da mesma arena OU de outra, não faz nada aqui (não dá pra sequestrar uma
+      // tentativa em andamento trocando de portal); os alvos em si é que respondem (ver
+      // `arenaTargetInteract`, populado em `buildGameCenterInteriorIfNeeded`).
       function handleGameCenterPortalInteract(id: GameCenterPortalId) {
         const info = GAME_CENTER_PORTAL_INFO[id]
         trackGamePortalSelected(id)
@@ -9779,9 +9958,16 @@ export function World3D({
           )
           return
         }
-        if (id === 'memoria') {
-          if (arenaPhase === 'idle') beginMemoryArenaCountdown(false)
-          else if (arenaPhase === 'success' || arenaPhase === 'fail') beginMemoryArenaCountdown(true)
+        if (id === 'memoria' || id === 'contar') {
+          // Achado da generalização (Lab 214): `success`/`fail` só significa "pode tentar de novo"
+          // pra ESTA MESMA arena. Terminar a memória e ir direto pra placa de Contar (sem sair do
+          // saguão) tem que contar como uma tentativa NOVA de Contar, não uma "retentativa" —
+          // senão `minigame_retried` dispararia errado no primeiro try de um jogo diferente.
+          if (arenaPhase === 'idle' || (activeArenaId !== id && (arenaPhase === 'success' || arenaPhase === 'fail'))) {
+            beginArenaCountdown(id, false)
+          } else if (activeArenaId === id && (arenaPhase === 'success' || arenaPhase === 'fail')) {
+            beginArenaCountdown(id, true)
+          }
           return
         }
         // `'bridge'` (não uma string nova tipo "game-center-logica") de propósito: é o MESMO kind
@@ -9795,13 +9981,88 @@ export function World3D({
         trackMinigameStarted('ponte-logica')
       }
 
-      // Template de arena (backlog "Lab 213") — prova de conceito: contagem regressiva própria (mesmo visual
-      // de `.minigame-countdown-overlay`, reaproveitado via `gameCenterMemoryStatusLabel` em vez de
-      // criar um novo componente React só pra isto — a arena inteira vive no closure de `setup()`,
-      // sem precisar de estado React), depois `playing` com cronômetro, terminando em `success`
-      // (todos os pares achados) ou `fail` (tempo esgotado). `isRetry` só diferencia o evento de
-      // analytics disparado (`minigame_started` sempre; `minigame_retried` só quando é de fato uma
-      // NOVA tentativa depois de uma anterior ter terminado).
+      // Controlador genérico de arena (Lab 214, generalização confirmada com o usuário) — contagem
+      // regressiva própria (mesmo visual de `.minigame-countdown-overlay`, reaproveitado via
+      // `config.statusLabel` em vez de criar um novo componente React só pra isto — a arena inteira
+      // vive no closure de `setup()`, sem precisar de estado React), depois `playing` com
+      // cronômetro OPCIONAL (`config.timeLimitS`, `null` pra arenas sem tempo punitivo tipo
+      // Contar), terminando em `success` (`config.beginAttempt`/o próprio alvo interativo decide) ou
+      // `fail` (só quando há cronômetro, via `config.onTimeout`). `isRetry` só diferencia o evento
+      // de analytics disparado (`minigame_started` sempre; `minigame_retried` só quando é de fato
+      // uma NOVA tentativa da MESMA arena depois de uma anterior ter terminado).
+      function beginArenaCountdown(id: ArenaId, isRetry: boolean) {
+        const config = arenaConfigs[id]
+        if (!config) return
+        if (activeArenaId && activeArenaId !== id) {
+          // A criança pode terminar uma arena (`success`/`fail`) e ir direto pra placa de outra
+          // sem sair do saguão — sem isto, o label de status da arena ANTERIOR (ex.: "Você
+          // venceu!") ficaria congelado e visível pra sempre perto dela, já que o loop de render só
+          // atualiza o label da arena ATIVA (ver mais abaixo).
+          const prevConfig = arenaConfigs[activeArenaId]
+          prevConfig?.setTargetsVisible(false)
+          prevConfig?.resetState()
+          if (prevConfig?.statusLabel) prevConfig.statusLabel.alpha = 0
+        }
+        if (arenaCountdownTimeout) clearTimeout(arenaCountdownTimeout)
+        if (arenaTimerInterval) clearInterval(arenaTimerInterval)
+        activeArenaId = id
+        arenaPhase = 'countdown'
+        arenaSecondsLeft = 3
+        config.setTargetsVisible(false)
+        const tickCountdown = () => {
+          if (config.statusLabel) {
+            config.statusLabel.text = `${config.label} — ${arenaSecondsLeft}`
+            config.statusLabel.alpha = 1
+          }
+          if (arenaSecondsLeft <= 0) {
+            arenaPhase = 'playing'
+            arenaSecondsLeft = config.timeLimitS ?? 0
+            config.beginAttempt()
+            trackMinigameStarted(id)
+            if (isRetry) trackMinigameRetried(id)
+            if (config.timeLimitS != null) arenaTimerInterval = setInterval(tickArenaTimer, 1000)
+            return
+          }
+          arenaSecondsLeft -= 1
+          arenaCountdownTimeout = setTimeout(tickCountdown, 1000)
+        }
+        tickCountdown()
+      }
+
+      function tickArenaTimer() {
+        if (arenaPhase !== 'playing' || !activeArenaId) return
+        const config = arenaConfigs[activeArenaId]
+        if (!config || config.timeLimitS == null) return
+        arenaSecondsLeft -= 1
+        if (arenaSecondsLeft <= 0) {
+          if (arenaTimerInterval) clearInterval(arenaTimerInterval)
+          arenaPhase = 'fail'
+          config.onTimeout?.()
+          return
+        }
+        if (config.statusLabel) config.statusLabel.text = `⏱️ ${arenaSecondsLeft}s`
+      }
+
+      // Chamado só ao sair do saguão (não ao trocar de arena mid-saguão — esse caso tem sua própria
+      // limpeza inline em `beginArenaCountdown` acima, mais enxuta porque a arena NOVA já está
+      // prestes a começar, não faz sentido zerar `arenaPhase`/disparar evento no meio do caminho) —
+      // critério de aceite do backlog "sair não deixa física/câmera/labels presos".
+      function exitActiveArena() {
+        if (!activeArenaId) return
+        const config = arenaConfigs[activeArenaId]
+        if (arenaPhase === 'playing') trackMinigameExited(activeArenaId)
+        if (arenaCountdownTimeout) clearTimeout(arenaCountdownTimeout)
+        if (arenaTimerInterval) clearInterval(arenaTimerInterval)
+        arenaCountdownTimeout = null
+        arenaTimerInterval = null
+        arenaPhase = 'idle'
+        config?.setTargetsVisible(false)
+        config?.resetState()
+        if (config?.statusLabel) config.statusLabel.alpha = 0
+        activeArenaId = null
+      }
+
+      // Memória (lab-198, prova de conceito do template) — cronômetro de 45s, falha ao esgotar.
       const MEMORY_TIME_LIMIT_S = 45
       const MEMORY_SYMBOLS = ['🍎', '🍌', '🍇']
       // `card.setEnabled` sozinho não esconde o TextBlock vinculado (achado ao vivo, ver comentário
@@ -9812,48 +10073,6 @@ export function World3D({
           gcMemoryCardMeshes[i].setEnabled(visible)
           gcMemoryCardLabels[i].alpha = visible ? 1 : 0
         }
-      }
-      function beginMemoryArenaCountdown(isRetry: boolean) {
-        if (arenaCountdownTimeout) clearTimeout(arenaCountdownTimeout)
-        if (arenaTimerInterval) clearInterval(arenaTimerInterval)
-        arenaPhase = 'countdown'
-        arenaSecondsLeft = 3
-        setMemoryCardsVisible(false)
-        const tickCountdown = () => {
-          if (gameCenterMemoryStatusLabel) {
-            gameCenterMemoryStatusLabel.text = `🧠 Memória — ${arenaSecondsLeft}`
-            gameCenterMemoryStatusLabel.alpha = 1
-          }
-          if (arenaSecondsLeft <= 0) {
-            arenaPhase = 'playing'
-            arenaMemoryState = createMemoryGame(MEMORY_SYMBOLS)
-            arenaSecondsLeft = MEMORY_TIME_LIMIT_S
-            setMemoryCardsVisible(true)
-            for (const label of gcMemoryCardLabels) label.text = '❓'
-            trackMinigameStarted('memoria')
-            if (isRetry) trackMinigameRetried('memoria')
-            arenaTimerInterval = setInterval(tickPlayingTimer, 1000)
-            return
-          }
-          arenaSecondsLeft -= 1
-          arenaCountdownTimeout = setTimeout(tickCountdown, 1000)
-        }
-        tickCountdown()
-      }
-
-      function tickPlayingTimer() {
-        if (arenaPhase !== 'playing') return
-        arenaSecondsLeft -= 1
-        if (arenaSecondsLeft <= 0) {
-          if (arenaTimerInterval) clearInterval(arenaTimerInterval)
-          arenaPhase = 'fail'
-          setMemoryCardsVisible(false)
-          if (gameCenterMemoryStatusLabel) {
-            gameCenterMemoryStatusLabel.text = '⏰ Tempo esgotado! Pressione E na placa pra tentar de novo'
-          }
-          return
-        }
-        if (gameCenterMemoryStatusLabel) gameCenterMemoryStatusLabel.text = `⏱️ ${arenaSecondsLeft}s`
       }
 
       function handleMemoryCardInteract(index: number) {
@@ -9872,6 +10091,54 @@ export function World3D({
             gameCenterMemoryStatusLabel.text = '🎉 Você venceu! Pressione E na placa pra jogar de novo'
           }
           trackMinigameCompleted('memoria')
+        }
+      }
+
+      // Contar (Lab 214) — sem cronômetro (backlog explícito: "sem tempo punitivo"), 3 rodadas
+      // corretas seguidas pra completar (`COUNTING_ROUNDS_TO_WIN`, `state/countingGame.ts`); errar
+      // não perde progresso, só mostra feedback e deixa escolher de novo na MESMA rodada.
+      const COUNTING_REWARD_COINS = 3
+      function setCountingTargetsVisible(visible: boolean) {
+        for (const star of gcCountingStarMeshes) star.setEnabled(visible)
+        for (let i = 0; i < gcCountingOptionMeshes.length; i++) {
+          gcCountingOptionMeshes[i].setEnabled(visible)
+          gcCountingOptionLabels[i].alpha = visible ? 1 : 0
+        }
+      }
+      function renderCountingRound() {
+        if (!arenaCountingState) return
+        const { targetCount, options } = arenaCountingState.round
+        for (let i = 0; i < gcCountingStarMeshes.length; i++) {
+          gcCountingStarMeshes[i].setEnabled(i < targetCount)
+        }
+        for (let i = 0; i < gcCountingOptionLabels.length; i++) {
+          gcCountingOptionLabels[i].text = String(options[i])
+        }
+      }
+      function handleCountingOptionInteract(index: number) {
+        if (arenaPhase !== 'playing' || !arenaCountingState) return
+        const chosen = arenaCountingState.round.options[index]
+        const { state, correct } = answerCountingRound(arenaCountingState, chosen)
+        arenaCountingState = state
+        if (!correct) {
+          if (gameCenterCountingStatusLabel) {
+            gameCenterCountingStatusLabel.text = '🤔 Quase! Conte de novo e escolha outra placa'
+          }
+          return
+        }
+        renderCountingRound()
+        if (isCountingGameComplete(state)) {
+          arenaPhase = 'success'
+          setCountingTargetsVisible(false)
+          if (gameCenterCountingStatusLabel) {
+            gameCenterCountingStatusLabel.text = '🎉 Você contou tudo certo! Pressione E na placa pra jogar de novo'
+          }
+          trackMinigameCompleted('contar')
+          for (let i = 0; i < COUNTING_REWARD_COINS; i++) onCollectCoinRef.current()
+          return
+        }
+        if (gameCenterCountingStatusLabel) {
+          gameCenterCountingStatusLabel.text = `✅ Isso mesmo! Rodada ${state.roundsWon}/${COUNTING_ROUNDS_TO_WIN}`
         }
       }
 
@@ -13185,24 +13452,38 @@ export function World3D({
                 : 0
           }
         }
-        // Dica "pressione E" de cada carta da arena de memória (backlog "Lab 213") — só faz sentido enquanto
-        // `playing` (fora disso as cartas estão `setEnabled(false)`, invisíveis, mas o TextBlock
-        // vinculado continuaria acompanhando a posição da malha desabilitada sem esta checagem).
-        if (avatarMesh && arenaPhase === 'playing') {
-          for (let i = 0; i < gcMemoryCardPos.length; i++) {
-            gcMemoryCardHintLabel[i].alpha = Vector3.Distance(avatarMesh.position, gcMemoryCardPos[i]) < MEMORY_CARD_TRIGGER_DISTANCE ? 1 : 0
+        // Dica "pressione E" de cada alvo da arena ATIVA (cartas de memória, placas de Contar) — só
+        // faz sentido enquanto `playing` (fora disso os alvos estão `setEnabled(false)`,
+        // invisíveis, mas o TextBlock vinculado continuaria acompanhando a posição da malha
+        // desabilitada sem esta checagem).
+        if (avatarMesh && arenaPhase === 'playing' && activeArenaId) {
+          const targetPositions = arenaTargetPositions[activeArenaId] ?? []
+          const hintLabels = arenaTargetHintLabels[activeArenaId] ?? []
+          for (let i = 0; i < targetPositions.length; i++) {
+            hintLabels[i].alpha = Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE ? 1 : 0
           }
         } else {
-          for (const label of gcMemoryCardHintLabel) label.alpha = 0
+          // Achado do review do Copilot: uma lista fixa de arrays aqui (uma por arena) quebra a
+          // promessa do template genérico — um mini-jogo novo exigiria lembrar de editar ESTE bloco
+          // também, fácil de esquecer (vazamento visual de dica presa). Percorre todas as arenas
+          // registradas em `arenaTargetHintLabels`, sem precisar conhecer os arrays específicos.
+          // `for...in` (não `Object.values`) de propósito — roda todo quadro, e `Object.values`
+          // alocaria um array novo a cada chamada (achado do review, 2ª rodada).
+          for (const key in arenaTargetHintLabels) {
+            const hintLabels = arenaTargetHintLabels[key as ArenaId]
+            if (!hintLabels) continue
+            for (const label of hintLabels) label.alpha = 0
+          }
         }
-        // Mensagem de status/resultado da arena (contagem, cronômetro, vitória/derrota) — some se a
-        // criança se afastar da área da arena, em vez de ficar flutuando pra sempre (achado ao
-        // verificar ao vivo: sem isso, "Você venceu!" continuava visível mesmo depois de ir pra
-        // outro portal, já que só `exitGameCenterInterior`/o próximo `beginMemoryArenaCountdown`
-        // mexiam nesse `alpha`).
-        if (avatarMesh && gameCenterMemoryStatusLabel) {
-          const nearArena = Vector3.Distance(avatarMesh.position, gameCenterPortalPos.memoria) < 3
-          gameCenterMemoryStatusLabel.alpha = arenaPhase !== 'idle' && nearArena ? 1 : 0
+        // Mensagem de status/resultado da arena ATIVA (contagem, cronômetro, vitória/derrota) —
+        // some se a criança se afastar da área da arena, em vez de ficar flutuando pra sempre
+        // (achado ao verificar ao vivo no lab-198: sem isso, "Você venceu!" continuava visível
+        // mesmo depois de ir pra outro portal, já que só `exitActiveArena`/o próximo
+        // `beginArenaCountdown` mexiam nesse `alpha`).
+        if (avatarMesh && activeArenaId) {
+          const config = arenaConfigs[activeArenaId]
+          const nearArena = Vector3.Distance(avatarMesh.position, gameCenterPortalPos[activeArenaId]) < 3
+          if (config?.statusLabel) config.statusLabel.alpha = arenaPhase !== 'idle' && nearArena ? 1 : 0
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
