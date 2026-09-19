@@ -1,15 +1,55 @@
 # Laboratório atual
 
-Em andamento: labs/lab-197-centro-jogos-educativo/ — cria um prédio/saguão de jogos no planeta
-principal, com 4 placas/portais (Contar/Soletrar/Memória/Lógica) — reaproveita a arquitetura de
-interior/teleporte da casa do jogador (sala isolada própria, não a `HOUSE_INTERIOR_CENTER`
-pessoal). Só o portal Lógica tem mini-jogo de verdade nesta fatia (liga ao quiz da ponte já
-existente); os outros 3 aparecem bloqueados/"em breve" até os labs 213-216 construírem o template
-de arena e os mini-jogos de verdade. Origem: `docs/gameplay-market-expansion-backlog.md`,
-"Lab 212 - Centro de jogos educativo com saguão e portais" — próximo item depois do lab-196. Ver
-`labs/lab-197-centro-jogos-educativo/FEATURES.md` pro objetivo/investigação prévia completos.
+Nenhum laboratório em andamento no momento — o próximo `lab start` decide o tema seguinte.
 
-Último concluído: labs/lab-196-hub-minijogos/ — cria um hub físico com 2 pedestais (parkour +
+Último concluído: labs/lab-197-centro-jogos-educativo/ — cria um prédio/saguão de jogos no planeta
+principal, com 4 placas/portais (Contar/Soletrar/Memória/Lógica) — reaproveita a arquitetura de
+interior/teleporte da casa do jogador (sala isolada própria, `GAME_CENTER_INTERIOR_CENTER =
+(-150, 0, -150)`, não a `HOUSE_INTERIOR_CENTER` pessoal). Só o portal Lógica tem mini-jogo de
+verdade nesta fatia (liga direto ao quiz da ponte já existente, lab-180, sem duplicar lógica de
+quiz); os outros 3 aparecem bloqueados/"em breve" até os labs 213-216 construírem o template de
+arena e os mini-jogos de verdade. Origem: `docs/gameplay-market-expansion-backlog.md`,
+"Lab 212 - Centro de jogos educativo com saguão e portais" — próximo item depois do lab-196.
+**Posicionamento do prédio — 3 candidatas rejeitadas ao vivo antes da final**: `(0.15, 0.7, -0.7)`
+media só ~30° do hub de mini-jogos (lab-196), abaixo da folga mínima que o próprio hub manteve dos
+vizinhos dele; `(0.75, 0.55, 0.4)` caiu perto de uma formação rochosa de montanha, câmera de 3ª
+pessoa presa numa visão de cima; `(0.85, 0.15, 0.5)` media só ~12,7° de `SHOP_ANCHOR_UP` (Lojinha),
+etiquetas sobrepostas na tela. Final `(-0.2, 0.3, 0.9)`, ajustada por `findFlatterUpReal` — mede
+~100° do hub, ~58° da casa, ~80° da Lojinha, confirmado ao vivo sem sobreposição. Eventos novos
+`game_center_entered`, `game_portal_selected` (`meta: { portalId }`), `game_center_returned`, e
+`time_to_first_minigame` (mesmo padrão de `time_to_first_control`/`time_to_first_learning_challenge`,
+lab-164, chamado de dentro de `trackMinigameStarted` — cobre qualquer caminho de início de
+mini-jogo, não só este lab) — todos com validação server-side e expostos em `weeklyFunnel` desde o
+primeiro commit (lição do lab-196). **PR #80 teve 2 rodadas de review com 2 bugs reais**: (1)
+`trackGameCenterReturned()` tinha ficado anexado por engano ao FIM da função errada
+(`exitHouseInterior` em vez de `exitGameCenterInterior` — as duas funções têm um teleporte de saída
+quase idêntico), disparando o evento sempre que qualquer jogador saía de CASA, inflando
+`weeklyFunnel.gameCenterReturned` com falsos positivos; corrigido removendo a chamada da função
+errada. (2) `time_to_first_minigame` gravava o objeto `meta` inteiro em vez de só `durationMs`
+(mesmo padrão tolerante do `session_end`, um evento LEGADO — este é um evento NOVO, deveria seguir
+a mesma restrição já aplicada aos outros 3 eventos novos deste lab); corrigido restringindo a
+`{ durationMs }`. `npx tsc -b` limpo; testes: app 213/213 (inalterado), `server-accounts` 160/160
+(+3 novos); `npm run build` sem regressão. **Verificado ao vivo via Chrome real, repetidamente**:
+prédio final sem sobreposição; fluxo completo entrada→4 placas→interação (bloqueada mostra "em
+breve", desbloqueada abre o quiz real da ponte)→saída, com os 5 eventos esperados disparando
+corretamente no caminho da Lógica (`game_portal_selected`, `time_to_first_learning_challenge`,
+`learning_challenge_started`, `minigame_started`, `time_to_first_minigame`); entrar/sair da CASA
+depois da correção não dispara mais nenhum evento do centro de jogos (confirmado com
+`window.fetch` interceptado, log vazio); câmera/física estáveis nos teleports de entrada/saída.
+Achado de ferramental (não é bug do jogo): teleportar repetidamente perto de um landmark novo via
+`__debugTeleport`/`__debugTeleportExact` em sucessão rápida, sem esperar ~2s de tempo real entre um
+teleporte e o screenshot seguinte, produz uma visão de câmera aérea/enevoada transitória — mesma
+limitação de throttle de `requestAnimationFrame` em abas controladas por automação já documentada
+em memória desta sessão, não reproduz esperando o tempo real necessário. Toque equivalente ao
+teclado não testado com simulação de toque real (mesma pendência disclosed em todos os labs
+anteriores desta sessão). Ver `labs/lab-197-centro-jogos-educativo/FEATURES.md` pro histórico
+completo rodada a rodada. **Merge confirmado**: PR #80 mesclada em `main` no commit `8dfabb5`
+(2026-09-19, merge commit, confirmado via `AskUserQuestion`). CI de `main` verde nos 3 workflows;
+deploy de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
+
+Antes desse: labs/lab-196-hub-minijogos/ — cria um hub físico com 2 pedestais (parkour +
 missão da ponte) que teleportam a criança até um mini-jogo já existente, com explicação curta +
 contagem regressiva, e pedestais de retorno pro hub. Origem:
 `docs/gameplay-market-expansion-backlog.md`, "Lab 209 - Hub de mini-jogos e teleport por botão no
