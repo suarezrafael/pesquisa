@@ -1,7 +1,8 @@
 # Laboratório 204 — Troféus na casa (fecha o Lab 211)
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-19
+Fim: 2026-09-19
 Commit inicial: 24a52c70feb7f36017de4181390ede4ad36393d9
 
 ## Objetivo do laboratório
