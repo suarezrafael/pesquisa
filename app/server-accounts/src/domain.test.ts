@@ -26,6 +26,7 @@ import {
   isValidPlanetInteractionKind,
   isValidLearningChallengeKind,
   isValidMinigameId,
+  isValidGameCenterPortalId,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
   sanitizeHouseFurnitureIds,
@@ -289,6 +290,13 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
   it('aceita os eventos do hub de mini-jogos (backlog "Lab 209")', () => {
     expect(isValidProductEventType('minigame_started')).toBe(true)
     expect(isValidProductEventType('minigame_completed')).toBe(true)
+    expect(isValidProductEventType('time_to_first_minigame')).toBe(true)
+  })
+
+  it('aceita os eventos do centro de jogos (backlog "Lab 212")', () => {
+    expect(isValidProductEventType('game_center_entered')).toBe(true)
+    expect(isValidProductEventType('game_portal_selected')).toBe(true)
+    expect(isValidProductEventType('game_center_returned')).toBe(true)
   })
 })
 
@@ -741,6 +749,22 @@ describe('isValidMinigameId (Hub de mini-jogos, backlog "Lab 209")', () => {
     expect(isValidMinigameId('')).toBe(false)
     expect(isValidMinigameId(123)).toBe(false)
     expect(isValidMinigameId(null)).toBe(false)
+  })
+})
+
+describe('isValidGameCenterPortalId (Centro de jogos, backlog "Lab 212")', () => {
+  it('aceita os 4 portais do saguão, travados ou não', () => {
+    expect(isValidGameCenterPortalId('contar')).toBe(true)
+    expect(isValidGameCenterPortalId('soletrar')).toBe(true)
+    expect(isValidGameCenterPortalId('memoria')).toBe(true)
+    expect(isValidGameCenterPortalId('logica')).toBe(true)
+  })
+
+  it('recusa id fora do conjunto conhecido', () => {
+    expect(isValidGameCenterPortalId('desenho')).toBe(false)
+    expect(isValidGameCenterPortalId('')).toBe(false)
+    expect(isValidGameCenterPortalId(123)).toBe(false)
+    expect(isValidGameCenterPortalId(null)).toBe(false)
   })
 })
 

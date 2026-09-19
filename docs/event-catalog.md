@@ -76,6 +76,7 @@ PR #55, 7ª rodada).
 | `time_to_first_control` | Primeiro frame com movimento real (teclado OU joystick combinados) NESTA sessão (lab-164) | `world3d/World3D.tsx`, laço de movimento | `durationMs` (desde `session_start`) | 1x por sessão |
 | `time_to_first_learning_challenge` | Primeira missão aberta NESTA sessão (lab-164) | `App.tsx`, `handleSelectQuest` | `durationMs` | 1x por sessão |
 | `time_to_first_reward` | Primeira conclusão genuína de missão NESTA sessão (lab-164) | `state/useProgress.ts`, `completeQuest` (via `trackFirstReward`) | `durationMs` | 1x por sessão |
+| `time_to_first_minigame` | Primeiro mini-jogo iniciado NESTA sessão, por qualquer caminho (hub do lab-196 ou portal "Lógica" do centro de jogos, backlog "Lab 212") — dispara de dentro de `trackMinigameStarted` | `productAnalytics.ts`, `trackFirstMinigame` (via `trackMinigameStarted`) | `durationMs` | 1x por sessão |
 | `activation_cycle_completed` | Igual ao de cima, mas só quando é a PRIMEIRA missão da vida do perfil (`completedQuestIds` vazio antes) E dentro de 10 minutos da sessão (lab-164) | `productAnalytics.ts`, `trackFirstReward` | `durationMs` | 0 ou 1x por perfil (a vida toda) |
 | `family_landing_viewed` | Tela de proposta de valor exibida em `/familia`, depois do portão de matemática (lab-166) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por exibição (sem limite de sessão) |
 | `parent_signup_started` | Clique em "Entrar / Criar conta" na tela de proposta de valor (lab-166) | `components/FamilyPortal.tsx`, `FamilyValueProp` | — | 1x por clique |
@@ -92,6 +93,9 @@ PR #55, 7ª rodada).
 | `weekly_event_objective_completed` | Objetivo educativo/ambiental do evento semanal concedido (lab-182, "Eventos semanais saudáveis") — dispara só na PRIMEIRA vez em cada semana ISO que o bônus é de fato pago, mesmo completando vários desafios ambientais na mesma semana | `App.tsx`, `handleEnvironmentalChallengeCorrect` | — | 1x por semana ISO por perfil |
 | `minigame_started` | Fim da contagem regressiva de um pedestal do hub de mini-jogos, no instante do teleporte pro mini-jogo (backlog "Lab 209 - Hub de mini-jogos") | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`) | 1x por teleporte |
 | `minigame_completed` | Uso do pedestal de RETORNO ao hub a partir de um mini-jogo — mede "fez a ida-e-volta pelo hub", não "resolveu o desafio certo" (parkour não tem estado de conclusão persistido; o quiz da ponte roda noutro componente que este evento não observa) | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`) | 1x por retorno |
+| `game_center_entered` | Entrar no saguão do centro de jogos pela porta externa (backlog "Lab 212 - Centro de jogos educativo com saguão e portais") | `world3d/World3D.tsx`, `enterGameCenterInterior` | — | 1x por entrada |
+| `game_portal_selected` | Interagir com QUALQUER placa/portal do saguão, travada ou não — mede "a criança entendeu que aquele portal existe e o que ele é", não "conseguiu jogar" | `world3d/World3D.tsx`, `handleGameCenterPortalInteract` | `portalId` (`"contar"`, `"soletrar"`, `"memoria"`, `"logica"`) | 1x por interação |
+| `game_center_returned` | Sair do saguão pela porta interna, de volta ao planeta | `world3d/World3D.tsx`, `exitGameCenterInterior` | — | 1x por saída |
 
 ## Nível de agregação (lab-185)
 
@@ -209,6 +213,14 @@ decisão").
   do resto do funil: dispositivos únicos com ao menos 1 ocorrência nos últimos 7 dias corridos, não
   uma contagem por perfil/sessão). `minigame_completed` mede "voltou ao hub depois de entrar", não
   "resolveu o mini-jogo certo" — ver a coluna de descrição da tabela acima.
+- **Centro de jogos educativo** (backlog "Lab 212") — `game_center_entered` → `game_portal_selected`
+  → `game_center_returned` formam o funil do saguão, lidos semanalmente por
+  `weeklyFunnel.gameCenterEntered`/`gamePortalSelected`/`gameCenterReturned` (mesma convenção de
+  ALCANCE). `game_portal_selected` dispara pra QUALQUER portal, incluindo os 3 ainda bloqueados
+  (`Contar`/`Soletrar`/`Memória`, sem mini-jogo de verdade nesta fatia — só `Lógica` abre algo de
+  verdade, reaproveitando o quiz da ponte do lab-180). `time_to_first_minigame` (mesmo padrão de
+  `time_to_first_control`/`time_to_first_learning_challenge`/`time_to_first_reward`, lab-164) cobre
+  QUALQUER caminho de início de mini-jogo — hub ou centro de jogos — não é específico deste lab.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de

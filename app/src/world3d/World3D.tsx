@@ -99,6 +99,9 @@ import {
   trackPlanetInteractionCompleted,
   trackMinigameStarted,
   trackMinigameCompleted,
+  trackGameCenterEntered,
+  trackGamePortalSelected,
+  trackGameCenterReturned,
 } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
 import type { Profile, Progress, Quest } from '../types'
@@ -3449,6 +3452,15 @@ export function World3D({
     // de gravidade radial acima, tratando o interior como mais um "planetinha" de raio grande).
     let insideHouseInterior = false
     let houseInteriorBuilt = false
+    // Centro de jogos (backlog "Lab 212 - Centro de jogos educativo com saguão e portais") —
+    // reaproveita `insideHouseInterior` como a flag "dentro de ALGUM interior de bolso" (câmera
+    // compacta, chuva desligada, pet escondido, cronômetro de sobrevivência pausado — todo
+    // comportamento já condicionado a ela serve igual pro saguão), e usa este novo booleano só pra
+    // distinguir QUAL sala está ativa nos poucos pontos que realmente precisam saber (qual malha de
+    // parede desvanecer pela câmera, onde fica a porta de saída, o que construir/popular). Nunca
+    // fica `true` com `insideHouseInterior` `false` — sempre os dois juntos.
+    let insideGameCenterInterior = false
+    let gameCenterInteriorBuilt = false
     // Restaurados ao sair (ver `exitHouseInterior`) — a casa nunca muda `currentPlanetId` (ver
     // comentário acima), então "fora" é sempre onde o jogador estava exatamente antes de entrar.
     let savedOutsideCenter = Vector3.Zero()
@@ -3467,6 +3479,28 @@ export function World3D({
     let houseCounterPos = Vector3.Zero()
     let houseExitHintLabel: TextBlock | null = null
     let houseEnterHintLabel: TextBlock | null = null
+    // Centro de jogos — mesmo papel de `houseDoorInsidePos`/`houseInteriorSpawnPos`/
+    // `houseExitHintLabel`/`houseEnterHintLabel` acima, sala própria.
+    let gameCenterDoorOutsidePos = Vector3.Zero()
+    let gameCenterDoorInsidePos = Vector3.Zero()
+    let gameCenterInteriorSpawnPos = Vector3.Zero()
+    let gameCenterExitHintLabel: TextBlock | null = null
+    let gameCenterEnterHintLabel: TextBlock | null = null
+    let gameCenterInteriorRootNode: TransformNode | null = null
+    const gameCenterWallMats: Record<string, PBRMaterial> = {}
+    type GameCenterPortalId = 'contar' | 'soletrar' | 'memoria' | 'logica'
+    const gameCenterPortalPos: Record<GameCenterPortalId, Vector3> = {
+      contar: Vector3.Zero(),
+      soletrar: Vector3.Zero(),
+      memoria: Vector3.Zero(),
+      logica: Vector3.Zero(),
+    }
+    const gameCenterPortalHintLabel: Record<GameCenterPortalId, TextBlock | null> = {
+      contar: null,
+      soletrar: null,
+      memoria: null,
+      logica: null,
+    }
     // lab-172 — mesmo padrão de `houseEnterHintLabel`, só que também exige um parceiro por perto
     // (ver uso no loop de física) — sozinho, o jogador nunca vê a dica, pra não convidar pra um
     // desafio que não dá pra completar sozinho.
@@ -4086,11 +4120,30 @@ export function World3D({
         }
         if (suspendRef.current || chatOpenRef.current || !avatarMesh) return
 
+        // Centro de jogos (backlog "Lab 212") — checado ANTES da casa porque `insideGameCenterInterior`
+        // é a flag MAIS ESPECÍFICA (só verdadeira dentro do saguão); `insideHouseInterior` sozinho
+        // não distingue as duas salas (ver comentário na declaração dele).
+        if (insideGameCenterInterior) {
+          if (Vector3.Distance(avatarMesh.position, gameCenterDoorInsidePos) < GAME_CENTER_TRIGGER_DISTANCE) {
+            exitGameCenterInterior()
+            return
+          }
+          for (const id of GAME_CENTER_PORTAL_IDS) {
+            if (Vector3.Distance(avatarMesh.position, gameCenterPortalPos[id]) < GAME_CENTER_TRIGGER_DISTANCE) {
+              handleGameCenterPortalInteract(id)
+              return
+            }
+          }
+        } else if (Vector3.Distance(avatarMesh.position, gameCenterDoorOutsidePos) < GAME_CENTER_TRIGGER_DISTANCE) {
+          enterGameCenterInterior()
+          return
+        }
+
         // Casa (lab-123) — apertar E perto da porta entra/sai; perto do balcão de compras (só
         // dentro de casa) abre o catálogo. Checado ANTES do carro/foguete: nenhum dos dois existe
         // perto da casa ou dentro do interior (planetinha de raio grande bem longe de tudo o
         // resto), então a ordem não importa na prática, mas casa primeiro deixa a intenção clara.
-        if (insideHouseInterior) {
+        if (insideHouseInterior && !insideGameCenterInterior) {
           if (Vector3.Distance(avatarMesh.position, houseDoorInsidePos) < HOUSE_TRIGGER_DISTANCE) {
             exitHouseInterior()
             return
@@ -9238,6 +9291,374 @@ export function World3D({
         )
       }
 
+      // Centro de jogos educativo (backlog "Lab 212 - Centro de jogos educativo com saguão e
+      // portais") — prédio com fachada sólida (mesma técnica de construção da casa/escolinhas:
+      // `PhysicsAggregate`, `findFlatterUpReal` pra evitar o prédio enterrado, porta decorativa sem
+      // vão físico de verdade) e um saguão INTERNO, reaproveitando o mesmo mecanismo de "planetinha
+      // de bolso" já usado pela casa (`insideHouseInterior`/`currentWorldCenter`/
+      // `currentGroundBaseFn`) — ver comentário na declaração de `insideGameCenterInterior` pro
+      // porquê de reaproveitar a MESMA flag em vez de duplicar toda a lógica de câmera/chuva/pet já
+      // condicionada a ela.
+      // Mesmo "planetinha" de raio grande da casa (`HOUSE_INTERIOR_CENTER`), bem longe de tudo o
+      // resto do mundo — centro PRÓPRIO (nunca o mesmo da casa), num quadrante bem diferente
+      // (`x` negativo vs. positivo) só pra deixar óbvio em qualquer inspeção de coordenadas que são
+      // dois "planetinhas" distintos, não o mesmo reaproveitado por engano.
+      const GAME_CENTER_INTERIOR_CENTER = new Vector3(-150, 0, -150)
+      const GAME_CENTER_INTERIOR_RADIUS = 10
+      // Maior que `HOUSE_ROOM_HALF_SIZE` (5.5) — precisa caber um leque de 4 placas visíveis ao
+      // mesmo tempo, sem amontoar (a casa só tem mobília numa anel decorativo, não algo que a
+      // criança precisa LER uma a uma).
+      const GAME_CENTER_ROOM_HALF_SIZE = 7
+
+      // Duas candidatas anteriores rejeitadas ao vivo: (0.15,0.7,-0.7) media só ~30° do hub
+      // (lab-196) — abaixo da folga mínima que o próprio hub manteve dos vizinhos dele (~35-64°);
+      // (0.75,0.55,0.4) caiu perto demais de uma formação rochosa (câmera 3ª pessoa presa olhando
+      // de cima, achado ao vivo); (0.85,0.15,0.5) media só ~12,7° de `SHOP_ANCHOR_UP` (Lojinha) —
+      // etiquetas sobrepostas na tela, confirmado ao vivo. Esta mede ~93° do hub, ~52° da casa,
+      // ~80° da Lojinha, ~103°/117° de parkour/ponte — confirmada ao vivo sem sobreposição.
+      const GAME_CENTER_CANDIDATE_UP = new Vector3(-0.2, 0.3, 0.9).normalize()
+      const GAME_CENTER_FOOTPRINT_ANGULAR_RADIUS = 1.6 / PLANET_RADIUS
+      const GAME_CENTER_SAFE_TERRAIN_VARIANCE = 0.6
+      const gameCenterUp = findFlatterUpReal(
+        GAME_CENTER_CANDIDATE_UP,
+        GAME_CENTER_FOOTPRINT_ANGULAR_RADIUS,
+        GAME_CENTER_SAFE_TERRAIN_VARIANCE,
+      )
+      const gameCenterSurfacePos = groundSurfacePosition(gameCenterUp)
+      const GAME_CENTER_TRIGGER_DISTANCE = 1.6
+
+      const gameCenterBase = new TransformNode('centro-jogos', scene)
+      gameCenterBase.position = gameCenterSurfacePos
+      gameCenterBase.rotationQuaternion = alignmentQuaternion(gameCenterUp)
+
+      const gameCenterWallMat = new PBRMaterial('gameCenterWallMat', scene)
+      gameCenterWallMat.albedoColor = new Color3(0.35, 0.4, 0.75)
+      gameCenterWallMat.roughness = 0.6
+      const gameCenterRoofMat = new PBRMaterial('gameCenterRoofMat', scene)
+      gameCenterRoofMat.albedoColor = new Color3(0.85, 0.55, 0.2)
+      gameCenterRoofMat.roughness = 0.5
+      const gameCenterDoorMat = new PBRMaterial('gameCenterDoorMat', scene)
+      gameCenterDoorMat.albedoColor = new Color3(0.4, 0.25, 0.15)
+      gameCenterDoorMat.roughness = 0.7
+      const gameCenterFoundationMat = new PBRMaterial('gameCenterFoundationMat', scene)
+      gameCenterFoundationMat.albedoColor = new Color3(0.5, 0.42, 0.32)
+      gameCenterFoundationMat.roughness = 0.95
+
+      const gameCenterWalls = MeshBuilder.CreateBox('gameCenterWalls', { width: 2.4, height: 1.7, depth: 2.0 }, scene)
+      gameCenterWalls.position = new Vector3(0, 0.85, 0)
+      gameCenterWalls.material = gameCenterWallMat
+      gameCenterWalls.parent = gameCenterBase
+      gameCenterWalls.receiveShadows = true
+      new PhysicsAggregate(gameCenterWalls, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+      shadowGenerator.addShadowCaster(gameCenterWalls)
+
+      const gameCenterRoof = MeshBuilder.CreateBox('gameCenterRoof', { width: 2.7, height: 0.25, depth: 2.3 }, scene)
+      gameCenterRoof.position = new Vector3(0, 1.825, 0)
+      gameCenterRoof.material = gameCenterRoofMat
+      gameCenterRoof.parent = gameCenterBase
+      gameCenterRoof.receiveShadows = true
+      shadowGenerator.addShadowCaster(gameCenterRoof)
+
+      const gameCenterFoundation = MeshBuilder.CreateBox(
+        'gameCenterFoundation',
+        { width: 2.55, height: 1.6, depth: 2.15 },
+        scene,
+      )
+      gameCenterFoundation.position = new Vector3(0, -0.65, 0)
+      gameCenterFoundation.material = gameCenterFoundationMat
+      gameCenterFoundation.parent = gameCenterBase
+      gameCenterFoundation.receiveShadows = true
+      shadowGenerator.addShadowCaster(gameCenterFoundation)
+
+      // Porta decorativa (mesmo padrão da casa/escolinhas: nenhum prédio deste jogo tem vão físico
+      // de verdade na parede — a parede inteira já é sólida via `PhysicsAggregate` acima).
+      const gameCenterDoor = MeshBuilder.CreateBox('gameCenterDoor', { width: 1.0, height: 1.5, depth: 0.1 }, scene)
+      gameCenterDoor.position = new Vector3(0, 0.75, 1.05)
+      gameCenterDoor.material = gameCenterDoorMat
+      gameCenterDoor.parent = gameCenterBase
+
+      settleMeshOnTerrain(gameCenterBase, gameCenterUp)
+      gameCenterSurfacePos.copyFrom(gameCenterBase.position)
+      gameCenterDoorOutsidePos = gameCenterBase.position.add(
+        Vector3.TransformNormal(gameCenterDoor.position, gameCenterBase.getWorldMatrix()),
+      )
+
+      const gameCenterSignLabel = new TextBlock('gameCenterSignLabel', '🎮 Centro de Jogos')
+      gameCenterSignLabel.color = 'white'
+      gameCenterSignLabel.fontSize = mobileFontSize(22)
+      gameCenterSignLabel.fontWeight = 'bold'
+      gameCenterSignLabel.outlineWidth = 4
+      gameCenterSignLabel.outlineColor = 'rgba(0,0,0,0.5)'
+      guiTexture.addControl(gameCenterSignLabel)
+      gameCenterSignLabel.linkWithMesh(gameCenterRoof)
+      gameCenterSignLabel.linkOffsetY = -40
+
+      const gameCenterEnterHint = new TextBlock('gameCenterEnterHint', 'Pressione E pra entrar')
+      gameCenterEnterHint.color = 'white'
+      gameCenterEnterHint.fontSize = mobileFontSize(18)
+      gameCenterEnterHint.fontWeight = 'bold'
+      gameCenterEnterHint.outlineWidth = 3
+      gameCenterEnterHint.outlineColor = 'rgba(0,0,0,0.6)'
+      gameCenterEnterHint.alpha = 0
+      guiTexture.addControl(gameCenterEnterHint)
+      gameCenterEnterHint.linkWithMesh(gameCenterDoor)
+      gameCenterEnterHint.linkOffsetY = -15
+      gameCenterEnterHintLabel = gameCenterEnterHint
+
+      // Só `Lógica` tem mini-jogo de verdade nesta fatia (reaproveita o quiz da ponte, lab-180) —
+      // `Contar`/`Soletrar`/`Memória` são construídos nos labs 213-216, ainda não existem (ver
+      // "Decisão de escopo" em FEATURES.md). `unlocked: false` usa o mesmo tom apagado de
+      // `applyPortalVisual` (portais de planeta-destino) — bloqueado, não escondido, pra cumprir o
+      // critério de aceite "entende pra qual tipo de mini-jogo vai" mesmo sem poder jogar ainda.
+      const GAME_CENTER_PORTAL_IDS: GameCenterPortalId[] = ['contar', 'soletrar', 'memoria', 'logica']
+      const GAME_CENTER_PORTAL_INFO: Record<GameCenterPortalId, { emoji: string; label: string; color: Color3; unlocked: boolean }> = {
+        contar: { emoji: '🔢', label: 'Contar', color: new Color3(0.2, 0.6, 0.85), unlocked: false },
+        soletrar: { emoji: '🔤', label: 'Soletrar', color: new Color3(0.85, 0.55, 0.2), unlocked: false },
+        memoria: { emoji: '🧠', label: 'Memória', color: new Color3(0.65, 0.3, 0.75), unlocked: false },
+        logica: { emoji: '🧩', label: 'Lógica', color: new Color3(0.25, 0.7, 0.35), unlocked: true },
+      }
+      const GAME_CENTER_LOCKED_MAT_COLOR = new Color3(0.4, 0.4, 0.42)
+
+      // Construído sob demanda na primeira entrada (mesmo padrão de `buildHouseInteriorIfNeeded`) —
+      // nenhum jogador que nunca visitar o centro de jogos paga o custo de criar esta sala.
+      function buildGameCenterInteriorIfNeeded() {
+        if (gameCenterInteriorBuilt) return
+        gameCenterInteriorBuilt = true
+
+        const GAME_CENTER_INTERIOR_UP = Vector3.Up()
+        const interiorRoot = new TransformNode('gameCenterInteriorRoot', scene)
+        interiorRoot.position = GAME_CENTER_INTERIOR_CENTER.add(GAME_CENTER_INTERIOR_UP.scale(GAME_CENTER_INTERIOR_RADIUS))
+        interiorRoot.rotationQuaternion = alignmentQuaternion(GAME_CENTER_INTERIOR_UP)
+        gameCenterInteriorRootNode = interiorRoot
+
+        const S = GAME_CENTER_ROOM_HALF_SIZE
+        const H = HOUSE_ROOM_HEIGHT
+        const T = HOUSE_WALL_THICK
+
+        const floorMat = new PBRMaterial('gcIntFloorMat', scene)
+        floorMat.albedoColor = new Color3(0.3, 0.32, 0.4)
+        floorMat.roughness = 0.7
+        const wallMat = new PBRMaterial('gcIntWallMat', scene)
+        wallMat.albedoColor = new Color3(0.82, 0.84, 0.9)
+        wallMat.roughness = 0.85
+        const ceilingMat = new PBRMaterial('gcIntCeilingMat', scene)
+        ceilingMat.albedoColor = new Color3(0.78, 0.8, 0.86)
+        ceilingMat.roughness = 0.9
+        const doorMat = new PBRMaterial('gcIntDoorMat', scene)
+        doorMat.albedoColor = new Color3(0.4, 0.25, 0.15)
+        doorMat.roughness = 0.7
+
+        const floor = MeshBuilder.CreateBox('gcIntFloor', { width: S * 2, height: T, depth: S * 2 }, scene)
+        floor.position.y = -T / 2
+        floor.material = floorMat
+        floor.parent = interiorRoot
+        floor.receiveShadows = true
+        new PhysicsAggregate(floor, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+
+        const ceiling = MeshBuilder.CreateBox('gcIntCeiling', { width: S * 2, height: T, depth: S * 2 }, scene)
+        ceiling.position.y = H + T / 2
+        ceiling.material = ceilingMat
+        ceiling.parent = interiorRoot
+
+        const wallHalf = H / 2
+        const northWall = MeshBuilder.CreateBox('gcIntWallNorth', { width: S * 2, height: H, depth: T }, scene)
+        northWall.position = new Vector3(0, wallHalf, -S)
+        const southWall = MeshBuilder.CreateBox('gcIntWallSouth', { width: S * 2, height: H, depth: T }, scene)
+        southWall.position = new Vector3(0, wallHalf, S)
+        const eastWall = MeshBuilder.CreateBox('gcIntWallEast', { width: T, height: H, depth: S * 2 }, scene)
+        eastWall.position = new Vector3(S, wallHalf, 0)
+        const westWall = MeshBuilder.CreateBox('gcIntWallWest', { width: T, height: H, depth: S * 2 }, scene)
+        westWall.position = new Vector3(-S, wallHalf, 0)
+        for (const wall of [northWall, southWall, eastWall, westWall]) {
+          // Material CLONADO por parede — mesmo motivo da casa (lab-136): desvanecer só a parede
+          // entre a câmera e o jogador precisa de alpha independente por parede.
+          const mat = wallMat.clone(`${wallMat.name}-${wall.name}`) as PBRMaterial
+          wall.material = mat
+          gameCenterWallMats[wall.name] = mat
+          wall.parent = interiorRoot
+          wall.receiveShadows = true
+          new PhysicsAggregate(wall, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+          shadowGenerator.addShadowCaster(wall)
+        }
+
+        const interiorDoor = MeshBuilder.CreateBox('gcIntDoor', { width: 0.9, height: 1.8, depth: 0.08 }, scene)
+        interiorDoor.position = new Vector3(0, 0.9, S - T / 2 - 0.05)
+        interiorDoor.material = doorMat
+        interiorDoor.parent = interiorRoot
+        gameCenterDoorInsidePos = interiorRoot.position.add(interiorDoor.position)
+
+        const exitHint = new TextBlock('gcExitHint', 'Pressione E pra sair')
+        exitHint.color = 'white'
+        exitHint.fontSize = mobileFontSize(18)
+        exitHint.fontWeight = 'bold'
+        exitHint.outlineWidth = 3
+        exitHint.outlineColor = 'rgba(0,0,0,0.6)'
+        exitHint.alpha = 0
+        guiTexture.addControl(exitHint)
+        exitHint.linkWithMesh(interiorDoor)
+        gameCenterExitHintLabel = exitHint
+
+        // Nascimento longe da porta (mesma histerese da casa) — evita disparar a saída no mesmo
+        // instante em que se entra.
+        const spawnClearanceFromBackWall = HOUSE_INTERIOR_CAMERA_DISTANCE + 1
+        gameCenterInteriorSpawnPos = interiorRoot.position.add(
+          new Vector3(0, AVATAR_RADIUS + 0.05, -(S - spawnClearanceFromBackWall)),
+        )
+
+        // 4 placas em leque, de frente pra porta (mesmo espírito do anel de mobília da casa, só
+        // que num arco fixo em vez de posições aleatórias — só 4 placas, sempre as mesmas, fica
+        // mais legível numa fileira do que espalhadas).
+        const arcSpan = Math.PI * 0.55
+        const arcStart = -arcSpan / 2
+        const ringRadius = S - 2.2
+        GAME_CENTER_PORTAL_IDS.forEach((id, index) => {
+          const info = GAME_CENTER_PORTAL_INFO[id]
+          const angle = arcStart + (arcSpan * index) / (GAME_CENTER_PORTAL_IDS.length - 1)
+          const localPos = new Vector3(Math.sin(angle) * ringRadius, 0, -Math.cos(angle) * ringRadius)
+
+          const plaqueMat = new PBRMaterial(`gcPortalMat-${id}`, scene)
+          plaqueMat.albedoColor = info.unlocked ? info.color : GAME_CENTER_LOCKED_MAT_COLOR
+          plaqueMat.roughness = 0.6
+          if (info.unlocked) plaqueMat.emissiveColor = info.color.scale(0.2)
+
+          const plaquePost = MeshBuilder.CreateCylinder(`gcPortalPost-${id}`, { height: 1.3, diameter: 0.14, tessellation: 8 }, scene)
+          plaquePost.position = localPos.add(new Vector3(0, 0.65, 0))
+          plaquePost.material = plaqueMat
+          plaquePost.parent = interiorRoot
+          plaquePost.receiveShadows = true
+          shadowGenerator.addShadowCaster(plaquePost)
+
+          const plaqueBoard = MeshBuilder.CreateBox(`gcPortalBoard-${id}`, { width: 0.9, height: 0.7, depth: 0.1 }, scene)
+          plaqueBoard.position = localPos.add(new Vector3(0, 1.35, 0))
+          plaqueBoard.material = plaqueMat
+          plaqueBoard.parent = interiorRoot
+          plaqueBoard.receiveShadows = true
+          shadowGenerator.addShadowCaster(plaqueBoard)
+          // Achatada quando bloqueada — mesmo sinal visual de `applyPortalVisual` (portais de
+          // planeta-destino): dá pra ver que existe, mas visivelmente "menos" que os desbloqueados.
+          plaqueBoard.visibility = info.unlocked ? 1 : 0.55
+
+          gameCenterPortalPos[id] = interiorRoot.position.add(localPos)
+
+          const plaqueLabel = new TextBlock(`gcPortalLabel-${id}`, `${info.emoji} ${info.label}`)
+          plaqueLabel.color = 'white'
+          plaqueLabel.fontSize = mobileFontSize(20)
+          plaqueLabel.fontWeight = 'bold'
+          plaqueLabel.outlineWidth = 4
+          plaqueLabel.outlineColor = 'rgba(0,0,0,0.5)'
+          guiTexture.addControl(plaqueLabel)
+          plaqueLabel.linkWithMesh(plaqueBoard)
+          plaqueLabel.linkOffsetY = -45
+
+          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? 'Pressione E pra jogar' : 'Pressione E · Em breve')
+          plaqueHint.color = 'white'
+          plaqueHint.fontSize = mobileFontSize(16)
+          plaqueHint.fontWeight = 'bold'
+          plaqueHint.outlineWidth = 3
+          plaqueHint.outlineColor = 'rgba(0,0,0,0.6)'
+          plaqueHint.alpha = 0
+          guiTexture.addControl(plaqueHint)
+          plaqueHint.linkWithMesh(plaqueBoard)
+          plaqueHint.linkOffsetY = -20
+          gameCenterPortalHintLabel[id] = plaqueHint
+        })
+      }
+
+      function enterGameCenterInterior() {
+        buildGameCenterInteriorIfNeeded()
+        if (!avatarMesh || !avatarBody) return
+        // Mesmo bloqueio da casa (lab-175): sair do carro/foguete antes, e nunca pular direto de
+        // UM interior de bolso pro outro sem sair (ver comentário na declaração de
+        // `insideGameCenterInterior` — os dois nunca coexistem).
+        if (drivingCar || drivingRocket) {
+          furnitureReactionTimeout = showChatBubbleText(
+            furnitureReactionLabel,
+            '🚗 Saia do carro ou do foguete antes de entrar no centro de jogos.',
+            furnitureReactionTimeout,
+          )
+          return
+        }
+        if (insideHouseInterior) {
+          furnitureReactionTimeout = showChatBubbleText(
+            furnitureReactionLabel,
+            '🏠 Saia de casa antes de entrar no centro de jogos.',
+            furnitureReactionTimeout,
+          )
+          return
+        }
+        savedOutsideCenter = currentWorldCenter
+        savedOutsideGroundFn = currentGroundBaseFn
+        savedOutsideLocalUp = avatarMesh.position.subtract(currentWorldCenter).normalize()
+        insideHouseInterior = true
+        insideGameCenterInterior = true
+        cameraYawOffsetRef.current = 0
+        houseCameraPitchOffsetRef.current = 0
+        houseCameraZoomRef.current = 1
+        pinchPointers.clear()
+        pinchStartDistance = 0
+        cameraDragging = false
+        cameraDragPointerId = null
+        currentWorldCenter = GAME_CENTER_INTERIOR_CENTER
+        currentGroundBaseFn = () => GAME_CENTER_INTERIOR_RADIUS
+        avatarBody.body.disablePreStep = false
+        avatarMesh.position.copyFrom(gameCenterInteriorSpawnPos)
+        scene.render()
+        avatarBody.body.setLinearVelocity(Vector3.Zero())
+        avatarBody.body.setAngularVelocity(Vector3.Zero())
+        avatarBody.body.disablePreStep = true
+        facing = new Vector3(0, 0, 1)
+        trackGameCenterEntered()
+      }
+
+      function exitGameCenterInterior() {
+        if (!insideGameCenterInterior) return
+        insideHouseInterior = false
+        insideGameCenterInterior = false
+        cameraDragging = false
+        cameraDragPointerId = null
+        pinchPointers.clear()
+        pinchStartDistance = 0
+        currentWorldCenter = savedOutsideCenter
+        currentGroundBaseFn = savedOutsideGroundFn
+        teleportAvatarTo(
+          savedOutsideCenter,
+          offsetLandingUp(savedOutsideLocalUp, savedOutsideGroundFn(savedOutsideLocalUp), 2.5),
+          savedOutsideGroundFn,
+        )
+        trackGameCenterReturned()
+      }
+
+      // Portal bloqueado só mostra a dica "em breve"; `Lógica` abre o MESMO quiz da ponte
+      // (lab-180) direto do saguão, sem precisar teleportar até a ponte de verdade — metáfora de
+      // "portal de arcade" (entra e joga na hora), diferente do hub do lab-196 (que reloca o
+      // avatar pro local físico do mini-jogo). `minigame_started`/`ponte-logica` reaproveita o
+      // MESMO id do hub de propósito — é o mesmo mini-jogo por baixo, mede o mesmo agregado
+      // independente de por onde a criança entrou. Não dispara `minigame_completed` aqui: não
+      // existe pedestal de retorno neste caminho (o modal fecha sozinho ao responder), então não
+      // há um "voltou" pra medir — `learning_challenge_completed` (já disparado pelo próprio fluxo
+      // do quiz) já cobre a conclusão de verdade pra quem quiser ler aquele evento.
+      function handleGameCenterPortalInteract(id: GameCenterPortalId) {
+        const info = GAME_CENTER_PORTAL_INFO[id]
+        trackGamePortalSelected(id)
+        if (!info.unlocked) {
+          furnitureReactionTimeout = showChatBubbleText(
+            furnitureReactionLabel,
+            `${info.emoji} ${info.label}: em breve!`,
+            furnitureReactionTimeout,
+          )
+          return
+        }
+        // `'bridge'` (não uma string nova tipo "game-center-logica") de propósito: é o MESMO kind
+        // de missão ambiental (`learning_challenge_started/completed`), só disparado de um lugar
+        // diferente — inventar um kind novo exigiria mudar o tipo de `onOpenEnvironmentalChallenge`
+        // e a allowlist do Worker (`isValidLearningChallengeKind`) sem nenhum ganho de sinal real.
+        onOpenEnvironmentalChallengeRef.current(
+          selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),
+          'bridge',
+        )
+        trackMinigameStarted('ponte-logica')
+      }
+
       // Posicionamento manual de mobília (lab-136, pedido do usuário: "tem que ter opção... de
       // escolher em que posição da casa deve ficar a peça... o ângulo e posição onde fica o
       // objeto"). Três funções espelhando o padrão já estabelecido de "entrar/confirmar/cancelar
@@ -11440,7 +11861,7 @@ export function World3D({
           // aos eixos locais de `interiorRoot`, então comparar a coordenada local da câmera contra
           // ±`HOUSE_ROOM_HALF_SIZE` em cada eixo já identifica exatamente qual parede é). Suaviza
           // com lerp (não troca de opacidade num só quadro) pra não "piscar".
-          if (insideHouseInterior && houseInteriorRootNode) {
+          if (insideHouseInterior && !insideGameCenterInterior && houseInteriorRootNode) {
             const camLocal = camera.position.subtract(houseInteriorRootNode.position)
             const wallOver: Record<string, boolean> = {
               houseIntWallNorth: camLocal.z < -HOUSE_ROOM_HALF_SIZE,
@@ -11449,6 +11870,21 @@ export function World3D({
               houseIntWallWest: camLocal.x < -HOUSE_ROOM_HALF_SIZE,
             }
             for (const [name, mat] of Object.entries(houseWallMats)) {
+              const targetAlpha = wallOver[name] ? HOUSE_WALL_FADE_ALPHA : 1
+              mat.alpha += (targetAlpha - mat.alpha) * 0.2
+            }
+          }
+          // Centro de jogos — mesmo desvanecimento de parede-entre-câmera-e-jogador da casa acima,
+          // sala própria (`GAME_CENTER_ROOM_HALF_SIZE` maior que `HOUSE_ROOM_HALF_SIZE`).
+          if (insideGameCenterInterior && gameCenterInteriorRootNode) {
+            const camLocal = camera.position.subtract(gameCenterInteriorRootNode.position)
+            const wallOver: Record<string, boolean> = {
+              gcIntWallNorth: camLocal.z < -GAME_CENTER_ROOM_HALF_SIZE,
+              gcIntWallSouth: camLocal.z > GAME_CENTER_ROOM_HALF_SIZE,
+              gcIntWallEast: camLocal.x > GAME_CENTER_ROOM_HALF_SIZE,
+              gcIntWallWest: camLocal.x < -GAME_CENTER_ROOM_HALF_SIZE,
+            }
+            for (const [name, mat] of Object.entries(gameCenterWallMats)) {
               const targetAlpha = wallOver[name] ? HOUSE_WALL_FADE_ALPHA : 1
               mat.alpha += (targetAlpha - mat.alpha) * 0.2
             }
@@ -12508,6 +12944,30 @@ export function World3D({
         if (avatarMesh && bridgeReturnHintLabel) {
           bridgeReturnHintLabel.alpha =
             !insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+        }
+
+        // Dicas "pressione E" do centro de jogos (backlog "Lab 212") — mesmo padrão da casa acima:
+        // só uma das duas portas fica visível por vez (fora/dentro), mais 1 dica por placa.
+        if (avatarMesh && gameCenterEnterHintLabel) {
+          gameCenterEnterHintLabel.alpha =
+            !insideHouseInterior && Vector3.Distance(avatarMesh.position, gameCenterDoorOutsidePos) < GAME_CENTER_TRIGGER_DISTANCE
+              ? 1
+              : 0
+        }
+        if (avatarMesh && gameCenterExitHintLabel) {
+          gameCenterExitHintLabel.alpha =
+            insideGameCenterInterior && Vector3.Distance(avatarMesh.position, gameCenterDoorInsidePos) < GAME_CENTER_TRIGGER_DISTANCE
+              ? 1
+              : 0
+        }
+        for (const id of GAME_CENTER_PORTAL_IDS) {
+          const label = gameCenterPortalHintLabel[id]
+          if (avatarMesh && label) {
+            label.alpha =
+              insideGameCenterInterior && Vector3.Distance(avatarMesh.position, gameCenterPortalPos[id]) < GAME_CENTER_TRIGGER_DISTANCE
+                ? 1
+                : 0
+          }
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
