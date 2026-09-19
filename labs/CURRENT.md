@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-204-trofeus-na-casa/ — fecha a única peça genuinamente aberta do backlog
+"Lab 211 - Troféus e sala/álbum de mini-jogos" (as outras duas já estavam satisfeitas pelos labs
+202/203): um pedestal de troféus decorativo dentro da casa pessoal, que abre o catálogo de
+conquistas já existente ao interagir. Decisão confirmada com o usuário via `AskUserQuestion`: fazer
+essa peça pequena em vez de pular pro Lab 191 (auditoria de FPS, bloqueado por depender de medição
+ao vivo indisponível nesta sessão). Ver `labs/lab-204-trofeus-na-casa/FEATURES.md` pra detalhe.
+
 Último concluído: labs/lab-203-parkour-arcade/ — melhora o `parkour1` já existente (argolas pra
 atravessar entre cada par de plataformas consecutivas, 6 no total; checkpoints — a plataforma mais
 alta já pisada na corrida, nunca regride — com respawn sem punição ao cair, sem perder moeda/argola
