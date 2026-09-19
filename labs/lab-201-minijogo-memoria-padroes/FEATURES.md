@@ -1,8 +1,8 @@
 # Laboratório 201 — Mini-jogo de memória e padrões
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-19
-Fim: -
+Fim: 2026-09-19
 Commit inicial: b5ee32c61cd7dcfa7d832f80d53274f5e9b0e3ee
 
 ## Objetivo do laboratório
@@ -59,22 +59,72 @@ próximo item depois do lab-200 (Lab 215, soletrar).
 
 ## Funcionalidades planejadas
 
-- [ ] Módulo de domínio puro `state/patternGame.ts` (+ testes): sequência cresce 1 posição por
-  rodada (começa em 3), errar repete a MESMA rodada sem perder progresso, `isPatternGameComplete`
-  após `PATTERN_ROUNDS_TO_WIN` rodadas seguidas.
-- [ ] Memória "cartas" polida: grade de até 12 cartas (6 pares, 3 colunas x 4 linhas — mesma
-  largura já comprovada, só mais fundo), catálogo de temas (símbolos sorteados por tentativa),
-  nível de dificuldade que sobe a cada vitória (3→6 pares), recompensa real ao completar
-  (`onCollectCoin`, mesmo padrão de Contar/Soletrar), sem cronômetro.
-- [ ] Memória "sequência" (novo, mesmo portal): sorteio 50/50 por tentativa entre cartas/sequência;
-  4 luzes/pods coloridos no mesmo ponto de ancoragem das cartas (nunca visíveis ao mesmo tempo);
-  reproduz a sequência (acender uma a uma) antes de liberar a vez do jogador; repetir na ordem certa
-  avança rodada; recompensa real ao completar as `PATTERN_ROUNDS_TO_WIN` rodadas.
-- [ ] Eventos comuns do template continuam reaproveitando `minigameId: 'memoria'` pros dois modos —
-  nenhuma mudança de allowlist server-side necessária (id já existe desde o lab-198).
-- [ ] Verificar ao vivo se o ambiente de automação permitir (travou nas 3 labs anteriores em
-  `document.hidden`); documentar e confiar em `tsc`/testes/build + leitura de código se não
-  permitir, mesmo processo dos labs 198-200.
+- [x] Módulo de domínio puro `state/patternGame.ts` (+ `patternGame.test.ts`, 6 testes): sequência
+  cresce 1 posição por rodada (começa em 3), errar repete a MESMA rodada sem perder progresso,
+  `isPatternGameComplete` após `PATTERN_ROUNDS_TO_WIN` (5) rodadas seguidas. Achado escrevendo o
+  próprio teste (antes de rodar, não um bug de produção): um loop de teste que reavaliava
+  `state.sequence.length` a cada iteração rodava um aperto extra na rodada NOVA assim que a
+  sequência crescia — corrigido travando o comprimento da rodada ANTES do loop.
+- [x] Memória "cartas" polida: grade de até 12 cartas (6 pares, 3 colunas x 4 linhas — mesma
+  largura já comprovada do lab-198, só mais fundo), catálogo de 5 temas (frutas/planetas/pets/
+  números/formas, sorteado por tentativa), nível de dificuldade que sobe a cada vitória (3→6
+  pares, reseta ao sair da arena), recompensa real ao completar (`onCollectCoin`, mesmo padrão de
+  Contar/Soletrar), sem cronômetro.
+- [x] Memória "sequência" (novo, mesmo portal): sorteio 50/50 por tentativa entre cartas/sequência;
+  4 pods coloridos no MESMO ponto de ancoragem das cartas (nunca visíveis ao mesmo tempo);
+  reproduz a sequência (acende uma posição de cada vez) antes de liberar a vez do jogador; errar
+  não perde rodadas ganhas, só repete a sequência atual; recompensa real ao completar as
+  `PATTERN_ROUNDS_TO_WIN` rodadas.
+- [x] Eventos comuns do template continuam reaproveitando `minigameId: 'memoria'` pros dois modos —
+  nenhuma mudança de allowlist server-side necessária (id já existe desde o lab-198;
+  `server-accounts` 161/161, sem teste novo).
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (4ª lab seguida — mesma limitação exata, confirmado com uma aba nova). Documentado abaixo;
+  confiado em `tsc`/testes/build + leitura de código, mesmo processo dos labs 198-200. Achei e
+  corrigi 2 bugs reais nessa própria revisão de código, ANTES de qualquer review externo (ver
+  "Verificação de código" abaixo).
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` limpo; `npm run test -- --run` do app: 243/243 (+6 de
+`patternGame.test.ts`); `npm run build` sem erros; `server-accounts`: `npx tsc --noEmit` limpo,
+`npm run test -- --run` 161/161 (sem mudança — `'memoria'` já estava na allowlist desde o lab-198).
+
+Sem poder testar ao vivo, revisei manualmente cada caminho novo — 2 bugs reais encontrados e
+corrigidos NESTA PRÓPRIA revisão (antes de qualquer review externo):
+
+1. **`sequencePlaybackTimeout` não era cancelado no `teardown` principal de `World3D`** — exatamente
+   a mesma classe de bug que o Copilot achou no lab-198 pra `arenaCountdownTimeout`/
+   `arenaTimerInterval` (já corrigida ali), só que eu esqueci de estender a correção pro handle NOVO
+   desta lab. Sem isto, desmontar `World3D` com uma reprodução de sequência pendente deixaria o
+   `setTimeout` disparar depois, mexendo em materiais/malhas já descartados por `scene.dispose()`.
+   Corrigido adicionando ao mesmo bloco de limpeza.
+2. **Um segundo handle solto (`patternPressFlashTimeout`, o "flash" de confirmação ao tocar um pod)
+   tinha o mesmo risco** — era um `setTimeout` bruto, não rastreado em nenhuma variável, então nem
+   `resetState` nem o `teardown` principal conseguiam cancelá-lo. Corrigido dando a ele seu próprio
+   handle rastreado, limpo nos mesmos dois lugares que `sequencePlaybackTimeout`.
+
+Outros pontos conferidos por leitura:
+
+- **Despacho de índice combinado** (`handleMemoryArenaInteract`): cartas ocupam os índices
+  `0..MEMORY_CARD_COUNT-1` (12), pods vêm logo depois (`MEMORY_CARD_COUNT..MEMORY_CARD_COUNT+3`) —
+  conferido que `arenaTargetPositions.memoria`/`arenaTargetHintLabels.memoria`/
+  `arenaTargetMeshes.memoria` (todos `[...cartas, ...pods]`, nessa ordem) usam a MESMA convenção de
+  offset que o dispatcher espera.
+- **Nível de dificuldade não deixa cartas "fantasma" visíveis**: `setMemoryCardsVisible` calcula
+  `activeCount = memoriaLevel * 2` toda vez que é chamada (não guarda um valor antigo) — chamar com
+  `visible=false` desabilita os 12 slots incondicionalmente (curto-circuito do `&&`), então não há
+  como um nível antigo deixar cartas extras visíveis ao esconder tudo.
+- **`resetState` cobre os dois modos**: zera `arenaMemoryState` E `arenaPatternState` juntos,
+  independente de qual estava ativo — não deixa o modo NÃO jogado nesta tentativa com lixo de uma
+  tentativa anterior (mesmo que, na prática, cada `beginAttempt` já sobrescreva o estado do modo
+  escolhido de qualquer forma).
+
+**Risco remanescente, honesto**: a grade de cartas cresceu de 2 pra 4 linhas (dobro da profundidade
+original do lab-198) — mantive a mesma LARGURA (3 colunas, já comprovada), só estendi profundidade,
+mas essa extensão em si não foi confirmada ao vivo nesta sessão. Os pods de sequência reaproveitam o
+mesmo ponto de ancoragem das cartas (risco zero de sobreposição NOVA, já que os dois conjuntos nunca
+ficam habilitados ao mesmo tempo).
 
 ## Fora de escopo (explicitamente adiado)
 
