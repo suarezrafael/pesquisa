@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Em andamento: labs/lab-201-minijogo-memoria-padroes/ — fecha a dívida do lab-198 (Memória de 3
+pares fixos, sem moedas, sempre foi prova de conceito) e entrega a segunda metade do próprio nome
+do item do backlog: um modo de repetir sequência (tipo Genius/Simon) no MESMO portal de Memória
+(sem slot de portal novo no saguão). Decisão confirmada com o usuário via `AskUserQuestion`: escopo
+maior (polir Memória + modo sequência), não só polir. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 216 - Mini-jogo de memoria e padroes" — próximo
+item depois do lab-200 (Lab 215). Ver `labs/lab-201-minijogo-memoria-padroes/FEATURES.md` pro
+objetivo/investigação prévia completos.
+
 Último concluído: labs/lab-200-minijogo-soletrar/ — segundo mini-jogo "de verdade" sobre o
 template de arena generalizado no lab-199 (Contar foi o primeiro), provando de vez o critério de
 aceite do lab-213 ("adicionar outro mini-jogo exige poucos pontos de código"): coletar letras
