@@ -1,16 +1,51 @@
 # Laboratório atual
 
-Em andamento: labs/lab-198-template-arena-educativa/ — cria uma infraestrutura mínima e
+Último concluído: labs/lab-198-template-arena-educativa/ — cria uma infraestrutura mínima e
 reutilizável de "arena" (contagem regressiva, estado `playing/success/fail/retry`, cronômetro,
-alvos interativos, eventos comuns) que os labs 214-216 vão usar depois. Prova de conceito: versão
-simples de verdade do jogo da memória, ocupando o portal "Memória" já existente no centro de jogos
-(lab-197), sem sala/interior nova (acontece no próprio saguão, decisão documentada em
-`FEATURES.md` pra não multiplicar a complexidade de câmera/chuva/pet das 2 salas já existentes).
-Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 213 - Template de arena educativa
-reutilizável" — próximo item depois do lab-197. Ver
-`labs/lab-198-template-arena-educativa/FEATURES.md` pro objetivo/investigação prévia completos.
+alvos interativos, eventos comuns) que os labs 214-216 vão usar depois. Prova de conceito
+(decisão de escopo confirmada com o usuário via `AskUserQuestion`, entre "versão simples de um dos
+3 mini-jogos" vs. "demo abstrata separada"): versão simples de verdade do jogo da memória (3 pares,
+6 cartas), ocupando o portal "Memória" já existente no centro de jogos (lab-197), sem sala/interior
+nova (acontece no próprio saguão, decisão documentada em `FEATURES.md` pra não multiplicar a
+complexidade de câmera/chuva/pet das 2 salas já existentes). Lógica pura em `state/memoryGame.ts`
+(+ 8 testes), sem dependência de Babylon, mesmo padrão de `state/progression.ts`. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 213 - Template de arena educativa reutilizável" —
+próximo item depois do lab-197. Eventos novos `minigame_retried`/`minigame_exited` (reaproveitando
+`minigameId`, agora incluindo `'memoria'`), validados server-side e expostos em `weeklyFunnel`
+desde o primeiro commit. **PR #81 teve 2 rodadas de review com 4 bugs reais** — 2 achados na
+verificação ao vivo antes do review automático, 2 do Copilot: (1) labels "❓" das cartas ficavam
+visíveis mesmo com a arena `idle` (`TextBlock` vinculado via `linkWithMesh` não desliga sozinho
+quando a malha vira `setEnabled(false)`) — corrigido com um helper que alterna malha e label
+juntos; (2) uma carta perto o bastante do portal "Lógica" sempre abria o quiz da ponte em vez de
+virar, porque os PORTAIS eram checados antes das CARTAS em `handleInteractPress` — corrigido
+invertendo a ordem; (3) achado Alto do Copilot, o mais sério do lab: `gcMemoryCardPos` usava a
+posição da carta em nível do chão, mas `avatarMesh.position` fica sempre 0.6 acima do chão
+(`AVATAR_RADIUS + 0.05`) — como a distância é 3D, o gap vertical sozinho já excedia
+`MEMORY_CARD_TRIGGER_DISTANCE` (0.4), tornando IMPOSSÍVEL virar qualquer carta em jogo normal (só
+não apareceu na verificação ao vivo por causa do próprio desvio de física/render de abas
+automatizadas, ver abaixo) — corrigido usando `card.position` (já elevado) em vez da posição em
+nível do chão; (4) achado Médio do Copilot: `arenaCountdownTimeout`/`arenaTimerInterval` só eram
+cancelados em `exitGameCenterInterior()`, não no `teardown()` do efeito principal — corrigido
+adicionando os dois handles à mesma limpeza de `fpsAutoTuneInterval`/`petAgingInterval`. 2ª rodada
+do Copilot confirmou os 2 achados como "Resolved". `npx tsc -b` limpo; testes: app 221/221 (+8 de
+`memoryGame.test.ts`), `server-accounts` 161/161 (+1); `npm run build` sem regressão. **Achado de
+ferramental, redescoberto nesta lab (já documentado uma vez no lab-39)**: teleportar e apertar `E`
+via chamadas de ferramenta separadas intercala tempo real suficiente pra física (Havok) divergir da
+malha renderizada numa aba de automação — mitigado forçando `scene.render()` várias vezes de forma
+síncrona antes de cada interação de teste; na rodada de correção do achado Alto do Copilot, a
+mesma sessão de automação chegou a um nível mais severo da mesma limitação (a aba nunca saiu de
+`document.hidden === true`, travando o próprio carregamento do mundo 3D antes de expor
+`window.__scene`) — a correção foi validada por leitura de código (matemática do gap vertical)
+em vez de reverificação ao vivo. Toque equivalente ao teclado não testado com simulação de toque
+real (mesma pendência disclosed em todos os labs anteriores desta sessão). Ver
+`labs/lab-198-template-arena-educativa/FEATURES.md` pro histórico completo rodada a rodada.
+**Merge confirmado**: PR #81 mesclada (squash) em `main` no commit `bc958a9` (2026-09-19,
+confirmado via `AskUserQuestion`). CI de `main` verde nos 3 workflows; deploy de produção
+confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-197-centro-jogos-educativo/ — cria um prédio/saguão de jogos no planeta
+Antes desse: labs/lab-197-centro-jogos-educativo/ — cria um prédio/saguão de jogos no planeta
 principal, com 4 placas/portais (Contar/Soletrar/Memória/Lógica) — reaproveita a arquitetura de
 interior/teleporte da casa do jogador (sala isolada própria, `GAME_CENTER_INTERIOR_CENTER =
 (-150, 0, -150)`, não a `HOUSE_INTERIOR_CENTER` pessoal). Só o portal Lógica tem mini-jogo de
