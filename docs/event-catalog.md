@@ -91,10 +91,10 @@ PR #55, 7ª rodada).
 | `learning_challenge_completed` | Resposta certa num dos 3 landmarks acima — credita XP/moeda de verdade via `completeQuest`, mesmo caminho de uma escolinha comum | `App.tsx`, `handleEnvironmentalChallengeCorrect` | `kind` (`"bridge"`, `"rocket_fuel"`, `"plaque"`) | 1x por tentativa concluída |
 | `album_planet_opened` | Expandir um planeta específico na lista nova "Planetas" do catálogo de conquistas (lab-181, "Circuito de descoberta e álbum de planetas") — sinal de interesse real num planeta, não só abrir o painel inteiro | `world3d/AchievementsPanel.tsx`, `togglePlanet` | `planetId` (um dos 7 planetas-destino) | 1x por expansão (reabrir o mesmo planeta conta de novo) |
 | `weekly_event_objective_completed` | Objetivo educativo/ambiental do evento semanal concedido (lab-182, "Eventos semanais saudáveis") — dispara só na PRIMEIRA vez em cada semana ISO que o bônus é de fato pago, mesmo completando vários desafios ambientais na mesma semana | `App.tsx`, `handleEnvironmentalChallengeCorrect` | — | 1x por semana ISO por perfil |
-| `minigame_started` | Início de um mini-jogo, por qualquer caminho: fim da contagem regressiva de um pedestal do hub (backlog "Lab 209"), ou início/reinício de uma tentativa de arena no centro de jogos (memória, backlog "Lab 213"; contar, backlog "Lab 214") | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`, `"memoria"`, `"contar"`) | 1x por início/reinício |
-| `minigame_completed` | Conclusão de um mini-jogo: uso do pedestal de RETORNO ao hub (mede "fez a ida-e-volta pelo hub", não "resolveu o desafio certo" — parkour não tem estado de conclusão persistido, e o quiz da ponte roda noutro componente que este evento não observa), OU vitória de verdade numa arena (memória: todos os pares encontrados, `isMemoryGameComplete`; contar: 3 rodadas certas seguidas, `isCountingGameComplete`) | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`, `"memoria"`, `"contar"`) | 1x por retorno/vitória |
-| `minigame_retried` | Tentar de novo uma arena DEPOIS de terminar (sucesso ou falha) — nunca no meio de uma tentativa em andamento, nem confundido com o início de uma arena DIFERENTE (backlog "Lab 213 - Template de arena educativa reutilizável") | `world3d/World3D.tsx` | `minigameId` (`"memoria"`, `"contar"`) | 1x por reinício |
-| `minigame_exited` | Sair do centro de jogos com uma tentativa de arena REALMENTE em andamento (não depois de já ter terminado) — mede abandono de verdade (backlog "Lab 213") | `world3d/World3D.tsx`, `exitGameCenterInterior` | `minigameId` (`"memoria"`, `"contar"`) | 1x por abandono |
+| `minigame_started` | Início de um mini-jogo, por qualquer caminho: fim da contagem regressiva de um pedestal do hub (backlog "Lab 209"), ou início/reinício de uma tentativa de arena no centro de jogos (memória, backlog "Lab 213"; contar, backlog "Lab 214"; soletrar, backlog "Lab 215") | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`, `"memoria"`, `"contar"`, `"soletrar"`) | 1x por início/reinício |
+| `minigame_completed` | Conclusão de um mini-jogo: uso do pedestal de RETORNO ao hub (mede "fez a ida-e-volta pelo hub", não "resolveu o desafio certo" — parkour não tem estado de conclusão persistido, e o quiz da ponte roda noutro componente que este evento não observa), OU vitória de verdade numa arena (memória: todos os pares encontrados, `isMemoryGameComplete`; contar: 3 rodadas certas seguidas, `isCountingGameComplete`; soletrar: palavra soletrada por completo, `isSpellingGameComplete`) | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`, `"memoria"`, `"contar"`, `"soletrar"`) | 1x por retorno/vitória |
+| `minigame_retried` | Tentar de novo uma arena DEPOIS de terminar (sucesso ou falha) — nunca no meio de uma tentativa em andamento, nem confundido com o início de uma arena DIFERENTE (backlog "Lab 213 - Template de arena educativa reutilizável") | `world3d/World3D.tsx` | `minigameId` (`"memoria"`, `"contar"`, `"soletrar"`) | 1x por reinício |
+| `minigame_exited` | Sair do centro de jogos com uma tentativa de arena REALMENTE em andamento (não depois de já ter terminado) — mede abandono de verdade (backlog "Lab 213") | `world3d/World3D.tsx`, `exitGameCenterInterior` | `minigameId` (`"memoria"`, `"contar"`, `"soletrar"`) | 1x por abandono |
 | `game_center_entered` | Entrar no saguão do centro de jogos pela porta externa (backlog "Lab 212 - Centro de jogos educativo com saguão e portais") | `world3d/World3D.tsx`, `enterGameCenterInterior` | — | 1x por entrada |
 | `game_portal_selected` | Interagir com QUALQUER placa/portal do saguão, travada ou não — mede "a criança entendeu que aquele portal existe e o que ele é", não "conseguiu jogar" | `world3d/World3D.tsx`, `handleGameCenterPortalInteract` | `portalId` (`"contar"`, `"soletrar"`, `"memoria"`, `"logica"`) | 1x por interação |
 | `game_center_returned` | Sair do saguão pela porta interna, de volta ao planeta | `world3d/World3D.tsx`, `exitGameCenterInterior` | — | 1x por saída |
@@ -218,10 +218,9 @@ decisão").
 - **Centro de jogos educativo** (backlog "Lab 212") — `game_center_entered` → `game_portal_selected`
   → `game_center_returned` formam o funil do saguão, lidos semanalmente por
   `weeklyFunnel.gameCenterEntered`/`gamePortalSelected`/`gameCenterReturned` (mesma convenção de
-  ALCANCE). `game_portal_selected` dispara pra QUALQUER portal, incluindo o 1 ainda bloqueado
-  (`Soletrar`, sem mini-jogo de verdade ainda) — `Lógica` (reaproveita o quiz da ponte do lab-180),
-  `Memória` (arena própria, backlog "Lab 213") e `Contar` (arena própria, backlog "Lab 214") já
-  abrem algo de verdade.
+  ALCANCE). `game_portal_selected` dispara pra QUALQUER portal — os 4 já abrem algo de verdade:
+  `Lógica` (reaproveita o quiz da ponte do lab-180), `Memória` (arena própria, backlog "Lab 213"),
+  `Contar` (arena própria, backlog "Lab 214") e `Soletrar` (arena própria, backlog "Lab 215").
   `time_to_first_minigame`
   (mesmo padrão de `time_to_first_control`/`time_to_first_learning_challenge`/`time_to_first_reward`,
   lab-164) cobre QUALQUER caminho de início de mini-jogo — hub, centro de jogos ou arena — não é
@@ -235,7 +234,11 @@ decisão").
   não conta — nesse caso a criança já terminou, não abandonou nada). O Lab 214 (arena de Contar,
   `state/countingGame.ts`) generalizou o controlador de arena que era colado à memória (só os NOMES
   eram genéricos antes) num contrato reutilizável por mini-jogo (`ArenaConfig`) — ver
-  `labs/lab-199-minijogo-contar/FEATURES.md`.
+  `labs/lab-199-minijogo-contar/FEATURES.md`. O Lab 215 (arena de Soletrar, `state/spellingGame.ts`)
+  é o segundo mini-jogo sobre esse controlador, sem tocar nele além de um pequeno registro novo
+  (`arenaTargetMeshes`, pra dica "Pressione E" ignorar alvos desabilitados — necessário porque o
+  número de azulejos ativos varia por palavra, ao contrário de memória/contar) — ver
+  `labs/lab-200-minijogo-soletrar/FEATURES.md`.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de
