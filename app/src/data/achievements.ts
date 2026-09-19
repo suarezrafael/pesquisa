@@ -1,7 +1,13 @@
 // Catálogo de conquistas (lab-93) — dado de domínio puro, mesmo padrão de `avatars.ts`/`hats.ts`.
 // Os 3 IDs vêm de `state/progression.ts` (`badgesEarnedAt`), fonte única de verdade — este
 // catálogo só adiciona ícone/descrição pra exibição, nunca decide quando uma conquista é ganha.
-import { BADGE_ALL_DONE, BADGE_COOP_FIRST, BADGE_FIRST_QUEST, BADGE_HALFWAY } from '../state/progression'
+import {
+  BADGE_ALL_DONE,
+  BADGE_COOP_FIRST,
+  BADGE_FIRST_QUEST,
+  BADGE_HALFWAY,
+  BADGE_PARKOUR_MASTER,
+} from '../state/progression'
 import { quests } from './quests'
 
 export interface AchievementOption {
@@ -35,5 +41,11 @@ export const ACHIEVEMENT_CATALOG: AchievementOption[] = [
     name: BADGE_COOP_FIRST,
     emoji: '🤝',
     description: 'Complete um desafio em dupla com outro jogador.',
+  },
+  {
+    id: BADGE_PARKOUR_MASTER,
+    name: BADGE_PARKOUR_MASTER,
+    emoji: '🏃',
+    description: 'Chegue ao topo do parkour coletando todas as argolas do percurso.',
   },
 ]

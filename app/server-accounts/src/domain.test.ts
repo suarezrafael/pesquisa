@@ -17,6 +17,7 @@ import {
   isNicknameAllowed,
   isOnlineNow,
   isPairingCodeUsable,
+  isPlausibleCount,
   isPlausibleSessionDuration,
   isSelfFriendRequest,
   isTokenRevoked,
@@ -311,6 +312,11 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
     expect(isValidProductEventType('game_center_weekly_quest_completed')).toBe(true)
     expect(isValidProductEventType('game_center_progress_viewed')).toBe(true)
   })
+
+  it('aceita os eventos do parkour arcade (backlog "Lab 210")', () => {
+    expect(isValidProductEventType('parkour_course_completed')).toBe(true)
+    expect(isValidProductEventType('parkour_checkpoint_respawn')).toBe(true)
+  })
 })
 
 describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {
@@ -338,6 +344,25 @@ describe('isPlausibleSessionDuration — lab-99, resto de G11', () => {
   })
 })
 
+
+describe('isPlausibleCount — lab-142, exportada pro parkour arcade (backlog "Lab 210")', () => {
+  it('aceita inteiros não-negativos até o teto', () => {
+    expect(isPlausibleCount(0, 50)).toBe(true)
+    expect(isPlausibleCount(6, 50)).toBe(true)
+    expect(isPlausibleCount(50, 50)).toBe(true)
+  })
+
+  it('rejeita negativo, não-inteiro e acima do teto', () => {
+    expect(isPlausibleCount(-1, 50)).toBe(false)
+    expect(isPlausibleCount(2.5, 50)).toBe(false)
+    expect(isPlausibleCount(51, 50)).toBe(false)
+  })
+
+  it('rejeita valores que não são número', () => {
+    expect(isPlausibleCount('6', 50)).toBe(false)
+    expect(isPlausibleCount(undefined, 50)).toBe(false)
+  })
+})
 
 describe('isValidNpsScore — lab-103', () => {
   it('aceita inteiros de 0 a 10', () => {
