@@ -126,6 +126,25 @@ mas essa extensão em si não foi confirmada ao vivo nesta sessão. Os pods de s
 mesmo ponto de ancoragem das cartas (risco zero de sobreposição NOVA, já que os dois conjuntos nunca
 ficam habilitados ao mesmo tempo).
 
+## Rodada de review — Copilot (PR #84)
+
+2 achados, ambos confirmados contra o código real e corrigidos:
+
+1. **Médio — `memoriaLevel` nunca resetava ao sair da arena**: o comportamento descrito (e
+   documentado neste próprio `FEATURES.md`) era "reseta ao sair da arena", mas `resetState()` nunca
+   fazia isso de verdade — a "escada" de dificuldade só subia, permanentemente, até fechar a aba.
+   Corrigido adicionando `memoriaLevel = MEMORY_MIN_PAIRS` em `resetState`.
+2. **Médio — `presentPatternSequence` podia começar com um flash de confirmação ainda pendente**:
+   `handlePatternPadInteract` chama `presentPatternSequence` logo depois de um aperto (erro ou fim
+   de rodada), enquanto o "flash" de 200ms daquele mesmo aperto ainda podia estar agendado. Se a
+   sequência repetisse a mesma cor no primeiro passo, o flash apagaria o destaque no meio da janela
+   de 500ms da reprodução, deixando a animação visualmente inconsistente. Corrigido cancelando
+   qualquer timeout pendente (flash ou reprodução anterior) e zerando todos os destaques logo no
+   início de `presentPatternSequence` — protege QUALQUER chamador futuro, não só este caminho.
+
+`npx tsc -b`, `npm run test -- --run` (243/243) e `npm run build` continuam limpos depois das duas
+correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Som (o backlog cita "luzes/sons" — esta fatia cobre só o feedback visual, mesma contenção de v1

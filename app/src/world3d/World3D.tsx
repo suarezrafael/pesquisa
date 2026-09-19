@@ -9895,6 +9895,10 @@ export function World3D({
           resetState: () => {
             arenaMemoryState = null
             arenaPatternState = null
+            // Achado do review do Copilot: a "escada" de dificuldade (3→6 pares) nunca voltava ao
+            // mínimo — `memoriaLevel` só subia, mesmo depois de sair da arena e voltar, apesar do
+            // comportamento descrito (reseta ao sair) nunca ter sido implementado de verdade.
+            memoriaLevel = MEMORY_MIN_PAIRS
             if (sequencePlaybackTimeout) clearTimeout(sequencePlaybackTimeout)
             sequencePlaybackTimeout = null
             if (patternPressFlashTimeout) clearTimeout(patternPressFlashTimeout)
@@ -10365,6 +10369,17 @@ export function World3D({
       const PATTERN_HIGHLIGHT_MS = 500
       const PATTERN_PAUSE_MS = 250
       function presentPatternSequence(sequence: number[]) {
+        // Achado do review do Copilot: chamada logo depois de um aperto (erro ou fim de rodada,
+        // ver `handlePatternPadInteract`) enquanto o "flash" de confirmação daquele aperto ainda
+        // podia estar pendente — se a sequência repetir a mesma cor no primeiro passo, o flash de
+        // 200ms apagaria o destaque no meio da janela de `PATTERN_HIGHLIGHT_MS` (500ms),
+        // deixando a reprodução visualmente inconsistente. Cancela qualquer timeout pendente (flash
+        // OU reprodução anterior) e zera todos os destaques antes de começar uma reprodução nova.
+        if (patternPressFlashTimeout) clearTimeout(patternPressFlashTimeout)
+        patternPressFlashTimeout = null
+        if (sequencePlaybackTimeout) clearTimeout(sequencePlaybackTimeout)
+        sequencePlaybackTimeout = null
+        for (let i = 0; i < gcPatternPadMeshes.length; i++) setPatternPadHighlighted(i, false)
         sequencePlaybackLocked = true
         if (gameCenterMemoryStatusLabel) {
           gameCenterMemoryStatusLabel.text = '🔵 Observe a sequência...'
