@@ -98,6 +98,9 @@ PR #55, 7ª rodada).
 | `game_center_entered` | Entrar no saguão do centro de jogos pela porta externa (backlog "Lab 212 - Centro de jogos educativo com saguão e portais") | `world3d/World3D.tsx`, `enterGameCenterInterior` | — | 1x por entrada |
 | `game_portal_selected` | Interagir com QUALQUER placa/portal do saguão, travada ou não — mede "a criança entendeu que aquele portal existe e o que ele é", não "conseguiu jogar" | `world3d/World3D.tsx`, `handleGameCenterPortalInteract` | `portalId` (`"contar"`, `"soletrar"`, `"memoria"`, `"logica"`) | 1x por interação |
 | `game_center_returned` | Sair do saguão pela porta interna, de volta ao planeta | `world3d/World3D.tsx`, `exitGameCenterInterior` | — | 1x por saída |
+| `minigame_trophy_earned` | Uma categoria do centro de jogos cruza um limiar de troféu NOVO (bronze/prata/ouro, backlog "Lab 217") — dispara só na conclusão EXATA que cruza o limiar, nunca em toda vitória acima do limiar já alcançado | `world3d/World3D.tsx` (memória/contar/soletrar), `App.tsx`/`handleEnvironmentalChallengeCorrect` (lógica) | `category` (`"contar"`, `"soletrar"`, `"memoria"`, `"logica"`), `tier` (`"bronze"`, `"prata"`, `"ouro"`) | 1x por troféu novo |
+| `game_center_weekly_quest_completed` | Missão semanal "jogue 1 mini-jogo educativo" concedida (backlog "Lab 217") — dispara só na PRIMEIRA vez em cada semana ISO, mesmo padrão de `weekly_event_objective_completed` acima, campo/objetivo SEPARADO | `world3d/World3D.tsx`, `App.tsx` | — | 1x por semana ISO por perfil |
+| `game_center_progress_viewed` | Responsável vê o resumo de habilidade praticada no centro de jogos (`ChildProgressPanel`, backlog "Lab 217") — mesmo padrão/trigger de `weekly_report_preview_viewed` | `components/FamilyPortal.tsx` | — | 1x por montagem do painel (com perfil real pra mostrar) |
 
 ## Nível de agregação (lab-185)
 
@@ -246,6 +249,19 @@ decisão").
   foi removido (o próprio Lab 216 lista "tempo punitivo" em "fora de escopo") — as 3 arenas
   registradas até agora (memória, contar, soletrar) não têm mais cronômetro nenhum. Ver
   `labs/lab-201-minijogo-memoria-padroes/FEATURES.md`.
+- **Progresso/álbum/recompensas do centro de jogos** (backlog "Lab 217") — `minigame_trophy_earned`/
+  `game_center_weekly_quest_completed`/`game_center_progress_viewed`, lidos semanalmente por
+  `weeklyFunnel.minigameTrophyEarned`/`gameCenterProgressViewed`/`weeklyMeaningfulPlayLearningSessions`
+  (mesma convenção de ALCANCE). `weekly_meaningful_play_learning_sessions` (métrica citada pelo
+  backlog) NÃO é um evento próprio — é o alcance semanal de `game_center_weekly_quest_completed`. A
+  categoria `logica` conta o desafio da ponte pelos 2 caminhos que já existiam (portal do centro de
+  jogos OU local físico original, lab-180) — os dois usam `kind: 'bridge'`, mesma habilidade
+  praticada. Achado real na revisão de código desta lab (não em teste ao vivo, ambiente travado em
+  `document.hidden` pela 5ª vez seguida): `progressRef.current` (`World3D.tsx`) não reflete uma
+  atualização de progresso na MESMA sincronia que a disparou (`setProgress` do React não é
+  síncrono) — corrigido devolvendo a contagem nova já calculada de forma síncrona pelo hook, sem
+  depender de reler `progressRef` logo em seguida. Ver
+  `labs/lab-202-progressao-album-recompensas/FEATURES.md`.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de
