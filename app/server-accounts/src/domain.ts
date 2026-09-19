@@ -309,10 +309,10 @@ export function isValidLearningChallengeKind(kind: unknown): kind is string {
 // conjunto FIXO no código-fonte (achado do review automático: `minigame_started`/
 // `minigame_completed` caíam no branch genérico de `handleTrackEvent`, sem essa validação — o
 // único sinal que esses dois eventos carregam é justamente este id). `'memoria'` (Lab 213 —
-// template de arena, prova de conceito) e `'contar'` (Lab 214) reaproveitam o MESMO id em
-// `minigame_started`/`completed`/`retried`/`exited` — é o mesmo mini-jogo, iniciado pelo portal do
-// centro de jogos (lab-197).
-const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica', 'memoria', 'contar'])
+// template de arena, prova de conceito), `'contar'` (Lab 214) e `'soletrar'` (Lab 215) reaproveitam
+// o MESMO id em `minigame_started`/`completed`/`retried`/`exited` — é o mesmo mini-jogo, iniciado
+// pelo portal do centro de jogos (lab-197).
+const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica', 'memoria', 'contar', 'soletrar'])
 
 export function isValidMinigameId(id: unknown): id is string {
   return typeof id === 'string' && MINIGAME_IDS.has(id)

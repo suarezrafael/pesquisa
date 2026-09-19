@@ -1,8 +1,8 @@
 # Laboratório 200 — Mini-jogo de soletrar e leitura
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-19
-Fim: -
+Fim: 2026-09-19
 Commit inicial: f5bf4f94028d99b9a81e89d63070ec53546fecf3
 
 ## Objetivo do laboratório
@@ -50,29 +50,110 @@ próximo item depois do lab-199 (Lab 214, mini-jogo de contar).
 
 ## Funcionalidades planejadas
 
-- [ ] Módulo de domínio puro `state/spellingGame.ts` (+ testes): catálogo controlado de palavras
-  curtas e seguras com dica emoji (`SPELLING_WORD_CATALOG`), sorteia uma por tentativa
-  (`random` injetável, mesmo padrão de `createMemoryGame`/`createCountingGame`), embaralha os
-  azulejos de letra (posição visual) sem afetar a ordem exigida pra soletrar; `collectSpellingTile`
-  confere se a letra do azulejo é a PRÓXIMA esperada (por letra, não por posição/id — trata letras
-  repetidas corretamente); errar não perde progresso; `isSpellingGameComplete`;
-  `spellingProgressText` (ex.: "G A _ _") pra exibir progresso sem vazar a resposta completa.
-- [ ] Generalização mínima do controlador (`arenaTargetMeshes`, novo): loop de dica "Pressione E"
-  ignora alvos com a malha desabilitada — necessário pra Soletrar (nº de azulejos variável por
-  palavra), sem quebrar memória/contar (sempre usam todos os slots, comportamento idêntico de
-  antes).
-- [ ] Portal "Soletrar" desbloqueado no centro de jogos: interagir sorteia uma palavra, revela até 6
-  azulejos de letra (pool fixo, só os da palavra atual ficam ativos) + uma placa de status com a
-  dica emoji e o progresso ("🐱 G A _ _"). Coletar (proximidade + `E`) na ordem certa avança; letra
-  errada mostra feedback sem penalidade.
-- [ ] Recompensa real ao completar: mesmo padrão de `COUNTING_REWARD_COINS`/`onCollectCoin` do
-  lab-199.
-- [ ] Eventos comuns do template (`minigame_started/completed/retried/exited`, `minigameId:
-  'soletrar'` — mesmo id do portal) — adicionar `'soletrar'` ao allowlist server-side
-  (`isValidMinigameId`) desde o primeiro commit.
-- [ ] Verificar ao vivo se o ambiente de automação permitir (nas 2 labs anteriores travou em
-  `document.hidden`); documentar e confiar em `tsc`/testes/build + leitura de código se não permitir,
-  mesmo processo já usado nos labs 198/199.
+- [x] Módulo de domínio puro `state/spellingGame.ts` (+ `spellingGame.test.ts`, 9 testes): catálogo
+  controlado de 8 palavras curtas e seguras com dica emoji (`SPELLING_WORD_CATALOG`), sorteia uma
+  por tentativa (`random` injetável, mesmo padrão de `createMemoryGame`/`createCountingGame`),
+  embaralha os azulejos de letra (posição visual) sem afetar a ordem exigida pra soletrar;
+  `collectSpellingTile` confere se a letra do azulejo é a PRÓXIMA esperada (por letra, não por
+  posição/id — teste dedicado com uma palavra sintética de letra repetida, já que o catálogo real
+  não tem nenhuma); errar não perde progresso; `isSpellingGameComplete`; `spellingProgressText`
+  (ex.: "G A _ _") pra exibir progresso sem vazar a resposta completa.
+- [x] Generalização mínima do controlador (`arenaTargetMeshes`, novo registro): o loop de dica
+  "Pressione E" agora pula alvos com a malha desabilitada (`mesh.isEnabled()`) — necessário pra
+  Soletrar (nº de azulejos ativos varia 3-6 por palavra); memória/contar continuam se comportando
+  exatamente como antes (sempre usam todos os slots do próprio pool).
+- [x] Portal "Soletrar" desbloqueado no centro de jogos: interagir sorteia uma palavra, revela até 6
+  azulejos de letra numa grade de 3 colunas (mesma forma da grade de cartas de memória, decisão
+  tomada durante a implementação pra reduzir risco espacial não verificável ao vivo — ver abaixo) +
+  uma placa de status com a dica emoji e o progresso. Coletar (proximidade + `E`) na ordem certa
+  avança; letra errada mostra feedback sem penalidade; status inicial já definido no `beginAttempt`
+  (não fica preso no "— 0" do fim do countdown, lição já aplicada direto desta vez, achado pelo
+  Copilot no lab-199 pra Contar).
+- [x] Recompensa real ao completar: `SPELLING_REWARD_COINS` (3), mesmo padrão de
+  `COUNTING_REWARD_COINS`/`onCollectCoin` do lab-199.
+- [x] Eventos comuns do template (`minigame_started/completed/retried/exited`, `minigameId:
+  'soletrar'` — mesmo id do portal) — `'soletrar'` adicionado ao `MINIGAME_IDS`/`isValidMinigameId`
+  (server-accounts) desde o primeiro commit.
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (3ª vez seguida — mesma limitação exata dos labs 198/199, confirmado com uma aba nova). Documentado
+  abaixo; confiado em `tsc`/testes/build + leitura de código, mesmo processo dos labs anteriores.
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` limpo; `npm run test -- --run` do app: 237/237 (+9 de
+`spellingGame.test.ts`); `npm run build` sem erros; `server-accounts`: `npx tsc --noEmit` limpo,
+`npm run test -- --run` 161/161 (sem teste novo — só um id novo num Set já testado).
+
+Sem poder testar ao vivo, revisei manualmente cada caminho novo:
+
+- **Mapeamento de índice azulejo↔posição-no-array**: `handleSpellingTileInteract(index)` lê
+  `arenaSpellingState.tiles[index]` (a posição VISUAL/pool-slot onde a criança interagiu) e passa
+  `tile.id` (identidade estável) pra `collectSpellingTile` — o mesmo padrão de duas camadas
+  (posição visual embaralhada vs. identidade estável) já usado em `MemoryCard.id`/`flipMemoryCard`.
+  Confirmado lendo `renderSpellingRound` (que escreve `gcSpellingTileLabels[i].text =
+  tiles[i].letter`, MESMO índice `i`) e `handleSpellingTileInteract` lado a lado — os dois
+  concordam sobre o que cada slot pool mostra.
+- **Slots do pool além do tamanho da palavra atual**: `renderSpellingRound` desabilita
+  explicitamente qualquer slot `i >= tiles.length` (`if (!tile || tile.collected)`); o loop de
+  interação genérico ainda itera todos os 6 slots registrados em `arenaTargetPositions.soletrar`
+  (não redimensionado por palavra, de propósito — evitar reconstruir o registro a cada tentativa),
+  mas `handleSpellingTileInteract` retorna cedo (`if (!tile) return`) pra qualquer índice além do
+  comprimento da palavra atual — pressionar `E` perto de um slot vazio não faz nada, só uma checagem
+  de distância a mais, sem efeito visível.
+- **Achado ANTES de testar (não durante)**: o layout inicial usava uma fileira única de 6 azulejos
+  (~3,25 unidades de largura) — quase o dobro da grade de 3 colunas já comprovada das cartas de
+  memória (~1,5 unidades). Sem poder confirmar ao vivo que cabe no saguão sem sobrepor a placa
+  vizinha, troquei pra uma grade de 3 colunas (mesma fórmula de `MEMORY_CARD_COLUMNS`/
+  `MEMORY_CARD_SPACING`, só o material/nome mudam) — reduz o risco espacial a "já testado antes",
+  em vez de introduzir uma forma nova sem verificação.
+- **Recompensa/eventos**: `trackMinigameCompleted('soletrar')` e o loop de `onCollectCoinRef` só
+  disparam dentro do `if (isSpellingGameComplete(state))`, depois de `renderSpellingRound()` já ter
+  atualizado os azulejos — mesma ordem de operações do Contar (lab-199), que já passou por 2
+  rodadas de review sem achado nessa parte.
+
+**Risco remanescente, honesto**: a posição EXATA da grade de Soletrar dentro do saguão (perto do
+próprio portal "Soletrar") não foi confirmada ao vivo — só o raciocínio de que reusar a MESMA forma
+já comprovada (grade 3 colunas) reduz bastante a chance de sobreposição, não elimina de vez.
+
+## Rodada de review — Copilot (PR #83)
+
+2 achados, ambos confirmados contra o código real e corrigidos:
+
+1. **Baixo — comentário desatualizado no `GAME_CENTER_PORTAL_INFO`**: o comentário logo acima
+   ainda dizia que `Contar`/`Soletrar` "ainda não existem" e descrevia o tom `unlocked: false`, mas
+   os 4 portais já estão `unlocked: true` desde este próprio lab. Corrigido.
+2. **Baixo, mas real — o loop de interação (`handleInteractPress`) não filtrava alvos
+   desabilitados**: só o loop de DICA "Pressione E" tinha o filtro `mesh.isEnabled()` (achado de
+   design desta própria lab); o loop que de fato DISPARA a interação ao apertar `E` continuava
+   percorrendo todos os slots do pool sem checar se estavam ativos. Resultado real: apertar `E`
+   perto de um azulejo já coletado (ou além do comprimento da palavra atual) mostrava "🤔 Essa não
+   é a próxima letra!" à toa — e, por causa do `return` logo depois, também impedia esse mesmo
+   aperto de abrir um portal genuinamente mais próximo (embora `ARENA_TARGET_TRIGGER_DISTANCE` ser
+   bem mais estrito reduza bastante a chance de coincidência). Corrigido em duas camadas: o loop de
+   interação agora aplica o mesmo filtro `mesh.isEnabled()` do loop de dica, e
+   `handleSpellingTileInteract` ganhou uma checagem extra de defesa (`tile.collected`) — mesmo
+   raciocínio de dupla camada já usado no domínio (`collectSpellingTile` também filtra
+   `tile.collected`).
+
+`npx tsc -b`, `npm run test -- --run` (237/237) e `npm run build` continuam limpos depois das duas
+correções.
+
+**2ª rodada (commit `8dc698b`)**: os 2 achados acima aparecem marcados "Resolved since last
+review". 1 achado novo sob "Previously missed" (código que NÃO mudou nesta lab, pré-existente),
+confirmado contra o código real e corrigido:
+
+3. **Médio — `ShadowGenerator` principal nunca era descartado no desmonte de `World3D`**: não é um
+   bug desta lab (existe desde muito antes — só ficou mais visível com mais malhas registradas nele,
+   ex.: os alvos de arena novos), mas genuíno: o próprio código já documentava, no gerador de sombra
+   da cena de benchmark de GPU (`benchmarkIsWeakGpu`), que `ShadowGenerator` NÃO é um recurso da
+   `Scene` — `scene.dispose()` sozinho não o descarta nem limpa sua lista de casters. O `teardown`
+   principal nunca aplicava essa mesma lição ao `shadowGenerator` do jogo de verdade — montar/
+   desmontar `World3D` repetidamente vazava referências a malhas/texturas de sombra já descartadas.
+   Corrigido com `shadowGenerator.dispose()` antes de `scene.dispose()`, mesmo padrão já
+   estabelecido pro gerador do benchmark.
+
+`npx tsc -b`, `npm run test -- --run` (237/237) e `npm run build` continuam limpos depois da
+correção.
 
 ## Fora de escopo (explicitamente adiado)
 

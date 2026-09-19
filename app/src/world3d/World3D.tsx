@@ -57,6 +57,13 @@ import {
   isCountingGameComplete,
   type CountingGameState,
 } from '../state/countingGame'
+import {
+  collectSpellingTile,
+  createSpellingGame,
+  isSpellingGameComplete,
+  spellingProgressText,
+  type SpellingGameState,
+} from '../state/spellingGame'
 import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
@@ -3523,7 +3530,7 @@ export function World3D({
     // a contagem regressiva/cronômetro opcional/label de status já prontos: registrar um mini-jogo
     // novo agora é "poucos pontos de código" (o próprio critério de aceite do lab-213) — um objeto
     // de config + os alvos 3D dele, não uma segunda cópia de `beginArenaCountdown`/`tickArenaTimer`.
-    type ArenaId = 'memoria' | 'contar'
+    type ArenaId = 'memoria' | 'contar' | 'soletrar'
     interface ArenaConfig {
       label: string
       timeLimitS: number | null
@@ -3541,6 +3548,12 @@ export function World3D({
     const arenaTargetPositions: Partial<Record<ArenaId, Vector3[]>> = {}
     const arenaTargetInteract: Partial<Record<ArenaId, (index: number) => void>> = {}
     const arenaTargetHintLabels: Partial<Record<ArenaId, TextBlock[]>> = {}
+    // `arenaTargetMeshes` (Lab 215): registrado pra que o loop de dica "Pressione E" (mais abaixo)
+    // possa pular alvos com a malha desabilitada — necessário pra Soletrar, cujo número de azulejos
+    // ativos varia por palavra (pool fixo de 6 slots, só `word.length` ficam habilitados por
+    // tentativa); memória/contar sempre usam todos os slots do próprio pool, então continuam se
+    // comportando exatamente como antes.
+    const arenaTargetMeshes: Partial<Record<ArenaId, Mesh[]>> = {}
     // Raio de gatilho compartilhado por qualquer alvo interativo de arena (carta de memória, placa
     // de resposta de contar, etc.) — mais estrito que `GAME_CENTER_TRIGGER_DISTANCE` (placas de
     // portal) de propósito, ver comentário em `handleInteractPress`.
@@ -3580,6 +3593,16 @@ export function World3D({
     const gcCountingOptionLabels: TextBlock[] = []
     const gcCountingOptionHintLabel: TextBlock[] = []
     let gameCenterCountingStatusLabel: TextBlock | null = null
+    // Soletrar (Lab 215) — mesmo espírito, registrado em `arenaConfigs.soletrar`/
+    // `arenaTargetPositions.soletrar`. Pool fixo de 6 slots de azulejo (maior palavra do catálogo,
+    // `COELHO`, tem 6 letras); só os `word.length` primeiros ficam ativos por tentativa —
+    // `renderSpellingRound` desabilita o resto.
+    const SPELLING_TILE_POOL_SIZE = 6
+    let arenaSpellingState: SpellingGameState | null = null
+    const gcSpellingTileMeshes: Mesh[] = []
+    const gcSpellingTileLabels: TextBlock[] = []
+    const gcSpellingTileHintLabel: TextBlock[] = []
+    let gameCenterSpellingStatusLabel: TextBlock | null = null
     // lab-172 — mesmo padrão de `houseEnterHintLabel`, só que também exige um parceiro por perto
     // (ver uso no loop de física) — sozinho, o jogador nunca vê a dica, pra não convidar pra um
     // desafio que não dá pra completar sozinho.
@@ -4207,17 +4230,24 @@ export function World3D({
             exitGameCenterInterior()
             return
           }
-          // Alvos da arena ativa (cartas de memória, placas de Contar) ANTES dos portais de
-          // propósito (lab-198, achado ao vivo): a placa "Lógica" fica perto o bastante de uma das
-          // cartas de memória (~1,57 unidades, dentro de `GAME_CENTER_TRIGGER_DISTANCE` = 1.6) que
-          // apertar `E` ali abria o quiz da ponte em vez de virar a carta. `ARENA_TARGET_TRIGGER_DISTANCE`
-          // (0.4) é bem mais estrito que o raio de qualquer portal, então checar os alvos primeiro
-          // nunca "rouba" um aperto de E que realmente era pra um portal distante — só resolve o
-          // conflito quando os dois coincidem.
+          // Alvos ATIVOS da arena ativa (cartas de memória, placas de Contar, azulejos de
+          // Soletrar) ANTES dos portais de propósito (lab-198, achado ao vivo): a placa "Lógica"
+          // fica perto o bastante de uma das cartas de memória (~1,57 unidades, dentro de
+          // `GAME_CENTER_TRIGGER_DISTANCE` = 1.6) que apertar `E` ali abria o quiz da ponte em vez
+          // de virar a carta. `ARENA_TARGET_TRIGGER_DISTANCE` (0.4) é bem mais estrito que o raio de
+          // qualquer portal, então checar os alvos primeiro nunca "rouba" um aperto de E que
+          // realmente era pra um portal distante — só resolve o conflito quando os dois coincidem.
+          // "ATIVO" importa a partir do Lab 215 (achado do review do Copilot): sem checar
+          // `mesh.isEnabled()`, apertar `E` perto de um azulejo já coletado (ou além do comprimento
+          // da palavra atual) consumia o aperto mostrando "letra errada" à toa, em vez de deixar o
+          // aperto passar pra um portal genuinamente mais próximo — mesma checagem já usada no loop
+          // de dica "Pressione E" (mais abaixo).
           if (arenaPhase === 'playing' && activeArenaId) {
             const targetPositions = arenaTargetPositions[activeArenaId] ?? []
+            const targetMeshes = arenaTargetMeshes[activeArenaId] ?? []
             for (let i = 0; i < targetPositions.length; i++) {
-              if (Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE) {
+              const active = targetMeshes[i]?.isEnabled() ?? true
+              if (active && Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE) {
                 arenaTargetInteract[activeArenaId]?.(i)
                 return
               }
@@ -7852,6 +7882,7 @@ export function World3D({
         // estado. Só leitura (nenhum efeito na regra de jogo).
         ;(window as any).__debugMemoryState = () => ({ arenaPhase, arenaSecondsLeft, arenaMemoryState })
         ;(window as any).__debugCountingState = () => ({ arenaPhase, arenaSecondsLeft, arenaCountingState, activeArenaId })
+        ;(window as any).__debugSpellingState = () => ({ arenaPhase, arenaSecondsLeft, arenaSpellingState, activeArenaId })
         // Gatilho de QA pra animação de golpe/tiro (lab-64) — o combate de verdade em Marte
         // resolve rápido demais (o jogador costuma morrer em poucos quadros) pra flagrar a
         // animação/VFX num teste automatizado por screenshot, ver "Pendências" no CONTEXT.md do
@@ -9511,14 +9542,17 @@ export function World3D({
 
       // `Lógica` reaproveita o quiz da ponte (lab-180); `Memória` roda a arena própria deste lab
       // (backlog "Lab 213 - Template de arena educativa reutilizável" — prova de conceito do template, ver
-      // "Decisão de escopo" em `FEATURES.md`). `Contar`/`Soletrar` continuam pros labs 214-215,
-      // ainda não existem. `unlocked: false` usa o mesmo tom apagado de `applyPortalVisual`
-      // (portais de planeta-destino) — bloqueado, não escondido, pra cumprir o critério de aceite
-      // "entende pra qual tipo de mini-jogo vai" mesmo sem poder jogar ainda.
+      // "Decisão de escopo" em `FEATURES.md`). Os 4 portais já abrem algo de verdade: `Lógica`
+      // (quiz da ponte, lab-180), `Memória` (arena própria, backlog "Lab 213"), `Contar` (arena
+      // própria, backlog "Lab 214") e `Soletrar` (arena própria, backlog "Lab 215"). Achado do
+      // review automático do Copilot: este comentário ficou desatualizado depois do lab-200 —
+      // `unlocked: false` (mesmo tom apagado de `applyPortalVisual`, portais de planeta-destino)
+      // não é mais usado por nenhum portal aqui, mas o campo continua no tipo pra um mini-jogo
+      // futuro que precise bloquear um portal de novo.
       const GAME_CENTER_PORTAL_IDS: GameCenterPortalId[] = ['contar', 'soletrar', 'memoria', 'logica']
       const GAME_CENTER_PORTAL_INFO: Record<GameCenterPortalId, { emoji: string; label: string; color: Color3; unlocked: boolean }> = {
         contar: { emoji: '🔢', label: 'Contar', color: new Color3(0.2, 0.6, 0.85), unlocked: true },
-        soletrar: { emoji: '🔤', label: 'Soletrar', color: new Color3(0.85, 0.55, 0.2), unlocked: false },
+        soletrar: { emoji: '🔤', label: 'Soletrar', color: new Color3(0.85, 0.55, 0.2), unlocked: true },
         memoria: { emoji: '🧠', label: 'Memória', color: new Color3(0.65, 0.3, 0.75), unlocked: true },
         logica: { emoji: '🧩', label: 'Lógica', color: new Color3(0.25, 0.7, 0.35), unlocked: true },
       }
@@ -9738,6 +9772,7 @@ export function World3D({
         arenaTargetPositions.memoria = gcMemoryCardPos
         arenaTargetInteract.memoria = handleMemoryCardInteract
         arenaTargetHintLabels.memoria = gcMemoryCardHintLabel
+        arenaTargetMeshes.memoria = gcMemoryCardMeshes
         arenaConfigs.memoria = {
           label: '🧠 Memória',
           timeLimitS: MEMORY_TIME_LIMIT_S,
@@ -9839,6 +9874,7 @@ export function World3D({
         arenaTargetPositions.contar = gcCountingOptionPos
         arenaTargetInteract.contar = handleCountingOptionInteract
         arenaTargetHintLabels.contar = gcCountingOptionHintLabel
+        arenaTargetMeshes.contar = gcCountingOptionMeshes
         // `timeLimitS: null` de propósito — backlog do Lab 214 é explícito: "sem tempo punitivo".
         arenaConfigs.contar = {
           label: '🔢 Contar',
@@ -9857,6 +9893,97 @@ export function World3D({
           },
           resetState: () => {
             arenaCountingState = null
+          },
+        }
+
+        // Azulejos de letra da arena de Soletrar (Lab 215) — mesmo padrão sob-demanda acima. Pool
+        // fixo de `SPELLING_TILE_POOL_SIZE` slots (cabe a maior palavra do catálogo, `COELHO`, 6
+        // letras); `renderSpellingRound` habilita só os `word.length` primeiros por tentativa.
+        const soletrarAnchorLocal = gameCenterPortalPos.soletrar.subtract(interiorRoot.position)
+        const spellingTileMat = new PBRMaterial('gcSpellingTileMat', scene)
+        spellingTileMat.albedoColor = new Color3(0.3, 0.32, 0.4)
+        spellingTileMat.roughness = 0.5
+        // Grade de 3 colunas (não uma fileira única de 6) de propósito — mesma forma/footprint já
+        // usada pelas cartas de memória (`MEMORY_CARD_COLUMNS`/`MEMORY_CARD_SPACING`), que já
+        // couberam no saguão sem sobrepor nada. Uma fileira única de 6 ficaria quase o dobro da
+        // largura, um risco espacial não verificado ao vivo nesta lab.
+        const SPELLING_TILE_COLUMNS = 3
+        const SPELLING_TILE_SPACING = 0.65
+        const gcSpellingTilePos: Vector3[] = []
+        for (let i = 0; i < SPELLING_TILE_POOL_SIZE; i++) {
+          const col = i % SPELLING_TILE_COLUMNS
+          const row = Math.floor(i / SPELLING_TILE_COLUMNS)
+          const tileLocalPos = soletrarAnchorLocal.add(
+            new Vector3((col - (SPELLING_TILE_COLUMNS - 1) / 2) * SPELLING_TILE_SPACING, 0, 1.8 + row * SPELLING_TILE_SPACING),
+          )
+
+          const tile = MeshBuilder.CreateBox(`gcSpellingTile-${i}`, { width: 0.5, height: 0.5, depth: 0.08 }, scene)
+          tile.position = tileLocalPos.add(new Vector3(0, 0.6, 0))
+          tile.material = spellingTileMat.clone(`gcSpellingTileMat-${i}`) as PBRMaterial
+          tile.parent = interiorRoot
+          tile.receiveShadows = true
+          tile.setEnabled(false)
+          shadowGenerator.addShadowCaster(tile)
+          gcSpellingTileMeshes[i] = tile
+          gcSpellingTilePos[i] = arenaTargetTriggerPos(tile)
+
+          const tileLabel = new TextBlock(`gcSpellingTileLabel-${i}`, '')
+          tileLabel.color = 'white'
+          tileLabel.fontSize = mobileFontSize(26)
+          tileLabel.fontWeight = 'bold'
+          tileLabel.outlineWidth = 3
+          tileLabel.outlineColor = 'rgba(0,0,0,0.6)'
+          tileLabel.alpha = 0
+          guiTexture.addControl(tileLabel)
+          tileLabel.linkWithMesh(tile)
+          gcSpellingTileLabels[i] = tileLabel
+
+          const tileHint = new TextBlock(`gcSpellingTileHint-${i}`, 'Pressione E')
+          tileHint.color = 'white'
+          tileHint.fontSize = mobileFontSize(14)
+          tileHint.fontWeight = 'bold'
+          tileHint.outlineWidth = 2
+          tileHint.outlineColor = 'rgba(0,0,0,0.6)'
+          tileHint.alpha = 0
+          guiTexture.addControl(tileHint)
+          tileHint.linkWithMesh(tile)
+          tileHint.linkOffsetY = 26
+          gcSpellingTileHintLabel[i] = tileHint
+        }
+
+        const spellingStatusLabel = new TextBlock('gcSpellingStatusLabel', '')
+        spellingStatusLabel.color = 'white'
+        spellingStatusLabel.fontSize = mobileFontSize(20)
+        spellingStatusLabel.fontWeight = 'bold'
+        spellingStatusLabel.outlineWidth = 4
+        spellingStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
+        spellingStatusLabel.alpha = 0
+        guiTexture.addControl(spellingStatusLabel)
+        spellingStatusLabel.linkWithMesh(gcSpellingTileMeshes[1])
+        spellingStatusLabel.linkOffsetY = -55
+        gameCenterSpellingStatusLabel = spellingStatusLabel
+
+        arenaTargetPositions.soletrar = gcSpellingTilePos
+        arenaTargetInteract.soletrar = handleSpellingTileInteract
+        arenaTargetHintLabels.soletrar = gcSpellingTileHintLabel
+        arenaTargetMeshes.soletrar = gcSpellingTileMeshes
+        // `timeLimitS: null` de propósito — mesmo raciocínio do Contar: "erro mostra dica sem
+        // punição" (backlog do Lab 215) não combina com pressão de tempo.
+        arenaConfigs.soletrar = {
+          label: '📖 Soletrar',
+          timeLimitS: null,
+          statusLabel: spellingStatusLabel,
+          setTargetsVisible: setSpellingTilesVisible,
+          beginAttempt: () => {
+            arenaSpellingState = createSpellingGame()
+            setSpellingTilesVisible(true)
+            renderSpellingRound()
+            if (spellingStatusLabel && arenaSpellingState) {
+              spellingStatusLabel.text = `${arenaSpellingState.hint} ${spellingProgressText(arenaSpellingState)}`
+            }
+          },
+          resetState: () => {
+            arenaSpellingState = null
           },
         }
       }
@@ -9958,11 +10085,11 @@ export function World3D({
           )
           return
         }
-        if (id === 'memoria' || id === 'contar') {
+        if (id === 'memoria' || id === 'contar' || id === 'soletrar') {
           // Achado da generalização (Lab 214): `success`/`fail` só significa "pode tentar de novo"
-          // pra ESTA MESMA arena. Terminar a memória e ir direto pra placa de Contar (sem sair do
-          // saguão) tem que contar como uma tentativa NOVA de Contar, não uma "retentativa" —
-          // senão `minigame_retried` dispararia errado no primeiro try de um jogo diferente.
+          // pra ESTA MESMA arena. Terminar uma arena e ir direto pra placa de outra (sem sair do
+          // saguão) tem que contar como uma tentativa NOVA, não uma "retentativa" — senão
+          // `minigame_retried` dispararia errado no primeiro try de um jogo diferente.
           if (arenaPhase === 'idle' || (activeArenaId !== id && (arenaPhase === 'success' || arenaPhase === 'fail'))) {
             beginArenaCountdown(id, false)
           } else if (activeArenaId === id && (arenaPhase === 'success' || arenaPhase === 'fail')) {
@@ -10139,6 +10266,62 @@ export function World3D({
         }
         if (gameCenterCountingStatusLabel) {
           gameCenterCountingStatusLabel.text = `✅ Isso mesmo! Rodada ${state.roundsWon}/${COUNTING_ROUNDS_TO_WIN}`
+        }
+      }
+
+      // Soletrar (Lab 215) — sem cronômetro (backlog explícito: "erro mostra dica sem punição"),
+      // 1 palavra por tentativa (`state/spellingGame.ts`); coletar as letras na ordem certa (por
+      // LETRA, não por posição — trata palavra com letra repetida) completa a tentativa.
+      const SPELLING_REWARD_COINS = 3
+      function setSpellingTilesVisible(visible: boolean) {
+        for (let i = 0; i < gcSpellingTileMeshes.length; i++) {
+          gcSpellingTileMeshes[i].setEnabled(visible)
+          gcSpellingTileLabels[i].alpha = visible ? 1 : 0
+        }
+      }
+      function renderSpellingRound() {
+        if (!arenaSpellingState) return
+        const { tiles } = arenaSpellingState
+        for (let i = 0; i < gcSpellingTileMeshes.length; i++) {
+          const tile = tiles[i]
+          if (!tile || tile.collected) {
+            gcSpellingTileMeshes[i].setEnabled(false)
+            gcSpellingTileLabels[i].alpha = 0
+            continue
+          }
+          gcSpellingTileMeshes[i].setEnabled(true)
+          gcSpellingTileLabels[i].alpha = 1
+          gcSpellingTileLabels[i].text = tile.letter
+        }
+      }
+      function handleSpellingTileInteract(index: number) {
+        if (arenaPhase !== 'playing' || !arenaSpellingState) return
+        const tile = arenaSpellingState.tiles[index]
+        // `tile.collected` também é filtrado no loop de interação (por `mesh.isEnabled()`, achado
+        // do review do Copilot) — repetido aqui como defesa extra: sem isto, um azulejo já
+        // coletado mostraria "letra errada" à toa se alcançado por qualquer outro caminho.
+        if (!tile || tile.collected) return
+        const { state, correct } = collectSpellingTile(arenaSpellingState, tile.id)
+        arenaSpellingState = state
+        if (!correct) {
+          if (gameCenterSpellingStatusLabel) {
+            gameCenterSpellingStatusLabel.text = `🤔 Essa não é a próxima letra! ${state.hint} ${spellingProgressText(state)}`
+          }
+          return
+        }
+        renderSpellingRound()
+        if (isSpellingGameComplete(state)) {
+          arenaPhase = 'success'
+          setSpellingTilesVisible(false)
+          if (gameCenterSpellingStatusLabel) {
+            gameCenterSpellingStatusLabel.text = `🎉 Você soletrou ${state.hint} ${state.word}! Pressione E na placa pra jogar de novo`
+          }
+          trackMinigameCompleted('soletrar')
+          for (let i = 0; i < SPELLING_REWARD_COINS; i++) onCollectCoinRef.current()
+          return
+        }
+        if (gameCenterSpellingStatusLabel) {
+          gameCenterSpellingStatusLabel.text = `${state.hint} ${spellingProgressText(state)}`
         }
       }
 
@@ -13452,15 +13635,21 @@ export function World3D({
                 : 0
           }
         }
-        // Dica "pressione E" de cada alvo da arena ATIVA (cartas de memória, placas de Contar) — só
-        // faz sentido enquanto `playing` (fora disso os alvos estão `setEnabled(false)`,
-        // invisíveis, mas o TextBlock vinculado continuaria acompanhando a posição da malha
-        // desabilitada sem esta checagem).
+        // Dica "pressione E" de cada alvo ATIVO da arena ATIVA (cartas de memória, placas de
+        // Contar, azulejos de Soletrar) — só faz sentido enquanto `playing` (fora disso os alvos
+        // estão `setEnabled(false)`, invisíveis, mas o TextBlock vinculado continuaria acompanhando
+        // a posição da malha desabilitada sem esta checagem). "ATIVO" importa de verdade a partir
+        // do Lab 215: memória/contar sempre usam todos os slots do próprio pool, mas Soletrar tem
+        // um pool fixo de 6 com só `word.length` habilitados por tentativa — sem checar
+        // `mesh.isEnabled()`, a dica de um slot desabilitado (palavra mais curta que o pool)
+        // apareceria flutuando sem nada real pra interagir ali.
         if (avatarMesh && arenaPhase === 'playing' && activeArenaId) {
           const targetPositions = arenaTargetPositions[activeArenaId] ?? []
           const hintLabels = arenaTargetHintLabels[activeArenaId] ?? []
+          const targetMeshes = arenaTargetMeshes[activeArenaId] ?? []
           for (let i = 0; i < targetPositions.length; i++) {
-            hintLabels[i].alpha = Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE ? 1 : 0
+            const active = targetMeshes[i]?.isEnabled() ?? true
+            hintLabels[i].alpha = active && Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE ? 1 : 0
           }
         } else {
           // Achado do review do Copilot: uma lista fixa de arrays aqui (uma por arena) quebra a
@@ -14023,6 +14212,14 @@ export function World3D({
       ;(scene as any).__cancelPerfSample?.()
       ;(scene as any).__cleanupPerf?.()
       sceneRef.current = null
+      // Achado do review automático do Copilot (pré-existente, não introduzido por nenhuma lab em
+      // particular — só ficou mais visível com mais malhas registradas nele, ex.: os alvos de
+      // arena): `ShadowGenerator` não é um recurso da `Scene` (mesmo comportamento já documentado
+      // no gerador da cena de benchmark, `benchmarkIsWeakGpu`, mais acima neste arquivo) —
+      // `scene.dispose()` sozinho NÃO dispõe o `shadowGenerator` principal nem limpa a lista de
+      // casters dele. Sem isto, montar/desmontar `World3D` repetidamente vazava referências a
+      // malhas/texturas de sombra já descartadas.
+      shadowGenerator.dispose()
       scene.dispose()
       engine.dispose()
     }
