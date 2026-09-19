@@ -482,10 +482,14 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   if (type === 'album_planet_opened' && !isValidDestinationPlanetId(metaObjForValidation.planetId)) {
     return new Response(null, { status: 400 })
   }
-  // Mesmo raciocínio dos eventos acima: `minigame_started`/`minigame_completed` só fazem sentido
-  // com um `minigameId` válido (é o que identifica qual pedestal do hub gerou o evento).
+  // Mesmo raciocínio dos eventos acima: `minigame_started`/`minigame_completed`/`minigame_retried`/
+  // `minigame_exited` só fazem sentido com um `minigameId` válido (é o que identifica qual
+  // pedestal do hub ou arena do centro de jogos gerou o evento).
   if (
-    (type === 'minigame_started' || type === 'minigame_completed') &&
+    (type === 'minigame_started' ||
+      type === 'minigame_completed' ||
+      type === 'minigame_retried' ||
+      type === 'minigame_exited') &&
     !isValidMinigameId(metaObjForValidation.minigameId)
   ) {
     return new Response(null, { status: 400 })
@@ -527,7 +531,12 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     } else if (type === 'album_planet_opened') {
       // já validado acima — só a chave permitida sobrevive.
       safeMeta = { planetId: metaObj.planetId }
-    } else if (type === 'minigame_started' || type === 'minigame_completed') {
+    } else if (
+      type === 'minigame_started' ||
+      type === 'minigame_completed' ||
+      type === 'minigame_retried' ||
+      type === 'minigame_exited'
+    ) {
       // já validado acima — só a chave permitida sobrevive.
       safeMeta = { minigameId: metaObj.minigameId }
     } else if (type === 'game_portal_selected') {
@@ -1871,6 +1880,9 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     // sem consulta direta ao banco.
     minigameStarted: weeklyDevices('minigame_started'),
     minigameCompleted: weeklyDevices('minigame_completed'),
+    // Template de arena ("Lab 213") — mesmo achado acima, exposto desde o primeiro commit.
+    minigameRetried: weeklyDevices('minigame_retried'),
+    minigameExited: weeklyDevices('minigame_exited'),
     // Centro de jogos ("Lab 212") — mesmo achado de lab-180/lab-196 acima: exposto desde o
     // primeiro commit, não como correção de review depois.
     gameCenterEntered: weeklyDevices('game_center_entered'),

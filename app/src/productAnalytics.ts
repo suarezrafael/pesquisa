@@ -245,6 +245,20 @@ export function trackMinigameCompleted(minigameId: string): void {
   trackEvent('minigame_completed', { minigameId })
 }
 
+// Backlog "Lab 213 - Template de arena educativa reutilizável" cita `minigame_retried`/
+// `minigame_exited` como eventos comuns esperados do template. `trackMinigameRetried` dispara
+// quando a criança tenta de novo DEPOIS de terminar (sucesso ou falha) — nunca no meio de uma
+// tentativa em andamento. `trackMinigameExited` dispara só quando ela sai com uma tentativa REALMENTE
+// em andamento (não depois de já ter terminado) — mede abandono de verdade, não "saiu depois de já
+// ter acabado o jogo".
+export function trackMinigameRetried(minigameId: string): void {
+  trackEvent('minigame_retried', { minigameId })
+}
+
+export function trackMinigameExited(minigameId: string): void {
+  trackEvent('minigame_exited', { minigameId })
+}
+
 // Backlog "Lab 212 - Centro de jogos educativo com saguão e portais" — nomes exatos citados pelo
 // documento. `game_center_entered`/`game_center_returned` não carregam `meta` (mesmo espírito de
 // `camera_recenter_used`/`weekly_event_objective_completed`: evento novo, sem campo documentado,
