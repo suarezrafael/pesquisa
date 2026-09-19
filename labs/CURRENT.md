@@ -1,6 +1,14 @@
 # Laboratório atual
 
-Nenhum laboratório em andamento no momento — o próximo `lab start` decide o tema seguinte.
+Em andamento: labs/lab-198-template-arena-educativa/ — cria uma infraestrutura mínima e
+reutilizável de "arena" (contagem regressiva, estado `playing/success/fail/retry`, cronômetro,
+alvos interativos, eventos comuns) que os labs 214-216 vão usar depois. Prova de conceito: versão
+simples de verdade do jogo da memória, ocupando o portal "Memória" já existente no centro de jogos
+(lab-197), sem sala/interior nova (acontece no próprio saguão, decisão documentada em
+`FEATURES.md` pra não multiplicar a complexidade de câmera/chuva/pet das 2 salas já existentes).
+Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 213 - Template de arena educativa
+reutilizável" — próximo item depois do lab-197. Ver
+`labs/lab-198-template-arena-educativa/FEATURES.md` pro objetivo/investigação prévia completos.
 
 Último concluído: labs/lab-197-centro-jogos-educativo/ — cria um prédio/saguão de jogos no planeta
 principal, com 4 placas/portais (Contar/Soletrar/Memória/Lógica) — reaproveita a arquitetura de
