@@ -4230,17 +4230,24 @@ export function World3D({
             exitGameCenterInterior()
             return
           }
-          // Alvos da arena ativa (cartas de memória, placas de Contar) ANTES dos portais de
-          // propósito (lab-198, achado ao vivo): a placa "Lógica" fica perto o bastante de uma das
-          // cartas de memória (~1,57 unidades, dentro de `GAME_CENTER_TRIGGER_DISTANCE` = 1.6) que
-          // apertar `E` ali abria o quiz da ponte em vez de virar a carta. `ARENA_TARGET_TRIGGER_DISTANCE`
-          // (0.4) é bem mais estrito que o raio de qualquer portal, então checar os alvos primeiro
-          // nunca "rouba" um aperto de E que realmente era pra um portal distante — só resolve o
-          // conflito quando os dois coincidem.
+          // Alvos ATIVOS da arena ativa (cartas de memória, placas de Contar, azulejos de
+          // Soletrar) ANTES dos portais de propósito (lab-198, achado ao vivo): a placa "Lógica"
+          // fica perto o bastante de uma das cartas de memória (~1,57 unidades, dentro de
+          // `GAME_CENTER_TRIGGER_DISTANCE` = 1.6) que apertar `E` ali abria o quiz da ponte em vez
+          // de virar a carta. `ARENA_TARGET_TRIGGER_DISTANCE` (0.4) é bem mais estrito que o raio de
+          // qualquer portal, então checar os alvos primeiro nunca "rouba" um aperto de E que
+          // realmente era pra um portal distante — só resolve o conflito quando os dois coincidem.
+          // "ATIVO" importa a partir do Lab 215 (achado do review do Copilot): sem checar
+          // `mesh.isEnabled()`, apertar `E` perto de um azulejo já coletado (ou além do comprimento
+          // da palavra atual) consumia o aperto mostrando "letra errada" à toa, em vez de deixar o
+          // aperto passar pra um portal genuinamente mais próximo — mesma checagem já usada no loop
+          // de dica "Pressione E" (mais abaixo).
           if (arenaPhase === 'playing' && activeArenaId) {
             const targetPositions = arenaTargetPositions[activeArenaId] ?? []
+            const targetMeshes = arenaTargetMeshes[activeArenaId] ?? []
             for (let i = 0; i < targetPositions.length; i++) {
-              if (Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE) {
+              const active = targetMeshes[i]?.isEnabled() ?? true
+              if (active && Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE) {
                 arenaTargetInteract[activeArenaId]?.(i)
                 return
               }
@@ -9535,10 +9542,13 @@ export function World3D({
 
       // `Lógica` reaproveita o quiz da ponte (lab-180); `Memória` roda a arena própria deste lab
       // (backlog "Lab 213 - Template de arena educativa reutilizável" — prova de conceito do template, ver
-      // "Decisão de escopo" em `FEATURES.md`). `Contar`/`Soletrar` continuam pros labs 214-215,
-      // ainda não existem. `unlocked: false` usa o mesmo tom apagado de `applyPortalVisual`
-      // (portais de planeta-destino) — bloqueado, não escondido, pra cumprir o critério de aceite
-      // "entende pra qual tipo de mini-jogo vai" mesmo sem poder jogar ainda.
+      // "Decisão de escopo" em `FEATURES.md`). Os 4 portais já abrem algo de verdade: `Lógica`
+      // (quiz da ponte, lab-180), `Memória` (arena própria, backlog "Lab 213"), `Contar` (arena
+      // própria, backlog "Lab 214") e `Soletrar` (arena própria, backlog "Lab 215"). Achado do
+      // review automático do Copilot: este comentário ficou desatualizado depois do lab-200 —
+      // `unlocked: false` (mesmo tom apagado de `applyPortalVisual`, portais de planeta-destino)
+      // não é mais usado por nenhum portal aqui, mas o campo continua no tipo pra um mini-jogo
+      // futuro que precise bloquear um portal de novo.
       const GAME_CENTER_PORTAL_IDS: GameCenterPortalId[] = ['contar', 'soletrar', 'memoria', 'logica']
       const GAME_CENTER_PORTAL_INFO: Record<GameCenterPortalId, { emoji: string; label: string; color: Color3; unlocked: boolean }> = {
         contar: { emoji: '🔢', label: 'Contar', color: new Color3(0.2, 0.6, 0.85), unlocked: true },
@@ -10287,7 +10297,10 @@ export function World3D({
       function handleSpellingTileInteract(index: number) {
         if (arenaPhase !== 'playing' || !arenaSpellingState) return
         const tile = arenaSpellingState.tiles[index]
-        if (!tile) return
+        // `tile.collected` também é filtrado no loop de interação (por `mesh.isEnabled()`, achado
+        // do review do Copilot) — repetido aqui como defesa extra: sem isto, um azulejo já
+        // coletado mostraria "letra errada" à toa se alcançado por qualquer outro caminho.
+        if (!tile || tile.collected) return
         const { state, correct } = collectSpellingTile(arenaSpellingState, tile.id)
         arenaSpellingState = state
         if (!correct) {

@@ -115,6 +115,29 @@ Sem poder testar ao vivo, revisei manualmente cada caminho novo:
 próprio portal "Soletrar") não foi confirmada ao vivo — só o raciocínio de que reusar a MESMA forma
 já comprovada (grade 3 colunas) reduz bastante a chance de sobreposição, não elimina de vez.
 
+## Rodada de review — Copilot (PR #83)
+
+2 achados, ambos confirmados contra o código real e corrigidos:
+
+1. **Baixo — comentário desatualizado no `GAME_CENTER_PORTAL_INFO`**: o comentário logo acima
+   ainda dizia que `Contar`/`Soletrar` "ainda não existem" e descrevia o tom `unlocked: false`, mas
+   os 4 portais já estão `unlocked: true` desde este próprio lab. Corrigido.
+2. **Baixo, mas real — o loop de interação (`handleInteractPress`) não filtrava alvos
+   desabilitados**: só o loop de DICA "Pressione E" tinha o filtro `mesh.isEnabled()` (achado de
+   design desta própria lab); o loop que de fato DISPARA a interação ao apertar `E` continuava
+   percorrendo todos os slots do pool sem checar se estavam ativos. Resultado real: apertar `E`
+   perto de um azulejo já coletado (ou além do comprimento da palavra atual) mostrava "🤔 Essa não
+   é a próxima letra!" à toa — e, por causa do `return` logo depois, também impedia esse mesmo
+   aperto de abrir um portal genuinamente mais próximo (embora `ARENA_TARGET_TRIGGER_DISTANCE` ser
+   bem mais estrito reduza bastante a chance de coincidência). Corrigido em duas camadas: o loop de
+   interação agora aplica o mesmo filtro `mesh.isEnabled()` do loop de dica, e
+   `handleSpellingTileInteract` ganhou uma checagem extra de defesa (`tile.collected`) — mesmo
+   raciocínio de dupla camada já usado no domínio (`collectSpellingTile` também filtra
+   `tile.collected`).
+
+`npx tsc -b`, `npm run test -- --run` (237/237) e `npm run build` continuam limpos depois das duas
+correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Entrada de texto livre, correção ortográfica aberta, IA generativa, chat (excluídos
