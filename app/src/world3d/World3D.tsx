@@ -64,6 +64,13 @@ import {
   spellingProgressText,
   type SpellingGameState,
 } from '../state/spellingGame'
+import {
+  PATTERN_PAD_COUNT,
+  createPatternGame,
+  isPatternGameComplete,
+  pressPatternPad,
+  type PatternGameState,
+} from '../state/patternGame'
 import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
@@ -3572,15 +3579,39 @@ export function World3D({
     let arenaSecondsLeft = 0
     let arenaCountdownTimeout: ReturnType<typeof setTimeout> | null = null
     let arenaTimerInterval: ReturnType<typeof setInterval> | null = null
-    // Memória (lab-198, prova de conceito do template) — estado/malhas específicos deste mini-jogo;
-    // registrados em `arenaConfigs.memoria`/`arenaTargetPositions.memoria` dentro de
-    // `buildGameCenterInteriorIfNeeded`.
-    const MEMORY_CARD_COUNT = 6
+    // Memória (lab-198, prova de conceito do template; polida no Lab 216 — mais pares, temas,
+    // recompensa real, sem cronômetro) — estado/malhas específicos deste mini-jogo; registrados em
+    // `arenaConfigs.memoria`/`arenaTargetPositions.memoria` dentro de
+    // `buildGameCenterInteriorIfNeeded`. `MEMORY_MIN_PAIRS`/`MEMORY_MAX_PAIRS` formam a "escada" de
+    // dificuldade (sobe 1 par por vitória, reseta ao sair da arena, ver `memoriaLevel`).
+    const MEMORY_MIN_PAIRS = 3
+    const MEMORY_MAX_PAIRS = 6
+    const MEMORY_CARD_COUNT = MEMORY_MAX_PAIRS * 2
+    let memoriaLevel = MEMORY_MIN_PAIRS
     let arenaMemoryState: MemoryGameState | null = null
     const gcMemoryCardMeshes: Mesh[] = []
     const gcMemoryCardLabels: TextBlock[] = []
     const gcMemoryCardHintLabel: TextBlock[] = []
     let gameCenterMemoryStatusLabel: TextBlock | null = null
+    // Sequência (Lab 216, "memória E padrões" — tipo Genius/Simon) — mesmo portal/arena de Memória
+    // (o saguão não tem slot de portal novo pra um 5º mini-jogo); cada tentativa sorteia 50/50
+    // entre "cartas" e "sequência" (`arenaMemoryMode`). Os pods de sequência ocupam o MESMO ponto de
+    // ancoragem das cartas — os dois conjuntos nunca ficam visíveis ao mesmo tempo (achado de design
+    // que elimina o risco de sobreposição espacial de ter 2 conjuntos de alvos numa arena só, ver
+    // FEATURES.md). `sequencePlaybackTimeout` conduz a "reprodução" da sequência (acender uma luz
+    // de cada vez) antes de liberar a vez do jogador — `sequencePlaybackLocked` ignora apertos de
+    // `E` durante essa reprodução, sem precisar de um novo valor no `arenaPhase` compartilhado
+    // (fica local a esta arena, igual `sittingAtDesk`/outros modos especiais deste arquivo).
+    let arenaMemoryMode: 'cartas' | 'sequencia' = 'cartas'
+    let arenaPatternState: PatternGameState | null = null
+    let sequencePlaybackLocked = false
+    let sequencePlaybackTimeout: ReturnType<typeof setTimeout> | null = null
+    // Handle separado do de cima — o "flash" rápido de confirmação ao tocar um pod (ver
+    // `handlePatternPadInteract`) roda em paralelo à reprodução, não em sequência com ela.
+    let patternPressFlashTimeout: ReturnType<typeof setTimeout> | null = null
+    const gcPatternPadMeshes: Mesh[] = []
+    const gcPatternPadMaterials: PBRMaterial[] = []
+    const gcPatternPadHintLabel: TextBlock[] = []
     // Contar (Lab 214) — mesmo espírito, registrado em `arenaConfigs.contar`/
     // `arenaTargetPositions.contar`. `gcCountingStarMeshes` são só decorativos (não-interativos,
     // pra criança contar visualmente); `gcCountingOptionMeshes`/`gcCountingOptionLabels` são as 3
@@ -7880,7 +7911,15 @@ export function World3D({
         // Gatilho de QA pra arena de memória (backlog "Lab 213") — o baralho é embaralhado de verdade
         // (`Math.random`), então não dá pra testar "achar o par certo" de fora sem enxergar o
         // estado. Só leitura (nenhum efeito na regra de jogo).
-        ;(window as any).__debugMemoryState = () => ({ arenaPhase, arenaSecondsLeft, arenaMemoryState })
+        ;(window as any).__debugMemoryState = () => ({
+          arenaPhase,
+          arenaSecondsLeft,
+          arenaMemoryMode,
+          memoriaLevel,
+          arenaMemoryState,
+          arenaPatternState,
+          sequencePlaybackLocked,
+        })
         ;(window as any).__debugCountingState = () => ({ arenaPhase, arenaSecondsLeft, arenaCountingState, activeArenaId })
         ;(window as any).__debugSpellingState = () => ({ arenaPhase, arenaSecondsLeft, arenaSpellingState, activeArenaId })
         // Gatilho de QA pra animação de golpe/tiro (lab-64) — o combate de verdade em Marte
@@ -9757,6 +9796,55 @@ export function World3D({
           gcMemoryCardHintLabel[i] = cardHint
         }
 
+        // Pods de sequência (Lab 216) — MESMO ponto de ancoragem das cartas de propósito: os dois
+        // conjuntos nunca ficam com `setEnabled(true)` ao mesmo tempo (só um modo roda por
+        // tentativa), então não há risco de sobreposição visual de verdade em compartilhar o
+        // espaço — ver "Achado de design" em FEATURES.md. 4 pods coloridos, grade 2x2, sem
+        // TextBlock de conteúdo (ao contrário das cartas, os pods não mostram símbolo nenhum — só
+        // acendem/apagam via `emissiveColor` durante a reprodução/interação).
+        const PATTERN_PAD_COLUMNS = 2
+        const PATTERN_PAD_SPACING = 0.9
+        const patternPadColors = [
+          new Color3(0.85, 0.2, 0.2),
+          new Color3(0.2, 0.7, 0.25),
+          new Color3(0.2, 0.45, 0.9),
+          new Color3(0.95, 0.8, 0.15),
+        ]
+        const gcPatternPadPos: Vector3[] = []
+        for (let i = 0; i < PATTERN_PAD_COUNT; i++) {
+          const col = i % PATTERN_PAD_COLUMNS
+          const row = Math.floor(i / PATTERN_PAD_COLUMNS)
+          const padLocalPos = memoriaAnchorLocal.add(
+            new Vector3((col - (PATTERN_PAD_COLUMNS - 1) / 2) * PATTERN_PAD_SPACING, 0, 1.8 + row * PATTERN_PAD_SPACING),
+          )
+
+          const pad = MeshBuilder.CreateCylinder(`gcPatternPad-${i}`, { height: 0.12, diameter: 0.6, tessellation: 16 }, scene)
+          pad.position = padLocalPos.add(new Vector3(0, 0.6, 0))
+          const padMat = new PBRMaterial(`gcPatternPadMat-${i}`, scene)
+          padMat.albedoColor = patternPadColors[i]
+          padMat.roughness = 0.5
+          pad.material = padMat
+          pad.parent = interiorRoot
+          pad.receiveShadows = true
+          pad.setEnabled(false)
+          shadowGenerator.addShadowCaster(pad)
+          gcPatternPadMeshes[i] = pad
+          gcPatternPadMaterials[i] = padMat
+          gcPatternPadPos[i] = arenaTargetTriggerPos(pad)
+
+          const padHint = new TextBlock(`gcPatternPadHint-${i}`, 'Pressione E')
+          padHint.color = 'white'
+          padHint.fontSize = mobileFontSize(14)
+          padHint.fontWeight = 'bold'
+          padHint.outlineWidth = 2
+          padHint.outlineColor = 'rgba(0,0,0,0.6)'
+          padHint.alpha = 0
+          guiTexture.addControl(padHint)
+          padHint.linkWithMesh(pad)
+          padHint.linkOffsetY = 26
+          gcPatternPadHintLabel[i] = padHint
+        }
+
         const memoryStatusLabel = new TextBlock('gcMemoryStatusLabel', '')
         memoryStatusLabel.color = 'white'
         memoryStatusLabel.fontSize = mobileFontSize(20)
@@ -9769,26 +9857,53 @@ export function World3D({
         memoryStatusLabel.linkOffsetY = -55
         gameCenterMemoryStatusLabel = memoryStatusLabel
 
-        arenaTargetPositions.memoria = gcMemoryCardPos
-        arenaTargetInteract.memoria = handleMemoryCardInteract
-        arenaTargetHintLabels.memoria = gcMemoryCardHintLabel
-        arenaTargetMeshes.memoria = gcMemoryCardMeshes
+        // Alvos combinados (cartas + pods) — ver comentário na declaração de `arenaMemoryMode`: os
+        // dois conjuntos nunca ficam habilitados ao mesmo tempo, então concatenar os registros é
+        // seguro (o filtro genérico `mesh.isEnabled()` do lab-200 pula quem estiver desabilitado
+        // nos loops de dica/interação, sem precisar generalizar o controlador de novo).
+        arenaTargetPositions.memoria = [...gcMemoryCardPos, ...gcPatternPadPos]
+        arenaTargetInteract.memoria = handleMemoryArenaInteract
+        arenaTargetHintLabels.memoria = [...gcMemoryCardHintLabel, ...gcPatternPadHintLabel]
+        arenaTargetMeshes.memoria = [...gcMemoryCardMeshes, ...gcPatternPadMeshes]
+        // `timeLimitS: null` (Lab 216 é explícito: "tempo punitivo" está em "Fora de escopo") —
+        // alinha Memória com Contar/Soletrar, que também não têm cronômetro. Sem cronômetro, nenhum
+        // dos dois modos alcança mais `fail`, só `success` (mesmo padrão das outras 2 arenas).
         arenaConfigs.memoria = {
           label: '🧠 Memória',
-          timeLimitS: MEMORY_TIME_LIMIT_S,
+          timeLimitS: null,
           statusLabel: memoryStatusLabel,
-          setTargetsVisible: setMemoryCardsVisible,
+          setTargetsVisible: (visible) => {
+            setMemoryCardsVisible(visible)
+            setPatternPadsVisible(visible)
+          },
           beginAttempt: () => {
-            arenaMemoryState = createMemoryGame(MEMORY_SYMBOLS)
-            setMemoryCardsVisible(true)
-            for (const label of gcMemoryCardLabels) label.text = '❓'
+            // Sorteio 50/50 a cada tentativa (inclusive retentativas) — mais variedade, mesmo
+            // espírito do sorteio de tema logo abaixo.
+            arenaMemoryMode = Math.random() < 0.5 ? 'cartas' : 'sequencia'
+            if (arenaMemoryMode === 'cartas') {
+              const theme = MEMORY_THEMES[Math.floor(Math.random() * MEMORY_THEMES.length)]
+              arenaMemoryState = createMemoryGame(theme.slice(0, memoriaLevel))
+              setMemoryCardsVisible(true)
+              for (const label of gcMemoryCardLabels) label.text = '❓'
+              if (memoryStatusLabel) memoryStatusLabel.text = `🧠 Encontre os ${memoriaLevel} pares!`
+            } else {
+              arenaPatternState = createPatternGame()
+              setPatternPadsVisible(true)
+              presentPatternSequence(arenaPatternState.sequence)
+            }
           },
           resetState: () => {
             arenaMemoryState = null
-          },
-          onTimeout: () => {
-            setMemoryCardsVisible(false)
-            memoryStatusLabel.text = '⏰ Tempo esgotado! Pressione E na placa pra tentar de novo'
+            arenaPatternState = null
+            // Achado do review do Copilot: a "escada" de dificuldade (3→6 pares) nunca voltava ao
+            // mínimo — `memoriaLevel` só subia, mesmo depois de sair da arena e voltar, apesar do
+            // comportamento descrito (reseta ao sair) nunca ter sido implementado de verdade.
+            memoriaLevel = MEMORY_MIN_PAIRS
+            if (sequencePlaybackTimeout) clearTimeout(sequencePlaybackTimeout)
+            sequencePlaybackTimeout = null
+            if (patternPressFlashTimeout) clearTimeout(patternPressFlashTimeout)
+            patternPressFlashTimeout = null
+            sequencePlaybackLocked = false
           },
         }
 
@@ -10189,16 +10304,29 @@ export function World3D({
         activeArenaId = null
       }
 
-      // Memória (lab-198, prova de conceito do template) — cronômetro de 45s, falha ao esgotar.
-      const MEMORY_TIME_LIMIT_S = 45
-      const MEMORY_SYMBOLS = ['🍎', '🍌', '🍇']
+      // Memória (lab-198, prova de conceito do template; polida no Lab 216). Catálogo de temas —
+      // cada tema precisa de pelo menos `MEMORY_MAX_PAIRS` símbolos (o nível corrente corta só os
+      // primeiros `memoriaLevel`) — reaproveita emoji já usados noutros lugares do jogo, sem
+      // conteúdo novo. Cobre o critério "usar temas do jogo" do backlog sem precisar de arte nova.
+      const MEMORY_THEMES: string[][] = [
+        ['🍎', '🍌', '🍇', '🍓', '🍊', '🥝'],
+        ['🪐', '🌍', '🌕', '⭐', '☄️', '🛸'],
+        ['🐱', '🐶', '🐰', '🐹', '🐢', '🐦'],
+        ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'],
+        ['⬛', '🔺', '🔵', '⭐', '💠', '🔶'],
+      ]
+      const MEMORY_REWARD_COINS = 3
       // `card.setEnabled` sozinho não esconde o TextBlock vinculado (achado ao vivo, ver comentário
       // na criação de `cardLabel` acima) — os dois sempre mudam juntos, por isso centralizados aqui
-      // em vez de duplicar o par malha+label em cada transição de estado.
+      // em vez de duplicar o par malha+label em cada transição de estado. Level-aware: só os
+      // primeiros `memoriaLevel * 2` slots do pool (12 cartas, 6 pares no máximo) ficam visíveis —
+      // o resto do pool existe só pros níveis mais altos.
       function setMemoryCardsVisible(visible: boolean) {
+        const activeCount = memoriaLevel * 2
         for (let i = 0; i < gcMemoryCardMeshes.length; i++) {
-          gcMemoryCardMeshes[i].setEnabled(visible)
-          gcMemoryCardLabels[i].alpha = visible ? 1 : 0
+          const active = visible && i < activeCount
+          gcMemoryCardMeshes[i].setEnabled(active)
+          gcMemoryCardLabels[i].alpha = active ? 1 : 0
         }
       }
 
@@ -10211,14 +10339,103 @@ export function World3D({
           gcMemoryCardLabels[card.id].text = revealed ? card.symbol : '❓'
         }
         if (matched && isMemoryGameComplete(state)) {
-          if (arenaTimerInterval) clearInterval(arenaTimerInterval)
           arenaPhase = 'success'
           setMemoryCardsVisible(false)
+          memoriaLevel = Math.min(memoriaLevel + 1, MEMORY_MAX_PAIRS)
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = '🎉 Você venceu! Pressione E na placa pra jogar de novo'
           }
           trackMinigameCompleted('memoria')
+          for (let i = 0; i < MEMORY_REWARD_COINS; i++) onCollectCoinRef.current()
         }
+      }
+
+      // Sequência (Lab 216) — acende/apaga um pod via `emissiveColor` (a `albedoColor` de base já
+      // dá a cor; o emissive é só o "brilho" de destaque temporário).
+      function setPatternPadHighlighted(padIndex: number, on: boolean) {
+        const mat = gcPatternPadMaterials[padIndex]
+        if (mat) mat.emissiveColor = on ? mat.albedoColor : Color3.Black()
+      }
+      function setPatternPadsVisible(visible: boolean) {
+        for (let i = 0; i < gcPatternPadMeshes.length; i++) {
+          gcPatternPadMeshes[i].setEnabled(visible)
+          if (!visible) setPatternPadHighlighted(i, false)
+        }
+      }
+      // Reproduz a sequência (acende uma posição de cada vez, com uma pausa entre elas) antes de
+      // liberar a vez do jogador — `sequencePlaybackLocked` bloqueia apertos de `E` durante a
+      // reprodução (ver `handlePatternPadInteract`). Chamada tanto no início de cada tentativa
+      // quanto depois de completar/errar uma rodada (pra mostrar a sequência atualizada de novo).
+      const PATTERN_HIGHLIGHT_MS = 500
+      const PATTERN_PAUSE_MS = 250
+      function presentPatternSequence(sequence: number[]) {
+        // Achado do review do Copilot: chamada logo depois de um aperto (erro ou fim de rodada,
+        // ver `handlePatternPadInteract`) enquanto o "flash" de confirmação daquele aperto ainda
+        // podia estar pendente — se a sequência repetir a mesma cor no primeiro passo, o flash de
+        // 200ms apagaria o destaque no meio da janela de `PATTERN_HIGHLIGHT_MS` (500ms),
+        // deixando a reprodução visualmente inconsistente. Cancela qualquer timeout pendente (flash
+        // OU reprodução anterior) e zera todos os destaques antes de começar uma reprodução nova.
+        if (patternPressFlashTimeout) clearTimeout(patternPressFlashTimeout)
+        patternPressFlashTimeout = null
+        if (sequencePlaybackTimeout) clearTimeout(sequencePlaybackTimeout)
+        sequencePlaybackTimeout = null
+        for (let i = 0; i < gcPatternPadMeshes.length; i++) setPatternPadHighlighted(i, false)
+        sequencePlaybackLocked = true
+        if (gameCenterMemoryStatusLabel) {
+          gameCenterMemoryStatusLabel.text = '🔵 Observe a sequência...'
+          gameCenterMemoryStatusLabel.alpha = 1
+        }
+        let step = 0
+        const showStep = () => {
+          if (step >= sequence.length) {
+            sequencePlaybackLocked = false
+            if (gameCenterMemoryStatusLabel) gameCenterMemoryStatusLabel.text = '🔵 Sua vez! Repita a sequência'
+            return
+          }
+          setPatternPadHighlighted(sequence[step], true)
+          sequencePlaybackTimeout = setTimeout(() => {
+            setPatternPadHighlighted(sequence[step], false)
+            step += 1
+            sequencePlaybackTimeout = setTimeout(showStep, PATTERN_PAUSE_MS)
+          }, PATTERN_HIGHLIGHT_MS)
+        }
+        showStep()
+      }
+      function handlePatternPadInteract(padIndex: number) {
+        if (arenaPhase !== 'playing' || !arenaPatternState || sequencePlaybackLocked) return
+        const { state, correct, roundComplete } = pressPatternPad(arenaPatternState, padIndex)
+        arenaPatternState = state
+        setPatternPadHighlighted(padIndex, true)
+        if (patternPressFlashTimeout) clearTimeout(patternPressFlashTimeout)
+        patternPressFlashTimeout = setTimeout(() => setPatternPadHighlighted(padIndex, false), 200)
+        if (!correct) {
+          if (gameCenterMemoryStatusLabel) gameCenterMemoryStatusLabel.text = '🤔 Ops! Observe de novo...'
+          presentPatternSequence(state.sequence)
+          return
+        }
+        if (!roundComplete) return
+        if (isPatternGameComplete(state)) {
+          arenaPhase = 'success'
+          setPatternPadsVisible(false)
+          if (gameCenterMemoryStatusLabel) {
+            gameCenterMemoryStatusLabel.text = '🎉 Sequência completa! Pressione E na placa pra jogar de novo'
+          }
+          trackMinigameCompleted('memoria')
+          for (let i = 0; i < MEMORY_REWARD_COINS; i++) onCollectCoinRef.current()
+          return
+        }
+        if (gameCenterMemoryStatusLabel) gameCenterMemoryStatusLabel.text = `✅ Rodada ${state.round - 1} completa!`
+        presentPatternSequence(state.sequence)
+      }
+      // Despacha pro modo certo (`arenaMemoryMode`) a partir do índice combinado — cartas ocupam os
+      // primeiros `MEMORY_CARD_COUNT` slots, pods vêm logo depois (ver `arenaTargetPositions.memoria`).
+      function handleMemoryArenaInteract(index: number) {
+        if (arenaMemoryMode === 'cartas') {
+          if (index < MEMORY_CARD_COUNT) handleMemoryCardInteract(index)
+          return
+        }
+        const padIndex = index - MEMORY_CARD_COUNT
+        if (padIndex >= 0 && padIndex < PATTERN_PAD_COUNT) handlePatternPadInteract(padIndex)
       }
 
       // Contar (Lab 214) — sem cronômetro (backlog explícito: "sem tempo punitivo"), 3 rodadas
@@ -14201,6 +14418,13 @@ export function World3D({
       if (petAgingInterval !== null) window.clearInterval(petAgingInterval)
       if (arenaCountdownTimeout) clearTimeout(arenaCountdownTimeout)
       if (arenaTimerInterval) clearInterval(arenaTimerInterval)
+      // `sequencePlaybackTimeout` (Lab 216, modo sequência de Memória) é um handle separado de
+      // `arenaCountdownTimeout`/`arenaTimerInterval` (mesmo motivo do lab-198 pros dois primeiros:
+      // sem isto, desmontar `World3D` com uma reprodução de sequência pendente deixaria o
+      // `setTimeout` disparar depois, mexendo em malhas/materiais já descartados por
+      // `scene.dispose()` mais abaixo).
+      if (sequencePlaybackTimeout) clearTimeout(sequencePlaybackTimeout)
+      if (patternPressFlashTimeout) clearTimeout(patternPressFlashTimeout)
       window.removeEventListener('resize', onResize)
       canvas.removeEventListener('pointerdown', onCameraPointerDown)
       window.removeEventListener('pointermove', onCameraPointerMove)

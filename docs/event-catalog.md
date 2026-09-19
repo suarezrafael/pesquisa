@@ -92,7 +92,7 @@ PR #55, 7ª rodada).
 | `album_planet_opened` | Expandir um planeta específico na lista nova "Planetas" do catálogo de conquistas (lab-181, "Circuito de descoberta e álbum de planetas") — sinal de interesse real num planeta, não só abrir o painel inteiro | `world3d/AchievementsPanel.tsx`, `togglePlanet` | `planetId` (um dos 7 planetas-destino) | 1x por expansão (reabrir o mesmo planeta conta de novo) |
 | `weekly_event_objective_completed` | Objetivo educativo/ambiental do evento semanal concedido (lab-182, "Eventos semanais saudáveis") — dispara só na PRIMEIRA vez em cada semana ISO que o bônus é de fato pago, mesmo completando vários desafios ambientais na mesma semana | `App.tsx`, `handleEnvironmentalChallengeCorrect` | — | 1x por semana ISO por perfil |
 | `minigame_started` | Início de um mini-jogo, por qualquer caminho: fim da contagem regressiva de um pedestal do hub (backlog "Lab 209"), ou início/reinício de uma tentativa de arena no centro de jogos (memória, backlog "Lab 213"; contar, backlog "Lab 214"; soletrar, backlog "Lab 215") | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`, `"memoria"`, `"contar"`, `"soletrar"`) | 1x por início/reinício |
-| `minigame_completed` | Conclusão de um mini-jogo: uso do pedestal de RETORNO ao hub (mede "fez a ida-e-volta pelo hub", não "resolveu o desafio certo" — parkour não tem estado de conclusão persistido, e o quiz da ponte roda noutro componente que este evento não observa), OU vitória de verdade numa arena (memória: todos os pares encontrados, `isMemoryGameComplete`; contar: 3 rodadas certas seguidas, `isCountingGameComplete`; soletrar: palavra soletrada por completo, `isSpellingGameComplete`) | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`, `"memoria"`, `"contar"`, `"soletrar"`) | 1x por retorno/vitória |
+| `minigame_completed` | Conclusão de um mini-jogo: uso do pedestal de RETORNO ao hub (mede "fez a ida-e-volta pelo hub", não "resolveu o desafio certo" — parkour não tem estado de conclusão persistido, e o quiz da ponte roda noutro componente que este evento não observa), OU vitória de verdade numa arena (memória modo cartas: todos os pares encontrados, `isMemoryGameComplete`; memória modo sequência: sequência completa até `PATTERN_ROUNDS_TO_WIN` rodadas, `isPatternGameComplete`; contar: 3 rodadas certas seguidas, `isCountingGameComplete`; soletrar: palavra soletrada por completo, `isSpellingGameComplete`) | `world3d/World3D.tsx` | `minigameId` (`"parkour1"`, `"ponte-logica"`, `"memoria"`, `"contar"`, `"soletrar"`) | 1x por retorno/vitória |
 | `minigame_retried` | Tentar de novo uma arena DEPOIS de terminar (sucesso ou falha) — nunca no meio de uma tentativa em andamento, nem confundido com o início de uma arena DIFERENTE (backlog "Lab 213 - Template de arena educativa reutilizável") | `world3d/World3D.tsx` | `minigameId` (`"memoria"`, `"contar"`, `"soletrar"`) | 1x por reinício |
 | `minigame_exited` | Sair do centro de jogos com uma tentativa de arena REALMENTE em andamento (não depois de já ter terminado) — mede abandono de verdade (backlog "Lab 213") | `world3d/World3D.tsx`, `exitGameCenterInterior` | `minigameId` (`"memoria"`, `"contar"`, `"soletrar"`) | 1x por abandono |
 | `game_center_entered` | Entrar no saguão do centro de jogos pela porta externa (backlog "Lab 212 - Centro de jogos educativo com saguão e portais") | `world3d/World3D.tsx`, `enterGameCenterInterior` | — | 1x por entrada |
@@ -238,7 +238,14 @@ decisão").
   é o segundo mini-jogo sobre esse controlador, sem tocar nele além de um pequeno registro novo
   (`arenaTargetMeshes`, pra dica "Pressione E" ignorar alvos desabilitados — necessário porque o
   número de azulejos ativos varia por palavra, ao contrário de memória/contar) — ver
-  `labs/lab-200-minijogo-soletrar/FEATURES.md`.
+  `labs/lab-200-minijogo-soletrar/FEATURES.md`. O Lab 216 fechou a dívida do lab-198 (Memória
+  ganhou moedas de verdade ao completar, mais pares com dificuldade progressiva 3-6, e um catálogo
+  de temas) e adicionou um segundo MODO — "sequência" (tipo Genius/Simon, `state/patternGame.ts`) —
+  no MESMO portal de Memória (o saguão não tem slot pra um 5º portal); sorteio 50/50 por tentativa
+  entre os dois modos, ambos reaproveitando `minigameId: 'memoria'`. O cronômetro de 45s do lab-198
+  foi removido (o próprio Lab 216 lista "tempo punitivo" em "fora de escopo") — as 3 arenas
+  registradas até agora (memória, contar, soletrar) não têm mais cronômetro nenhum. Ver
+  `labs/lab-201-minijogo-memoria-padroes/FEATURES.md`.
 - **Confiança do responsável** / **conversão adulta** — `parent_area_click` → `family_landing_viewed`
   → `parent_signup_started` → `checkout_started` (lab-166) formam o funil completo, do primeiro
   clique na `TitleScreen` até o início do pagamento; famílias novas ainda vêm direto de
