@@ -127,6 +127,25 @@ reusar exatamente a mesma técnica de orientação já usada e testada ao vivo p
 (`fireLaserBeam`, lab-38/39) e por a distância de gatilho (`PARKOUR_TRIGGER_DISTANCE = 1.0`) ser
 generosa o bastante pra tolerar alguma imprecisão de posicionamento.
 
+## Rodada de review — Copilot (PR #86)
+
+2 achados na 1ª rodada, ambos confirmados contra o código real e corrigidos:
+
+1. **Médio — `parkour_course_completed` não validava a RELAÇÃO entre campos**: cada número
+   (`ringsCollected`/`totalRings`/`elapsedSeconds`) era validado isoladamente
+   (`isPlausibleCount`), mas nada impedia `ringsCollected > totalRings` (combinação impossível no
+   jogo de verdade, mas aceitável do ponto de vista de cada checagem individual) — poluiria a
+   métrica. Corrigido com uma checagem adicional (`ringsCollected <= totalRings`) na mesma cadeia
+   de validação (`index.ts`).
+2. **Médio — `parkourStatusMessage` podia vazar pro hub**: uma mensagem disparada pouco antes de
+   sair pelo pedestal de retorno (impulso coletado, troféu conquistado) continuava visível depois
+   de já estar de volta no hub, até o próprio `setTimeout` de 3-4s expirar — vazando feedback do
+   mini-jogo pra fora da arena. Corrigido limpando `parkourStatusMessage` (`setParkourStatusMessage(null)`)
+   no mesmo ponto onde `parkourHud` já era limpo ao sair.
+
+`npx tsc -b`, `npm run test -- --run` (app 257/257, `server-accounts` 168/168) e `npm run build`
+continuam limpos depois das duas correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - `parkour2`/`parkour3` (escolha explícita do usuário nesta lab).
