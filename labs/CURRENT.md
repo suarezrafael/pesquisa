@@ -1,15 +1,46 @@
 # Laboratório atual
 
-Em andamento: labs/lab-199-minijogo-contar/ — primeiro mini-jogo "de verdade" de matemática
+Último concluído: labs/lab-199-minijogo-contar/ — primeiro mini-jogo "de verdade" de matemática
 inicial (contar quantidade) sobre o template de arena do lab-198, e generalização de verdade da
-máquina de estado da arena (decisão confirmada com o usuário via `AskUserQuestion`: hoje só os
-NOMES são genéricos, a implementação está colada à memória — generalizar agora antes de repetir o
-padrão memória-colado uma 3ª vez no lab-215/soletrar). Origem:
-`docs/gameplay-market-expansion-backlog.md`, "Lab 214 - Mini-jogo de contar e quantidade" —
-próximo item depois do lab-198 (Lab 213). Ver `labs/lab-199-minijogo-contar/FEATURES.md` pro
-objetivo/investigação prévia/decisão de escopo completos.
+máquina de estado da arena (decisão confirmada com o usuário via `AskUserQuestion`: no lab-198 só
+os NOMES de `arenaPhase`/`arenaSecondsLeft` eram genéricos, a implementação inteira estava colada à
+memória — generalizar agora, antes de repetir o padrão colado uma 3ª vez no lab-215/soletrar).
+Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 214 - Mini-jogo de contar e quantidade" —
+próximo item depois do lab-198 (Lab 213). Extrai um controlador reutilizável em `World3D.tsx`
+(`ArenaId`/`ArenaConfig`/`arenaConfigs`, `beginArenaCountdown`/`tickArenaTimer`/`exitActiveArena`,
+cronômetro OPCIONAL por arena via `timeLimitS: number | null`) e migra a memória pra usá-lo sem
+mudar comportamento visível; extrai também `arenaTargetTriggerPos`, um helper único de posição de
+gatilho (sempre a posição já elevada da malha) que evita reproduzir a classe de bug Alto achada
+pelo Copilot no lab-198 (gap vertical entre avatar e alvo) em qualquer mini-jogo futuro. Contar
+(`state/countingGame.ts`, lógica pura, 7 testes) roda em cima do controlador: quantidade-alvo 2-6 +
+3 opções únicas (pool fixo embaralhado, nunca trava com `random` constante), SEM cronômetro
+(backlog explícito: "sem tempo punitivo"), 3 acertos seguidos completam e dão moedas de verdade
+(`onCollectCoin`, mesmo padrão de `MARS_COIN_POT_REWARD`) — diferente da memória, que ainda não tem
+recompensa persistida (decisão já tomada no lab-198, fica pro lab-216). Eventos reaproveitados com
+`minigameId: 'contar'` (mesmo id do portal, não um sinônimo novo). **PR #82 teve 3 rodadas de
+review com 4 bugs reais**: (1) status da arena Contar ficava congelado em "🔢 Contar — 0" (sem
+cronômetro, nada reescrevia o texto depois do countdown — na memória isso nunca aparecia porque o
+cronômetro sobrescreve 1s depois) — corrigido no `beginAttempt` de Contar; (2) limpeza de dicas
+"Pressione E" ainda percorria uma lista fixa por arena na mão, quebrando a promessa do template
+genérico — corrigido percorrendo `arenaTargetHintLabels` genericamente; (3) trocar de arena
+mid-saguão não chamava `resetState()` na arena anterior, deixando estado de domínio antigo vivo no
+closure à toa — corrigido; (4) `Object.values(arenaTargetHintLabels)` no loop de render alocava um
+array novo a cada quadro — corrigido com `for...in`. `npx tsc -b` limpo; testes: app 228/228 (+7 de
+`countingGame.test.ts`), `server-accounts` 161/161 (sem teste novo — só um id novo num Set já
+testado); `npm run build` sem regressão. **Sem verificação ao vivo nesta lab**: o Chrome desta
+sessão travou de novo em `document.hidden === true` (mesma limitação do lab-198, ainda mais cedo —
+nem saiu da tela título) — verificação por leitura de código linha a linha, com atenção a 2 casos
+de borda que a própria generalização introduziu (documentados em detalhe em
+`labs/lab-199-minijogo-contar/FEATURES.md`, seção "Verificação de código"): trocar de arena sem
+sair do saguão conta como tentativa NOVA (não retentativa) da arena diferente, e o label de status
+da arena anterior precisa ser escondido explicitamente ao trocar (senão fica congelado na tela).
+**Merge confirmado**: PR #82 mesclada (squash) em `main` no commit `5735c41` (2026-09-19,
+confirmado via `AskUserQuestion`). CI de `main` verde nos 3 workflows; deploy de produção
+confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-198-template-arena-educativa/ — cria uma infraestrutura mínima e
+Antes desse: labs/lab-198-template-arena-educativa/ — cria uma infraestrutura mínima e
 reutilizável de "arena" (contagem regressiva, estado `playing/success/fail/retry`, cronômetro,
 alvos interativos, eventos comuns) que os labs 214-216 vão usar depois. Prova de conceito
 (decisão de escopo confirmada com o usuário via `AskUserQuestion`, entre "versão simples de um dos
