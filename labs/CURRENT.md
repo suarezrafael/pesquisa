@@ -1,13 +1,47 @@
 # Laboratório atual
 
-Em andamento: labs/lab-200-minijogo-soletrar/ — segundo mini-jogo "de verdade" sobre o template de
-arena generalizado no lab-199 (Contar foi o primeiro): coletar letras flutuantes na ordem certa pra
-formar uma palavra de um catálogo controlado (sem cronômetro, recompensa real ao completar, mesmo
-padrão do Contar). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 215 - Mini-jogo de
-soletrar e leitura" — próximo item depois do lab-199 (Lab 214). Ver
-`labs/lab-200-minijogo-soletrar/FEATURES.md` pro objetivo/investigação prévia completos.
+Último concluído: labs/lab-200-minijogo-soletrar/ — segundo mini-jogo "de verdade" sobre o
+template de arena generalizado no lab-199 (Contar foi o primeiro), provando de vez o critério de
+aceite do lab-213 ("adicionar outro mini-jogo exige poucos pontos de código"): coletar letras
+flutuantes na ordem certa pra formar uma palavra de um catálogo controlado de 8 palavras seguras
+com dica emoji (`state/spellingGame.ts`, lógica pura, 9 testes) — combina por LETRA (não por
+posição/id), tratando corretamente palavra com letra repetida; sem cronômetro (mesmo raciocínio do
+Contar: "erro sem punição" não combina com pressão de tempo); 3 moedas de recompensa real ao
+completar (mesmo padrão do Contar). Origem: `docs/gameplay-market-expansion-backlog.md`,
+"Lab 215 - Mini-jogo de soletrar e leitura" — próximo item depois do lab-199 (Lab 214).
+**Generalização mínima real do controlador** (só nesta lab, não tocado desde o lab-199): novo
+registro `arenaTargetMeshes` (malha de cada alvo) permite ao loop de dica "Pressione E" E ao loop
+de interação pularem alvos com a malha desabilitada — necessário porque o número de azulejos ativos
+varia por palavra (3-6 letras, pool fixo de 6 slots), diferente de memória/contar (sempre usam todos
+os slots do próprio pool); benefício que vale pra qualquer arena futura com contagem de alvos
+variável. **Decisão tomada durante a implementação**: grade de 3 colunas (mesma forma já comprovada
+das cartas de memória), não uma fileira única de 6 — reduz risco espacial não verificável ao vivo
+nesta sessão. **PR #83 teve 3 rodadas de review com 5 bugs reais**: (1) comentário desatualizado no
+`GAME_CENTER_PORTAL_INFO` ainda dizia que Contar/Soletrar "não existem"; (2) o loop de interação
+(`handleInteractPress`) não filtrava alvos desabilitados como o loop de dica já fazia — apertar `E`
+perto de um azulejo já coletado (ou além do comprimento da palavra) mostrava "letra errada" à toa e
+podia consumir um aperto que devia abrir um portal próximo — corrigido em duas camadas (filtro no
+loop + checagem de defesa no handler); (3) achado sob "Previously missed" (código pré-existente, não
+desta lab, só ficou visível com mais malhas registradas): o `ShadowGenerator` principal nunca era
+descartado no desmonte de `World3D` — o próprio código já documentava essa mesma limitação do
+Babylon (`scene.dispose()` não cascata pro `ShadowGenerator`) no gerador da cena de benchmark de
+GPU, mas o teardown principal nunca aplicava a mesma lição a si mesmo — corrigido com
+`shadowGenerator.dispose()` antes de `scene.dispose()`. `npx tsc -b` limpo; testes: app 237/237 (+9
+de `spellingGame.test.ts`), `server-accounts` 161/161 (sem teste novo — só um id novo num Set já
+testado); `npm run build` sem regressão. **Sem verificação ao vivo — 3ª lab seguida**: o Chrome
+desta sessão travou de novo em `document.hidden === true` (mesma limitação exata dos labs 198/199,
+confirmado com uma aba nova) — verificação por leitura de código, com atenção especial ao
+mapeamento posição-visual↔identidade-estável (mesmo padrão de duas camadas de `MemoryCard.id`) e à
+ordem de operações da recompensa/eventos (mesma sequência já revisada 2x no Contar). Risco
+remanescente registrado com honestidade em `FEATURES.md`: a posição exata da grade de Soletrar no
+saguão não foi confirmada ao vivo (só reduzida, não eliminada, por reusar uma forma já comprovada).
+**Merge confirmado**: PR #83 mesclada (squash) em `main` no commit `d98c926` (2026-09-19,
+confirmado via `AskUserQuestion`). CI de `main` verde nos 3 workflows; deploy de produção
+confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-199-minijogo-contar/ — primeiro mini-jogo "de verdade" de matemática
+Antes desse: labs/lab-199-minijogo-contar/ — primeiro mini-jogo "de verdade" de matemática
 inicial (contar quantidade) sobre o template de arena do lab-198, e generalização de verdade da
 máquina de estado da arena (decisão confirmada com o usuário via `AskUserQuestion`: no lab-198 só
 os NOMES de `arenaPhase`/`arenaSecondsLeft` eram genéricos, a implementação inteira estava colada à
