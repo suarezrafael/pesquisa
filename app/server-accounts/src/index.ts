@@ -534,9 +534,13 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       // já validado acima — só a chave permitida sobrevive.
       safeMeta = { portalId: metaObj.portalId }
     } else if (type === 'time_to_first_minigame') {
-      // mesmo raciocínio de `session_end` acima — descarta um `durationMs` implausível em vez de
-      // recusar o evento inteiro (ver checagem de validação mais acima).
-      safeMeta = isPlausibleSessionDuration(metaObj.durationMs) ? metaObj : null
+      // Mesmo raciocínio de `session_end` acima pra tolerar um `durationMs` implausível sem
+      // recusar o evento inteiro (ver checagem de validação mais acima) — MAS, diferente de
+      // `session_end` (evento LEGADO, mantido como está por compatibilidade), este é um evento
+      // NOVO: achado do review automático — gravar `metaObj` inteiro deixaria qualquer chave extra
+      // não documentada sobreviver (mesmo raciocínio de `cosmetic_equipped`/`game_portal_selected`
+      // acima), então restringe à única chave documentada.
+      safeMeta = isPlausibleSessionDuration(metaObj.durationMs) ? { durationMs: metaObj.durationMs } : null
     } else if (type === 'game_center_entered' || type === 'game_center_returned') {
       // mesmo raciocínio de `camera_recenter_used`/`weekly_event_objective_completed` abaixo:
       // eventos novos deste lab, sem campo de `meta` documentado — não herdam a tolerância de

@@ -159,6 +159,33 @@ Checagens automatizadas: `npx tsc -b` limpo; `npm run test` app 213/213 (inalter
 build` sem erros; `npm run test` `server-accounts` 160/160 (+3 desde o lab-196: `isValidMinigameId`
 já existia, novos testes cobrem `isValidGameCenterPortalId` e a allowlist dos eventos do lab-197).
 
+## Review automático — PR #80, rodada 1
+
+2 achados reais, ambos confirmados contra o código de verdade (não só o texto do review):
+
+1. **`trackGameCenterReturned()` disparava ao sair da CASA, não só do centro de jogos (real,
+   corrigido)** — bug de edição: o teleporte de saída de `exitHouseInterior()` é praticamente
+   idêntico ao de `exitGameCenterInterior()` (mesma chamada de `teleportAvatarTo` com os mesmos
+   argumentos), e a chamada nova acabou anexada ao fim da função ERRADA por engano ao escrever o
+   bloco novo. Resultado: sair de casa (qualquer jogador, a qualquer momento) também contava como
+   "voltou do centro de jogos", inflando `weeklyFunnel.gameCenterReturned` com falsos positivos.
+   Corrigido removendo a chamada de `exitHouseInterior()` — só `exitGameCenterInterior()` (linha
+   verificada por `grep`) dispara o evento agora. **Verificado ao vivo**: entrou e saiu da casa
+   normalmente (não do centro de jogos) com `window.fetch` interceptado — log de eventos vazio,
+   confirmando que o bug não reproduz mais.
+2. **`time_to_first_minigame` gravava `meta` inteiro em vez de só `durationMs` (real, corrigido)**
+   — o branch de `safeMeta` copiava o objeto `metaObj` inteiro quando `durationMs` era plausível
+   (mesmo padrão do `session_end`, um evento LEGADO que tolera isso por compatibilidade), mas
+   `time_to_first_minigame` é um evento NOVO deste lab — o mesmo raciocínio já aplicado a
+   `game_center_entered`/`game_center_returned`/`game_portal_selected` (eventos novos não herdam a
+   tolerância de `meta` livre) deveria valer aqui também, e não valia. Corrigido restringindo
+   explicitamente a `{ durationMs: metaObj.durationMs }`.
+
+Checagens depois desta rodada: `npx tsc -b` limpo; `npm run test` app 213/213 e `server-accounts`
+160/160 (inalterados — mudança é comportamento/sanitização, não testada por unit test nova); `npm
+run build` sem erros. Re-verificado ao vivo (Chrome real): fluxo de entrar/sair da CASA não dispara
+mais nenhum evento do centro de jogos.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Editor de fases, UGC, multiplayer competitivo, assinatura ou moedas pagas (excluídos

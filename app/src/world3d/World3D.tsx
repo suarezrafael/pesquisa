@@ -9289,7 +9289,6 @@ export function World3D({
           offsetLandingUp(savedOutsideLocalUp, savedOutsideGroundFn(savedOutsideLocalUp), 2.5),
           savedOutsideGroundFn,
         )
-        trackGameCenterReturned()
       }
 
       // Centro de jogos educativo (backlog "Lab 212 - Centro de jogos educativo com saguão e
