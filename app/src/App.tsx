@@ -28,6 +28,8 @@ import {
   trackLearningChallengeStarted,
   trackLearningChallengeCompleted,
   trackWeeklyEventObjectiveCompleted,
+  trackMinigameTrophyEarned,
+  trackGameCenterWeeklyQuestCompleted,
 } from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
@@ -43,10 +45,14 @@ import {
   switchActiveProfile,
   touchLastPlayed,
 } from './state/storage'
-import type { Profile, Progress, Quest } from './types'
+import type { GameCenterCategory, Profile, Progress, Quest } from './types'
 import type { FurnitureOption } from './data/furniture'
 import { WEEKLY_EVENT_OBJECTIVE_REWARD_COINS, getCurrentWeeklyEvent, type WeeklyEvent } from './data/weeklyEvents'
-import { weeklyEventObjectiveStatus, type WeeklyEventObjectiveStatus } from './state/progression'
+import {
+  weeklyEventObjectiveStatus,
+  type WeeklyEventObjectiveStatus,
+  GAME_CENTER_WEEKLY_QUEST_REWARD_COINS,
+} from './state/progression'
 
 // O engine 3D (Babylon.js + Havok) só é baixado quando o jogador realmente
 // entra no mundo — mantém as telas iniciais leves em conexão 4G.
@@ -131,6 +137,7 @@ function GameApp() {
     toggleHouseVisible,
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
+    gameCenterMinigameCompleted,
   } = useProgress()
   // Achado do review automático do Copilot (várias rodadas até chegar aqui): tentativas
   // anteriores guardavam `event`+`nowIso` juntos num estado atualizado por um timer de 60s,
@@ -202,6 +209,11 @@ function GameApp() {
     // abaixo) E concedeu o bônus do objetivo semanal nesta mesma resposta — moeda ADICIONAL, não
     // incluída em `awardedCoins` acima.
     weeklyEventObjectiveBonusCoins?: number
+    // Backlog "Lab 217" — só populado quando esta resposta era o desafio de Lógica (`kind:
+    // 'bridge'`) E a conclusão cruzou um troféu novo / concedeu o bônus da missão semanal do centro
+    // de jogos (objetivo SEPARADO do de cima — os dois podem conceder na MESMA resposta).
+    gameCenterTrophyEarned?: 'bronze' | 'prata' | 'ouro'
+    gameCenterWeeklyQuestBonusCoins?: number
     // lab-150 (achado do Copilot, PR #2): evento semanal capturado no MOMENTO do cálculo da
     // recompensa (`CompletionResult.event`), não recalculado de novo na hora de mostrar o toast.
     event: WeeklyEvent
@@ -390,6 +402,20 @@ function GameApp() {
     // `useProgress.ts` sobre por que a ordem/atualizador funcional importam aqui).
     const rewardGranted = weeklyEventObjectiveProgress(nowIso)
     const weeklyEventObjectiveBonusCoins = rewardGranted ? WEEKLY_EVENT_OBJECTIVE_REWARD_COINS : undefined
+    // Progresso/troféus do centro de jogos (backlog "Lab 217") — `kind === 'bridge'` é a MESMA
+    // habilidade de Lógica do centro de jogos (World3D.tsx trata os dois como a categoria
+    // `'logica'`, ver comentário em `types.ts`), venha do local físico original (lab-180) ou do
+    // portal do saguão (lab-197) — objetivo SEPARADO do evento semanal ambiental acima, os dois
+    // podem conceder na MESMA resposta.
+    let gameCenterTrophyEarned: 'bronze' | 'prata' | 'ouro' | undefined
+    let gameCenterWeeklyQuestBonusCoins: number | undefined
+    if (kind === 'bridge') {
+      const { newTrophy, weeklyQuestRewardGranted } = gameCenterMinigameCompleted('logica', nowIso)
+      gameCenterTrophyEarned = newTrophy ?? undefined
+      gameCenterWeeklyQuestBonusCoins = weeklyQuestRewardGranted ? GAME_CENTER_WEEKLY_QUEST_REWARD_COINS : undefined
+      if (newTrophy) trackMinigameTrophyEarned('logica', newTrophy)
+      if (weeklyQuestRewardGranted) trackGameCenterWeeklyQuestCompleted(nowIso)
+    }
     setReward({
       quest,
       newBadges,
@@ -398,6 +424,8 @@ function GameApp() {
       currentStreak,
       streakBonusCoins,
       weeklyEventObjectiveBonusCoins,
+      gameCenterTrophyEarned,
+      gameCenterWeeklyQuestBonusCoins,
       event,
     })
     trackLearningChallengeCompleted(kind)
@@ -420,6 +448,19 @@ function GameApp() {
   // atrasado da tentativa antiga disparar, `handleOpenEnvironmentalChallenge` já sobrescreve o
   // ref com um `attemptId` novo — a comparação em `handleEnvironmentalChallengeCorrect` falha
   // do mesmo jeito, sem precisar que o fechamento zere nada.
+  // Progresso/troféus do centro de jogos (backlog "Lab 217") — chamado por `World3D.tsx` na
+  // conclusão de verdade de qualquer arena (memória/contar/soletrar; Lógica é tratada à parte em
+  // `handleEnvironmentalChallengeCorrect` acima, `kind === 'bridge'`). Fires os 2 eventos de
+  // analytics aqui (não em `World3D.tsx`) pra manter as regras de QUANDO disparar
+  // (`newTrophy`/`weeklyQuestRewardGranted`) num lugar só, junto da decisão de progressão em si.
+  function handleGameCenterMinigameCompleted(category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>) {
+    const nowIso = new Date().toISOString()
+    const { newTrophy, weeklyQuestRewardGranted, newCompletions } = gameCenterMinigameCompleted(category, nowIso)
+    if (newTrophy) trackMinigameTrophyEarned(category, newTrophy)
+    if (weeklyQuestRewardGranted) trackGameCenterWeeklyQuestCompleted(nowIso)
+    return { newTrophy, weeklyQuestRewardGranted, newCompletions }
+  }
+
   function handleCloseEnvironmentalChallenge() {
     if (activeEnvironmentalChallenge && !progress.completedQuestIds.includes(activeEnvironmentalChallenge.quest.id)) {
       resetStreak()
@@ -609,6 +650,7 @@ function GameApp() {
           onFindPlanetSecret={foundPlanetSecret}
           onCollectPostcard={collectPostcard}
           onCollectCoin={collectCoin}
+          onGameCenterMinigameCompleted={handleGameCenterMinigameCompleted}
           placingFurnitureRequestId={pendingPlacementId}
           onPlacingRequestHandled={() => setPendingPlacementId(null)}
           onFurniturePlaced={setFurniturePlacement}
@@ -699,6 +741,8 @@ function GameApp() {
           planetClearBonusXp={reward.planetClearBonusXp}
           planetClearBonusCoins={reward.planetClearBonusCoins}
           weeklyEventObjectiveBonusCoins={reward.weeklyEventObjectiveBonusCoins}
+          gameCenterTrophyEarned={reward.gameCenterTrophyEarned}
+          gameCenterWeeklyQuestBonusCoins={reward.gameCenterWeeklyQuestBonusCoins}
           event={reward.event}
           onContinue={() => setReward(null)}
         />

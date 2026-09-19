@@ -1,5 +1,11 @@
 export type QuestType = 'logica' | 'matematica' | 'leitura'
 
+// Backlog "Lab 217 - Progressao, album e recompensas do centro de jogos" — as 4 categorias do
+// centro de jogos (lab-197), mesmos ids já usados como `GameCenterPortalId`/`minigameId` no
+// centro de jogos (`World3D.tsx`)/allowlist server-side (`isValidGameCenterPortalId`).
+export type GameCenterCategory = 'contar' | 'soletrar' | 'memoria' | 'logica'
+export type GameCenterTrophyTier = 'bronze' | 'prata' | 'ouro'
+
 export interface QuestChoice {
   id: string
   label: string
@@ -176,4 +182,18 @@ export interface Progress {
   // (mesma lógica de "visível pros amigos por padrão" já usada pelo perfil público do lab-163, sem
   // toggle) — o jogador pode desligar em `MyHousePanel.tsx`.
   houseVisible: boolean
+  // Progresso por categoria do centro de jogos (backlog "Lab 217 - Progressao, album e recompensas
+  // do centro de jogos") — quantas vezes cada mini-jogo/desafio foi CONCLUÍDO (não "iniciado"),
+  // vitalício (não reseta por semana, ao contrário do objetivo semanal abaixo). `logica` conta
+  // qualquer conclusão do desafio da ponte (`kind: 'bridge'`), venha do centro de jogos ou do local
+  // físico original (lab-180) — é a MESMA habilidade praticada, o backlog trata como categoria de
+  // habilidade, não "visitou o portal". Usado por `gameCenterTrophyTier`/`applyGameCenterMinigameCompleted`
+  // em `state/progression.ts` pra decidir o troféu (bronze/prata/ouro) de cada categoria.
+  gameCenterCompletionsByCategory: Record<GameCenterCategory, number>
+  // Missão semanal "jogue 1 mini-jogo educativo" (backlog "Lab 217") — MESMO padrão de
+  // `weeklyEventObjectiveRewardedAtIso` acima (guarda o INSTANTE, não só a semana, pela mesma razão
+  // anti-farm: comparar só a chave de semana permitiria adiantar/voltar o relógio pra reivindicar
+  // duas vezes). Objetivo SEPARADO do evento semanal ambiental (`weeklyEventObjectiveRewardedAtIso`)
+  // — os dois podem ser concluídos na mesma semana, cada um com sua própria recompensa.
+  gameCenterWeeklyQuestRewardedAtIso: string | null
 }

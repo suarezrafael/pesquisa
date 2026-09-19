@@ -1,4 +1,4 @@
-import type { Progress, Quest, QuestType } from '../types'
+import type { GameCenterCategory, GameCenterTrophyTier, Progress, Quest, QuestType } from '../types'
 import { quests } from '../data/quests'
 import { findAvatarById } from '../data/avatars'
 import { findHatById } from '../data/hats'
@@ -163,6 +163,99 @@ export function applyWeeklyEventObjectiveProgress(progress: Progress, nowIso: st
       ...progress,
       weeklyEventObjectiveRewardedAtIso: nowIso,
       coins: progress.coins + WEEKLY_EVENT_OBJECTIVE_REWARD_COINS,
+    },
+    rewardGranted: true,
+  }
+}
+
+// Centro de jogos (backlog "Lab 217 - Progressao, album e recompensas do centro de jogos") —
+// troféu por categoria (`contar`/`soletrar`/`memoria`/`logica`), 3 níveis conquistáveis só jogando
+// (sem loot box/gacha/boost pago, backlog explícito). Limiares baixos de propósito — cada mini-jogo
+// dura só 30-90s (labs 199-201), então "bronze" já vem na primeira vitória; evita o risco de
+// "completismo ansioso" citado no próprio item do backlog.
+export const GAME_CENTER_TROPHY_THRESHOLDS: Record<GameCenterTrophyTier, number> = {
+  bronze: 1,
+  prata: 5,
+  ouro: 15,
+}
+
+export function gameCenterTrophyTier(completions: number): GameCenterTrophyTier | null {
+  if (completions >= GAME_CENTER_TROPHY_THRESHOLDS.ouro) return 'ouro'
+  if (completions >= GAME_CENTER_TROPHY_THRESHOLDS.prata) return 'prata'
+  if (completions >= GAME_CENTER_TROPHY_THRESHOLDS.bronze) return 'bronze'
+  return null
+}
+
+// Texto compacto pra dica "Pressione E" de cada portal — cobre o critério de aceite "criança vê o
+// que já completou e o próximo objetivo" sem precisar de um painel novo (a dica já existe, só
+// ganha um prefixo). Sem troféu ainda (`completions === 0`) não mostra nada — não polui a PRIMEIRA
+// interação, que já tem seu próprio incentivo natural (curiosidade de "o que tem aqui").
+export function gameCenterTrophyProgressPrefix(completions: number): string {
+  if (completions <= 0) return ''
+  if (completions >= GAME_CENTER_TROPHY_THRESHOLDS.ouro) return '🏆 Ouro · '
+  if (completions >= GAME_CENTER_TROPHY_THRESHOLDS.prata) {
+    return `🥈 ${completions}/${GAME_CENTER_TROPHY_THRESHOLDS.ouro} · `
+  }
+  return `🥉 ${completions}/${GAME_CENTER_TROPHY_THRESHOLDS.prata} · `
+}
+
+export interface GameCenterMinigameCompletedResult {
+  progress: Progress
+  newTrophy: GameCenterTrophyTier | null
+}
+
+// Chamada 1x por CONCLUSÃO de verdade (não "tentativa iniciada") de qualquer arena do centro de
+// jogos — `newTrophy` só vem preenchido na conclusão EXATA que cruza um limiar novo (não em toda
+// conclusão acima do limiar já alcançado antes), pra quem chama saber quando mostrar "🏆 Troféu
+// novo!" uma vez só, não a cada vitória.
+export function applyGameCenterMinigameCompleted(
+  progress: Progress,
+  category: GameCenterCategory,
+): GameCenterMinigameCompletedResult {
+  const prevCount = progress.gameCenterCompletionsByCategory[category]
+  const nextCount = prevCount + 1
+  const prevTier = gameCenterTrophyTier(prevCount)
+  const nextTier = gameCenterTrophyTier(nextCount)
+  return {
+    progress: {
+      ...progress,
+      gameCenterCompletionsByCategory: { ...progress.gameCenterCompletionsByCategory, [category]: nextCount },
+    },
+    newTrophy: nextTier !== prevTier ? nextTier : null,
+  }
+}
+
+// Missão semanal "jogue 1 mini-jogo educativo" (backlog "Lab 217") — MESMO padrão de
+// `isWeeklyEventObjectiveDone`/`hasWeeklyEventClockRolledBack`/`wouldGrantWeeklyEventObjectiveReward`/
+// `applyWeeklyEventObjectiveProgress` acima, campo/objetivo SEPARADO (`gameCenterWeeklyQuestRewardedAtIso`)
+// — os comentários detalhados de por quê cada guarda existe estão lá, não repetidos aqui.
+export const GAME_CENTER_WEEKLY_QUEST_REWARD_COINS = 15
+
+export function isGameCenterWeeklyQuestDone(progress: Progress, nowIso: string): boolean {
+  if (!progress.gameCenterWeeklyQuestRewardedAtIso) return false
+  return isoWeekKey(new Date(progress.gameCenterWeeklyQuestRewardedAtIso)) === isoWeekKey(new Date(nowIso))
+}
+
+function hasGameCenterWeeklyQuestClockRolledBack(progress: Progress, nowIso: string): boolean {
+  return progress.gameCenterWeeklyQuestRewardedAtIso !== null && nowIso < progress.gameCenterWeeklyQuestRewardedAtIso
+}
+
+export function wouldGrantGameCenterWeeklyQuestReward(progress: Progress, nowIso: string): boolean {
+  return !hasGameCenterWeeklyQuestClockRolledBack(progress, nowIso) && !isGameCenterWeeklyQuestDone(progress, nowIso)
+}
+
+export interface GameCenterWeeklyQuestResult {
+  progress: Progress
+  rewardGranted: boolean
+}
+
+export function applyGameCenterWeeklyQuestProgress(progress: Progress, nowIso: string): GameCenterWeeklyQuestResult {
+  if (!wouldGrantGameCenterWeeklyQuestReward(progress, nowIso)) return { progress, rewardGranted: false }
+  return {
+    progress: {
+      ...progress,
+      gameCenterWeeklyQuestRewardedAtIso: nowIso,
+      coins: progress.coins + GAME_CENTER_WEEKLY_QUEST_REWARD_COINS,
     },
     rewardGranted: true,
   }

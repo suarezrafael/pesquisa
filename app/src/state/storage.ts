@@ -193,6 +193,9 @@ export const emptyProgress: Progress = {
   weeklyXpSnapshot: 0,
   // Objetivo do evento semanal — ver comentário em `types.ts`.
   weeklyEventObjectiveRewardedAtIso: null,
+  // Progresso/missão semanal do centro de jogos (Lab 217) — ver comentário em `types.ts`.
+  gameCenterCompletionsByCategory: { contar: 0, soletrar: 0, memoria: 0, logica: 0 },
+  gameCenterWeeklyQuestRewardedAtIso: null,
 }
 
 // A partir daqui, `loadProfile`/`saveProfile`/`loadProgress`/`saveProgress`/`hasTutorialBeenSeen`/

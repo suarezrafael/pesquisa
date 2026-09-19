@@ -27,6 +27,8 @@ import {
   isValidLearningChallengeKind,
   isValidMinigameId,
   isValidGameCenterPortalId,
+  isValidGameCenterCategory,
+  isValidGameCenterTrophyTier,
   isValidHouseFurnitureIds,
   isValidHousePlacements,
   sanitizeHouseFurnitureIds,
@@ -302,6 +304,12 @@ describe('isValidProductEventType — lab-99, resto de G11', () => {
   it('aceita os eventos do template de arena (backlog "Lab 213")', () => {
     expect(isValidProductEventType('minigame_retried')).toBe(true)
     expect(isValidProductEventType('minigame_exited')).toBe(true)
+  })
+
+  it('aceita os eventos de progresso/recompensa do centro de jogos (backlog "Lab 217")', () => {
+    expect(isValidProductEventType('minigame_trophy_earned')).toBe(true)
+    expect(isValidProductEventType('game_center_weekly_quest_completed')).toBe(true)
+    expect(isValidProductEventType('game_center_progress_viewed')).toBe(true)
   })
 })
 
@@ -773,6 +781,25 @@ describe('isValidGameCenterPortalId (Centro de jogos, backlog "Lab 212")', () =>
     expect(isValidGameCenterPortalId('')).toBe(false)
     expect(isValidGameCenterPortalId(123)).toBe(false)
     expect(isValidGameCenterPortalId(null)).toBe(false)
+  })
+})
+
+describe('isValidGameCenterCategory/isValidGameCenterTrophyTier (backlog "Lab 217")', () => {
+  it('aceita as 4 categorias (mesmo conjunto de isValidGameCenterPortalId)', () => {
+    expect(isValidGameCenterCategory('contar')).toBe(true)
+    expect(isValidGameCenterCategory('soletrar')).toBe(true)
+    expect(isValidGameCenterCategory('memoria')).toBe(true)
+    expect(isValidGameCenterCategory('logica')).toBe(true)
+    expect(isValidGameCenterCategory('desenho')).toBe(false)
+  })
+
+  it('aceita os 3 níveis de troféu, recusa fora do conjunto', () => {
+    expect(isValidGameCenterTrophyTier('bronze')).toBe(true)
+    expect(isValidGameCenterTrophyTier('prata')).toBe(true)
+    expect(isValidGameCenterTrophyTier('ouro')).toBe(true)
+    expect(isValidGameCenterTrophyTier('diamante')).toBe(false)
+    expect(isValidGameCenterTrophyTier('')).toBe(false)
+    expect(isValidGameCenterTrophyTier(null)).toBe(false)
   })
 })
 

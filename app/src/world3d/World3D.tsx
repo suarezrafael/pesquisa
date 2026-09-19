@@ -112,6 +112,9 @@ import {
   petLifecycleStage,
   petStageFor,
   petVisualScale,
+  gameCenterTrophyProgressPrefix,
+  gameCenterTrophyTier,
+  GAME_CENTER_WEEKLY_QUEST_REWARD_COINS,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
 import {
@@ -126,9 +129,11 @@ import {
   trackGameCenterReturned,
   trackMinigameRetried,
   trackMinigameExited,
+  trackMinigameTrophyEarned,
+  trackGameCenterWeeklyQuestCompleted,
 } from '../productAnalytics'
 import { ParentalGateModal } from '../components/ParentalGateModal'
-import type { Profile, Progress, Quest } from '../types'
+import type { GameCenterCategory, GameCenterTrophyTier, Profile, Progress, Quest } from '../types'
 import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
 import type { WeeklyEvent } from '../data/weeklyEvents'
 import { HudHeader } from './HudHeader'
@@ -230,6 +235,25 @@ interface World3DProps {
   // esconder feito o baú), então `World3D.tsx` precisa do retorno pra decidir se mostra o aviso.
   onCollectPostcard: (planetId: string) => boolean
   onCollectCoin: () => void
+  // Progresso/troféus do centro de jogos (backlog "Lab 217") — chamado 1x por CONCLUSÃO de verdade
+  // de qualquer arena (memória/contar/soletrar). `App.tsx` repassa pra
+  // `useProgress().gameCenterMinigameCompleted`, retorna sincronamente se essa conclusão cruzou um
+  // troféu novo e/ou concedeu o bônus da missão semanal — usado aqui só pra decidir a MENSAGEM de
+  // status a mostrar (a moeda em si já foi creditada por `onCollectCoin` antes desta chamada).
+  // `newCompletions` (a contagem NOVA, não só `newTrophy`) é necessário porque `setProgress` não é
+  // síncrono — `progressRef.current` só reflete esta conclusão no PRÓXIMO render, tarde demais pra
+  // atualizar o troféu visual AINDA NESTA visita sem esperar a criança sair e voltar (achado ao
+  // revisar o próprio código antes de qualquer teste, ver FEATURES.md do backlog "Lab 217"). O desafio de
+  // Lógica (`kind: 'bridge'`) NÃO passa por aqui — é detectado direto em `App.tsx` (mesmo handler
+  // que já processa `completeQuest` pra qualquer desafio ambiental), então o troféu visual da
+  // placa "Lógica" só reflete uma conclusão na PRÓXIMA vez que a criança entrar no centro de jogos
+  // (`refreshGameCenterTrophyVisuals`, chamado em `enterGameCenterInterior`) — essa parte É uma
+  // limitação conhecida e aceita, sem `newCompletions` equivalente pra contornar (ver FEATURES.md).
+  onGameCenterMinigameCompleted: (category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>) => {
+    newTrophy: GameCenterTrophyTier | null
+    weeklyQuestRewardGranted: boolean
+    newCompletions: number
+  }
   onSwitchProfile: () => void
   suspendTriggers: boolean
   // lab-136 (pedido do usuário: "tem que ter opção... de escolher em que posição da casa deve
@@ -2451,6 +2475,7 @@ export function World3D({
   onFindPlanetSecret,
   onCollectPostcard,
   onCollectCoin,
+  onGameCenterMinigameCompleted,
   onSwitchProfile,
   suspendTriggers,
   placingFurnitureRequestId,
@@ -2547,6 +2572,7 @@ export function World3D({
   const onFindPlanetSecretRef = useRef(onFindPlanetSecret)
   const onCollectPostcardRef = useRef(onCollectPostcard)
   const onCollectCoinRef = useRef(onCollectCoin)
+  const onGameCenterMinigameCompletedRef = useRef(onGameCenterMinigameCompleted)
   const onOpenShopRef = useRef(onOpenShop)
   const onFurniturePlacedRef = useRef(onFurniturePlaced)
   const onOpenCoopChallengeRef = useRef(onOpenCoopChallenge)
@@ -2709,6 +2735,7 @@ export function World3D({
   onFindPlanetSecretRef.current = onFindPlanetSecret
   onCollectPostcardRef.current = onCollectPostcard
   onCollectCoinRef.current = onCollectCoin
+  onGameCenterMinigameCompletedRef.current = onGameCenterMinigameCompleted
   onOpenShopRef.current = onOpenShop
   onFurniturePlacedRef.current = onFurniturePlaced
   onOpenCoopChallengeRef.current = onOpenCoopChallenge
@@ -3520,6 +3547,22 @@ export function World3D({
       logica: Vector3.Zero(),
     }
     const gameCenterPortalHintLabel: Record<GameCenterPortalId, TextBlock | null> = {
+      contar: null,
+      soletrar: null,
+      memoria: null,
+      logica: null,
+    }
+    // Troféus visuais (Lab 217) — uma malha por portal, criada uma vez junto da placa/post,
+    // escondida (`setEnabled(false)`) até `refreshGameCenterTrophyVisuals` decidir mostrar (a
+    // criança pode não ter troféu nenhum ainda). `GameCenterPortalId` e `GameCenterCategory` são o
+    // MESMO conjunto de 4 ids — cada portal É a categoria, não precisa de mapeamento à parte.
+    const gameCenterTrophyMeshes: Record<GameCenterPortalId, Mesh | null> = {
+      contar: null,
+      soletrar: null,
+      memoria: null,
+      logica: null,
+    }
+    const gameCenterTrophyMaterials: Record<GameCenterPortalId, PBRMaterial | null> = {
       contar: null,
       soletrar: null,
       memoria: null,
@@ -9739,7 +9782,28 @@ export function World3D({
           plaqueHint.linkWithMesh(plaqueBoard)
           plaqueHint.linkOffsetY = -20
           gameCenterPortalHintLabel[id] = plaqueHint
+
+          // Troféu visual (Lab 217) — acima da placa, cor/visibilidade decididas depois por
+          // `refreshGameCenterTrophyVisuals` (chamada logo após este laço, e de novo a cada
+          // entrada no saguão). Forma de taça simples (cone truncado) só pra distinguir de longe
+          // da placa/post abaixo, sem exigir uma malha nova complexa.
+          const trophyMat = new PBRMaterial(`gcTrophyMat-${id}`, scene)
+          trophyMat.roughness = 0.35
+          const trophyMesh = MeshBuilder.CreateCylinder(
+            `gcTrophy-${id}`,
+            { height: 0.32, diameterTop: 0.08, diameterBottom: 0.28, tessellation: 12 },
+            scene,
+          )
+          trophyMesh.position = localPos.add(new Vector3(0, 1.95, 0))
+          trophyMesh.material = trophyMat
+          trophyMesh.parent = interiorRoot
+          trophyMesh.receiveShadows = true
+          trophyMesh.setEnabled(false)
+          shadowGenerator.addShadowCaster(trophyMesh)
+          gameCenterTrophyMeshes[id] = trophyMesh
+          gameCenterTrophyMaterials[id] = trophyMat
         })
+        refreshGameCenterTrophyVisuals()
 
         // Cartas da arena de memória — construídas uma vez (mesmo padrão sob-demanda de toda esta
         // função), escondidas (`setEnabled(false)`) até `beginArenaCountdown` revelar. Perto da
@@ -10105,6 +10169,13 @@ export function World3D({
 
       function enterGameCenterInterior() {
         buildGameCenterInteriorIfNeeded()
+        // Progresso/troféus do centro de jogos (Lab 217) — re-sincroniza com `progressRef.current`
+        // TODA entrada, não só na primeira construção da sala: cobre o caminho do desafio de
+        // Lógica, cuja conclusão é detectada fora deste arquivo (`App.tsx`, `kind: 'bridge'`) e não
+        // tem como empurrar um refresh imediato pra dentro do closure de `setup()` — a criança vê o
+        // troféu atualizado na PRÓXIMA vez que atravessar a porta (limitação conhecida, ver
+        // FEATURES.md do backlog "Lab 217").
+        refreshGameCenterTrophyVisuals()
         if (!avatarMesh || !avatarBody) return
         // Mesmo bloqueio da casa (lab-175): sair do carro/foguete antes, e nunca pular direto de
         // UM interior de bolso pro outro sem sair (ver comentário na declaração de
@@ -10189,6 +10260,67 @@ export function World3D({
       // `playing`), da mesma arena OU de outra, não faz nada aqui (não dá pra sequestrar uma
       // tentativa em andamento trocando de portal); os alvos em si é que respondem (ver
       // `arenaTargetInteract`, populado em `buildGameCenterInteriorIfNeeded`).
+      // Progresso/troféus do centro de jogos (Lab 217) — sincroniza a malha/label de UM portal com
+      // uma contagem de conclusões já conhecida (não lê `progressRef.current` sozinho — achado
+      // revisando o próprio código antes de qualquer teste: `setProgress` não é síncrono, então
+      // `progressRef.current` só reflete uma conclusão recém-creditada no PRÓXIMO render, tarde
+      // demais pra atualizar o troféu AINDA NESTA visita). `refreshGameCenterTrophyVisuals` (mais
+      // abaixo) é quem lê `progressRef.current` pra sincronizar os 4 portais de uma vez (na
+      // construção da sala e a cada entrada no saguão, onde a espera de um render já passou faz
+      // tempo); `handleGameCenterMinigameReward` chama esta função direto com a contagem NOVA já
+      // devolvida por `onGameCenterMinigameCompletedRef`, sem esperar nada.
+      const GAME_CENTER_TROPHY_COLORS: Record<GameCenterTrophyTier, Color3> = {
+        bronze: new Color3(0.65, 0.4, 0.2),
+        prata: new Color3(0.75, 0.75, 0.78),
+        ouro: new Color3(0.85, 0.7, 0.15),
+      }
+      function updateGameCenterTrophyVisual(id: GameCenterPortalId, completions: number) {
+        const tier = gameCenterTrophyTier(completions)
+        const mesh = gameCenterTrophyMeshes[id]
+        const mat = gameCenterTrophyMaterials[id]
+        if (mesh) mesh.setEnabled(tier !== null)
+        if (mat && tier) {
+          mat.albedoColor = GAME_CENTER_TROPHY_COLORS[tier]
+          mat.emissiveColor = GAME_CENTER_TROPHY_COLORS[tier].scale(0.35)
+        }
+        const hintLabel = gameCenterPortalHintLabel[id]
+        if (hintLabel) {
+          const info = GAME_CENTER_PORTAL_INFO[id]
+          const cta = info.unlocked ? 'Pressione E pra jogar' : 'Pressione E · Em breve'
+          hintLabel.text = `${gameCenterTrophyProgressPrefix(completions)}${cta}`
+        }
+      }
+      function refreshGameCenterTrophyVisuals() {
+        for (const id of GAME_CENTER_PORTAL_IDS) {
+          const category: GameCenterCategory = id
+          updateGameCenterTrophyVisual(id, progressRef.current.gameCenterCompletionsByCategory[category])
+        }
+      }
+
+      // Compartilhado pelos 4 sucessos de arena (cartas de memória, sequência, contar, soletrar) —
+      // credita o progresso/troféu/missão semanal (`onGameCenterMinigameCompletedRef`, `App.tsx`),
+      // atualiza os troféus visuais na hora (sem esperar a próxima entrada no saguão, ver
+      // comentário em `onGameCenterMinigameCompleted` na declaração de `World3DProps`) e devolve o
+      // texto de status já com o troféu/bônus anexado, se algum foi conquistado nesta vitória.
+      function handleGameCenterMinigameReward(
+        category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>,
+        baseStatusText: string,
+      ): string {
+        const { newTrophy, weeklyQuestRewardGranted, newCompletions } = onGameCenterMinigameCompletedRef.current(category)
+        updateGameCenterTrophyVisual(category, newCompletions)
+        if (newTrophy) trackMinigameTrophyEarned(category, newTrophy)
+        if (weeklyQuestRewardGranted) trackGameCenterWeeklyQuestCompleted(new Date().toISOString())
+        let text = baseStatusText
+        if (newTrophy) {
+          const tierLabel = newTrophy === 'ouro' ? '🏆 Ouro' : newTrophy === 'prata' ? '🥈 Prata' : '🥉 Bronze'
+          text += ` ${tierLabel} desbloqueado!`
+        }
+        if (weeklyQuestRewardGranted) {
+          text += ` 🎁 +${GAME_CENTER_WEEKLY_QUEST_REWARD_COINS} moedas (missão semanal)!`
+        }
+        return text
+      }
+
       function handleGameCenterPortalInteract(id: GameCenterPortalId) {
         const info = GAME_CENTER_PORTAL_INFO[id]
         trackGamePortalSelected(id)
@@ -10342,11 +10474,14 @@ export function World3D({
           arenaPhase = 'success'
           setMemoryCardsVisible(false)
           memoriaLevel = Math.min(memoriaLevel + 1, MEMORY_MAX_PAIRS)
-          if (gameCenterMemoryStatusLabel) {
-            gameCenterMemoryStatusLabel.text = '🎉 Você venceu! Pressione E na placa pra jogar de novo'
-          }
           trackMinigameCompleted('memoria')
           for (let i = 0; i < MEMORY_REWARD_COINS; i++) onCollectCoinRef.current()
+          if (gameCenterMemoryStatusLabel) {
+            gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
+              'memoria',
+              '🎉 Você venceu! Pressione E na placa pra jogar de novo',
+            )
+          }
         }
       }
 
@@ -10417,11 +10552,14 @@ export function World3D({
         if (isPatternGameComplete(state)) {
           arenaPhase = 'success'
           setPatternPadsVisible(false)
-          if (gameCenterMemoryStatusLabel) {
-            gameCenterMemoryStatusLabel.text = '🎉 Sequência completa! Pressione E na placa pra jogar de novo'
-          }
           trackMinigameCompleted('memoria')
           for (let i = 0; i < MEMORY_REWARD_COINS; i++) onCollectCoinRef.current()
+          if (gameCenterMemoryStatusLabel) {
+            gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
+              'memoria',
+              '🎉 Sequência completa! Pressione E na placa pra jogar de novo',
+            )
+          }
           return
         }
         if (gameCenterMemoryStatusLabel) gameCenterMemoryStatusLabel.text = `✅ Rodada ${state.round - 1} completa!`
@@ -10474,11 +10612,14 @@ export function World3D({
         if (isCountingGameComplete(state)) {
           arenaPhase = 'success'
           setCountingTargetsVisible(false)
-          if (gameCenterCountingStatusLabel) {
-            gameCenterCountingStatusLabel.text = '🎉 Você contou tudo certo! Pressione E na placa pra jogar de novo'
-          }
           trackMinigameCompleted('contar')
           for (let i = 0; i < COUNTING_REWARD_COINS; i++) onCollectCoinRef.current()
+          if (gameCenterCountingStatusLabel) {
+            gameCenterCountingStatusLabel.text = handleGameCenterMinigameReward(
+              'contar',
+              '🎉 Você contou tudo certo! Pressione E na placa pra jogar de novo',
+            )
+          }
           return
         }
         if (gameCenterCountingStatusLabel) {
@@ -10530,11 +10671,14 @@ export function World3D({
         if (isSpellingGameComplete(state)) {
           arenaPhase = 'success'
           setSpellingTilesVisible(false)
-          if (gameCenterSpellingStatusLabel) {
-            gameCenterSpellingStatusLabel.text = `🎉 Você soletrou ${state.hint} ${state.word}! Pressione E na placa pra jogar de novo`
-          }
           trackMinigameCompleted('soletrar')
           for (let i = 0; i < SPELLING_REWARD_COINS; i++) onCollectCoinRef.current()
+          if (gameCenterSpellingStatusLabel) {
+            gameCenterSpellingStatusLabel.text = handleGameCenterMinigameReward(
+              'soletrar',
+              `🎉 Você soletrou ${state.hint} ${state.word}! Pressione E na placa pra jogar de novo`,
+            )
+          }
           return
         }
         if (gameCenterSpellingStatusLabel) {
