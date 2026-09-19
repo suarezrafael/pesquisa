@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Em andamento: labs/lab-202-progressao-album-recompensas/ — progresso por categoria
+(Contar/Soletrar/Memória/Lógica), troféus 3D visuais nos 4 portais do saguão, missão semanal nova
+de "jogue 1 mini-jogo educativo", e resumo estendido pro responsável (`ChildProgressPanel`,
+`FamilyPortal.tsx`). Decisão confirmada com o usuário via `AskUserQuestion`: escopo completo,
+incluindo os troféus como objetos 3D de verdade (não só texto). Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 217 - Progressao, album e recompensas do centro
+de jogos" — próximo item depois do lab-201 (Lab 216). Ver
+`labs/lab-202-progressao-album-recompensas/FEATURES.md` pro objetivo/investigação prévia
+completos.
+
 Último concluído: labs/lab-201-minijogo-memoria-padroes/ — fecha a dívida do lab-198 (Memória de 3
 pares fixos, sem moedas, sempre foi prova de conceito) e entrega a segunda metade do próprio nome
 do item do backlog: um modo de repetir sequência (tipo Genius/Simon) no MESMO portal de Memória
