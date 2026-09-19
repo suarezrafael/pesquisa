@@ -520,7 +520,11 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     (!isPlausibleCount(metaObjForValidation.ringsCollected, 50) ||
       !isPlausibleCount(metaObjForValidation.totalRings, 50) ||
       !isPlausibleCount(metaObjForValidation.elapsedSeconds, 3600) ||
-      typeof metaObjForValidation.trophyEarned !== 'boolean')
+      typeof metaObjForValidation.trophyEarned !== 'boolean' ||
+      // Achado do review automático do Copilot: as checagens acima validam cada campo
+      // isoladamente, mas não a RELAÇÃO entre eles — sem isto, `ringsCollected > totalRings`
+      // (combinação impossível no jogo de verdade) passava e poluía a métrica.
+      (metaObjForValidation.ringsCollected as number) > (metaObjForValidation.totalRings as number))
   ) {
     return new Response(null, { status: 400 })
   }

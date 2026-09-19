@@ -4543,6 +4543,11 @@ export function World3D({
             // Some o HUD do percurso ao sair (nunca fica "pendurado" enquanto o jogador
             // já está de volta no hub); a corrida em si é reiniciada na PRÓXIMA entrada, não aqui.
             setParkourHud(null)
+            // Achado do review automático do Copilot: sem isto, uma mensagem de status disparada
+            // pouco antes de sair (impulso coletado, troféu conquistado) continuava visível no HUB
+            // até o próprio `setTimeout` de 3-4s expirar — vazando feedback do mini-jogo pra fora
+            // da arena.
+            setParkourStatusMessage(null)
           }
           return
         }
