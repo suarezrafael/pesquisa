@@ -68,6 +68,40 @@ confirmadas ao vivo (ambiente de automação desta sessão trava em `document.hi
 com a mesma limitação). Reduzido por reusar a técnica exata do balcão de compras (já testada ao vivo
 em labs anteriores) e por manter distância generosa de qualquer geometria existente.
 
+## Rodada de review — Copilot (PR #87)
+
+1 achado, confirmado contra o código real e corrigido:
+
+1. **Médio — pedestal de troféus fora da validação de posicionamento de mobília**: o posicionamento
+   manual de mobília (lab-136, `isCurrentFurniturePositionValid`) só conhecia o balcão de compras
+   (`HOUSE_COUNTER_COLLISION`) como obstáculo FIXO — o pedestal novo não estava na lista, então uma
+   cama/mesa podia ser confirmada bem em cima dele apesar da posição inicial ter sido escolhida pra
+   não colidir com nada. Corrigido adicionando `HOUSE_TROPHY_SHELF_COLLISION` (mesma coordenada
+   local do pedestal, `HOUSE_ROOM_HALF_SIZE - 1.3`) à lista de obstáculos — e, na mesma correção,
+   `buildHouseInteriorIfNeeded` passou a LER a posição de `HOUSE_TROPHY_SHELF_COLLISION.x`/`.z` em
+   vez de recalculá-la separadamente, garantindo que as duas nunca possam divergir.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois da
+correção.
+
+**Rodada 2**: 1 achado novo, confirmado e corrigido:
+
+2. **Médio — posições SALVAS não eram validadas ao carregar, só ao arrastar de novo**: a correção
+   da rodada 1 só protegia um ARRASTE novo (`isCurrentFurniturePositionValid`) — uma posição já
+   salva (de antes do pedestal existir, ou recebida num snapshot de visita) continuava sendo
+   aplicada direto por `refreshHouseFurnitureVisuals`, sem checagem nenhuma, sobrepondo o pedestal
+   pra sempre. Corrigido validando a posição salva contra os obstáculos FIXOS (`HOUSE_FIXED_OBSTACLES`
+   = balcão + pedestal) antes de aplicá-la — se inválida, cai no layout padrão em anel pra ESTA
+   renderização, sem migrar/reescrever o dado persistido (decisão deliberada: resolver sobreposição
+   mobília-contra-mobília de posições históricas seria uma migração bem maior, fora do escopo desta
+   lab pequena — só o obstáculo NOVO precisa dessa proteção).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 2
+correções.
+
+**Rodada 3**: "🟢 Approval recommended", "Findings: None", achado da rodada 2 confirmado como
+"Resolved since last review", nenhum comentário inline novo. Pronta pra revisão de merge.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Tornar o pedestal um reflexo dinâmico de tier/contagem real de troféus (decisão deliberada — ver
@@ -75,3 +109,8 @@ em labs anteriores) e por manter distância generosa de qualquer geometria exist
 - `parkour2`/`parkour3` (fora de escopo desde o lab-203, não revisitado aqui).
 - Evento `trophy_earned` dedicado citado no backlog — já coberto por `minigame_trophy_earned`
   (lab-202) e `parkour_course_completed.trophyEarned` (lab-203); não duplicado aqui.
+- Migrar/persistir uma correção de posição salva que conflita com um obstáculo fixo (só cai no
+  layout padrão na RENDERIZAÇÃO atual, sem reescrever `progress.housePlacements`) e resolver
+  sobreposição mobília-contra-mobília de posições históricas (gap pré-existente desde o lab-140,
+  não introduzido por esta lab) — ambos identificados na rodada 2 de review, decisão deliberada de
+  não expandir escopo pra uma migração de dados.

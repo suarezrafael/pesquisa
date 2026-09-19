@@ -3569,6 +3569,11 @@ export function World3D({
     let houseDoorInsidePos = Vector3.Zero()
     let houseInteriorSpawnPos = Vector3.Zero()
     let houseCounterPos = Vector3.Zero()
+    // Backlog "Lab 211 - Troféus e sala/álbum de mini-jogos" — prateleira fixa (não é mobília
+    // comprável, sempre presente, mesmo espírito do balcão de compras acima) que abre o MESMO
+    // catálogo de conquistas já usado pela carteira de estudos no mundo aberto (`onOpenAchievementsRef`)
+    // — reaproveita 100% do painel/dados existentes, nenhuma UI nova.
+    let houseTrophyShelfPos = Vector3.Zero()
     let houseExitHintLabel: TextBlock | null = null
     let houseEnterHintLabel: TextBlock | null = null
     // Centro de jogos — mesmo papel de `houseDoorInsidePos`/`houseInteriorSpawnPos`/
@@ -4440,6 +4445,14 @@ export function World3D({
             // nada, garantindo que a visita nunca vira um jeito de mexer na PRÓPRIA mobília por
             // engano enquanto está dentro da casa de outra pessoa ("visitante não altera nada").
             if (!visitingHouseSnapshot) onOpenMyHouseRef.current()
+            return
+          }
+          // Backlog "Lab 211" — mesmo raciocínio do balcão acima: visitando a casa de um amigo, a
+          // prateleira de troféus não abre nada (mostraria as PRÓPRIAS conquistas do visitante
+          // dentro da casa de outra pessoa, confuso e sem sentido — o catálogo não sabe mostrar
+          // conquistas de OUTRO jogador, só as do perfil local).
+          if (Vector3.Distance(avatarMesh.position, houseTrophyShelfPos) < HOUSE_TRIGGER_DISTANCE) {
+            if (!visitingHouseSnapshot) onOpenAchievementsRef.current()
             return
           }
           // lab-170 (pedido do usuário: "ao se aproximar na cama tem que ter como deitar" /
@@ -9096,15 +9109,30 @@ export function World3D({
       // Balcão de compras — obstáculo FIXO (nunca se move), centro da sala em coordenada local
       // (mesma posição de `counter.position` em `buildHouseInteriorIfNeeded`, `x=0, z=0`).
       const HOUSE_COUNTER_COLLISION = { x: 0, z: 0, radius: 0.9 }
+      // Pedestal de troféus (backlog "Lab 211") — mesmo raciocínio do balcão acima: obstáculo FIXO,
+      // mesma coordenada local usada em `buildHouseInteriorIfNeeded` (`trophyShelfX`/`trophyShelfZ`
+      // = `HOUSE_ROOM_HALF_SIZE - 1.3`). Achado do review automático do Copilot: sem isto, a
+      // validação de posicionamento manual de mobília (lab-136) não sabia que o pedestal existia —
+      // uma cama/mesa podia ser confirmada bem em cima dele, apesar do posicionamento inicial do
+      // pedestal ter sido escolhido pra não colidir com NADA.
+      const HOUSE_TROPHY_SHELF_COLLISION = { x: HOUSE_ROOM_HALF_SIZE - 1.3, z: -(HOUSE_ROOM_HALF_SIZE - 1.3), radius: 0.7 }
+      // Achado do review automático do Copilot (rodada 2): os dois obstáculos FIXOS acima só eram
+      // consultados durante um NOVO arraste (`isCurrentFurniturePositionValid`) — uma posição já
+      // SALVA (de antes do pedestal existir, ou recebida num snapshot de visita) era aplicada
+      // direto por `refreshHouseFurnitureVisuals`, sem checagem nenhuma. Lido também lá, filtrando
+      // só contra os obstáculos FIXOS (nunca contra outra mobília — resolver sobreposição
+      // mobília-contra-mobília de posições históricas seria uma migração bem maior, fora do escopo
+      // desta lab, que só precisa proteger contra o pedestal NOVO introduzido aqui).
+      const HOUSE_FIXED_OBSTACLES = [HOUSE_COUNTER_COLLISION, HOUSE_TROPHY_SHELF_COLLISION]
 
-      // Monta a lista de obstáculos (balcão + toda peça JÁ colocada, exceto a que está sendo
-      // movida) e delega a geometria pura pro módulo `houseCollision.ts` (lab-140, testável sem
-      // Babylon — ver os testes lá). A parede em si já é impossível de violar (o movimento durante
-      // o posicionamento trava a posição em `HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN`,
+      // Monta a lista de obstáculos (balcão + pedestal + toda peça JÁ colocada, exceto a que está
+      // sendo movida) e delega a geometria pura pro módulo `houseCollision.ts` (lab-140, testável
+      // sem Babylon — ver os testes lá). A parede em si já é impossível de violar (o movimento
+      // durante o posicionamento trava a posição em `HOUSE_ROOM_HALF_SIZE - FURNITURE_PLACEMENT_MARGIN`,
       // ver o loop de física mais abaixo), então só falta cuidar de objeto-contra-objeto aqui.
       function isCurrentFurniturePositionValid(excludeKey: string, x: number, z: number): boolean {
         const movingRadius = collisionRadiusForKind(FURNITURE_VISUAL_KIND[excludeKey.split('#')[0]]?.kind)
-        const obstacles = [HOUSE_COUNTER_COLLISION]
+        const obstacles = [HOUSE_COUNTER_COLLISION, HOUSE_TROPHY_SHELF_COLLISION]
         for (const [key, piece] of Object.entries(houseFurnitureNodes)) {
           if (key === excludeKey) continue
           obstacles.push({
@@ -9379,9 +9407,14 @@ export function World3D({
             const piece = buildFurniturePiece(visual.kind, visual.color)
             piece.parent = roomRoot
             // Posição salva pelo jogador (lab-136, "Mover" no `MyHousePanel`) tem prioridade sobre
-            // o layout padrão em anel — só cai no anel se esta cópia nunca foi reposicionada.
+            // o layout padrão em anel — só cai no anel se esta cópia nunca foi reposicionada OU se
+            // a posição salva conflita com um obstáculo FIXO (achado do review automático do
+            // Copilot: sem esta checagem, uma posição salva ANTES do pedestal de troféus existir
+            // continuaria sobrepondo ele pra sempre, já que só o ARRASTE novo era validado).
             const saved = activePlacements[key]
-            if (saved) {
+            const savedIsValid =
+              !!saved && isFurniturePositionValid(saved.x, saved.z, collisionRadiusForKind(visual.kind), HOUSE_FIXED_OBSTACLES)
+            if (saved && savedIsValid) {
               piece.position = new Vector3(saved.x, 0, saved.z)
               piece.rotation.y = saved.rotY
             } else {
@@ -9529,6 +9562,56 @@ export function World3D({
         guiTexture.addControl(counterLabel)
         counterLabel.linkWithMesh(counter)
         counterLabel.linkOffsetY = -40
+
+        // Prateleira de troféus (backlog "Lab 211 - Troféus e sala/álbum de mini-jogos") — fixa
+        // (não é mobília comprável, sempre presente, mesmo espírito do balcão acima), num canto
+        // oposto à porta/balcão, fora do anel de mobília comprada (raio 3.0 ao redor do centro,
+        // ver `refreshHouseFurnitureVisuals`) pra nunca colidir com uma peça posicionada ali.
+        // Decorativa (2 taças fixas, não reflete contagem/tier real) — interagir abre o MESMO
+        // catálogo de conquistas já usado pela carteira de estudos no mundo aberto
+        // (`onOpenAchievementsRef`), reaproveitando 100% do painel/dados existentes.
+        const trophyShelfMat = new PBRMaterial('houseTrophyShelfMat', scene)
+        trophyShelfMat.albedoColor = new Color3(0.55, 0.38, 0.25)
+        trophyShelfMat.roughness = 0.75
+        const trophyShelfCupMat = new PBRMaterial('houseTrophyCupMat', scene)
+        trophyShelfCupMat.albedoColor = new Color3(0.85, 0.68, 0.25)
+        trophyShelfCupMat.metallic = 0.6
+        trophyShelfCupMat.roughness = 0.35
+
+        // Pedestal de PÉ (não uma prateleira presa na parede) — mesma técnica do balcão de compras
+        // acima (caixa livre no chão), evita depender de ficar exatamente colado numa parede pra
+        // parecer "montado" corretamente. Coordenadas vêm de `HOUSE_TROPHY_SHELF_COLLISION` (não
+        // recalculadas aqui) — fonte única de verdade compartilhada com a validação de
+        // posicionamento de mobília (`isCurrentFurniturePositionValid`), nunca podem divergir.
+        const trophyShelfX = HOUSE_TROPHY_SHELF_COLLISION.x
+        const trophyShelfZ = HOUSE_TROPHY_SHELF_COLLISION.z
+        const trophyShelf = MeshBuilder.CreateBox('houseTrophyShelf', { width: 0.9, height: 0.5, depth: 0.4 }, scene)
+        trophyShelf.position = new Vector3(trophyShelfX, 0.25, trophyShelfZ)
+        trophyShelf.material = trophyShelfMat
+        trophyShelf.parent = interiorRoot
+        shadowGenerator.addShadowCaster(trophyShelf)
+        houseTrophyShelfPos = interiorRoot.position.add(trophyShelf.position)
+
+        for (const cupOffsetX of [-0.24, 0.24]) {
+          const cup = MeshBuilder.CreateCylinder(
+            `houseTrophyCup-${cupOffsetX}`,
+            { height: 0.22, diameterTop: 0.22, diameterBottom: 0.1, tessellation: 12 },
+            scene,
+          )
+          cup.position = new Vector3(trophyShelfX + cupOffsetX, 0.61, trophyShelfZ)
+          cup.material = trophyShelfCupMat
+          cup.parent = interiorRoot
+          shadowGenerator.addShadowCaster(cup)
+        }
+
+        const trophyShelfLabel = new TextBlock('houseTrophyShelfLabel', '🏆 Conquistas')
+        trophyShelfLabel.color = 'white'
+        trophyShelfLabel.fontSize = mobileFontSize(20)
+        trophyShelfLabel.outlineWidth = 4
+        trophyShelfLabel.outlineColor = 'rgba(0,0,0,0.5)'
+        guiTexture.addControl(trophyShelfLabel)
+        trophyShelfLabel.linkWithMesh(trophyShelf)
+        trophyShelfLabel.linkOffsetY = -40
 
         // Mobília em anel ao redor do balcão — construída por `refreshHouseFurnitureVisuals`
         // (lab-138: uma peça por CÓPIA possuída, não mais uma por tipo de item; ver comentário na
