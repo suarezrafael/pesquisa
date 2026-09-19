@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Em andamento: labs/lab-199-minijogo-contar/ — primeiro mini-jogo "de verdade" de matemática
+inicial (contar quantidade) sobre o template de arena do lab-198, e generalização de verdade da
+máquina de estado da arena (decisão confirmada com o usuário via `AskUserQuestion`: hoje só os
+NOMES são genéricos, a implementação está colada à memória — generalizar agora antes de repetir o
+padrão memória-colado uma 3ª vez no lab-215/soletrar). Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 214 - Mini-jogo de contar e quantidade" —
+próximo item depois do lab-198 (Lab 213). Ver `labs/lab-199-minijogo-contar/FEATURES.md` pro
+objetivo/investigação prévia/decisão de escopo completos.
+
 Último concluído: labs/lab-198-template-arena-educativa/ — cria uma infraestrutura mínima e
 reutilizável de "arena" (contagem regressiva, estado `playing/success/fail/retry`, cronômetro,
 alvos interativos, eventos comuns) que os labs 214-216 vão usar depois. Prova de conceito
