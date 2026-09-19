@@ -9116,6 +9116,14 @@ export function World3D({
       // uma cama/mesa podia ser confirmada bem em cima dele, apesar do posicionamento inicial do
       // pedestal ter sido escolhido pra não colidir com NADA.
       const HOUSE_TROPHY_SHELF_COLLISION = { x: HOUSE_ROOM_HALF_SIZE - 1.3, z: -(HOUSE_ROOM_HALF_SIZE - 1.3), radius: 0.7 }
+      // Achado do review automático do Copilot (rodada 2): os dois obstáculos FIXOS acima só eram
+      // consultados durante um NOVO arraste (`isCurrentFurniturePositionValid`) — uma posição já
+      // SALVA (de antes do pedestal existir, ou recebida num snapshot de visita) era aplicada
+      // direto por `refreshHouseFurnitureVisuals`, sem checagem nenhuma. Lido também lá, filtrando
+      // só contra os obstáculos FIXOS (nunca contra outra mobília — resolver sobreposição
+      // mobília-contra-mobília de posições históricas seria uma migração bem maior, fora do escopo
+      // desta lab, que só precisa proteger contra o pedestal NOVO introduzido aqui).
+      const HOUSE_FIXED_OBSTACLES = [HOUSE_COUNTER_COLLISION, HOUSE_TROPHY_SHELF_COLLISION]
 
       // Monta a lista de obstáculos (balcão + pedestal + toda peça JÁ colocada, exceto a que está
       // sendo movida) e delega a geometria pura pro módulo `houseCollision.ts` (lab-140, testável
@@ -9399,9 +9407,14 @@ export function World3D({
             const piece = buildFurniturePiece(visual.kind, visual.color)
             piece.parent = roomRoot
             // Posição salva pelo jogador (lab-136, "Mover" no `MyHousePanel`) tem prioridade sobre
-            // o layout padrão em anel — só cai no anel se esta cópia nunca foi reposicionada.
+            // o layout padrão em anel — só cai no anel se esta cópia nunca foi reposicionada OU se
+            // a posição salva conflita com um obstáculo FIXO (achado do review automático do
+            // Copilot: sem esta checagem, uma posição salva ANTES do pedestal de troféus existir
+            // continuaria sobrepondo ele pra sempre, já que só o ARRASTE novo era validado).
             const saved = activePlacements[key]
-            if (saved) {
+            const savedIsValid =
+              !!saved && isFurniturePositionValid(saved.x, saved.z, collisionRadiusForKind(visual.kind), HOUSE_FIXED_OBSTACLES)
+            if (saved && savedIsValid) {
               piece.position = new Vector3(saved.x, 0, saved.z)
               piece.rotation.y = saved.rotY
             } else {
