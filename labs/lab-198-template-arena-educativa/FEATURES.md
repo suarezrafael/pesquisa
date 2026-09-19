@@ -160,6 +160,12 @@ retornado por `__debugMemoryState`, restringir os IDs de evento da arena a um co
 vieram como comentário de linha nesta rodada (só apareceram no texto solto do resumo) — ficam como
 possível polimento futuro (lab-216), não bloqueiam esta fatia.
 
+**2ª rodada (commit `2fb9940`)**: os 2 achados acima aparecem marcados "Resolved since last
+review"; `Findings: None`, sem nenhum comentário de linha novo (checado nos dois endpoints,
+`reviews` e `comments`). O cabeçalho solto "Four moderate findings remain in `World3D.tsx`" não
+corresponde a nenhum comentário de linha real — mesmo padrão da 1ª rodada, onde sugestões soltas no
+texto (sem thread de linha) não bloqueiam o merge. Considerado limpo para seguir.
+
 **Nota sobre verificação desta rodada**: desta vez não foi possível reverificar ao vivo no Chrome
 automatizado — a aba, mesmo recém-criada, nunca sai de `document.hidden === true` nesta sessão em
 particular (indo além do desvio de física/render já documentado acima: aqui o próprio carregamento
