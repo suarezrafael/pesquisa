@@ -319,3 +319,25 @@ export function trackGameCenterWeeklyQuestCompleted(nowIso: string): void {
 export function trackGameCenterProgressViewed(): void {
   trackEvent('game_center_progress_viewed')
 }
+
+// Backlog "Lab 210 - Parkour arcade com argolas, tesouros e power-ups justos" — cobre as métricas
+// citadas pelo documento ("conclusões de parkour", "troféus conquistados") sem mudar a semântica já
+// existente de `minigame_completed('parkour1')` (que continua contando ao tocar o pedestal de
+// retorno, não isto). Dispara toda vez que o jogador alcança o topo do percurso, mesmo sem todas as
+// argolas — `ringsCollected`/`totalRings` deixam a análise distinguir "chegou" de "dominou" sem
+// precisar de um segundo evento.
+export function trackParkourCourseCompleted(
+  ringsCollected: number,
+  totalRings: number,
+  elapsedSeconds: number,
+  trophyEarned: boolean,
+): void {
+  trackEvent('parkour_course_completed', { ringsCollected, totalRings, elapsedSeconds, trophyEarned })
+}
+
+// Cobre "tentativas por sessão"/"retry sem abandono" (Lab 210) — dispara a cada queda que aciona o
+// teleporte de volta pro checkpoint, nunca pra volta ao hub (isso já é `minigame_completed`/saída
+// deliberada, não uma "tentativa" no sentido de retry dentro do próprio percurso).
+export function trackParkourCheckpointRespawn(checkpointIndex: number): void {
+  trackEvent('parkour_checkpoint_respawn', { checkpointIndex })
+}

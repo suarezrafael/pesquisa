@@ -65,32 +65,67 @@ boost/troféu); (b) mesmo que (a) e também construir pedestais novos no hub pra
 
 ## Funcionalidades planejadas
 
-- [ ] Argolas pra atravessar: uma entre cada par de plataformas consecutivas (`PARKOUR_STEPS - 1` =
+- [x] Argolas pra atravessar: uma entre cada par de plataformas consecutivas (`PARKOUR_STEPS - 1` =
   6 argolas), malha toroidal orientada na direção do pulo, coletadas por proximidade (mesmo raciocínio
   de detecção já usado pra moeda/checkpoint, sem física de "atravessar" um plano exato). Contador
-  "💍 x/6" no HUD só enquanto dentro do parkour.
-- [ ] Checkpoints: cada plataforma alcançada vira o novo checkpoint (índice mais alto já visitado,
+  "💍 x/6 · ⏱ Xs" no HUD só enquanto dentro do parkour.
+- [x] Checkpoints: cada plataforma alcançada vira o novo checkpoint (índice mais alto já visitado,
   nunca regride). Detecção de queda por altura ao longo de `PARKOUR_ANCHOR_UP` relativa à
   plataforma do checkpoint atual; ao cair, teleporte direto pra cima da plataforma do checkpoint
   (nova função `teleportAvatarToPosition`, mesma segurança física de `teleportAvatarTo` sem a
   matemática de superfície esférica) — sem perda de moeda/argola já coletada.
-- [ ] Cronômetro informativo (não punitivo): conta o tempo dentro da arena, mostrado no HUD, sem
-  afetar recompensa/dificuldade — só feedback ("seu tempo foi X").
-- [ ] Impulso temporário (velocidade + pulo mais alto): um item coletável no meio do percurso, ativo
-  só por uma janela de tempo curta E só enquanto `activeMinigameId === 'parkour1'` (sai do mini-jogo
-  = desliga na hora, nunca vaza pro mundo aberto).
-- [ ] Troféu de conclusão: `BADGE_PARKOUR_MASTER` (novo, `progression.ts`, mesmo padrão de
+- [x] Cronômetro informativo (não punitivo): conta o tempo dentro da arena, mostrado no HUD, sem
+  afetar recompensa/dificuldade — só feedback (contador ao vivo em segundos).
+- [x] Impulso temporário (velocidade + pulo mais alto): um item coletável no meio do percurso, ativo
+  só por 10s E só enquanto `activeMinigameId === 'parkour1'` (sai do mini-jogo = desliga na hora,
+  nunca vaza pro mundo aberto — a condição do multiplicador já checa `activeMinigameId` toda vez,
+  não só no momento da coleta).
+- [x] Troféu de conclusão: `BADGE_PARKOUR_MASTER` (novo, `progression.ts`, mesmo padrão de
   `BADGE_COOP_FIRST`) concedido na primeira vez que o jogador alcança o topo com as 6 argolas
   coletadas; catálogo (`data/achievements.ts`) ganha uma entrada nova — aparece no álbum de
   conquistas de graça, sem UI nova.
-- [ ] Eventos novos: `parkour_course_completed` (meta: argolas coletadas, total, tempo, troféu
+- [x] Eventos novos: `parkour_course_completed` (meta: argolas coletadas, total, tempo, troféu
   concedido — cobre "conclusões de parkour" e "troféus conquistados" do backlog) e
   `parkour_checkpoint_respawn` (meta: índice do checkpoint — cobre "tentativas por sessão"/"retry
   sem abandono"). `minigame_started`/`minigame_completed('parkour1')` continuam como já eram (fora
-  de escopo mudar a semântica existente).
-- [ ] Testes unitários da lógica pura nova em `progression.ts` (`applyParkourCourseCompleted`).
-- [ ] Verificar ao vivo (ver limitação conhecida abaixo) e, na falta dela, revisão de código
-  cuidadosa.
+  de escopo mudar a semântica existente). Allowlist/validação/`weeklyFunnel` desde o primeiro
+  commit (`server-accounts`), mesma disciplina do lab-202.
+- [x] Testes unitários da lógica pura nova em `progression.ts` (`applyParkourCourseCompleted`, 3
+  testes) e em `server-accounts/src/domain.ts` (`isPlausibleCount` exportada, 3 testes + 1 de
+  allowlist).
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (6ª lab seguida — mesma limitação exata, confirmado com uma aba nova nesta mesma sessão).
+  Documentado abaixo; confiado em `tsc`/testes/build + verificação matemática manual da física de
+  queda (ver "Verificação de código").
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` limpo; `npm run test -- --run` do app: 257/257 (+3 de
+`applyParkourCourseCompleted`); `npm run build` sem erros. `server-accounts`: `npx tsc --noEmit`
+limpo, `npm run test -- --run` 168/168 (+4 novos).
+
+**Verificação matemática manual da detecção de queda** (não dá pra confirmar ao vivo, ver limitação
+acima, então feita com os números reais do percurso): no instante em que o jogador entra no
+`parkour1` (`teleportAvatarTo(Vector3.Zero(), PARKOUR_ANCHOR_UP, currentGroundBaseFn)`), a posição
+do avatar fica em `parkourAnchorPos + PARKOUR_ANCHOR_UP*(AVATAR_RADIUS+0.05)` = `+0.6` ao longo de
+`PARKOUR_ANCHOR_UP`. A plataforma 0 (checkpoint inicial) fica em `parkourAnchorPos + ... +
+PARKOUR_ANCHOR_UP*0.5` = `+0.5` na mesma projeção (o deslocamento `forward`/`lateral` da plataforma
+não contribui pro produto escalar com `PARKOUR_ANCHOR_UP`, já que `forward`/`right` são perpendiculares
+a ele por construção, `Vector3.Cross`). `heightVsCheckpoint` no instante da entrada fica em `0.6 -
+0.5 = +0.1` — positivo, não dispara a queda por engano bem no momento de entrar no mini-jogo (a
+margem de queda é `-1.3`). Em cima de qualquer plataforma `i` (checkpoint = `i`), a mesma conta dá
+`+0.75` (altura do avatar em pé sobre o topo da plataforma, que tem 0.3 de altura). A margem de
+`-1.3` fica bem abaixo do pico de qualquer pulo bem-sucedido (altura máxima do pulo ≈1.54 acima do
+ponto de partida, sempre positiva até quase o fim da parábola) — só dispara numa queda de verdade,
+não numa parábola normal de travessia.
+
+**Risco remanescente, honesto**: a posição exata das argolas (ponto médio entre plataformas + 0.55
+de altura) e do item de impulso (plataforma 3, +0.5 de altura) não foi confirmada ao vivo — não
+avaliei se a argola realmente intercepta a trajetória do pulo no ponto certo pra "atravessar dá
+sensação de acerto" (só calculada por geometria, não vista em jogo). Reduzido (não eliminado) por
+reusar exatamente a mesma técnica de orientação já usada e testada ao vivo pro feixe de laser
+(`fireLaserBeam`, lab-38/39) e por a distância de gatilho (`PARKOUR_TRIGGER_DISTANCE = 1.0`) ser
+generosa o bastante pra tolerar alguma imprecisão de posicionamento.
 
 ## Fora de escopo (explicitamente adiado)
 
