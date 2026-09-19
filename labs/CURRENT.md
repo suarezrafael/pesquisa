@@ -1,16 +1,48 @@
 # Laboratório atual
 
-Em andamento: labs/lab-202-progressao-album-recompensas/ — progresso por categoria
-(Contar/Soletrar/Memória/Lógica), troféus 3D visuais nos 4 portais do saguão, missão semanal nova
-de "jogue 1 mini-jogo educativo", e resumo estendido pro responsável (`ChildProgressPanel`,
-`FamilyPortal.tsx`). Decisão confirmada com o usuário via `AskUserQuestion`: escopo completo,
-incluindo os troféus como objetos 3D de verdade (não só texto). Origem:
-`docs/gameplay-market-expansion-backlog.md`, "Lab 217 - Progressao, album e recompensas do centro
-de jogos" — próximo item depois do lab-201 (Lab 216). Ver
-`labs/lab-202-progressao-album-recompensas/FEATURES.md` pro objetivo/investigação prévia
-completos.
+Último concluído: labs/lab-202-progressao-album-recompensas/ — progresso por categoria
+(Contar/Soletrar/Memória/Lógica; `logica` conta o desafio da ponte pelos 2 caminhos que já
+existiam — portal do centro de jogos OU local físico original, lab-180 — mesmo `kind: 'bridge'`
+por baixo desde o lab-197, mesma habilidade praticada), troféus 3D visuais nos 4 portais do saguão
+(bronze/prata/ouro, limiares 1/5/15, sem loot box/gacha/boost pago), missão semanal nova de "jogue
+1 mini-jogo educativo" (`gameCenterWeeklyQuestRewardedAtIso`, mesmo padrão anti-recuo-de-relógio do
+objetivo ambiental já existente, campo/recompensa SEPARADOS), e resumo estendido pro responsável
+(`ChildProgressPanel`, `FamilyPortal.tsx`, troféu + contagem vitalícia por categoria). Decisão
+confirmada com o usuário via `AskUserQuestion`: escopo completo, incluindo os troféus como objetos
+3D de verdade nos portais (não só texto/hint). Origem: `docs/gameplay-market-expansion-backlog.md`,
+"Lab 217 - Progressao, album e recompensas do centro de jogos" — próximo item depois do lab-201
+(Lab 216). A dica "Pressione E" de cada portal ganha um prefixo de progresso (`gameCenterTrophyProgressPrefix`,
+ex.: "🥉 3/5 ·") — cobre "criança vê o que já completou e o próximo objetivo" sem painel novo.
+Eventos novos: `minigame_trophy_earned` (`category`+`tier`, só na conclusão que CRUZA um limiar
+novo), `game_center_weekly_quest_completed`, `game_center_progress_viewed`; `weeklyFunnel.weeklyMeaningfulPlayLearningSessions`
+(métrica citada pelo backlog) é o alcance semanal derivado do evento de missão semanal, não um
+evento próprio. **Achado real na PRÓPRIA revisão de código, antes de qualquer teste externo**:
+`progressRef.current` (`World3D.tsx`) não reflete uma atualização de `setProgress` na MESMA
+sincronia que a disparou (React não aplica o estado na hora) — o troféu visual não atualizaria na
+mesma visita pras 3 arenas (memória/contar/soletrar). Corrigido devolvendo a contagem NOVA já
+calculada de forma síncrona pelo hook (mesmo padrão já usado por `weeklyEventObjectiveProgress`,
+lab-182), sem depender de reler `progressRef` logo em seguida. **PR #85 teve 2 rodadas de review
+com 4 bugs reais** (1 auto-encontrado + 3 do Copilot): (1) achado acima; (2) 2 eventos novos sem
+`meta` (`game_center_weekly_quest_completed`/`game_center_progress_viewed`) caíam no branch
+genérico de sanitização server-side, gravando qualquer objeto que o client mandasse — corrigido
+incluindo os 2 no branch `safeMeta = null` dos outros eventos novos sem meta; (3)
+`game_center_progress_viewed` podia disparar de novo em re-renders do `Dashboard` (`loadProfile()`
+devolve um objeto novo a cada chamada) — corrigido usando `Boolean(profile)` como dependência
+estável do `useEffect`; (4) `minigame_trophy_earned`/`game_center_weekly_quest_completed`
+disparavam 2x pras 3 arenas (`App.tsx` já dispara antes de devolver o resultado, `World3D.tsx`
+disparava de novo com um timestamp próprio) — corrigido removendo a duplicata em `World3D.tsx`.
+`npx tsc -b` limpo; testes: app 254/254 (+11 de `progression.test.ts`), `server-accounts` 164/164
+(+3 novos); `npm run build` sem regressão. **Sem verificação ao vivo — 5ª lab seguida**: o Chrome
+desta sessão travou de novo em `document.hidden === true` — verificação só por leitura de código
+cuidadosa. Risco remanescente registrado com honestidade em `FEATURES.md`: posição/tamanho do
+troféu 3D acima de cada placa não confirmados ao vivo. **Merge confirmado**: PR #85 mesclada
+(squash) em `main` no commit `5c32f80` (2026-09-19, confirmado via `AskUserQuestion`). CI de `main`
+verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-201-minijogo-memoria-padroes/ — fecha a dívida do lab-198 (Memória de 3
+Antes desse: labs/lab-201-minijogo-memoria-padroes/ — fecha a dívida do lab-198 (Memória de 3
 pares fixos, sem moedas, sempre foi prova de conceito) e entrega a segunda metade do próprio nome
 do item do backlog: um modo de repetir sequência (tipo Genius/Simon) no MESMO portal de Memória
 (sem slot de portal novo no saguão). Decisão confirmada com o usuário via `AskUserQuestion`: escopo
