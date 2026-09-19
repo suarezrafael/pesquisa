@@ -30,6 +30,7 @@ import {
   trackWeeklyEventObjectiveCompleted,
   trackMinigameTrophyEarned,
   trackGameCenterWeeklyQuestCompleted,
+  trackParkourCourseCompleted,
 } from './productAnalytics'
 import { quests } from './data/quests'
 import { surpriseQuizzes } from './data/surpriseQuizzes'
@@ -138,6 +139,7 @@ function GameApp() {
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
     gameCenterMinigameCompleted,
+    parkourCourseCompleted,
   } = useProgress()
   // Achado do review automático do Copilot (várias rodadas até chegar aqui): tentativas
   // anteriores guardavam `event`+`nowIso` juntos num estado atualizado por um timer de 60s,
@@ -461,6 +463,23 @@ function GameApp() {
     return { newTrophy, weeklyQuestRewardGranted, newCompletions }
   }
 
+  // Troféu de domínio do parkour (backlog "Lab 210") — chamado por `World3D.tsx` uma vez por
+  // corrida, ao alcançar o topo do `parkour1`. O GATE "só concede com todas as argolas" mora aqui
+  // (camada de apresentação/regra de produto), não em `applyParkourCourseCompleted` (`progression.ts`,
+  // que só sabe conceder-se-ainda-não-tinha) — mesma separação de `handleGameCenterMinigameCompleted`
+  // acima. `parkour_course_completed` dispara em TODA conclusão (mesmo sem todas as argolas), com
+  // `trophyEarned` refletindo só se ESTA conclusão concedeu o emblema agora.
+  function handleParkourCourseCompleted(ringsCollected: number, totalRings: number, elapsedSeconds: number) {
+    // Achado do review automático do Copilot: `>=` concederia o troféu numa contagem anômala
+    // (ex.: `totalRings === 0`) sem nenhuma argola de verdade — igualdade estrita + exigir
+    // `totalRings > 0` deixa a regra "todas as argolas" explícita e nunca satisfeita por um total
+    // degenerado.
+    const allRingsCollected = totalRings > 0 && ringsCollected === totalRings
+    const { newBadge } = allRingsCollected ? parkourCourseCompleted() : { newBadge: false }
+    trackParkourCourseCompleted(ringsCollected, totalRings, elapsedSeconds, newBadge)
+    return { newBadge }
+  }
+
   function handleCloseEnvironmentalChallenge() {
     if (activeEnvironmentalChallenge && !progress.completedQuestIds.includes(activeEnvironmentalChallenge.quest.id)) {
       resetStreak()
@@ -651,6 +670,7 @@ function GameApp() {
           onCollectPostcard={collectPostcard}
           onCollectCoin={collectCoin}
           onGameCenterMinigameCompleted={handleGameCenterMinigameCompleted}
+          onParkourCourseCompleted={handleParkourCourseCompleted}
           placingFurnitureRequestId={pendingPlacementId}
           onPlacingRequestHandled={() => setPendingPlacementId(null)}
           onFurniturePlaced={setFurniturePlacement}

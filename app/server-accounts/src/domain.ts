@@ -221,6 +221,11 @@ const PRODUCT_EVENT_TYPES = new Set([
   'minigame_trophy_earned',
   'game_center_weekly_quest_completed',
   'game_center_progress_viewed',
+  // "Parkour arcade com argolas, tesouros e power-ups justos" — cobre "conclusões de parkour" e
+  // "tentativas por sessão/retry sem abandono" citados pelo backlog, sem mudar a semântica já
+  // existente de `minigame_completed('parkour1')`, ver app/src/productAnalytics.ts.
+  'parkour_course_completed',
+  'parkour_checkpoint_respawn',
 ])
 
 export function isValidProductEventType(type: string): boolean {
@@ -370,7 +375,11 @@ export interface ProgressSummary {
   leituraCompleted?: number
 }
 
-function isPlausibleCount(value: unknown, max: number): value is number {
+// Exportada pro parkour arcade (backlog "Lab 210") — mesmo raciocínio de `isPlausibleSessionDuration`:
+// reaproveitada pra validar os campos numéricos de `parkour_course_completed`/
+// `parkour_checkpoint_respawn` (argolas coletadas, cronômetro, índice de checkpoint) sem duplicar a
+// checagem "inteiro não-negativo até um teto generoso" que `ProgressSummary` já usa.
+export function isPlausibleCount(value: unknown, max: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max
 }
 

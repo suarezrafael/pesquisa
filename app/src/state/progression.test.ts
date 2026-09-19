@@ -10,6 +10,7 @@ import {
   applyCoopChallengeCompleted,
   applyPetDailyChallengeCompleted,
   applyDailyLoginReward,
+  applyParkourCourseCompleted,
   applyPlanetQuestCompletion,
   applyPostcardCollected,
   applyQuestCompletion,
@@ -21,6 +22,7 @@ import {
   BADGE_ALL_DONE,
   BADGE_COOP_FIRST,
   BADGE_FIRST_QUEST,
+  BADGE_PARKOUR_MASTER,
   canChangeNickname,
   equipPet,
   feedPet,
@@ -1259,6 +1261,31 @@ describe('applyCoopChallengeCompleted (lab-172, desafio em dupla)', () => {
     const progress = { ...emptyProgress, lastCoopChallengeAt: '2026-09-10T08:00:00.000Z' }
     const result = applyCoopChallengeCompleted(progress, '2026-09-08T08:00:00.000Z')
     expect(result.rewarded).toBe(false)
+  })
+})
+
+describe('applyParkourCourseCompleted (backlog "Lab 210", troféu de domínio do parkour)', () => {
+  it('concede o emblema "Mestre do Parkour" na primeira vez', () => {
+    const result = applyParkourCourseCompleted(emptyProgress)
+    expect(result.newBadge).toBe(true)
+    expect(result.progress.badges).toContain(BADGE_PARKOUR_MASTER)
+  })
+
+  it('não reconcede o emblema numa segunda conclusão (único, mesmo padrão de BADGE_COOP_FIRST)', () => {
+    const progress = { ...emptyProgress, badges: [BADGE_PARKOUR_MASTER] }
+    const result = applyParkourCourseCompleted(progress)
+    expect(result.newBadge).toBe(false)
+    expect(result.progress).toBe(progress)
+    expect(result.progress.badges).toEqual([BADGE_PARKOUR_MASTER])
+  })
+
+  it('preserva emblemas já conquistados de outras fontes ao adicionar o novo', () => {
+    const progress = { ...emptyProgress, badges: [BADGE_COOP_FIRST, BADGE_FIRST_QUEST] }
+    const result = applyParkourCourseCompleted(progress)
+    expect(result.newBadge).toBe(true)
+    expect(result.progress.badges).toEqual(
+      expect.arrayContaining([BADGE_COOP_FIRST, BADGE_FIRST_QUEST, BADGE_PARKOUR_MASTER]),
+    )
   })
 })
 

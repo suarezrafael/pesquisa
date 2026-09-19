@@ -124,6 +124,7 @@ import {
   trackPlanetInteractionCompleted,
   trackMinigameStarted,
   trackMinigameCompleted,
+  trackParkourCheckpointRespawn,
   trackGameCenterEntered,
   trackGamePortalSelected,
   trackGameCenterReturned,
@@ -252,6 +253,18 @@ interface World3DProps {
     weeklyQuestRewardGranted: boolean
     newCompletions: number
   }
+  // Backlog "Lab 210" (parkour arcade) — chamado UMA VEZ por corrida, na primeira vez que o jogador alcança o
+  // topo do `parkour1` (independente de ter coletado todas as argolas ou não — `ringsCollected`/
+  // `totalRings` deixam `App.tsx` decidir se essa conclusão específica "domina" o percurso).
+  // `App.tsx` só credita `BADGE_PARKOUR_MASTER` (via `useProgress().parkourCourseCompleted`) quando
+  // `ringsCollected === totalRings`, e sempre dispara o evento de analytics de conclusão — mesma
+  // separação de responsabilidade de `onGameCenterMinigameCompleted` acima (World3D só informa O
+  // QUE aconteceu; App.tsx decide a regra de progresso).
+  onParkourCourseCompleted: (
+    ringsCollected: number,
+    totalRings: number,
+    elapsedSeconds: number,
+  ) => { newBadge: boolean }
   onSwitchProfile: () => void
   suspendTriggers: boolean
   // lab-136 (pedido do usuário: "tem que ter opção... de escolher em que posição da casa deve
@@ -324,6 +337,21 @@ const WALK_SPEED = 9.5
 const RUN_SPEED = 14
 const JUMP_SPEED = 6.2 // velocidade radial (pra fora do planeta) aplicada ao pular
 const TURN_RATE = 2.6 // rad/s — velocidade de giro ao segurar esquerda/direita
+// Backlog "Lab 210" (parkour arcade) — impulso temporário, só multiplica velocidade/pulo enquanto
+// `activeMinigameId === 'parkour1'` (ver laço de física principal); nunca lido fora dali.
+const PARKOUR_BOOST_DURATION = 10 // segundos
+const PARKOUR_BOOST_SPEED_MULTIPLIER = 1.5
+const PARKOUR_BOOST_JUMP_MULTIPLIER = 1.25
+const PARKOUR_TRIGGER_DISTANCE = 1.0 // raio de coleta de argola/impulso e de "chegou na plataforma"
+// Altura (ao longo de `PARKOUR_ANCHOR_UP`, relativa à plataforma do checkpoint atual) abaixo da
+// qual o jogador é considerado "caiu" — maior que a folga normal de estar EM CIMA da plataforma
+// (que fica perto de 0), pequena o bastante pra disparar bem antes de bater no chão de verdade lá
+// embaixo.
+const PARKOUR_FALL_MARGIN = 1.3
+// `setup()` usa exatamente esta constante pra `PARKOUR_STEPS` (não um `7` solto de novo) — o total
+// de argolas exibido no HUD (`parkourRings.length`, calculado dentro de `setup()`) sempre deriva
+// dela, sem risco de divergência.
+const PARKOUR1_STEPS = 7
 // Achado do review automático do Copilot: `speedRatio` (onde `WALK_CYCLE_SPEED` é usado, no ciclo
 // de passada) é NORMALIZADO por `currentSpeed` — a full velocidade, o ciclo sempre avança a
 // `WALK_CYCLE_SPEED` rad/s, não importa o valor de `WALK_SPEED`. Isso significa que a fase por
@@ -2474,6 +2502,7 @@ export function World3D({
   onCollectPostcard,
   onCollectCoin,
   onGameCenterMinigameCompleted,
+  onParkourCourseCompleted,
   onSwitchProfile,
   suspendTriggers,
   placingFurnitureRequestId,
@@ -2571,6 +2600,7 @@ export function World3D({
   const onCollectPostcardRef = useRef(onCollectPostcard)
   const onCollectCoinRef = useRef(onCollectCoin)
   const onGameCenterMinigameCompletedRef = useRef(onGameCenterMinigameCompleted)
+  const onParkourCourseCompletedRef = useRef(onParkourCourseCompleted)
   const onOpenShopRef = useRef(onOpenShop)
   const onFurniturePlacedRef = useRef(onFurniturePlaced)
   const onOpenCoopChallengeRef = useRef(onOpenCoopChallenge)
@@ -2704,6 +2734,18 @@ export function World3D({
     secondsLeft: number
   } | null>(null)
   const teleportToMinigameRef = useRef<(id: 'parkour1' | 'ponte-logica') => void>(() => {})
+  // Backlog "Lab 210" (parkour arcade) — HUD da corrida atual, `null` enquanto fora do `parkour1`. Argolas
+  // atualizam na hora (evento raro, no máximo 6x por corrida); cronômetro só 1x/segundo já
+  // arredondado (mesmo espírito de `survivalTimeDisplay` acima — não recria o objeto 60x/s por um
+  // número que só importa uma vez por segundo).
+  const [parkourHud, setParkourHud] = useState<{
+    ringsCollected: number
+    totalRings: number
+    elapsedSeconds: number
+  } | null>(null)
+  // Feedback transitório (impulso coletado, troféu conquistado) — mesmo padrão de
+  // `treasureFoundMessage` acima (some sozinho depois de alguns segundos).
+  const [parkourStatusMessage, setParkourStatusMessage] = useState<string | null>(null)
   // Lido por `handleInteractPress` (dentro do closure de `setup()`) pra evitar reiniciar a
   // contagem regressiva já em andamento — achado do review automático: sem essa checagem, apertar
   // `E` de novo enquanto ainda dentro do raio do pedestal (segurar/tocar repetidamente) reseta
@@ -2734,6 +2776,7 @@ export function World3D({
   onCollectPostcardRef.current = onCollectPostcard
   onCollectCoinRef.current = onCollectCoin
   onGameCenterMinigameCompletedRef.current = onGameCenterMinigameCompleted
+  onParkourCourseCompletedRef.current = onParkourCourseCompleted
   onOpenShopRef.current = onOpenShop
   onFurniturePlacedRef.current = onFurniturePlaced
   onOpenCoopChallengeRef.current = onOpenCoopChallenge
@@ -3695,6 +3738,36 @@ export function World3D({
     let parkourReturnHintLabel: TextBlock | null = null
     let bridgeReturnHintLabel: TextBlock | null = null
     let activeMinigameId: 'parkour1' | 'ponte-logica' | null = null
+    // Backlog "Lab 210" (parkour arcade) — estado da CORRIDA atual de `parkour1`, reiniciado a cada entrada
+    // (ver `teleportToMinigameRef.current` mais abaixo). Vive só no closure, mesmo espírito do
+    // resto do parkour original (lab-11): não é progresso persistido, é estado de partida que some
+    // ao sair. `parkourCheckpointIndex` nunca regride sozinho (só reseta a 0 numa entrada nova) —
+    // "checkpoint" aqui é literalmente "a plataforma mais alta já pisada nesta corrida".
+    // `parkourPlatformPositions`/`parkourRings` são preenchidos durante a construção do percurso,
+    // mais abaixo neste mesmo `setup()`.
+    let parkourCheckpointIndex = 0
+    let parkourRingsCollectedCount = 0
+    let parkourElapsedSeconds = 0
+    let parkourBoostActiveUntil = 0
+    let parkourTopReachedThisRun = false
+    let parkourLastHudSecond = -1
+    // Achado do review automático do Copilot: dois `window.setTimeout` independentes (impulso 3s,
+    // troféu 4s) podiam se sobrepor — se o troféu fosse conquistado dentro da janela do timeout do
+    // impulso, o timeout do impulso limpava a mensagem do troféu antes da hora. `parkourStatusMessageTimeout`
+    // guarda o handle PENDENTE (se houver); `showParkourStatusMessage` cancela qualquer timeout
+    // anterior antes de agendar o novo, garantindo que só a mensagem MAIS RECENTE controla quando
+    // limpar.
+    let parkourStatusMessageTimeout: ReturnType<typeof window.setTimeout> | null = null
+    function showParkourStatusMessage(text: string, durationMs: number) {
+      if (parkourStatusMessageTimeout !== null) window.clearTimeout(parkourStatusMessageTimeout)
+      setParkourStatusMessage(text)
+      parkourStatusMessageTimeout = window.setTimeout(() => {
+        parkourStatusMessageTimeout = null
+        setParkourStatusMessage(null)
+      }, durationMs)
+    }
+    const parkourPlatformPositions: Vector3[] = []
+    const parkourRings: { mesh: Mesh; worldPos: Vector3; collected: boolean }[] = []
     const houseFurnitureNodes: Record<string, TransformNode> = {}
     // Casa visitável (lab-175, "Lab 171 - Casa visitável somente leitura") — snapshot da mobília
     // de OUTRO jogador, populado só durante uma visita (`__visitFriendHouse`, ver mais abaixo);
@@ -3837,6 +3910,23 @@ export function World3D({
         facing = Vector3.Cross(landingUp, Vector3.Right())
         if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(landingUp, Vector3.Forward())
         facing.normalize()
+      }
+
+      // Irmã mais simples de `teleportAvatarTo` acima, pro respawn de checkpoint do parkour: aquela função calcula a posição a
+      // partir de "pouso na superfície ESFÉRICA do planeta" (`center + landingUp*(groundFn+raio)`),
+      // o que não serve pro respawn de checkpoint do parkour (as plataformas ficam FORA da
+      // superfície real, numa altura arbitrária do referencial tangente local, ver
+      // `PARKOUR_ANCHOR_UP` mais abaixo). Mesma segurança física (`disablePreStep`/`scene.render()`/
+      // zerar velocidade), só que recebe a posição absoluta já pronta em vez de recalculá-la.
+      function teleportAvatarToPosition(pos: Vector3, facingHint: Vector3) {
+        if (!avatarMesh || !avatarBody) return
+        avatarBody.body.disablePreStep = false
+        avatarMesh.position.copyFrom(pos)
+        scene.render()
+        avatarBody.body.setLinearVelocity(Vector3.Zero())
+        avatarBody.body.setAngularVelocity(Vector3.Zero())
+        avatarBody.body.disablePreStep = true
+        facing = facingHint.lengthSquared() > 1e-6 ? facingHint.clone().normalize() : facing
       }
 
       // Ponto/tangente numa curva de Bézier cúbica — usada pra voar o foguete pelo espaço
@@ -4465,6 +4555,20 @@ export function World3D({
           if (activeMinigameId === 'parkour1') {
             trackMinigameCompleted(activeMinigameId)
             activeMinigameId = null
+            // Some o HUD do percurso ao sair (nunca fica "pendurado" enquanto o jogador
+            // já está de volta no hub); a corrida em si é reiniciada na PRÓXIMA entrada, não aqui.
+            setParkourHud(null)
+            // Achado do review automático do Copilot: sem isto, uma mensagem de status disparada
+            // pouco antes de sair (impulso coletado, troféu conquistado) continuava visível no HUB
+            // até o próprio `setTimeout` de 3-4s expirar — vazando feedback do mini-jogo pra fora
+            // da arena. Cancela o timeout PENDENTE (se houver) — sem isto, ele ainda dispararia
+            // mais tarde e chamaria `setParkourStatusMessage(null)` de novo (inofensivo em si, mas
+            // deixaria `parkourStatusMessageTimeout` com um handle obsoleto).
+            if (parkourStatusMessageTimeout !== null) {
+              window.clearTimeout(parkourStatusMessageTimeout)
+              parkourStatusMessageTimeout = null
+            }
+            setParkourStatusMessage(null)
           }
           return
         }
@@ -5799,7 +5903,7 @@ export function World3D({
       const parkourAnchorPos = PARKOUR_ANCHOR_UP.scale(PLANET_RADIUS + terrainHeight(PARKOUR_ANCHOR_UP))
       const parkourForward = Vector3.Cross(PARKOUR_ANCHOR_UP, Vector3.Right()).normalize()
       const parkourRight = Vector3.Cross(PARKOUR_ANCHOR_UP, parkourForward).normalize()
-      const PARKOUR_STEPS = 7
+      const PARKOUR_STEPS = PARKOUR1_STEPS
       const PARKOUR_FORWARD_STEP = 1.1
       const PARKOUR_LATERAL_AMPLITUDE = 0.9
       const PARKOUR_HEIGHT_STEP = 0.85
@@ -5808,7 +5912,17 @@ export function World3D({
       parkourPlatformMat.albedoColor = new Color3(0.72, 0.48, 0.28)
       parkourPlatformMat.roughness = 0.75
 
+      // Backlog "Lab 210" — argola torus entre cada par de plataformas consecutivas, orientada na direção do
+      // pulo (eixo do anel = direção plataforma anterior → atual, pra atravessar "de frente" fazer
+      // sentido visualmente). Diâmetro generoso (1.1) — folga de sobra pra não frustrar o pulo já
+      // calculado pra ter espaço de manobra (ver comentário de física acima).
+      const parkourRingMat = new PBRMaterial('parkourRingMat', scene)
+      parkourRingMat.albedoColor = new Color3(0.95, 0.75, 0.15)
+      parkourRingMat.emissiveColor = new Color3(0.4, 0.3, 0.05)
+      parkourRingMat.roughness = 0.35
+
       let parkourTopPos = parkourAnchorPos
+      let prevPlatPos: Vector3 | null = null
       for (let i = 0; i < PARKOUR_STEPS; i++) {
         const lateral = (i % 2 === 0 ? 1 : -1) * PARKOUR_LATERAL_AMPLITUDE
         const platPos = parkourAnchorPos
@@ -5816,6 +5930,7 @@ export function World3D({
           .add(parkourRight.scale(lateral))
           .add(PARKOUR_ANCHOR_UP.scale(0.5 + i * PARKOUR_HEIGHT_STEP))
         parkourTopPos = platPos
+        parkourPlatformPositions.push(platPos)
 
         const platform = MeshBuilder.CreateBox(`parkourPlatform-${i}`, { width: 1.3, height: 0.3, depth: 1.3 }, scene)
         platform.position.copyFrom(platPos)
@@ -5824,7 +5939,46 @@ export function World3D({
         platform.receiveShadows = true
         shadowGenerator.addShadowCaster(platform)
         new PhysicsAggregate(platform, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
+
+        if (prevPlatPos) {
+          const ringPos = Vector3.Lerp(prevPlatPos, platPos, 0.5).add(PARKOUR_ANCHOR_UP.scale(0.55))
+          const ringAxis = platPos.subtract(prevPlatPos).normalize()
+          const ring = MeshBuilder.CreateTorus(`parkourRing-${i}`, { diameter: 1.1, thickness: 0.12, tessellation: 24 }, scene)
+          ring.position.copyFrom(ringPos)
+          // Alinha o EIXO do torus (normalmente Y local) com a direção do pulo — mesma técnica de
+          // "de um vetor pra outro" já usada pro feixe de laser (`fireLaserBeam`, ver `Quaternion.RotationAxis`
+          // com produto vetorial), só que a referência é `Vector3.Up()` (eixo natural do torus) em
+          // vez do vetor entre dois pontos.
+          const upRef = Vector3.Up()
+          if (Math.abs(Vector3.Dot(ringAxis, upRef)) > 0.999) {
+            ring.rotationQuaternion = Quaternion.Identity()
+          } else {
+            const rotAxis = Vector3.Cross(upRef, ringAxis).normalize()
+            const angle = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(upRef, ringAxis))))
+            ring.rotationQuaternion = Quaternion.RotationAxis(rotAxis, angle)
+          }
+          ring.material = parkourRingMat
+          shadowGenerator.addShadowCaster(ring)
+          parkourRings.push({ mesh: ring, worldPos: ringPos, collected: false })
+        }
+        prevPlatPos = platPos
       }
+
+      // Impulso temporário (backlog "Lab 210") — item único no meio do percurso (plataforma
+      // 3 de 7, onde o ziguezague já pede mais alcance). Ativo só enquanto `activeMinigameId ===
+      // 'parkour1'` (ver laço de física principal) — sair do mini-jogo pelo pedestal de retorno já
+      // zera `activeMinigameId` na hora, então o impulso nunca "vaza" pro mundo aberto mesmo que a
+      // janela de tempo ainda não tenha acabado (risco citado explicitamente pelo backlog).
+      const PARKOUR_BOOST_PLATFORM_INDEX = 3
+      const parkourBoostPos = parkourPlatformPositions[PARKOUR_BOOST_PLATFORM_INDEX].add(PARKOUR_ANCHOR_UP.scale(0.5))
+      const parkourBoostMat = new PBRMaterial('parkourBoostMat', scene)
+      parkourBoostMat.albedoColor = new Color3(0.25, 0.85, 0.95)
+      parkourBoostMat.emissiveColor = new Color3(0.15, 0.55, 0.65)
+      const parkourBoostMesh = MeshBuilder.CreateCylinder('parkourBoost', { height: 0.5, diameter: 0.4, tessellation: 6 }, scene)
+      parkourBoostMesh.position.copyFrom(parkourBoostPos)
+      parkourBoostMesh.material = parkourBoostMat
+      shadowGenerator.addShadowCaster(parkourBoostMesh)
+      let parkourBoostCollectedThisRun = false
 
       // Recompensa no topo do percurso — reaproveita o mesmo mecanismo de moeda (visual, giro,
       // detecção de proximidade, coleta) em vez de inventar um sistema novo: um item a mais no
@@ -8697,6 +8851,22 @@ export function World3D({
         activeMinigameId = id
         if (id === 'parkour1') {
           teleportAvatarTo(Vector3.Zero(), PARKOUR_ANCHOR_UP, currentGroundBaseFn)
+          // Reinicia o estado da corrida a cada ENTRADA (não na saída): única entrada de
+          // reset evita duplicar a lógica entre "saiu pelo pedestal" e "saiu de outro jeito" (não
+          // existe outro jeito hoje, mas resetar na entrada continua correto de qualquer forma).
+          parkourCheckpointIndex = 0
+          parkourRingsCollectedCount = 0
+          parkourElapsedSeconds = 0
+          parkourBoostActiveUntil = 0
+          parkourTopReachedThisRun = false
+          parkourBoostCollectedThisRun = false
+          parkourLastHudSecond = -1
+          for (const ring of parkourRings) {
+            ring.collected = false
+            ring.mesh.setEnabled(true)
+          }
+          parkourBoostMesh.setEnabled(true)
+          setParkourHud({ ringsCollected: 0, totalRings: parkourRings.length, elapsedSeconds: 0 })
         } else {
           teleportAvatarTo(Vector3.Zero(), bridgeUp, currentGroundBaseFn)
         }
@@ -12557,9 +12727,17 @@ export function World3D({
             touchJumpRef.current = false
             jumpRequested = true
           }
+          // Impulso do parkour só multiplica DENTRO da arena, nunca fora dela (ver
+          // constantes/comentário no topo do arquivo): `activeMinigameId` já vira `null` no
+          // instante em que o jogador sai pelo pedestal de retorno, então esta condição nunca fica
+          // "ligada por engano" fora do mini-jogo mesmo que a janela de tempo ainda não tenha
+          // acabado.
+          const parkourBoostActive = activeMinigameId === 'parkour1' && time < parkourBoostActiveUntil
           if (jumpRequested) {
             jumpRequested = false
-            if (grounded && laserStunTimer <= 0) radialSpeed = JUMP_SPEED
+            if (grounded && laserStunTimer <= 0) {
+              radialSpeed = JUMP_SPEED * (parkourBoostActive ? PARKOUR_BOOST_JUMP_MULTIPLIER : 1)
+            }
           }
 
           // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
@@ -12596,11 +12774,90 @@ export function World3D({
             }
           }
 
+          // Backlog "Lab 210" (parkour arcade) — argolas, impulso, checkpoint, queda, cronômetro e conclusão
+          // do `parkour1`. Tudo dentro deste `if` (custo zero pro resto do mundo enquanto o
+          // jogador não está no mini-jogo).
+          if (activeMinigameId === 'parkour1') {
+            // Argolas — coleta por proximidade, mesmo raciocínio já usado pra moeda: sem física de
+            // "atravessar um plano exato", que exigiria detectar a direção do cruzamento e não só a
+            // distância.
+            for (const ring of parkourRings) {
+              if (!ring.collected && Vector3.Distance(pos, ring.worldPos) < PARKOUR_TRIGGER_DISTANCE) {
+                ring.collected = true
+                ring.mesh.setEnabled(false)
+                parkourRingsCollectedCount++
+                setParkourHud({
+                  ringsCollected: parkourRingsCollectedCount,
+                  totalRings: parkourRings.length,
+                  elapsedSeconds: Math.floor(parkourElapsedSeconds),
+                })
+              }
+            }
+
+            // Impulso — coleta única por corrida (some até a próxima entrada no mini-jogo).
+            if (!parkourBoostCollectedThisRun && Vector3.Distance(pos, parkourBoostPos) < PARKOUR_TRIGGER_DISTANCE) {
+              parkourBoostCollectedThisRun = true
+              parkourBoostMesh.setEnabled(false)
+              parkourBoostActiveUntil = time + PARKOUR_BOOST_DURATION
+              showParkourStatusMessage('⚡ Impulso ativado!', 3000)
+            }
+
+            // Checkpoint — a plataforma mais alta já pisada nesta corrida; nunca regride sozinho
+            // (só reseta a 0 numa entrada nova, ver `teleportToMinigameRef.current`).
+            for (let i = parkourCheckpointIndex + 1; i < parkourPlatformPositions.length; i++) {
+              if (Vector3.Distance(pos, parkourPlatformPositions[i]) < PARKOUR_TRIGGER_DISTANCE) {
+                parkourCheckpointIndex = i
+              }
+            }
+
+            // Queda — altura ao longo de `PARKOUR_ANCHOR_UP`, relativa à plataforma do checkpoint
+            // atual (não à plataforma inicial): "queda reseta em checkpoint sem punir" (backlog
+            // "Lab 210") — sem perda de moeda/argola já coletada, só reposiciona.
+            const checkpointPos = parkourPlatformPositions[parkourCheckpointIndex]
+            const heightVsCheckpoint = Vector3.Dot(pos.subtract(checkpointPos), PARKOUR_ANCHOR_UP)
+            if (heightVsCheckpoint < -PARKOUR_FALL_MARGIN) {
+              const respawnPos = checkpointPos.add(PARKOUR_ANCHOR_UP.scale(AVATAR_RADIUS + 0.35))
+              teleportAvatarToPosition(respawnPos, parkourForward)
+              trackParkourCheckpointRespawn(parkourCheckpointIndex)
+            }
+
+            // Cronômetro informativo — nunca afeta dificuldade/recompensa, só feedback. HUD só
+            // atualiza quando o segundo arredondado muda (mesmo espírito de `survivalTimeDisplay`:
+            // evita recriar o objeto do estado 60x/s por um número que só importa 1x/segundo).
+            parkourElapsedSeconds += dt
+            const roundedElapsed = Math.floor(parkourElapsedSeconds)
+            if (roundedElapsed !== parkourLastHudSecond) {
+              parkourLastHudSecond = roundedElapsed
+              setParkourHud({
+                ringsCollected: parkourRingsCollectedCount,
+                totalRings: parkourRings.length,
+                elapsedSeconds: roundedElapsed,
+              })
+            }
+
+            // Conclusão — alcançar o topo, uma vez por corrida (independente de ter coletado todas
+            // as argolas ou não; `App.tsx` decide se ESTA conclusão específica concede o troféu).
+            if (!parkourTopReachedThisRun) {
+              const topPos = parkourPlatformPositions[parkourPlatformPositions.length - 1]
+              if (Vector3.Distance(pos, topPos) < PARKOUR_TRIGGER_DISTANCE) {
+                parkourTopReachedThisRun = true
+                const { newBadge } = onParkourCourseCompletedRef.current(
+                  parkourRingsCollectedCount,
+                  parkourRings.length,
+                  roundedElapsed,
+                )
+                if (newBadge) {
+                  showParkourStatusMessage('🏆 Troféu conquistado: Mestre do Parkour!', 4000)
+                }
+              }
+            }
+          }
+
           // Correr/caminhar (pedido do usuário) — segurar Shift troca de velocidade; segurar o
           // botão de toque (`touchRunRef`, pedido do usuário: "botão de correr" pro Android sem
           // teclado) faz o mesmo.
           const running = !!keysDown['shift'] || touchRunRef.current
-          const currentSpeed = running ? RUN_SPEED : WALK_SPEED
+          const currentSpeed = (running ? RUN_SPEED : WALK_SPEED) * (parkourBoostActive ? PARKOUR_BOOST_SPEED_MULTIPLIER : 1)
           const radialVel = localUp.scale(radialSpeed)
           if (laserStunTimer > 0) {
             // Caindo depois do laser — não mexe mais na velocidade, deixa só a gravidade (já
@@ -14820,6 +15077,12 @@ export function World3D({
       {treasureFoundMessage && <p className="mars-death-message">{treasureFoundMessage}</p>}
       {planetSecretFoundMessage && <p className="mars-death-message">{planetSecretFoundMessage}</p>}
       {postcardFoundMessage && <p className="mars-death-message">{postcardFoundMessage}</p>}
+      {parkourHud && (
+        <p className="mars-enemy-count">
+          💍 {parkourHud.ringsCollected}/{parkourHud.totalRings} · ⏱ {parkourHud.elapsedSeconds}s
+        </p>
+      )}
+      {parkourStatusMessage && <p className="mars-death-message">{parkourStatusMessage}</p>}
       {minigamePrompt && (
         <div className="minigame-countdown-overlay" role="status" aria-live="assertive">
           <p className="minigame-countdown-title">

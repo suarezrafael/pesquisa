@@ -268,6 +268,8 @@ export const BADGE_HALFWAY = 'Metade do Caminho'
 export const BADGE_ALL_DONE = 'Mestre das Missões'
 // lab-172 — ver `applyCoopChallengeCompleted` abaixo.
 export const BADGE_COOP_FIRST = 'Dupla Dinâmica'
+// Backlog "Lab 210" — ver `applyParkourCourseCompleted` abaixo.
+export const BADGE_PARKOUR_MASTER = 'Mestre do Parkour'
 
 export function badgesEarnedAt(completedCount: number): string[] {
   const earned: string[] = []
@@ -1297,6 +1299,28 @@ export function applyCoopChallengeCompleted(progress: Progress, nowIso: string):
     rewarded: true,
     coins: COOP_CHALLENGE_COINS,
     newBadge,
+  }
+}
+
+export interface ParkourCourseCompletedResult {
+  progress: Progress
+  newBadge: boolean
+}
+
+// Backlog "Lab 210" — troféu de "domínio" do parkour, distinto de `minigame_completed('parkour1')` (que já
+// existe desde o hub, lab-196/209, e conta ao simplesmente tocar o pedestal de retorno): só concede
+// `BADGE_PARKOUR_MASTER` quando o jogador alcança o topo do percurso com TODAS as argolas
+// coletadas nessa mesma corrida — "completou" e "dominou" são coisas diferentes, mesmo espírito de
+// jogos de plataforma clássicos. Sem recompensa de moeda aqui de propósito: a moeda de conclusão já
+// existe (item no topo do percurso, reaproveitando o mecanismo de moeda comum) — inventar uma
+// segunda fonte de moeda pro mesmo evento duplicaria recompensa sem motivo. Emblema é único (como
+// `BADGE_FIRST_QUEST`/`BADGE_ALL_DONE`/`BADGE_COOP_FIRST`), nunca reconcedido.
+export function applyParkourCourseCompleted(progress: Progress): ParkourCourseCompletedResult {
+  const newBadge = !progress.badges.includes(BADGE_PARKOUR_MASTER)
+  if (!newBadge) return { progress, newBadge: false }
+  return {
+    progress: { ...progress, badges: [...progress.badges, BADGE_PARKOUR_MASTER] },
+    newBadge: true,
   }
 }
 

@@ -25,6 +25,7 @@ import {
   isEventNewerThan,
   isNicknameAllowed,
   isOnlineNow,
+  isPlausibleCount,
   isPlausibleSessionDuration,
   isSelfFriendRequest,
   isTokenRevoked,
@@ -510,6 +511,26 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
   ) {
     return new Response(null, { status: 400 })
   }
+  // "Parkour arcade com argolas, tesouros e power-ups justos" (Lab 210) — `parkour_course_completed`
+  // só faz sentido com os 3 números (argolas coletadas/total/tempo) e o booleano de troféu válidos;
+  // limites generosos (não o número exato de argolas do design atual, que pode mudar sem precisar
+  // atualizar este Worker) — mesmo raciocínio de `ProgressSummary`/`isPlausibleCount` já usado.
+  if (
+    type === 'parkour_course_completed' &&
+    (!isPlausibleCount(metaObjForValidation.ringsCollected, 50) ||
+      !isPlausibleCount(metaObjForValidation.totalRings, 50) ||
+      !isPlausibleCount(metaObjForValidation.elapsedSeconds, 3600) ||
+      typeof metaObjForValidation.trophyEarned !== 'boolean' ||
+      // Achado do review automático do Copilot: as checagens acima validam cada campo
+      // isoladamente, mas não a RELAÇÃO entre eles — sem isto, `ringsCollected > totalRings`
+      // (combinação impossível no jogo de verdade) passava e poluía a métrica.
+      (metaObjForValidation.ringsCollected as number) > (metaObjForValidation.totalRings as number))
+  ) {
+    return new Response(null, { status: 400 })
+  }
+  if (type === 'parkour_checkpoint_respawn' && !isPlausibleCount(metaObjForValidation.checkpointIndex, 50)) {
+    return new Response(null, { status: 400 })
+  }
   // `time_to_first_minigame` (Lab 212) segue o mesmo raciocínio de `session_end`: o sinal "criança
   // chegou no primeiro mini-jogo" continua válido mesmo com uma duração implausível, então só o
   // campo suspeito é descartado (ver branch de `safeMeta` abaixo), não o evento inteiro — mesma
@@ -589,6 +610,17 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
       // Mesmo raciocínio de `camera_recenter_used` acima: evento novo, sem campo de `meta`
       // documentado — não herda a tolerância de `meta` livre dos eventos legados.
       safeMeta = null
+    } else if (type === 'parkour_course_completed') {
+      // já validado acima — só as 4 chaves permitidas sobrevivem.
+      safeMeta = {
+        ringsCollected: metaObj.ringsCollected,
+        totalRings: metaObj.totalRings,
+        elapsedSeconds: metaObj.elapsedSeconds,
+        trophyEarned: metaObj.trophyEarned,
+      }
+    } else if (type === 'parkour_checkpoint_respawn') {
+      // já validado acima — só a chave permitida sobrevive.
+      safeMeta = { checkpointIndex: metaObj.checkpointIndex }
     } else {
       safeMeta = metaObj
     }
@@ -1918,6 +1950,14 @@ async function handleAdminMetrics(request: Request, env: Env): Promise<Response>
     minigameTrophyEarned: weeklyDevices('minigame_trophy_earned'),
     gameCenterProgressViewed: weeklyDevices('game_center_progress_viewed'),
     weeklyMeaningfulPlayLearningSessions: weeklyDevices('game_center_weekly_quest_completed'),
+    // Parkour arcade ("Lab 210") — mesmo achado de lab-180/lab-196 acima, exposto desde o primeiro
+    // commit. `parkourCourseCompleted` é ALCANCE (dispositivos únicos que chegaram ao topo pelo
+    // menos 1x na semana, cobre "conclusões de parkour"); `parkourCheckpointRespawn` cobre
+    // "tentativas por sessão/retry sem abandono" do mesmo jeito aproximado de
+    // `planetInteractionCompleted` (lab-179): alcance, não contagem por sessão — este endpoint não
+    // agrupa por sessão hoje.
+    parkourCourseCompleted: weeklyDevices('parkour_course_completed'),
+    parkourCheckpointRespawn: weeklyDevices('parkour_checkpoint_respawn'),
   }
 
   // lab-165 — social/comercial da semana vêm direto das tabelas próprias (labs 159-162 pro social,

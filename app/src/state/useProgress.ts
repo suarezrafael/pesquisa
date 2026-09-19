@@ -48,6 +48,8 @@ import {
   applyGameCenterWeeklyQuestProgress,
   gameCenterTrophyTier,
   wouldGrantGameCenterWeeklyQuestReward,
+  applyParkourCourseCompleted,
+  type ParkourCourseCompletedResult,
 } from './progression'
 
 export function useProgress() {
@@ -381,6 +383,25 @@ export function useProgress() {
     return result
   }
 
+  // Troféu de domínio do parkour (backlog "Lab 210") — chamado por `App.tsx`
+  // (`handleParkourCourseCompleted`) só quando o gate "todas as argolas" é satisfeito;
+  // `World3D.tsx` só REPORTA a conclusão do percurso (com ou sem todas as argolas), nunca chama
+  // isto diretamente. Mesmo formato funcional de
+  // `coopChallengeCompleted` acima: `applyParkourCourseCompleted` só mexe em `badges`, nunca em
+  // moeda/XP, então não tem o risco de composição descrito no comentário de
+  // `weeklyEventObjectiveProgress` (que existe só por causa de MOEDA concedida em duas chamadas
+  // próximas na mesma sincronia).
+  function parkourCourseCompleted(): ParkourCourseCompletedResult {
+    let result!: ParkourCourseCompletedResult
+    setProgress((prev) => {
+      result = applyParkourCourseCompleted(prev)
+      if (!result.newBadge) return prev
+      saveProgress(result.progress)
+      return result.progress
+    })
+    return result
+  }
+
   // Desafio educativo leve do pet (lab-174) — mesmo formato funcional de `feedPet`/
   // `coopChallengeCompleted` acima (protege contra clique/evento duplo antes do re-render).
   function petDailyChallengeCompleted(nowIso: string): PetDailyChallengeResult {
@@ -496,5 +517,6 @@ export function useProgress() {
     syncWeeklyXp,
     weeklyEventObjectiveProgress,
     gameCenterMinigameCompleted,
+    parkourCourseCompleted,
   }
 }
