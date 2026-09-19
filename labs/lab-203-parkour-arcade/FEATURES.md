@@ -175,6 +175,11 @@ mudou desde a rodada anterior, reavaliado de novo), todos confirmados e corrigid
 `npx tsc -b`, `npm run test -- --run` (app 257/257) e `npm run build` seguem limpos depois das 3
 correções.
 
+**Rodada 4**: "Findings: None", nenhum comentário inline novo — só uma frase de resumo não-acionável
+sobre a falta de verificação ao vivo (já documentada e honesta nesta lab desde o início, ver
+"Verificação de código" acima), sem nenhum achado específico por trás. Mesmo padrão de encerramento
+já visto no final de quase todas as labs desta sessão — pronta pra revisão de merge.
+
 ## Fora de escopo (explicitamente adiado)
 
 - `parkour2`/`parkour3` (escolha explícita do usuário nesta lab).
