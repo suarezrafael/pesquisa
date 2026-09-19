@@ -1,15 +1,46 @@
 # Laboratório atual
 
-Em andamento: labs/lab-201-minijogo-memoria-padroes/ — fecha a dívida do lab-198 (Memória de 3
+Último concluído: labs/lab-201-minijogo-memoria-padroes/ — fecha a dívida do lab-198 (Memória de 3
 pares fixos, sem moedas, sempre foi prova de conceito) e entrega a segunda metade do próprio nome
 do item do backlog: um modo de repetir sequência (tipo Genius/Simon) no MESMO portal de Memória
 (sem slot de portal novo no saguão). Decisão confirmada com o usuário via `AskUserQuestion`: escopo
 maior (polir Memória + modo sequência), não só polir. Origem:
 `docs/gameplay-market-expansion-backlog.md`, "Lab 216 - Mini-jogo de memoria e padroes" — próximo
-item depois do lab-200 (Lab 215). Ver `labs/lab-201-minijogo-memoria-padroes/FEATURES.md` pro
-objetivo/investigação prévia completos.
+item depois do lab-200 (Lab 215). Memória "cartas" ganhou grade de até 12 cartas (6 pares, 3
+colunas x 4 linhas — mesma largura já comprovada do lab-198, só mais fundo), catálogo de 5 temas
+sorteados por tentativa (frutas/planetas/pets/números/formas), nível de dificuldade que sobe a cada
+vitória (3→6 pares, reseta ao sair da arena) e recompensa real ao completar (`onCollectCoin`, mesmo
+padrão de Contar/Soletrar). Memória "sequência" (novo, `state/patternGame.ts`, 6 testes) roda no
+MESMO portal — sorteio 50/50 por tentativa entre os dois modos; 4 pods coloridos ocupam o MESMO
+ponto de ancoragem das cartas (nunca visíveis ao mesmo tempo, sem risco de sobreposição espacial);
+reproduz a sequência (acende uma posição de cada vez) antes de liberar a vez do jogador; errar não
+perde rodadas já ganhas, só repete a sequência atual; completar `PATTERN_ROUNDS_TO_WIN` (5) rodadas
+também dá recompensa real. **Cronômetro de 45s removido de Memória** (mudança deliberada, não
+regressão: o próprio Lab 216 lista "tempo punitivo" em "fora de escopo") — as 3 arenas registradas
+até agora (memória, contar, soletrar) não têm mais cronômetro nenhum. **PR #84 teve 2 rodadas de
+review com 4 bugs reais** — 2 achados na PRÓPRIA revisão de código antes de qualquer review externo
+(`sequencePlaybackTimeout` e um segundo handle de flash de confirmação não eram cancelados no
+`teardown` principal de `World3D` — mesma classe de bug já achada pelo Copilot no lab-198 pros
+handles de countdown/timer, só esquecida pros handles novos desta lab) e 2 do Copilot: (1)
+`memoriaLevel` nunca resetava de verdade ao sair da arena, apesar do comportamento já estar
+documentado — corrigido adicionando o reset em `resetState`; (2) `presentPatternSequence` podia
+começar com um flash de confirmação do aperto anterior ainda pendente, que se a sequência repetisse
+a mesma cor no primeiro passo apagaria o destaque no meio da janela de reprodução — corrigido
+cancelando qualquer timeout pendente (flash ou reprodução anterior) logo no início da função. `npx
+tsc -b` limpo; testes: app 243/243 (+6 de `patternGame.test.ts`), `server-accounts` 161/161 (sem
+mudança — `'memoria'` já estava na allowlist desde o lab-198); `npm run build` sem regressão. **Sem
+verificação ao vivo — 4ª lab seguida**: o Chrome desta sessão travou de novo em
+`document.hidden === true` (mesma limitação exata dos labs 198-200, confirmado com uma aba nova) —
+verificação só por leitura de código, incluindo os 2 bugs auto-encontrados citados acima. Risco
+remanescente registrado com honestidade em `FEATURES.md`: a grade de cartas dobrou de profundidade
+(2→4 linhas, mesma largura de 3 colunas já comprovada) sem confirmação ao vivo. **Merge
+confirmado**: PR #84 mesclada (squash) em `main` no commit `6503553` (2026-09-19, confirmado via
+`AskUserQuestion`). CI de `main` verde nos 3 workflows; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-200-minijogo-soletrar/ — segundo mini-jogo "de verdade" sobre o
+Antes desse: labs/lab-200-minijogo-soletrar/ — segundo mini-jogo "de verdade" sobre o
 template de arena generalizado no lab-199 (Contar foi o primeiro), provando de vez o critério de
 aceite do lab-213 ("adicionar outro mini-jogo exige poucos pontos de código"): coletar letras
 flutuantes na ordem certa pra formar uma palavra de um catálogo controlado de 8 palavras seguras
