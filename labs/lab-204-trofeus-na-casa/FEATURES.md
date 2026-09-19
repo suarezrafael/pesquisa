@@ -99,6 +99,9 @@ correção.
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 2
 correções.
 
+**Rodada 3**: "🟢 Approval recommended", "Findings: None", achado da rodada 2 confirmado como
+"Resolved since last review", nenhum comentário inline novo. Pronta pra revisão de merge.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Tornar o pedestal um reflexo dinâmico de tier/contagem real de troféus (decisão deliberada — ver
