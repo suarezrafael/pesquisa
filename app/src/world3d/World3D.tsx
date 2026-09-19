@@ -14212,6 +14212,14 @@ export function World3D({
       ;(scene as any).__cancelPerfSample?.()
       ;(scene as any).__cleanupPerf?.()
       sceneRef.current = null
+      // Achado do review automático do Copilot (pré-existente, não introduzido por nenhuma lab em
+      // particular — só ficou mais visível com mais malhas registradas nele, ex.: os alvos de
+      // arena): `ShadowGenerator` não é um recurso da `Scene` (mesmo comportamento já documentado
+      // no gerador da cena de benchmark, `benchmarkIsWeakGpu`, mais acima neste arquivo) —
+      // `scene.dispose()` sozinho NÃO dispõe o `shadowGenerator` principal nem limpa a lista de
+      // casters dele. Sem isto, montar/desmontar `World3D` repetidamente vazava referências a
+      // malhas/texturas de sombra já descartadas.
+      shadowGenerator.dispose()
       scene.dispose()
       engine.dispose()
     }

@@ -138,6 +138,23 @@ já comprovada (grade 3 colunas) reduz bastante a chance de sobreposição, não
 `npx tsc -b`, `npm run test -- --run` (237/237) e `npm run build` continuam limpos depois das duas
 correções.
 
+**2ª rodada (commit `8dc698b`)**: os 2 achados acima aparecem marcados "Resolved since last
+review". 1 achado novo sob "Previously missed" (código que NÃO mudou nesta lab, pré-existente),
+confirmado contra o código real e corrigido:
+
+3. **Médio — `ShadowGenerator` principal nunca era descartado no desmonte de `World3D`**: não é um
+   bug desta lab (existe desde muito antes — só ficou mais visível com mais malhas registradas nele,
+   ex.: os alvos de arena novos), mas genuíno: o próprio código já documentava, no gerador de sombra
+   da cena de benchmark de GPU (`benchmarkIsWeakGpu`), que `ShadowGenerator` NÃO é um recurso da
+   `Scene` — `scene.dispose()` sozinho não o descarta nem limpa sua lista de casters. O `teardown`
+   principal nunca aplicava essa mesma lição ao `shadowGenerator` do jogo de verdade — montar/
+   desmontar `World3D` repetidamente vazava referências a malhas/texturas de sombra já descartadas.
+   Corrigido com `shadowGenerator.dispose()` antes de `scene.dispose()`, mesmo padrão já
+   estabelecido pro gerador do benchmark.
+
+`npx tsc -b`, `npm run test -- --run` (237/237) e `npm run build` continuam limpos depois da
+correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Entrada de texto livre, correção ortográfica aberta, IA generativa, chat (excluídos
