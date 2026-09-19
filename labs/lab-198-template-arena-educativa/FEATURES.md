@@ -70,8 +70,9 @@ pra expandir/polir depois; esta fatia só precisa provar que o template funciona
 - [x] Verificar ao vivo: entrar no portal Memória mostra as cartas; virar cartas funciona; par
   certo fica marcado; jogo completo mostra sucesso; deixar o tempo acabar mostra falha; "tentar de
   novo" reinicia sem travar câmera/física/labels; sair da arena sem completá-la não deixa nada
-  preso (critério de aceite explícito do backlog). Ver "Verificação ao vivo" abaixo — inclui 3
-  bugs reais encontrados e corrigidos nessa verificação.
+  preso (critério de aceite explícito do backlog). Ver "Verificação ao vivo" abaixo — inclui 2
+  bugs reais encontrados e corrigidos nessa verificação, mais 2 achados na rodada de review do
+  Copilot (ver "Rodada de review" abaixo).
 
 ## Verificação ao vivo
 
@@ -130,6 +131,47 @@ Câmera/física estáveis em todos os teleports testados. Checagens automatizada
 limpo; `npm run test` app 221/221 (+8 de `memoryGame.test.ts`); `npm run build` sem erros;
 `npm run test` `server-accounts` 161/161 (+1, `isValidMinigameId` cobrindo `'memoria'` e a
 allowlist dos 2 eventos novos).
+
+## Rodada de review — Copilot (PR #81)
+
+2 achados, ambos confirmados contra o código real (não só o texto do review) e corrigidos:
+
+1. **Alto — carta nunca virava em jogo normal (achado real, não só no ambiente de automação)**:
+   `gcMemoryCardPos[i]` usava `cardLocalPos` (nível do chão, `y=0` relativo a `interiorRoot`),
+   enquanto `avatarMesh.position` fica sempre `AVATAR_RADIUS + 0.05` (0.6) acima do chão. Como
+   `Vector3.Distance` é 3D, a distância mínima possível entre avatar e carta já era 0.6 (só de
+   diferença vertical) — maior que `MEMORY_CARD_TRIGGER_DISTANCE` (0.4), tornando IMPOSSÍVEL virar
+   qualquer carta em jogo de verdade. Isso **revisita e corrige** a "pista falsa" registrada
+   originalmente em "Verificação ao vivo" acima: a conclusão de que `gcMemoryCardPos` estava certo
+   estava errada — o problema real era a altura, só que mascarado pelo desvio de física/render já
+   documentado nesta lab (o teste ao vivo aparentemente "funcionou" por causa desse mesmo desvio,
+   não apesar dele). Corrigido usando `card.position` (já elevado, mesma referência de altura do
+   avatar) em vez de `cardLocalPos`.
+2. **Médio — timers da arena não cancelados no teardown do efeito (real, corrigido)**:
+   `arenaCountdownTimeout`/`arenaTimerInterval` só eram limpos em `exitGameCenterInterior()`, não no
+   `teardown()` do efeito principal (que já limpa `fpsAutoTuneInterval`/`petAgingInterval` etc. no
+   mesmo padrão). Se o componente desmontasse durante `countdown`/`playing` (troca de conta, HMR,
+   navegação), o timer continuaria rodando e mexendo em malhas/labels já descartadas. Corrigido
+   adicionando os dois handles à mesma lista de limpeza do `teardown()`.
+
+Outros itens citados no resumo do review (nits de contagem de bugs no `FEATURES.md`, pausar o
+cronômetro quando o input está suspenso, mostrar "45s" imediatamente, clonar o snapshot de estado
+retornado por `__debugMemoryState`, restringir os IDs de evento da arena a um conjunto próprio) não
+vieram como comentário de linha nesta rodada (só apareceram no texto solto do resumo) — ficam como
+possível polimento futuro (lab-216), não bloqueiam esta fatia.
+
+**Nota sobre verificação desta rodada**: desta vez não foi possível reverificar ao vivo no Chrome
+automatizado — a aba, mesmo recém-criada, nunca sai de `document.hidden === true` nesta sessão em
+particular (indo além do desvio de física/render já documentado acima: aqui o próprio carregamento
+do mundo 3D — Havok + GLBs — trava indefinidamente em "Carregando o mundo 3D…", nem chega a expor
+`window.__scene`). A correção do achado Alto foi validada por leitura de código: `avatarMesh.position`
+fica sempre a `AVATAR_RADIUS + 0.05` (0.6) do chão (mesmo valor usado no spawn/teleporte em vários
+outros pontos do arquivo), `cardLocalPos` ficava em `y=0`, então a distância mínima 3D só pela
+diferença vertical (0.6) já excedia `MEMORY_CARD_TRIGGER_DISTANCE` (0.4) — matematicamente
+impossível virar qualquer carta antes da correção. Trocar para `card.position` (que já soma essa
+mesma elevação de 0.6) cancela o gap vertical, igualando o padrão dos outros gatilhos do arquivo
+(que só "funcionam apesar do gap" por terem um raio bem maior). `npx tsc -b`, `npm run test -- --run`
+(221/221) e `npm run build` continuam limpos após as duas correções.
 
 ## Fora de escopo (explicitamente adiado)
 

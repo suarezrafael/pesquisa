@@ -9630,7 +9630,12 @@ export function World3D({
           card.setEnabled(false)
           shadowGenerator.addShadowCaster(card)
           gcMemoryCardMeshes[i] = card
-          gcMemoryCardPos[i] = interiorRoot.position.add(cardLocalPos)
+          // Usa `card.position` (já elevado +0.6, mesma referência de altura do avatar —
+          // `AVATAR_RADIUS + 0.05` = 0.6), não `cardLocalPos` (nível do chão): achado no review do
+          // Copilot que o gap vertical sozinho (0.6) já excedia `MEMORY_CARD_TRIGGER_DISTANCE`
+          // (0.4), tornando as cartas impossíveis de virar em jogo normal — só não aparecia nos
+          // testes ao vivo por causa do desvio de física/render já documentado nesta lab.
+          gcMemoryCardPos[i] = interiorRoot.position.add(card.position)
 
           const cardLabel = new TextBlock(`gcMemoryCardLabel-${i}`, '❓')
           cardLabel.color = 'white'
@@ -13724,6 +13729,8 @@ export function World3D({
       if (fpsAutoTuneTimeout !== null) window.clearTimeout(fpsAutoTuneTimeout)
       if (waitForSetupInterval !== null) window.clearInterval(waitForSetupInterval)
       if (petAgingInterval !== null) window.clearInterval(petAgingInterval)
+      if (arenaCountdownTimeout) clearTimeout(arenaCountdownTimeout)
+      if (arenaTimerInterval) clearInterval(arenaTimerInterval)
       window.removeEventListener('resize', onResize)
       canvas.removeEventListener('pointerdown', onCameraPointerDown)
       window.removeEventListener('pointermove', onCameraPointerMove)
