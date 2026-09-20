@@ -1,8 +1,8 @@
 # Laboratório 213 — Poeira de passos ao caminhar/correr
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
-Fim: -
+Fim: 2026-09-20
 Commit inicial: ed10f1ab346be482d22fade089e9e11b748f9a6b
 
 ## Objetivo do laboratório
@@ -109,6 +109,15 @@ Pontos conferidos por leitura:
 
 `npx tsc -b --force`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
 correção.
+
+**Rodada 2 nunca aconteceu — reviewer automático travado, não ciclo longo**: depois de corrigir e
+subir o commit da rodada 1, pedir uma nova revisão do Copilot (mesmo método usado com sucesso nas
+labs 210-212: `requested_reviewers` POST) não disparou nenhuma revisão nova em ~40 minutos, mesmo
+tentando 3 formas diferentes (re-pedir via API, remover e re-adicionar o reviewer, comentário
+`@copilot review`). Diferente de um ciclo de review longo (onde o Copilot responde mas continua
+achando coisa) — aqui o reviewer automático simplesmente não respondeu de novo. Usuário consultado
+via `AskUserQuestion`: optou por mesclar sem esperar a rodada 2, já que o único achado real da
+rodada 1 foi confirmado por leitura de código E corrigido, com `tsc`/testes/build limpos depois.
 
 ## Fora de escopo (explicitamente adiado)
 

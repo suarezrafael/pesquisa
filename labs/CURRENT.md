@@ -1,16 +1,40 @@
 # Laboratório atual
 
-Em andamento: labs/lab-213-poeira-de-passos/ — backlog "Lab 198 - Efeitos visuais de recompensa,
-movimento e interacao": fecha a peça "footstep dust/grass" com uma nuvem pequena de poeira nos pés
-do avatar a cada passada real (reaproveita o gatilho já existente de `playFootstep()`, que dispara
-no cruzamento de zero do ciclo de perna, movido por velocidade física real desde o lab-194).
-Continuação direta do lab-212, escolhida autonomamente depois do usuário confirmar continuar via
-`AskUserQuestion`. Nota à parte: um item de backlog novo foi registrado em
-`docs/gameplay-market-expansion-backlog.md` — "Lab 212 - Mercado do jogo" — como marcador de um
-pedido do usuário ("o jogo tem que ter um mercado") ainda SEM escopo definido; não bloqueia este
-laboratório, mas precisa de uma conversa de decisão de escopo antes de ser implementado.
+Último concluído: labs/lab-213-poeira-de-passos/ — backlog "Lab 198 - Efeitos visuais de
+recompensa, movimento e interacao": fecha a peça "footstep dust/grass" com uma nuvem pequena de
+poeira nos pés do avatar a cada passada real, reaproveitando o gatilho já existente de
+`playFootstep()` (cruzamento de zero do ciclo de perna, movido por velocidade física real desde o
+lab-194). `ParticleSystem` dedicado (`footstepDustSystem`), separado do `landingPuffSystem`,
+desligado em `isLowEndDevice`. Continuação direta do lab-212, escolhida autonomamente depois do
+usuário confirmar continuar via `AskUserQuestion`. **PR #96 teve 1 rodada de review do Copilot**:
+achou 1 bug real — o emissor usava o centro do colisor físico, não o pé que pisou (pernas têm
+deslocamento lateral em `studentFigure.ts`, `side * 0.1`, nunca aplicado no cálculo do emissor) —
+corrigido deslocando o ponto de emissão por `right.scale(footSign * FOOT_X_OFFSET)`
+(`FOOT_X_OFFSET = 0.1`, mesmo valor de `studentFigure.ts`) antes de projetar no chão. **Rodada 2
+nunca aconteceu**: pedir uma nova revisão do Copilot (mesmo método das labs 210-212) não disparou
+nada em ~40 minutos, mesmo tentando 3 formas diferentes (re-pedir via API, remover e re-adicionar
+o reviewer, comentário `@copilot review`) — reviewer automático travado, não um ciclo longo.
+Usuário consultado via `AskUserQuestion` — optou por mesclar sem a rodada 2, já que o achado real
+da rodada 1 foi corrigido e confirmado por leitura de código. `npx tsc -b --force` limpo (lição do
+lab-212 sobre o cache incremental não pego por `tsc -b` puro); testes: app 257/257; `npm run build`
+sem regressão. **Verificação ao vivo parcial, primeira melhoria desde o lab-199**: desta vez
+sobrescrever `document.hidden`/`visibilityState` via `Object.defineProperty` +
+`dispatchEvent(new Event('visibilitychange'))` no console foi suficiente pra sair de "Carregando o
+mundo 3D..." — mundo carregou, avatar andou com W real sem nenhum erro no console. Mas o próprio
+ambiente de automação reporta GPU fraca (`fraco=true` no HUD de debug), então o burst de poeira
+fica desligado por design nesse ambiente — não foi possível confirmar visualmente a partícula em
+si, só que o código novo não quebra nada durante caminhada real. **Merge confirmado**: PR #96
+mesclada (squash) em `main` no commit `e215032` (2026-09-20, confirmado via `AskUserQuestion`). CI
+de `main` verde (app, server-accounts, server-cf-relay); deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200). Nota à parte: um item de
+backlog novo foi registrado em `docs/gameplay-market-expansion-backlog.md` — "Lab 212 - Mercado do
+jogo" — como marcador de um pedido do usuário ("o jogo tem que ter um mercado") ainda SEM escopo
+definido; não bloqueia nenhum laboratório, mas precisa de uma conversa de decisão de escopo antes
+de ser implementado.
 
-Último concluído: labs/lab-212-pulso-recompensa/ — backlog "Lab 198 - Efeitos visuais de
+Antes desse: labs/lab-212-pulso-recompensa/ — backlog "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao": fecha a peça "pulso de recompensa" — um pulso visual (escala +
 brilho) na barra de XP e no contador de moedas do HUD toda vez que sobem de verdade
 (`useRewardPulseRef`, `HudHeader.tsx` — manipula a classe direto no DOM via `ref`, sem `key`/
