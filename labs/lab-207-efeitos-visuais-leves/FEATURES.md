@@ -120,6 +120,29 @@ de teleporte existente OU futuro sem precisar tocar nenhum deles.
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
 
+**Rodada 4**: 1 achado real, confirmado e corrigido — a correção da rodada 3 (limiar de
+deslocamento de 5 unidades) foi INSUFICIENTE:
+
+4. **Médio — respawn de checkpoint do parkour passava batido pelo limiar de 5 unidades**: o
+   review calculou que `teleportAvatarToPosition` no respawn de checkpoint desloca o avatar de até
+   ~1,3 unidade ABAIXO do checkpoint (`PARKOUR_FALL_MARGIN`) pra ~0,9 unidade ACIMA dele
+   (`AVATAR_RADIUS + 0.35`) — um deslocamento total de só ~2,2 unidades, bem abaixo do limiar de 5
+   que a rodada 3 escolheu. Confirmado como um problema estrutural do próprio limiar: 5 unidades
+   precisava ser alto o bastante pra nunca confundir uma queda rápida de verdade sob lag (uma
+   queda a velocidade alta PODE mesmo mover 2+ unidades num quadro só sob um soluço de FPS) — não
+   dava pra baixar o limiar sem arriscar o problema oposto (suprimir poeira de quedas reais).
+   Corrigido abandonando o limiar de distância inteiramente: cada um dos 7 pontos que reposicionam
+   o avatar diretamente neste arquivo (achados por buscar o padrão compartilhado
+   `avatarBody.body.disablePreStep = false`, já usado em todos eles: `teleportAvatarTo`,
+   `teleportAvatarToPosition`, saída do carro, os 2 teleportes de depuração
+   `__debugTeleport`/`__debugTeleportExact`, entrada na casa, entrada no centro de jogos) agora
+   marca `wasGroundedLastFrame = true` explicitamente — mesmo padrão de mutação de closure
+   compartilhada já usado por `facing` dentro de `teleportAvatarTo`. Cobertura completa dos 7
+   pontos confirmada por busca no arquivo inteiro.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
+correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Footstep dust (poeira a cada passo andando) — mais frequente/sensível a performance, merece sua
