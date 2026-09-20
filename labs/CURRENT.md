@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Em andamento: labs/lab-207-efeitos-visuais-leves/ — primeira fatia pequena do backlog "Lab 198 -
+Efeitos visuais de recompensa, movimento e interacao": uma nuvem de poeira ao aterrissar depois de
+qualquer pulo/queda, reaproveitando 100% a técnica de partículas já madura do `rocketFlameSystem`
+(textura por canvas + `ParticleSystem`), só trocando "contínuo ligado/desligado" por um burst único
+(`manualEmitCount`) e calculando direção/gravidade a partir do `localUp` do ponto de aterrissagem
+(mundo é uma esfera, "pra baixo" varia por local). Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 198 - Efeitos visuais de recompensa, movimento e
+interacao" — escolhido entre os itens não bloqueados por medição de FPS ao vivo depois do lab-206
+(Lab 196). Ver `labs/lab-207-efeitos-visuais-leves/FEATURES.md` pra detalhe.
+
 Último concluído: labs/lab-206-npcs-vivos-planetas/ — dá vida aos professores das escolinhas dos
 planetas secundários (hoje estáticos): idle sutil (balanço vertical, fase própria por professor,
 roda sempre — inclusive com chat aberto/jogo suspenso, mesmo lugar/padrão das outras animações
