@@ -97,6 +97,25 @@ Pontos conferidos por leitura:
   trailMesh.js` — importar de `@babylonjs/core` (não do `.pure`) já chama `RegisterTrailMesh()`
   como efeito colateral do próprio módulo.
 
+## Rodada de review — Copilot (PR #98)
+
+**Rodada 1**: "🟢 Approval recommended", 1 achado listado (repetido em 3 locais do mesmo arquivo:
+linhas 4120/4176/6983) — investigado e **não procede**:
+
+1. **"Reabilitar `TrailMesh` antes de resetar e iniciar o voo"**: o achado presume que o mesh foi
+   desabilitado via `setEnabled(false)` e nunca reabilitado antes do próximo `reset()`/`start()`.
+   Conferido contra o código real: a criação usa `rocketTrailMesh.isVisible = false` (não
+   `setEnabled`), e `boardRocket()` já define `rocketTrailMesh.isVisible = true` explicitamente
+   logo antes de `reset()`/`start()` (ver bloco `if (rocketTrailMesh) { flameAnchor.
+   computeWorldMatrix(true); rocketTrailMesh.reset(); rocketTrailMesh.isVisible = true;
+   rocketTrailMesh.start() }`). Nenhuma chamada a `setEnabled` existe neste código — o achado
+   parece uma leitura equivocada do comentário adjacente (que cita `isLowEndDevice`/lab-211 como
+   analogia de "não criar" em vez de "criar e nunca disparar", não descrição do próprio
+   `TrailMesh`). Nenhuma mudança de código necessária.
+
+`npx tsc -b --force`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos (nenhuma
+mudança nesta rodada). Ciclo de review encerrado (1 rodada, achado único investigado e descartado).
+
 ## Fora de escopo (explicitamente adiado)
 
 - Feedback de puzzle (última peça restante do Lab 198).
