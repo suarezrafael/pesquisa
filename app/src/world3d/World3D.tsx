@@ -3479,6 +3479,17 @@ export function World3D({
     // transição "no ar → no chão" (não só "está no chão") pra disparar a nuvem de poeira só UMA
     // vez por aterrissagem, não todo quadro em que `grounded` for verdadeiro.
     let wasGroundedLastFrame = true
+    // Achado do review automático do Copilot (sugestão sem comentário inline, investigada e
+    // adotada por ser barata): teleporte/respawn (pouso de planeta, morte em Marte, checkpoint do
+    // parkour, entrar/sair de casa, etc. — muitos pontos de chamada espalhados pelo arquivo, caro
+    // demais pra tocar um por um) reposiciona o avatar instantaneamente; se ele estivesse no ar
+    // (`grounded=false`) bem no instante do teleporte, o próximo quadro veria a transição
+    // falso→verdadeiro e disparava uma poeira "do nada" no destino, sem queda de verdade ter
+    // acontecido ali. Em vez de tocar cada ponto de teleporte individualmente, detecta a PRÓPRIA
+    // causa raiz aqui: um deslocamento de posição maior que qualquer movimento físico normal
+    // consegue produzir num quadro só (mesmo a `RUN_SPEED` mais um pulo alto, a distância real por
+    // quadro fica bem abaixo disso) só pode ser um teleporte — suprime o disparo nesse quadro.
+    let lastFramePosForLandingPuff: Vector3 | null = null
     // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
     // morrendo e caindo até o planeta novamente") — enquanto `laserStunTimer > 0`, o controle
     // normal do jogador (andar/pular) fica suspenso e o personagem visual gira sem parar
@@ -12910,7 +12921,13 @@ export function World3D({
           // degenerado de `localUp` paralelo a `Vector3.Right()` — ao contrário de âncoras fixas
           // como a do parkour (escolhidas manualmente, já longe de qualquer polo problemático), o
           // jogador pode aterrissar em QUALQUER ponto da esfera.
-          if (grounded && !wasGroundedLastFrame && landingPuffSystem) {
+          // Deslocamento maior que qualquer movimento físico normal produz num quadro só (mesmo
+          // `RUN_SPEED` com o impulso do parkour, ou um pulo alto, ficam bem abaixo de 5 unidades
+          // por quadro mesmo com um soluço de FPS) só pode ser teleporte/respawn — suprime o
+          // disparo nesse caso, em vez de tocar cada ponto de teleporte do arquivo individualmente.
+          const teleportedThisFrame =
+            lastFramePosForLandingPuff !== null && Vector3.DistanceSquared(pos, lastFramePosForLandingPuff) > 25
+          if (grounded && !wasGroundedLastFrame && !teleportedThisFrame && landingPuffSystem) {
             const perp1 = Vector3.Cross(localUp, Vector3.Right())
             if (perp1.lengthSquared() < 1e-6) perp1.copyFrom(Vector3.Cross(localUp, Vector3.Forward()))
             perp1.normalize()
@@ -12923,6 +12940,7 @@ export function World3D({
             landingPuffSystem.start()
           }
           wasGroundedLastFrame = grounded
+          lastFramePosForLandingPuff = pos.clone()
 
           if (touchJumpRef.current) {
             touchJumpRef.current = false

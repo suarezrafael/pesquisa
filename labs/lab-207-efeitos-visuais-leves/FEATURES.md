@@ -105,6 +105,21 @@ confirmação visual real.
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois da
 correção.
 
+**Rodada 3**: "Findings: None" pra achado formal, achado da rodada 2 confirmado "Resolved since
+last review". O resumo em texto solto levantou uma preocupação nova, sem comentário inline:
+teleportes/respawns (pouso de planeta, morte em Marte, checkpoint do parkour, entrar/sair de casa —
+muitos pontos de chamada espalhados pelo arquivo) reposicionam o avatar instantaneamente; se ele
+estivesse no ar bem no instante do teleporte, o quadro seguinte veria a transição falso→verdadeiro
+e disparava poeira "do nada" no destino. Avaliado como um achado real (cenário plausível), mas em
+vez de tocar cada ponto de teleporte individualmente (caro, e arriscado esquecer um), corrigido
+detectando a PRÓPRIA causa raiz: um deslocamento de posição maior que qualquer movimento físico
+normal produz num quadro só (limiar de 5 unidades — bem acima do que `RUN_SPEED` + impulso do
+parkour conseguem mesmo com um soluço de FPS, bem abaixo de qualquer distância real de teleporte)
+só pode ser teleporte/respawn — suprime o disparo nesse quadro específico, cobrindo qualquer ponto
+de teleporte existente OU futuro sem precisar tocar nenhum deles.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Footstep dust (poeira a cada passo andando) — mais frequente/sensível a performance, merece sua
