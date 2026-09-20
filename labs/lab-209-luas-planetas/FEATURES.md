@@ -122,6 +122,9 @@ Pontos conferidos por leitura:
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
 
+**Rodada 2**: "Findings: None", nenhum comentário inline (confirmado por contagem — 0). Ciclo de
+review encerrado aqui (2 rodadas). Pronta pra revisão de merge.
+
 **Risco remanescente, honesto**: a órbita não foi vista ao vivo — a matemática da distância
 constante ao centro (acima) é sólida, mas o TAMANHO aparente/velocidade/legibilidade visual da lua
 no céu (pequena demais? rápida demais?) não foi confirmado. O ângulo de inclinação fixo (60°) pode
