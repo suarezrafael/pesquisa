@@ -29,7 +29,7 @@ de `main` verde (app, server-accounts, server-cf-relay); deploy de produção co
 (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
 (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
 (`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200). Nota à parte: um item de
-backlog novo foi registrado em `docs/gameplay-market-expansion-backlog.md` — "Lab 212 - Mercado do
+backlog novo foi registrado em `docs/gameplay-market-expansion-backlog.md` — "Lab 218 - Mercado do
 jogo" — como marcador de um pedido do usuário ("o jogo tem que ter um mercado") ainda SEM escopo
 definido; não bloqueia nenhum laboratório, mas precisa de uma conversa de decisão de escopo antes
 de ser implementado.

@@ -4,6 +4,10 @@ Data: 2026-09-11
 Branch base: `main`, apos lab-176 mergeado. No momento desta escrita, o lab-177 estava em andamento
 em outro branch/worktree.
 
+> Status auditado em 2026-09-20: a ordem original abaixo e historica. Consulte
+> `docs/backlog-status.md` para o mapeamento entre numero do backlog, laboratorio executado e
+> pendencias atuais. Os Labs 212-217 do backlog foram implementados pelos labs reais 197-202.
+
 ## Adendo urgente 2026-09-16 - Performance Babylon.js mobile
 
 Antes de continuar a ordem normal deste backlog, executar o lab urgente descrito em
@@ -294,7 +298,80 @@ Requisitos minimos:
 - Riscos: ansiedade de completismo; excesso de trofeus diluir valor.
 - Prioridade: P1.
 
-### Lab 212 - Mercado do jogo (bazar tematico de itens/cosmeticos)
+### Lab 212 - Centro de jogos educativo com saguao e portais
+
+- Problema / hipotese: desafios educativos dispersos sao dificeis de descobrir e repetir.
+- Usuario beneficiado: crianca.
+- Escopo: predio/saguao no mundo 3D com quatro plataformas para `Contar`, `Soletrar`, `Memoria` e
+  `Logica`; entrada, saida e retorno claros.
+- Fora de escopo: UGC aberto, matchmaking competitivo, assinatura para acessar aprendizagem.
+- Criterios de aceite: quatro destinos legiveis; acesso gratuito; retorno ao saguao sem perder
+  progresso; controles desktop e mobile.
+- Metricas esperadas: `game_center_entered`, `game_portal_selected`, inicio e conclusao por arena.
+- Riscos: teleport quebrar camera/fisica; saguao pesado em mobile.
+- Prioridade: P1. Concluido pelo lab real 197, PR #80.
+
+### Lab 213 - Template de arena educativa reutilizavel
+
+- Problema / hipotese: cada mini-jogo recriado do zero aumenta bugs e torna analytics inconsistente.
+- Usuario beneficiado: crianca e equipe de produto.
+- Escopo: ciclo comum de entrada, contagem, tentativa, sucesso/falha, repeticao, saida, feedback e
+  eventos; componentes 3D reutilizaveis para alvos e botoes.
+- Fora de escopo: editor de fases ou engine generica fora do jogo.
+- Criterios de aceite: uma arena usa o template ponta a ponta; retry e abandono sao medidos.
+- Metricas esperadas: `minigame_started`, `minigame_retried`, `minigame_exited`.
+- Riscos: abstracao excessiva; estado de uma arena vazar para outra.
+- Prioridade: P1. Concluido pelo lab real 198, PR #81.
+
+### Lab 214 - Mini-jogo de contar e quantidade
+
+- Problema / hipotese: aprender contando objetos no espaco 3D e mais envolvente que responder um
+  quiz isolado.
+- Usuario beneficiado: crianca.
+- Escopo: coletar/organizar quantidades, comparar mais/menos/igual e completar sequencias curtas.
+- Fora de escopo: pressao de tempo, recompensa paga ou conteudo escolar bloqueado.
+- Criterios de aceite: rodada de 1-3 minutos, erro sem punicao e recompensa gratuita.
+- Metricas esperadas: inicio, conclusao, retry e tempo de rodada.
+- Riscos: dificuldade inadequada; objetos pequenos em mobile.
+- Prioridade: P1. Concluido pelo lab real 199, PR #82.
+
+### Lab 215 - Mini-jogo de soletrar e leitura
+
+- Problema / hipotese: letras fisicas e contexto visual tornam leitura e ortografia parte da acao.
+- Usuario beneficiado: crianca.
+- Escopo: coletar letras na ordem para formar palavra indicada por imagem/contexto; catalogo fechado
+  de palavras, sem texto livre.
+- Fora de escopo: chat, texto arbitrario ou correcao por IA.
+- Criterios de aceite: dica clara, feedback sem penalidade e palavras adequadas a faixa etaria.
+- Metricas esperadas: inicio, conclusao, erro por tentativa e retry.
+- Riscos: acentos/variantes; palavra ambigua sem contexto.
+- Prioridade: P1. Concluido pelo lab real 200, PR #83.
+
+### Lab 216 - Mini-jogo de memoria e padroes
+
+- Problema / hipotese: pares e sequencias curtas oferecem repeticao cognitiva sem parecer prova.
+- Usuario beneficiado: crianca.
+- Escopo: pares visuais e modo de sequencia com luz/som, rodadas curtas e dificuldade progressiva.
+- Fora de escopo: cronometro punitivo ou ranking agressivo.
+- Criterios de aceite: feedback claro, retry imediato e suporte a mobile/reduced motion.
+- Metricas esperadas: conclusao, tentativas e repeticao por sessao.
+- Riscos: estimulo visual excessivo; sequencia longa frustrar.
+- Prioridade: P1. Concluido pelo lab real 201, PR #84.
+
+### Lab 217 - Progressao, album e recompensas do centro de jogos
+
+- Problema / hipotese: progresso visivel e trofeus conquistados aumentam desejo de retornar.
+- Usuario beneficiado: crianca e responsavel.
+- Escopo: progresso por categoria, trofeus bronze/prata/ouro, missao semanal saudavel e resumo para
+  o responsavel.
+- Fora de escopo: paywall, gacha, streak punitiva ou comparacao social agressiva.
+- Criterios de aceite: trofeu vem de conclusao real; progresso educativo permanece gratuito;
+  responsavel entende quais habilidades foram praticadas.
+- Metricas esperadas: `minigame_trophy_earned`, missao semanal e visualizacao do resumo.
+- Riscos: ansiedade de completismo; recompensas dominarem o objetivo educativo.
+- Prioridade: P1. Concluido pelo lab real 202, PR #85.
+
+### Lab 218 - Mercado do jogo (bazar tematico de itens/cosmeticos)
 
 - Problema / hipotese: pedido direto do usuario em chat (2026-09-20): "o jogo tem que ter um
   mercado". Hoje a "lojinha" e um menu 2D sobreposto (`onOpenShop`), sem nenhum lugar FISICO no
@@ -635,30 +712,16 @@ Regras:
 - Nao adicionar efeitos visuais sem medir FPS.
 - Para moonwalk, sincronize animacao com distancia real percorrida no solo e velocidade tangencial.
 
-Ordem recomendada apos o lab atual:
-1. Lab 201 - Modal de ranking nao bloqueia arrasto do planeta, por ser bug de input reportado.
-2. Lab 202 - Objetos do mundo alinhados ao relevo.
-3. Lab 203 - Pet maior, visivel e com troca clara.
-4. Lab 204 - Ceu escuro no espaco e claro na atmosfera.
-5. Lab 205 - Preview fixo na lojinha durante scroll.
-6. Lab 207 - Troca segura de nickname.
-7. Lab 206 - Pets premium de qualidade, roupas e mascaras.
-8. Lab 208 - Movimento mais rapido e responsivo.
-9. Lab 209 - Hub de mini-jogos e teleport por botao no chao.
-10. Lab 210 - Parkour arcade com argolas, tesouros e power-ups justos.
-11. Lab 211 - Trofeus e sala/album de mini-jogos.
-12. Lab 191 - Auditoria de FPS, draw calls e custo por sistema.
-13. Lab 192 - Locomocao sem moonwalk.
-14. Lab 193 - Otimizacao de draw calls e props repetidos.
-15. Lab 194 - Quick chat contextual sem supervisao pesada.
-16. Lab 195 - Ranking seguro sem friccao excessiva.
-17. Lab 196 - NPCs vivos nos planetas secundarios.
-18. Lab 197 - Orbitas com objetos em alto-relevo.
-19. Lab 198 - Efeitos visuais de recompensa, movimento e interacao.
-20. Lab 200 - Extensao de missoes fisicas por planeta.
-21. Lab 212 - Mercado do jogo (bazar tematico de itens/cosmeticos) — bloqueado ate o usuario
-    detalhar o escopo desejado.
-22. Lab 199 - Prototipo seguro de filtro de chat livre, somente se pesquisa e responsavel justificarem.
+Ordem recomendada apos a auditoria de 2026-09-20:
+1. Concluir o Lab 191 com baseline em Android fisico e classificacao do gargalo por cena.
+2. Executar o Lab 193 somente com os dados do baseline: otimizar draw calls/props repetidos e medir
+   antes/depois.
+3. Completar o Lab 206: novos modelos de pets e cosmeticos; o preview 3D ja foi entregue no lab
+   real 192.
+4. Completar o Lab 198: trail de foguete/cometa e feedback de puzzle; os outros quatro efeitos ja
+   foram entregues nos labs reais 207, 211, 212 e 213.
+5. Refinar o escopo do Lab 218 - Mercado do jogo antes de implementar.
+6. Considerar o Lab 199 apenas se a Pesquisa F e responsaveis justificarem o risco de texto livre.
 
 Para cada lab, crie FEATURES.md, mantenha escopo pequeno, rode testes/build quando aplicavel,
 verifique em navegador real se tocar 3D, atualize labs/CURRENT.md e escreva CONTEXT.md baseado no
@@ -667,15 +730,11 @@ diff real.
 
 ## 7. Recomendacao priorizada
 
-Depois do lab 177, eu recomendo corrigir primeiro **Lab 201 - Modal de ranking nao bloqueia arrasto
-do planeta**, **Lab 202 - Objetos do mundo alinhados ao relevo** e **Lab 203 - Pet maior, visivel e
-com troca clara**, junto com **Lab 204 - Ceu escuro no espaco e claro na atmosfera** e **Lab 205 -
-Preview fixo na lojinha durante scroll**. Depois, fazer **Lab 207 - Troca segura de nickname** e,
-quando o pet atual estiver confiavel, **Lab 206 - Pets premium de qualidade, roupas e mascaras**.
-Para aumentar retencao jogavel, priorizar **Lab 208 - Movimento mais rapido e responsivo**, **Lab
-209 - Hub de mini-jogos**, **Lab 210 - Parkour arcade** e **Lab 211 - Trofeus de mini-jogos**. Em
-seguida, fazer **Lab 191 - Auditoria de FPS, draw calls e custo por sistema** e **Lab 192 - Locomocao
-sem moonwalk**.
+O proximo trabalho tecnico recomendado e fechar o **Lab 191 - Auditoria de FPS** com amostras reais
+em Android. A instrumentacao foi entregue no lab real 193, mas o baseline por cena continua
+pendente. Com esses dados, executar o **Lab 193 - Otimizacao de draw calls e props repetidos** e
+comparar o antes/depois. Em paralelo de produto, o proximo trabalho de evidencia e o **Lab 186 -
+Playtest guiado crianca + responsavel**, definido no backlog de crescimento.
 
 Pergunta de mercado respondida: "A crianca percebe Missao Aprender como um jogo 3D de qualidade
 suficiente para querer ficar e voltar?" Sem input funcional, objetos acima do relevo, pet visivel,
