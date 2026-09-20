@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Em andamento: labs/lab-206-npcs-vivos-planetas/ — dá vida aos professores das escolinhas dos
+planetas secundários (hoje estáticos): idle sutil, olhar/virar pro jogador ao se aproximar (snap
+único no gatilho, não giro contínuo, pra evitar tremedeira perto do raio), e fala catalogada curta
+por matéria (`quest.type`) reaproveitando o balão já existente do jogador. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 196 - NPCs vivos nos planetas secundarios" —
+escolhido entre os itens não bloqueados por medição de FPS ao vivo depois do lab-205 (Lab 195). Ver
+`labs/lab-206-npcs-vivos-planetas/FEATURES.md` pra detalhe da investigação.
+
 Último concluído: labs/lab-205-ranking-sem-friccao/ — remove a fricção desnecessária de abrir o
 painel de ranking: antes, as DUAS abas (online e local, entre perfis do mesmo aparelho) passavam
 pelo mesmo portão parental de multiplayer, mesmo a aba local sendo 100% offline. Auditoria mudou o
