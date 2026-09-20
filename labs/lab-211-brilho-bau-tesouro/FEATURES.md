@@ -76,6 +76,25 @@ Pontos conferidos por leitura:
   decisões de performance no mesmo `setup()` (amostragem do pipeline de pós-processamento,
   `engine.setHardwareScalingLevel`, etc.), mesmo escopo de função que a nova animação.
 
+## Rodada de review — Copilot (PR #94)
+
+**Rodada 1**: 1 achado real, confirmado e corrigido:
+
+1. **Médio — material continuava animando depois do baú ser achado**: confirmado contra o código
+   — `treasureChestGlowMats` só excluía baús já achados no momento da CONSTRUÇÃO (`alreadyFound`);
+   um baú achado DURANTE a sessão (`chest.pivot.setEnabled(false)` no gatilho de proximidade)
+   deixava o material dele no array pra sempre — o laço de brilho por quadro continuava
+   interpolando a cor de um material invisível, sem efeito visual nenhum, só trabalho
+   desperdiçado. Corrigido guardando `buckleMat` direto no marcador (`treasureChestMarkers`) e
+   removendo-o de `treasureChestGlowMats` no exato momento em que o baú é achado.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
+**Rodada 2**: "🟢 Approval recommended", "Findings: None", achado da rodada 1 confirmado "Resolved
+since last review". Contagem bruta de comentários (1) confere com o único id já conhecido/corrigido
+— nenhum comentário genuinamente novo. Ciclo de review encerrado (2 rodadas). Pronta pra revisão de
+merge.
+
 **Risco remanescente, honesto**: a aparência exata do pulso (velocidade, contraste entre pico/vale)
 não foi confirmada ao vivo — valores escolhidos por analogia com o brilho estático já existente das
 moedas (mesma faixa de matiz dourada), ajustados pra oscilar visivelmente sem ficar "piscando"
