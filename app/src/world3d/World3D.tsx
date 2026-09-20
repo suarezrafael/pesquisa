@@ -3925,6 +3925,13 @@ export function World3D({
         // Teleporte físico seguro (mesmo padrão usado em todo o resto do jogo pra mover o avatar
         // direto — ver saída do carro logo abaixo — `disablePreStep = false` + `scene.render()`
         // sincronizam o corpo físico de verdade com a posição escrita aqui).
+        // Backlog "Lab 198" — achado do review automático do Copilot: precisa ser marcado ANTES
+        // de `scene.render()` (não depois), porque `scene.render()` dispara
+        // `onBeforeRenderObservable` de forma SÍNCRONA/reentrante — a checagem de poeira de
+        // aterrissagem roda de novo aqui dentro, ainda dentro desta mesma chamada, então marcar
+        // depois chegaria tarde demais pra suprimir o disparo indevido (ver comentário completo
+        // perto da declaração de `wasGroundedLastFrame`).
+        wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(center.add(landingUp.scale(groundFn(landingUp) + AVATAR_RADIUS + 0.05)))
         scene.render()
@@ -3934,9 +3941,6 @@ export function World3D({
         facing = Vector3.Cross(landingUp, Vector3.Right())
         if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(landingUp, Vector3.Forward())
         facing.normalize()
-        // Backlog "Lab 198" — suprime a poeira de aterrissagem no quadro seguinte a este
-        // teleporte (ver comentário completo perto da declaração de `wasGroundedLastFrame`).
-        wasGroundedLastFrame = true
       }
 
       // Irmã mais simples de `teleportAvatarTo` acima, pro respawn de checkpoint do parkour: aquela função calcula a posição a
@@ -3947,6 +3951,9 @@ export function World3D({
       // zerar velocidade), só que recebe a posição absoluta já pronta em vez de recalculá-la.
       function teleportAvatarToPosition(pos: Vector3, facingHint: Vector3) {
         if (!avatarMesh || !avatarBody) return
+        // Backlog "Lab 198" — marcado ANTES de `scene.render()`, mesmo motivo de
+        // `teleportAvatarTo` acima (achado do review automático do Copilot).
+        wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(pos)
         scene.render()
@@ -3954,8 +3961,6 @@ export function World3D({
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
         facing = facingHint.lengthSquared() > 1e-6 ? facingHint.clone().normalize() : facing
-        // Backlog "Lab 198" — mesmo motivo de `teleportAvatarTo` acima.
-        wasGroundedLastFrame = true
       }
 
       // Ponto/tangente numa curva de Bézier cúbica — usada pra voar o foguete pelo espaço
@@ -4393,6 +4398,9 @@ export function World3D({
             // completamente a escrita direta em `avatarMesh.position` e volta pra onde estava
             // no próximo passo de física — bug real encontrado testando esta função: o jogador
             // saía do carro mas continuava "preso" na posição de quando entrou.
+            // Backlog "Lab 198" — marcado ANTES de `scene.render()` (achado do review automático
+            // do Copilot: reentrante/síncrono, ver comentário completo em `teleportAvatarTo`).
+            wasGroundedLastFrame = true
             avatarBody.body.disablePreStep = false
             avatarMesh.position.copyFrom(
               exitSpotUp.scale(PLANET_RADIUS + terrainHeight(exitSpotUp) + AVATAR_RADIUS + 0.05),
@@ -4405,9 +4413,6 @@ export function World3D({
           facing = exitFwd.subtract(exitSpotUp.scale(Vector3.Dot(exitFwd, exitSpotUp)))
           if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(exitSpotUp, Vector3.Right())
           facing.normalize()
-          // Backlog "Lab 198" — mesmo motivo de `teleportAvatarTo` (ver comentário completo perto
-          // da declaração de `wasGroundedLastFrame`).
-          wasGroundedLastFrame = true
           // Desparenta do carro (lab-27) — volta a ser posicionada pelo loop de física normal
           // do avatar a pé (que retoma no próximo quadro, já que `drivingCar` vira null aqui).
           studentFigure.root.parent = null
@@ -8179,13 +8184,13 @@ export function World3D({
           // lab-39: a causa real de resultados "congelados" testando o parkour de laser era a
           // aba do Chrome da automação não renderizar quadro nenhum quando só esperando sem
           // interagir, não este código).
+          wasGroundedLastFrame = true // Backlog "Lab 198" — marcado ANTES de scene.render() (reentrante).
           avatarBody.body.disablePreStep = false
           avatarMesh.position = localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05)
           scene.render()
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
           avatarBody.body.disablePreStep = true
-          wasGroundedLastFrame = true // Backlog "Lab 198" — mesmo motivo de `teleportAvatarTo`.
         }
         // Bug real encontrado testando o parkour de laser (lab-39): `__debugTeleport` sempre
         // recalcula a altura do CHÃO na direção dada, então não dava pra testar uma posição no
@@ -8195,13 +8200,13 @@ export function World3D({
         // (posição de verdade, não uma direção a normalizar) e não mexe na altura.
         ;(window as any).__debugTeleportExact = (x: number, y: number, z: number) => {
           if (!avatarMesh || !avatarBody) return
+          wasGroundedLastFrame = true // Backlog "Lab 198" — marcado ANTES de scene.render() (reentrante).
           avatarBody.body.disablePreStep = false
           avatarMesh.position = new Vector3(x, y, z)
           scene.render()
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
           avatarBody.body.disablePreStep = true
-          wasGroundedLastFrame = true // Backlog "Lab 198" — mesmo motivo de `teleportAvatarTo`.
         }
         // Ajusta a direção pra onde o personagem anda (dev-only, QA) — teleportar não muda
         // `facing` (fica sempre o que era antes), então sem isto não dá pra testar "andar até X"
@@ -9788,6 +9793,9 @@ export function World3D({
         // Teleporte físico seguro (mesmo padrão de `teleportAvatarTo`/saída do carro) — posição
         // exata (sem aproximação de curvatura: a sala é um chão PLANO de verdade, diferente da
         // superfície esférica que `offsetLandingUp` foi pensado pra aproximar).
+        // Backlog "Lab 198" — marcado ANTES de `scene.render()` (achado do review automático do
+        // Copilot: reentrante/síncrono, ver comentário completo em `teleportAvatarTo`).
+        wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(houseInteriorSpawnPos)
         scene.render()
@@ -9795,9 +9803,6 @@ export function World3D({
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
         facing = new Vector3(0, 0, 1)
-        // Backlog "Lab 198" — mesmo motivo de `teleportAvatarTo` (ver comentário completo perto
-        // da declaração de `wasGroundedLastFrame`).
-        wasGroundedLastFrame = true
         refreshHouseFurnitureVisuals()
         if (visitingHouseSnapshot) {
           furnitureReactionTimeout = showChatBubbleText(
@@ -10557,6 +10562,9 @@ export function World3D({
         cameraDragPointerId = null
         currentWorldCenter = GAME_CENTER_INTERIOR_CENTER
         currentGroundBaseFn = () => GAME_CENTER_INTERIOR_RADIUS
+        // Backlog "Lab 198" — marcado ANTES de `scene.render()` (achado do review automático do
+        // Copilot: reentrante/síncrono, ver comentário completo em `teleportAvatarTo`).
+        wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(gameCenterInteriorSpawnPos)
         scene.render()
@@ -10564,9 +10572,6 @@ export function World3D({
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
         facing = new Vector3(0, 0, 1)
-        // Backlog "Lab 198" — mesmo motivo de `teleportAvatarTo` (ver comentário completo perto
-        // da declaração de `wasGroundedLastFrame`).
-        wasGroundedLastFrame = true
         trackGameCenterEntered()
       }
 

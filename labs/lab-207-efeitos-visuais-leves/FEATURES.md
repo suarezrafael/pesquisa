@@ -143,6 +143,23 @@ deslocamento de 5 unidades) foi INSUFICIENTE:
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
 correção.
 
+**Rodada 5**: 1 achado real, confirmado e corrigido — a correção da rodada 4 (marcar
+`wasGroundedLastFrame = true` DEPOIS de `scene.render()`, no fim de cada função de teleporte) tinha
+uma falha de ordem sutil:
+
+5. **Médio — `wasGroundedLastFrame` marcado tarde demais, depois de `scene.render()`**:
+   `scene.render()` dispara `onBeforeRenderObservable` de forma SÍNCRONA/reentrante — a própria
+   checagem de poeira de aterrissagem roda de novo, ainda dentro da mesma chamada de teleporte,
+   ANTES da linha `wasGroundedLastFrame = true` (que só vinha depois do `scene.render()`) ter
+   chance de rodar. Isso é relevante de verdade porque `teleportAvatarToPosition` (respawn de
+   checkpoint do parkour) é chamada de DENTRO do próprio laço de física principal — não de um
+   handler de evento externo —, então essa reentrância acontece na prática, não só em teoria.
+   Corrigido movendo `wasGroundedLastFrame = true` pra ANTES de `scene.render()` nos 7 pontos
+   (mesma lista da rodada 4).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
+correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Footstep dust (poeira a cada passo andando) — mais frequente/sensível a performance, merece sua
