@@ -55,15 +55,60 @@ restantes do Lab 198) e qualquer variação de poeira por bioma/superfície.
 
 ## Funcionalidades planejadas
 
-- [ ] `footstepDustSystem`: segundo `ParticleSystem` dedicado, reaproveitando `dustTexture`,
-  capacidade pequena (~20), burst pequeno (`manualEmitCount` ~3-4) por passada.
-- [ ] Disparo no mesmo ponto onde `playFootstep()` já é chamado (`footSign !== lastFootSign`),
+- [x] `footstepDustSystem`: segundo `ParticleSystem` dedicado, reaproveitando `dustTexture`,
+  capacidade pequena (20), burst pequeno (`manualEmitCount = 4`) por passada.
+- [x] Disparo no mesmo ponto onde `playFootstep()` já é chamado (`footSign !== lastFootSign`),
   condicionado a `grounded && !isLowEndDevice`.
-- [ ] Direção/gravidade calculadas a partir do `localUp` do ponto de contato (mesmo idioma já usado
+- [x] Direção/gravidade calculadas a partir do `localUp` do ponto de contato (mesmo idioma já usado
   pelo landing puff), emitidas na posição do pé do avatar.
-- [ ] Verificar ao vivo: ambiente de automação desta sessão provavelmente trava de novo em
-  `document.hidden` (mesma limitação de todas as labs anteriores) — se acontecer, documentar e
-  confiar em `tsc`/testes/build + leitura de código cuidadosa.
+- [x] Verificar ao vivo: **desta vez o `document.hidden` NÃO travou** — sobrescrever
+  `document.hidden`/`visibilityState` via `Object.defineProperty` + `dispatchEvent(new
+  Event('visibilitychange'))` no console do DevTools (antes desta lab só `document.hidden` era
+  testado, sem forçar o `visibilitychange`) foi suficiente desta vez pra sair de "Carregando o mundo
+  3D..." — mundo carregou, avatar visível, planeta principal renderizado. Consegui andar com W
+  (tecla real via `computer` tool, repetida) sem nenhum erro no console, sem crash, câmera/avatar se
+  movendo normalmente. **Mas o próprio ambiente de automação reporta GPU fraca** (HUD de debug:
+  `fraco=true`) — ou seja, o burst de poeira de passo fica DESLIGADO de propósito nesse ambiente
+  (mesmo comportamento que rodaria num celular fraco de verdade), então não foi possível CONFIRMAR
+  VISUALMENTE a partícula em si aparecendo; só que o código novo (incluindo o ramo
+  `grounded && !isLowEndDevice`) não quebra nada durante caminhada real. `gpuTier` é estado React
+  fechado dentro do `useEffect` de setup — não há um jeito simples de forçá-lo pra `'strong'` depois
+  que a cena já montou, então não persegui mais que isso.
+
+## Verificação de código
+
+Checagens automatizadas: `npx tsc -b --force` limpo (lição do lab-212: `--force` ignora o cache
+incremental, que já se mostrou não confiável pra `noUnusedLocals`/`noUnusedParameters` neste
+repositório); `npm run test -- --run`: 257/257 (sem mudança — efeito puramente cosmético, nenhuma
+lógica de domínio nova); `npm run build` sem erros.
+
+Pontos conferidos por leitura:
+
+- **Sem conflito com `landingPuffSystem`**: sistemas separados, cada um com seu próprio
+  `emitter`/`direction`/`manualEmitCount` — mesmo se os dois dispararem no mesmo quadro (pouso bem
+  na troca de perna), nenhum sobrescreve o outro.
+- **`grounded` já calculado antes deste ponto no laço** (raycast físico, usado também pelo pulo e
+  pelo landing puff) — reaproveitado sem custo adicional de raycast.
+- **`isLowEndDevice` acessível no mesmo escopo de função** — mesmo padrão já usado pelo brilho do
+  baú (lab-211) e por toda decisão de performance do `setup()`.
+
+## Rodada de review — Copilot (PR #96)
+
+**Rodada 1**: 1 achado real, confirmado e corrigido:
+
+1. **Médio — poeira emitida do centro do colisor, não do pé que pisou**: confirmado contra o
+   código — `studentFigure.ts` posiciona as pernas com deslocamento lateral (`upperPivot.position
+   = new Vector3(side * 0.1, hipY, 0)`, `side` -1 = `legPivotL`/esquerda, +1 = `legPivotR`/
+   direita), mas o emissor usava `pos` (centro do colisor físico) direto, sem esse deslocamento —
+   a poeira sempre nascia no meio do avatar, nunca alternando de lado, visivelmente deslocada do
+   sapato em câmera próxima. Corrigido deslocando o ponto de emissão por
+   `right.scale(footSign * FOOT_X_OFFSET)` antes de projetar no chão — `right` já é o mesmo eixo
+   usado pra orientar o personagem visual (`Vector3.Cross(localUp, facing)`, calculado mais acima
+   no mesmo laço) e `footSign` já é ±1 na mesma convenção de `side` (-1 esquerda/+1 direita), então
+   reaproveita variáveis existentes sem introduzir estado novo.
+
+`npx tsc -b --force`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
+correção.
 
 ## Fora de escopo (explicitamente adiado)
 

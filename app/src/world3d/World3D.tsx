@@ -383,6 +383,10 @@ const RUN_CYCLE_SPEED = WALK_CYCLE_SPEED * (RUN_SPEED / WALK_SPEED)
 // NPCs de qualquer ajuste futuro de velocidade do avatar.
 const NPC_WALK_CYCLE_SPEED = 6.125 // rad/s de fase — histórico (era `WALK_CYCLE_SPEED * 0.7` com WALK_CYCLE_SPEED=8.75)
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
+// Mesmo deslocamento lateral usado em `studentFigure.ts` (`upperPivot.position = new Vector3(side *
+// 0.1, hipY, 0)` pras pernas, `side` -1 = esquerda/`legPivotL`, +1 = direita/`legPivotR`) — usado
+// pra emitir a poeira de passo (lab-213) no pé que realmente pisou, não no centro do avatar.
+const FOOT_X_OFFSET = 0.1
 // Relatado pelo usuário: "o boneco não dobra os joelhos pra andar". A fórmula antiga
 // (`max(0, sin(...))`) fazia o joelho dobrar só na METADE do ciclo (fase de "levantar a perna")
 // e ficar 100% reto (zero) na outra metade (fase de apoio) — biomecanicamente ok, mas na prática
@@ -3905,6 +3909,11 @@ export function World3D({
     // planeta específico, ao contrário de `rocketFlameSystem`/Marte). `null` até lá porque a
     // textura/malha de referência só existem depois que a cena básica está pronta.
     let landingPuffSystem: ParticleSystem | null = null
+    // Backlog "Lab 198" — poeira de PASSO (lab-213), sistema PRÓPRIO e menor que o de pouso: os dois
+    // podem, em tese, disparar no mesmo quadro (aterrissar bem na troca de perna) e cada um tem seus
+    // próprios `emitter`/`direction`/`manualEmitCount`; um único sistema compartilhado correria o
+    // risco de um disparo sobrescrever os parâmetros do outro no meio do burst.
+    let footstepDustSystem: ParticleSystem | null = null
     // Inimigos de Marte (lab-60) — populado dentro de `buildMarsIfNeeded`, lido/mutado pelo laço
     // de IA/combate por quadro (só roda quando `currentPlanetId === 'marte'`).
     const marsEnemies: MarsEnemy[] = []
@@ -8404,6 +8413,27 @@ export function World3D({
       // `direction1`/`direction2`/`gravity` recalculados a cada disparo (não fixados aqui) — o
       // mundo é uma esfera, "pra cima"/"pra baixo" dependem de ONDE o jogador aterrissou
       // (`localUp` daquele ponto), não de um eixo Y fixo do mundo.
+
+      // Poeira de PASSO (backlog "Lab 198", lab-213) — mesma textura do pouso, mas capacidade e
+      // burst bem menores (efeito sutil a cada passada, não uma nuvem de impacto). Disparada no
+      // mesmo ponto onde `playFootstep()` já é chamado, mais abaixo no laço de física principal.
+      footstepDustSystem = new ParticleSystem('footstepDust', 20, scene)
+      footstepDustSystem.particleTexture = dustTexture
+      footstepDustSystem.emitter = Vector3.Zero()
+      footstepDustSystem.minEmitBox = new Vector3(-0.08, 0, -0.08)
+      footstepDustSystem.maxEmitBox = new Vector3(0.08, 0.05, 0.08)
+      footstepDustSystem.minEmitPower = 0.4
+      footstepDustSystem.maxEmitPower = 0.8
+      footstepDustSystem.updateSpeed = 0.02
+      footstepDustSystem.minLifeTime = 0.25
+      footstepDustSystem.maxLifeTime = 0.4
+      footstepDustSystem.minSize = 0.12
+      footstepDustSystem.maxSize = 0.25
+      footstepDustSystem.color1 = new Color4(0.75, 0.65, 0.5, 0.5)
+      footstepDustSystem.color2 = new Color4(0.6, 0.5, 0.35, 0.35)
+      footstepDustSystem.colorDead = new Color4(0.5, 0.42, 0.3, 0)
+      footstepDustSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
+      footstepDustSystem.emitRate = 0
 
       const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, profile.equippedPantsColorId)
       const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, profile.equippedShoeColorId)
@@ -13750,6 +13780,30 @@ export function World3D({
             if (footSign !== 0 && footSign !== lastFootSign) {
               lastFootSign = footSign
               playFootstep()
+              // Poeira de passo (backlog "Lab 198", lab-213) — só com o pé realmente no chão
+              // (`grounded`, calculado acima por raycast físico): o ciclo de perna também roda no
+              // ar (comandado por `throttle`, não por `grounded`), e sem essa guarda a poeira
+              // apareceria "flutuando" durante um pulo. Desligada em aparelho fraco, mesmo padrão
+              // de `isLowEndDevice` já usado pelo brilho pulsante do baú (lab-211).
+              if (grounded && !isLowEndDevice && footstepDustSystem) {
+                // Achado do review automático do Copilot: a primeira versão emitia do centro do
+                // colisor (`pos`), não do pé que pisou — a poeira nunca alternava de lado e ficava
+                // visivelmente deslocada do sapato em câmera próxima. `right` (calculado acima,
+                // mesmo eixo usado pra orientar o personagem visual) + `footSign` (já é ±1, mesma
+                // convenção de `side` em `studentFigure.ts`: -1 esquerda/+1 direita) desloca o
+                // emissor pro pé correto antes de projetar no chão.
+                const footWorldPos = pos.add(right.scale(footSign * FOOT_X_OFFSET))
+                const perp1 = Vector3.Cross(localUp, Vector3.Right())
+                if (perp1.lengthSquared() < 1e-6) perp1.copyFrom(Vector3.Cross(localUp, Vector3.Forward()))
+                perp1.normalize()
+                const perp2 = Vector3.Cross(localUp, perp1).normalize()
+                footstepDustSystem.emitter = footWorldPos.subtract(localUp.scale(AVATAR_RADIUS)).clone()
+                footstepDustSystem.direction1 = localUp.scale(0.5).add(perp1.scale(-0.3)).add(perp2.scale(-0.3))
+                footstepDustSystem.direction2 = localUp.scale(0.9).add(perp1.scale(0.3)).add(perp2.scale(0.3))
+                footstepDustSystem.gravity = localUp.scale(-2)
+                footstepDustSystem.manualEmitCount = 4
+                footstepDustSystem.start()
+              }
             }
           } else {
             studentFigure.legPivotL.rotation.x *= 0.8
