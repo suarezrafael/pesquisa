@@ -1951,15 +1951,13 @@ a.nickname-generate-btn {
 }
 
 /* Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — atalho radial pras frases mais
-   relevantes pro contexto atual, antes do catálogo completo acima. Fundo transparente (não
-   `.modal-overlay` escuro) — mesma decisão de chat/ranking/mochila de não bloquear a tela toda. */
-.chat-radial-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 45;
-  background: transparent;
-}
-
+   relevantes pro contexto atual, antes do catálogo completo acima. Achado do review automático do
+   Copilot: uma primeira versão tinha um backdrop de TELA CHEIA (mesmo transparente) só pra
+   capturar "clique fora fecha" — reintroduzia o mesmo bug que o lab-205 corrigiu pro ranking
+   ("modal bloqueia arrasto do planeta"), já que um elemento cobrindo `inset: 0` captura
+   pointer/wheel em cima do canvas INTEIRO, não só na área do próprio radial. Removido — mesmo
+   padrão de `.chat-panel`/`.ranking-panel` (nenhum backdrop, fecha só por ×/Esc), `z-index: 20`
+   igual a `.chat-panel` (não precisa do `45` de `.modal-overlay`, que é só pra tela cheia). */
 .chat-radial {
   position: absolute;
   top: 50%;
@@ -1967,6 +1965,7 @@ a.nickname-generate-btn {
   transform: translateY(-50%);
   width: 200px;
   height: 200px;
+  z-index: 20;
 }
 
 /* Mesmo estilo de círculo de `.help-button` (anel branco opaco + fundo translúcido) — já

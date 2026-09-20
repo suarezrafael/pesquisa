@@ -8191,12 +8191,24 @@ export function World3D({
       // radial (`ChatRadial.tsx`, React) mostra primeiro. Lê os mesmos `let` do laço de física
       // principal (mesmo padrão de ponte já usado por `__handleInteractPress`/`__refreshPet` etc. —
       // closures compartilhadas, sem duplicar estado em React). Prioridade mais específico primeiro:
-      // dentro de casa > minijogo/centro de jogos ("corrida") > planeta secundário > pet equipado >
-      // padrão — "missão" do backlog foi fundida em "planeta" (todo planeta secundário já É uma
-      // missão, ver escolinha do lab-206) pra não duplicar contexto sem sinal próprio pra distinguir.
+      // minijogo/centro de jogos ("corrida") > casa > planeta secundário > pet equipado > padrão —
+      // "missão" do backlog foi fundida em "planeta" (todo planeta secundário já É uma missão, ver
+      // escolinha do lab-206) pra não duplicar contexto sem sinal próprio pra distinguir.
+      // Achado do review automático do Copilot: `enterGameCenterInterior` liga `insideHouseInterior`
+      // JUNTO com `insideGameCenterInterior` (mesmo padrão documentado na declaração de
+      // `insideGameCenterInterior`, "reaproveita `insideHouseInterior` como a flag 'dentro de ALGUM
+      // interior de bolso'") — checar `insideHouseInterior` primeiro fazia o saguão do centro de
+      // jogos (e qualquer minijogo dentro dele) cair sempre em `casa`, nunca em `corrida`. Corrigido
+      // checando o sinal MAIS ESPECÍFICO primeiro, mesma ordem já usada pelo loop de física
+      // principal pra este mesmo par de flags ("checado ANTES da casa porque
+      // `insideGameCenterInterior` é a flag MAIS ESPECÍFICA").
       ;(scene as any).__getChatContext = (): ChatContext => {
-        if (insideHouseInterior) return 'casa'
         if (activeMinigameId !== null || insideGameCenterInterior) return 'corrida'
+        // `visitingHouseSnapshot` não-nulo (lab-175) = visitando a casa de um AMIGO — a frase
+        // contextual de `casa` ("Bem-vindo à minha casa!") é da perspectiva de quem MORA ali;
+        // dita por um visitante ficaria invertida/sem sentido. Cai pro próximo contexto da
+        // prioridade em vez de reaproveitar `casa` incorretamente aqui.
+        if (insideHouseInterior && !visitingHouseSnapshot) return 'casa'
         if (currentPlanetId !== null) return 'planeta'
         if (progressRef.current.equippedPetId) return 'pet'
         return 'default'

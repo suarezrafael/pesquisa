@@ -25,63 +25,67 @@ export function ChatRadial({ context, onSend, onMore, onClose }: ChatRadialProps
   const slotCount = items.length + 1 // +1 pro botão "mais opções", sempre o último
 
   return (
-    // Fundo transparente (não `.modal-overlay` escuro) só pra capturar clique-fora-fecha — mesma
-    // decisão já tomada pra chat/ranking/mochila (comentário de `canvasInert` em `World3D.tsx`):
-    // são atalhos pequenos, não telas cheias, o canvas continua interativo ao redor.
-    <div className="chat-radial-backdrop" onClick={onClose}>
-      <div
-        className="chat-radial"
-        role="menu"
-        aria-label="Chat rápido"
-        ref={rootRef}
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="chat-radial-center" aria-hidden="true">
-          💬
-        </div>
-        {items.map((item, i) => {
-          const angle = (i / slotCount) * 2 * Math.PI - Math.PI / 2
-          const x = Math.round(Math.cos(angle) * RADIUS)
-          const y = Math.round(Math.sin(angle) * RADIUS)
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="menuitem"
-              className="chat-radial-btn"
-              style={{ transform: `translate(${x}px, ${y}px)` }}
-              onClick={() => {
-                onSend(item.id)
-                onClose()
-              }}
-              aria-label={item.text}
-            >
-              <span aria-hidden="true">{item.emoji}</span>
-            </button>
-          )
-        })}
-        {(() => {
-          const angle = (items.length / slotCount) * 2 * Math.PI - Math.PI / 2
-          const x = Math.round(Math.cos(angle) * RADIUS)
-          const y = Math.round(Math.sin(angle) * RADIUS)
-          return (
-            <button
-              type="button"
-              role="menuitem"
-              className="chat-radial-btn chat-radial-more"
-              style={{ transform: `translate(${x}px, ${y}px)` }}
-              onClick={onMore}
-              aria-label="Mais opções de chat"
-            >
-              ⋯
-            </button>
-          )
-        })()}
-        <button type="button" className="modal-close chat-radial-close" onClick={onClose} aria-label="Fechar chat rápido">
-          ×
-        </button>
+    // Achado do review automático do Copilot: um backdrop de TELA CHEIA (mesmo transparente) pra
+    // capturar "clique fora fecha" reintroduz o mesmo bug que o lab-205 corrigiu pro ranking
+    // ("modal bloqueia arrasto do planeta") — um elemento cobrindo a tela toda captura
+    // pointer/wheel em CIMA do canvas inteiro, não só na área do próprio radial, mesmo excluído de
+    // `canvasInert`. `ChatPanel`/`RankingPanel` (mesma categoria de "atalho pequeno, não tela
+    // cheia") nem têm esse backdrop — fecham só por ×, Esc (`useModalA11y`) ou reabrindo o gatilho.
+    // Sem backdrop aqui, mesmo padrão: nenhuma div nova cobrindo a tela, canvas livre ao redor.
+    <div
+      className="chat-radial"
+      // Achado do review automático do Copilot: `role="menu"`/`role="menuitem"` prometem
+      // navegação por SETA entre os itens (prática ARIA padrão pra esses papéis) — nunca
+      // implementada aqui (só o Tab genérico de `useModalA11y`, mesmo de todo outro painel deste
+      // arquivo). Sem seta implementada, os papéis de menu SÃO a regressão de acessibilidade, não
+      // a solução — trocado por `role="group"`, que não promete nenhuma tecla que não exista.
+      role="group"
+      aria-label="Chat rápido"
+      ref={rootRef}
+      tabIndex={-1}
+    >
+      <div className="chat-radial-center" aria-hidden="true">
+        💬
       </div>
+      {items.map((item, i) => {
+        const angle = (i / slotCount) * 2 * Math.PI - Math.PI / 2
+        const x = Math.round(Math.cos(angle) * RADIUS)
+        const y = Math.round(Math.sin(angle) * RADIUS)
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className="chat-radial-btn"
+            style={{ transform: `translate(${x}px, ${y}px)` }}
+            onClick={() => {
+              onSend(item.id)
+              onClose()
+            }}
+            aria-label={item.text}
+          >
+            <span aria-hidden="true">{item.emoji}</span>
+          </button>
+        )
+      })}
+      {(() => {
+        const angle = (items.length / slotCount) * 2 * Math.PI - Math.PI / 2
+        const x = Math.round(Math.cos(angle) * RADIUS)
+        const y = Math.round(Math.sin(angle) * RADIUS)
+        return (
+          <button
+            type="button"
+            className="chat-radial-btn chat-radial-more"
+            style={{ transform: `translate(${x}px, ${y}px)` }}
+            onClick={onMore}
+            aria-label="Mais opções de chat"
+          >
+            ⋯
+          </button>
+        )
+      })()}
+      <button type="button" className="modal-close chat-radial-close" onClick={onClose} aria-label="Fechar chat rápido">
+        ×
+      </button>
     </div>
   )
 }

@@ -138,6 +138,44 @@ correção de bug — outra ordem seria igualmente válida; esta foi escolhida p
 decrescente do sinal (interior de bolso é o contexto mais "isolado e certo", pet equipado é o mais
 "sempre verdadeiro quando nada mais se aplica").
 
+## Rodada de review — Copilot (PR #91)
+
+**Rodada 1**: "🟡 Changes recommended". 1 achado formal (comentário inline) + 3 achados descritos só
+no resumo em texto (sem comentário inline próprio, tabela de "votos") — todos investigados contra
+o código real antes de corrigir, nenhum descartado como falso positivo:
+
+1. **Médio (comentário inline) — centro de jogos classificado incorretamente como `casa`**:
+   confirmado contra o código — `enterGameCenterInterior()` (`World3D.tsx`) liga
+   `insideHouseInterior = true` JUNTO com `insideGameCenterInterior = true` (mesmo padrão já
+   documentado na declaração de `insideGameCenterInterior`: "reaproveita `insideHouseInterior` como
+   a flag 'dentro de ALGUM interior de bolso'"). `__getChatContext` checava `insideHouseInterior`
+   ANTES de `insideGameCenterInterior`, então o saguão do centro de jogos (e qualquer minijogo
+   dentro dele) sempre caía em `casa`, nunca em `corrida`. Corrigido invertendo a ordem — mesmo
+   critério de especificidade que o próprio loop de física principal já usa pra este par de flags.
+2. **Médio (só no resumo) — backdrop de tela cheia bloqueia interação com o canvas**: confirmado
+   contra o CSS — a primeira versão de `.chat-radial-backdrop` era `position: fixed; inset: 0`
+   (tela cheia, mesmo transparente), capturando pointer/wheel em cima do canvas INTEIRO enquanto o
+   radial estava aberto, não só na área do próprio componente. Mesma classe de bug que o lab-205
+   corrigiu pro ranking ("modal bloqueia arrasto do planeta") — mas reintroduzida aqui por um
+   mecanismo diferente (uma div cobrindo a tela, não o atributo `inert`). Corrigido removendo o
+   backdrop inteiramente: `ChatPanel`/`RankingPanel` (mesma categoria de atalho pequeno) nem têm
+   um, fecham só por ×/Esc — o radial passou a seguir o mesmo padrão em vez de inventar
+   "clique fora fecha" com um custo colateral que os outros dois nunca tiveram.
+3. **Médio (só no resumo) — semântica de menu (`role="menu"`/`"menuitem"`) sem navegação por seta
+   correspondente**: confirmado contra o componente — usar esses papéis ARIA promete navegação por
+   seta entre os itens (prática padrão da especificação), nunca implementada aqui (só o Tab
+   genérico de `useModalA11y`, igual a todo outro painel do arquivo). Corrigido trocando por
+   `role="group"`, que não promete nenhuma tecla que o componente não ofereça de verdade.
+4. **Médio (só no resumo) — mensagem "Bem-vindo à minha casa!" pode aparecer visitando a casa de um
+   amigo**: confirmado contra o código — `visitingHouseSnapshot` (`World3D.tsx`, lab-175) é
+   não-nulo exatamente quando o jogador está visitando a casa de OUTRO jogador; a frase contextual
+   de `casa` é da perspectiva de quem MORA ali, sem sentido dita por um visitante. Corrigido: o
+   contexto `casa` só é retornado quando `insideHouseInterior && !visitingHouseSnapshot` — visitando
+   a casa de um amigo, cai pro próximo contexto da prioridade (planeta/pet/padrão).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 4
+correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Texto livre, PII, DM, voz — fora de escopo do próprio item do backlog.
