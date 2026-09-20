@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Em andamento: labs/lab-211-brilho-bau-tesouro/ — backlog "Lab 198 - Efeitos visuais de recompensa,
+movimento e interacao": fecha a peça "brilho em interativo" com um brilho pulsante no fecho dourado
+dos baús de tesouro (lab-131) — os únicos colecionáveis de recompensa real ainda sem nenhum brilho
+(moedas já têm um estático). Animação incondicional (mesmo padrão de nuvens/luas/idle dos
+professores), desligada em aparelho fraco (`isLowEndDevice`, material fica estático no valor de
+pico). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 198 - Efeitos visuais de
+recompensa, movimento e interacao" — escolhido com o usuário via `AskUserQuestion` depois do
+lab-210. Ver `labs/lab-211-brilho-bau-tesouro/FEATURES.md` pra detalhe.
+
 Último concluído: labs/lab-210-missoes-fisicas-venus/ — backlog "Lab 200 - Extensao de missoes
 fisicas por planeta": amplia o "Lab 180 - Missões ambientais de aprendizagem" (já implementado, 3
 landmarks no planeta principal) com 3 missões físicas ADICIONAIS (não repete o lab-180) em Vênus,
