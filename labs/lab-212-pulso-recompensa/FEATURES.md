@@ -133,6 +133,11 @@ baixo, confirmado e corrigido:
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
 
+Usuário consultado via `AskUserQuestion` depois da rodada 3 (ciclo mais longo que o esperado pra um
+efeito visual pequeno, principalmente porque a correção da rodada 1 precisou ser refeita na rodada
+2) — escolheu parar aqui e mesclar, tratando as 3 rodadas de correções como suficientes. Ciclo de
+review encerrado.
+
 **Risco remanescente, honesto**: a intensidade/duração exata do pulso (escala 1.18x, brilho 1.35x,
 650ms) não foi confirmada ao vivo — valores escolhidos por sensação de "juiciness" comum em jogos
 casuais, sem playtest real.
