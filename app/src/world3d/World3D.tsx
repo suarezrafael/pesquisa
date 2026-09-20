@@ -5778,6 +5778,16 @@ export function World3D({
       // precisar buscar o mesh de novo.
       const treasureChestMarkers: { chestId: string; worldPos: Vector3; pivot: TransformNode; label: TextBlock }[] = []
 
+      // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — luas orbitando os planetas
+      // secundários (`orbitingMoons`, animação por quadro) e o fato educativo mostrado ao pousar
+      // (`planetMoonFacts`, mesma histerese `triggered`/`RESET_DISTANCE` já usada em toda detecção
+      // de proximidade do arquivo). `center`/`basePos`/`axis` guardados em espaço RELATIVO ao
+      // centro do planeta (não world direto) — a posição de verdade é recalculada a cada quadro
+      // como `center + rotateAroundAxis(basePos, axis, tempo*velocidade)` (mesmo idioma já usado
+      // por `cloudGroups`, função `rotateAroundAxis` já existente).
+      const orbitingMoons: { mesh: Mesh; center: Vector3; basePos: Vector3; axis: Vector3; speed: number }[] = []
+      const planetMoonFacts: { worldPos: Vector3; text: string; id: string }[] = []
+
       // Segredos visuais escondidos (lab-179, "Planetas interativos v1") — mesmo formato de
       // `treasureChestMarkers` acima.
       const planetSecretMarkers: { secretId: string; worldPos: Vector3; pivot: TransformNode }[] = []
@@ -5971,6 +5981,59 @@ export function World3D({
           base,
           teacher,
           idlePhase: Math.random() * Math.PI * 2,
+        })
+      }
+
+      // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — só planetas que TÊM lua de
+      // verdade ganham uma aqui (Mercúrio/Vênus ficam de fora, nenhum dos dois tem lua nenhuma —
+      // "Fora de escopo: simulação astronômica perfeita" não impede escolher exemplos reais onde é
+      // de graça). Órbita: inclina `landingUp` 60° em torno de um eixo perpendicular (mesmo
+      // fallback de eixo degenerado já usado em `teleportAvatarTo`/landing puff — evita colapsar
+      // quando `landingUp` é quase paralelo a `Vector3.Right()`), então gira essa direção em torno
+      // do próprio `landingUp` a cada quadro — a lua descreve um círculo de latitude, ficando numa
+      // altura consistente no céu visto do ponto de pouso (não desaparece atrás do horizonte).
+      function buildPlanetMoon(
+        center: Vector3,
+        landingUp: Vector3,
+        planetRadius: number,
+        moonColorRgb: Color3,
+        orbitMultiplier: number,
+        moonRadiusMultiplier: number,
+        speed: number,
+        fact: string,
+        idSuffix: string,
+      ) {
+        let perp = Vector3.Cross(landingUp, Vector3.Right())
+        if (perp.lengthSquared() < 1e-6) perp = Vector3.Cross(landingUp, Vector3.Forward())
+        perp.normalize()
+        const basePos = rotateAroundAxis(landingUp, perp, Math.PI / 3)
+          .normalize()
+          .scale(planetRadius * orbitMultiplier)
+
+        const moonMat = new PBRMaterial(`moonMat-${idSuffix}`, scene)
+        moonMat.albedoColor = moonColorRgb
+        moonMat.roughness = 0.95
+        const mesh = MeshBuilder.CreateSphere(
+          `moon-${idSuffix}`,
+          { diameter: planetRadius * moonRadiusMultiplier * 2, segments: 8 },
+          scene,
+        )
+        mesh.material = moonMat
+        // Achado do review automático do Copilot: planetas secundários são construídos SOB
+        // DEMANDA (`buildPlanetIfNeeded`) — na primeira visita, `time` (relógio global desde o
+        // início da sessão) já está bem adiantado, não em zero. Posicionar aqui na fase 0
+        // (`basePos` puro) faria a lua "pular" de repente pra fase certa assim que o laço de
+        // órbita (mais abaixo) rodasse o primeiro quadro com o `time` de verdade. Calcula a
+        // posição inicial com a MESMA fórmula do laço por quadro, usando o `time` atual no
+        // instante da construção — sem descontinuidade nenhuma entre este quadro e o próximo.
+        mesh.position = center.add(rotateAroundAxis(basePos, landingUp, time * speed))
+        mesh.isPickable = false
+
+        orbitingMoons.push({ mesh, center, basePos, axis: landingUp, speed })
+        planetMoonFacts.push({
+          worldPos: center.add(landingUp.scale(planetRadius + 0.05)),
+          text: fact,
+          id: `moon-fact-${idSuffix}`,
         })
       }
 
@@ -6773,6 +6836,21 @@ export function World3D({
         const secondPlanetRoot = new TransformNode('secondPlanetRoot', scene)
         secondPlanetRoot.position = SECOND_PLANET_CENTER
 
+        // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — Fobos, uma das duas luas reais
+        // de Marte (a outra, Deimos, fica de fora — 1 lua por planeta já cumpre o critério de
+        // aceite "ao menos alguns objetos", sem dobrar o custo de desenho por planeta à toa).
+        buildPlanetMoon(
+          SECOND_PLANET_CENTER,
+          SECOND_PLANET_LANDING_UP,
+          SECOND_PLANET_RADIUS,
+          new Color3(0.42, 0.38, 0.34),
+          1.9,
+          0.12,
+          0.09,
+          '🌙 Fobos é uma das luas de Marte — orbita bem pertinho do planeta!',
+          'marte',
+        )
+
         // Marte (lab-59, pedido do usuário: "o outro planeta é Marte... ele é meio marrom") —
         // marrom-avermelhado, sem trocar céu/luz (globais, compartilhados com o planeta
         // principal; trocar exigiria salvar/restaurar o estado inteiro ao ir e voltar — fora de
@@ -7338,6 +7416,20 @@ export function World3D({
         const jupiterRoot = new TransformNode('jupiterRoot', scene)
         jupiterRoot.position = JUPITER_CENTER
 
+        // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — Europa, uma das luas reais de
+        // Júpiter (famosa por ser coberta de gelo).
+        buildPlanetMoon(
+          JUPITER_CENTER,
+          JUPITER_LANDING_UP,
+          JUPITER_RADIUS,
+          new Color3(0.82, 0.78, 0.68),
+          2.0,
+          0.16,
+          0.06,
+          '🌙 Europa é uma lua de Júpiter coberta de gelo!',
+          'jupiter',
+        )
+
         // Faixas: textura pequena (largura irrelevante — as faixas variam só em V/altura, não em
         // U/longitude), altura maior pra faixas finas o bastante perto da câmera. UV padrão de
         // `CreateSphere` (V = latitude, U = longitude) já dá o efeito de faixas ao redor da esfera
@@ -7467,6 +7559,24 @@ export function World3D({
         const saturnRoot = new TransformNode('saturnRoot', scene)
         saturnRoot.position = SATURN_CENTER
 
+        // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — Titã, a maior lua real de
+        // Saturno, famosa por ter atmosfera densa (rara entre luas). Multiplicador de órbita um
+        // pouco maior que o dos outros planetas (2.2 em vez de ~2.0) de propósito: o anel de
+        // Saturno (mais abaixo) já ocupa até ~1.625×`SATURN_RADIUS` de distância do centro
+        // (`diameter/2 + thickness/2` do torus) — a lua precisa orbitar por FORA do anel, não por
+        // cima dele.
+        buildPlanetMoon(
+          SATURN_CENTER,
+          SATURN_LANDING_UP,
+          SATURN_RADIUS,
+          new Color3(0.78, 0.58, 0.32),
+          2.2,
+          0.2,
+          0.05,
+          '🌙 Titã é a maior lua de Saturno e tem uma atmosfera densa!',
+          'saturno',
+        )
+
         const bandTexture = new DynamicTexture('saturnBandsTex', { width: 8, height: 512 }, scene, false)
         const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
         const bandColors = ['#e8dcc0', '#d9c9a0', '#f0e6d0', '#c9b888', '#e0d4b0', '#d4c298']
@@ -7572,6 +7682,20 @@ export function World3D({
         const uranusRoot = new TransformNode('uranusRoot', scene)
         uranusRoot.position = URANUS_CENTER
 
+        // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — Titânia, a maior lua real de
+        // Urano.
+        buildPlanetMoon(
+          URANUS_CENTER,
+          URANUS_LANDING_UP,
+          URANUS_RADIUS,
+          new Color3(0.55, 0.52, 0.5),
+          2.0,
+          0.15,
+          0.06,
+          '🌙 Titânia é a maior lua de Urano!',
+          'urano',
+        )
+
         const bandTexture = new DynamicTexture('uranusBandsTex', { width: 8, height: 512 }, scene, false)
         const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
         const bandColors = ['#a8dcd4', '#c0ece4', '#98ccc4', '#b4e0d8', '#8cc0b8']
@@ -7676,6 +7800,22 @@ export function World3D({
       function buildNeptuneIfNeeded() {
         const neptuneRoot = new TransformNode('neptuneRoot', scene)
         neptuneRoot.position = NEPTUNE_CENTER
+
+        // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — Tritão, a maior lua real de
+        // Netuno — órbita RETRÓGRADA de verdade (gira ao contrário do sentido normal dos outros
+        // corpos do sistema), reforçada aqui com `speed` negativo (mesmo `rotateAroundAxis` dos
+        // outros, só o sinal do ângulo inverte o sentido visual do giro).
+        buildPlanetMoon(
+          NEPTUNE_CENTER,
+          NEPTUNE_LANDING_UP,
+          NEPTUNE_RADIUS,
+          new Color3(0.75, 0.68, 0.66),
+          2.0,
+          0.17,
+          -0.055,
+          '🌙 Tritão é a maior lua de Netuno e orbita ao contrário das outras!',
+          'netuno',
+        )
 
         const bandTexture = new DynamicTexture('neptuneBandsTex', { width: 8, height: 512 }, scene, false)
         const bandCtx = bandTexture.getContext() as CanvasRenderingContext2D
@@ -12025,6 +12165,12 @@ export function World3D({
       const TEACHER_IDLE_BOB_AMPLITUDE = 0.03
       const TEACHER_IDLE_BOB_SPEED = 1.6
 
+      // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — raio de gatilho do fato educativo
+      // sobre a lua, medido a partir do próprio ponto de pouso (`marker.worldPos` em
+      // `buildPlanetMoon`) — folga parecida com `TEACHER_GREETING_TRIGGER_DISTANCE` acima, dispara
+      // quase assim que o jogador chega.
+      const MOON_FACT_TRIGGER_DISTANCE = 2.5
+
       // lab-170 (pedido do usuário: "outros objetos tem que ser interativos, pela tecla E") —
       // raio de gatilho pra QUALQUER peça de mobília (bem menor que o das escolinhas/casa: uma
       // cama/estante ocupa bem menos espaço que um totem inteiro).
@@ -12773,6 +12919,15 @@ export function World3D({
           for (const puff of cloud.puffs) {
             puff.visibility += (cloudTarget - puff.visibility) * 0.2
           }
+        }
+
+        // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — luas orbitando os planetas
+        // secundários, mesmo idioma de `cloudGroups` acima (`rotateAroundAxis`); incondicional,
+        // roda sempre, mesmo com chat aberto ou jogo suspenso, igual toda outra animação puramente
+        // cosmética deste laço (achado do review automático do Copilot no lab-206: animação
+        // cosmética presa atrás de uma guarda de interação é o bug, não o padrão certo).
+        for (const moon of orbitingMoons) {
+          moon.mesh.position = moon.center.add(rotateAroundAxis(moon.basePos, moon.axis, time * moon.speed))
         }
 
         // combina teclado + joystick
@@ -13733,6 +13888,22 @@ export function World3D({
               } else if (d > RESET_DISTANCE && triggered.has(greetTriggerId)) {
                 triggered.delete(greetTriggerId)
                 marker.teacher.root.rotationQuaternion = Quaternion.Identity()
+              }
+            }
+
+            // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — fato educativo sobre a lua
+            // do planeta, mostrado ao chegar perto do ponto de pouso (mesma histerese
+            // `triggered`/`RESET_DISTANCE`, mesmo balão `furnitureReactionLabel` já reaproveitado
+            // acima pro professor). `worldPos` é o próprio ponto de pouso — dispara quase assim que
+            // o jogador chega, reforçando a hipótese do próprio item do backlog ("orientação
+            // espacial": pousa, olha pro céu, associa o fato à lua visível orbitando).
+            for (const marker of planetMoonFacts) {
+              const d = Vector3.Distance(pos, marker.worldPos)
+              if (d < MOON_FACT_TRIGGER_DISTANCE && !triggered.has(marker.id)) {
+                triggered.add(marker.id)
+                furnitureReactionTimeout = showChatBubbleText(furnitureReactionLabel, marker.text, furnitureReactionTimeout)
+              } else if (d > RESET_DISTANCE && triggered.has(marker.id)) {
+                triggered.delete(marker.id)
               }
             }
 
