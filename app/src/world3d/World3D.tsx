@@ -306,7 +306,14 @@ interface World3DProps {
   // `completeQuest` (é uma missão normal do pool de sempre, só alcançada por um caminho
   // ambiental novo em vez de só pela escolinha), então não precisa de nenhuma ponte de volta
   // pra este componente — `App.tsx` cuida do resto sozinho.
-  onOpenEnvironmentalChallenge: (quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque') => void
+  // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — 3 kinds novos
+  // (`push_object`/`circuit_order`/`reading_collect`), mesmo pipeline de recompensa/eventos do
+  // lab-180 (`bridge`/`rocket_fuel`/`plaque`), só disparados por mecânicas físicas diferentes num
+  // planeta secundário em vez de landmarks estáticos no planeta principal.
+  onOpenEnvironmentalChallenge: (
+    quest: Quest,
+    kind: 'bridge' | 'rocket_fuel' | 'plaque' | 'push_object' | 'circuit_order' | 'reading_collect',
+  ) => void
 }
 
 const PLANET_RADIUS = 13
@@ -4583,6 +4590,54 @@ export function World3D({
           )
           return
         }
+        // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — pedestal do circuito de
+        // Vênus (2/3 mecânicas novas). Só o PRÓXIMO pedestal esperado (`circuitNextIndex`) reage
+        // de verdade — pisar/apertar E num pedestal fora de ordem reseta o progresso inteiro
+        // (feedback visual, sem punir recompensa nenhuma).
+        // Achado do review automático do Copilot: sem esta guarda, apertar E perto de QUALQUER
+        // pedestal depois do circuito já completo (`circuitDone`) caía no ramo de erro (nenhum
+        // índice bate com `circuitNextIndex`, que já passou do último), reacendendo o hint do
+        // pedestal 1 e apagando o verde dos 3 — parecia um puzzle "resetado", pronto pra jogar de
+        // novo, mas a guarda `!circuitDone` do prêmio nunca deixaria uma 2ª conclusão abrir
+        // recompensa nenhuma. Ignorado por completo enquanto `circuitDone` (nem ativa, nem
+        // reseta) — `circuitDone` em si volta pra `false` sozinho assim que o modal fechar (ver
+        // laço de física principal, achado da rodada seguinte do review: `circuitDone` era
+        // marcado ANTES do modal ser respondido, então fechar sem responder travava a recompensa
+        // pra sempre — agora reabre uma chance nova em vez de travar).
+        if (!insideHouseInterior && !circuitDone) {
+          for (let i = 0; i < circuitPedestals.length; i++) {
+            const ped = circuitPedestals[i]
+            if (Vector3.Distance(avatarMesh.position, ped.worldPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+              // Achado do review automático do Copilot: pular pedestais JÁ ativados (`if
+              // (ped.activated) continue`, versão anterior) deixava apertar E de novo num
+              // pedestal já feito (ex.: voltar pro 1 esperando o 3) sem reação nenhuma — nem
+              // ativa (não é o próximo), nem reseta (pulado pelo `continue`), contradizendo a
+              // própria regra declarada de "qualquer fora de ordem reseta". `i === circuitNextIndex`
+              // já distingue certo/errado sozinho (o pedestal na posição certa nunca está
+              // `activated` ainda, por definição de como `circuitNextIndex` avança) — não precisa
+              // de checagem de `activated` nenhuma aqui.
+              if (i === circuitNextIndex) {
+                ped.activated = true
+                ped.mat.emissiveColor = new Color3(0.2, 0.8, 0.3)
+                circuitNextIndex++
+                if (circuitNextIndex === circuitPedestals.length && !circuitDone) {
+                  circuitDone = true
+                  onOpenEnvironmentalChallengeRef.current(
+                    selectEnvironmentalChallengeQuest('matematica', progressRef.current.completedQuestIds),
+                    'circuit_order',
+                  )
+                }
+              } else {
+                for (const p of circuitPedestals) {
+                  p.activated = false
+                  p.mat.emissiveColor = Color3.Black()
+                }
+                circuitNextIndex = 0
+              }
+              return
+            }
+          }
+        }
 
         // Hub de mini-jogos (backlog "Lab 209") — pedestais de ENTRADA só disparam a contagem
         // regressiva (`setMinigamePrompt`, React); o teleporte de verdade só acontece quando ela
@@ -5787,6 +5842,37 @@ export function World3D({
       // por `cloudGroups`, função `rotateAroundAxis` já existente).
       const orbitingMoons: { mesh: Mesh; center: Vector3; basePos: Vector3; axis: Vector3; speed: number }[] = []
       const planetMoonFacts: { worldPos: Vector3; text: string; id: string }[] = []
+
+      // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — 3 mecânicas físicas novas em
+      // Vênus (planeta priorizado, ver `FEATURES.md` do lab), cada uma disparando o MESMO pipeline
+      // de recompensa/eventos do lab-180 (`selectEnvironmentalChallengeQuest` +
+      // `onOpenEnvironmentalChallengeRef`), só com um `kind` novo pra analytics.
+      //
+      // Empurrar/alinhar objeto: caixa física (`mass > 0`, único corpo dinâmico não-avatar deste
+      // jogo) precisa da MESMA "gravidade radial manual" já aplicada ao avatar
+      // (`body.applyForce(localUp.scale(-GRAVITY), pos)`, ver laço de física principal) — sem
+      // isso a caixa flutuaria (gravidade do motor Havok fica em 0 globalmente; só corpos
+      // dinâmicos que pedem força própria "caem"). `down` fixo (não recalculado por posição) é uma
+      // aproximação deliberada, válida porque a caixa só se move numa área pequena e plana perto
+      // do ponto de partida — mesmo raciocínio já aceito pros bichos da lagoa ("a curvatura do
+      // planeta nessa escala é desprezível").
+      let pushObjectPuzzle: { body: PhysicsBody; mesh: Mesh; down: Vector3; targetPos: Vector3; mass: number; done: boolean } | null =
+        null
+      // Ligar circuito em ordem: 3 pedestais fixos, ativados por TECLA E (mesmo padrão "Pressione
+      // E" dos 3 landmarks do lab-180, checado dentro de `handleInteractPress`) na ordem 1→2→3.
+      // Apertar E num pedestal fora de ordem reseta o progresso (feedback visual, sem punição de
+      // recompensa — mesmo espírito de "erro não pune" do lab-180). Achado do review automático
+      // do Copilot: um comentário anterior aqui (e em mais 2 lugares deste arquivo) descrevia
+      // ativação por proximidade — uma decisão de design que foi trocada por tecla E durante a
+      // implementação, sem atualizar todos os comentários que a descreviam.
+      let circuitPedestals: { worldPos: Vector3; mesh: Mesh; mat: PBRMaterial; hintLabel: TextBlock; activated: boolean }[] = []
+      let circuitNextIndex = 0
+      let circuitDone = false
+      // Coletar leitura ambiental: 3 pergaminhos, mesmo padrão de coleta por proximidade das
+      // moedas (`coins`) — array PRÓPRIO (não reaproveita `coins` de verdade) porque isto não paga
+      // moeda nenhuma sozinho, só destrava a pergunta ao completar o conjunto.
+      const scrollMarkers: { worldPos: Vector3; mesh: Mesh; collected: boolean }[] = []
+      let scrollsDone = false
 
       // Segredos visuais escondidos (lab-179, "Planetas interativos v1") — mesmo formato de
       // `treasureChestMarkers` acima.
@@ -7405,6 +7491,136 @@ export function World3D({
         returnHint.linkWithMesh(returnRocketRoot)
         returnHint.linkOffsetY = -230
         returnRockets.set('venus', { root: returnRocketRoot, hintLabel: returnHint })
+
+        // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — Vênus é o planeta
+        // priorizado (nível 3, sem timer de sobrevivência, sem mecânica especial própria ainda).
+        // 3 direções novas continuam a MESMA espiral de ângulo de ouro das escolinhas (índices
+        // 0-5) e do baú (índice 6) — índices 7/8/9. Posições escolhidas por inspeção (mesma
+        // convenção informal já aceita pelos outros landmarks, ver "Pendências" do CONTEXT.md do
+        // lab-180: sem varredura exaustiva de colisão contra rochas/moedas espalhadas).
+        function venusSpiralDir(index: number, phiDeg: number): Vector3 {
+          const phi = (phiDeg * Math.PI) / 180
+          const theta = index * GOLDEN_ANGLE
+          return new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+        }
+        const pushDown = venusSpiralDir(7, 50)
+        const circuitDir = venusSpiralDir(8, 90)
+        const scrollsDir = venusSpiralDir(9, 130)
+
+        // (1) Empurrar/alinhar objeto — caixa física dinâmica (`mass > 0`, único corpo não-avatar
+        // com massa deste jogo) até uma zona-alvo bem perto (distância curta de propósito: reduz
+        // o tempo/superfície em que a "física instável" citada pelo próprio item do backlog
+        // poderia dar errado). `pushDown` fixo é o "chão" desta área pequena (ver comentário na
+        // declaração de `pushObjectPuzzle`, mesma aproximação já aceita pros bichos da lagoa).
+        let pushPerp = Vector3.Cross(pushDown, Vector3.Right())
+        if (pushPerp.lengthSquared() < 1e-6) pushPerp = Vector3.Cross(pushDown, Vector3.Forward())
+        pushPerp.normalize()
+        const PUSH_BOX_MASS = 3
+        const boxMat = new PBRMaterial('venusPushBoxMat', scene)
+        boxMat.albedoColor = new Color3(0.75, 0.55, 0.2)
+        boxMat.roughness = 0.7
+        boxMat.metallic = 0.15
+        const boxMesh = MeshBuilder.CreateBox('venusPushBox', { size: 0.6 }, scene)
+        boxMesh.material = boxMat
+        boxMesh.position = VENUS_CENTER.add(pushDown.scale(VENUS_RADIUS + 0.3))
+        boxMesh.rotationQuaternion = alignmentQuaternion(pushDown)
+        shadowGenerator.addShadowCaster(boxMesh)
+        const boxAggregate = new PhysicsAggregate(
+          boxMesh,
+          PhysicsShapeType.BOX,
+          { mass: PUSH_BOX_MASS, friction: 0.8, restitution: 0 },
+          scene,
+        )
+        const targetMat = new PBRMaterial('venusPushTargetMat', scene)
+        targetMat.albedoColor = new Color3(0.3, 0.85, 0.4)
+        targetMat.emissiveColor = new Color3(0.1, 0.3, 0.12)
+        targetMat.alpha = 0.7
+        const targetMesh = MeshBuilder.CreateCylinder('venusPushTarget', { height: 0.05, diameter: 1.1 }, scene)
+        targetMesh.material = targetMat
+        targetMesh.isPickable = false
+        // Achado do review automático do Copilot: a zona-alvo fica a 0,3 rad de `pushDown` (ver
+        // comentário acima), então a direção radial de VERDADE na posição dela é essa direção
+        // ROTACIONADA, não `pushDown` original — alinhar ao `pushDown` deixava o disco raso
+        // inclinado em relação ao chão na própria posição dele, em vez de deitado nele.
+        const pushTargetDir = rotateAroundAxis(pushDown, pushPerp, 0.3).normalize()
+        const pushTargetPos = VENUS_CENTER.add(pushTargetDir.scale(VENUS_RADIUS + 0.3))
+        targetMesh.position = pushTargetPos
+        targetMesh.rotationQuaternion = alignmentQuaternion(pushTargetDir)
+        pushObjectPuzzle = {
+          body: boxAggregate.body,
+          mesh: boxMesh,
+          down: pushDown,
+          targetPos: pushTargetPos,
+          mass: PUSH_BOX_MASS,
+          done: false,
+        }
+
+        // (2) Ligar circuito em ordem — 3 pedestais numerados, ativados por tecla E (mesmo
+        // padrão "Pressione E" já usado pelos 3 landmarks do lab-180) na ordem 1→2→3. Pisar fora
+        // de ordem reseta o progresso, sem punir recompensa (mesmo espírito de "erro não pune").
+        // Só o hint do PRÓXIMO pedestal esperado acende, não os 3 ao mesmo tempo — reduz a chance
+        // de a criança apertar E no pedestal errado sem saber por que nada aconteceu.
+        for (let i = 0; i < 3; i++) {
+          const spin = (i / 3) * Math.PI * 2
+          const spinPerp = rotateAroundAxis(pushPerp, circuitDir, spin)
+          const dir = rotateAroundAxis(circuitDir, spinPerp, 0.22)
+          const pos = VENUS_CENTER.add(dir.scale(VENUS_RADIUS))
+          const pedMat = new PBRMaterial(`venusPedestalMat-${i}`, scene)
+          pedMat.albedoColor = new Color3(0.4, 0.4, 0.45)
+          pedMat.roughness = 0.5
+          pedMat.metallic = 0.3
+          const pedMesh = MeshBuilder.CreateCylinder(`venusPedestal-${i}`, { height: 0.5, diameter: 0.5 }, scene)
+          pedMesh.material = pedMat
+          pedMesh.position = pos.add(dir.scale(0.25))
+          pedMesh.rotationQuaternion = alignmentQuaternion(dir)
+          shadowGenerator.addShadowCaster(pedMesh)
+          const pedLabel = new TextBlock(`venusPedestalLabel-${i}`, String(i + 1))
+          pedLabel.color = 'white'
+          pedLabel.fontSize = mobileFontSize(28)
+          pedLabel.fontWeight = 'bold'
+          pedLabel.outlineWidth = 4
+          pedLabel.outlineColor = 'rgba(0,0,0,0.5)'
+          guiTexture.addControl(pedLabel)
+          pedLabel.linkWithMesh(pedMesh)
+          pedLabel.linkOffsetY = -30
+          const pedHint = new TextBlock(`venusPedestalHint-${i}`, 'Pressione E')
+          pedHint.color = 'white'
+          pedHint.fontSize = mobileFontSize(18)
+          pedHint.fontWeight = 'bold'
+          pedHint.outlineWidth = 3
+          pedHint.outlineColor = 'rgba(0,0,0,0.6)'
+          pedHint.alpha = 0
+          guiTexture.addControl(pedHint)
+          pedHint.linkWithMesh(pedMesh)
+          pedHint.linkOffsetY = -70
+          circuitPedestals.push({ worldPos: pos, mesh: pedMesh, mat: pedMat, hintLabel: pedHint, activated: false })
+        }
+
+        // (3) Coletar leitura ambiental — 3 pergaminhos espalhados perto de `scrollsDir`, mesmo
+        // padrão de coleta por proximidade das moedas (`coins`), array próprio (ver comentário na
+        // declaração de `scrollMarkers`).
+        const scrollMat = new PBRMaterial('venusScrollMat', scene)
+        scrollMat.albedoColor = new Color3(0.86, 0.78, 0.58)
+        scrollMat.roughness = 0.85
+        for (let i = 0; i < 3; i++) {
+          const spin = (i / 3) * Math.PI * 2 + 0.6
+          const spinPerp = rotateAroundAxis(pushPerp, scrollsDir, spin)
+          const dir = rotateAroundAxis(scrollsDir, spinPerp, 0.2)
+          const scrollPos = VENUS_CENTER.add(dir.scale(VENUS_RADIUS + 0.2))
+          const scrollMesh = MeshBuilder.CreateCylinder(`venusScroll-${i}`, { height: 0.5, diameter: 0.18 }, scene)
+          scrollMesh.material = scrollMat
+          scrollMesh.position = scrollPos
+          // Achado do review automático do Copilot: `Quaternion.RotationAxis(dir, i)` sozinho só
+          // GIRA em torno de `dir` — nunca mapeia o eixo Y local do cilindro pra essa direção, então
+          // ficava com "pra cima" mundial em vez de alinhado à normal da superfície curva (mesmo
+          // bug que o ponto (2) já cometeu, corrigido acima). Mesma composição já usada em todo o
+          // resto do arquivo pra "alinhar à superfície + variar visualmente": `alignmentQuaternion`
+          // primeiro, `RotationAxis(Vector3.Up(), ângulo)` depois (gira em torno do eixo Y LOCAL,
+          // já que a composição já aconteceu).
+          scrollMesh.rotationQuaternion = alignmentQuaternion(dir).multiply(Quaternion.RotationAxis(Vector3.Up(), i))
+          shadowGenerator.addShadowCaster(scrollMesh)
+          scrollMarkers.push({ worldPos: scrollPos, mesh: scrollMesh, collected: false })
+        }
       }
 
       // Júpiter (lab-112, continuação da frente Sistema Solar) — primeiro gigante gasoso: sem
@@ -12930,6 +13146,90 @@ export function World3D({
           moon.mesh.position = moon.center.add(rotateAroundAxis(moon.basePos, moon.axis, time * moon.speed))
         }
 
+        // Backlog "Lab 200" — força radial manual da caixa empurrável de Vênus, mesma técnica do
+        // avatar (`body.applyForce(localUp.scale(-GRAVITY), pos)` mais abaixo) — sem isto a caixa
+        // flutuaria (gravidade do motor Havok fica em 0 globalmente). A FORÇA em si é incondicional
+        // (mantém a caixa "assentada" mesmo com um modal aberto, inofensivo) — só o GATILHO da
+        // recompensa é guardado.
+        // Achado do review automático do Copilot (2 rodadas de refinamento):
+        // 1) `!hudInertRef.current` (não só `!suspendRef.current`) — `hudInertRef` (lab-208) já
+        //    inclui `suspendTriggers` na própria fórmula, cobrindo TAMBÉM chat radial/ranking/
+        //    mochila (estado local de `World3D.tsx`, fora de `suspendTriggers`) — sem isso, a caixa
+        //    assentando com um desses painéis abertos ainda abriria o `QuestModal` por baixo dele.
+        // 2) `currentPlanetId === 'venus' && !insideHouseInterior && !drivingRocket` — a caixa
+        //    continua existindo e simulando fisicamente mesmo depois do jogador sair de Vênus
+        //    (`currentPlanetId` continua `'venus'` DURANTE o voo do foguete de volta, só muda na
+        //    chegada) — sem isso, um resíduo de movimento podia assentar a caixa na zona-alvo
+        //    enquanto o jogador já está em outro lugar (voando, ou dentro de uma casa), abrindo um
+        //    quiz fora de contexto.
+        // 3) `pushObjectPuzzle.done` deixou de ser permanente — achado real: era marcado ANTES do
+        //    modal ser respondido; fechar sem responder (`handleCloseEnvironmentalChallenge`, sem
+        //    creditar nada) deixava `done` travado pra sempre, tornando a recompensa desta caixa
+        //    IMPOSSÍVEL de conseguir pelo resto da sessão.
+        // Achado do review automático do Copilot (rodada seguinte, severidade ALTA): a 1ª versão
+        // dessa correção rearmava assim que o MODAL fechasse (`!hudInertRef.current`) — mas a
+        // caixa continua fisicamente dentro da zona-alvo nesse instante (nada a moveu embora), e
+        // rearmar sem checar isso reabria OUTRO desafio no quadro seguinte, sem nenhum empurrão
+        // novo — um loop de modal se reabrindo sozinho. Corrigido de vez: `done` só volta pra
+        // `false` quando a caixa sai de verdade da zona-alvo (não quando o modal fecha) — fechar
+        // sem responder não trava mais a recompensa pra sempre (a criança pode empurrar a caixa
+        // pra fora e de volta pra tentar outra vez, sempre disponível), e a caixa PARADA dentro da
+        // zona nunca reabre o modal sozinha duas vezes.
+        if (pushObjectPuzzle) {
+          pushObjectPuzzle.body.applyForce(pushObjectPuzzle.down.scale(-GRAVITY * pushObjectPuzzle.mass), pushObjectPuzzle.mesh.position)
+          const inTargetZone = Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7
+          if (pushObjectPuzzle.done) {
+            if (!inTargetZone) pushObjectPuzzle.done = false
+          } else if (
+            !hudInertRef.current &&
+            currentPlanetId === 'venus' &&
+            !insideHouseInterior &&
+            !drivingRocket &&
+            inTargetZone
+          ) {
+            pushObjectPuzzle.done = true
+            onOpenEnvironmentalChallengeRef.current(
+              selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),
+              'push_object',
+            )
+          }
+        }
+
+        // Mesmo achado acima (rodada seguinte do review automático do Copilot): `circuitDone`
+        // também era marcado ANTES do modal ser respondido — fechar sem responder travava o
+        // circuito inteiro pra sempre (guarda `!circuitDone` em `handleInteractPress`, ver mais
+        // acima). Volta pra `false` sozinho assim que o modal fechar, reabrindo os 3 pedestais
+        // pra uma tentativa nova (mesmo espírito "sempre re-tentável" dos landmarks do lab-180).
+        if (circuitDone && !hudInertRef.current) {
+          circuitDone = false
+          circuitNextIndex = 0
+          for (const p of circuitPedestals) {
+            p.activated = false
+            p.mat.emissiveColor = Color3.Black()
+          }
+        }
+
+        // Mesma classe de achado (pró-ativamente identificada por analogia, não citada pelo
+        // review nesta linha específica): os pergaminhos também marcavam `scrollsDone = true`
+        // ANTES do modal ser respondido — fechar sem responder deixaria os 3 já `collected`
+        // (mesh escondida) SEM nenhuma chance de reabrir a recompensa. Achado do review automático
+        // do Copilot (rodada seguinte, mesmo achado de severidade ALTA da caixa física, citado
+        // pra esta linha também): reabilitar os 3 assim que o MODAL fechasse (sem checar a posição
+        // do jogador) podia recolher um pergaminho no MESMO instante se a criança estivesse parada
+        // bem em cima de um deles ao fechar — reabrindo o desafio sem nenhuma coleta nova de
+        // verdade. Corrigido: só reabilita quando o jogador NÃO está perto de nenhum dos 3 (mesmo
+        // raio de coleta, 1,3) — precisa se afastar e voltar pra coletar de novo de verdade.
+        if (scrollsDone && !hudInertRef.current) {
+          const nearAnyScroll = !!avatarMesh && scrollMarkers.some((s) => Vector3.Distance(avatarMesh!.position, s.worldPos) < 1.3)
+          if (!nearAnyScroll) {
+            scrollsDone = false
+            for (const s of scrollMarkers) {
+              s.collected = false
+              s.mesh.setEnabled(true)
+            }
+          }
+        }
+
         // combina teclado + joystick
         // Achado do review automático do Copilot: `inert` (via `TouchJoystick`) bloqueia NOVO
         // toque enquanto um modal está aberto, mas não zera um vetor JÁ diferente de zero — segurar
@@ -13980,6 +14280,36 @@ export function World3D({
               }
             }
 
+            // Backlog "Lab 200" — pergaminhos de Vênus (3/3 mecânicas novas), mesmo padrão de
+            // coleta por proximidade das moedas acima, sem pagar moeda nenhuma sozinho — só
+            // destrava a pergunta ao completar as 3.
+            for (const scroll of scrollMarkers) {
+              if (scroll.collected) continue
+              if (Vector3.Distance(pos, scroll.worldPos) < 1.3) {
+                scroll.collected = true
+                scroll.mesh.setEnabled(false)
+                playCoinCollect()
+              }
+            }
+            // Achado do review automático do Copilot: este bloco só é protegido por
+            // `!suspendRef.current && !chatOpenRef.current` (guarda que envolve TODO este trecho,
+            // incluindo moedas — não estreitada aqui de propósito, pra não mudar o comportamento
+            // já estabelecido de outras mecânicas fora do escopo desta lab). Ranking/mochila ficam
+            // de fora dessa guarda — `!hudInertRef.current` (que já inclui os dois) cobre o
+            // gatilho da recompensa especificamente, mesmo ajuste já aplicado à caixa física.
+            if (
+              !scrollsDone &&
+              !hudInertRef.current &&
+              scrollMarkers.length > 0 &&
+              scrollMarkers.every((s) => s.collected)
+            ) {
+              scrollsDone = true
+              onOpenEnvironmentalChallengeRef.current(
+                selectEnvironmentalChallengeQuest('leitura', progressRef.current.completedQuestIds),
+                'reading_collect',
+              )
+            }
+
             // Pote de moedas na base alienígena de Marte (lab-128) — `marsCoinPotPivot` existe
             // desde a construção do planeta, mas só fica `isEnabled()` depois de Marte limpo
             // nesta visita (ver o bloco que chama `setEnabled(true)`) — checar isso aqui evita
@@ -14714,6 +15044,18 @@ export function World3D({
         if (avatarMesh && plaqueEnterHintLabel) {
           plaqueEnterHintLabel.alpha =
             !insideHouseInterior && Vector3.Distance(avatarMesh.position, plaqueSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+        }
+
+        // Backlog "Lab 200" — só o hint do pedestal do circuito ESPERADO A SEGUIR acende (ver
+        // comentário em `handleInteractPress`).
+        if (avatarMesh) {
+          for (let i = 0; i < circuitPedestals.length; i++) {
+            const ped = circuitPedestals[i]
+            ped.hintLabel.alpha =
+              !insideHouseInterior && i === circuitNextIndex && Vector3.Distance(avatarMesh.position, ped.worldPos) < ENV_CHALLENGE_TRIGGER_DISTANCE
+                ? 1
+                : 0
+          }
         }
 
         // Dicas "pressione E" do hub de mini-jogos (backlog "Lab 209") — mesmo padrão das missões

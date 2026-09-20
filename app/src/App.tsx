@@ -180,7 +180,7 @@ function GameApp() {
   // `activeQuest`.
   const [activeEnvironmentalChallenge, setActiveEnvironmentalChallenge] = useState<{
     quest: Quest
-    kind: 'bridge' | 'rocket_fuel' | 'plaque'
+    kind: 'bridge' | 'rocket_fuel' | 'plaque' | 'push_object' | 'circuit_order' | 'reading_collect'
     attemptId: string
   } | null>(null)
   // Achado do review automático do Copilot (PR #59): `QuestModal` atrasa `onCorrect` em 700ms
@@ -369,7 +369,7 @@ function GameApp() {
   // minutos (lab-164). `trackFirstLearningChallenge` já é idempotente (só dispara uma vez por
   // sessão), então chamar aqui também é seguro mesmo se a criança já tiver aberto uma escolinha
   // antes.
-  function handleOpenEnvironmentalChallenge(quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque') {
+  function handleOpenEnvironmentalChallenge(quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque' | 'push_object' | 'circuit_order' | 'reading_collect') {
     const attemptId = crypto.randomUUID()
     activeEnvironmentalAttemptIdRef.current = attemptId
     setActiveEnvironmentalChallenge({ quest, kind, attemptId })

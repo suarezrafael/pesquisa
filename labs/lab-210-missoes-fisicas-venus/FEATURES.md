@@ -116,6 +116,133 @@ Pontos conferidos por leitura:
   (não um union estreito) — nenhuma mudança de assinatura necessária no lado de analytics do
   cliente, só a allowlist do servidor.
 
+## Rodada de review — Copilot (PR #93)
+
+**Rodada 1**: 3 achados reais (2 comentários inline formais + 1 achado só no resumo em texto),
+confirmados e corrigidos:
+
+1. **Médio — pressionar E de novo num pedestal JÁ ativado não fazia nada**: confirmado contra o
+   código — `if (ped.activated) continue` pulava pedestais já feitos SEM checar distância, então
+   apertar E de novo num pedestal já ativado (esperando um índice diferente) não caía nem no ramo
+   de acerto (não é o próximo) nem no de erro (pulado pelo `continue`) — nada acontecia, ao
+   contrário da regra declarada ("qualquer fora de ordem reseta"). Corrigido removendo o `continue`:
+   `i === circuitNextIndex` já distingue certo/errado sozinho, sem precisar checar `activated`.
+2. **Médio — comentários descreviam ativação por proximidade, código usa tecla E**: confirmado —
+   a declaração de `circuitPedestals` (e mais 2 lugares) ainda dizia "ativados por PROXIMIDADE (não
+   tecla E)", sobra da primeira versão do design (trocada por E durante a implementação, sem
+   atualizar todos os comentários). Corrigido, confirmado por busca que não sobrou nenhuma menção.
+3. **Médio (só no resumo) — gatilho da caixa física podia disparar com outro modal já aberto**:
+   confirmado — a checagem de conclusão da caixa vivia no mesmo bloco INCONDICIONAL das luas
+   (backlog "Lab 197", roda sempre, mesmo suspenso — decisão correta PRA ANIMAÇÃO COSMÉTICA, mas
+   errada pro GATILHO de recompensa). `activeEnvironmentalChallenge !== null` já faz parte de
+   `suspendTriggers` (`App.tsx`) — sem guarda, a caixa podia assentar na zona-alvo enquanto outro
+   desafio ambiental já estava aberto (ex. a placa), e `onOpenEnvironmentalChallengeRef`
+   sobrescreveria `activeEnvironmentalChallenge` por baixo do modal em uso, arrancando a pergunta
+   que a criança já respondia. Corrigido: a FORÇA da caixa continua incondicional (mantê-la
+   "assentada" é inofensivo), só o GATILHO da recompensa ganhou `!suspendRef.current`.
+4. **Baixo — documentação de analytics desatualizada**: `docs/event-catalog.md` e o comentário de
+   `productAnalytics.ts` perto de `trackLearningChallengeStarted` ainda só citavam
+   `bridge`/`rocket_fuel`/`plaque`. Atualizados pra incluir os 3 kinds novos.
+
+`npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
+`npm run build` seguem limpos depois das 4 correções.
+
+**Rodada 2**: os achados 1 e 2 da rodada 1 confirmados "Resolved since last review" (o achado 4,
+docs de analytics, continua listado como "Open" pela persistência de thread já vista em labs
+anteriores — resolvido de verdade, sem ação nova). 2 achados formais novos + 2 achados "Previously
+missed" (marcados pelo próprio Copilot como não detectados na rodada 1, em código que já existia
+desde a implementação original) — os 4 confirmados e corrigidos:
+
+5. **Médio — circuito completo virava "replay morto"**: confirmado contra o código — depois de
+   `circuitDone = true`, apertar E perto de QUALQUER pedestal caía no ramo de ERRO (nenhum índice
+   bate com `circuitNextIndex`, já além do último), reacendendo o hint do pedestal 1 e apagando o
+   verde dos 3 — parecia um puzzle pronto pra jogar de novo, mas a guarda `!circuitDone` do prêmio
+   nunca deixaria uma 2ª conclusão abrir recompensa nenhuma. Corrigido ignorando toda interação de
+   pedestal depois de `circuitDone`.
+6. **Médio — gatilho da caixa só guardava `suspendRef`, não `hudInertRef`**: confirmado — a
+   correção da rodada 1 (`!suspendRef.current`) só cobre os modais de `App.tsx`
+   (`suspendTriggers`); chat radial/ranking/mochila são estado LOCAL de `World3D.tsx`
+   (`hudInertRef`, lab-208), fora de `suspendTriggers`. Corrigido trocando pra
+   `!hudInertRef.current` sozinho — já inclui `suspendTriggers` na própria fórmula
+   (`hudInert = fullScreenInert || ...`, `fullScreenInert` inclui `suspendTriggers`), cobrindo os
+   dois casos sem redundância.
+7. **Médio (Previously missed) — zona-alvo da caixa alinhada à direção ERRADA**: confirmado — o
+   alvo fica a 0,3 rad de `pushDown` (rotação deliberada, ver Investigação prévia), mas o disco raso
+   era alinhado ao `pushDown` ORIGINAL, não à direção de verdade na própria posição dele — o disco
+   ficava inclinado em relação ao chão ali, em vez de deitado nele. Corrigido calculando
+   `pushTargetDir` (a direção rotacionada) e alinhando a essa direção, não a `pushDown`.
+8. **Médio (Previously missed) — pergaminhos nunca alinhados à superfície**: confirmado —
+   `Quaternion.RotationAxis(dir, i)` sozinho só GIRA em torno de `dir`, nunca mapeia o eixo Y local
+   do cilindro pra essa direção — os 3 pergaminhos ficavam com "pra cima" mundial em vez de
+   alinhados à normal da superfície curva de Vênus. Corrigido compondo
+   `alignmentQuaternion(dir).multiply(Quaternion.RotationAxis(Vector3.Up(), i))`, mesmo padrão já
+   usado em todo o resto do arquivo pra "alinhar à superfície + variar visualmente".
+
+`npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
+`npm run build` seguem limpos depois das 4 correções.
+
+**Rodada 3**: os achados 6 e 5 da rodada 2 confirmados "Resolved since last review" (o achado de
+docs de analytics continua "Open" pela persistência de thread já vista antes — resolvido de
+verdade). 1 achado formal novo + 2 achados "Previously missed" — o mais sério do ciclo inteiro,
+confirmado e corrigido:
+
+9. **Médio — recompensa ficava IMPOSSÍVEL pra sempre se a criança fechasse o modal sem
+   responder**: confirmado contra o código — `circuitDone`/`pushObjectPuzzle.done` eram marcados
+   `true` no INSTANTE em que a condição física era satisfeita (3º pedestal, caixa na zona-alvo),
+   ANTES do `QuestModal` ser respondido. Fechar sem responder (`handleCloseEnvironmentalChallenge`,
+   que não credita nada) deixava a flag travada em `true` PRA SEMPRE — a guarda `!circuitDone`/
+   `!pushObjectPuzzle.done` nunca deixaria uma 2ª tentativa abrir recompensa nenhuma pelo resto da
+   sessão. Corrigido: as duas flags voltam pra `false` sozinhas assim que o modal fechar de
+   verdade (`!hudInertRef.current`), certo OU cancelado — mesmo espírito "sempre re-tentável" já
+   estabelecido pelos landmarks do lab-180 (pressionar E de novo sempre sorteia outra pergunta,
+   nenhum landmark trava depois de fechar sem responder). Também identificado (por analogia, não
+   citado pelo review nesta linha específica) e corrigido o mesmo problema em `scrollsDone` — os
+   pergaminhos voltam a ficar coletáveis se o modal fechar sem recompensa.
+10. **Médio (Previously missed) — gatilho da caixa sem checar localização/estado do jogador**:
+    confirmado — `currentPlanetId` continua `'venus'` DURANTE o voo do foguete de volta (só muda na
+    chegada), e a caixa continua existindo/simulando fisicamente mesmo depois do jogador sair do
+    planeta. Um resíduo de movimento podia assentar a caixa na zona-alvo enquanto o jogador já
+    estava voando ou dentro de uma casa, abrindo um quiz fora de contexto. Corrigido acrescentando
+    `currentPlanetId === 'venus' && !insideHouseInterior && !drivingRocket` ao gatilho da
+    recompensa (a força em si continua incondicional).
+11. **Médio (Previously missed) — coleta de pergaminho sem cobrir ranking/mochila**: confirmado —
+    o bloco de coleta (moedas + pergaminhos) só é protegido por `!suspendRef.current &&
+    !chatOpenRef.current` (guarda mais ampla, não estreitada de propósito pra não afetar
+    mecânicas fora do escopo desta lab, como as moedas). Corrigido acrescentando
+    `!hudInertRef.current` especificamente ao gatilho da recompensa dos pergaminhos (cobre
+    ranking/mochila também, sem mexer na guarda mais ampla que protege o resto do bloco).
+
+`npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
+`npm run build` seguem limpos depois das correções.
+
+**Rodada 4**: o achado 9 da rodada 3 (circuito) confirmado "Resolved since last review" (o achado
+de docs de analytics continua "Open" pela persistência de thread já vista antes). 1 achado formal
+novo, de severidade ALTA (a mais alta do ciclo inteiro) — a própria correção da rodada 3 introduziu
+um problema novo, confirmado e corrigido:
+
+12. **Alto — a correção da rodada 3 causava um loop de modal se reabrindo sozinho**: confirmado
+    contra o código — rearmar `pushObjectPuzzle.done`/`scrollsDone` assim que o MODAL fechasse
+    (`!hudInertRef.current`) não considerava que a caixa/pergaminhos continuam no MESMO estado
+    físico "concluído" nesse instante (nada os moveu embora) — o quadro seguinte reabria OUTRO
+    desafio ambiental sem nenhum empurrão/coleta nova de verdade, um loop de modal reabrindo
+    sozinho (pior que o travamento original: em vez de nunca mais conseguir a recompensa, a
+    criança ficava presa vendo o mesmo quiz reabrir repetidamente). Corrigido de vez: a caixa só
+    rearma quando sai de VERDADE da zona-alvo (não quando o modal fecha) — resolve os dois
+    problemas ao mesmo tempo (nunca trava pra sempre, já que dá pra empurrar pra fora e de volta a
+    qualquer momento; nunca reabre sozinha, já que ficar parada dentro da zona não conta como
+    "saiu e voltou"). Pergaminhos ganharam o mesmo tratamento: só reabilitam quando o jogador NÃO
+    está perto de nenhum dos 3 (precisa se afastar e voltar pra coletar de novo de verdade).
+    Circuito não precisou do mesmo ajuste — resetar `circuitNextIndex` pra 0 já exige 3 apertos de
+    E genuinamente novos pra completar de novo, sem risco de reabertura instantânea.
+
+`npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
+`npm run build` seguem limpos depois da correção.
+
+Usuário consultado via `AskUserQuestion` depois da rodada 3 (ciclo já incomumente longo pra uma lab
+de risco elevado) — escolheu pedir mais uma rodada; esta rodada 4 achou o problema mais sério do
+ciclo. Consultado de novo antes de decidir prosseguir além desta rodada — escolheu parar aqui e
+mesclar, tratando as 4 rodadas de correções como suficientes. Ciclo de review encerrado.
+
 **Risco remanescente, honesto (mais alto que labs anteriores desta sessão)**: a caixa física é o
 PRIMEIRO corpo dinâmico não-avatar deste jogo — nunca testada ao vivo, nem aqui nem em nenhum lab
 anterior. Cenários de falha possíveis não descartáveis só por leitura de código: a caixa pode

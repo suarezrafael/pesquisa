@@ -768,6 +768,13 @@ describe('isValidLearningChallengeKind (lab-180, "Missões ambientais de aprendi
     expect(isValidLearningChallengeKind('plaque')).toBe(true)
   })
 
+  // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — 3 kinds novos, mesmo pipeline.
+  it('aceita os 3 kinds novos do lab-200', () => {
+    expect(isValidLearningChallengeKind('push_object')).toBe(true)
+    expect(isValidLearningChallengeKind('circuit_order')).toBe(true)
+    expect(isValidLearningChallengeKind('reading_collect')).toBe(true)
+  })
+
   it('recusa categoria fora do conjunto conhecido', () => {
     expect(isValidLearningChallengeKind('door_pattern')).toBe(false)
     expect(isValidLearningChallengeKind('')).toBe(false)
