@@ -147,6 +147,21 @@ diretamente relacionada, corrigida junto):
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 5
 correções no total.
 
+**Rodada 4**: "Findings: None" pra achado inline novo (o "Open (1)" listado é o mesmo thread da
+rodada 1, já corrigido 2x — parece ficar referenciado até ser marcado resolvido manualmente na UI
+do GitHub, não indica um problema novo). O resumo em texto solto mencionou "CTA hover state tem
+problema de contraste" sem comentário inline dedicado — verificado por cálculo manual de contraste
+(fórmula WCAG): `filter: brightness(1.08)` no hover empurrava `--primary-dark` (#d63473, ~4,5:1 com
+texto branco) de volta pra perto de ~3,96:1 (abaixo do mínimo AA), a MESMA classe de bug que a
+correção da rodada 3 tinha acabado de resolver no estado normal. Corrigido escurecendo no hover em
+vez de clarear (`brightness(0.92)`, ~5,18:1 calculado) — mesmo espírito da correção anterior, sem
+esperar por um comentário inline formal já que o cálculo confirma o problema de verdade. A segunda
+menção do resumo ("comentários de layering desatualizados") não teve comentário inline nem exemplo
+concreto — tratada como não-acionável (sweep manual não encontrou nenhum comentário referenciando
+um valor de z-index antigo).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Remover o portão parental da presença online de verdade — a auditoria concluiu que isso NÃO é

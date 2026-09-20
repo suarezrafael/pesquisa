@@ -2011,7 +2011,11 @@ a.nickname-generate-btn {
 }
 
 .ranking-online-gate-btn:hover {
-  filter: brightness(1.08);
+  /* Escurece, não clareia — `brightness(1.08)` (padrão de `.chat-quick-btn:hover` acima, que usa
+     `var(--primary)`) empurraria `--primary-dark` de volta pra perto do tom que falhou contraste
+     (~3,96:1 calculado, abaixo do mínimo AA), anulando a correção acima. Escurecer melhora o
+     contraste em vez de piorar (~5,18:1). */
+  filter: brightness(0.92);
 }
 
 .ranking-row-self {
