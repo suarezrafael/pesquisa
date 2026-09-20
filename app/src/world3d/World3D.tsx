@@ -3938,6 +3938,14 @@ export function World3D({
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
+        // Achado do review automático do Copilot (rodada seguinte): a marcação ANTES de
+        // `scene.render()` (acima) podia ser SOBRESCRITA pela própria chamada reentrante — se o
+        // destino do teleporte ficar levemente acima da superfície (folga de segurança comum em
+        // pousos/respawns), a checagem reentrante recalcula `grounded` como falso e grava
+        // `wasGroundedLastFrame = false` de volta antes desta função terminar. Reafirmar aqui,
+        // DEPOIS de `scene.render()`, garante que o quadro seguinte (de verdade) sempre veja
+        // `true`, não importa o que a chamada reentrante tenha decidido no meio do caminho.
+        wasGroundedLastFrame = true
         facing = Vector3.Cross(landingUp, Vector3.Right())
         if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(landingUp, Vector3.Forward())
         facing.normalize()
@@ -3960,6 +3968,9 @@ export function World3D({
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
+        // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo` acima (a
+        // chamada reentrante pode sobrescrever a marcação de antes).
+        wasGroundedLastFrame = true
         facing = facingHint.lengthSquared() > 1e-6 ? facingHint.clone().normalize() : facing
       }
 
@@ -4409,6 +4420,8 @@ export function World3D({
             avatarBody.body.setLinearVelocity(Vector3.Zero())
             avatarBody.body.setAngularVelocity(Vector3.Zero())
             avatarBody.body.disablePreStep = true
+            // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo`.
+            wasGroundedLastFrame = true
           }
           facing = exitFwd.subtract(exitSpotUp.scale(Vector3.Dot(exitFwd, exitSpotUp)))
           if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(exitSpotUp, Vector3.Right())
@@ -8191,6 +8204,7 @@ export function World3D({
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
           avatarBody.body.disablePreStep = true
+          wasGroundedLastFrame = true // Reafirma DEPOIS de scene.render() (reentrante pode sobrescrever).
         }
         // Bug real encontrado testando o parkour de laser (lab-39): `__debugTeleport` sempre
         // recalcula a altura do CHÃO na direção dada, então não dava pra testar uma posição no
@@ -8207,6 +8221,7 @@ export function World3D({
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
           avatarBody.body.disablePreStep = true
+          wasGroundedLastFrame = true // Reafirma DEPOIS de scene.render() (reentrante pode sobrescrever).
         }
         // Ajusta a direção pra onde o personagem anda (dev-only, QA) — teleportar não muda
         // `facing` (fica sempre o que era antes), então sem isto não dá pra testar "andar até X"
@@ -9802,6 +9817,8 @@ export function World3D({
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
+        // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo`.
+        wasGroundedLastFrame = true
         facing = new Vector3(0, 0, 1)
         refreshHouseFurnitureVisuals()
         if (visitingHouseSnapshot) {
@@ -10571,6 +10588,8 @@ export function World3D({
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
+        // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo`.
+        wasGroundedLastFrame = true
         facing = new Vector3(0, 0, 1)
         trackGameCenterEntered()
       }

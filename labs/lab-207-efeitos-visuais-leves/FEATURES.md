@@ -160,6 +160,27 @@ uma falha de ordem sutil:
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
 correção.
 
+**Rodada 6**: 1 achado real, confirmado por conta matemática precisa e corrigido — a correção da
+rodada 5 (marcar `wasGroundedLastFrame = true` ANTES de `scene.render()`) ainda tinha uma brecha:
+
+6. **Médio — a própria chamada reentrante podia SOBRESCREVER a marcação de antes**: o respawn de
+   checkpoint do parkour posiciona o avatar em `checkpointPos + PARKOUR_ANCHOR_UP*(AVATAR_RADIUS +
+   0.35)` — como a plataforma tem 0,3 de altura (topo a +0,15 do centro), os PÉS do avatar ficam
+   ~0,2 unidade ACIMA da superfície de verdade (folga de segurança deliberada). Contra o limiar de
+   `grounded` (`AVATAR_RADIUS + 0.13`), essa folga de 0,2 é grande demais — a checagem REENTRANTE
+   (disparada pelo próprio `scene.render()` de dentro da função de teleporte) calcula
+   `grounded=false` nesse instante e GRAVA `wasGroundedLastFrame = false` de volta, sobrescrevendo
+   a marcação `true` de antes, ANTES da função de teleporte sequer terminar. No quadro seguinte de
+   verdade, o avatar já assentou (`grounded=true`), mas `wasGroundedLastFrame` ficou `false`
+   (sobrescrito) — dispara a poeira mesmo assim. Corrigido reafirmando `wasGroundedLastFrame = true`
+   de novo, IMEDIATAMENTE DEPOIS de `scene.render()`, nos mesmos 7 pontos — a marcação de ANTES
+   ainda é necessária (protege a própria checagem reentrante, pros destinos que pousam bem no
+   chão), a de DEPOIS garante que o quadro seguinte real sempre veja o valor certo, não importa o
+   que a chamada reentrante tenha decidido no meio do caminho.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
+correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Footstep dust (poeira a cada passo andando) — mais frequente/sensível a performance, merece sua
