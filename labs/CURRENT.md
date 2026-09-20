@@ -1,19 +1,41 @@
 # Laboratório atual
 
-Em andamento: labs/lab-210-missoes-fisicas-venus/ — backlog "Lab 200 - Extensao de missoes fisicas
-por planeta": amplia o "Lab 180 - Missões ambientais de aprendizagem" (já implementado, 3 landmarks
-no planeta principal) com 3 missões físicas ADICIONAIS (não repete o lab-180) em Vênus, planeta
-priorizado: empurrar uma caixa física dinâmica até uma zona-alvo (primeiro corpo físico dinâmico
-não-avatar deste jogo, risco elevado documentado), ligar 3 pedestais numa ordem certa, coletar 3
-pergaminhos espalhados — cada uma credita recompensa real via o mesmo pipeline do lab-180
+Último concluído: labs/lab-210-missoes-fisicas-venus/ — backlog "Lab 200 - Extensao de missoes
+fisicas por planeta": amplia o "Lab 180 - Missões ambientais de aprendizagem" (já implementado, 3
+landmarks no planeta principal) com 3 missões físicas ADICIONAIS (não repete o lab-180) em Vênus,
+planeta priorizado: empurrar uma caixa física dinâmica até uma zona-alvo (primeiro corpo físico
+dinâmico não-avatar deste jogo), ligar 3 pedestais numa ordem certa, coletar 3 pergaminhos
+espalhados — cada uma credita recompensa real via o mesmo pipeline do lab-180
 (`selectEnvironmentalChallengeQuest`/`completeQuest`), com 3 `kind` novos pro analytics
 (`push_object`/`circuit_order`/`reading_collect`). Origem:
 `docs/growth-retention-monetization-backlog.md`, "Lab 200 - Extensao de missoes fisicas por
 planeta" — escolhido com o usuário via `AskUserQuestion` (2 perguntas: qual item, depois o plano
-concreto de 3 mecânicas + planeta) depois do lab-209. Ver
-`labs/lab-210-missoes-fisicas-venus/FEATURES.md` pra detalhe.
+concreto de 3 mecânicas + planeta) depois do lab-209. **PR #93 teve 4 rodadas de review do
+Copilot**, a mais séria da sessão: (1) achado só no resumo — a caixa (construída sob demanda, mesmo
+padrão dos outros planetas) usa a mesma técnica de "gravidade radial manual" do avatar
+(`body.applyForce`, já que o motor Havok fica em 0 globalmente); (2) 2 achados formais + 2
+"Previously missed" — reset do circuito não reagia a pedestal já ativado, comentários
+desatualizados sobre ativação por proximidade, gatilho da caixa sem guarda contra modal já aberto,
+zona-alvo/pergaminhos com orientação errada na superfície curva (nunca de fato alinhados à normal);
+(3) **o achado mais sério**: `circuitDone`/`pushObjectPuzzle.done`/`scrollsDone` eram marcados
+ANTES do quiz ser respondido — fechar sem responder travava a recompensa das 3 mecânicas
+IMPOSSÍVEL de conseguir pelo resto da sessão; corrigido revertendo essas flags sozinhas; (4) a
+própria correção da rodada 3 causava um LOOP de modal se reabrindo sozinho (a caixa/pergaminhos
+continuavam no mesmo estado físico "concluído" ao fechar o modal) — corrigido de vez rearmando só
+quando o progresso sai de verdade (caixa fora da zona-alvo, jogador longe dos pergaminhos), não
+quando o modal fecha. Usuário consultado via `AskUserQuestion` duas vezes (depois da rodada 3 e da
+rodada 4, dado o risco elevado da caixa física) — escolheu continuar uma vez, depois parar e
+mesclar. `npx tsc -b` limpo; testes: app 257/257, server-accounts 169/169 (3 novos); `npm run
+build` sem regressão. **Sem verificação ao vivo — 13ª lab seguida**: o Chrome desta sessão travou
+de novo em `document.hidden === true` — risco HONESTAMENTE mais alto que labs anteriores por causa
+da caixa física (primeiro corpo dinâmico não-avatar do jogo, nunca testado ao vivo). **Merge
+confirmado**: PR #93 mesclada (squash) em `main` no commit `764d7c4` (2026-09-20, confirmado via
+`AskUserQuestion`). CI de `main` verde (app, server-accounts, server-cf-relay); deploy de produção
+confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-209-luas-planetas/ — backlog "Lab 197 - Orbitas com objetos em
+Antes desse: labs/lab-209-luas-planetas/ — backlog "Lab 197 - Orbitas com objetos em
 alto-relevo": anéis (Saturno/Urano) e crateras (Mercúrio) já existiam de labs anteriores; esta lab
 fecha a peça que faltava (satélites/luas) com uma lua real orbitando cada um dos 5 planetas
 secundários que de verdade têm lua (Fobos/Marte, Europa/Júpiter, Titã/Saturno, Titânia/Urano,
