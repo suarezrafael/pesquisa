@@ -1,14 +1,37 @@
 # Laboratório atual
 
-Em andamento: labs/lab-206-npcs-vivos-planetas/ — dá vida aos professores das escolinhas dos
-planetas secundários (hoje estáticos): idle sutil, olhar/virar pro jogador ao se aproximar (snap
-único no gatilho, não giro contínuo, pra evitar tremedeira perto do raio), e fala catalogada curta
-por matéria (`quest.type`) reaproveitando o balão já existente do jogador. Origem:
+Último concluído: labs/lab-206-npcs-vivos-planetas/ — dá vida aos professores das escolinhas dos
+planetas secundários (hoje estáticos): idle sutil (balanço vertical, fase própria por professor,
+roda sempre — inclusive com chat aberto/jogo suspenso, mesmo lugar/padrão das outras animações
+cosméticas do arquivo, nuvens/pulso do portal), olhar/virar pro jogador ao se aproximar (snap
+único no gatilho, não giro contínuo, pra evitar tremedeira perto do raio — calculado inteiramente
+no referencial LOCAL da escolinha via `atan2`, evitando conversão de quaternion mundo↔local), e
+fala catalogada curta por matéria (`quest.type`: lógica/matemática/leitura) reaproveitando o balão
+já existente do jogador (`furnitureReactionLabel`) — nenhuma UI nova. Origem:
 `docs/gameplay-market-expansion-backlog.md`, "Lab 196 - NPCs vivos nos planetas secundarios" —
-escolhido entre os itens não bloqueados por medição de FPS ao vivo depois do lab-205 (Lab 195). Ver
-`labs/lab-206-npcs-vivos-planetas/FEATURES.md` pra detalhe da investigação.
+escolhido entre os itens não bloqueados por medição de FPS ao vivo depois do lab-205 (Lab 195).
+**PR #89 teve 2 rodadas de review do Copilot**: rodada 1 achou 1 bug real — o balanço de idle
+estava DENTRO do bloco `!suspendRef.current && !chatOpenRef.current` (pensado só pra proteger
+gatilhos de interação), contradizendo o próprio comentário ("roda sempre") e congelando a animação
+com o chat aberto ou o jogo suspenso — corrigido movendo o idle pra um laço incondicional separado.
+A mesma rodada também apontou um achado de severidade ALTA ("acessa campo `marker.id`
+inexistente") que foi investigado e descartado como FALSO POSITIVO: esse campo não existe em
+nenhum lugar do código desta lab, e `npx tsc -b` ficou limpo o tempo todo (antes e depois da
+correção real) — o comentário simplesmente não correspondia ao código de verdade. Rodada 2 voltou
+com "🟢 Approval recommended", o mesmo falso positivo ainda listado como thread "aberta" (mesmo
+padrão de referência persistente já visto em labs anteriores — o próprio resumo recomendou
+aprovação mesmo assim). `npx tsc -b` limpo; testes: app 257/257 (sem mudança — animação/gatilho de
+proximidade, nenhuma lógica de domínio nova); `npm run build` sem regressão. **Sem verificação ao
+vivo — 9ª lab seguida**: o Chrome desta sessão travou de novo em `document.hidden === true`,
+confirmado com uma aba nova — a convenção de "frente" (+Z) do rig foi confirmada por leitura
+(`studentFigure.ts`), mas o SENTIDO exato do giro de olhar pro jogador não foi confirmado ao vivo
+(risco puramente cosmético, documentado em `FEATURES.md`). **Merge confirmado**: PR #89 mesclada
+(squash) em `main` no commit `3df2c58` (2026-09-20, confirmado via `AskUserQuestion`). CI de `main`
+verde; deploy de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare
+Pages (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-205-ranking-sem-friccao/ — remove a fricção desnecessária de abrir o
+Antes desse: labs/lab-205-ranking-sem-friccao/ — remove a fricção desnecessária de abrir o
 painel de ranking: antes, as DUAS abas (online e local, entre perfis do mesmo aparelho) passavam
 pelo mesmo portão parental de multiplayer, mesmo a aba local sendo 100% offline. Auditoria mudou o
 escopo original do backlog: remover o portão da aba ONLINE de verdade não seria seguro (conectar
