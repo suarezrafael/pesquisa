@@ -240,7 +240,8 @@ um problema novo, confirmado e corrigido:
 
 Usuário consultado via `AskUserQuestion` depois da rodada 3 (ciclo já incomumente longo pra uma lab
 de risco elevado) — escolheu pedir mais uma rodada; esta rodada 4 achou o problema mais sério do
-ciclo. Consultado de novo antes de decidir prosseguir além desta rodada.
+ciclo. Consultado de novo antes de decidir prosseguir além desta rodada — escolheu parar aqui e
+mesclar, tratando as 4 rodadas de correções como suficientes. Ciclo de review encerrado.
 
 **Risco remanescente, honesto (mais alto que labs anteriores desta sessão)**: a caixa física é o
 PRIMEIRO corpo dinâmico não-avatar deste jogo — nunca testada ao vivo, nem aqui nem em nenhum lab
