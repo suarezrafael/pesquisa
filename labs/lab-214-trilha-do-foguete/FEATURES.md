@@ -65,16 +65,56 @@ anteriores desta mesma lab-pai). Fora de escopo: feedback de puzzle (última pe�
 
 ## Funcionalidades planejadas
 
-- [ ] Import de `TrailMesh` em `@babylonjs/core`.
-- [ ] `rocketTrailMesh: TrailMesh | null`, criado só quando `!isLowEndDevice`, gerador =
+- [x] Import de `TrailMesh` em `@babylonjs/core`.
+- [x] `rocketTrailMesh: TrailMesh | null`, criado só quando `!isLowEndDevice`, gerador =
   `flameAnchor`, material `PBRMaterial` unlit aditivo.
-- [ ] `boardRocket()`: `computeWorldMatrix(true)` no gerador + `reset()` + `isVisible = true` +
+- [x] `boardRocket()`: `computeWorldMatrix(true)` no gerador + `reset()` + `isVisible = true` +
   `start()`.
-- [ ] `landRocket()`: `stop()` + `isVisible = false`.
-- [ ] Verificar ao vivo: ambiente de automação desta sessão tende a travar em `document.hidden`
-  (mesma limitação de labs anteriores) — se acontecer, documentar e confiar em `tsc`/testes/build +
-  leitura de código cuidadosa. Efeito só aparece durante o voo de foguete, difícil de alcançar sem
-  jogar de verdade mesmo com o mundo carregado.
+- [x] `landRocket()`: `stop()` + `isVisible = false`.
+- [~] Verificar ao vivo: não tentado nesta lab — efeito só aparece durante o voo de foguete
+  (precisa embarcar e decolar de verdade), e as últimas tentativas de verificação ao vivo nesta
+  sessão (labs 211-213) já mostraram que mesmo quando o `document.hidden` é contornado, o ambiente
+  de automação frequentemente fica com `0 FPS`/`0 draw calls` (loop de renderização parado) e/ou
+  reporta GPU fraca (`fraco=true`, que desligaria o rastro de propósito). Confiado em `tsc --force`/
+  testes/build + leitura de código cuidadosa (mesmo padrão aceito nas labs anteriores).
+
+## Verificação de código
+
+Checagens automatizadas: `npx tsc -b --force` limpo; `npm run test -- --run`: 257/257 (sem
+mudança — efeito puramente cosmético, nenhuma lógica de domínio nova); `npm run build` sem erros.
+
+Pontos conferidos por leitura:
+
+- **`flameAnchor` acessível no escopo de `boardRocket`/`landRocket`**: mesma relação de escopo já
+  usada por `rocketFlameSystem` (declarado com `let ... = null` no topo de `setup()`, atribuído
+  perto de `flameAnchor` e referenciado dentro de `boardRocket`, que só executa bem depois — em
+  resposta a um clique do jogador). `flameAnchor` é uma `const` na MESMA função `setup()`, também
+  já em escopo por definição antes de `boardRocket` ser efetivamente chamado.
+- **`Engine.ALPHA_ADD` sem import novo**: confirmado em
+  `node_modules/@babylonjs/core/Engines/engine.pure.d.ts` — exposto como estático na classe
+  `Engine`, já importada neste arquivo.
+- **`RegisterTrailMesh()` automático**: confirmado lendo `node_modules/@babylonjs/core/Meshes/
+  trailMesh.js` — importar de `@babylonjs/core` (não do `.pure`) já chama `RegisterTrailMesh()`
+  como efeito colateral do próprio módulo.
+
+## Rodada de review — Copilot (PR #98)
+
+**Rodada 1**: "🟢 Approval recommended", 1 achado listado (repetido em 3 locais do mesmo arquivo:
+linhas 4120/4176/6983) — investigado e **não procede**:
+
+1. **"Reabilitar `TrailMesh` antes de resetar e iniciar o voo"**: o achado presume que o mesh foi
+   desabilitado via `setEnabled(false)` e nunca reabilitado antes do próximo `reset()`/`start()`.
+   Conferido contra o código real: a criação usa `rocketTrailMesh.isVisible = false` (não
+   `setEnabled`), e `boardRocket()` já define `rocketTrailMesh.isVisible = true` explicitamente
+   logo antes de `reset()`/`start()` (ver bloco `if (rocketTrailMesh) { flameAnchor.
+   computeWorldMatrix(true); rocketTrailMesh.reset(); rocketTrailMesh.isVisible = true;
+   rocketTrailMesh.start() }`). Nenhuma chamada a `setEnabled` existe neste código — o achado
+   parece uma leitura equivocada do comentário adjacente (que cita `isLowEndDevice`/lab-211 como
+   analogia de "não criar" em vez de "criar e nunca disparar", não descrição do próprio
+   `TrailMesh`). Nenhuma mudança de código necessária.
+
+`npx tsc -b --force`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos (nenhuma
+mudança nesta rodada). Ciclo de review encerrado (1 rodada, achado único investigado e descartado).
 
 ## Fora de escopo (explicitamente adiado)
 

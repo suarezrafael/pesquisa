@@ -31,6 +31,7 @@ import {
   ShaderMaterial,
   SSAO2RenderingPipeline,
   ShadowGenerator,
+  TrailMesh,
   TransformNode,
   UniversalCamera,
   Vector3,
@@ -3905,6 +3906,10 @@ export function World3D({
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
     let rocketFlameSystem: ParticleSystem | null = null
+    // Backlog "Lab 198" (lab-214) — rastro tipo cometa que persiste atrás da nave durante o voo
+    // inteiro, diferente da chama curta dos bocais (`rocketFlameSystem`, acima). `null` em
+    // `isLowEndDevice` (nunca chega a ser criado — ver `setup()`, mais abaixo).
+    let rocketTrailMesh: TrailMesh | null = null
     // Backlog "Lab 198" — construído uma vez perto da criação do avatar (não depende de estar num
     // planeta específico, ao contrário de `rocketFlameSystem`/Marte). `null` até lá porque a
     // textura/malha de referência só existem depois que a cena básica está pronta.
@@ -4100,6 +4105,19 @@ export function World3D({
         flyingRocket.rotationQuaternion = fromRestQuat.clone()
         startRocketEngine()
         if (rocketFlameSystem) rocketFlameSystem.emitRate = 80
+        // Rastro tipo cometa (backlog "Lab 198", lab-214) — `reset()` recoloca TODOS os segmentos
+        // na posição atual do gerador (`flameAnchor`); sem isso, o primeiro quadro do voo
+        // desenharia uma fita esticada ligando a decolagem ANTERIOR (outro planeta, possivelmente
+        // do outro lado do sistema solar) até a posição nova. `computeWorldMatrix(true)` força
+        // recalcular a matriz de mundo do `flameAnchor` já com `flyingRocket.position`/
+        // `rotationQuaternion` aplicados acima nesta mesma função — sem isso, `reset()` correria o
+        // risco de ler a matriz de mundo do quadro anterior (ainda não recomputada pelo motor).
+        if (rocketTrailMesh) {
+          flameAnchor.computeWorldMatrix(true)
+          rocketTrailMesh.reset()
+          rocketTrailMesh.isVisible = true
+          rocketTrailMesh.start()
+        }
         // Aviso ao decolar rumo a Marte sem os dois itens de combate (lab-61, pedido do usuário:
         // "dê dicas de como encontrar a espada e a arma senão não tem como sobreviver") — só
         // indo pra Marte especificamente (lab-110: os outros planetas-destino não têm combate
@@ -4152,6 +4170,12 @@ export function World3D({
         drivingRocket = null
         stopRocketEngine()
         if (rocketFlameSystem) rocketFlameSystem.emitRate = 0
+        // `TrailMesh` é um mesh de topo próprio na cena, não filho de `flyingRocket` — desabilitar
+        // `flyingRocket` (acima) não esconde nem para o rastro sozinho.
+        if (rocketTrailMesh) {
+          rocketTrailMesh.stop()
+          rocketTrailMesh.isVisible = false
+        }
 
         if (arrivedPlanetId) {
           const planet = DESTINATION_PLANETS[arrivedPlanetId]
@@ -6943,6 +6967,34 @@ export function World3D({
       rocketFlameSystem.blendMode = ParticleSystem.BLENDMODE_ADD
       rocketFlameSystem.emitRate = 0
       rocketFlameSystem.start()
+
+      // Rastro tipo cometa (backlog "Lab 198", lab-214) — diferente da chama acima (curta,
+      // fica nos bocais): persiste atrás da nave ao longo do trecho percorrido, reforçando a
+      // sensação de velocidade. `TrailMesh` regenera geometria a cada quadro seguindo o gerador
+      // (`onBeforeRenderObservable`) — custo real de malha, não partícula barata — por isso só
+      // CRIADO em `!isLowEndDevice` (nunca em aparelho fraco), mesmo padrão de decisão do brilho
+      // pulsante do baú (lab-211): em vez de criar e nunca disparar, simplesmente não existe.
+      if (!isLowEndDevice) {
+        rocketTrailMesh = new TrailMesh('rocketTrail', flameAnchor, scene, {
+          diameter: 0.3,
+          length: 9,
+          autoStart: false,
+        })
+        rocketTrailMesh.receiveShadows = false
+        rocketTrailMesh.isVisible = false
+        const trailMat = new PBRMaterial('rocketTrailMat', scene)
+        // Mesmo padrão da cúpula de estrelas (`starfieldMat`) — `unlit` + `albedoColor` preto
+        // explícito (senão o branco padrão do PBR tingiria o rastro por baixo do emissivo).
+        // `Engine.ALPHA_ADD` (constante estática, `Engine` já importado neste arquivo) pro
+        // mesmo brilho aditivo já usado pela chama (`ParticleSystem.BLENDMODE_ADD`).
+        trailMat.unlit = true
+        trailMat.albedoColor = Color3.Black()
+        trailMat.emissiveColor = new Color3(1, 0.55, 0.15)
+        trailMat.alpha = 0.5
+        trailMat.alphaMode = Engine.ALPHA_ADD
+        trailMat.backFaceCulling = false
+        rocketTrailMesh.material = trailMat
+      }
 
       // Planetinha secundário (lab-58) — só construído quando o jogador embarca no foguete pela
       // primeira vez ("só aparece quando você embarca na nave", pedido do usuário), não fica
