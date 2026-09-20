@@ -72,7 +72,7 @@ import {
   type PatternGameState,
 } from '../state/patternGame'
 import { planetQuests } from '../data/planetQuests'
-import { findQuickChatMessage } from '../data/chatMessages'
+import { findQuickChatMessage, type ChatContext } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
 import { buildCachorro, buildGato, petFurColor } from './petFigure'
@@ -139,6 +139,7 @@ import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
+import { ChatRadial } from './ChatRadial'
 import { RankingPanel } from './RankingPanel'
 import { MarsHealthBar } from './MarsHealthBar'
 import { SurvivalTimerBar } from './SurvivalTimerBar'
@@ -2649,6 +2650,14 @@ export function World3D({
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(true)
   const [muted, setMuted] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  // Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — o gatilho de chat do HUD
+  // agora abre este atalho radial PRIMEIRO (frases mais relevantes pro contexto atual), não mais
+  // direto o catálogo completo (`chatOpen`, ainda intacto — o radial tem um botão "mais opções"
+  // que troca pra ele). `chatContext` é computado uma vez, no momento em que o radial abre (ver
+  // `openMultiplayerFeature`/`onOpenChat` mais abaixo) — não precisa ficar atualizando ao vivo
+  // enquanto o radial está aberto, ele é fechado bem rápido (1 toque numa frase ou "mais opções").
+  const [chatRadialOpen, setChatRadialOpen] = useState(false)
+  const [chatContext, setChatContext] = useState<ChatContext>('default')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [mpConnected, setMpConnected] = useState(false)
   const [rankingOpen, setRankingOpen] = useState(false)
@@ -2758,7 +2767,9 @@ export function World3D({
   const selectedWeaponRef = useRef<'sword' | 'gun' | null>(null)
   selectedWeaponRef.current = selectedWeapon
   const chatOpenRef = useRef(false)
-  chatOpenRef.current = chatOpen
+  // `chatRadialOpen` inclusa aqui — mesma proteção de movimento/gatilho que o catálogo completo já
+  // tinha, agora cobrindo os dois pontos de entrada do chat (radial e painel completo).
+  chatOpenRef.current = chatOpen || chatRadialOpen
 
   profileRef.current = profile
   progressRef.current = progress
@@ -8173,6 +8184,41 @@ export function World3D({
         const quickMsg = findQuickChatMessage(messageId)
         if (!quickMsg) return
         localChatBubbleTimeout = showChatBubbleText(localChatLabel, `${quickMsg.emoji} ${quickMsg.text}`, localChatBubbleTimeout)
+      }
+
+      // Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — chamado só no instante em
+      // que o jogador toca no ícone de chat (não por quadro), pra decidir qual conjunto de frases o
+      // radial (`ChatRadial.tsx`, React) mostra primeiro. Lê os mesmos `let` do laço de física
+      // principal (mesmo padrão de ponte já usado por `__handleInteractPress`/`__refreshPet` etc. —
+      // closures compartilhadas, sem duplicar estado em React). Prioridade mais específico primeiro:
+      // minijogo/centro de jogos ("corrida") > casa > planeta secundário > pet equipado > padrão —
+      // "missão" do backlog foi fundida em "planeta" (todo planeta secundário já É uma missão, ver
+      // escolinha do lab-206) pra não duplicar contexto sem sinal próprio pra distinguir.
+      // Achado do review automático do Copilot: `enterGameCenterInterior` liga `insideHouseInterior`
+      // JUNTO com `insideGameCenterInterior` (mesmo padrão documentado na declaração de
+      // `insideGameCenterInterior`, "reaproveita `insideHouseInterior` como a flag 'dentro de ALGUM
+      // interior de bolso'") — checar `insideHouseInterior` primeiro fazia o saguão do centro de
+      // jogos (e qualquer minijogo dentro dele) cair sempre em `casa`, nunca em `corrida`. Corrigido
+      // checando o sinal MAIS ESPECÍFICO primeiro, mesma ordem já usada pelo loop de física
+      // principal pra este mesmo par de flags ("checado ANTES da casa porque
+      // `insideGameCenterInterior` é a flag MAIS ESPECÍFICA").
+      ;(scene as any).__getChatContext = (): ChatContext => {
+        if (activeMinigameId !== null || insideGameCenterInterior) return 'corrida'
+        // `visitingHouseSnapshot` não-nulo (lab-175) = visitando a casa de um AMIGO — a frase
+        // contextual de `casa` ("Bem-vindo à minha casa!") é da perspectiva de quem MORA ali;
+        // dita por um visitante ficaria invertida/sem sentido. Cai pro próximo contexto da
+        // prioridade em vez de reaproveitar `casa` incorretamente aqui.
+        if (insideHouseInterior && !visitingHouseSnapshot) return 'casa'
+        if (currentPlanetId !== null) return 'planeta'
+        // Achado do review automático do Copilot: `equippedPetId` sozinho não garante que o pet
+        // exista de verdade — é progresso persistido (JSON arbitrário, pode ficar com um id de um
+        // pet removido/renomeado do catálogo). `rebuildPet()` (perto da criação do avatar) já trata
+        // isso resolvendo pelo catálogo (`findPetById`) e simplesmente não constrói nada se não
+        // achar — sem a mesma checagem aqui, o contexto `pet` podia ser oferecido sem nenhum pet
+        // de verdade visível no mundo.
+        const equippedPetId = progressRef.current.equippedPetId
+        if (equippedPetId && findPetById(equippedPetId)) return 'pet'
+        return 'default'
       }
 
       // Câmera já posicionada corretamente antes do primeiro quadro (evita "pulo" inicial).
@@ -15273,7 +15319,7 @@ export function World3D({
   // mochila durante os 3s de contagem regressiva do hub de mini-jogos — o modal renderiza atrás do
   // overlay da contagem (`.minigame-countdown-overlay` tem `z-index: 40`, `.modal-overlay` tem
   // `z-index: 10`), então ficava aberto mas visualmente escondido até a contagem terminar.
-  const hudInert = fullScreenInert || chatOpen || rankingOpen || bagOpen || !!minigamePrompt
+  const hudInert = fullScreenInert || chatOpen || chatRadialOpen || rankingOpen || bagOpen || !!minigamePrompt
   hudInertRef.current = hudInert
   // Deixar o `<canvas>` inteiro `inert` enquanto chat/ranking/mochila está aberto (como `hudInert`
   // sozinho faria) desabilitava ARRASTO DE CÂMERA/JOYSTICK na área livre inteira, não só na
@@ -15338,7 +15384,17 @@ export function World3D({
         onOpenNicknamePanel={onOpenNicknamePanel}
         muted={muted}
         onToggleMute={handleToggleMute}
-        onOpenChat={() => openMultiplayerFeature(() => setChatOpen(true))}
+        // Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — abre o radial contextual
+        // primeiro (frases mais relevantes já visíveis num toque só); o catálogo completo
+        // (`setChatOpen`) continua a um toque de distância, via "mais opções" dentro do radial (ver
+        // `onMore` no bloco de render abaixo). Mesmo portão parental de antes — só o DESTINO do
+        // toque no ícone de chat mudou, não a regra de quem pode abri-lo.
+        onOpenChat={() =>
+          openMultiplayerFeature(() => {
+            setChatContext((sceneRef.current as any)?.__getChatContext?.() ?? 'default')
+            setChatRadialOpen(true)
+          })
+        }
         // Backlog "Lab 195 - Ranking seguro sem fricção excessiva" — abrir o PAINEL não exige mais
         // o portão parental (a aba "Neste aparelho" é 100% local, sem rede nenhuma); só a aba
         // "Online agora", que depende de presença online de verdade, ainda passa pelo portão —
@@ -15483,6 +15539,17 @@ export function World3D({
             </button>
           </div>
         </div>
+      )}
+      {chatRadialOpen && (
+        <ChatRadial
+          context={chatContext}
+          onSend={handleSendChat}
+          onMore={() => {
+            setChatRadialOpen(false)
+            setChatOpen(true)
+          }}
+          onClose={() => setChatRadialOpen(false)}
+        />
       )}
       {chatOpen && (
         <ChatPanel

@@ -78,6 +78,13 @@ export const QUICK_CHAT_MESSAGES: QuickChatMessage[] = [
   { id: 'cuidado', emoji: '⚠️', text: 'Cuidado!', category: 'jogo' },
   { id: 'missao_dificil', emoji: '🤔', text: 'Essa missão é difícil!', category: 'jogo' },
   { id: 'nivel_up', emoji: '⬆️', text: 'Subi de nível!', category: 'jogo' },
+
+  // Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — 3 frases novas pra cobrir
+  // contextos (casa/corrida/pet) sem análogo natural entre as ~35 já existentes; os outros
+  // contextos (planeta, default) reaproveitam 100% frases já existentes.
+  { id: 'bem_vindo_casa', emoji: '🏠', text: 'Bem-vindo à minha casa!', category: 'convite' },
+  { id: 'boa_corrida', emoji: '🏁', text: 'Boa corrida!', category: 'jogo' },
+  { id: 'pet_fofo', emoji: '🐾', text: 'Que bichinho fofo!', category: 'elogio' },
 ]
 
 export function findQuickChatMessage(id: string): QuickChatMessage | undefined {
@@ -86,4 +93,25 @@ export function findQuickChatMessage(id: string): QuickChatMessage | undefined {
 
 export function quickChatByCategory(category: QuickChatCategory): QuickChatMessage[] {
   return QUICK_CHAT_MESSAGES.filter((m) => m.category === category)
+}
+
+// Backlog "Lab 194 - Quick chat contextual sem supervisao pesada": chat radial mostra só as
+// frases mais relevantes pro contexto atual (evita cavar 5 abas / ~35 frases pra achar "Vamos pra
+// escolinha?" quando o jogador está literalmente na frente de uma escolinha). `ChatRadial.tsx`
+// consome isto; o catálogo completo por categoria (`ChatPanel.tsx`, acima) continua intacto e
+// acessível via "mais opções" a partir do radial — nada removido, só um atalho contextual novo.
+export type ChatContext = 'casa' | 'corrida' | 'planeta' | 'pet' | 'default'
+
+const CONTEXTUAL_QUICK_CHAT_IDS: Record<ChatContext, string[]> = {
+  casa: ['bem_vindo_casa', 'vem_aqui', 'trocar', 'legal'],
+  corrida: ['boa_corrida', 'vamos', 'quase_la', 'consegui'],
+  planeta: ['explorar', 'escolinha', 'ajuda', 'cuidado'],
+  pet: ['pet_fofo', 'adorei', 'legal', 'voce_demais'],
+  default: ['oi', 'legal', 'vamos', 'ajuda'],
+}
+
+export function contextualQuickChatMessages(context: ChatContext): QuickChatMessage[] {
+  return CONTEXTUAL_QUICK_CHAT_IDS[context]
+    .map((id) => findQuickChatMessage(id))
+    .filter((m): m is QuickChatMessage => !!m)
 }

@@ -19,6 +19,7 @@ const QUICK_CHAT_IDS = new Set([
   'vamos', 'vem_aqui', 'espera', 'ajuda', 'combinado', 'trocar', 'escolinha', 'explorar', 'sigam_me',
   'voce_demais', 'boa_ideia', 'muito_bem', 'roupa_legal', 'chapeu_legal', 'inteligente',
   'consegui', 'quase_la', 'tentar_de_novo', 'moeda', 'cuidado', 'missao_dificil', 'nivel_up',
+  'bem_vindo_casa', 'boa_corrida', 'pet_fofo',
 ])
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001

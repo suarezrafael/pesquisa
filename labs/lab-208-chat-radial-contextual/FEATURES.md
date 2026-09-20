@@ -45,11 +45,15 @@ bloqueados por medição ao vivo indisponível nesta sessão). Usuário escolheu
   (`__getChatContext`, mesmo padrão de `__handleInteractPress`/`__refreshPet`/etc.) que combina o
   que já existe num único contexto, calculada sob demanda (só quando o jogador toca no ícone de
   chat), não por quadro.
-- **Contextos e prioridade** (mais específico primeiro): `casa` (dentro de qualquer interior de
-  bolso) > `corrida` (minijogo ativo OU dentro do centro de jogos) > `planeta` (num planeta
-  secundário — funde "planeta atual" e "missão" do backlog, já que todo planeta secundário já É
-  uma missão, ver escolinhas do lab-206) > `pet` (tem um pet equipado, quando nenhum dos anteriores
-  se aplica) > `default` (hub principal, sem nenhum dos anteriores).
+- **Contextos e prioridade** (mais específico primeiro): `corrida` (minijogo ativo OU dentro do
+  centro de jogos) > `casa` (dentro de um interior de bolso que NÃO é o centro de jogos, e que não
+  é uma visita à casa de um amigo) > `planeta` (num planeta secundário — funde "planeta atual" e
+  "missão" do backlog, já que todo planeta secundário já É uma missão, ver escolinhas do lab-206) >
+  `pet` (tem um pet equipado, quando nenhum dos anteriores se aplica) > `default` (hub principal,
+  sem nenhum dos anteriores). Achado do review automático do Copilot (rodada 1): `corrida` precisa
+  vir ANTES de `casa` porque `enterGameCenterInterior()` liga as duas flags juntas
+  (`insideHouseInterior` e `insideGameCenterInterior`) — checar `casa` primeiro faria o saguão do
+  centro de jogos nunca cair em `corrida`.
 - **Frases contextuais reaproveitam o catálogo já existente** sempre que fazem sentido (`explorar`,
   `escolinha`, `ajuda`, `cuidado`, `vamos`, `quase_la`, `consegui`, `vem_aqui`, `trocar`, `legal`,
   `adorei`, `voce_demais`) — só 3 frases novas onde nada do catálogo cobria bem o contexto:
@@ -58,12 +62,16 @@ bloqueados por medição ao vivo indisponível nesta sessão). Usuário escolheu
   legado/suspenso mas mantido em sincronia por convenção já documentada no próprio arquivo).
 - **UI radial não usa `.modal-overlay` (tela cheia)** — mesma decisão já tomada pra chat/ranking/
   mochila (comentário de `canvasInert` em `World3D.tsx`): são atalhos pequenos, o canvas continua
-  interativo ao redor. Fundo do radial é transparente, só captura clique-fora-fecha; os botões
-  circulares reaproveitam o MESMO estilo já auditado pra contraste AA de `.help-button` (anel
-  branco opaco + fundo translúcido), em vez de repetir `--primary` + texto branco (`.chat-quick-btn`
-  já usa essa combinação sem ter passado pela auditoria de contraste — não é regressão desta lab
-  tocar nisso, mas também não faz sentido REPLICAR uma combinação sabidamente arriscada num
-  componente novo quando já existe um padrão validado ao lado).
+  interativo ao redor. Fecha só por × ou Esc (`useModalA11y`), sem nenhum backdrop — achado do
+  review automático do Copilot (rodada 1): uma primeira versão tinha um backdrop transparente de
+  TELA CHEIA só pra fechar com clique-fora, mas isso capturava pointer/wheel em cima do canvas
+  INTEIRO (mesma classe de bug que o lab-205 corrigiu pro ranking), removido de vez — nem
+  `ChatPanel`/`RankingPanel` têm esse comportamento. Os botões circulares reaproveitam o MESMO
+  estilo já auditado pra contraste AA de `.help-button` (anel branco opaco + fundo translúcido), em
+  vez de repetir `--primary` + texto branco (`.chat-quick-btn` já usa essa combinação sem ter
+  passado pela auditoria de contraste — não é regressão desta lab tocar nisso, mas também não faz
+  sentido REPLICAR uma combinação sabidamente arriscada num componente novo quando já existe um
+  padrão validado ao lado).
 - **`useModalA11y` reaproveitado** (mesmo hook de `ChatPanel`/`RankingPanel`/etc.) — Esc fecha,
   foco entra/sai corretamente, coexiste com outros painéis na pilha compartilhada já existente.
 
@@ -133,10 +141,128 @@ posição fixa no canto direito da tela) não foi confirmada ao vivo — pode pr
 de posição em telas muito estreitas (o `.chat-radial` de 200×200px cabe com folga em qualquer
 tela ≥ 320px de largura, mas não foi testado contra o teclado virtual mobile aberto, por exemplo,
 já que o radial não tem campo de texto nenhum pra abrir teclado). O SENTIDO de prioridade de
-contexto (`casa` > `corrida` > `planeta` > `pet` > `default`) é uma escolha de design, não uma
-correção de bug — outra ordem seria igualmente válida; esta foi escolhida por especificidade
-decrescente do sinal (interior de bolso é o contexto mais "isolado e certo", pet equipado é o mais
+contexto (`corrida` > `casa` > `planeta` > `pet` > `default`) é uma escolha de design pro que vem
+DEPOIS de `corrida` (obrigatório vir primeiro, ver achado da rodada 1 acima) — outra ordem pro
+restante seria igualmente válida; esta foi escolhida por especificidade decrescente do sinal
+(interior de bolso é o contexto mais "isolado e certo" depois de corrida, pet equipado é o mais
 "sempre verdadeiro quando nada mais se aplica").
+
+## Rodada de review — Copilot (PR #91)
+
+**Rodada 1**: "🟡 Changes recommended". 1 achado formal (comentário inline) + 3 achados descritos só
+no resumo em texto (sem comentário inline próprio, tabela de "votos") — todos investigados contra
+o código real antes de corrigir, nenhum descartado como falso positivo:
+
+1. **Médio (comentário inline) — centro de jogos classificado incorretamente como `casa`**:
+   confirmado contra o código — `enterGameCenterInterior()` (`World3D.tsx`) liga
+   `insideHouseInterior = true` JUNTO com `insideGameCenterInterior = true` (mesmo padrão já
+   documentado na declaração de `insideGameCenterInterior`: "reaproveita `insideHouseInterior` como
+   a flag 'dentro de ALGUM interior de bolso'"). `__getChatContext` checava `insideHouseInterior`
+   ANTES de `insideGameCenterInterior`, então o saguão do centro de jogos (e qualquer minijogo
+   dentro dele) sempre caía em `casa`, nunca em `corrida`. Corrigido invertendo a ordem — mesmo
+   critério de especificidade que o próprio loop de física principal já usa pra este par de flags.
+2. **Médio (só no resumo) — backdrop de tela cheia bloqueia interação com o canvas**: confirmado
+   contra o CSS — a primeira versão de `.chat-radial-backdrop` era `position: fixed; inset: 0`
+   (tela cheia, mesmo transparente), capturando pointer/wheel em cima do canvas INTEIRO enquanto o
+   radial estava aberto, não só na área do próprio componente. Mesma classe de bug que o lab-205
+   corrigiu pro ranking ("modal bloqueia arrasto do planeta") — mas reintroduzida aqui por um
+   mecanismo diferente (uma div cobrindo a tela, não o atributo `inert`). Corrigido removendo o
+   backdrop inteiramente: `ChatPanel`/`RankingPanel` (mesma categoria de atalho pequeno) nem têm
+   um, fecham só por ×/Esc — o radial passou a seguir o mesmo padrão em vez de inventar
+   "clique fora fecha" com um custo colateral que os outros dois nunca tiveram.
+3. **Médio (só no resumo) — semântica de menu (`role="menu"`/`"menuitem"`) sem navegação por seta
+   correspondente**: confirmado contra o componente — usar esses papéis ARIA promete navegação por
+   seta entre os itens (prática padrão da especificação), nunca implementada aqui (só o Tab
+   genérico de `useModalA11y`, igual a todo outro painel do arquivo). Corrigido trocando por
+   `role="group"`, que não promete nenhuma tecla que o componente não ofereça de verdade.
+4. **Médio (só no resumo) — mensagem "Bem-vindo à minha casa!" pode aparecer visitando a casa de um
+   amigo**: confirmado contra o código — `visitingHouseSnapshot` (`World3D.tsx`, lab-175) é
+   não-nulo exatamente quando o jogador está visitando a casa de OUTRO jogador; a frase contextual
+   de `casa` é da perspectiva de quem MORA ali, sem sentido dita por um visitante. Corrigido: o
+   contexto `casa` só é retornado quando `insideHouseInterior && !visitingHouseSnapshot` — visitando
+   a casa de um amigo, cai pro próximo contexto da prioridade (planeta/pet/padrão).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 4
+correções.
+
+**Rodada 2**: achado da rodada 1 confirmado "Resolved since last review". 2 achados novos, os dois
+de DOCUMENTAÇÃO (não de código) — confirmados e corrigidos:
+
+5. **Baixo — "Contextos e prioridade" (Investigação prévia) ainda documentava `casa` > `corrida`**:
+   confirmado — a correção real da rodada 1 (inverter a ordem no código) nunca foi refletida na
+   lista de prioridade original desta seção, só no changelog da própria rodada 1 mais abaixo —
+   ficavam contraditórias entre si. Corrigido atualizando a lista original pra `corrida` > `casa`,
+   com nota explicando o motivo (mesmas duas flags ligadas juntas por `enterGameCenterInterior`).
+6. **Baixo — texto sobre "captura clique-fora-fecha" ficou obsoleto**: confirmado — a correção real
+   da rodada 1 (remover o backdrop inteiro) mudou o comportamento de fechar pra só ×/Esc, mas o
+   texto original de "Investigação prévia" ainda descrevia o backdrop transparente capturando
+   clique-fora. Corrigido atualizando o texto pra descrever o comportamento final (sem backdrop),
+   com nota do porquê (mesmo bug de bloqueio de canvas do lab-205, reintroduzido e depois removido).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos (nenhuma mudança de
+código nesta rodada, só `FEATURES.md`).
+
+**Rodada 3**: os 2 achados da rodada 2 confirmados "Resolved since last review". 1 achado formal
+novo (comentário inline) + 2 achados "Previously missed" (marcados pelo próprio Copilot como não
+detectados nas rodadas anteriores, em código que não tinha mudado desde a rodada 2) — os 3
+confirmados e corrigidos:
+
+7. **Baixo — 3ª referência desatualizada a `casa > corrida`**: confirmado — a correção da rodada 2
+   arrumou a lista de prioridade em "Investigação prévia", mas o "Risco remanescente" mais abaixo
+   ainda citava a ordem antiga (`casa > corrida > planeta > pet > default`). Corrigido pra refletir
+   a ordem de verdade, com nota de que só a posição de `corrida` é obrigatória (achado da rodada
+   1), o resto continua sendo escolha de design.
+8. **Médio — caixa de 200×200px do radial ainda tapa o canvas nos espaços vazios entre os botões**:
+   confirmado contra o CSS — remover o backdrop de TELA CHEIA (rodada 1) não bastava: `.chat-radial`
+   continuava sendo uma `div` de 200×200px com `pointer-events` padrão (`auto`), então clicar/arrastar
+   num espaço vazio DENTRO dessa caixa (fora dos círculos dos botões, mas ainda dentro do quadrado)
+   continuava sendo capturado por ela, tapando aquele pedaço do canvas. Corrigido devolvendo
+   `pointer-events: none` pro contêiner e `pointer-events: auto` só nos controles de verdade
+   (`.chat-radial-btn`, `.chat-radial-close`) — `pointer-events` é herdado, então sem o `auto`
+   explícito nos botões eles ficariam eles mesmos inclicáveis.
+9. **Médio — `equippedPetId` sozinho não garante que o pet exista de verdade**: confirmado contra
+   `rebuildPet()` (perto da criação do avatar) — ele já resolve `equippedPetId` pelo catálogo
+   (`findPetById`) e simplesmente não constrói nada se o id não for encontrado (progresso
+   persistido é JSON arbitrário, pode ficar com um id de pet removido/renomeado do catálogo). O
+   `__getChatContext` fazia só uma checagem de truthy, sem essa mesma validação — podia oferecer o
+   contexto `pet` com nenhum pet de verdade visível no mundo. Corrigido exigindo
+   `findPetById(equippedPetId)` também.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 3
+correções.
+
+**Rodada 4**: o achado da rodada 3 (3ª referência desatualizada) confirmado "Resolved since last
+review". 1 achado "Previously missed" novo, confirmado e corrigido:
+
+10. **Médio — botão de fechar do radial com contraste insuficiente sobre a cena 3D**: confirmado
+    contra o CSS — `.chat-radial-close` herdava de `.modal-close` um fundo transparente + cor
+    `#6774a3`, pensado pra sentar em cima do fundo OPACO branco de `.chat-panel`/outros modais, não
+    direto sobre a cena 3D (este radial não tem painel nem backdrop atrás dele, ver achado da
+    rodada 1) — contra um céu claro, esse ícone podia cair abaixo do mínimo de 3:1 pra ícones/UI.
+    Corrigido dando ao botão de fechar o MESMO anel opaco (branco translúcido + borda branca +
+    sombra dupla) já usado pelos outros botões do radial, em vez de herdar o estilo pensado pra
+    outro contexto visual.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
+**Rodada 5**: 1 achado real, confirmado e corrigido — a própria correção da rodada 4 introduziu um
+problema novo:
+
+11. **Médio — botão de fechar do radial abaixo do alvo mínimo de toque (auto-inflingido pela
+    rodada 4)**: confirmado contra o CSS — a correção do contraste (rodada 4) encolheu
+    `.chat-radial-close` pra 32×32px (`min-width: 0; min-height: 0; width: 32px; height: 32px`),
+    abaixo do piso de 44×44px já estabelecido em todo o resto do jogo
+    (`docs/prompts/02-design-profissional.md` §3). Corrigido voltando pro tamanho mínimo certo
+    (44×44px), mantendo o anel opaco da correção anterior — os dois requisitos (contraste e alvo de
+    toque) cabem juntos sem conflito, só precisavam das duas correções aplicadas ao mesmo tempo.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
+**Rodada 6**: "Findings: None", achado da rodada 5 confirmado "Resolved since last review".
+Contagem bruta de comentários inline conferida (5) contra os 5 ids já conhecidos/corrigidos das
+rodadas 1-4 — nenhum comentário genuinamente novo. Ciclo de review encerrado aqui (6 rodadas,
+usuário consultado via `AskUserQuestion` depois da rodada 5 sobre continuar ou parar — escolheu
+pedir mais uma rodada; esta rodada 6 veio limpa). Pronta pra revisão de merge.
 
 ## Fora de escopo (explicitamente adiado)
 

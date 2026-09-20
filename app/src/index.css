@@ -1950,6 +1950,106 @@ a.nickname-generate-btn {
   filter: brightness(1.08);
 }
 
+/* Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — atalho radial pras frases mais
+   relevantes pro contexto atual, antes do catálogo completo acima. Achado do review automático do
+   Copilot: uma primeira versão tinha um backdrop de TELA CHEIA (mesmo transparente) só pra
+   capturar "clique fora fecha" — reintroduzia o mesmo bug que o lab-205 corrigiu pro ranking
+   ("modal bloqueia arrasto do planeta"), já que um elemento cobrindo `inset: 0` captura
+   pointer/wheel em cima do canvas INTEIRO, não só na área do próprio radial. Removido — mesmo
+   padrão de `.chat-panel`/`.ranking-panel` (nenhum backdrop, fecha só por ×/Esc), `z-index: 20`
+   igual a `.chat-panel` (não precisa do `45` de `.modal-overlay`, que é só pra tela cheia). */
+.chat-radial {
+  position: absolute;
+  top: 50%;
+  right: 1.2rem;
+  transform: translateY(-50%);
+  width: 200px;
+  height: 200px;
+  z-index: 20;
+  /* Achado do review automático do Copilot (rodada 3): remover o backdrop de tela cheia (acima)
+     não bastava — esta própria caixa de 200×200px, com `pointer-events` padrão (`auto`), ainda
+     captura clique/arrasto/roda nos espaços VAZIOS entre os botões circulares (o quadrado ao redor
+     do círculo de botões), tapando um pedaço do canvas embaixo mesmo sem fundo visível. Devolve o
+     "chão" da caixa pro canvas; só os controles de verdade (`.chat-radial-btn`/`-close`,
+     `pointer-events: auto` mais abaixo) voltam a interceptar ponteiro. */
+  pointer-events: none;
+}
+
+/* Mesmo estilo de círculo de `.help-button` (anel branco opaco + fundo translúcido) — já
+   auditado pro contraste mínimo AA de 3:1 pra ícones/UI contra qualquer fundo 3D
+   (`docs/prompts/02-design-profissional.md` §3), em vez de inventar uma cor nova sem essa
+   garantia (`--primary` com texto branco já falhou essa mesma auditoria em `.ranking-online-gate-btn`,
+   lab-120). */
+.chat-radial-center,
+.chat-radial-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  margin: -24px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 0 0 2px #000, 0 4px 12px rgba(23, 44, 102, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.chat-radial-center {
+  pointer-events: none;
+}
+
+.chat-radial-btn {
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+  /* `pointer-events` é herdado — sem isto, os botões herdariam o `none` de `.chat-radial` (achado
+     da rodada 3 acima) e ficariam eles mesmos INCLICÁVEIS, não só o espaço vazio ao redor. */
+  pointer-events: auto;
+}
+
+.chat-radial-btn:hover,
+.chat-radial-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.chat-radial-more {
+  font-size: 1.6rem;
+  font-weight: 900;
+}
+
+.chat-radial-close {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.4rem;
+  /* Mesmo motivo de `.chat-radial-btn` acima — herdaria `pointer-events: none` de `.chat-radial`
+     sem isto. */
+  pointer-events: auto;
+  /* Achado do review automático do Copilot (rodada 4): herdava de `.modal-close` um fundo
+     transparente + `#6774a3` — pensado pra sentar em cima do fundo OPACO branco de `.chat-panel`/
+     etc., não direto sobre a cena 3D (este radial não tem painel nem backdrop atrás, ver achado da
+     rodada 1). Contra um céu claro, esse ícone podia cair abaixo do mínimo de 3:1 pra ícones/UI.
+     Mesmo anel opaco dos outros botões do radial, não a herança de `.modal-close`. Achado do
+     review automático do Copilot (rodada 5): a correção acima encolheu o botão pra 32×32px,
+     abaixo do piso de 44×44px de alvo de toque já estabelecido em todo o resto do jogo
+     (`docs/prompts/02-design-profissional.md` §3, mesmo piso de `.help-button`/
+     `.furniture-placement-confirm`/etc.) — corrigido voltando pro tamanho mínimo certo, mantendo
+     o anel opaco (ambos os requisitos cabem juntos sem conflito). */
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink);
+  font-size: 1.1rem;
+  box-shadow: 0 0 0 2px #000, 0 4px 12px rgba(23, 44, 102, 0.2);
+}
+
 /* Ranking multiplayer (lab-20) */
 
 .ranking-panel {
