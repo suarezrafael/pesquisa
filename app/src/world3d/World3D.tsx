@@ -306,7 +306,14 @@ interface World3DProps {
   // `completeQuest` (é uma missão normal do pool de sempre, só alcançada por um caminho
   // ambiental novo em vez de só pela escolinha), então não precisa de nenhuma ponte de volta
   // pra este componente — `App.tsx` cuida do resto sozinho.
-  onOpenEnvironmentalChallenge: (quest: Quest, kind: 'bridge' | 'rocket_fuel' | 'plaque') => void
+  // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — 3 kinds novos
+  // (`push_object`/`circuit_order`/`reading_collect`), mesmo pipeline de recompensa/eventos do
+  // lab-180 (`bridge`/`rocket_fuel`/`plaque`), só disparados por mecânicas físicas diferentes num
+  // planeta secundário em vez de landmarks estáticos no planeta principal.
+  onOpenEnvironmentalChallenge: (
+    quest: Quest,
+    kind: 'bridge' | 'rocket_fuel' | 'plaque' | 'push_object' | 'circuit_order' | 'reading_collect',
+  ) => void
 }
 
 const PLANET_RADIUS = 13
@@ -4583,6 +4590,37 @@ export function World3D({
           )
           return
         }
+        // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — pedestal do circuito de
+        // Vênus (2/3 mecânicas novas). Só o PRÓXIMO pedestal esperado (`circuitNextIndex`) reage
+        // de verdade — pisar/apertar E num pedestal fora de ordem reseta o progresso inteiro
+        // (feedback visual, sem punir recompensa nenhuma).
+        if (!insideHouseInterior) {
+          for (let i = 0; i < circuitPedestals.length; i++) {
+            const ped = circuitPedestals[i]
+            if (ped.activated) continue
+            if (Vector3.Distance(avatarMesh.position, ped.worldPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+              if (i === circuitNextIndex) {
+                ped.activated = true
+                ped.mat.emissiveColor = new Color3(0.2, 0.8, 0.3)
+                circuitNextIndex++
+                if (circuitNextIndex === circuitPedestals.length && !circuitDone) {
+                  circuitDone = true
+                  onOpenEnvironmentalChallengeRef.current(
+                    selectEnvironmentalChallengeQuest('matematica', progressRef.current.completedQuestIds),
+                    'circuit_order',
+                  )
+                }
+              } else {
+                for (const p of circuitPedestals) {
+                  p.activated = false
+                  p.mat.emissiveColor = Color3.Black()
+                }
+                circuitNextIndex = 0
+              }
+              return
+            }
+          }
+        }
 
         // Hub de mini-jogos (backlog "Lab 209") — pedestais de ENTRADA só disparam a contagem
         // regressiva (`setMinigamePrompt`, React); o teleporte de verdade só acontece quando ela
@@ -5787,6 +5825,34 @@ export function World3D({
       // por `cloudGroups`, função `rotateAroundAxis` já existente).
       const orbitingMoons: { mesh: Mesh; center: Vector3; basePos: Vector3; axis: Vector3; speed: number }[] = []
       const planetMoonFacts: { worldPos: Vector3; text: string; id: string }[] = []
+
+      // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — 3 mecânicas físicas novas em
+      // Vênus (planeta priorizado, ver `FEATURES.md` do lab), cada uma disparando o MESMO pipeline
+      // de recompensa/eventos do lab-180 (`selectEnvironmentalChallengeQuest` +
+      // `onOpenEnvironmentalChallengeRef`), só com um `kind` novo pra analytics.
+      //
+      // Empurrar/alinhar objeto: caixa física (`mass > 0`, único corpo dinâmico não-avatar deste
+      // jogo) precisa da MESMA "gravidade radial manual" já aplicada ao avatar
+      // (`body.applyForce(localUp.scale(-GRAVITY), pos)`, ver laço de física principal) — sem
+      // isso a caixa flutuaria (gravidade do motor Havok fica em 0 globalmente; só corpos
+      // dinâmicos que pedem força própria "caem"). `down` fixo (não recalculado por posição) é uma
+      // aproximação deliberada, válida porque a caixa só se move numa área pequena e plana perto
+      // do ponto de partida — mesmo raciocínio já aceito pros bichos da lagoa ("a curvatura do
+      // planeta nessa escala é desprezível").
+      let pushObjectPuzzle: { body: PhysicsBody; mesh: Mesh; down: Vector3; targetPos: Vector3; mass: number; done: boolean } | null =
+        null
+      // Ligar circuito em ordem: 3 pedestais fixos, ativados por PROXIMIDADE (não tecla E — mais
+      // simples e seguro que integrar no dispatcher grande de `handleInteractPress`) na ordem
+      // 1→2→3. Pisar num pedestal fora de ordem reseta o progresso (feedback visual, sem punição
+      // de recompensa — mesmo espírito de "erro não pune" do lab-180).
+      let circuitPedestals: { worldPos: Vector3; mesh: Mesh; mat: PBRMaterial; hintLabel: TextBlock; activated: boolean }[] = []
+      let circuitNextIndex = 0
+      let circuitDone = false
+      // Coletar leitura ambiental: 3 pergaminhos, mesmo padrão de coleta por proximidade das
+      // moedas (`coins`) — array PRÓPRIO (não reaproveita `coins` de verdade) porque isto não paga
+      // moeda nenhuma sozinho, só destrava a pergunta ao completar o conjunto.
+      const scrollMarkers: { worldPos: Vector3; mesh: Mesh; collected: boolean }[] = []
+      let scrollsDone = false
 
       // Segredos visuais escondidos (lab-179, "Planetas interativos v1") — mesmo formato de
       // `treasureChestMarkers` acima.
@@ -7405,6 +7471,124 @@ export function World3D({
         returnHint.linkWithMesh(returnRocketRoot)
         returnHint.linkOffsetY = -230
         returnRockets.set('venus', { root: returnRocketRoot, hintLabel: returnHint })
+
+        // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — Vênus é o planeta
+        // priorizado (nível 3, sem timer de sobrevivência, sem mecânica especial própria ainda).
+        // 3 direções novas continuam a MESMA espiral de ângulo de ouro das escolinhas (índices
+        // 0-5) e do baú (índice 6) — índices 7/8/9. Posições escolhidas por inspeção (mesma
+        // convenção informal já aceita pelos outros landmarks, ver "Pendências" do CONTEXT.md do
+        // lab-180: sem varredura exaustiva de colisão contra rochas/moedas espalhadas).
+        function venusSpiralDir(index: number, phiDeg: number): Vector3 {
+          const phi = (phiDeg * Math.PI) / 180
+          const theta = index * GOLDEN_ANGLE
+          return new Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+        }
+        const pushDown = venusSpiralDir(7, 50)
+        const circuitDir = venusSpiralDir(8, 90)
+        const scrollsDir = venusSpiralDir(9, 130)
+
+        // (1) Empurrar/alinhar objeto — caixa física dinâmica (`mass > 0`, único corpo não-avatar
+        // com massa deste jogo) até uma zona-alvo bem perto (distância curta de propósito: reduz
+        // o tempo/superfície em que a "física instável" citada pelo próprio item do backlog
+        // poderia dar errado). `pushDown` fixo é o "chão" desta área pequena (ver comentário na
+        // declaração de `pushObjectPuzzle`, mesma aproximação já aceita pros bichos da lagoa).
+        let pushPerp = Vector3.Cross(pushDown, Vector3.Right())
+        if (pushPerp.lengthSquared() < 1e-6) pushPerp = Vector3.Cross(pushDown, Vector3.Forward())
+        pushPerp.normalize()
+        const PUSH_BOX_MASS = 3
+        const boxMat = new PBRMaterial('venusPushBoxMat', scene)
+        boxMat.albedoColor = new Color3(0.75, 0.55, 0.2)
+        boxMat.roughness = 0.7
+        boxMat.metallic = 0.15
+        const boxMesh = MeshBuilder.CreateBox('venusPushBox', { size: 0.6 }, scene)
+        boxMesh.material = boxMat
+        boxMesh.position = VENUS_CENTER.add(pushDown.scale(VENUS_RADIUS + 0.3))
+        boxMesh.rotationQuaternion = alignmentQuaternion(pushDown)
+        shadowGenerator.addShadowCaster(boxMesh)
+        const boxAggregate = new PhysicsAggregate(
+          boxMesh,
+          PhysicsShapeType.BOX,
+          { mass: PUSH_BOX_MASS, friction: 0.8, restitution: 0 },
+          scene,
+        )
+        const targetMat = new PBRMaterial('venusPushTargetMat', scene)
+        targetMat.albedoColor = new Color3(0.3, 0.85, 0.4)
+        targetMat.emissiveColor = new Color3(0.1, 0.3, 0.12)
+        targetMat.alpha = 0.7
+        const targetMesh = MeshBuilder.CreateCylinder('venusPushTarget', { height: 0.05, diameter: 1.1 }, scene)
+        targetMesh.material = targetMat
+        targetMesh.isPickable = false
+        const pushTargetPos = VENUS_CENTER.add(rotateAroundAxis(pushDown.scale(VENUS_RADIUS + 0.3), pushPerp, 0.3))
+        targetMesh.position = pushTargetPos
+        targetMesh.rotationQuaternion = alignmentQuaternion(pushDown)
+        pushObjectPuzzle = {
+          body: boxAggregate.body,
+          mesh: boxMesh,
+          down: pushDown,
+          targetPos: pushTargetPos,
+          mass: PUSH_BOX_MASS,
+          done: false,
+        }
+
+        // (2) Ligar circuito em ordem — 3 pedestais numerados, ativados por tecla E (mesmo
+        // padrão "Pressione E" já usado pelos 3 landmarks do lab-180) na ordem 1→2→3. Pisar fora
+        // de ordem reseta o progresso, sem punir recompensa (mesmo espírito de "erro não pune").
+        // Só o hint do PRÓXIMO pedestal esperado acende, não os 3 ao mesmo tempo — reduz a chance
+        // de a criança apertar E no pedestal errado sem saber por que nada aconteceu.
+        for (let i = 0; i < 3; i++) {
+          const spin = (i / 3) * Math.PI * 2
+          const spinPerp = rotateAroundAxis(pushPerp, circuitDir, spin)
+          const dir = rotateAroundAxis(circuitDir, spinPerp, 0.22)
+          const pos = VENUS_CENTER.add(dir.scale(VENUS_RADIUS))
+          const pedMat = new PBRMaterial(`venusPedestalMat-${i}`, scene)
+          pedMat.albedoColor = new Color3(0.4, 0.4, 0.45)
+          pedMat.roughness = 0.5
+          pedMat.metallic = 0.3
+          const pedMesh = MeshBuilder.CreateCylinder(`venusPedestal-${i}`, { height: 0.5, diameter: 0.5 }, scene)
+          pedMesh.material = pedMat
+          pedMesh.position = pos.add(dir.scale(0.25))
+          pedMesh.rotationQuaternion = alignmentQuaternion(dir)
+          shadowGenerator.addShadowCaster(pedMesh)
+          const pedLabel = new TextBlock(`venusPedestalLabel-${i}`, String(i + 1))
+          pedLabel.color = 'white'
+          pedLabel.fontSize = mobileFontSize(28)
+          pedLabel.fontWeight = 'bold'
+          pedLabel.outlineWidth = 4
+          pedLabel.outlineColor = 'rgba(0,0,0,0.5)'
+          guiTexture.addControl(pedLabel)
+          pedLabel.linkWithMesh(pedMesh)
+          pedLabel.linkOffsetY = -30
+          const pedHint = new TextBlock(`venusPedestalHint-${i}`, 'Pressione E')
+          pedHint.color = 'white'
+          pedHint.fontSize = mobileFontSize(18)
+          pedHint.fontWeight = 'bold'
+          pedHint.outlineWidth = 3
+          pedHint.outlineColor = 'rgba(0,0,0,0.6)'
+          pedHint.alpha = 0
+          guiTexture.addControl(pedHint)
+          pedHint.linkWithMesh(pedMesh)
+          pedHint.linkOffsetY = -70
+          circuitPedestals.push({ worldPos: pos, mesh: pedMesh, mat: pedMat, hintLabel: pedHint, activated: false })
+        }
+
+        // (3) Coletar leitura ambiental — 3 pergaminhos espalhados perto de `scrollsDir`, mesmo
+        // padrão de coleta por proximidade das moedas (`coins`), array próprio (ver comentário na
+        // declaração de `scrollMarkers`).
+        const scrollMat = new PBRMaterial('venusScrollMat', scene)
+        scrollMat.albedoColor = new Color3(0.86, 0.78, 0.58)
+        scrollMat.roughness = 0.85
+        for (let i = 0; i < 3; i++) {
+          const spin = (i / 3) * Math.PI * 2 + 0.6
+          const spinPerp = rotateAroundAxis(pushPerp, scrollsDir, spin)
+          const dir = rotateAroundAxis(scrollsDir, spinPerp, 0.2)
+          const scrollPos = VENUS_CENTER.add(dir.scale(VENUS_RADIUS + 0.2))
+          const scrollMesh = MeshBuilder.CreateCylinder(`venusScroll-${i}`, { height: 0.5, diameter: 0.18 }, scene)
+          scrollMesh.material = scrollMat
+          scrollMesh.position = scrollPos
+          scrollMesh.rotationQuaternion = Quaternion.RotationAxis(dir, i)
+          shadowGenerator.addShadowCaster(scrollMesh)
+          scrollMarkers.push({ worldPos: scrollPos, mesh: scrollMesh, collected: false })
+        }
       }
 
       // Júpiter (lab-112, continuação da frente Sistema Solar) — primeiro gigante gasoso: sem
@@ -12930,6 +13114,22 @@ export function World3D({
           moon.mesh.position = moon.center.add(rotateAroundAxis(moon.basePos, moon.axis, time * moon.speed))
         }
 
+        // Backlog "Lab 200" — força radial manual da caixa empurrável de Vênus, mesma técnica do
+        // avatar (`body.applyForce(localUp.scale(-GRAVITY), pos)` mais abaixo) — sem isto a caixa
+        // flutuaria (gravidade do motor Havok fica em 0 globalmente). Incondicional, roda todo
+        // quadro enquanto o puzzle não foi resolvido, independente de chat/carro/foguete (a caixa
+        // existe fisicamente na cena o tempo todo, não só quando o jogador está perto olhando).
+        if (pushObjectPuzzle && !pushObjectPuzzle.done) {
+          pushObjectPuzzle.body.applyForce(pushObjectPuzzle.down.scale(-GRAVITY * pushObjectPuzzle.mass), pushObjectPuzzle.mesh.position)
+          if (Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7) {
+            pushObjectPuzzle.done = true
+            onOpenEnvironmentalChallengeRef.current(
+              selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),
+              'push_object',
+            )
+          }
+        }
+
         // combina teclado + joystick
         // Achado do review automático do Copilot: `inert` (via `TouchJoystick`) bloqueia NOVO
         // toque enquanto um modal está aberto, mas não zera um vetor JÁ diferente de zero — segurar
@@ -13980,6 +14180,25 @@ export function World3D({
               }
             }
 
+            // Backlog "Lab 200" — pergaminhos de Vênus (3/3 mecânicas novas), mesmo padrão de
+            // coleta por proximidade das moedas acima, sem pagar moeda nenhuma sozinho — só
+            // destrava a pergunta ao completar as 3.
+            for (const scroll of scrollMarkers) {
+              if (scroll.collected) continue
+              if (Vector3.Distance(pos, scroll.worldPos) < 1.3) {
+                scroll.collected = true
+                scroll.mesh.setEnabled(false)
+                playCoinCollect()
+              }
+            }
+            if (!scrollsDone && scrollMarkers.length > 0 && scrollMarkers.every((s) => s.collected)) {
+              scrollsDone = true
+              onOpenEnvironmentalChallengeRef.current(
+                selectEnvironmentalChallengeQuest('leitura', progressRef.current.completedQuestIds),
+                'reading_collect',
+              )
+            }
+
             // Pote de moedas na base alienígena de Marte (lab-128) — `marsCoinPotPivot` existe
             // desde a construção do planeta, mas só fica `isEnabled()` depois de Marte limpo
             // nesta visita (ver o bloco que chama `setEnabled(true)`) — checar isso aqui evita
@@ -14714,6 +14933,18 @@ export function World3D({
         if (avatarMesh && plaqueEnterHintLabel) {
           plaqueEnterHintLabel.alpha =
             !insideHouseInterior && Vector3.Distance(avatarMesh.position, plaqueSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+        }
+
+        // Backlog "Lab 200" — só o hint do pedestal do circuito ESPERADO A SEGUIR acende (ver
+        // comentário em `handleInteractPress`).
+        if (avatarMesh) {
+          for (let i = 0; i < circuitPedestals.length; i++) {
+            const ped = circuitPedestals[i]
+            ped.hintLabel.alpha =
+              !insideHouseInterior && i === circuitNextIndex && Vector3.Distance(avatarMesh.position, ped.worldPos) < ENV_CHALLENGE_TRIGGER_DISTANCE
+                ? 1
+                : 0
+          }
         }
 
         // Dicas "pressione E" do hub de mini-jogos (backlog "Lab 209") — mesmo padrão das missões

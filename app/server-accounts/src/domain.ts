@@ -310,7 +310,17 @@ export function isValidPlanetInteractionKind(kind: unknown): kind is string {
 // lab-180 ("Missões ambientais de aprendizagem") — qual dos 3 landmarks novos do planeta
 // principal gerou o desafio, mesmo espírito de `PLANET_INTERACTION_KINDS` acima: valor de um
 // conjunto FIXO no código-fonte, nunca texto livre.
-const LEARNING_CHALLENGE_KINDS = new Set(['bridge', 'rocket_fuel', 'plaque'])
+// Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — 3 kinds novos, mesmo pipeline de
+// analytics do lab-180, disparados por mecânicas físicas num planeta secundário em vez de
+// landmarks estáticos no planeta principal.
+const LEARNING_CHALLENGE_KINDS = new Set([
+  'bridge',
+  'rocket_fuel',
+  'plaque',
+  'push_object',
+  'circuit_order',
+  'reading_collect',
+])
 
 export function isValidLearningChallengeKind(kind: unknown): kind is string {
   return typeof kind === 'string' && LEARNING_CHALLENGE_KINDS.has(kind)
