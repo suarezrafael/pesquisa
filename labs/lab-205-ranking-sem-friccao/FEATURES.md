@@ -117,6 +117,19 @@ junto):
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois das
 correções.
 
+**Rodada 2**: 1 achado novo de severidade ALTA, confirmado e corrigido:
+
+3. **Alto — `.modal-overlay` a 25 ainda ficava abaixo de `.furniture-placement-bar`**: a correção
+   da rodada 1 subiu o overlay o suficiente pra `.chat-panel`/`.ranking-panel` (20), mas
+   `.furniture-placement-bar` (modo de posicionar mobília, lab-136) usa `z-index: 30` — botões de
+   verdade, não cobertos por `hudInert`. Em vez de perseguir cada colisão de z-index isoladamente,
+   corrigido subindo `.modal-overlay` pra `z-index: 45` — acima de TODO z-index já usado no
+   arquivo (o maior anterior era 40) — estabelecendo de vez a invariante "nenhum modal renderiza
+   atrás de painel/barra nenhuma", em vez de resolver só o caso específico encontrado.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 3
+correções (z-index rodada 1, alvo de toque, z-index rodada 2).
+
 ## Fora de escopo (explicitamente adiado)
 
 - Remover o portão parental da presença online de verdade — a auditoria concluiu que isso NÃO é

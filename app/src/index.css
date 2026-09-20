@@ -1266,17 +1266,18 @@ a.nickname-generate-btn {
   align-items: flex-end;
   justify-content: center;
   padding: 0;
-  /* Achado do review automático do Copilot (backlog "Lab 195") — `.chat-panel`/`.ranking-panel`
-     (z-index 20) ficavam ACIMA deste overlay (10). Nunca dava pra notar antes porque nenhum
-     `.modal-overlay` (ex.: `ParentalGateModal`) abria enquanto um desses painéis já estava
+  /* Achado do review automático do Copilot (backlog "Lab 195"), em 2 rodadas — 1ª: `.chat-panel`/
+     `.ranking-panel` (z-index 20) ficavam ACIMA deste overlay (10); 2ª (achado de severidade alta,
+     depois de subir só pra 25): `.furniture-placement-bar` (z-index 30, botões de verdade, NÃO
+     coberta por `hudInert`) ainda ficava acima. Nunca dava pra notar antes porque nenhum
+     `.modal-overlay` (ex.: `ParentalGateModal`) abria enquanto outro painel/barra HUD já estava
      montado (o portão sempre abria ANTES do chat, nunca junto). O convite novo de "Ativar modo
-     online" dentro do `RankingPanel` quebrou essa premissa — agora o portão pode abrir com o
-     painel de ranking já aberto por baixo, e o painel (mais alto) ficava visível/clicável por
-     cima do fundo escurecido do modal, quebrando a exclusividade que um modal deveria garantir.
-     25 (acima de todo painel HUD interativo, ver `.chat-panel` acima) resolve isso sem mexer no
-     z-index dos painéis em si.
+     online" dentro do `RankingPanel` quebrou essa premissa — agora o portão pode abrir com
+     qualquer painel/barra HUD já aberta por baixo. Em vez de perseguir cada colisão de z-index uma
+     de cada vez, 45 fica acima de TODO z-index já usado no arquivo (o maior anterior era 40,
+     `.minigame-countdown-overlay`) — um modal nunca deveria renderizar atrás de nada.
   */
-  z-index: 25;
+  z-index: 45;
 }
 
 @media (min-width: 480px) {
