@@ -4597,8 +4597,15 @@ export function World3D({
         if (!insideHouseInterior) {
           for (let i = 0; i < circuitPedestals.length; i++) {
             const ped = circuitPedestals[i]
-            if (ped.activated) continue
             if (Vector3.Distance(avatarMesh.position, ped.worldPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
+              // Achado do review automático do Copilot: pular pedestais JÁ ativados (`if
+              // (ped.activated) continue`, versão anterior) deixava apertar E de novo num
+              // pedestal já feito (ex.: voltar pro 1 esperando o 3) sem reação nenhuma — nem
+              // ativa (não é o próximo), nem reseta (pulado pelo `continue`), contradizendo a
+              // própria regra declarada de "qualquer fora de ordem reseta". `i === circuitNextIndex`
+              // já distingue certo/errado sozinho (o pedestal na posição certa nunca está
+              // `activated` ainda, por definição de como `circuitNextIndex` avança) — não precisa
+              // de checagem de `activated` nenhuma aqui.
               if (i === circuitNextIndex) {
                 ped.activated = true
                 ped.mat.emissiveColor = new Color3(0.2, 0.8, 0.3)
@@ -5841,10 +5848,13 @@ export function World3D({
       // planeta nessa escala é desprezível").
       let pushObjectPuzzle: { body: PhysicsBody; mesh: Mesh; down: Vector3; targetPos: Vector3; mass: number; done: boolean } | null =
         null
-      // Ligar circuito em ordem: 3 pedestais fixos, ativados por PROXIMIDADE (não tecla E — mais
-      // simples e seguro que integrar no dispatcher grande de `handleInteractPress`) na ordem
-      // 1→2→3. Pisar num pedestal fora de ordem reseta o progresso (feedback visual, sem punição
-      // de recompensa — mesmo espírito de "erro não pune" do lab-180).
+      // Ligar circuito em ordem: 3 pedestais fixos, ativados por TECLA E (mesmo padrão "Pressione
+      // E" dos 3 landmarks do lab-180, checado dentro de `handleInteractPress`) na ordem 1→2→3.
+      // Apertar E num pedestal fora de ordem reseta o progresso (feedback visual, sem punição de
+      // recompensa — mesmo espírito de "erro não pune" do lab-180). Achado do review automático
+      // do Copilot: um comentário anterior aqui (e em mais 2 lugares deste arquivo) descrevia
+      // ativação por proximidade — uma decisão de design que foi trocada por tecla E durante a
+      // implementação, sem atualizar todos os comentários que a descreviam.
       let circuitPedestals: { worldPos: Vector3; mesh: Mesh; mat: PBRMaterial; hintLabel: TextBlock; activated: boolean }[] = []
       let circuitNextIndex = 0
       let circuitDone = false
@@ -13116,12 +13126,17 @@ export function World3D({
 
         // Backlog "Lab 200" — força radial manual da caixa empurrável de Vênus, mesma técnica do
         // avatar (`body.applyForce(localUp.scale(-GRAVITY), pos)` mais abaixo) — sem isto a caixa
-        // flutuaria (gravidade do motor Havok fica em 0 globalmente). Incondicional, roda todo
-        // quadro enquanto o puzzle não foi resolvido, independente de chat/carro/foguete (a caixa
-        // existe fisicamente na cena o tempo todo, não só quando o jogador está perto olhando).
+        // flutuaria (gravidade do motor Havok fica em 0 globalmente). A FORÇA em si é incondicional
+        // (mantém a caixa "assentada" mesmo com um modal aberto, inofensivo) — mas o GATILHO da
+        // recompensa é guardado por `!suspendRef.current` (achado do review automático do Copilot:
+        // sem essa guarda, a caixa podia assentar na zona-alvo ENQUANTO outro desafio ambiental já
+        // estava aberto — ex. o jogador respondendo a placa — e `onOpenEnvironmentalChallengeRef`
+        // sobrescreveria `activeEnvironmentalChallenge` por baixo do modal já em uso, arrancando a
+        // pergunta que a criança já estava respondendo). Mesma guarda já usada pra coleta de moeda/
+        // pergaminho mais abaixo.
         if (pushObjectPuzzle && !pushObjectPuzzle.done) {
           pushObjectPuzzle.body.applyForce(pushObjectPuzzle.down.scale(-GRAVITY * pushObjectPuzzle.mass), pushObjectPuzzle.mesh.position)
-          if (Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7) {
+          if (!suspendRef.current && Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7) {
             pushObjectPuzzle.done = true
             onOpenEnvironmentalChallengeRef.current(
               selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),

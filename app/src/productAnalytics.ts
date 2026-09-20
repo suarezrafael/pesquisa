@@ -212,6 +212,12 @@ export function trackPlanetInteractionCompleted(planetId: string, kind: string):
 // `trackPlanetInteractionCompleted` acima. Sem limite de "uma vez por sessão": cada tentativa é
 // seu próprio par de eventos.
 //
+// Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — 3 `kind` novos
+// (`push_object`/`circuit_order`/`reading_collect`), mesmo pipeline/allowlist acima, disparados
+// por mecânicas físicas num planeta secundário (Vênus) em vez de landmarks estáticos no planeta
+// principal. Achado do review automático do Copilot: este comentário e o allowlist do servidor
+// precisam ficar em sincronia — atualizado aqui junto da mudança do allowlist.
+//
 // Achado do review automático do Copilot (PR #59): SEM um id de tentativa no payload (só
 // `kind`+`device_id`+timestamp), não dá pra calcular `retry_without_quit_rate` (métrica citada
 // pelo documento) como uma taxa POR TENTATIVA de verdade — se o mesmo dispositivo abre o mesmo

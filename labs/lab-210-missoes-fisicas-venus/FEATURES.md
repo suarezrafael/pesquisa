@@ -116,6 +116,37 @@ Pontos conferidos por leitura:
   (não um union estreito) — nenhuma mudança de assinatura necessária no lado de analytics do
   cliente, só a allowlist do servidor.
 
+## Rodada de review — Copilot (PR #93)
+
+**Rodada 1**: 3 achados reais (2 comentários inline formais + 1 achado só no resumo em texto),
+confirmados e corrigidos:
+
+1. **Médio — pressionar E de novo num pedestal JÁ ativado não fazia nada**: confirmado contra o
+   código — `if (ped.activated) continue` pulava pedestais já feitos SEM checar distância, então
+   apertar E de novo num pedestal já ativado (esperando um índice diferente) não caía nem no ramo
+   de acerto (não é o próximo) nem no de erro (pulado pelo `continue`) — nada acontecia, ao
+   contrário da regra declarada ("qualquer fora de ordem reseta"). Corrigido removendo o `continue`:
+   `i === circuitNextIndex` já distingue certo/errado sozinho, sem precisar checar `activated`.
+2. **Médio — comentários descreviam ativação por proximidade, código usa tecla E**: confirmado —
+   a declaração de `circuitPedestals` (e mais 2 lugares) ainda dizia "ativados por PROXIMIDADE (não
+   tecla E)", sobra da primeira versão do design (trocada por E durante a implementação, sem
+   atualizar todos os comentários). Corrigido, confirmado por busca que não sobrou nenhuma menção.
+3. **Médio (só no resumo) — gatilho da caixa física podia disparar com outro modal já aberto**:
+   confirmado — a checagem de conclusão da caixa vivia no mesmo bloco INCONDICIONAL das luas
+   (backlog "Lab 197", roda sempre, mesmo suspenso — decisão correta PRA ANIMAÇÃO COSMÉTICA, mas
+   errada pro GATILHO de recompensa). `activeEnvironmentalChallenge !== null` já faz parte de
+   `suspendTriggers` (`App.tsx`) — sem guarda, a caixa podia assentar na zona-alvo enquanto outro
+   desafio ambiental já estava aberto (ex. a placa), e `onOpenEnvironmentalChallengeRef`
+   sobrescreveria `activeEnvironmentalChallenge` por baixo do modal em uso, arrancando a pergunta
+   que a criança já respondia. Corrigido: a FORÇA da caixa continua incondicional (mantê-la
+   "assentada" é inofensivo), só o GATILHO da recompensa ganhou `!suspendRef.current`.
+4. **Baixo — documentação de analytics desatualizada**: `docs/event-catalog.md` e o comentário de
+   `productAnalytics.ts` perto de `trackLearningChallengeStarted` ainda só citavam
+   `bridge`/`rocket_fuel`/`plaque`. Atualizados pra incluir os 3 kinds novos.
+
+`npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
+`npm run build` seguem limpos depois das 4 correções.
+
 **Risco remanescente, honesto (mais alto que labs anteriores desta sessão)**: a caixa física é o
 PRIMEIRO corpo dinâmico não-avatar deste jogo — nunca testada ao vivo, nem aqui nem em nenhum lab
 anterior. Cenários de falha possíveis não descartáveis só por leitura de código: a caixa pode
