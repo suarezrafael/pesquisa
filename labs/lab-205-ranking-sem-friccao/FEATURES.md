@@ -92,6 +92,31 @@ Pontos conferidos por leitura:
   `rankingOpen` independente de qualquer condição de multiplayer; nenhum outro código lido depende
   de "ranking aberto ⇒ conectado".
 
+## Rodada de review — Copilot (PR #88)
+
+1 achado real (confirmado e corrigido) + 1 achado de acessibilidade suprimido (barato, corrigido
+junto):
+
+1. **Médio — o portão parental renderizava ATRÁS do painel de ranking**: `.chat-panel`/
+   `.ranking-panel` têm `z-index: 20`, `.modal-overlay` (usado por `ParentalGateModal`) tinha
+   `z-index: 10`. Isso nunca importou antes porque nenhum `.modal-overlay` abria enquanto um desses
+   painéis já estava montado (o portão sempre abria ANTES do chat, nunca junto — `handleParentalGateAuthorize`
+   fecha o portão e abre o chat na MESMA função, batched pelo React numa render só). O convite novo
+   de "Ativar modo online" quebra essa premissa de propósito: agora o portão abre com o painel de
+   ranking JÁ montado por baixo — e, com o z-index antigo, o painel (mais alto) ficava
+   visível/clicável por cima do fundo escurecido do modal, quebrando a exclusividade que um modal
+   deveria garantir. Corrigido subindo `.modal-overlay` pra `z-index: 25` (acima de qualquer painel
+   HUD interativo) — afeta todo modal do app (efeito pretendido: nenhum modal deveria renderizar
+   atrás de painel nenhum), não só este caminho novo.
+2. **Baixo (suprimido, corrigido por ser barato) — alvo de toque abaixo de 44×44px**: o botão
+   "Ativar modo online" reaproveitava `.chat-category-btn` (pensado pras abas compactas lado a
+   lado), bem abaixo do piso de 44×44px já estabelecido (`docs/prompts/02-design-profissional.md`
+   §3). Corrigido com uma classe própria (`.ranking-online-gate-btn`) só pra este botão — não muda
+   `.chat-category-btn` (usado pelas abas online/local, que continuam compactas de propósito).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois das
+correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Remover o portão parental da presença online de verdade — a auditoria concluiu que isso NÃO é

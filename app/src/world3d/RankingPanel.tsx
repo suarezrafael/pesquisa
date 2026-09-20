@@ -129,7 +129,7 @@ export function RankingPanel({
                 Pra ver outros jogadores online aqui, é preciso ativar o modo online — a mesma
                 autorização usada pelo chat.
               </p>
-              <button type="button" className="chat-category-btn" onClick={onRequestMultiplayerConsent}>
+              <button type="button" className="ranking-online-gate-btn" onClick={onRequestMultiplayerConsent}>
                 Ativar modo online
               </button>
             </div>
