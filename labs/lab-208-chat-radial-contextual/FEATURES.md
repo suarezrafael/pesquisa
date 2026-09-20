@@ -1,7 +1,8 @@
 # Laboratório 208 — Chat radial contextual
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
+Fim: 2026-09-20
 Commit inicial: 11a35cb9b275496aa5e3b876a35e608eeb696fce
 
 ## Objetivo do laboratório
