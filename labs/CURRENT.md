@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Em andamento: labs/lab-209-luas-planetas/ — backlog "Lab 197 - Orbitas com objetos em alto-relevo":
+anéis (Saturno/Urano) e crateras (Mercúrio) já existiam de labs anteriores; esta lab fecha a peça
+que faltava (satélites/luas) com uma lua real orbitando cada um dos 5 planetas secundários que de
+verdade têm lua (Fobos/Marte, Europa/Júpiter, Titã/Saturno, Titânia/Urano, Tritão/Netuno —
+Mercúrio/Vênus ficam de fora, nenhum dos dois tem lua nenhuma), cada uma com um fato educativo curto
+mostrado ao pousar. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 197 - Orbitas com
+objetos em alto-relevo" — escolhido com o usuário via `AskUserQuestion` (escopo maior: várias luas +
+fato educativo como interação) depois do lab-208. Ver `labs/lab-209-luas-planetas/FEATURES.md` pra
+detalhe.
+
 Último concluído: labs/lab-208-chat-radial-contextual/ — backlog "Lab 194 - Quick chat contextual
 sem supervisao pesada": transforma o chat catalogado atual num atalho radial/contextual (frases
 mais relevantes pro estado do jogador — corrida/casa/planeta/pet — num toque só), mantendo o
