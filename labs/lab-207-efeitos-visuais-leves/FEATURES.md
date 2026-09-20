@@ -82,6 +82,26 @@ duração) não foi confirmada ao vivo — valores escolhidos por analogia com `
 (já testado ao vivo), ajustados pra uma sensação mais "poeira caindo" que "chama subindo", mas sem
 confirmação visual real.
 
+## Rodada de review — Copilot (PR #90)
+
+1 achado, parcialmente confirmado (mecanismo alegado incorreto, mas correção adotada mesmo assim):
+
+1. **Médio — "emissão contínua continua ligada depois do burst manual" (mecanismo alegado
+   INCORRETO, correção adotada por outro motivo)**: o review alegou que, com `emitRate = 200`, o
+   sistema continuaria emitindo por taxa depois do burst de 18. Investigado contra o código-fonte
+   real do `@babylonjs/core` instalado (`thinParticleSystem.pure.js`, função de atualização por
+   quadro): enquanto `manualEmitCount > -1` (verdadeiro logo depois de setado, e continua verdadeiro
+   mesmo depois de consumido e zerado — `0 > -1`), o sistema NUNCA volta sozinho pro modo
+   `emitRate`; `emitRate` simplesmente não é lido nem uma vez enquanto isso — a alegação específica
+   do review não procede tecnicamente. Mesmo assim, `emitRate` foi trocado de `200` pra `0` (o
+   valor real que eu já pretendia como "estado de repouso", mesma convenção de `rocketFlameSystem`):
+   o `200` original nunca fazia nada de verdade neste sistema (só usa `manualEmitCount`, nunca
+   `emitRate`), e o comentário original que dizia "`emitRate = 200` pra pausar/acelerar o burst"
+   estava factualmente errado — corrigido junto.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois da
+correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Footstep dust (poeira a cada passo andando) — mais frequente/sensível a performance, merece sua

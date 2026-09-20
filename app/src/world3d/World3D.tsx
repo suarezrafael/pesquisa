@@ -7957,7 +7957,18 @@ export function World3D({
       landingPuffSystem.color2 = new Color4(0.6, 0.5, 0.35, 0.5)
       landingPuffSystem.colorDead = new Color4(0.5, 0.42, 0.3, 0)
       landingPuffSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
-      landingPuffSystem.emitRate = 200
+      // `emitRate = 0` (mesmo padrão de repouso de `rocketFlameSystem`) — achado do review
+      // automático do Copilot, investigado contra o código-fonte real do `@babylonjs/core`
+      // instalado (`thinParticleSystem.pure.js`): `manualEmitCount` (usado no disparo, mais
+      // abaixo) já ignora `emitRate` completamente enquanto `manualEmitCount > -1` (cria TODAS as
+      // partículas pedidas numa única atualização, não pausado por taxa nenhuma, e nunca volta
+      // sozinho pro modo `emitRate` depois de consumido) — a alegação original do review
+      // ("continua emitindo com emitRate=200 depois do burst") não procede tecnicamente, mas
+      // `emitRate = 0` continua sendo o valor certo aqui: nunca é lido de verdade neste sistema
+      // (só usa `manualEmitCount`), e deixar em 0 remove qualquer ambiguidade sobre depender de um
+      // comportamento de várias etapas não documentado, além de bater com a convenção já
+      // estabelecida de sistemas "em repouso" deste arquivo.
+      landingPuffSystem.emitRate = 0
       // `direction1`/`direction2`/`gravity` recalculados a cada disparo (não fixados aqui) — o
       // mundo é uma esfera, "pra cima"/"pra baixo" dependem de ONDE o jogador aterrissou
       // (`localUp` daquele ponto), não de um eixo Y fixo do mundo.
