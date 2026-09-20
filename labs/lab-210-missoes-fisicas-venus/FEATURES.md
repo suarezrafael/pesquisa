@@ -181,6 +181,40 @@ desde a implementação original) — os 4 confirmados e corrigidos:
 `npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
 `npm run build` seguem limpos depois das 4 correções.
 
+**Rodada 3**: os achados 6 e 5 da rodada 2 confirmados "Resolved since last review" (o achado de
+docs de analytics continua "Open" pela persistência de thread já vista antes — resolvido de
+verdade). 1 achado formal novo + 2 achados "Previously missed" — o mais sério do ciclo inteiro,
+confirmado e corrigido:
+
+9. **Médio — recompensa ficava IMPOSSÍVEL pra sempre se a criança fechasse o modal sem
+   responder**: confirmado contra o código — `circuitDone`/`pushObjectPuzzle.done` eram marcados
+   `true` no INSTANTE em que a condição física era satisfeita (3º pedestal, caixa na zona-alvo),
+   ANTES do `QuestModal` ser respondido. Fechar sem responder (`handleCloseEnvironmentalChallenge`,
+   que não credita nada) deixava a flag travada em `true` PRA SEMPRE — a guarda `!circuitDone`/
+   `!pushObjectPuzzle.done` nunca deixaria uma 2ª tentativa abrir recompensa nenhuma pelo resto da
+   sessão. Corrigido: as duas flags voltam pra `false` sozinhas assim que o modal fechar de
+   verdade (`!hudInertRef.current`), certo OU cancelado — mesmo espírito "sempre re-tentável" já
+   estabelecido pelos landmarks do lab-180 (pressionar E de novo sempre sorteia outra pergunta,
+   nenhum landmark trava depois de fechar sem responder). Também identificado (por analogia, não
+   citado pelo review nesta linha específica) e corrigido o mesmo problema em `scrollsDone` — os
+   pergaminhos voltam a ficar coletáveis se o modal fechar sem recompensa.
+10. **Médio (Previously missed) — gatilho da caixa sem checar localização/estado do jogador**:
+    confirmado — `currentPlanetId` continua `'venus'` DURANTE o voo do foguete de volta (só muda na
+    chegada), e a caixa continua existindo/simulando fisicamente mesmo depois do jogador sair do
+    planeta. Um resíduo de movimento podia assentar a caixa na zona-alvo enquanto o jogador já
+    estava voando ou dentro de uma casa, abrindo um quiz fora de contexto. Corrigido acrescentando
+    `currentPlanetId === 'venus' && !insideHouseInterior && !drivingRocket` ao gatilho da
+    recompensa (a força em si continua incondicional).
+11. **Médio (Previously missed) — coleta de pergaminho sem cobrir ranking/mochila**: confirmado —
+    o bloco de coleta (moedas + pergaminhos) só é protegido por `!suspendRef.current &&
+    !chatOpenRef.current` (guarda mais ampla, não estreitada de propósito pra não afetar
+    mecânicas fora do escopo desta lab, como as moedas). Corrigido acrescentando
+    `!hudInertRef.current` especificamente ao gatilho da recompensa dos pergaminhos (cobre
+    ranking/mochila também, sem mexer na guarda mais ampla que protege o resto do bloco).
+
+`npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
+`npm run build` seguem limpos depois das correções.
+
 **Risco remanescente, honesto (mais alto que labs anteriores desta sessão)**: a caixa física é o
 PRIMEIRO corpo dinâmico não-avatar deste jogo — nunca testada ao vivo, nem aqui nem em nenhum lab
 anterior. Cenários de falha possíveis não descartáveis só por leitura de código: a caixa pode

@@ -4599,7 +4599,11 @@ export function World3D({
         // índice bate com `circuitNextIndex`, que já passou do último), reacendendo o hint do
         // pedestal 1 e apagando o verde dos 3 — parecia um puzzle "resetado", pronto pra jogar de
         // novo, mas a guarda `!circuitDone` do prêmio nunca deixaria uma 2ª conclusão abrir
-        // recompensa nenhuma. Ignorado por completo depois de concluído — nem ativa, nem reseta.
+        // recompensa nenhuma. Ignorado por completo enquanto `circuitDone` (nem ativa, nem
+        // reseta) — `circuitDone` em si volta pra `false` sozinho assim que o modal fechar (ver
+        // laço de física principal, achado da rodada seguinte do review: `circuitDone` era
+        // marcado ANTES do modal ser respondido, então fechar sem responder travava a recompensa
+        // pra sempre — agora reabre uma chance nova em vez de travar).
         if (!insideHouseInterior && !circuitDone) {
           for (let i = 0; i < circuitPedestals.length; i++) {
             const ped = circuitPedestals[i]
@@ -13145,26 +13149,69 @@ export function World3D({
         // Backlog "Lab 200" — força radial manual da caixa empurrável de Vênus, mesma técnica do
         // avatar (`body.applyForce(localUp.scale(-GRAVITY), pos)` mais abaixo) — sem isto a caixa
         // flutuaria (gravidade do motor Havok fica em 0 globalmente). A FORÇA em si é incondicional
-        // (mantém a caixa "assentada" mesmo com um modal aberto, inofensivo) — mas o GATILHO da
-        // recompensa é guardado por `!hudInertRef.current` (achado do review automático do
-        // Copilot, 2 rodadas): a 1ª correção usou só `!suspendRef.current`, mas esse ref só
-        // reflete os modais de `App.tsx` (`suspendTriggers`) — chat radial/ranking/mochila são
-        // estado LOCAL de `World3D.tsx` (`hudInertRef`, lab-208), não entram em `suspendTriggers`.
-        // `hudInertRef` já INCLUI `suspendTriggers` na própria fórmula (`hudInert = fullScreenInert
-        // || chatOpen || chatRadialOpen || rankingOpen || bagOpen || ...`, `fullScreenInert` por
-        // sua vez inclui `suspendTriggers`) — um único guard cobre os dois casos, sem redundância.
-        // Sem isso, a caixa assentando com QUALQUER desses painéis abertos ainda abriria o
-        // `QuestModal` por baixo dele, arrancando o que a criança já estava fazendo. Mesma guarda
-        // (`!suspendRef.current && !chatOpenRef.current`, subconjunto de `hudInert`) já usada pra
-        // coleta de moeda/pergaminho mais abaixo.
-        if (pushObjectPuzzle && !pushObjectPuzzle.done) {
+        // (mantém a caixa "assentada" mesmo com um modal aberto, inofensivo) — só o GATILHO da
+        // recompensa é guardado.
+        // Achado do review automático do Copilot (2 rodadas de refinamento):
+        // 1) `!hudInertRef.current` (não só `!suspendRef.current`) — `hudInertRef` (lab-208) já
+        //    inclui `suspendTriggers` na própria fórmula, cobrindo TAMBÉM chat radial/ranking/
+        //    mochila (estado local de `World3D.tsx`, fora de `suspendTriggers`) — sem isso, a caixa
+        //    assentando com um desses painéis abertos ainda abriria o `QuestModal` por baixo dele.
+        // 2) `currentPlanetId === 'venus' && !insideHouseInterior && !drivingRocket` — a caixa
+        //    continua existindo e simulando fisicamente mesmo depois do jogador sair de Vênus
+        //    (`currentPlanetId` continua `'venus'` DURANTE o voo do foguete de volta, só muda na
+        //    chegada) — sem isso, um resíduo de movimento podia assentar a caixa na zona-alvo
+        //    enquanto o jogador já está em outro lugar (voando, ou dentro de uma casa), abrindo um
+        //    quiz fora de contexto.
+        // 3) `pushObjectPuzzle.done` deixou de ser permanente — achado real: era marcado ANTES do
+        //    modal ser respondido; fechar sem responder (`handleCloseEnvironmentalChallenge`, sem
+        //    creditar nada) deixava `done` travado pra sempre, tornando a recompensa desta caixa
+        //    IMPOSSÍVEL de conseguir pelo resto da sessão. Volta pra `false` sozinho assim que o
+        //    modal fechar (correto OU cancelado) — mesmo espírito de "sempre re-tentável" já usado
+        //    pelos landmarks do lab-180 (pressionar E de novo sempre sorteia outra pergunta,
+        //    nenhum landmark trava depois de fechar sem responder).
+        if (pushObjectPuzzle) {
           pushObjectPuzzle.body.applyForce(pushObjectPuzzle.down.scale(-GRAVITY * pushObjectPuzzle.mass), pushObjectPuzzle.mesh.position)
-          if (!hudInertRef.current && Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7) {
+          if (pushObjectPuzzle.done) {
+            if (!hudInertRef.current) pushObjectPuzzle.done = false
+          } else if (
+            !hudInertRef.current &&
+            currentPlanetId === 'venus' &&
+            !insideHouseInterior &&
+            !drivingRocket &&
+            Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7
+          ) {
             pushObjectPuzzle.done = true
             onOpenEnvironmentalChallengeRef.current(
               selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),
               'push_object',
             )
+          }
+        }
+
+        // Mesmo achado acima (rodada seguinte do review automático do Copilot): `circuitDone`
+        // também era marcado ANTES do modal ser respondido — fechar sem responder travava o
+        // circuito inteiro pra sempre (guarda `!circuitDone` em `handleInteractPress`, ver mais
+        // acima). Volta pra `false` sozinho assim que o modal fechar, reabrindo os 3 pedestais
+        // pra uma tentativa nova (mesmo espírito "sempre re-tentável" dos landmarks do lab-180).
+        if (circuitDone && !hudInertRef.current) {
+          circuitDone = false
+          circuitNextIndex = 0
+          for (const p of circuitPedestals) {
+            p.activated = false
+            p.mat.emissiveColor = Color3.Black()
+          }
+        }
+
+        // Mesma classe de achado (pró-ativamente identificada por analogia, não citada pelo
+        // review nesta linha específica): os pergaminhos também marcavam `scrollsDone = true`
+        // ANTES do modal ser respondido — fechar sem responder deixaria os 3 já `collected`
+        // (mesh escondida) SEM nenhuma chance de reabrir a recompensa. Reabilita os 3 pra coleta
+        // de novo assim que o modal fechar, mesmo espírito das outras 2 mecânicas acima.
+        if (scrollsDone && !hudInertRef.current) {
+          scrollsDone = false
+          for (const s of scrollMarkers) {
+            s.collected = false
+            s.mesh.setEnabled(true)
           }
         }
 
@@ -14229,7 +14276,18 @@ export function World3D({
                 playCoinCollect()
               }
             }
-            if (!scrollsDone && scrollMarkers.length > 0 && scrollMarkers.every((s) => s.collected)) {
+            // Achado do review automático do Copilot: este bloco só é protegido por
+            // `!suspendRef.current && !chatOpenRef.current` (guarda que envolve TODO este trecho,
+            // incluindo moedas — não estreitada aqui de propósito, pra não mudar o comportamento
+            // já estabelecido de outras mecânicas fora do escopo desta lab). Ranking/mochila ficam
+            // de fora dessa guarda — `!hudInertRef.current` (que já inclui os dois) cobre o
+            // gatilho da recompensa especificamente, mesmo ajuste já aplicado à caixa física.
+            if (
+              !scrollsDone &&
+              !hudInertRef.current &&
+              scrollMarkers.length > 0 &&
+              scrollMarkers.every((s) => s.collected)
+            ) {
               scrollsDone = true
               onOpenEnvironmentalChallengeRef.current(
                 selectEnvironmentalChallengeQuest('leitura', progressRef.current.completedQuestIds),
