@@ -1,7 +1,8 @@
 # Laboratório 205 — Ranking sem fricção desnecessária
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-19
+Fim: 2026-09-19
 Commit inicial: 12975a5b24908be71712baf2872ad6f47b84618e
 
 ## Objetivo do laboratório
