@@ -3,11 +3,6 @@ import type { Profile, Progress } from '../types'
 import { getLevel, seriesForLevel, xpIntoLevel, type PlayerSeries } from '../state/progression'
 import type { WeeklyEvent } from '../data/weeklyEvents'
 
-// Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "pulso de
-// recompensa": quanto tempo o CSS `.reward-pulse` fica aplicado depois de moedas/XP subirem,
-// tempo suficiente pra sincronizar com a animação (`index.css`, mesma duração).
-const REWARD_PULSE_MS = 650
-
 // lab-156 — emblema/rótulo por série, só apresentação (a regra de qual nível vira qual série
 // mora em `seriesForLevel`, `state/progression.ts`).
 const SERIES_BADGE: Record<PlayerSeries, { emoji: string; label: string }> = {
@@ -17,25 +12,28 @@ const SERIES_BADGE: Record<PlayerSeries, { emoji: string; label: string }> = {
   diamante: { emoji: '💎', label: 'Diamante' },
 }
 
-// Backlog "Lab 198" — "pulso de recompensa": `true` por um instante toda vez que `value` SOBE
-// (nunca ao cair — trocar de perfil pra um com menos moedas/XP não deve "pulsar"). `prevRef`
-// nasce com o próprio `value` inicial, então a primeira renderização nunca pulsa sozinha (só
-// aumentos genuínos DEPOIS da montagem contam). Puramente CSS (`transform`/`filter`, sem
-// WebGL) — orçamento desprezível mesmo em aparelho fraco, não precisa da mesma guarda de
-// `isLowEndDevice` usada pelos efeitos 3D deste jogo.
-function usePulseOnIncrease(value: number): boolean {
-  const [pulsing, setPulsing] = useState(false)
+// Backlog "Lab 198" — "pulso de recompensa": devolve uma CHAVE que muda a cada aumento genuíno de
+// `value` (nunca ao cair — trocar de perfil pra um com menos moedas/XP não deve "pulsar"). `prevRef`
+// nasce com o próprio `value` inicial, então a 1ª renderização nunca pulsa sozinha.
+//
+// Achado do review automático do Copilot: a 1ª versão usava um booleano (`pulsing`) ligado/
+// desligado por `setTimeout` — 2 recompensas em sequência rápida (a 2ª chegando ANTES do timeout
+// da 1ª zerar `pulsing`) faziam `setPulsing(true)` de novo sobre um valor JÁ `true`, que o React
+// não re-renderiza (mesmo valor) — a classe CSS nunca saía e voltava do DOM, então a animação
+// (já em andamento) não reiniciava, e a 2ª recompensa não pulsava visualmente. Trocar a `key` do
+// elemento força o React a REMONTAR o nó (não só re-renderizar) — único jeito confiável de
+// reiniciar uma animação CSS já em andamento a partir do zero, em qualquer intervalo entre
+// recompensas. Uma vez tocada, a animação (`animation-iteration-count` padrão, 1x) fica parada no
+// quadro final — idêntico ao estado de repouso — então a classe pode ficar aplicada pra sempre
+// depois do 1º pulso, sem precisar de nenhum "desligar" por timeout.
+function usePulseKey(value: number): number {
+  const [pulseKey, setPulseKey] = useState(0)
   const prevRef = useRef(value)
   useEffect(() => {
-    if (value > prevRef.current) {
-      setPulsing(true)
-      const id = window.setTimeout(() => setPulsing(false), REWARD_PULSE_MS)
-      prevRef.current = value
-      return () => window.clearTimeout(id)
-    }
+    if (value > prevRef.current) setPulseKey((k) => k + 1)
     prevRef.current = value
   }, [value])
-  return pulsing
+  return pulseKey
 }
 
 interface HudHeaderProps {
@@ -92,8 +90,8 @@ export function HudHeader({
   const { current, needed } = xpIntoLevel(progress.xp)
   const percent = Math.min(100, Math.round((current / needed) * 100))
   const series = SERIES_BADGE[seriesForLevel(level)]
-  const xpPulsing = usePulseOnIncrease(progress.xp)
-  const coinsPulsing = usePulseOnIncrease(progress.coins)
+  const xpPulseKey = usePulseKey(progress.xp)
+  const coinsPulseKey = usePulseKey(progress.coins)
 
   return (
     <div className="hud-overlay" inert={inert}>
@@ -102,11 +100,14 @@ export function HudHeader({
           <div className="hub-avatar">{profile.avatarEmoji}</div>
           <div className="hub-header-info">
             <h1>{profile.name}</h1>
-            <div
-              className={`xp-bar${xpPulsing ? ' reward-pulse' : ''}`}
-              aria-label={`Nível ${level}, ${current} de ${needed} XP`}
-            >
-              <div className="xp-bar-fill" style={{ width: `${percent}%` }} />
+            {/* `key`/`.reward-pulse` no WRAPPER, não no `.xp-bar` em si — remontar `.xp-bar-fill`
+                direto perderia a transição suave de largura já existente (`transition: width`)
+                bem no momento que ela mais importa (o próprio ganho de XP). O wrapper remonta
+                (reiniciando o pulso), o preenchimento por dentro continua intacto. */}
+            <div key={xpPulseKey} className={xpPulseKey > 0 ? 'reward-pulse' : undefined}>
+              <div className="xp-bar" aria-label={`Nível ${level}, ${current} de ${needed} XP`}>
+                <div className="xp-bar-fill" style={{ width: `${percent}%` }} />
+              </div>
             </div>
             <span className="hub-level">
               Nível {level} ·{' '}
@@ -115,7 +116,9 @@ export function HudHeader({
               </span>
             </span>
           </div>
-          <div className={`hub-coins${coinsPulsing ? ' reward-pulse' : ''}`}>🪙 {progress.coins}</div>
+          <div key={coinsPulseKey} className={`hub-coins${coinsPulseKey > 0 ? ' reward-pulse' : ''}`}>
+            🪙 {progress.coins}
+          </div>
         </header>
 
         <button type="button" className="help-button" onClick={onOpenQuestList} aria-label="Ver missões">

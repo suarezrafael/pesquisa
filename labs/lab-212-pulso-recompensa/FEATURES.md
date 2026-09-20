@@ -78,6 +78,30 @@ Pontos conferidos por leitura:
   de "troquei pra um perfil com valor mais alto") — imprecisão pequena e aceita, mesmo espírito de
   outras aproximações já documentadas neste projeto (ex. `retry_without_quit_rate`, lab-180).
 
+## Rodada de review — Copilot (PR #95)
+
+**Rodada 1**: 2 achados reais, confirmados e corrigidos:
+
+1. **Médio — pulso não reiniciava em recompensas rápidas seguidas**: confirmado contra o código —
+   a 1ª versão usava um booleano (`pulsing`) ligado/desligado por `setTimeout`; uma 2ª recompensa
+   chegando ANTES do timeout da 1ª zerar `pulsing` fazia `setPulsing(true)` de novo sobre um valor
+   JÁ `true` — o React não re-renderiza pra um valor igual, então a classe CSS nunca saía e voltava
+   do DOM, e a animação (já em andamento) não reiniciava. Corrigido trocando o booleano por uma
+   `pulseKey` numérica incrementada a cada aumento genuíno, usada como `key` do elemento — trocar a
+   `key` força o React a REMONTAR o nó (não só re-renderizar), único jeito confiável de reiniciar
+   uma animação CSS já em andamento. Pra barra de XP especificamente, a `key`/classe foi pro um
+   NOVO wrapper externo, não pro `.xp-bar` em si — remontar `.xp-bar-fill` direto perderia a
+   transição suave de largura já existente (`transition: width`) bem no momento que ela mais
+   importa.
+2. **Médio — animação não respeitava `prefers-reduced-motion`**: confirmado — o pulso é disparado
+   por uma AÇÃO do jogo (ganhar recompensa), não pela navegação do próprio usuário — exatamente o
+   caso que essa preferência de acessibilidade existe pra cobrir. Corrigido com
+   `@media (prefers-reduced-motion: reduce) { .reward-pulse { animation: none } }`, sem precisar
+   de nenhuma lógica nova em `HudHeader.tsx`.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 2
+correções.
+
 **Risco remanescente, honesto**: a intensidade/duração exata do pulso (escala 1.18x, brilho 1.35x,
 650ms) não foi confirmada ao vivo — valores escolhidos por sensação de "juiciness" comum em jogos
 casuais, sem playtest real.

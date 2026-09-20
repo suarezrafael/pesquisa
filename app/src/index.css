@@ -608,10 +608,10 @@ a.nickname-generate-btn {
 }
 
 /* Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "pulso de
-   recompensa": aplicado por um instante (`usePulseOnIncrease`, `HudHeader.tsx`) toda vez que
-   moedas/XP sobem de verdade. Só `transform`/`filter` (sem WebGL, sem partícula) — orçamento
-   desprezível mesmo em aparelho fraco, ao contrário dos efeitos 3D deste jogo que precisam da
-   guarda de `isLowEndDevice`. */
+   recompensa": aplicado por um instante (`usePulseKey`, `HudHeader.tsx`) toda vez que moedas/XP
+   sobem de verdade. Só `transform`/`filter` (sem WebGL, sem partícula) — orçamento desprezível
+   mesmo em aparelho fraco, ao contrário dos efeitos 3D deste jogo que precisam da guarda de
+   `isLowEndDevice`. */
 @keyframes reward-pulse-kf {
   0% {
     transform: scale(1);
@@ -629,6 +629,18 @@ a.nickname-generate-btn {
 
 .reward-pulse {
   animation: reward-pulse-kf 0.65s ease-out;
+}
+
+/* Achado do review automático do Copilot: movimento disparado por uma AÇÃO do jogo (não pelo
+   próprio usuário navegando) é exatamente o caso que `prefers-reduced-motion` existe pra cobrir —
+   uma criança/responsável com sensibilidade a movimento não pediu esse pulso, ele só acontece
+   como reação a ganhar recompensa. Desliga a animação (mantém o valor final igual ao de repouso,
+   nenhuma perda de informação — só o "escala e brilha" desaparece) sem precisar de nenhuma lógica
+   nova em `HudHeader.tsx`. */
+@media (prefers-reduced-motion: reduce) {
+  .reward-pulse {
+    animation: none;
+  }
 }
 
 .badge-row {
