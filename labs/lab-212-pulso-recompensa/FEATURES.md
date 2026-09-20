@@ -141,3 +141,31 @@ review encerrado.
 **Risco remanescente, honesto**: a intensidade/duração exata do pulso (escala 1.18x, brilho 1.35x,
 650ms) não foi confirmada ao vivo — valores escolhidos por sensação de "juiciness" comum em jogos
 casuais, sem playtest real.
+
+## Incidente pós-merge: CI quebrado (import não usado)
+
+O CI falhou no commit do merge (`a4b001d`): `error TS6133: 'useState' is declared but its value is
+never read` em `HudHeader.tsx`. A correção da rodada 2 (ver acima) trocou o hook por uma versão
+baseada em `ref` (`useRewardPulseRef`), removendo o único uso de `useState` do corpo da função, mas
+o import ficou pra trás — nem eu nem o review automático do Copilot pegaram isso antes do merge.
+
+**Causa raiz de por que `npx tsc -b` local não pegou isso nas rodadas 2 e 3**: o cache incremental
+do `tsc -b` (`.tsbuildinfo`, reaproveitado localmente entre as várias execuções desta sessão) não
+reavalia com confiança diagnósticos de `noUnusedLocals`/`noUnusedParameters` (ambos `true` em
+`tsconfig.app.json`) entre execuções — confirmado reproduzindo o erro com `npx tsc -b --force`
+(que ignora o cache) e vendo ele desaparecer só depois da correção de verdade. O CI, partindo de um
+checkout limpo do zero a cada execução, sempre pegou certo — foi exatamente o que aconteceu aqui,
+na primeira vez que o código realmente rodou sem nenhum cache local por perto.
+
+**Corrigido** (commit `0df5bf8`, direto em `main` — mudança mecânica de risco zero, remover um
+import genuinamente não usado não pode mudar comportamento nenhum, então não abriu PR/rodada de
+review nova pra isso): removido o import de `useState`. CI verde de novo (app, server-accounts,
+server-cf-relay); deploy de produção reconfirmado: Vercel, Cloudflare Pages e o Worker
+`server-accounts` todos 200.
+
+**Lição pro resto da sessão**: `npx tsc -b` sozinho (sem `--force`) não é mais confiável como
+verificação FINAL antes de declarar uma rodada de review "limpa" quando o import/uso de algo muda
+de lugar — usar `--force` (ou confiar só no CI de fato, que sempre roda sem cache) pra essa
+categoria específica de erro (`noUnusedLocals`/`noUnusedParameters`) daqui pra frente. Nenhuma
+outra lab desta sessão foi afetada — o CI de cada merge anterior (labs 207-211) já tinha, cada um,
+partido de um checkout limpo e passado de verdade, então o problema é isolado a esta lab.

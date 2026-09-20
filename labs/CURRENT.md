@@ -1,15 +1,39 @@
 # Laboratório atual
 
-Em andamento: labs/lab-212-pulso-recompensa/ — backlog "Lab 198 - Efeitos visuais de recompensa,
-movimento e interacao": fecha a peça "pulso de recompensa" — um pulso visual (escala + brilho) na
-barra de XP e no contador de moedas do HUD toda vez que sobem de verdade (`usePulseOnIncrease`,
-`HudHeader.tsx`), puramente CSS, sem gating de `isLowEndDevice` (custo desprezível, não compete com
-o orçamento de quadro da cena 3D). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 198 -
-Efeitos visuais de recompensa, movimento e interacao" — continuação direta do lab-211 (mesma lab
-pai), escolhida autonomamente depois do lab-211 (escopo pequeno, baixo risco). Ver
-`labs/lab-212-pulso-recompensa/FEATURES.md` pra detalhe.
+Último concluído: labs/lab-212-pulso-recompensa/ — backlog "Lab 198 - Efeitos visuais de
+recompensa, movimento e interacao": fecha a peça "pulso de recompensa" — um pulso visual (escala +
+brilho) na barra de XP e no contador de moedas do HUD toda vez que sobem de verdade
+(`useRewardPulseRef`, `HudHeader.tsx` — manipula a classe direto no DOM via `ref`, sem `key`/
+remonte), puramente CSS, sem gating de `isLowEndDevice` (custo desprezível, não compete com o
+orçamento de quadro da cena 3D), respeitando `prefers-reduced-motion`. Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 198 - Efeitos visuais de recompensa, movimento e
+interacao" — continuação direta do lab-211 (mesma lab pai), escolhida autonomamente depois do
+lab-211. **PR #95 teve 3 rodadas de review do Copilot**, mais longa que o esperado pra um efeito
+pequeno: rodada 1 achou 2 reais (pulso não reiniciava em recompensas rápidas seguidas — 1ª correção
+usou `key` pra forçar remonte; animação não respeitava `prefers-reduced-motion`); rodada 2 achou que
+a PRÓPRIA correção de `key` da rodada 1 remontava a subárvore inteira (React sempre remonta tudo
+embaixo de um elemento com `key` trocada, não só aquele nó), perdendo a transição de largura da
+barra de XP — corrigido de vez trocando por manipulação de classe direto no DOM via `ref` (remove,
+força reflow, adiciona de novo), sem nunca desmontar nada; rodada 3 achou 1 comentário de CSS
+desatualizado (nome antigo do hook). Usuário consultado via `AskUserQuestion` depois da rodada 3 —
+escolheu parar e mesclar. `npx tsc -b` limpo; testes: app 257/257; `npm run build` sem regressão.
+**Incidente pós-merge**: o CI falhou no commit do merge (`a4b001d`) — `useState` importado mas não
+mais usado depois da correção da rodada 2, nem eu nem o Copilot pegamos antes do merge. Causa raiz:
+o cache incremental do `tsc -b` local não reavalia com confiança diagnósticos de
+`noUnusedLocals`/`noUnusedParameters` entre execuções reaproveitando o mesmo `.tsbuildinfo` —
+confirmado reproduzindo o erro com `npx tsc -b --force` (ignora o cache) e vendo ele sumir só
+depois da correção de verdade; o CI, partindo de checkout limpo sempre, pegou certo. Corrigido
+direto em `main` (commit `0df5bf8`, mudança mecânica de risco zero — sem PR/rodada de review nova).
+Nenhuma outra lab desta sessão foi afetada (CI de cada merge anterior já tinha partido de checkout
+limpo e passado de verdade). **Sem verificação ao vivo — 16ª lab seguida**: o Chrome desta sessão
+travou de novo em `document.hidden === true`. **Merge confirmado**: PR #95 mesclada (squash) em
+`main` no commit `a4b001d` (2026-09-20, confirmado via `AskUserQuestion`), seguida do hotfix
+`0df5bf8`. CI de `main` verde (app, server-accounts, server-cf-relay); deploy de produção
+reconfirmado após o hotfix: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-211-brilho-bau-tesouro/ — backlog "Lab 198 - Efeitos visuais de
+Antes desse: labs/lab-211-brilho-bau-tesouro/ — backlog "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao": fecha a peça "brilho em interativo" com um brilho pulsante no
 fecho dourado dos baús de tesouro (lab-131) — os únicos colecionáveis de recompensa real ainda sem
 nenhum brilho (moedas já têm um estático). Animação incondicional (mesmo padrão de nuvens/luas/idle
