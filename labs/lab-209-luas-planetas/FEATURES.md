@@ -105,6 +105,23 @@ Pontos conferidos por leitura:
   critério de aceite, dobrar o custo de desenho só em Marte quebraria a simetria do padrão
   "1 lua por planeta" sem ganho educativo proporcional).
 
+## Rodada de review — Copilot (PR #92)
+
+**Rodada 1**: 1 achado real, só no resumo em texto (sem comentário inline), confirmado e corrigido:
+
+1. **Médio — lua pula de posição no quadro seguinte à construção sob demanda**: confirmado contra
+   o código — planetas secundários só são construídos na primeira visita
+   (`buildPlanetIfNeeded`/`builtPlanetIds`), quando o relógio global `time` (contando desde o
+   início da sessão) já está bem adiantado, não em zero. `buildPlanetMoon` posicionava a lua na
+   fase 0 (`center.add(basePos)`, sem rotação) no momento da construção — assim que o laço de
+   órbita por quadro rodasse o próximo quadro com o `time` de verdade (bem maior que 0), a lua
+   "pularia" de repente pra fase certa, uma descontinuidade visível. Corrigido calculando a posição
+   inicial com a MESMA fórmula do laço por quadro (`rotateAroundAxis(basePos, landingUp, time *
+   speed)`), usando o `time` atual no instante da construção — sem descontinuidade entre este
+   quadro e o próximo.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
 **Risco remanescente, honesto**: a órbita não foi vista ao vivo — a matemática da distância
 constante ao centro (acima) é sólida, mas o TAMANHO aparente/velocidade/legibilidade visual da lua
 no céu (pequena demais? rápida demais?) não foi confirmado. O ângulo de inclinação fixo (60°) pode

@@ -6019,7 +6019,14 @@ export function World3D({
           scene,
         )
         mesh.material = moonMat
-        mesh.position = center.add(basePos)
+        // Achado do review automático do Copilot: planetas secundários são construídos SOB
+        // DEMANDA (`buildPlanetIfNeeded`) — na primeira visita, `time` (relógio global desde o
+        // início da sessão) já está bem adiantado, não em zero. Posicionar aqui na fase 0
+        // (`basePos` puro) faria a lua "pular" de repente pra fase certa assim que o laço de
+        // órbita (mais abaixo) rodasse o primeiro quadro com o `time` de verdade. Calcula a
+        // posição inicial com a MESMA fórmula do laço por quadro, usando o `time` atual no
+        // instante da construção — sem descontinuidade nenhuma entre este quadro e o próximo.
+        mesh.position = center.add(rotateAroundAxis(basePos, landingUp, time * speed))
         mesh.isPickable = false
 
         orbitingMoons.push({ mesh, center, basePos, axis: landingUp, speed })
