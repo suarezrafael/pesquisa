@@ -607,6 +607,30 @@ a.nickname-generate-btn {
   white-space: nowrap;
 }
 
+/* Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "pulso de
+   recompensa": aplicado por um instante (`usePulseOnIncrease`, `HudHeader.tsx`) toda vez que
+   moedas/XP sobem de verdade. Só `transform`/`filter` (sem WebGL, sem partícula) — orçamento
+   desprezível mesmo em aparelho fraco, ao contrário dos efeitos 3D deste jogo que precisam da
+   guarda de `isLowEndDevice`. */
+@keyframes reward-pulse-kf {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(1.18);
+    filter: brightness(1.35);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.reward-pulse {
+  animation: reward-pulse-kf 0.65s ease-out;
+}
+
 .badge-row {
   display: flex;
   flex-wrap: wrap;

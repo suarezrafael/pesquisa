@@ -1,6 +1,12 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Profile, Progress } from '../types'
 import { getLevel, seriesForLevel, xpIntoLevel, type PlayerSeries } from '../state/progression'
 import type { WeeklyEvent } from '../data/weeklyEvents'
+
+// Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "pulso de
+// recompensa": quanto tempo o CSS `.reward-pulse` fica aplicado depois de moedas/XP subirem,
+// tempo suficiente pra sincronizar com a animação (`index.css`, mesma duração).
+const REWARD_PULSE_MS = 650
 
 // lab-156 — emblema/rótulo por série, só apresentação (a regra de qual nível vira qual série
 // mora em `seriesForLevel`, `state/progression.ts`).
@@ -9,6 +15,27 @@ const SERIES_BADGE: Record<PlayerSeries, { emoji: string; label: string }> = {
   prata: { emoji: '🥈', label: 'Prata' },
   ouro: { emoji: '🥇', label: 'Ouro' },
   diamante: { emoji: '💎', label: 'Diamante' },
+}
+
+// Backlog "Lab 198" — "pulso de recompensa": `true` por um instante toda vez que `value` SOBE
+// (nunca ao cair — trocar de perfil pra um com menos moedas/XP não deve "pulsar"). `prevRef`
+// nasce com o próprio `value` inicial, então a primeira renderização nunca pulsa sozinha (só
+// aumentos genuínos DEPOIS da montagem contam). Puramente CSS (`transform`/`filter`, sem
+// WebGL) — orçamento desprezível mesmo em aparelho fraco, não precisa da mesma guarda de
+// `isLowEndDevice` usada pelos efeitos 3D deste jogo.
+function usePulseOnIncrease(value: number): boolean {
+  const [pulsing, setPulsing] = useState(false)
+  const prevRef = useRef(value)
+  useEffect(() => {
+    if (value > prevRef.current) {
+      setPulsing(true)
+      const id = window.setTimeout(() => setPulsing(false), REWARD_PULSE_MS)
+      prevRef.current = value
+      return () => window.clearTimeout(id)
+    }
+    prevRef.current = value
+  }, [value])
+  return pulsing
 }
 
 interface HudHeaderProps {
@@ -65,6 +92,8 @@ export function HudHeader({
   const { current, needed } = xpIntoLevel(progress.xp)
   const percent = Math.min(100, Math.round((current / needed) * 100))
   const series = SERIES_BADGE[seriesForLevel(level)]
+  const xpPulsing = usePulseOnIncrease(progress.xp)
+  const coinsPulsing = usePulseOnIncrease(progress.coins)
 
   return (
     <div className="hud-overlay" inert={inert}>
@@ -73,7 +102,10 @@ export function HudHeader({
           <div className="hub-avatar">{profile.avatarEmoji}</div>
           <div className="hub-header-info">
             <h1>{profile.name}</h1>
-            <div className="xp-bar" aria-label={`Nível ${level}, ${current} de ${needed} XP`}>
+            <div
+              className={`xp-bar${xpPulsing ? ' reward-pulse' : ''}`}
+              aria-label={`Nível ${level}, ${current} de ${needed} XP`}
+            >
               <div className="xp-bar-fill" style={{ width: `${percent}%` }} />
             </div>
             <span className="hub-level">
@@ -83,7 +115,7 @@ export function HudHeader({
               </span>
             </span>
           </div>
-          <div className="hub-coins">🪙 {progress.coins}</div>
+          <div className={`hub-coins${coinsPulsing ? ' reward-pulse' : ''}`}>🪙 {progress.coins}</div>
         </header>
 
         <button type="button" className="help-button" onClick={onOpenQuestList} aria-label="Ver missões">
