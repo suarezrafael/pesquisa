@@ -1,7 +1,8 @@
 # Laboratório 207 — Efeitos visuais leves: poeira de aterrissagem
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
+Fim: 2026-09-20
 Commit inicial: 887eaa768f93eb7f4f8fea3d58f8c5e3270a9d3d
 
 ## Objetivo do laboratório
