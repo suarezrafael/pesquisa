@@ -24,9 +24,11 @@ labs anteriores deste item).
   disparado de dentro da cena 3D — mais simples e mais robusto detectar isso comparando o `progress`
   já recebido via prop a cada render, sem precisar de nenhuma ponte nova entre `World3D.tsx`/`App.tsx`
   e o HUD.
-- **`usePulseOnIncrease(value)`**: hook local reutilizável, aplicado duas vezes (XP e moedas) —
-  guarda o valor anterior num `useRef` (nasce já igual ao valor inicial, então a 1ª renderização
-  nunca pulsa sozinha) e só marca `pulsing = true` quando o valor NOVO é MAIOR que o anterior —
+- **`useRewardPulseRef(value)`** (nome final depois da rodada 2 do review, ver "Rodada de review"
+  abaixo — a versão original chamava `usePulseOnIncrease` e usava um booleano+`setTimeout`): hook
+  local reutilizável, aplicado duas vezes (XP e moedas) — guarda o valor anterior num `useRef`
+  (nasce já igual ao valor inicial, então a 1ª renderização nunca pulsa sozinha) e só reaplica a
+  classe `.reward-pulse` direto no DOM (via `ref`) quando o valor NOVO é MAIOR que o anterior —
   nunca ao cair (ex.: trocar de perfil pra um com menos moedas não deve "pulsar", só ganhos de
   verdade).
 - **Puramente CSS (`transform`/`filter`), sem WebGL/partícula nova** — orçamento desprezível mesmo
@@ -48,7 +50,7 @@ decisão de escopo/verificação numa lab futura.
 
 ## Funcionalidades planejadas
 
-- [x] `usePulseOnIncrease(value)`: hook local em `HudHeader.tsx`, dispara só em AUMENTO genuíno.
+- [x] `useRewardPulseRef(value)`: hook local em `HudHeader.tsx`, dispara só em AUMENTO genuíno.
 - [x] Aplicado à barra de XP (`.xp-bar`) e ao contador de moedas (`.hub-coins`).
 - [x] `.reward-pulse` (`index.css`): keyframe de escala (1 → 1.18 → 1) + brilho (`filter:
   brightness`), 0.65s, sem gating de `isLowEndDevice` (custo desprezível, ver Investigação prévia).
@@ -64,14 +66,10 @@ run build` sem erros.
 
 Pontos conferidos por leitura:
 
-- **`usePulseOnIncrease` não pulsa na montagem inicial**: `useRef(value)` nasce com o MESMO valor
+- **`useRewardPulseRef` não pulsa na montagem inicial**: `useRef(value)` nasce com o MESMO valor
   que o `useEffect` compara no primeiro disparo (`value > prevRef.current` é `false` quando os dois
   começam iguais) — confirmado por leitura da ordem de inicialização de hooks do React (`useRef`
   roda antes do corpo do `useEffect`, sempre).
-- **Limpeza do `setTimeout`**: o `useEffect` retorna uma função de limpeza que cancela o timeout
-  pendente — se XP/moedas subirem de novo ANTES do pulso anterior terminar (2 recompensas rápidas
-  seguidas), o timeout antigo é cancelado e um novo de 650ms começa do zero, sem timeout duplicado
-  nem `pulsing` sendo desligado cedo demais pelo timeout antigo.
 - **Troca de perfil não dispara pulso indevido na maioria dos casos**: como o hook só reage a
   AUMENTO, trocar pra um perfil com MENOS moedas/XP não pulsa. Um caso residual honesto: trocar pra
   um perfil com MAIS moedas/XP que o anterior TAMBÉM pulsa (o hook não distingue "ganhou recompensa"
@@ -98,6 +96,27 @@ Pontos conferidos por leitura:
    caso que essa preferência de acessibilidade existe pra cobrir. Corrigido com
    `@media (prefers-reduced-motion: reduce) { .reward-pulse { animation: none } }`, sem precisar
    de nenhuma lógica nova em `HudHeader.tsx`.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 2
+correções.
+
+**Rodada 2**: os 2 achados da rodada 1 confirmados "Resolved since last review". 2 achados novos —
+a própria correção da rodada 1 tinha um problema, confirmados e corrigidos:
+
+3. **Médio — o remonte por `key` da rodada 1 não protegia os filhos**: confirmado contra o React —
+   trocar a `key` de um elemento remonta a SUBÁRVORE INTEIRA embaixo dele, não só aquele nó; o
+   wrapper novo em volta de `.xp-bar`/`.xp-bar-fill` (pensado pra ISOLAR o remonte do preenchimento)
+   não isolava nada — `.xp-bar-fill` remontava junto, nascendo direto na largura final e
+   interrompendo a transição suave (`transition: width`) bem no momento que ela mais importa (o
+   próprio ganho de XP). Corrigido de vez: abandonado o `key`/remonte inteiramente, trocado por
+   `useRewardPulseRef` — manipula a classe `.reward-pulse` DIRETO no DOM via `ref` (remove, força
+   reflow com `el.offsetWidth`, adiciona de novo), reiniciando a animação CSS com garantia sem
+   nunca desmontar nada. `.xp-bar`/`.xp-bar-fill` voltam a não precisar de nenhum wrapper.
+4. **Baixo — `FEATURES.md` descrevia uma limpeza de `setTimeout` que já não existia no código**:
+   confirmado — a bala de verificação "Limpeza do `setTimeout`" descrevia a implementação
+   ORIGINAL (antes até da correção da rodada 1), nunca atualizada quando o booleano+timeout foi
+   trocado por `pulseKey`. Corrigida (removida, junto com 2 outras menções ao nome antigo do hook,
+   `usePulseOnIncrease` → `useRewardPulseRef`, pra refletir o código de verdade).
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 2
 correções.
