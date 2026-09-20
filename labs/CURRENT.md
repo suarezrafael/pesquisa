@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Em andamento: labs/lab-213-poeira-de-passos/ — backlog "Lab 198 - Efeitos visuais de recompensa,
+movimento e interacao": fecha a peça "footstep dust/grass" com uma nuvem pequena de poeira nos pés
+do avatar a cada passada real (reaproveita o gatilho já existente de `playFootstep()`, que dispara
+no cruzamento de zero do ciclo de perna, movido por velocidade física real desde o lab-194).
+Continuação direta do lab-212, escolhida autonomamente depois do usuário confirmar continuar via
+`AskUserQuestion`. Nota à parte: um item de backlog novo foi registrado em
+`docs/gameplay-market-expansion-backlog.md` — "Lab 212 - Mercado do jogo" — como marcador de um
+pedido do usuário ("o jogo tem que ter um mercado") ainda SEM escopo definido; não bloqueia este
+laboratório, mas precisa de uma conversa de decisão de escopo antes de ser implementado.
+
 Último concluído: labs/lab-212-pulso-recompensa/ — backlog "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao": fecha a peça "pulso de recompensa" — um pulso visual (escala +
 brilho) na barra de XP e no contador de moedas do HUD toda vez que sobem de verdade
