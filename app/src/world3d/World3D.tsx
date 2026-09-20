@@ -13165,20 +13165,27 @@ export function World3D({
         // 3) `pushObjectPuzzle.done` deixou de ser permanente — achado real: era marcado ANTES do
         //    modal ser respondido; fechar sem responder (`handleCloseEnvironmentalChallenge`, sem
         //    creditar nada) deixava `done` travado pra sempre, tornando a recompensa desta caixa
-        //    IMPOSSÍVEL de conseguir pelo resto da sessão. Volta pra `false` sozinho assim que o
-        //    modal fechar (correto OU cancelado) — mesmo espírito de "sempre re-tentável" já usado
-        //    pelos landmarks do lab-180 (pressionar E de novo sempre sorteia outra pergunta,
-        //    nenhum landmark trava depois de fechar sem responder).
+        //    IMPOSSÍVEL de conseguir pelo resto da sessão.
+        // Achado do review automático do Copilot (rodada seguinte, severidade ALTA): a 1ª versão
+        // dessa correção rearmava assim que o MODAL fechasse (`!hudInertRef.current`) — mas a
+        // caixa continua fisicamente dentro da zona-alvo nesse instante (nada a moveu embora), e
+        // rearmar sem checar isso reabria OUTRO desafio no quadro seguinte, sem nenhum empurrão
+        // novo — um loop de modal se reabrindo sozinho. Corrigido de vez: `done` só volta pra
+        // `false` quando a caixa sai de verdade da zona-alvo (não quando o modal fecha) — fechar
+        // sem responder não trava mais a recompensa pra sempre (a criança pode empurrar a caixa
+        // pra fora e de volta pra tentar outra vez, sempre disponível), e a caixa PARADA dentro da
+        // zona nunca reabre o modal sozinha duas vezes.
         if (pushObjectPuzzle) {
           pushObjectPuzzle.body.applyForce(pushObjectPuzzle.down.scale(-GRAVITY * pushObjectPuzzle.mass), pushObjectPuzzle.mesh.position)
+          const inTargetZone = Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7
           if (pushObjectPuzzle.done) {
-            if (!hudInertRef.current) pushObjectPuzzle.done = false
+            if (!inTargetZone) pushObjectPuzzle.done = false
           } else if (
             !hudInertRef.current &&
             currentPlanetId === 'venus' &&
             !insideHouseInterior &&
             !drivingRocket &&
-            Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7
+            inTargetZone
           ) {
             pushObjectPuzzle.done = true
             onOpenEnvironmentalChallengeRef.current(
@@ -13205,13 +13212,21 @@ export function World3D({
         // Mesma classe de achado (pró-ativamente identificada por analogia, não citada pelo
         // review nesta linha específica): os pergaminhos também marcavam `scrollsDone = true`
         // ANTES do modal ser respondido — fechar sem responder deixaria os 3 já `collected`
-        // (mesh escondida) SEM nenhuma chance de reabrir a recompensa. Reabilita os 3 pra coleta
-        // de novo assim que o modal fechar, mesmo espírito das outras 2 mecânicas acima.
+        // (mesh escondida) SEM nenhuma chance de reabrir a recompensa. Achado do review automático
+        // do Copilot (rodada seguinte, mesmo achado de severidade ALTA da caixa física, citado
+        // pra esta linha também): reabilitar os 3 assim que o MODAL fechasse (sem checar a posição
+        // do jogador) podia recolher um pergaminho no MESMO instante se a criança estivesse parada
+        // bem em cima de um deles ao fechar — reabrindo o desafio sem nenhuma coleta nova de
+        // verdade. Corrigido: só reabilita quando o jogador NÃO está perto de nenhum dos 3 (mesmo
+        // raio de coleta, 1,3) — precisa se afastar e voltar pra coletar de novo de verdade.
         if (scrollsDone && !hudInertRef.current) {
-          scrollsDone = false
-          for (const s of scrollMarkers) {
-            s.collected = false
-            s.mesh.setEnabled(true)
+          const nearAnyScroll = !!avatarMesh && scrollMarkers.some((s) => Vector3.Distance(avatarMesh!.position, s.worldPos) < 1.3)
+          if (!nearAnyScroll) {
+            scrollsDone = false
+            for (const s of scrollMarkers) {
+              s.collected = false
+              s.mesh.setEnabled(true)
+            }
           }
         }
 

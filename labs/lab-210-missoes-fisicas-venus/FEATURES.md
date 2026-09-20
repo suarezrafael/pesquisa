@@ -215,6 +215,33 @@ confirmado e corrigido:
 `npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
 `npm run build` seguem limpos depois das correções.
 
+**Rodada 4**: o achado 9 da rodada 3 (circuito) confirmado "Resolved since last review" (o achado
+de docs de analytics continua "Open" pela persistência de thread já vista antes). 1 achado formal
+novo, de severidade ALTA (a mais alta do ciclo inteiro) — a própria correção da rodada 3 introduziu
+um problema novo, confirmado e corrigido:
+
+12. **Alto — a correção da rodada 3 causava um loop de modal se reabrindo sozinho**: confirmado
+    contra o código — rearmar `pushObjectPuzzle.done`/`scrollsDone` assim que o MODAL fechasse
+    (`!hudInertRef.current`) não considerava que a caixa/pergaminhos continuam no MESMO estado
+    físico "concluído" nesse instante (nada os moveu embora) — o quadro seguinte reabria OUTRO
+    desafio ambiental sem nenhum empurrão/coleta nova de verdade, um loop de modal reabrindo
+    sozinho (pior que o travamento original: em vez de nunca mais conseguir a recompensa, a
+    criança ficava presa vendo o mesmo quiz reabrir repetidamente). Corrigido de vez: a caixa só
+    rearma quando sai de VERDADE da zona-alvo (não quando o modal fecha) — resolve os dois
+    problemas ao mesmo tempo (nunca trava pra sempre, já que dá pra empurrar pra fora e de volta a
+    qualquer momento; nunca reabre sozinha, já que ficar parada dentro da zona não conta como
+    "saiu e voltou"). Pergaminhos ganharam o mesmo tratamento: só reabilitam quando o jogador NÃO
+    está perto de nenhum dos 3 (precisa se afastar e voltar pra coletar de novo de verdade).
+    Circuito não precisou do mesmo ajuste — resetar `circuitNextIndex` pra 0 já exige 3 apertos de
+    E genuinamente novos pra completar de novo, sem risco de reabertura instantânea.
+
+`npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
+`npm run build` seguem limpos depois da correção.
+
+Usuário consultado via `AskUserQuestion` depois da rodada 3 (ciclo já incomumente longo pra uma lab
+de risco elevado) — escolheu pedir mais uma rodada; esta rodada 4 achou o problema mais sério do
+ciclo. Consultado de novo antes de decidir prosseguir além desta rodada.
+
 **Risco remanescente, honesto (mais alto que labs anteriores desta sessão)**: a caixa física é o
 PRIMEIRO corpo dinâmico não-avatar deste jogo — nunca testada ao vivo, nem aqui nem em nenhum lab
 anterior. Cenários de falha possíveis não descartáveis só por leitura de código: a caixa pode
