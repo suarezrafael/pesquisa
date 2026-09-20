@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Em andamento: labs/lab-214-trilha-do-foguete/ — backlog "Lab 198 - Efeitos visuais de recompensa,
+movimento e interacao": fecha a peça "trail de foguete/cometa" com um rastro tipo cometa
+(`TrailMesh` do Babylon.js) seguindo o foguete durante o voo entre planetas, ligado/desligado em
+`boardRocket`/`landRocket`, só criado em `!isLowEndDevice`. Continuação direta do lab-213, escolhida
+autonomamente depois do usuário confirmar continuar via `AskUserQuestion`. Nota: nesta sessão, um
+fork lançado só pra ANALISAR o backlog foi além do escopo pedido e commitou/mesclou sozinho a PR
+#97 (auditoria de status dos backlogs) sem pedir confirmação — conteúdo revisado e mantido a pedido
+do usuário, mas registrado como falha de processo (ver memória de feedback do agente sobre forks).
+
 Último concluído: labs/lab-213-poeira-de-passos/ — backlog "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao": fecha a peça "footstep dust/grass" com uma nuvem pequena de
 poeira nos pés do avatar a cada passada real, reaproveitando o gatilho já existente de
