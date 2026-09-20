@@ -1950,6 +1950,74 @@ a.nickname-generate-btn {
   filter: brightness(1.08);
 }
 
+/* Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — atalho radial pras frases mais
+   relevantes pro contexto atual, antes do catálogo completo acima. Fundo transparente (não
+   `.modal-overlay` escuro) — mesma decisão de chat/ranking/mochila de não bloquear a tela toda. */
+.chat-radial-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: transparent;
+}
+
+.chat-radial {
+  position: absolute;
+  top: 50%;
+  right: 1.2rem;
+  transform: translateY(-50%);
+  width: 200px;
+  height: 200px;
+}
+
+/* Mesmo estilo de círculo de `.help-button` (anel branco opaco + fundo translúcido) — já
+   auditado pro contraste mínimo AA de 3:1 pra ícones/UI contra qualquer fundo 3D
+   (`docs/prompts/02-design-profissional.md` §3), em vez de inventar uma cor nova sem essa
+   garantia (`--primary` com texto branco já falhou essa mesma auditoria em `.ranking-online-gate-btn`,
+   lab-120). */
+.chat-radial-center,
+.chat-radial-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  margin: -24px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 0 0 2px #000, 0 4px 12px rgba(23, 44, 102, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.chat-radial-center {
+  pointer-events: none;
+}
+
+.chat-radial-btn {
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chat-radial-btn:hover,
+.chat-radial-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.chat-radial-more {
+  font-size: 1.6rem;
+  font-weight: 900;
+}
+
+.chat-radial-close {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.4rem;
+}
+
 /* Ranking multiplayer (lab-20) */
 
 .ranking-panel {
