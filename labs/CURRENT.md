@@ -1,6 +1,12 @@
 # Laboratório atual
 
-Último concluído: labs/lab-214-trilha-do-foguete/ — backlog "Lab 198 - Efeitos visuais de
+Em andamento: labs/lab-215-feedback-puzzle/ — última peça do backlog "Lab 198 - Efeitos visuais de
+recompensa, movimento e interação": feedback visual e sonoro imediato para os puzzles de Memória/
+Padrões, Contar e Soletrar no Centro de Jogos. Escopo pequeno: um anel 3D reutilizável com estados
+de acerto, tentativa incorreta e conclusão, dois sons sintetizados respeitando mute e redução em
+aparelhos fracos. Não altera regras, recompensas ou dificuldade. Ver `FEATURES.md` da pasta.
+
+Antes desse: labs/lab-214-trilha-do-foguete/ — backlog "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao": fecha a peça "trail de foguete/cometa" com um rastro tipo
 cometa (`TrailMesh` do Babylon.js) seguindo o foguete (`flameAnchor`) durante o voo entre planetas
 — efeito distinto da chama de escapamento já existente (`rocketFlameSystem`, lab-59), que é curta e
