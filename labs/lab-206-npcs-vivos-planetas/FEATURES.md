@@ -91,6 +91,28 @@ professor olhando na direção OPOSTA (180°) ou de lado (90°) em vez de reto p
 cosmético (não afeta gatilho de quiz/fala/idle, que continuam funcionando independente do sentido
 do giro) — reduzido, não eliminado, pela verificação matemática acima.
 
+## Rodada de review — Copilot (PR #89)
+
+2 achados: 1 real (confirmado e corrigido), 1 falso positivo (investigado e descartado com
+evidência):
+
+1. **Médio — idle sutil congelava com chat aberto ou jogo suspenso (real)**: a primeira versão
+   colocava a atualização do balanço vertical DENTRO do bloco `!suspendRef.current &&
+   !chatOpenRef.current` (pensado só pra proteger GATILHOS de interação, ex.: abrir um quiz com o
+   chat aberto) — contradizia o próprio comentário ("roda sempre, mesmo em escolinha já concluída")
+   e congelava a animação toda vez que um painel abria. Corrigido movendo o idle pra um laço
+   incondicional separado, no mesmo lugar/padrão das outras animações puramente cosméticas do
+   arquivo (nuvens, pulso do portal) — só o giro/fala (interação de verdade) continua atrás da
+   guarda.
+2. **Alto (FALSO POSITIVO) — "acessa campo `marker.id` inexistente"**: investigado antes de
+   corrigir — `marker.id` não aparece em NENHUM lugar do código desta lab (a linha citada usa
+   `marker.quest.id`, dentro de `greetTriggerId`, não `marker.id`). `npx tsc -b` continua limpo
+   antes E depois da correção do achado real acima, confirmando que não existe erro de TypeScript
+   nenhum aqui. Descartado sem alteração de código.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois da
+correção real.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Escolinhas do planeta principal (não citadas pelo backlog desta lab).

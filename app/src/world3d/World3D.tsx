@@ -12595,6 +12595,20 @@ export function World3D({
           BASE_SUN_INTENSITY + (RAIN_SUN_INTENSITY - BASE_SUN_INTENSITY) * rainAmount + lightningFlash * LIGHTNING_SUN_BOOST
 
         grassMaterial.setFloat('time', time)
+
+        // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — idle sutil dos professores das
+        // escolinhas dos planetas secundários. Fica FORA do bloco `!suspendRef.current &&
+        // !chatOpenRef.current` mais abaixo (que só deveria proteger GATILHOS de interação, ex.:
+        // abrir um quiz enquanto o chat está aberto) — achado do review automático do Copilot: a
+        // primeira versão desta lab colocava o idle DENTRO daquele bloco, contradizendo o próprio
+        // comentário ("roda sempre, mesmo em escolinha já concluída") e congelando o balanço toda
+        // vez que o chat abria ou o jogo suspendia. Mesmo lugar/padrão das outras animações
+        // puramente cosméticas deste laço (nuvens, pulso do portal) — sempre incondicionais.
+        for (const marker of planetQuestMarkers) {
+          marker.teacher.root.position.y =
+            Math.sin(time * TEACHER_IDLE_BOB_SPEED + marker.idlePhase) * TEACHER_IDLE_BOB_AMPLITUDE
+        }
+
         for (const cloud of cloudGroups) {
           cloud.node.position = rotateAroundAxis(cloud.basePos, Vector3.Up(), time * cloud.speed)
           // Pedido do usuário: "o mesmo vale pras nuvens quando cruzam a câmera" — a câmera em
@@ -13512,15 +13526,13 @@ export function World3D({
               }
             }
 
-            // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — idle sutil (roda sempre,
-            // mesmo em escolinha já concluída — o professor continua "vivo" independente da quest)
-            // + olhar pro jogador e fala catalogada (só na primeira aproximação de cada visita,
-            // mesma histerese `triggered`/`RESET_DISTANCE` do laço acima, chave própria pra não
-            // colidir com o gatilho do quiz).
+            // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — olhar pro jogador e fala
+            // catalogada (só na primeira aproximação de cada visita, mesma histerese
+            // `triggered`/`RESET_DISTANCE` do laço acima, chave própria pra não colidir com o
+            // gatilho do quiz). Idle sutil fica FORA deste bloco (ver comentário lá) — roda sempre,
+            // independente de chat/suspensão, só o giro/fala (interação de verdade) fica atrás
+            // desta guarda.
             for (const marker of planetQuestMarkers) {
-              marker.teacher.root.position.y =
-                Math.sin(time * TEACHER_IDLE_BOB_SPEED + marker.idlePhase) * TEACHER_IDLE_BOB_AMPLITUDE
-
               const d = Vector3.Distance(pos, marker.worldPos)
               const greetTriggerId = `planet-teacher-greet-${marker.quest.id}`
               if (d < TEACHER_GREETING_TRIGGER_DISTANCE && !triggered.has(greetTriggerId)) {
