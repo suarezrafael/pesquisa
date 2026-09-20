@@ -49,12 +49,38 @@ labs futuros — cada uma merece sua própria decisão de escopo/verificação.
 
 ## Funcionalidades planejadas
 
-- [ ] `ParticleSystem` de poeira (textura gerada por canvas, mesma técnica de `rocketFlameSystem`),
+- [x] `ParticleSystem` de poeira (textura gerada por canvas, mesma técnica de `rocketFlameSystem`),
   construído uma vez perto da criação do avatar, sempre disponível (não depende de estar num
   planeta específico).
-- [ ] Disparo em burst (`manualEmitCount`) a cada transição "no ar → no chão" detectada no loop de
+- [x] Disparo em burst (`manualEmitCount`) a cada transição "no ar → no chão" detectada no loop de
   física principal, com direção/gravidade calculadas a partir do `localUp` do ponto de contato.
-- [ ] Verificar ao vivo (ver limitação conhecida) e, na falta dela, revisão de código cuidadosa.
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (10ª lab seguida — mesma limitação exata, confirmado com uma aba nova). Documentado abaixo;
+  confiado em `tsc`/testes/build + leitura de código cuidadosa.
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` limpo; `npm run test -- --run`: 257/257 (sem mudança —
+nenhuma lógica de domínio nova, só efeito visual/gatilho de física); `npm run build` sem erros.
+
+Pontos conferidos por leitura:
+
+- **`manualEmitCount` + `.start()`** é o padrão nativo do Babylon.js pra burst único (emite
+  exatamente a contagem pedida, pausada por `emitRate`, e para sozinho — não precisa de nenhum
+  `setTimeout`/`stop()` manual).
+- **Fallback do eixo degenerado** (`localUp` paralelo a `Vector3.Right()`) mirrora exatamente
+  `teleportAvatarTo` (já existente, testado ao vivo em labs anteriores) — decisão deliberada de
+  incluir esse fallback aqui (ao contrário de âncoras fixas como o parkour, que não precisam, por
+  serem escolhidas manualmente longe de qualquer polo problemático): o jogador pode aterrissar em
+  QUALQUER ponto da esfera, incluindo, em tese, um alinhado com `Vector3.Right()`.
+- **`emitter = pos.subtract(localUp.scale(AVATAR_RADIUS)).clone()`**: snapshot de posição (não uma
+  malha perseguida) — a nuvem fica parada onde o jogador aterrissou, comportamento correto de
+  poeira de verdade (não segue o jogador andando embora).
+
+**Risco remanescente, honesto**: a aparência/proporção exata da nuvem (tamanho, velocidade,
+duração) não foi confirmada ao vivo — valores escolhidos por analogia com `rocketFlameSystem`
+(já testado ao vivo), ajustados pra uma sensação mais "poeira caindo" que "chama subindo", mas sem
+confirmação visual real.
 
 ## Fora de escopo (explicitamente adiado)
 

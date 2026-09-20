@@ -3475,6 +3475,10 @@ export function World3D({
     let lastNetSendMs = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
+    // Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — detecta a
+    // transição "no ar → no chão" (não só "está no chão") pra disparar a nuvem de poeira só UMA
+    // vez por aterrissagem, não todo quadro em que `grounded` for verdadeiro.
+    let wasGroundedLastFrame = true
     // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
     // morrendo e caindo até o planeta novamente") — enquanto `laserStunTimer > 0`, o controle
     // normal do jogador (andar/pular) fica suspenso e o personagem visual gira sem parar
@@ -3862,6 +3866,10 @@ export function World3D({
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
     let rocketFlameSystem: ParticleSystem | null = null
+    // Backlog "Lab 198" — construído uma vez perto da criação do avatar (não depende de estar num
+    // planeta específico, ao contrário de `rocketFlameSystem`/Marte). `null` até lá porque a
+    // textura/malha de referência só existem depois que a cena básica está pronta.
+    let landingPuffSystem: ParticleSystem | null = null
     // Inimigos de Marte (lab-60) — populado dentro de `buildMarsIfNeeded`, lido/mutado pelo laço
     // de IA/combate por quadro (só roda quando `currentPlanetId === 'marte'`).
     const marsEnemies: MarsEnemy[] = []
@@ -7917,6 +7925,42 @@ export function World3D({
         { mass: 1, restitution: 0.05, friction: 0.6 },
         scene,
       )
+
+      // Nuvem de poeira ao aterrissar (backlog "Lab 198") — mesma técnica de textura por canvas já
+      // madura em `rocketFlameSystem` (gradiente radial num `DynamicTexture`), só com tom terroso
+      // em vez de amarelo/laranja e `BLENDMODE_STANDARD` (poeira opaca, não um brilho aditivo).
+      // Disparada em burst (`manualEmitCount`, não `emitRate` contínuo) a cada aterrissagem — ver
+      // laço de física principal, mais abaixo, onde `wasGroundedLastFrame` detecta a transição.
+      const dustTexture = new DynamicTexture('landingPuffTex', { width: 32, height: 32 }, scene, false)
+      const dustCtx = dustTexture.getContext() as CanvasRenderingContext2D
+      const dustGradient = dustCtx.createRadialGradient(16, 16, 0, 16, 16, 16)
+      dustGradient.addColorStop(0, 'rgba(214,188,150,0.85)')
+      dustGradient.addColorStop(0.5, 'rgba(180,152,112,0.55)')
+      dustGradient.addColorStop(1, 'rgba(160,132,92,0)')
+      dustCtx.fillStyle = dustGradient
+      dustCtx.fillRect(0, 0, 32, 32)
+      dustTexture.update()
+
+      landingPuffSystem = new ParticleSystem('landingPuff', 40, scene)
+      landingPuffSystem.particleTexture = dustTexture
+      landingPuffSystem.emitter = Vector3.Zero()
+      landingPuffSystem.minEmitBox = new Vector3(-0.15, 0, -0.15)
+      landingPuffSystem.maxEmitBox = new Vector3(0.15, 0.1, 0.15)
+      landingPuffSystem.minEmitPower = 0.8
+      landingPuffSystem.maxEmitPower = 1.6
+      landingPuffSystem.updateSpeed = 0.02
+      landingPuffSystem.minLifeTime = 0.35
+      landingPuffSystem.maxLifeTime = 0.6
+      landingPuffSystem.minSize = 0.25
+      landingPuffSystem.maxSize = 0.55
+      landingPuffSystem.color1 = new Color4(0.75, 0.65, 0.5, 0.7)
+      landingPuffSystem.color2 = new Color4(0.6, 0.5, 0.35, 0.5)
+      landingPuffSystem.colorDead = new Color4(0.5, 0.42, 0.3, 0)
+      landingPuffSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
+      landingPuffSystem.emitRate = 200
+      // `direction1`/`direction2`/`gravity` recalculados a cada disparo (não fixados aqui) — o
+      // mundo é uma esfera, "pra cima"/"pra baixo" dependem de ONDE o jogador aterrissou
+      // (`localUp` daquele ponto), não de um eixo Y fixo do mundo.
 
       const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, profile.equippedPantsColorId)
       const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, profile.equippedShoeColorId)
@@ -12846,6 +12890,29 @@ export function World3D({
               grounded = groundRayResult.hitDistance <= AVATAR_RADIUS + 0.13
             }
           }
+
+          // Backlog "Lab 198" — nuvem de poeira na transição "no ar → no chão" (não a cada quadro
+          // com `grounded` verdadeiro). Direção/gravidade calculadas a partir do `localUp` do
+          // ponto de contato — mesmo idioma de par de eixos perpendiculares já usado em todo este
+          // arquivo pra orientar objetos na superfície esférica (`Vector3.Cross(localUp,
+          // Vector3.Right())`), com o mesmo fallback de `teleportAvatarTo` (acima) pro caso
+          // degenerado de `localUp` paralelo a `Vector3.Right()` — ao contrário de âncoras fixas
+          // como a do parkour (escolhidas manualmente, já longe de qualquer polo problemático), o
+          // jogador pode aterrissar em QUALQUER ponto da esfera.
+          if (grounded && !wasGroundedLastFrame && landingPuffSystem) {
+            const perp1 = Vector3.Cross(localUp, Vector3.Right())
+            if (perp1.lengthSquared() < 1e-6) perp1.copyFrom(Vector3.Cross(localUp, Vector3.Forward()))
+            perp1.normalize()
+            const perp2 = Vector3.Cross(localUp, perp1).normalize()
+            landingPuffSystem.emitter = pos.subtract(localUp.scale(AVATAR_RADIUS)).clone()
+            landingPuffSystem.direction1 = localUp.scale(0.6).add(perp1.scale(-0.4)).add(perp2.scale(-0.4))
+            landingPuffSystem.direction2 = localUp.scale(1.0).add(perp1.scale(0.4)).add(perp2.scale(0.4))
+            landingPuffSystem.gravity = localUp.scale(-2.5)
+            landingPuffSystem.manualEmitCount = 18
+            landingPuffSystem.start()
+          }
+          wasGroundedLastFrame = grounded
+
           if (touchJumpRef.current) {
             touchJumpRef.current = false
             jumpRequested = true
