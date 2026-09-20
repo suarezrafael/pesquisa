@@ -90,6 +90,11 @@ Pontos conferidos por leitura:
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
 
+**Rodada 2**: "🟢 Approval recommended", "Findings: None", achado da rodada 1 confirmado "Resolved
+since last review". Contagem bruta de comentários (1) confere com o único id já conhecido/corrigido
+— nenhum comentário genuinamente novo. Ciclo de review encerrado (2 rodadas). Pronta pra revisão de
+merge.
+
 **Risco remanescente, honesto**: a aparência exata do pulso (velocidade, contraste entre pico/vale)
 não foi confirmada ao vivo — valores escolhidos por analogia com o brilho estático já existente das
 moedas (mesma faixa de matiz dourada), ajustados pra oscilar visivelmente sem ficar "piscando"
