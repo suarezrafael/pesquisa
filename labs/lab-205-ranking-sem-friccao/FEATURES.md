@@ -56,17 +56,41 @@ por medição ao vivo.
 
 ## Funcionalidades planejadas
 
-- [ ] Abrir o painel de ranking (`setRankingOpen(true)`) direto, sem passar por
+- [x] Abrir o painel de ranking (`setRankingOpen(true)`) direto, sem passar por
   `openMultiplayerFeature`/`ParentalGateModal` — o portão continua existindo, só não guarda mais a
   abertura do painel em si.
-- [ ] Aba padrão inteligente: com 2+ perfis E sem consentimento de multiplayer ainda, abre direto na
+- [x] Aba padrão inteligente: com 2+ perfis E sem consentimento de multiplayer ainda, abre direto na
   aba "Neste aparelho" (a única que já tem dado real pra mostrar) em vez de "Online agora" vazia.
-- [ ] Aba "Online agora" sem consentimento: mostra um convite específico ("ative o modo online, mesma
+- [x] Aba "Online agora" sem consentimento: mostra um convite específico ("ative o modo online, mesma
   autorização do chat") com botão que abre o MESMO portão parental já existente — nunca finge que
   "ranking online" é mais seguro que multiplayer completo, porque não é.
-- [ ] `docs/prompts/01-seguranca.md`/regras de segurança infantil: nenhuma mudança na regra real (o
+- [x] `docs/prompts/01-seguranca.md`/regras de segurança infantil: nenhuma mudança na regra real (o
   portão pro multiplayer de verdade continua intacto) — só a UI de QUANDO ele aparece muda.
-- [ ] Verificar ao vivo (ver limitação conhecida) e, na falta dela, revisão de código cuidadosa.
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (8ª lab seguida — mesma limitação exata, confirmado com uma aba nova). Documentado abaixo;
+  confiado em `tsc`/testes/build + leitura de código cuidadosa.
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` limpo; `npm run test -- --run`: 257/257 (sem mudança — nenhuma
+lógica de domínio nova, só UI/gating); `npm run build` sem erros.
+
+Pontos conferidos por leitura:
+
+- **`hasMultiplayerConsent()` chamada direto na renderização** (não um `useState` próprio) —
+  reavalia sozinha a cada re-render de `World3D`, que já acontece quando
+  `handleParentalGateAuthorize` muda `showParentalGate`; confirmado que não existe nenhum caminho
+  onde o painel de ranking re-renderiza sem que ALGUM estado do componente pai mude (o React não
+  teria motivo pra re-renderizar `RankingPanel` sozinho sem um pai também re-renderizando, já que
+  `rankingOpen` controla a própria montagem do componente).
+- **`entries` nunca depende de consentimento** — `refreshRanking()` roda incondicionalmente desde o
+  mount (`window.setInterval`), sempre incluindo pelo menos o próprio jogador (`isSelf: true`); sem
+  consentimento, `remotePlayers` simplesmente nunca é populado (não há conexão pra receber estados
+  remotos), então a aba online mostraria só o próprio jogador SE fosse renderizada — mas agora nem
+  chega a renderizar a lista, mostra o convite em vez disso.
+- **Nenhuma outra tela assume que `rankingOpen` implica consentimento** — `hudInert` já incluía
+  `rankingOpen` independente de qualquer condição de multiplayer; nenhum outro código lido depende
+  de "ranking aberto ⇒ conectado".
 
 ## Fora de escopo (explicitamente adiado)
 

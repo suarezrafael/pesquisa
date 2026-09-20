@@ -15135,7 +15135,11 @@ export function World3D({
         muted={muted}
         onToggleMute={handleToggleMute}
         onOpenChat={() => openMultiplayerFeature(() => setChatOpen(true))}
-        onOpenRanking={() => openMultiplayerFeature(() => setRankingOpen(true))}
+        // Backlog "Lab 195 - Ranking seguro sem fricção excessiva" — abrir o PAINEL não exige mais
+        // o portão parental (a aba "Neste aparelho" é 100% local, sem rede nenhuma); só a aba
+        // "Online agora", que depende de presença online de verdade, ainda passa pelo portão —
+        // dentro do próprio `RankingPanel`, via `onRequestMultiplayerConsent` abaixo.
+        onOpenRanking={() => setRankingOpen(true)}
         showBag={hasSword || hasGun}
         onOpenBag={() => setBagOpen(true)}
         onOpenPairing={onOpenPairing}
@@ -15288,6 +15292,13 @@ export function World3D({
         <RankingPanel
           entries={rankingEntries}
           connected={mpConnected}
+          // Backlog "Lab 195" — `hasMultiplayerConsent()` (não `mpConnected`) distingue "nunca
+          // autorizou" (mostra o convite pra ativar) de "autorizou mas está reconectando" (`connected`
+          // já cobre esse segundo caso com "sem conexão"). Chamada direto na renderização — sem
+          // estado novo, já reavalia sozinha a cada re-render deste componente (que já acontece
+          // quando `handleParentalGateAuthorize` muda outro estado).
+          hasMultiplayerConsent={hasMultiplayerConsent()}
+          onRequestMultiplayerConsent={() => openMultiplayerFeature(() => {})}
           profile={profile}
           progress={progress}
           onClose={() => setRankingOpen(false)}

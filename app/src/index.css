@@ -1963,6 +1963,20 @@ a.nickname-generate-btn {
   word-break: break-word;
 }
 
+/* Backlog "Lab 195 - Ranking seguro sem fricção excessiva" — convite pra ativar o modo online
+   dentro da própria aba, em vez de bloquear o painel inteiro atrás do portão parental (ver
+   `RankingPanel.tsx`). Mesmo espírito visual de `.chat-empty` (texto discreto), com espaço pro
+   botão abaixo. */
+.ranking-online-gate {
+  padding: 0.4rem 0.2rem;
+}
+
+.ranking-online-gate p {
+  color: #6774a3;
+  font-size: 0.85rem;
+  margin: 0 0 0.6rem;
+}
+
 .ranking-row-self {
   font-weight: 700;
   /* lab-120, auditoria WCAG AA: mesma correção de `.reward-bonus-line` acima — `--primary` como
