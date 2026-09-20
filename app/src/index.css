@@ -1266,7 +1266,18 @@ a.nickname-generate-btn {
   align-items: flex-end;
   justify-content: center;
   padding: 0;
-  z-index: 10;
+  /* Achado do review automático do Copilot (backlog "Lab 195"), em 2 rodadas — 1ª: `.chat-panel`/
+     `.ranking-panel` (z-index 20) ficavam ACIMA deste overlay (10); 2ª (achado de severidade alta,
+     depois de subir só pra 25): `.furniture-placement-bar` (z-index 30, botões de verdade, NÃO
+     coberta por `hudInert`) ainda ficava acima. Nunca dava pra notar antes porque nenhum
+     `.modal-overlay` (ex.: `ParentalGateModal`) abria enquanto outro painel/barra HUD já estava
+     montado (o portão sempre abria ANTES do chat, nunca junto). O convite novo de "Ativar modo
+     online" dentro do `RankingPanel` quebrou essa premissa — agora o portão pode abrir com
+     qualquer painel/barra HUD já aberta por baixo. Em vez de perseguir cada colisão de z-index uma
+     de cada vez, 45 fica acima de TODO z-index já usado no arquivo (o maior anterior era 40,
+     `.minigame-countdown-overlay`) — um modal nunca deveria renderizar atrás de nada.
+  */
+  z-index: 45;
 }
 
 @media (min-width: 480px) {
@@ -1961,6 +1972,50 @@ a.nickname-generate-btn {
   font-size: 0.88rem;
   margin: 0 0 0.5rem;
   word-break: break-word;
+}
+
+/* Backlog "Lab 195 - Ranking seguro sem fricção excessiva" — convite pra ativar o modo online
+   dentro da própria aba, em vez de bloquear o painel inteiro atrás do portão parental (ver
+   `RankingPanel.tsx`). Mesmo espírito visual de `.chat-empty` (texto discreto), com espaço pro
+   botão abaixo. */
+.ranking-online-gate {
+  padding: 0.4rem 0.2rem;
+}
+
+.ranking-online-gate p {
+  color: #6774a3;
+  font-size: 0.85rem;
+  margin: 0 0 0.6rem;
+}
+
+/* Achado do review automático do Copilot — `.chat-category-btn` (padding 0.35rem 0.7rem, fonte
+   0.72rem) fica bem abaixo do alvo mínimo de toque de 44×44px (`docs/prompts/02-design-profissional.md`
+   §3, mesmo piso já estabelecido em `.furniture-placement-confirm` etc.) — aceitável pras abas
+   compactas onde nasceu (várias lado a lado), mas este é um botão de AÇÃO isolado, sem motivo pra
+   ficar pequeno. */
+.ranking-online-gate-btn {
+  border: none;
+  /* Achado do review automático do Copilot: `--primary` (#f582ae) com texto branco fica em
+     ~2,4:1 de contraste, abaixo do mínimo AA de 4,5:1 — mesmo achado (e mesma correção,
+     `--primary-dark`) já aplicado em `.reward-bonus-line`/`.ranking-row-self` na auditoria WCAG
+     do lab-120. */
+  background: var(--primary-dark);
+  color: white;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.85rem;
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
+}
+
+.ranking-online-gate-btn:hover {
+  /* Escurece, não clareia — `brightness(1.08)` (padrão de `.chat-quick-btn:hover` acima, que usa
+     `var(--primary)`) empurraria `--primary-dark` de volta pra perto do tom que falhou contraste
+     (~3,96:1 calculado, abaixo do mínimo AA), anulando a correção acima. Escurecer melhora o
+     contraste em vez de piorar (~5,18:1). */
+  filter: brightness(0.92);
 }
 
 .ranking-row-self {

@@ -8,6 +8,14 @@ import type { Profile, Progress } from '../types'
 interface RankingPanelProps {
   entries: RankingEntry[]
   connected: boolean
+  // Backlog "Lab 195 - Ranking seguro sem fricção excessiva" — abrir este painel não passa mais
+  // pelo portão parental (ver `World3D.tsx`, `onOpenRanking`); `hasMultiplayerConsent` distingue
+  // "nunca autorizou multiplayer" (mostra o convite abaixo) de "autorizou mas está reconectando"
+  // (`connected` já cobre esse caso com "sem conexão"). `onRequestMultiplayerConsent` reabre o
+  // MESMO portão já usado pelo chat — presença online de verdade continua exigindo a mesma
+  // autorização de sempre, só a entrada na UI mudou.
+  hasMultiplayerConsent: boolean
+  onRequestMultiplayerConsent: () => void
   // lab-157 — só usados pela aba "Neste aparelho" (ranking local entre perfis, lab-108); a aba
   // "Online agora" (comportamento original, lab-20) não depende de nenhum dos dois.
   profile: Profile
@@ -41,13 +49,24 @@ function buildLocalEntries(profile: Profile, progress: Progress, nowIso: string)
     .sort((a, b) => b.weeklyXp - a.weeklyXp)
 }
 
-export function RankingPanel({ entries, connected, profile, progress, onClose }: RankingPanelProps) {
+export function RankingPanel({
+  entries,
+  connected,
+  hasMultiplayerConsent,
+  onRequestMultiplayerConsent,
+  profile,
+  progress,
+  onClose,
+}: RankingPanelProps) {
   const panelRef = useModalA11y(onClose)
-  const [tab, setTab] = useState<RankingTab>('online')
   // Só mostra a aba local com 2+ perfis no aparelho — mesmo espírito de `ProfilePicker` só
   // aparecer com múltiplos perfis (lab-108): ranking de uma pessoa só não diz nada.
   const roster = listProfiles()
   const showLocalTab = roster.length > 1
+  // Backlog "Lab 195" — sem consentimento de multiplayer ainda, a aba online não tem nenhum outro
+  // jogador de verdade pra mostrar (só o próprio perfil); com 2+ perfis no aparelho, a aba local
+  // JÁ tem dado real — abrir direto nela evita a criança cair numa aba "vazia" só com um convite.
+  const [tab, setTab] = useState<RankingTab>(showLocalTab && !hasMultiplayerConsent ? 'local' : 'online')
   // lab-157 (achado do review automático do Copilot): só monta a lista local (leituras de
   // `localStorage` + ordenação) quando a aba local está de fato ABERTA — antes rodava em todo
   // render sempre que houvesse 2+ perfis, mesmo olhando "Online agora".
@@ -62,7 +81,16 @@ export function RankingPanel({ entries, connected, profile, progress, onClose }:
       tabIndex={-1}
     >
       <div className="chat-panel-header">
-        <span>Ranking {tab === 'online' && (connected ? '🟢 conectado' : '🔴 sem conexão')}</span>
+        <span>
+          Ranking{' '}
+          {/* Achado do review automático do Copilot: sem consentimento de multiplayer ainda,
+              "🔴 sem conexão" soava como um problema técnico (implica "tente de novo"), quando na
+              verdade a criança simplesmente ainda não ativou o modo online — o convite abaixo já
+              explica isso com clareza; o indicador de conexão só faz sentido depois de já ter
+              consentido (aí sim "sem conexão" é uma falha de rede de verdade, não falta de
+              autorização). */}
+          {tab === 'online' && hasMultiplayerConsent && (connected ? '🟢 conectado' : '🔴 sem conexão')}
+        </span>
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar ranking">
           ×
         </button>
@@ -89,15 +117,32 @@ export function RankingPanel({ entries, connected, profile, progress, onClose }:
 
       <div className="chat-panel-messages">
         {tab === 'online' ? (
-          <>
-            {entries.length === 0 && <p className="chat-empty">Ninguém por perto ainda.</p>}
-            {entries.map((entry, i) => (
-              <p key={entry.id} className={`ranking-row${entry.isSelf ? ' ranking-row-self' : ''}`}>
-                <span className="ranking-place">{i + 1}º</span> {entry.avatarEmoji} <strong>{entry.name}</strong>
-                {entry.isSelf && ' (você)'} — Nível {getLevel(entry.xp)} · 🪙 {entry.coins}
+          hasMultiplayerConsent ? (
+            <>
+              {entries.length === 0 && <p className="chat-empty">Ninguém por perto ainda.</p>}
+              {entries.map((entry, i) => (
+                <p key={entry.id} className={`ranking-row${entry.isSelf ? ' ranking-row-self' : ''}`}>
+                  <span className="ranking-place">{i + 1}º</span> {entry.avatarEmoji} <strong>{entry.name}</strong>
+                  {entry.isSelf && ' (você)'} — Nível {getLevel(entry.xp)} · 🪙 {entry.coins}
+                </p>
+              ))}
+            </>
+          ) : (
+            // Backlog "Lab 195" — nunca finge que "ver o ranking online" é mais seguro que ativar
+            // multiplayer de verdade: conectar torna a posição/aparência do jogador visível pra
+            // qualquer outro jogador conectado, não é só um placar. O convite deixa isso explícito
+            // e reaproveita o MESMO portão parental do chat, em vez de inventar uma autorização
+            // separada mais fraca.
+            <div className="ranking-online-gate">
+              <p>
+                Pra ver outros jogadores online aqui, é preciso ativar o modo online — a mesma
+                autorização usada pelo chat.
               </p>
-            ))}
-          </>
+              <button type="button" className="ranking-online-gate-btn" onClick={onRequestMultiplayerConsent}>
+                Ativar modo online
+              </button>
+            </div>
+          )
         ) : (
           localEntries.map((entry, i) => (
             <p key={entry.id} className={`ranking-row${entry.isSelf ? ' ranking-row-self' : ''}`}>

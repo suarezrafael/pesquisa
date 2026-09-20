@@ -56,17 +56,127 @@ por medição ao vivo.
 
 ## Funcionalidades planejadas
 
-- [ ] Abrir o painel de ranking (`setRankingOpen(true)`) direto, sem passar por
+- [x] Abrir o painel de ranking (`setRankingOpen(true)`) direto, sem passar por
   `openMultiplayerFeature`/`ParentalGateModal` — o portão continua existindo, só não guarda mais a
   abertura do painel em si.
-- [ ] Aba padrão inteligente: com 2+ perfis E sem consentimento de multiplayer ainda, abre direto na
+- [x] Aba padrão inteligente: com 2+ perfis E sem consentimento de multiplayer ainda, abre direto na
   aba "Neste aparelho" (a única que já tem dado real pra mostrar) em vez de "Online agora" vazia.
-- [ ] Aba "Online agora" sem consentimento: mostra um convite específico ("ative o modo online, mesma
+- [x] Aba "Online agora" sem consentimento: mostra um convite específico ("ative o modo online, mesma
   autorização do chat") com botão que abre o MESMO portão parental já existente — nunca finge que
   "ranking online" é mais seguro que multiplayer completo, porque não é.
-- [ ] `docs/prompts/01-seguranca.md`/regras de segurança infantil: nenhuma mudança na regra real (o
+- [x] `docs/prompts/01-seguranca.md`/regras de segurança infantil: nenhuma mudança na regra real (o
   portão pro multiplayer de verdade continua intacto) — só a UI de QUANDO ele aparece muda.
-- [ ] Verificar ao vivo (ver limitação conhecida) e, na falta dela, revisão de código cuidadosa.
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (8ª lab seguida — mesma limitação exata, confirmado com uma aba nova). Documentado abaixo;
+  confiado em `tsc`/testes/build + leitura de código cuidadosa.
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` limpo; `npm run test -- --run`: 257/257 (sem mudança — nenhuma
+lógica de domínio nova, só UI/gating); `npm run build` sem erros.
+
+Pontos conferidos por leitura:
+
+- **`hasMultiplayerConsent()` chamada direto na renderização** (não um `useState` próprio) —
+  reavalia sozinha a cada re-render de `World3D`, que já acontece quando
+  `handleParentalGateAuthorize` muda `showParentalGate`; confirmado que não existe nenhum caminho
+  onde o painel de ranking re-renderiza sem que ALGUM estado do componente pai mude (o React não
+  teria motivo pra re-renderizar `RankingPanel` sozinho sem um pai também re-renderizando, já que
+  `rankingOpen` controla a própria montagem do componente).
+- **`entries` nunca depende de consentimento** — `refreshRanking()` roda incondicionalmente desde o
+  mount (`window.setInterval`), sempre incluindo pelo menos o próprio jogador (`isSelf: true`); sem
+  consentimento, `remotePlayers` simplesmente nunca é populado (não há conexão pra receber estados
+  remotos), então a aba online mostraria só o próprio jogador SE fosse renderizada — mas agora nem
+  chega a renderizar a lista, mostra o convite em vez disso.
+- **Nenhuma outra tela assume que `rankingOpen` implica consentimento** — `hudInert` já incluía
+  `rankingOpen` independente de qualquer condição de multiplayer; nenhum outro código lido depende
+  de "ranking aberto ⇒ conectado".
+
+## Rodada de review — Copilot (PR #88)
+
+1 achado real (confirmado e corrigido) + 1 achado de acessibilidade suprimido (barato, corrigido
+junto):
+
+1. **Médio — o portão parental renderizava ATRÁS do painel de ranking**: `.chat-panel`/
+   `.ranking-panel` têm `z-index: 20`, `.modal-overlay` (usado por `ParentalGateModal`) tinha
+   `z-index: 10`. Isso nunca importou antes porque nenhum `.modal-overlay` abria enquanto um desses
+   painéis já estava montado (o portão sempre abria ANTES do chat, nunca junto — `handleParentalGateAuthorize`
+   fecha o portão e abre o chat na MESMA função, batched pelo React numa render só). O convite novo
+   de "Ativar modo online" quebra essa premissa de propósito: agora o portão abre com o painel de
+   ranking JÁ montado por baixo — e, com o z-index antigo, o painel (mais alto) ficava
+   visível/clicável por cima do fundo escurecido do modal, quebrando a exclusividade que um modal
+   deveria garantir. Corrigido subindo `.modal-overlay` pra `z-index: 25` (acima de qualquer painel
+   HUD interativo) — afeta todo modal do app (efeito pretendido: nenhum modal deveria renderizar
+   atrás de painel nenhum), não só este caminho novo.
+2. **Baixo (suprimido, corrigido por ser barato) — alvo de toque abaixo de 44×44px**: o botão
+   "Ativar modo online" reaproveitava `.chat-category-btn` (pensado pras abas compactas lado a
+   lado), bem abaixo do piso de 44×44px já estabelecido (`docs/prompts/02-design-profissional.md`
+   §3). Corrigido com uma classe própria (`.ranking-online-gate-btn`) só pra este botão — não muda
+   `.chat-category-btn` (usado pelas abas online/local, que continuam compactas de propósito).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois das
+correções.
+
+**Rodada 2**: 1 achado novo de severidade ALTA, confirmado e corrigido:
+
+3. **Alto — `.modal-overlay` a 25 ainda ficava abaixo de `.furniture-placement-bar`**: a correção
+   da rodada 1 subiu o overlay o suficiente pra `.chat-panel`/`.ranking-panel` (20), mas
+   `.furniture-placement-bar` (modo de posicionar mobília, lab-136) usa `z-index: 30` — botões de
+   verdade, não cobertos por `hudInert`. Em vez de perseguir cada colisão de z-index isoladamente,
+   corrigido subindo `.modal-overlay` pra `z-index: 45` — acima de TODO z-index já usado no
+   arquivo (o maior anterior era 40) — estabelecendo de vez a invariante "nenhum modal renderiza
+   atrás de painel/barra nenhuma", em vez de resolver só o caso específico encontrado.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 3
+correções (z-index rodada 1, alvo de toque, z-index rodada 2).
+
+**Rodada 3**: 1 achado sob "Previously missed" confirmado e corrigido, mais 1 melhoria de clareza
+identificada pela própria descrição do resumo da rodada (sem comentário inline dedicado, mas
+diretamente relacionada, corrigida junto):
+
+4. **Médio — contraste insuficiente no CTA novo**: `.ranking-online-gate-btn` usava
+   `var(--primary)` (#f582ae) com texto branco (~2,4:1, abaixo do mínimo AA de 4,5:1) — mesmo achado
+   (e mesma correção) já aplicado em `.reward-bonus-line`/`.ranking-row-self` na auditoria WCAG do
+   lab-120. Corrigido trocando pra `var(--primary-dark)`.
+5. **Clareza — indicador de conexão soava como falha técnica antes do consentimento**: "🔴 sem
+   conexão" no cabeçalho, mostrado mesmo sem a criança nunca ter ativado o modo online, sugeria "o
+   multiplayer está com problema, tente de novo" — não é isso, ela simplesmente ainda não
+   autorizou. Corrigido só mostrando o indicador de conexão quando `hasMultiplayerConsent` já é
+   verdadeiro (o convite já explica a situação sem consentimento).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 5
+correções no total.
+
+**Rodada 4**: "Findings: None" pra achado inline novo (o "Open (1)" listado é o mesmo thread da
+rodada 1, já corrigido 2x — parece ficar referenciado até ser marcado resolvido manualmente na UI
+do GitHub, não indica um problema novo). O resumo em texto solto mencionou "CTA hover state tem
+problema de contraste" sem comentário inline dedicado — verificado por cálculo manual de contraste
+(fórmula WCAG): `filter: brightness(1.08)` no hover empurrava `--primary-dark` (#d63473, ~4,5:1 com
+texto branco) de volta pra perto de ~3,96:1 (abaixo do mínimo AA), a MESMA classe de bug que a
+correção da rodada 3 tinha acabado de resolver no estado normal. Corrigido escurecendo no hover em
+vez de clarear (`brightness(0.92)`, ~5,18:1 calculado) — mesmo espírito da correção anterior, sem
+esperar por um comentário inline formal já que o cálculo confirma o problema de verdade. A segunda
+menção do resumo ("comentários de layering desatualizados") não teve comentário inline nem exemplo
+concreto — tratada como não-acionável (sweep manual não encontrou nenhum comentário referenciando
+um valor de z-index antigo).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
+**Rodada 5**: nenhum comentário inline novo (os 2 "Open"/"Previously" continuam sendo os MESMOS 2
+threads da rodada 1, ambos corrigidos 2x cada — parecem só ficar referenciados até alguém marcar
+"resolved" manualmente na UI do GitHub, não indicam problema novo). O resumo em texto solto repetiu
+"CTA contrast" (já corrigido e reverificado por cálculo 2x — estado normal ~4,5:1, hover ~5,18:1,
+ambos acima do mínimo AA) e citou pela primeira vez "stacked-modal focus handling" — investigado
+antes de descartar ou corrigir: `useModalA11y` (`state/useModalA11y.ts`) já é uma pilha
+COMPARTILHADA de raízes de modal, construída e endurecida especificamente pra "vários painéis
+abertos ao mesmo tempo" (comentário no próprio arquivo: "painéis pequenos (chat/ranking/mochila)
+podem ficar abertos AO MESMO TEMPO... é assim que chat+ranking coexistem" — já passou por pelo
+menos 9 rodadas de review documentadas nos próprios comentários). `ParentalGateModal` E
+`RankingPanel` já usam o MESMO hook (`useModalA11y`) — o cenário nesta lab (portão aberto com o
+ranking já montado por baixo) é exatamente o caso que essa pilha compartilhada já resolve
+(roteamento de foco pro topo, Esc mirando o painel com foco de verdade, restauração correta fora
+de ordem LIFO). Concluído como NÃO sendo um achado novo de verdade — infraestrutura já existente e
+testada resolve o cenário, sem código novo necessário aqui.
 
 ## Fora de escopo (explicitamente adiado)
 
