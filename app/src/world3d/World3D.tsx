@@ -920,6 +920,12 @@ const TREASURE_CHEST_DIR: Vector3 = (() => {
 })()
 const TREASURE_CHEST_TRIGGER_DISTANCE = 1.4
 
+// Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "brilho em
+// interativo": pico/vale do brilho pulsante do fecho do baú (ver `treasureChestGlowMats`).
+const TREASURE_CHEST_GLOW_PEAK = new Color3(0.85, 0.65, 0.1)
+const TREASURE_CHEST_GLOW_LOW = new Color3(0.35, 0.26, 0.03)
+const TREASURE_CHEST_GLOW_SPEED = 2.2
+
 function nearAnySchool(dir: { x: number; y: number; z: number }): boolean {
   for (const schoolDir of SCHOOL_DIRS) {
     const dot = dir.x * schoolDir.x + dir.y * schoolDir.y + dir.z * schoolDir.z
@@ -5833,6 +5839,14 @@ export function World3D({
       // precisar buscar o mesh de novo.
       const treasureChestMarkers: { chestId: string; worldPos: Vector3; pivot: TransformNode; label: TextBlock }[] = []
 
+      // Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "brilho em
+      // interativo": diferente do brilho ESTÁTICO que moedas já têm (`coinMat.emissiveColor`
+      // fixo, sem animação), o baú ganha um brilho PULSANTE de verdade — só a cor emissiva do
+      // fecho dourado, sem partícula/mesh nova, orçamento mínimo. `isLowEndDevice`: em vez de
+      // animar a cada quadro (custo pequeno mas real, GPU fraca), fica com um brilho ESTÁTICO
+      // (mesmo valor "no pico" do pulso) — ainda chama atenção, sem o custo por quadro.
+      const treasureChestGlowMats: PBRMaterial[] = []
+
       // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — luas orbitando os planetas
       // secundários (`orbitingMoons`, animação por quadro) e o fato educativo mostrado ao pousar
       // (`planetMoonFacts`, mesma histerese `triggered`/`RESET_DISTANCE` já usada em toda detecção
@@ -5914,6 +5928,10 @@ export function World3D({
         buckleMat.albedoColor = new Color3(0.85, 0.68, 0.2)
         buckleMat.metallic = 0.8
         buckleMat.roughness = 0.3
+        // Backlog "Lab 198" — brilho pulsante (ver comentário na declaração de
+        // `treasureChestGlowMats`). Começa no valor "no pico" — em aparelho fraco, fica assim pra
+        // sempre (estático); no laço por quadro, oscila entre este valor e `TREASURE_CHEST_GLOW_LOW`.
+        buckleMat.emissiveColor = TREASURE_CHEST_GLOW_PEAK.clone()
         const buckle = MeshBuilder.CreateBox(`treasureChestBuckle-${nameSuffix}`, { width: 0.14, height: 0.2, depth: 0.06 }, scene)
         buckle.position = new Vector3(0, 0.32, 0.26)
         buckle.material = buckleMat
@@ -5931,6 +5949,9 @@ export function World3D({
         const alreadyFound = progressRef.current.foundTreasureChestIds.includes(chestId)
         base.setEnabled(!alreadyFound)
         label.isVisible = !alreadyFound
+        // Backlog "Lab 198" — só anima o brilho de baús ainda não achados (um já achado fica
+        // `setEnabled(false)`, invisível — animar a cor dele seria trabalho sem efeito nenhum).
+        if (!alreadyFound) treasureChestGlowMats.push(buckleMat)
 
         // Mesmo raciocínio de `worldPos` de `buildPlanetEscolinha` acima: calculado direto do
         // `*_CENTER` fixo, não via `getAbsolutePosition()` (a matriz de mundo só recomputa depois
@@ -13144,6 +13165,19 @@ export function World3D({
         // cosmética presa atrás de uma guarda de interação é o bug, não o padrão certo).
         for (const moon of orbitingMoons) {
           moon.mesh.position = moon.center.add(rotateAroundAxis(moon.basePos, moon.axis, time * moon.speed))
+        }
+
+        // Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "brilho em
+        // interativo": pulso incondicional (mesmo lugar/padrão de toda animação cosmética deste
+        // laço — nuvens, luas, idle dos professores — nunca atrás de guarda de chat/suspensão).
+        // Só anima em aparelho não-fraco (`!isLowEndDevice`) — critério de aceite do próprio item
+        // ("efeitos desligam/reduzem em mobile"); em aparelho fraco, o material já nasceu no valor
+        // de pico (ver construção em `buildTreasureChest`) e fica assim, sem custo por quadro.
+        if (!isLowEndDevice) {
+          const glowT = 0.5 + 0.5 * Math.sin(time * TREASURE_CHEST_GLOW_SPEED)
+          for (const mat of treasureChestGlowMats) {
+            Color3.LerpToRef(TREASURE_CHEST_GLOW_LOW, TREASURE_CHEST_GLOW_PEAK, glowT, mat.emissiveColor)
+          }
         }
 
         // Backlog "Lab 200" — força radial manual da caixa empurrável de Vênus, mesma técnica do
