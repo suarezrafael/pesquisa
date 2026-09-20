@@ -1,5 +1,18 @@
 # Laboratório atual
 
+Em andamento: labs/lab-210-missoes-fisicas-venus/ — backlog "Lab 200 - Extensao de missoes fisicas
+por planeta": amplia o "Lab 180 - Missões ambientais de aprendizagem" (já implementado, 3 landmarks
+no planeta principal) com 3 missões físicas ADICIONAIS (não repete o lab-180) em Vênus, planeta
+priorizado: empurrar uma caixa física dinâmica até uma zona-alvo (primeiro corpo físico dinâmico
+não-avatar deste jogo, risco elevado documentado), ligar 3 pedestais numa ordem certa, coletar 3
+pergaminhos espalhados — cada uma credita recompensa real via o mesmo pipeline do lab-180
+(`selectEnvironmentalChallengeQuest`/`completeQuest`), com 3 `kind` novos pro analytics
+(`push_object`/`circuit_order`/`reading_collect`). Origem:
+`docs/growth-retention-monetization-backlog.md`, "Lab 200 - Extensao de missoes fisicas por
+planeta" — escolhido com o usuário via `AskUserQuestion` (2 perguntas: qual item, depois o plano
+concreto de 3 mecânicas + planeta) depois do lab-209. Ver
+`labs/lab-210-missoes-fisicas-venus/FEATURES.md` pra detalhe.
+
 Último concluído: labs/lab-209-luas-planetas/ — backlog "Lab 197 - Orbitas com objetos em
 alto-relevo": anéis (Saturno/Urano) e crateras (Mercúrio) já existiam de labs anteriores; esta lab
 fecha a peça que faltava (satélites/luas) com uma lua real orbitando cada um dos 5 planetas
