@@ -121,6 +121,18 @@ a própria correção da rodada 1 tinha um problema, confirmados e corrigidos:
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 2
 correções.
 
+**Rodada 3**: os 2 achados da rodada 2 confirmados "Resolved since last review". 1 achado novo,
+baixo, confirmado e corrigido:
+
+5. **Baixo — comentário do CSS ainda citava `usePulseKey`**: confirmado — a correção da rodada 2
+   trocou o hook `usePulseKey` por `useRewardPulseRef` em `HudHeader.tsx`, mas o comentário em
+   `index.css` (que descreve o mesmo efeito do lado da folha de estilo) nunca foi atualizado junto.
+   Corrigido; busca confirma que não sobrou nenhuma menção a `usePulseKey`/`usePulseOnIncrease` em
+   código de verdade (só nas seções "Rodada de review" deste arquivo, contando a história de
+   propósito).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
 **Risco remanescente, honesto**: a intensidade/duração exata do pulso (escala 1.18x, brilho 1.35x,
 650ms) não foi confirmada ao vivo — valores escolhidos por sensação de "juiciness" comum em jogos
 casuais, sem playtest real.

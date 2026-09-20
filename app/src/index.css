@@ -608,8 +608,8 @@ a.nickname-generate-btn {
 }
 
 /* Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "pulso de
-   recompensa": aplicado por um instante (`usePulseKey`, `HudHeader.tsx`) toda vez que moedas/XP
-   sobem de verdade. Só `transform`/`filter` (sem WebGL, sem partícula) — orçamento desprezível
+   recompensa": aplicado toda vez que moedas/XP sobem de verdade (`useRewardPulseRef`,
+   `HudHeader.tsx`). Só `transform`/`filter` (sem WebGL, sem partícula) — orçamento desprezível
    mesmo em aparelho fraco, ao contrário dos efeitos 3D deste jogo que precisam da guarda de
    `isLowEndDevice`. */
 @keyframes reward-pulse-kf {
