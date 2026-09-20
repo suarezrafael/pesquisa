@@ -5837,7 +5837,13 @@ export function World3D({
       // Baús de tesouro escondidos (lab-131) — `pivot`/`label` guardados direto no marcador (não
       // só o id) porque o gatilho de proximidade precisa escondê-los na hora do achado, sem
       // precisar buscar o mesh de novo.
-      const treasureChestMarkers: { chestId: string; worldPos: Vector3; pivot: TransformNode; label: TextBlock }[] = []
+      // `buckleMat` guardado direto no marcador (achado do review automático do Copilot, PR #94):
+      // sem isso, achar um baú DURANTE a sessão (`pivot.setEnabled(false)` no gatilho de
+      // proximidade) tirava o baú da tela, mas o material dele continuava em
+      // `treasureChestGlowMats` — o laço de brilho por quadro continuava animando a cor de um
+      // material invisível pra sempre, sem efeito nenhum visível, só desperdiçando trabalho.
+      const treasureChestMarkers: { chestId: string; worldPos: Vector3; pivot: TransformNode; label: TextBlock; buckleMat: PBRMaterial }[] =
+        []
 
       // Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — "brilho em
       // interativo": diferente do brilho ESTÁTICO que moedas já têm (`coinMat.emissiveColor`
@@ -5961,6 +5967,7 @@ export function World3D({
           worldPos: planetRoot.position.add(localUp.scale(radius)),
           pivot: base,
           label,
+          buckleMat,
         })
       }
 
@@ -14252,6 +14259,11 @@ export function World3D({
               if (Vector3.Distance(pos, chest.worldPos) < TREASURE_CHEST_TRIGGER_DISTANCE) {
                 chest.pivot.setEnabled(false)
                 chest.label.isVisible = false
+                // Achado do review automático do Copilot (PR #94): sem isto, o material do fecho
+                // continuava em `treasureChestGlowMats` mesmo com o baú já invisível — o laço de
+                // brilho por quadro seguia animando um material que ninguém vê pra sempre.
+                const glowIndex = treasureChestGlowMats.indexOf(chest.buckleMat)
+                if (glowIndex !== -1) treasureChestGlowMats.splice(glowIndex, 1)
                 onFindTreasureChestRef.current(chest.chestId)
                 playCoinCollect()
                 const reward = findTreasureChestById(chest.chestId)?.coinReward ?? 0
