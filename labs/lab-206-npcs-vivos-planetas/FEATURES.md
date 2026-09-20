@@ -1,7 +1,8 @@
 # Laboratório 206 — NPCs vivos nos planetas secundários
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-19
+Fim: 2026-09-20
 Commit inicial: 4425b0ff1c847acb3f69fa2c9328b3f72107536f
 
 ## Objetivo do laboratório
