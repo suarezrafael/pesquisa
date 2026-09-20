@@ -245,6 +245,19 @@ review". 1 achado "Previously missed" novo, confirmado e corrigido:
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
 
+**Rodada 5**: 1 achado real, confirmado e corrigido — a própria correção da rodada 4 introduziu um
+problema novo:
+
+11. **Médio — botão de fechar do radial abaixo do alvo mínimo de toque (auto-inflingido pela
+    rodada 4)**: confirmado contra o CSS — a correção do contraste (rodada 4) encolheu
+    `.chat-radial-close` pra 32×32px (`min-width: 0; min-height: 0; width: 32px; height: 32px`),
+    abaixo do piso de 44×44px já estabelecido em todo o resto do jogo
+    (`docs/prompts/02-design-profissional.md` §3). Corrigido voltando pro tamanho mínimo certo
+    (44×44px), mantendo o anel opaco da correção anterior — os dois requisitos (contraste e alvo de
+    toque) cabem juntos sem conflito, só precisavam das duas correções aplicadas ao mesmo tempo.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Texto livre, PII, DM, voz — fora de escopo do próprio item do backlog.

@@ -2032,11 +2032,16 @@ a.nickname-generate-btn {
      transparente + `#6774a3` — pensado pra sentar em cima do fundo OPACO branco de `.chat-panel`/
      etc., não direto sobre a cena 3D (este radial não tem painel nem backdrop atrás, ver achado da
      rodada 1). Contra um céu claro, esse ícone podia cair abaixo do mínimo de 3:1 pra ícones/UI.
-     Mesmo anel opaco dos outros botões do radial, não a herança de `.modal-close`. */
-  min-width: 0;
-  min-height: 0;
-  width: 32px;
-  height: 32px;
+     Mesmo anel opaco dos outros botões do radial, não a herança de `.modal-close`. Achado do
+     review automático do Copilot (rodada 5): a correção acima encolheu o botão pra 32×32px,
+     abaixo do piso de 44×44px de alvo de toque já estabelecido em todo o resto do jogo
+     (`docs/prompts/02-design-profissional.md` §3, mesmo piso de `.help-button`/
+     `.furniture-placement-confirm`/etc.) — corrigido voltando pro tamanho mínimo certo, mantendo
+     o anel opaco (ambos os requisitos cabem juntos sem conflito). */
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 2px solid #fff;
   background: rgba(255, 255, 255, 0.62);
