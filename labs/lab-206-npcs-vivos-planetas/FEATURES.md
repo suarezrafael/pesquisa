@@ -51,16 +51,74 @@ escolinha já É a quest ligada àquele professor — não seria uma segunda que
 
 ## Funcionalidades planejadas
 
-- [ ] Idle sutil: balanço vertical suave (seno, fase própria por professor pra não sincronizar
+- [x] Idle sutil: balanço vertical suave (seno, fase própria por professor pra não sincronizar
   todos) — sempre ativo, não depende de proximidade.
-- [ ] Olhar pro jogador: ao entrar no raio de proximidade, o professor gira (snap, não contínuo)
+- [x] Olhar pro jogador: ao entrar no raio de proximidade, o professor gira (snap, não contínuo)
   pra encarar o jogador, calculado no referencial local da escolinha; volta a olhar pra frente
   (identidade) ao se afastar além do raio de reset — mesma histerese `triggered`/`RESET_DISTANCE`
   já usada em todo o arquivo.
-- [ ] Fala catalogada: junto do giro, uma frase curta por matéria (`quest.type`) aparece no balão já
+- [x] Fala catalogada: junto do giro, uma frase curta por matéria (`quest.type`) aparece no balão já
   existente do jogador (`furnitureReactionLabel`) — sem chat livre, sem texto novo por professor.
-- [ ] Verificar ao vivo (ver limitação conhecida) e, na falta dela, revisão de código cuidadosa —
-  atenção especial à convenção de "frente" de `buildStudentFigure` (risco documentado abaixo).
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (9ª lab seguida — mesma limitação exata, confirmado com uma aba nova). Documentado abaixo;
+  confiado em `tsc`/testes/build + leitura de código cuidadosa.
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` limpo; `npm run test -- --run`: 257/257 (sem mudança —
+nenhuma lógica de domínio nova, só animação/gatilho de proximidade); `npm run build` sem erros.
+
+Pontos conferidos por leitura:
+
+- **Convenção de "frente" do rig** (`studentFigure.ts`): comentário confirma olhos posicionados em
+  `z: 0.1` ("na frente do rosto (+Z)") — local +Z é a frente do boneco. O próprio código do avatar
+  (`Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)`, `facing` como 3º eixo) confirma que
+  +Z-como-frente é a convenção usada em todo o resto do arquivo pro MESMO rig.
+- **`base.getWorldMatrix().invertToRef(tmpMatrix)`** confirmado contra a assinatura real do
+  `@babylonjs/core` instalado (`math.vector.pure.d.ts`): `invertToRef<T extends Matrix>(other: T):
+  T` é método de INSTÂNCIA (inverte a matriz em que é chamada, escreve o resultado em `other`, sem
+  mutar a matriz original) — não existe `Matrix.InvertToRef` estático (erro cometido e corrigido
+  antes de qualquer verificação externa).
+- **`planetRoot` nunca é rotacionado** (comentário já existente no código: "`planetRoot.position` é
+  sempre o `*_CENTER` fixo do planeta, nunca rotacionado") — confirma que a rotação MUNDIAL de
+  `base` é só a própria `base.rotationQuaternion` (`alignmentQuaternion(localUp)`), sem rotação
+  adicional do pai a considerar.
+
+**Risco remanescente, honesto**: o SENTIDO exato do giro (`atan2(dirLocal.x, dirLocal.z)` +
+`Quaternion.RotationAxis(Vector3.Up(), yaw)`) não foi confirmado ao vivo — é matematicamente
+consistente com a convenção +Z-como-frente confirmada acima, mas um erro de sinal deixaria o
+professor olhando na direção OPOSTA (180°) ou de lado (90°) em vez de reto pro jogador. Puramente
+cosmético (não afeta gatilho de quiz/fala/idle, que continuam funcionando independente do sentido
+do giro) — reduzido, não eliminado, pela verificação matemática acima.
+
+## Rodada de review — Copilot (PR #89)
+
+2 achados: 1 real (confirmado e corrigido), 1 falso positivo (investigado e descartado com
+evidência):
+
+1. **Médio — idle sutil congelava com chat aberto ou jogo suspenso (real)**: a primeira versão
+   colocava a atualização do balanço vertical DENTRO do bloco `!suspendRef.current &&
+   !chatOpenRef.current` (pensado só pra proteger GATILHOS de interação, ex.: abrir um quiz com o
+   chat aberto) — contradizia o próprio comentário ("roda sempre, mesmo em escolinha já concluída")
+   e congelava a animação toda vez que um painel abria. Corrigido movendo o idle pra um laço
+   incondicional separado, no mesmo lugar/padrão das outras animações puramente cosméticas do
+   arquivo (nuvens, pulso do portal) — só o giro/fala (interação de verdade) continua atrás da
+   guarda.
+2. **Alto (FALSO POSITIVO) — "acessa campo `marker.id` inexistente"**: investigado antes de
+   corrigir — `marker.id` não aparece em NENHUM lugar do código desta lab (a linha citada usa
+   `marker.quest.id`, dentro de `greetTriggerId`, não `marker.id`). `npx tsc -b` continua limpo
+   antes E depois da correção do achado real acima, confirmando que não existe erro de TypeScript
+   nenhum aqui. Descartado sem alteração de código.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois da
+correção real.
+
+**Rodada 2**: "🟢 Approval recommended" ("não há problemas pendentes que bloqueiem a aprovação"),
+achado real da rodada 1 confirmado como "Resolved since last review". O falso positivo
+(`marker.id`) continua listado como "Open" pela 2ª vez seguida, mesmo com o próprio texto do resumo
+recomendando aprovação — mesmo padrão de thread persistente já visto em labs anteriores (o comentário
+original só some da listagem quando alguém marca "resolved" manualmente na UI do GitHub, não reflete
+mais uma reavaliação real). Nenhum comentário inline novo. Pronta pra revisão de merge.
 
 ## Fora de escopo (explicitamente adiado)
 
