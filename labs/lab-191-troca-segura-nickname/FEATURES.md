@@ -1,8 +1,8 @@
 # Laboratório 191 — Troca segura de nickname
 
-Status: em andamento (PR convergida, aguardando confirmação de merge)
+Status: concluído (PR #71 mesclada em `main`)
 Início: 2026-09-16
-Fim: -
+Fim: 2026-09-16
 Commit inicial: 11871b3ab94168282b08b7c097670b897576f40d
 
 ## Objetivo do laboratório

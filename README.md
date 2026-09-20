@@ -26,8 +26,9 @@ zero. Este README dá a visão geral; os laboratórios têm o histórico detalha
   Vento, chuva, trovão, trilha chiptune (várias faixas alternando), passos, sons de animais,
   moeda, laser.
 - **PWA**: instalável, `vite-plugin-pwa`/Workbox.
-- **Persistência**: só `localStorage` — sem conta/backend (decisão consciente, ver seção
-  "Limitações conhecidas").
+- **Persistência de gameplay**: progresso infantil continua em `localStorage`, sem enviar PII ou
+  progresso da criança ao backend. Contas adultas, assinatura e entitlements usam o Worker
+  comercial (`app/server-accounts/`).
 - **Multiplayer**: WebSocket cru. Relay v1 (`app/server/relay.cjs`, Node, Fly.io — **suspenso, sem
   uso**, ver seu `README.md`) → relay v2 (`app/server-cf-relay/`, Cloudflare Workers + Durable
   Objects — **ativo, em produção**) — migrado porque o plano gratuito do Fly.io encolheu pra um
@@ -194,16 +195,16 @@ cd app/server-cf-relay && npx wrangler deploy               # relay v2 (Cloudfla
   conversa. Invocada em praticamente todo laboratório desta lista.
 - `skills-lock.json` (raiz do repositório) fixa outras ~25 skills genéricas disponíveis no
   ambiente (Firebase, Supabase, Azure, shadcn, TDD, deploy-to-vercel, etc.) — nenhuma delas foi
-  escrita especificamente pra este projeto, e a maioria (Firebase/Supabase/Azure/shadcn) nem se
-  aplica, já que o jogo não tem backend. Ficam disponíveis, mas não fazem parte da convenção real
-  deste repositório.
+  escrita especificamente pra este projeto, e a maioria (Firebase/Supabase/Azure/shadcn) não se
+  aplica ao backend ativo em Neon + Cloudflare Workers. Ficam disponíveis, mas não fazem parte da
+  convenção real deste repositório.
 
 ## Mais contexto
 
-- `prompt.md` — brief de produto original (hipóteses de mercado, escopo do MVP, stack recomendada
-  incluindo opções de backend/monetização **planejadas, não implementadas** — ver nota de status
-  perto da seção 7 do próprio arquivo).
+- `prompt.md` — brief de produto original (hipóteses de mercado, escopo do MVP e opções de stack).
+  Para a implementação comercial real, use `docs/plano-comercial-backend.md`.
 - `docs/prompts/` — padrão de qualidade de engenharia (segurança, design, arquitetura, clean code)
   aplicado a todo o código do jogo.
-- `labs/` — histórico completo, laboratório por laboratório (76 até agora), com o "porquê" de cada
-  decisão.
+- `docs/backlog-status.md` — índice auditado entre números do backlog, labs reais e pendências.
+- `labs/` — histórico completo, laboratório por laboratório (até o lab-213), com o "porquê" de
+  cada decisão.

@@ -1,8 +1,8 @@
 # Laboratório 187 — Objetos do mundo alinhados ao relevo
 
-Status: em andamento
+Status: concluído (PR #67 mesclada em `main`)
 Início: 2026-09-15
-Fim: -
+Fim: 2026-09-15
 Commit inicial: 43cc4520ed3e244d19b79aad0853b4a12090f20c
 
 ## Objetivo do laboratório

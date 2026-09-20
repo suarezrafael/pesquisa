@@ -1,8 +1,8 @@
 # Laboratório 188 — Pet maior, visível e com troca clara
 
-Status: em andamento
+Status: concluído (PR #68 mesclada em `main`)
 Início: 2026-09-15
-Fim: -
+Fim: 2026-09-15
 Commit inicial: 604b3e43ef06b605f17a0e0a703987b248b8190b
 
 ## Objetivo do laboratório

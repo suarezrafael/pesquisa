@@ -2,7 +2,6 @@
 
 Status: concluído
 Início: 2026-08-17
-Fim: -
 Fim: 2026-08-17
 Commit inicial: 910be52c4daf5d0896b8854b18809ea3296f6f5e
 

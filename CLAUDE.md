@@ -58,7 +58,8 @@ brief that drives what gets built.
   proposal, lean GDD, technical architecture, sprint plan, and a Play-Store-free launch plan.
   Section 14 contains the exact operational prompt intended to drive that work. Section 15 covers
   the monetization strategy (parent-facing subscription, never gating educational content —
-  modeled on Prodigy Math Game) — planned, not implemented.
+  modeled on Prodigy Math Game), implemented since lab-83; use
+  `docs/plano-comercial-backend.md` for the current architecture and phase status.
 - The game client is Babylon.js + Havok (3D/physics, since lab-02) + React/Vite, still
   frontend-only for gameplay (`localStorage`, no accounts, no child PII) — see `README.md`'s
   "Stack técnica" section. As of lab-78+ there **is** a backend, but it's scoped strictly to the
@@ -82,8 +83,9 @@ brief that drives what gets built.
   asks to start/close a lab or asks where the project left off.
 - `skills-lock.json` at the repo root pins ~25 other general-purpose skills (Firebase, Supabase,
   Azure, shadcn, TDD, deploy-to-vercel, etc.) available in this Claude Code environment. None of
-  them are specifically curated for this project's actual stack — most (Firebase/Supabase/Azure/
-  shadcn) don't apply at all, since this project has no backend. Treat them as generally-available
+  them are specifically curated for this project's actual stack — most
+  (Firebase/Supabase/Azure/shadcn) don't apply to the active Neon + Cloudflare Workers backend.
+  Treat them as generally-available
   tools, not project conventions; `lab` is the one workflow this repo actually depends on.
 
 ## Development workflow: laboratórios (labs)

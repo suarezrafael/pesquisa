@@ -1,8 +1,8 @@
 # Laboratório 192 — Preview 3D de verdade na lojinha de pets
 
-Status: em andamento (PR convergida, aguardando confirmação de merge)
+Status: concluído (PR #72 mesclada em `main`)
 Início: 2026-09-16
-Fim: -
+Fim: 2026-09-16
 Commit inicial: 3ecf90ce75e33ce5cdc465b5145112377d3b3dc1
 
 ## Objetivo do laboratório

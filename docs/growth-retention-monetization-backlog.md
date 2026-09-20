@@ -1,5 +1,10 @@
 # Missao Aprender - Backlog de crescimento, retencao e monetizacao responsavel
 
+> Status auditado em 2026-09-20: Labs 176-185 deste backlog foram concluidos. O Lab 186 original
+> (playtest com crianca + responsavel) continua pendente. O diretorio real
+> `labs/lab-186-ranking-nao-bloqueia-arrasto/` implementou outro item urgente e nao substitui esse
+> playtest. Consulte `docs/backlog-status.md` antes de escolher o proximo trabalho.
+
 Data: 2026-09-11
 Branch base: `main`, com observacao de que o PR #49 / lab-175 estava aberto no momento desta
 analise.
@@ -655,19 +660,13 @@ Primeiro confira o estado atual:
    nao foi, nao duplique esse trabalho.
 4. Escolha o proximo lab pequeno do backlog abaixo.
 
-Ordem recomendada:
+Ordem recomendada apos a auditoria de 2026-09-20:
 
-1. Lab 176 - Lojinha com preview de avatar estavel.
-2. Lab 177 - Relevo e montanhas visiveis.
-3. Lab 178 - Camera Roblox-like facil.
-4. Lab 185 - Medicao de coortes de retencao e qualidade, se faltar evento para provar os labs.
-5. Lab 179 - Planetas interativos v1.
-6. Lab 180 - Missoes ambientais de aprendizagem.
-7. Lab 181 - Circuito de descoberta e album de planetas.
-8. Lab 182 - Eventos semanais saudaveis, estendendo `weeklyEvents.ts`.
-9. Lab 183 - Auditoria da vitrine adulta de assinatura.
-10. Lab 184 - Qualidade visual dos planetas e mundo.
-11. Lab 186 - Playtest guiado crianca + responsavel.
+1. Lab 186 - Playtest guiado crianca + responsavel.
+2. Pesquisa A - Teste dos 10 segundos.
+3. Pesquisa B - Playtest de camera e primeira sessao.
+4. Pesquisa C/E - Valor da assinatura e linguagem etica de monetizacao.
+5. UX Labs 187-190, priorizados pelos problemas observados nos testes.
 
 Para cada lab:
 
@@ -682,19 +681,15 @@ Para cada lab:
   backend.
 - Antes de pedir merge, leia comentarios do Copilot/GitHub no PR e corrija achados reais.
 
-Comece pelo Lab 176, a menos que `labs/CURRENT.md` mostre que ele ja foi feito. O objetivo e corrigir
-o preview do avatar na lojinha quando troca bone/chapeu/outros cosmeticos, porque isso bloqueia
-confianca em customizacao e monetizacao cosmetica.
+Comece pelo Lab 186 original deste documento. Nao confunda com o lab real 186, que corrigiu o
+ranking sem bloquear o arrasto da camera. O objetivo agora e validar com pessoas reais se as
+melhorias ja entregues geram diversao, compreensao educativa e confianca parental.
 ```
 
 ## 13. Recomendacao priorizada
 
-O proximo lab deve ser o **Lab 176 - Lojinha com preview de avatar estavel**.
+O proximo lab de produto deve ser o **Lab 186 - Playtest guiado crianca + responsavel**.
 
-Pergunta de mercado que ele ajuda a responder: a crianca consegue se apegar ao avatar e confiar na
-customizacao como recompensa desejavel? Sem esse alicerce, cosmeticos premium e assinatura adulta
-perdem forca porque o responsavel ve um produto visualmente instavel.
-
-Depois dele, execute o **Lab 177 - Relevo e montanhas visiveis** e o **Lab 178 - Camera Roblox-like
-facil** antes de adicionar features grandes. Esses tres labs formam a base de qualidade percebida:
-avatar, mundo visivel e controle.
+Pergunta de mercado que ele ajuda a responder: depois das melhorias de avatar, mundo, camera,
+planetas e mini-jogos, a crianca quer continuar jogando e o responsavel entende valor, seguranca e
+motivo para assinar sem que aprendizagem seja bloqueada?

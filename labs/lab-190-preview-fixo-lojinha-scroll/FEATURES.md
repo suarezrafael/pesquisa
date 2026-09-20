@@ -1,8 +1,8 @@
 # Laboratório 190 — Preview fixo na lojinha durante scroll
 
-Status: em andamento (PR aprovada pelo review automático, aguardando confirmação de merge)
+Status: concluído (PR #70 mesclada em `main`)
 Início: 2026-09-15
-Fim: -
+Fim: 2026-09-15
 Commit inicial: 65b696f370a7c3311ad20db1b669f7b7e8286ac9
 
 ## Objetivo do laboratório

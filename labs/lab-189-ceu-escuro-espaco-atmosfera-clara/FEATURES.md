@@ -1,8 +1,8 @@
 # Laboratório 189 — Céu escuro no espaço e claro na atmosfera
 
-Status: em andamento
+Status: concluído (PR #69 mesclada em `main`)
 Início: 2026-09-15
-Fim: -
+Fim: 2026-09-15
 Commit inicial: ab2b0ff0bfa7d07b44ff55c605996ba3d8bae501
 
 ## Objetivo do laboratório
