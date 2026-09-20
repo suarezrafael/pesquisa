@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Em andamento: labs/lab-205-ranking-sem-friccao/ — remove a fricção desnecessária de abrir o painel
+de ranking: hoje as DUAS abas (online e local, entre perfis do mesmo aparelho) passam pelo mesmo
+portão parental de multiplayer, mesmo a aba local sendo 100% offline. Auditoria mudou o escopo
+original: remover o portão da aba ONLINE de verdade não seria seguro (conectar torna a posição/
+aparência do jogador visível a estranhos, não é "só um placar") — só a abertura do PAINEL deixa de
+exigir o portão; a aba online, sem consentimento, mostra um convite específico reaproveitando o
+mesmo portão existente. Decisão confirmada com o usuário via `AskUserQuestion`, escolhida entre 4
+opções (Lab 193 drawcalls bloqueado por medição ao vivo indisponível, Lab 196 NPCs vivos, outro item
+da lista). Ver `labs/lab-205-ranking-sem-friccao/FEATURES.md` pra detalhe da auditoria.
+
 Último concluído: labs/lab-204-trofeus-na-casa/ — fecha a única peça genuinamente aberta do backlog
 "Lab 211 - Troféus e sala/álbum de mini-jogos" (as outras duas — troféus por mini-jogo/parkour e
 exibição no álbum de conquistas — já estavam satisfeitas pelos labs 202/203): um pedestal de
