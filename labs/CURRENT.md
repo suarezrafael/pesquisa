@@ -1,15 +1,27 @@
 # Laboratório atual
 
-Em andamento: labs/lab-211-brilho-bau-tesouro/ — backlog "Lab 198 - Efeitos visuais de recompensa,
-movimento e interacao": fecha a peça "brilho em interativo" com um brilho pulsante no fecho dourado
-dos baús de tesouro (lab-131) — os únicos colecionáveis de recompensa real ainda sem nenhum brilho
-(moedas já têm um estático). Animação incondicional (mesmo padrão de nuvens/luas/idle dos
-professores), desligada em aparelho fraco (`isLowEndDevice`, material fica estático no valor de
+Último concluído: labs/lab-211-brilho-bau-tesouro/ — backlog "Lab 198 - Efeitos visuais de
+recompensa, movimento e interacao": fecha a peça "brilho em interativo" com um brilho pulsante no
+fecho dourado dos baús de tesouro (lab-131) — os únicos colecionáveis de recompensa real ainda sem
+nenhum brilho (moedas já têm um estático). Animação incondicional (mesmo padrão de nuvens/luas/idle
+dos professores), desligada em aparelho fraco (`isLowEndDevice`, material fica estático no valor de
 pico). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao" — escolhido com o usuário via `AskUserQuestion` depois do
-lab-210. Ver `labs/lab-211-brilho-bau-tesouro/FEATURES.md` pra detalhe.
+lab-210. **PR #94 teve 2 rodadas de review do Copilot**: rodada 1 achou 1 bug real — um baú achado
+DURANTE a sessão só tinha o pivô desabilitado (`pivot.setEnabled(false)`), mas o material do fecho
+continuava em `treasureChestGlowMats` pra sempre, animando a cor de um objeto invisível sem efeito
+nenhum — corrigido guardando `buckleMat` direto no marcador e removendo-o do array no momento do
+achado. Rodada 2 veio "🟢 Approval recommended", "Findings: None", ciclo encerrado. `npx tsc -b`
+limpo; testes: app 257/257 (sem mudança — efeito visual puramente cosmético, nenhuma lógica de
+domínio nova); `npm run build` sem regressão. **Sem verificação ao vivo — 14ª lab seguida**: o
+Chrome desta sessão travou de novo em `document.hidden === true` — verificação só por leitura de
+código. **Merge confirmado**: PR #94 mesclada (squash) em `main` no commit `317fd81` (2026-09-20,
+confirmado via `AskUserQuestion`). CI de `main` verde (app, server-accounts, server-cf-relay);
+deploy de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-210-missoes-fisicas-venus/ — backlog "Lab 200 - Extensao de missoes
+Antes desse: labs/lab-210-missoes-fisicas-venus/ — backlog "Lab 200 - Extensao de missoes
 fisicas por planeta": amplia o "Lab 180 - Missões ambientais de aprendizagem" (já implementado, 3
 landmarks no planeta principal) com 3 missões físicas ADICIONAIS (não repete o lab-180) em Vênus,
 planeta priorizado: empurrar uma caixa física dinâmica até uma zona-alvo (primeiro corpo físico
