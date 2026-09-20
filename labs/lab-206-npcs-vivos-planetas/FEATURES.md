@@ -51,16 +51,45 @@ escolinha já É a quest ligada àquele professor — não seria uma segunda que
 
 ## Funcionalidades planejadas
 
-- [ ] Idle sutil: balanço vertical suave (seno, fase própria por professor pra não sincronizar
+- [x] Idle sutil: balanço vertical suave (seno, fase própria por professor pra não sincronizar
   todos) — sempre ativo, não depende de proximidade.
-- [ ] Olhar pro jogador: ao entrar no raio de proximidade, o professor gira (snap, não contínuo)
+- [x] Olhar pro jogador: ao entrar no raio de proximidade, o professor gira (snap, não contínuo)
   pra encarar o jogador, calculado no referencial local da escolinha; volta a olhar pra frente
   (identidade) ao se afastar além do raio de reset — mesma histerese `triggered`/`RESET_DISTANCE`
   já usada em todo o arquivo.
-- [ ] Fala catalogada: junto do giro, uma frase curta por matéria (`quest.type`) aparece no balão já
+- [x] Fala catalogada: junto do giro, uma frase curta por matéria (`quest.type`) aparece no balão já
   existente do jogador (`furnitureReactionLabel`) — sem chat livre, sem texto novo por professor.
-- [ ] Verificar ao vivo (ver limitação conhecida) e, na falta dela, revisão de código cuidadosa —
-  atenção especial à convenção de "frente" de `buildStudentFigure` (risco documentado abaixo).
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (9ª lab seguida — mesma limitação exata, confirmado com uma aba nova). Documentado abaixo;
+  confiado em `tsc`/testes/build + leitura de código cuidadosa.
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` limpo; `npm run test -- --run`: 257/257 (sem mudança —
+nenhuma lógica de domínio nova, só animação/gatilho de proximidade); `npm run build` sem erros.
+
+Pontos conferidos por leitura:
+
+- **Convenção de "frente" do rig** (`studentFigure.ts`): comentário confirma olhos posicionados em
+  `z: 0.1` ("na frente do rosto (+Z)") — local +Z é a frente do boneco. O próprio código do avatar
+  (`Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)`, `facing` como 3º eixo) confirma que
+  +Z-como-frente é a convenção usada em todo o resto do arquivo pro MESMO rig.
+- **`base.getWorldMatrix().invertToRef(tmpMatrix)`** confirmado contra a assinatura real do
+  `@babylonjs/core` instalado (`math.vector.pure.d.ts`): `invertToRef<T extends Matrix>(other: T):
+  T` é método de INSTÂNCIA (inverte a matriz em que é chamada, escreve o resultado em `other`, sem
+  mutar a matriz original) — não existe `Matrix.InvertToRef` estático (erro cometido e corrigido
+  antes de qualquer verificação externa).
+- **`planetRoot` nunca é rotacionado** (comentário já existente no código: "`planetRoot.position` é
+  sempre o `*_CENTER` fixo do planeta, nunca rotacionado") — confirma que a rotação MUNDIAL de
+  `base` é só a própria `base.rotationQuaternion` (`alignmentQuaternion(localUp)`), sem rotação
+  adicional do pai a considerar.
+
+**Risco remanescente, honesto**: o SENTIDO exato do giro (`atan2(dirLocal.x, dirLocal.z)` +
+`Quaternion.RotationAxis(Vector3.Up(), yaw)`) não foi confirmado ao vivo — é matematicamente
+consistente com a convenção +Z-como-frente confirmada acima, mas um erro de sinal deixaria o
+professor olhando na direção OPOSTA (180°) ou de lado (90°) em vez de reto pro jogador. Puramente
+cosmético (não afeta gatilho de quiz/fala/idle, que continuam funcionando independente do sentido
+do giro) — reduzido, não eliminado, pela verificação matemática acima.
 
 ## Fora de escopo (explicitamente adiado)
 

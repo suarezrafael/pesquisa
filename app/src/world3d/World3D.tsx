@@ -101,7 +101,7 @@ import {
   disposeStudentFigure,
   type StudentFigure,
 } from './studentFigure'
-import { questTypeColor } from './questVisuals'
+import { questTypeColor, questTypeGreeting } from './questVisuals'
 import { collisionRadiusForKind, isFurniturePositionValid } from './houseCollision'
 import {
   furnitureQuantity,
@@ -5704,7 +5704,18 @@ export function World3D({
       // padrão de `quizMarkers` (proximidade dispara `onSelectPlanetQuestRef`, ver laço de
       // gatilhos mais abaixo) — a `Quest` fica guardada direto no marcador (não só o id) pra não
       // precisar de busca nenhuma no laço de gatilho, que roda a cada quadro.
-      const planetQuestMarkers: { quest: Quest; worldPos: Vector3 }[] = []
+      // `base`/`teacher` (backlog "Lab 196 - NPCs vivos nos planetas secundarios") guardados aqui
+      // também — reaproveita este mesmo laço de proximidade/histerese já existente em vez de um
+      // registro paralelo novo pro professor de cada escolinha.
+      const planetQuestMarkers: {
+        quest: Quest
+        worldPos: Vector3
+        base: TransformNode
+        teacher: StudentFigure
+        // Backlog "Lab 196" — fase própria do balanço de idle (sorteada uma vez na construção),
+        // pra os professores das 6 escolinhas de um mesmo planeta não balançarem em sincronia.
+        idlePhase: number
+      }[] = []
 
       // Baús de tesouro escondidos (lab-131) — `pivot`/`label` guardados direto no marcador (não
       // só o id) porque o gatilho de proximidade precisa escondê-los na hora do achado, sem
@@ -5898,7 +5909,13 @@ export function World3D({
         // de ser criado neste mesmo quadro — a matriz de mundo só é recomputada depois, e o laço
         // de gatilhos (mais abaixo) precisa da posição correta desde o primeiro frame. Válido
         // porque `planetRoot.position` é sempre o `*_CENTER` fixo do planeta (nunca rotacionado).
-        planetQuestMarkers.push({ quest, worldPos: planetRoot.position.add(localUp.scale(radius)) })
+        planetQuestMarkers.push({
+          quest,
+          worldPos: planetRoot.position.add(localUp.scale(radius)),
+          base,
+          teacher,
+          idlePhase: Math.random() * Math.PI * 2,
+        })
       }
 
       // Parkour (lab-11) — sequência de plataformas subindo em ziguezague, só dá pra atravessar
@@ -11847,6 +11864,15 @@ export function World3D({
       // raciocínio da carteira/Minha Casa: o totem+professor ocupam espaço parecido.
       const PLANET_SCHOOL_TRIGGER_DISTANCE = 1.2
 
+      // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — raio um pouco maior que o da
+      // própria escolinha (1.2): o professor "percebe" o jogador chegando um pouco ANTES dele
+      // acionar o quiz, mesmo espírito de um NPC de verdade notando alguém se aproximar. Usa
+      // `RESET_DISTANCE` (já existente, 3.6) como raio de saída — mesma histerese gatilho/reset já
+      // usada em toda detecção de proximidade deste arquivo.
+      const TEACHER_GREETING_TRIGGER_DISTANCE = 2.2
+      const TEACHER_IDLE_BOB_AMPLITUDE = 0.03
+      const TEACHER_IDLE_BOB_SPEED = 1.6
+
       // lab-170 (pedido do usuário: "outros objetos tem que ser interativos, pela tecla E") —
       // raio de gatilho pra QUALQUER peça de mobília (bem menor que o das escolinhas/casa: uma
       // cama/estante ocupa bem menos espaço que um totem inteiro).
@@ -13483,6 +13509,43 @@ export function World3D({
                 onSelectPlanetQuestRef.current(marker.quest.id)
               } else if (d > RESET_DISTANCE) {
                 triggered.delete(triggerId)
+              }
+            }
+
+            // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — idle sutil (roda sempre,
+            // mesmo em escolinha já concluída — o professor continua "vivo" independente da quest)
+            // + olhar pro jogador e fala catalogada (só na primeira aproximação de cada visita,
+            // mesma histerese `triggered`/`RESET_DISTANCE` do laço acima, chave própria pra não
+            // colidir com o gatilho do quiz).
+            for (const marker of planetQuestMarkers) {
+              marker.teacher.root.position.y =
+                Math.sin(time * TEACHER_IDLE_BOB_SPEED + marker.idlePhase) * TEACHER_IDLE_BOB_AMPLITUDE
+
+              const d = Vector3.Distance(pos, marker.worldPos)
+              const greetTriggerId = `planet-teacher-greet-${marker.quest.id}`
+              if (d < TEACHER_GREETING_TRIGGER_DISTANCE && !triggered.has(greetTriggerId)) {
+                triggered.add(greetTriggerId)
+                // Direção até o jogador no referencial LOCAL da escolinha (`base`) — evita
+                // qualquer conversão de quaternion mundo↔local: `teacher.root.rotationQuaternion`
+                // já é relativo a `base`, então um giro em torno do eixo Y LOCAL (`Vector3.Up()`)
+                // basta, mesma técnica já usada em todo objeto fixo na superfície deste arquivo
+                // (`Quaternion.RotationAxis(Vector3.Up(), spin)`).
+                marker.base.getWorldMatrix().invertToRef(tmpMatrix)
+                const avatarLocalPos = Vector3.TransformCoordinates(pos, tmpMatrix)
+                const dirLocal = avatarLocalPos.subtract(marker.teacher.root.position)
+                dirLocal.y = 0
+                if (dirLocal.lengthSquared() > 1e-6) {
+                  const yaw = Math.atan2(dirLocal.x, dirLocal.z)
+                  marker.teacher.root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), yaw)
+                }
+                furnitureReactionTimeout = showChatBubbleText(
+                  furnitureReactionLabel,
+                  questTypeGreeting[marker.quest.type],
+                  furnitureReactionTimeout,
+                )
+              } else if (d > RESET_DISTANCE && triggered.has(greetTriggerId)) {
+                triggered.delete(greetTriggerId)
+                marker.teacher.root.rotationQuaternion = Quaternion.Identity()
               }
             }
 
