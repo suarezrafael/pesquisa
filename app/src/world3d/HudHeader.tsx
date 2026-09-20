@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Profile, Progress } from '../types'
 import { getLevel, seriesForLevel, xpIntoLevel, type PlayerSeries } from '../state/progression'
 import type { WeeklyEvent } from '../data/weeklyEvents'
