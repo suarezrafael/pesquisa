@@ -1,7 +1,8 @@
 # Laboratório 210 — Missões físicas em Vênus
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
+Fim: 2026-09-20
 Commit inicial: 0353ccdd3d00fd0068eaf278772dc16bea5440e3
 
 ## Objetivo do laboratório
