@@ -1,6 +1,6 @@
 # Laboratório atual
 
-Em andamento: labs/lab-207-efeitos-visuais-leves/ — primeira fatia pequena do backlog "Lab 198 -
+Último concluído: labs/lab-207-efeitos-visuais-leves/ — primeira fatia pequena do backlog "Lab 198 -
 Efeitos visuais de recompensa, movimento e interacao": uma nuvem de poeira ao aterrissar depois de
 qualquer pulo/queda, reaproveitando 100% a técnica de partículas já madura do `rocketFlameSystem`
 (textura por canvas + `ParticleSystem`), só trocando "contínuo ligado/desligado" por um burst único
@@ -8,9 +8,39 @@ qualquer pulo/queda, reaproveitando 100% a técnica de partículas já madura do
 (mundo é uma esfera, "pra baixo" varia por local). Origem:
 `docs/gameplay-market-expansion-backlog.md`, "Lab 198 - Efeitos visuais de recompensa, movimento e
 interacao" — escolhido entre os itens não bloqueados por medição de FPS ao vivo depois do lab-206
-(Lab 196). Ver `labs/lab-207-efeitos-visuais-leves/FEATURES.md` pra detalhe.
+(Lab 196). **PR #90 teve 7 rodadas de review do Copilot**, a mais longa da sessão até agora: (1)
+achado sobre `emitRate=200` continuar emitindo depois do burst — mecanismo alegado investigado e
+refutado contra o código-fonte real do `@babylonjs/core` (`manualEmitCount`, uma vez setado, nunca
+volta sozinho pro modo `emitRate`), mas a troca pra `emitRate=0` foi adotada mesmo assim por ser o
+verdadeiro "estado de repouso" (mesma convenção do `rocketFlameSystem`) — o `200` original nunca
+fazia nada de verdade; (2) autocontradição no próprio `FEATURES.md` (uma nota dizia que o burst era
+"pausado por emitRate", contradizendo a investigação mais cuidadosa logo abaixo) — corrigida; (3-4)
+teleportes/respawns (pouso, morte, checkpoint de parkour, entrar/sair de casa) podiam disparar
+poeira "do nada" no destino porque reposicionam o avatar instantaneamente — uma primeira tentativa
+com limiar de distância (5 unidades) foi refutada com conta precisa (checkpoint do parkour desloca
+só ~2,2 unidades) e abandonada; substituída por marcação explícita de `wasGroundedLastFrame = true`
+nos 7 pontos que reposicionam o avatar diretamente (achados pelo padrão compartilhado
+`disablePreStep = false`); (5-6) essa marcação teve duas rodadas de refinamento de ORDEM por causa
+de `scene.render()` disparar `onBeforeRenderObservable` de forma SÍNCRONA/reentrante (o respawn do
+parkour é chamado de DENTRO do próprio laço de física, então a reentrância acontece de verdade): a
+marcação precisou ficar ANTES de `scene.render()` (rodada 5), e TAMBÉM reafirmada DEPOIS (rodada 6),
+porque a folga de segurança do respawn do parkour (~0,2 unidade acima do limiar de `grounded`,
+0,13) fazia a própria chamada reentrante sobrescrever a marcação de antes com `false`; (7) "Findings:
+None", achado da rodada 6 confirmado resolvido — a contagem de comentários subiu de 4 pra 5 mas o
+5º id já correspondia exatamente à correção da rodada 6, sem achado genuinamente novo. `npx tsc -b`
+limpo; testes: app 257/257 (sem mudança — efeito visual/gatilho de física, nenhuma lógica de domínio
+nova); `npm run build` sem regressão. **Sem verificação ao vivo — 10ª lab seguida**: o Chrome desta
+sessão travou de novo em `document.hidden === true`, confirmado com uma aba nova — verificação só
+por leitura de código e código-fonte real do Babylon.js; a aparência exata da nuvem (tamanho,
+velocidade, duração) não foi confirmada visualmente. Aprovação pra mesclar checada com o usuário via
+`AskUserQuestion` no meio do ciclo (rodada 5→6) por causa do número incomum de rodadas, e de novo no
+fim antes do merge de fato. **Merge confirmado**: PR #90 mesclada (squash) em `main` no commit
+`6d66c63` (2026-09-20, confirmado via `AskUserQuestion`). CI de `main` verde; deploy de produção
+confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-206-npcs-vivos-planetas/ — dá vida aos professores das escolinhas dos
+Antes desse: labs/lab-206-npcs-vivos-planetas/ — dá vida aos professores das escolinhas dos
 planetas secundários (hoje estáticos): idle sutil (balanço vertical, fase própria por professor,
 roda sempre — inclusive com chat aberto/jogo suspenso, mesmo lugar/padrão das outras animações
 cosméticas do arquivo, nuvens/pulso do portal), olhar/virar pro jogador ao se aproximar (snap
