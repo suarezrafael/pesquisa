@@ -1,16 +1,35 @@
 # Laboratório atual
 
-Em andamento: labs/lab-209-luas-planetas/ — backlog "Lab 197 - Orbitas com objetos em alto-relevo":
-anéis (Saturno/Urano) e crateras (Mercúrio) já existiam de labs anteriores; esta lab fecha a peça
-que faltava (satélites/luas) com uma lua real orbitando cada um dos 5 planetas secundários que de
-verdade têm lua (Fobos/Marte, Europa/Júpiter, Titã/Saturno, Titânia/Urano, Tritão/Netuno —
-Mercúrio/Vênus ficam de fora, nenhum dos dois tem lua nenhuma), cada uma com um fato educativo curto
-mostrado ao pousar. Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 197 - Orbitas com
-objetos em alto-relevo" — escolhido com o usuário via `AskUserQuestion` (escopo maior: várias luas +
-fato educativo como interação) depois do lab-208. Ver `labs/lab-209-luas-planetas/FEATURES.md` pra
-detalhe.
+Último concluído: labs/lab-209-luas-planetas/ — backlog "Lab 197 - Orbitas com objetos em
+alto-relevo": anéis (Saturno/Urano) e crateras (Mercúrio) já existiam de labs anteriores; esta lab
+fecha a peça que faltava (satélites/luas) com uma lua real orbitando cada um dos 5 planetas
+secundários que de verdade têm lua (Fobos/Marte, Europa/Júpiter, Titã/Saturno, Titânia/Urano,
+Tritão/Netuno, órbita retrógrada de verdade — Mercúrio/Vênus ficam de fora, nenhum dos dois tem lua
+nenhuma), cada uma com um fato educativo curto mostrado ao pousar. Órbita reaproveita 100% o idioma
+já usado por `cloudGroups` (`rotateAroundAxis`); fato educativo reaproveita a mesma histerese
+`triggered`/`RESET_DISTANCE` e o balão `furnitureReactionLabel` já usados pelo cumprimento do
+professor (lab-206) — nenhum estado/mecânica nova, só objetos decorativos + gatilho de proximidade.
+Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 197 - Orbitas com objetos em alto-relevo"
+— escolhido com o usuário via `AskUserQuestion` (escopo maior: várias luas + fato educativo como
+interação, não a fatia de 1 lua só) depois do lab-208. **PR #92 teve 2 rodadas de review do
+Copilot**: rodada 1 achou 1 bug real, só no resumo em texto (sem comentário inline) — planetas
+secundários são construídos SOB DEMANDA (na primeira visita), então na hora da construção o relógio
+global de animação (`time`) já está bem adiantado, não em zero; posicionar a lua na fase 0 nesse
+momento fazia ela "pular" de repente pra fase certa assim que o laço de órbita rodasse o próximo
+quadro com o `time` de verdade — corrigido calculando a posição inicial com a MESMA fórmula do laço
+por quadro, usando o `time` atual no instante da construção. Rodada 2 veio "Findings: None", 0
+comentários inline, ciclo encerrado. `npx tsc -b` limpo; testes: app 257/257 (sem mudança — objetos
+decorativos/gatilho de proximidade, nenhuma lógica de domínio nova); `npm run build` sem regressão.
+**Sem verificação ao vivo — 12ª lab seguida**: o Chrome desta sessão travou de novo em
+`document.hidden === true` — verificação só por leitura de código, incluindo conta geométrica da
+distância órbita-vs-anel (Saturno/Urano) pra garantir que a lua nunca cruza o anel existente.
+**Merge confirmado**: PR #92 mesclada (squash) em `main` no commit `b57c99a` (2026-09-20, confirmado
+via `AskUserQuestion`). CI de `main` verde; deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-208-chat-radial-contextual/ — backlog "Lab 194 - Quick chat contextual
+Antes desse: labs/lab-208-chat-radial-contextual/ — backlog "Lab 194 - Quick chat contextual
 sem supervisao pesada": transforma o chat catalogado atual num atalho radial/contextual (frases
 mais relevantes pro estado do jogador — corrida/casa/planeta/pet — num toque só), mantendo o
 catálogo completo por categoria intacto como "mais opções". Reavalia se o novo modo ainda precisa
