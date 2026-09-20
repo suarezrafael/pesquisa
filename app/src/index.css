@@ -2028,6 +2028,21 @@ a.nickname-generate-btn {
   /* Mesmo motivo de `.chat-radial-btn` acima — herdaria `pointer-events: none` de `.chat-radial`
      sem isto. */
   pointer-events: auto;
+  /* Achado do review automático do Copilot (rodada 4): herdava de `.modal-close` um fundo
+     transparente + `#6774a3` — pensado pra sentar em cima do fundo OPACO branco de `.chat-panel`/
+     etc., não direto sobre a cena 3D (este radial não tem painel nem backdrop atrás, ver achado da
+     rodada 1). Contra um céu claro, esse ícone podia cair abaixo do mínimo de 3:1 pra ícones/UI.
+     Mesmo anel opaco dos outros botões do radial, não a herança de `.modal-close`. */
+  min-width: 0;
+  min-height: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink);
+  font-size: 1.1rem;
+  box-shadow: 0 0 0 2px #000, 0 4px 12px rgba(23, 44, 102, 0.2);
 }
 
 /* Ranking multiplayer (lab-20) */

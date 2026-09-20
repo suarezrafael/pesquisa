@@ -231,6 +231,20 @@ confirmados e corrigidos:
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 3
 correções.
 
+**Rodada 4**: o achado da rodada 3 (3ª referência desatualizada) confirmado "Resolved since last
+review". 1 achado "Previously missed" novo, confirmado e corrigido:
+
+10. **Médio — botão de fechar do radial com contraste insuficiente sobre a cena 3D**: confirmado
+    contra o CSS — `.chat-radial-close` herdava de `.modal-close` um fundo transparente + cor
+    `#6774a3`, pensado pra sentar em cima do fundo OPACO branco de `.chat-panel`/outros modais, não
+    direto sobre a cena 3D (este radial não tem painel nem backdrop atrás dele, ver achado da
+    rodada 1) — contra um céu claro, esse ícone podia cair abaixo do mínimo de 3:1 pra ícones/UI.
+    Corrigido dando ao botão de fechar o MESMO anel opaco (branco translúcido + borda branca +
+    sombra dupla) já usado pelos outros botões do radial, em vez de herdar o estilo pensado pra
+    outro contexto visual.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Texto livre, PII, DM, voz — fora de escopo do próprio item do backlog.
