@@ -1,16 +1,43 @@
 # Laboratório atual
 
-Em andamento: labs/lab-205-ranking-sem-friccao/ — remove a fricção desnecessária de abrir o painel
-de ranking: hoje as DUAS abas (online e local, entre perfis do mesmo aparelho) passam pelo mesmo
-portão parental de multiplayer, mesmo a aba local sendo 100% offline. Auditoria mudou o escopo
-original: remover o portão da aba ONLINE de verdade não seria seguro (conectar torna a posição/
-aparência do jogador visível a estranhos, não é "só um placar") — só a abertura do PAINEL deixa de
-exigir o portão; a aba online, sem consentimento, mostra um convite específico reaproveitando o
-mesmo portão existente. Decisão confirmada com o usuário via `AskUserQuestion`, escolhida entre 4
-opções (Lab 193 drawcalls bloqueado por medição ao vivo indisponível, Lab 196 NPCs vivos, outro item
-da lista). Ver `labs/lab-205-ranking-sem-friccao/FEATURES.md` pra detalhe da auditoria.
+Último concluído: labs/lab-205-ranking-sem-friccao/ — remove a fricção desnecessária de abrir o
+painel de ranking: antes, as DUAS abas (online e local, entre perfis do mesmo aparelho) passavam
+pelo mesmo portão parental de multiplayer, mesmo a aba local sendo 100% offline. Auditoria mudou o
+escopo original do backlog: remover o portão da aba ONLINE de verdade não seria seguro (conectar
+torna a posição/aparência do jogador visível a estranhos, não é "só um placar", contrariando a
+premissa original) — só a abertura do PAINEL deixou de exigir o portão; a aba online, sem
+consentimento, mostra um convite específico reaproveitando o mesmo portão já usado pelo chat, em
+vez de bloquear o painel inteiro. Decisão confirmada com o usuário via `AskUserQuestion`, escolhida
+entre 4 opções (Lab 193 drawcalls bloqueado por medição ao vivo indisponível, Lab 196 NPCs vivos,
+outro item da lista). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 195 - Ranking
+seguro sem fricção excessiva" — próximo item depois do lab-204 (Lab 211). **PR #88 teve 5 rodadas
+de review, todas do Copilot**: (1) o portão parental podia renderizar ATRÁS do painel de ranking
+(`.chat-panel`/`.ranking-panel` com z-index 20 acima do `.modal-overlay` original, 10) — nunca
+importava antes porque nenhum modal abria com um desses painéis já montado, até o convite novo
+quebrar essa premissa; (2) mesmo depois de subir pra 25, `.furniture-placement-bar` (z-index 30,
+botões de verdade, fora de `hudInert`) ainda ficava por cima — corrigido de vez subindo
+`.modal-overlay` pra 45, acima de TODO z-index já usado no arquivo, em vez de perseguir cada
+colisão isolada; (3) o CTA novo ("Ativar modo online") tinha contraste abaixo do mínimo AA
+(`--primary` com texto branco, ~2,4:1) — corrigido com `--primary-dark` (mesma correção já usada em
+`.reward-bonus-line`/`.ranking-row-self` no lab-120); (4) o hover do mesmo CTA (`brightness(1.08)`)
+empurrava a cor de volta pra perto do tom que tinha acabado de falhar contraste — corrigido
+escurecendo no hover em vez de clarear; (5) o indicador "🔴 sem conexão" soava como falha técnica
+mesmo antes de qualquer consentimento — corrigido só mostrando esse indicador quando já há
+consentimento. Rodada 5 mencionou "stacked-modal focus handling" sem comentário inline — investigado
+e confirmado como NÃO sendo um achado novo: `useModalA11y` já é uma pilha compartilhada de raízes de
+modal, construída e endurecida especificamente pra vários painéis abertos ao mesmo tempo (chat +
+ranking já coexistiam antes desta lab), e tanto `RankingPanel` quanto `ParentalGateModal` já usam o
+mesmo hook — o cenário já estava coberto por infraestrutura existente. `npx tsc -b` limpo; testes:
+app 257/257 (sem mudança — UI/gating, nenhuma lógica de domínio nova); `npm run build` sem
+regressão. **Sem verificação ao vivo — 8ª lab seguida**: o Chrome desta sessão travou de novo em
+`document.hidden === true`, confirmado com uma aba nova — verificação só por leitura de código e,
+pros achados de contraste, cálculo manual da fórmula WCAG. **Merge confirmado**: PR #88 mesclada
+(squash) em `main` no commit `1cee388` (2026-09-19, confirmado via `AskUserQuestion`). CI de `main`
+verde; deploy de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare
+Pages (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-204-trofeus-na-casa/ — fecha a única peça genuinamente aberta do backlog
+Antes desse: labs/lab-204-trofeus-na-casa/ — fecha a única peça genuinamente aberta do backlog
 "Lab 211 - Troféus e sala/álbum de mini-jogos" (as outras duas — troféus por mini-jogo/parkour e
 exibição no álbum de conquistas — já estavam satisfeitas pelos labs 202/203): um pedestal de
 troféus fixo (não é mobília comprável, sempre presente) dentro da casa pessoal, num canto oposto ao
