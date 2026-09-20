@@ -147,6 +147,40 @@ confirmados e corrigidos:
 `npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
 `npm run build` seguem limpos depois das 4 correções.
 
+**Rodada 2**: os achados 1 e 2 da rodada 1 confirmados "Resolved since last review" (o achado 4,
+docs de analytics, continua listado como "Open" pela persistência de thread já vista em labs
+anteriores — resolvido de verdade, sem ação nova). 2 achados formais novos + 2 achados "Previously
+missed" (marcados pelo próprio Copilot como não detectados na rodada 1, em código que já existia
+desde a implementação original) — os 4 confirmados e corrigidos:
+
+5. **Médio — circuito completo virava "replay morto"**: confirmado contra o código — depois de
+   `circuitDone = true`, apertar E perto de QUALQUER pedestal caía no ramo de ERRO (nenhum índice
+   bate com `circuitNextIndex`, já além do último), reacendendo o hint do pedestal 1 e apagando o
+   verde dos 3 — parecia um puzzle pronto pra jogar de novo, mas a guarda `!circuitDone` do prêmio
+   nunca deixaria uma 2ª conclusão abrir recompensa nenhuma. Corrigido ignorando toda interação de
+   pedestal depois de `circuitDone`.
+6. **Médio — gatilho da caixa só guardava `suspendRef`, não `hudInertRef`**: confirmado — a
+   correção da rodada 1 (`!suspendRef.current`) só cobre os modais de `App.tsx`
+   (`suspendTriggers`); chat radial/ranking/mochila são estado LOCAL de `World3D.tsx`
+   (`hudInertRef`, lab-208), fora de `suspendTriggers`. Corrigido trocando pra
+   `!hudInertRef.current` sozinho — já inclui `suspendTriggers` na própria fórmula
+   (`hudInert = fullScreenInert || ...`, `fullScreenInert` inclui `suspendTriggers`), cobrindo os
+   dois casos sem redundância.
+7. **Médio (Previously missed) — zona-alvo da caixa alinhada à direção ERRADA**: confirmado — o
+   alvo fica a 0,3 rad de `pushDown` (rotação deliberada, ver Investigação prévia), mas o disco raso
+   era alinhado ao `pushDown` ORIGINAL, não à direção de verdade na própria posição dele — o disco
+   ficava inclinado em relação ao chão ali, em vez de deitado nele. Corrigido calculando
+   `pushTargetDir` (a direção rotacionada) e alinhando a essa direção, não a `pushDown`.
+8. **Médio (Previously missed) — pergaminhos nunca alinhados à superfície**: confirmado —
+   `Quaternion.RotationAxis(dir, i)` sozinho só GIRA em torno de `dir`, nunca mapeia o eixo Y local
+   do cilindro pra essa direção — os 3 pergaminhos ficavam com "pra cima" mundial em vez de
+   alinhados à normal da superfície curva de Vênus. Corrigido compondo
+   `alignmentQuaternion(dir).multiply(Quaternion.RotationAxis(Vector3.Up(), i))`, mesmo padrão já
+   usado em todo o resto do arquivo pra "alinhar à superfície + variar visualmente".
+
+`npx tsc -b`, `npm run test -- --run` (app, 257/257), `npm run test` (server-accounts, 169/169) e
+`npm run build` seguem limpos depois das 4 correções.
+
 **Risco remanescente, honesto (mais alto que labs anteriores desta sessão)**: a caixa física é o
 PRIMEIRO corpo dinâmico não-avatar deste jogo — nunca testada ao vivo, nem aqui nem em nenhum lab
 anterior. Cenários de falha possíveis não descartáveis só por leitura de código: a caixa pode

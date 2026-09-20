@@ -4594,7 +4594,13 @@ export function World3D({
         // Vênus (2/3 mecânicas novas). Só o PRÓXIMO pedestal esperado (`circuitNextIndex`) reage
         // de verdade — pisar/apertar E num pedestal fora de ordem reseta o progresso inteiro
         // (feedback visual, sem punir recompensa nenhuma).
-        if (!insideHouseInterior) {
+        // Achado do review automático do Copilot: sem esta guarda, apertar E perto de QUALQUER
+        // pedestal depois do circuito já completo (`circuitDone`) caía no ramo de erro (nenhum
+        // índice bate com `circuitNextIndex`, que já passou do último), reacendendo o hint do
+        // pedestal 1 e apagando o verde dos 3 — parecia um puzzle "resetado", pronto pra jogar de
+        // novo, mas a guarda `!circuitDone` do prêmio nunca deixaria uma 2ª conclusão abrir
+        // recompensa nenhuma. Ignorado por completo depois de concluído — nem ativa, nem reseta.
+        if (!insideHouseInterior && !circuitDone) {
           for (let i = 0; i < circuitPedestals.length; i++) {
             const ped = circuitPedestals[i]
             if (Vector3.Distance(avatarMesh.position, ped.worldPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
@@ -7528,9 +7534,14 @@ export function World3D({
         const targetMesh = MeshBuilder.CreateCylinder('venusPushTarget', { height: 0.05, diameter: 1.1 }, scene)
         targetMesh.material = targetMat
         targetMesh.isPickable = false
-        const pushTargetPos = VENUS_CENTER.add(rotateAroundAxis(pushDown.scale(VENUS_RADIUS + 0.3), pushPerp, 0.3))
+        // Achado do review automático do Copilot: a zona-alvo fica a 0,3 rad de `pushDown` (ver
+        // comentário acima), então a direção radial de VERDADE na posição dela é essa direção
+        // ROTACIONADA, não `pushDown` original — alinhar ao `pushDown` deixava o disco raso
+        // inclinado em relação ao chão na própria posição dele, em vez de deitado nele.
+        const pushTargetDir = rotateAroundAxis(pushDown, pushPerp, 0.3).normalize()
+        const pushTargetPos = VENUS_CENTER.add(pushTargetDir.scale(VENUS_RADIUS + 0.3))
         targetMesh.position = pushTargetPos
-        targetMesh.rotationQuaternion = alignmentQuaternion(pushDown)
+        targetMesh.rotationQuaternion = alignmentQuaternion(pushTargetDir)
         pushObjectPuzzle = {
           body: boxAggregate.body,
           mesh: boxMesh,
@@ -7595,7 +7606,14 @@ export function World3D({
           const scrollMesh = MeshBuilder.CreateCylinder(`venusScroll-${i}`, { height: 0.5, diameter: 0.18 }, scene)
           scrollMesh.material = scrollMat
           scrollMesh.position = scrollPos
-          scrollMesh.rotationQuaternion = Quaternion.RotationAxis(dir, i)
+          // Achado do review automático do Copilot: `Quaternion.RotationAxis(dir, i)` sozinho só
+          // GIRA em torno de `dir` — nunca mapeia o eixo Y local do cilindro pra essa direção, então
+          // ficava com "pra cima" mundial em vez de alinhado à normal da superfície curva (mesmo
+          // bug que o ponto (2) já cometeu, corrigido acima). Mesma composição já usada em todo o
+          // resto do arquivo pra "alinhar à superfície + variar visualmente": `alignmentQuaternion`
+          // primeiro, `RotationAxis(Vector3.Up(), ângulo)` depois (gira em torno do eixo Y LOCAL,
+          // já que a composição já aconteceu).
+          scrollMesh.rotationQuaternion = alignmentQuaternion(dir).multiply(Quaternion.RotationAxis(Vector3.Up(), i))
           shadowGenerator.addShadowCaster(scrollMesh)
           scrollMarkers.push({ worldPos: scrollPos, mesh: scrollMesh, collected: false })
         }
@@ -13128,15 +13146,20 @@ export function World3D({
         // avatar (`body.applyForce(localUp.scale(-GRAVITY), pos)` mais abaixo) — sem isto a caixa
         // flutuaria (gravidade do motor Havok fica em 0 globalmente). A FORÇA em si é incondicional
         // (mantém a caixa "assentada" mesmo com um modal aberto, inofensivo) — mas o GATILHO da
-        // recompensa é guardado por `!suspendRef.current` (achado do review automático do Copilot:
-        // sem essa guarda, a caixa podia assentar na zona-alvo ENQUANTO outro desafio ambiental já
-        // estava aberto — ex. o jogador respondendo a placa — e `onOpenEnvironmentalChallengeRef`
-        // sobrescreveria `activeEnvironmentalChallenge` por baixo do modal já em uso, arrancando a
-        // pergunta que a criança já estava respondendo). Mesma guarda já usada pra coleta de moeda/
-        // pergaminho mais abaixo.
+        // recompensa é guardado por `!hudInertRef.current` (achado do review automático do
+        // Copilot, 2 rodadas): a 1ª correção usou só `!suspendRef.current`, mas esse ref só
+        // reflete os modais de `App.tsx` (`suspendTriggers`) — chat radial/ranking/mochila são
+        // estado LOCAL de `World3D.tsx` (`hudInertRef`, lab-208), não entram em `suspendTriggers`.
+        // `hudInertRef` já INCLUI `suspendTriggers` na própria fórmula (`hudInert = fullScreenInert
+        // || chatOpen || chatRadialOpen || rankingOpen || bagOpen || ...`, `fullScreenInert` por
+        // sua vez inclui `suspendTriggers`) — um único guard cobre os dois casos, sem redundância.
+        // Sem isso, a caixa assentando com QUALQUER desses painéis abertos ainda abriria o
+        // `QuestModal` por baixo dele, arrancando o que a criança já estava fazendo. Mesma guarda
+        // (`!suspendRef.current && !chatOpenRef.current`, subconjunto de `hudInert`) já usada pra
+        // coleta de moeda/pergaminho mais abaixo.
         if (pushObjectPuzzle && !pushObjectPuzzle.done) {
           pushObjectPuzzle.body.applyForce(pushObjectPuzzle.down.scale(-GRAVITY * pushObjectPuzzle.mass), pushObjectPuzzle.mesh.position)
-          if (!suspendRef.current && Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7) {
+          if (!hudInertRef.current && Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7) {
             pushObjectPuzzle.done = true
             onOpenEnvironmentalChallengeRef.current(
               selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),
