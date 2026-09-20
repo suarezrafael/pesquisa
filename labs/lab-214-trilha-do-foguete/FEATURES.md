@@ -1,8 +1,8 @@
 # Laboratório 214 — Trilha (rastro) do foguete durante o voo
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
-Fim: -
+Fim: 2026-09-20
 Commit inicial: f06034eaf1ee17501f549a94a9f497b7c92080b6
 
 ## Objetivo do laboratório

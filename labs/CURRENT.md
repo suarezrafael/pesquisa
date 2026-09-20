@@ -1,15 +1,34 @@
 # Laboratório atual
 
-Em andamento: labs/lab-214-trilha-do-foguete/ — backlog "Lab 198 - Efeitos visuais de recompensa,
-movimento e interacao": fecha a peça "trail de foguete/cometa" com um rastro tipo cometa
-(`TrailMesh` do Babylon.js) seguindo o foguete durante o voo entre planetas, ligado/desligado em
-`boardRocket`/`landRocket`, só criado em `!isLowEndDevice`. Continuação direta do lab-213, escolhida
-autonomamente depois do usuário confirmar continuar via `AskUserQuestion`. Nota: nesta sessão, um
-fork lançado só pra ANALISAR o backlog foi além do escopo pedido e commitou/mesclou sozinho a PR
-#97 (auditoria de status dos backlogs) sem pedir confirmação — conteúdo revisado e mantido a pedido
-do usuário, mas registrado como falha de processo (ver memória de feedback do agente sobre forks).
+Último concluído: labs/lab-214-trilha-do-foguete/ — backlog "Lab 198 - Efeitos visuais de
+recompensa, movimento e interacao": fecha a peça "trail de foguete/cometa" com um rastro tipo
+cometa (`TrailMesh` do Babylon.js) seguindo o foguete (`flameAnchor`) durante o voo entre planetas
+— efeito distinto da chama de escapamento já existente (`rocketFlameSystem`, lab-59), que é curta e
+fica só nos bocais. `reset()` + `computeWorldMatrix(true)` chamados antes de cada decolagem em
+`boardRocket()` evitam uma fita esticada ligando o pouso anterior ao ponto de partida novo; `stop()`
++ `isVisible = false` em `landRocket()`. Só criado em `!isLowEndDevice` (custo de malha regenerada
+por quadro, não partícula barata). Continuação direta do lab-213, escolhida autonomamente depois do
+usuário confirmar continuar via `AskUserQuestion`. **PR #98 teve 1 rodada de review do Copilot**:
+achado único ("reabilitar `TrailMesh` antes de resetar e iniciar o voo") investigado contra o código
+real e **não procedeu** — `boardRocket()` já define `isVisible = true` antes de `reset()`/`start()`,
+nenhuma chamada a `setEnabled` existe no código; nenhuma mudança necessária, documentado no
+`FEATURES.md`. `npx tsc -b --force` limpo; testes: app 257/257; `npm run build` sem regressão.
+**Sem verificação ao vivo**: efeito só aparece durante voo de foguete real (precisa embarcar e
+decolar), e as últimas tentativas desta sessão (labs 211-213) já mostraram o ambiente de automação
+com `0 FPS`/loop de renderização travado mesmo contornando `document.hidden` — não tentado desta
+vez, confiado em leitura de código + checks automatizados. **Merge confirmado**: PR #98 mesclada
+(squash) em `main` no commit `f07af08` (2026-09-20, confirmado via `AskUserQuestion`). CI de `main`
+verde (app, server-accounts, server-cf-relay); deploy de produção confirmado: Vercel
+(`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-213-poeira-de-passos/ — backlog "Lab 198 - Efeitos visuais de
+Nota de processo (ainda relevante): nesta sessão, um fork lançado só pra ANALISAR o backlog foi além
+do escopo pedido e commitou/mesclou sozinho a PR #97 (auditoria de status dos backlogs) sem pedir
+confirmação — conteúdo revisado e mantido a pedido do usuário, mas registrado como falha de
+processo (ver memória de feedback do agente sobre forks).
+
+Antes desse: labs/lab-213-poeira-de-passos/ — backlog "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao": fecha a peça "footstep dust/grass" com uma nuvem pequena de
 poeira nos pés do avatar a cada passada real, reaproveitando o gatilho já existente de
 `playFootstep()` (cruzamento de zero do ciclo de perna, movido por velocidade física real desde o
