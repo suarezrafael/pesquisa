@@ -3475,6 +3475,21 @@ export function World3D({
     let lastNetSendMs = 0
     let keysDown: Record<string, boolean> = {}
     let jumpRequested = false
+    // Backlog "Lab 198 - Efeitos visuais de recompensa, movimento e interacao" — detecta a
+    // transição "no ar → no chão" (não só "está no chão") pra disparar a nuvem de poeira só UMA
+    // vez por aterrissagem, não todo quadro em que `grounded` for verdadeiro.
+    let wasGroundedLastFrame = true
+    // Achado do review automático do Copilot, em 2 rodadas: teleporte/respawn (pouso de planeta,
+    // morte em Marte, checkpoint do parkour, entrar/sair de casa, etc.) reposiciona o avatar
+    // instantaneamente; se ele estivesse no ar (`grounded=false`) bem no instante do teleporte, o
+    // próximo quadro veria a transição falso→verdadeiro e disparava poeira "do nada" no destino. A
+    // 1ª tentativa de correção (limiar de deslocamento de posição) foi INSUFICIENTE — achado real
+    // da 2ª rodada: o respawn de checkpoint do parkour desloca só ~2,2 unidades (bem abaixo de um
+    // limiar seguro contra quedas rápidas de verdade sob lag), passando batido pelo limiar. Cada
+    // um dos 7 pontos que reposicionam o avatar diretamente neste arquivo (identificados pelo
+    // padrão compartilhado `avatarBody.body.disablePreStep = false`, já usado em todos eles) agora
+    // marca `wasGroundedLastFrame = true` explicitamente — mesmo padrão de mutação de closure
+    // compartilhada já usado por `facing` dentro de `teleportAvatarTo`.
     // Laser do parkour (lab-38, pedido do usuário: "se pisar no laser fazer animação de
     // morrendo e caindo até o planeta novamente") — enquanto `laserStunTimer > 0`, o controle
     // normal do jogador (andar/pular) fica suspenso e o personagem visual gira sem parar
@@ -3862,6 +3877,10 @@ export function World3D({
     let drivingRocket: RocketFlight | null = null
     let flyingRocket: TransformNode | null = null
     let rocketFlameSystem: ParticleSystem | null = null
+    // Backlog "Lab 198" — construído uma vez perto da criação do avatar (não depende de estar num
+    // planeta específico, ao contrário de `rocketFlameSystem`/Marte). `null` até lá porque a
+    // textura/malha de referência só existem depois que a cena básica está pronta.
+    let landingPuffSystem: ParticleSystem | null = null
     // Inimigos de Marte (lab-60) — populado dentro de `buildMarsIfNeeded`, lido/mutado pelo laço
     // de IA/combate por quadro (só roda quando `currentPlanetId === 'marte'`).
     const marsEnemies: MarsEnemy[] = []
@@ -3906,12 +3925,27 @@ export function World3D({
         // Teleporte físico seguro (mesmo padrão usado em todo o resto do jogo pra mover o avatar
         // direto — ver saída do carro logo abaixo — `disablePreStep = false` + `scene.render()`
         // sincronizam o corpo físico de verdade com a posição escrita aqui).
+        // Backlog "Lab 198" — achado do review automático do Copilot: precisa ser marcado ANTES
+        // de `scene.render()` (não depois), porque `scene.render()` dispara
+        // `onBeforeRenderObservable` de forma SÍNCRONA/reentrante — a checagem de poeira de
+        // aterrissagem roda de novo aqui dentro, ainda dentro desta mesma chamada, então marcar
+        // depois chegaria tarde demais pra suprimir o disparo indevido (ver comentário completo
+        // perto da declaração de `wasGroundedLastFrame`).
+        wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(center.add(landingUp.scale(groundFn(landingUp) + AVATAR_RADIUS + 0.05)))
         scene.render()
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
+        // Achado do review automático do Copilot (rodada seguinte): a marcação ANTES de
+        // `scene.render()` (acima) podia ser SOBRESCRITA pela própria chamada reentrante — se o
+        // destino do teleporte ficar levemente acima da superfície (folga de segurança comum em
+        // pousos/respawns), a checagem reentrante recalcula `grounded` como falso e grava
+        // `wasGroundedLastFrame = false` de volta antes desta função terminar. Reafirmar aqui,
+        // DEPOIS de `scene.render()`, garante que o quadro seguinte (de verdade) sempre veja
+        // `true`, não importa o que a chamada reentrante tenha decidido no meio do caminho.
+        wasGroundedLastFrame = true
         facing = Vector3.Cross(landingUp, Vector3.Right())
         if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(landingUp, Vector3.Forward())
         facing.normalize()
@@ -3925,12 +3959,18 @@ export function World3D({
       // zerar velocidade), só que recebe a posição absoluta já pronta em vez de recalculá-la.
       function teleportAvatarToPosition(pos: Vector3, facingHint: Vector3) {
         if (!avatarMesh || !avatarBody) return
+        // Backlog "Lab 198" — marcado ANTES de `scene.render()`, mesmo motivo de
+        // `teleportAvatarTo` acima (achado do review automático do Copilot).
+        wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(pos)
         scene.render()
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
+        // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo` acima (a
+        // chamada reentrante pode sobrescrever a marcação de antes).
+        wasGroundedLastFrame = true
         facing = facingHint.lengthSquared() > 1e-6 ? facingHint.clone().normalize() : facing
       }
 
@@ -4369,6 +4409,9 @@ export function World3D({
             // completamente a escrita direta em `avatarMesh.position` e volta pra onde estava
             // no próximo passo de física — bug real encontrado testando esta função: o jogador
             // saía do carro mas continuava "preso" na posição de quando entrou.
+            // Backlog "Lab 198" — marcado ANTES de `scene.render()` (achado do review automático
+            // do Copilot: reentrante/síncrono, ver comentário completo em `teleportAvatarTo`).
+            wasGroundedLastFrame = true
             avatarBody.body.disablePreStep = false
             avatarMesh.position.copyFrom(
               exitSpotUp.scale(PLANET_RADIUS + terrainHeight(exitSpotUp) + AVATAR_RADIUS + 0.05),
@@ -4377,6 +4420,8 @@ export function World3D({
             avatarBody.body.setLinearVelocity(Vector3.Zero())
             avatarBody.body.setAngularVelocity(Vector3.Zero())
             avatarBody.body.disablePreStep = true
+            // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo`.
+            wasGroundedLastFrame = true
           }
           facing = exitFwd.subtract(exitSpotUp.scale(Vector3.Dot(exitFwd, exitSpotUp)))
           if (facing.lengthSquared() < 1e-6) facing = Vector3.Cross(exitSpotUp, Vector3.Right())
@@ -7918,6 +7963,53 @@ export function World3D({
         scene,
       )
 
+      // Nuvem de poeira ao aterrissar (backlog "Lab 198") — mesma técnica de textura por canvas já
+      // madura em `rocketFlameSystem` (gradiente radial num `DynamicTexture`), só com tom terroso
+      // em vez de amarelo/laranja e `BLENDMODE_STANDARD` (poeira opaca, não um brilho aditivo).
+      // Disparada em burst (`manualEmitCount`, não `emitRate` contínuo) a cada aterrissagem — ver
+      // laço de física principal, mais abaixo, onde `wasGroundedLastFrame` detecta a transição.
+      const dustTexture = new DynamicTexture('landingPuffTex', { width: 32, height: 32 }, scene, false)
+      const dustCtx = dustTexture.getContext() as CanvasRenderingContext2D
+      const dustGradient = dustCtx.createRadialGradient(16, 16, 0, 16, 16, 16)
+      dustGradient.addColorStop(0, 'rgba(214,188,150,0.85)')
+      dustGradient.addColorStop(0.5, 'rgba(180,152,112,0.55)')
+      dustGradient.addColorStop(1, 'rgba(160,132,92,0)')
+      dustCtx.fillStyle = dustGradient
+      dustCtx.fillRect(0, 0, 32, 32)
+      dustTexture.update()
+
+      landingPuffSystem = new ParticleSystem('landingPuff', 40, scene)
+      landingPuffSystem.particleTexture = dustTexture
+      landingPuffSystem.emitter = Vector3.Zero()
+      landingPuffSystem.minEmitBox = new Vector3(-0.15, 0, -0.15)
+      landingPuffSystem.maxEmitBox = new Vector3(0.15, 0.1, 0.15)
+      landingPuffSystem.minEmitPower = 0.8
+      landingPuffSystem.maxEmitPower = 1.6
+      landingPuffSystem.updateSpeed = 0.02
+      landingPuffSystem.minLifeTime = 0.35
+      landingPuffSystem.maxLifeTime = 0.6
+      landingPuffSystem.minSize = 0.25
+      landingPuffSystem.maxSize = 0.55
+      landingPuffSystem.color1 = new Color4(0.75, 0.65, 0.5, 0.7)
+      landingPuffSystem.color2 = new Color4(0.6, 0.5, 0.35, 0.5)
+      landingPuffSystem.colorDead = new Color4(0.5, 0.42, 0.3, 0)
+      landingPuffSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
+      // `emitRate = 0` (mesmo padrão de repouso de `rocketFlameSystem`) — achado do review
+      // automático do Copilot, investigado contra o código-fonte real do `@babylonjs/core`
+      // instalado (`thinParticleSystem.pure.js`): `manualEmitCount` (usado no disparo, mais
+      // abaixo) já ignora `emitRate` completamente enquanto `manualEmitCount > -1` (cria TODAS as
+      // partículas pedidas numa única atualização, não pausado por taxa nenhuma, e nunca volta
+      // sozinho pro modo `emitRate` depois de consumido) — a alegação original do review
+      // ("continua emitindo com emitRate=200 depois do burst") não procede tecnicamente, mas
+      // `emitRate = 0` continua sendo o valor certo aqui: nunca é lido de verdade neste sistema
+      // (só usa `manualEmitCount`), e deixar em 0 remove qualquer ambiguidade sobre depender de um
+      // comportamento de várias etapas não documentado, além de bater com a convenção já
+      // estabelecida de sistemas "em repouso" deste arquivo.
+      landingPuffSystem.emitRate = 0
+      // `direction1`/`direction2`/`gravity` recalculados a cada disparo (não fixados aqui) — o
+      // mundo é uma esfera, "pra cima"/"pra baixo" dependem de ONDE o jogador aterrissou
+      // (`localUp` daquele ponto), não de um eixo Y fixo do mundo.
+
       const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, profile.equippedPantsColorId)
       const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, profile.equippedShoeColorId)
       const initialBackpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, profile.equippedBackpackColorId)
@@ -8105,12 +8197,14 @@ export function World3D({
           // lab-39: a causa real de resultados "congelados" testando o parkour de laser era a
           // aba do Chrome da automação não renderizar quadro nenhum quando só esperando sem
           // interagir, não este código).
+          wasGroundedLastFrame = true // Backlog "Lab 198" — marcado ANTES de scene.render() (reentrante).
           avatarBody.body.disablePreStep = false
           avatarMesh.position = localUp.scale(PLANET_RADIUS + terrainHeight(localUp) + AVATAR_RADIUS + 0.05)
           scene.render()
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
           avatarBody.body.disablePreStep = true
+          wasGroundedLastFrame = true // Reafirma DEPOIS de scene.render() (reentrante pode sobrescrever).
         }
         // Bug real encontrado testando o parkour de laser (lab-39): `__debugTeleport` sempre
         // recalcula a altura do CHÃO na direção dada, então não dava pra testar uma posição no
@@ -8120,12 +8214,14 @@ export function World3D({
         // (posição de verdade, não uma direção a normalizar) e não mexe na altura.
         ;(window as any).__debugTeleportExact = (x: number, y: number, z: number) => {
           if (!avatarMesh || !avatarBody) return
+          wasGroundedLastFrame = true // Backlog "Lab 198" — marcado ANTES de scene.render() (reentrante).
           avatarBody.body.disablePreStep = false
           avatarMesh.position = new Vector3(x, y, z)
           scene.render()
           avatarBody.body.setLinearVelocity(Vector3.Zero())
           avatarBody.body.setAngularVelocity(Vector3.Zero())
           avatarBody.body.disablePreStep = true
+          wasGroundedLastFrame = true // Reafirma DEPOIS de scene.render() (reentrante pode sobrescrever).
         }
         // Ajusta a direção pra onde o personagem anda (dev-only, QA) — teleportar não muda
         // `facing` (fica sempre o que era antes), então sem isto não dá pra testar "andar até X"
@@ -9712,12 +9808,17 @@ export function World3D({
         // Teleporte físico seguro (mesmo padrão de `teleportAvatarTo`/saída do carro) — posição
         // exata (sem aproximação de curvatura: a sala é um chão PLANO de verdade, diferente da
         // superfície esférica que `offsetLandingUp` foi pensado pra aproximar).
+        // Backlog "Lab 198" — marcado ANTES de `scene.render()` (achado do review automático do
+        // Copilot: reentrante/síncrono, ver comentário completo em `teleportAvatarTo`).
+        wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(houseInteriorSpawnPos)
         scene.render()
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
+        // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo`.
+        wasGroundedLastFrame = true
         facing = new Vector3(0, 0, 1)
         refreshHouseFurnitureVisuals()
         if (visitingHouseSnapshot) {
@@ -10478,12 +10579,17 @@ export function World3D({
         cameraDragPointerId = null
         currentWorldCenter = GAME_CENTER_INTERIOR_CENTER
         currentGroundBaseFn = () => GAME_CENTER_INTERIOR_RADIUS
+        // Backlog "Lab 198" — marcado ANTES de `scene.render()` (achado do review automático do
+        // Copilot: reentrante/síncrono, ver comentário completo em `teleportAvatarTo`).
+        wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(gameCenterInteriorSpawnPos)
         scene.render()
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
+        // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo`.
+        wasGroundedLastFrame = true
         facing = new Vector3(0, 0, 1)
         trackGameCenterEntered()
       }
@@ -12846,6 +12952,29 @@ export function World3D({
               grounded = groundRayResult.hitDistance <= AVATAR_RADIUS + 0.13
             }
           }
+
+          // Backlog "Lab 198" — nuvem de poeira na transição "no ar → no chão" (não a cada quadro
+          // com `grounded` verdadeiro). Direção/gravidade calculadas a partir do `localUp` do
+          // ponto de contato — mesmo idioma de par de eixos perpendiculares já usado em todo este
+          // arquivo pra orientar objetos na superfície esférica (`Vector3.Cross(localUp,
+          // Vector3.Right())`), com o mesmo fallback de `teleportAvatarTo` (acima) pro caso
+          // degenerado de `localUp` paralelo a `Vector3.Right()` — ao contrário de âncoras fixas
+          // como a do parkour (escolhidas manualmente, já longe de qualquer polo problemático), o
+          // jogador pode aterrissar em QUALQUER ponto da esfera.
+          if (grounded && !wasGroundedLastFrame && landingPuffSystem) {
+            const perp1 = Vector3.Cross(localUp, Vector3.Right())
+            if (perp1.lengthSquared() < 1e-6) perp1.copyFrom(Vector3.Cross(localUp, Vector3.Forward()))
+            perp1.normalize()
+            const perp2 = Vector3.Cross(localUp, perp1).normalize()
+            landingPuffSystem.emitter = pos.subtract(localUp.scale(AVATAR_RADIUS)).clone()
+            landingPuffSystem.direction1 = localUp.scale(0.6).add(perp1.scale(-0.4)).add(perp2.scale(-0.4))
+            landingPuffSystem.direction2 = localUp.scale(1.0).add(perp1.scale(0.4)).add(perp2.scale(0.4))
+            landingPuffSystem.gravity = localUp.scale(-2.5)
+            landingPuffSystem.manualEmitCount = 18
+            landingPuffSystem.start()
+          }
+          wasGroundedLastFrame = grounded
+
           if (touchJumpRef.current) {
             touchJumpRef.current = false
             jumpRequested = true
