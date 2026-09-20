@@ -162,6 +162,22 @@ um valor de z-index antigo).
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
 
+**Rodada 5**: nenhum comentário inline novo (os 2 "Open"/"Previously" continuam sendo os MESMOS 2
+threads da rodada 1, ambos corrigidos 2x cada — parecem só ficar referenciados até alguém marcar
+"resolved" manualmente na UI do GitHub, não indicam problema novo). O resumo em texto solto repetiu
+"CTA contrast" (já corrigido e reverificado por cálculo 2x — estado normal ~4,5:1, hover ~5,18:1,
+ambos acima do mínimo AA) e citou pela primeira vez "stacked-modal focus handling" — investigado
+antes de descartar ou corrigir: `useModalA11y` (`state/useModalA11y.ts`) já é uma pilha
+COMPARTILHADA de raízes de modal, construída e endurecida especificamente pra "vários painéis
+abertos ao mesmo tempo" (comentário no próprio arquivo: "painéis pequenos (chat/ranking/mochila)
+podem ficar abertos AO MESMO TEMPO... é assim que chat+ranking coexistem" — já passou por pelo
+menos 9 rodadas de review documentadas nos próprios comentários). `ParentalGateModal` E
+`RankingPanel` já usam o MESMO hook (`useModalA11y`) — o cenário nesta lab (portão aberto com o
+ranking já montado por baixo) é exatamente o caso que essa pilha compartilhada já resolve
+(roteamento de foco pro topo, Esc mirando o painel com foco de verdade, restauração correta fora
+de ordem LIFO). Concluído como NÃO sendo um achado novo de verdade — infraestrutura já existente e
+testada resolve o cenário, sem código novo necessário aqui.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Remover o portão parental da presença online de verdade — a auditoria concluiu que isso NÃO é
