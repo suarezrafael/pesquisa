@@ -65,9 +65,12 @@ nenhuma lógica de domínio nova, só efeito visual/gatilho de física); `npm ru
 
 Pontos conferidos por leitura:
 
-- **`manualEmitCount` + `.start()`** é o padrão nativo do Babylon.js pra burst único (emite
-  exatamente a contagem pedida, pausada por `emitRate`, e para sozinho — não precisa de nenhum
-  `setTimeout`/`stop()` manual).
+- **`manualEmitCount` + `.start()`** é o padrão nativo do Babylon.js pra burst único — confirmado
+  contra o código-fonte real (`thinParticleSystem.pure.js`): enquanto `manualEmitCount > -1`, TODAS
+  as partículas pedidas nascem numa única atualização (não pausadas por `emitRate`, que nem chega a
+  ser lido nesse modo), e o valor fica travado em `0` depois de consumido (não volta sozinho pro
+  modo `emitRate`) — por isso o disparo escreve `manualEmitCount` de novo a cada aterrissagem, em
+  vez de confiar em qualquer reversão automática.
 - **Fallback do eixo degenerado** (`localUp` paralelo a `Vector3.Right()`) mirrora exatamente
   `teleportAvatarTo` (já existente, testado ao vivo em labs anteriores) — decisão deliberada de
   incluir esse fallback aqui (ao contrário de âncoras fixas como o parkour, que não precisam, por
