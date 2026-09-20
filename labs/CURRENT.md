@@ -1,5 +1,16 @@
 # Laboratório atual
 
+Em andamento: labs/lab-208-chat-radial-contextual/ — backlog "Lab 194 - Quick chat contextual sem
+supervisao pesada": transforma o chat catalogado atual num atalho radial/contextual (frases mais
+relevantes pro estado do jogador — casa/corrida/planeta/pet — num toque só), mantendo o catálogo
+completo por categoria intacto como "mais opções". Reavalia se o novo modo ainda precisa do mesmo
+portão parental do chat/ranking atuais — conclusão: sim, continua precisando (chat sempre envia
+mensagem de verdade a outros jogadores pela rede, diferente do ranking local do lab-205). Origem:
+`docs/gameplay-market-expansion-backlog.md`, "Lab 194 - Quick chat contextual sem supervisao
+pesada" — escolhido com o usuário via `AskUserQuestion` (escopo completo) depois do lab-207 (Lab
+191/193 seguem bloqueados por medição de FPS ao vivo indisponível). Ver
+`labs/lab-208-chat-radial-contextual/FEATURES.md` pra detalhe.
+
 Último concluído: labs/lab-207-efeitos-visuais-leves/ — primeira fatia pequena do backlog "Lab 198 -
 Efeitos visuais de recompensa, movimento e interacao": uma nuvem de poeira ao aterrissar depois de
 qualquer pulo/queda, reaproveitando 100% a técnica de partículas já madura do `rocketFlameSystem`

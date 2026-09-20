@@ -1,0 +1,151 @@
+# Laboratório 208 — Chat radial contextual
+
+Status: em andamento
+Início: 2026-09-20
+Commit inicial: 11a35cb9b275496aa5e3b876a35e608eeb696fce
+
+## Objetivo do laboratório
+
+Backlog "Lab 194 - Quick chat contextual sem supervisao pesada": a reclamação sobre o chat vem de
+baixa expressividade, não necessariamente de precisar de texto livre — transformar o chat
+catalogado atual num atalho radial/contextual (frases mais relevantes pro estado atual do jogador
+num toque só), sem abrir mão do catálogo fechado, e reavaliar se esse novo modo ainda precisa do
+mesmo portão parental do chat/ranking atuais.
+
+Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 194 - Quick chat contextual sem
+supervisao pesada" — escolhido junto com o usuário via `AskUserQuestion` (escopo maior, com
+decisão de design real, inclusive sobre o portão parental) entre 3 opções (escopo completo / fatia
+menor / pular por agora) depois do lab-207 (Lab 191/193, auditoria de FPS/drawcalls, seguem
+bloqueados por medição ao vivo indisponível nesta sessão). Usuário escolheu escopo completo.
+
+## Investigação prévia
+
+- **Catálogo já é bem maior que os "10 frases originais"** que motivaram a reclamação original
+  (lab-82 já expandiu pra ~35 frases em 5 categorias/abas: saudação, reação, convite, elogio,
+  jogo). O problema remanescente não é falta de frase, é FRICÇÃO DE NAVEGAÇÃO: achar "Vamos pra
+  escolinha?" hoje exige abrir o painel, trocar de aba, rolar a grade — mesmo a frase certa já
+  existindo. Esta lab ataca a fricção, não o tamanho do catálogo.
+- **Reavaliação do portão parental (pedido explícito do item do backlog)**: diferente do ranking
+  (lab-205, onde SÓ ABRIR o painel virou seguro porque a aba local é 100% offline — nenhum dado sai
+  pra rede), o chat SEMPRE envia uma mensagem de verdade a outros jogadores reais pela rede,
+  mesmo sendo 100% catalogado (sem texto livre, sem PII) — continua na mesma categoria de risco de
+  "conectar torna a posição/aparência do jogador visível a estranhos" que a auditoria do lab-205
+  já usou pra justificar MANTER o portão na aba online do ranking. Conclusão desta lab: o portão
+  parental do chat continua necessário e não muda — só o CAMINHO até enviar uma frase catalogada
+  fica mais curto, a decisão de permitir ou não continua a mesma.
+- **`ChatPanel.tsx`/`chatMessages.ts` (catálogo + abas) continuam 100% intactos** — o radial novo é
+  um atalho ADICIONAL, não uma substituição. Reduz o risco de regressão (nada do fluxo existente
+  muda de comportamento) e mantém o "mais opções" como rede de segurança pra qualquer frase fora
+  do conjunto contextual.
+- **Contexto detectado a partir de estado que já existe na cena** (`currentPlanetId`,
+  `activeMinigameId`, `insideHouseInterior`, `insideGameCenterInterior` — todos `let` já mantidos
+  pelo laço de física principal, `World3D.tsx`) mais `progress.equippedPetId` (React, via
+  `progressRef.current`, já usado em outros pontos do arquivo pro mesmo propósito de ler estado
+  atual de dentro do closure). Nenhum estado novo precisou ser criado — só uma nova PONTE
+  (`__getChatContext`, mesmo padrão de `__handleInteractPress`/`__refreshPet`/etc.) que combina o
+  que já existe num único contexto, calculada sob demanda (só quando o jogador toca no ícone de
+  chat), não por quadro.
+- **Contextos e prioridade** (mais específico primeiro): `casa` (dentro de qualquer interior de
+  bolso) > `corrida` (minijogo ativo OU dentro do centro de jogos) > `planeta` (num planeta
+  secundário — funde "planeta atual" e "missão" do backlog, já que todo planeta secundário já É
+  uma missão, ver escolinhas do lab-206) > `pet` (tem um pet equipado, quando nenhum dos anteriores
+  se aplica) > `default` (hub principal, sem nenhum dos anteriores).
+- **Frases contextuais reaproveitam o catálogo já existente** sempre que fazem sentido (`explorar`,
+  `escolinha`, `ajuda`, `cuidado`, `vamos`, `quase_la`, `consegui`, `vem_aqui`, `trocar`, `legal`,
+  `adorei`, `voce_demais`) — só 3 frases novas onde nada do catálogo cobria bem o contexto:
+  `bem_vindo_casa` (🏠), `boa_corrida` (🏁), `pet_fofo` (🐾). Ids novos adicionados às DUAS cópias
+  da lista de validação do servidor (`server-cf-relay/src/index.ts`, ativo; `server/relay.cjs`,
+  legado/suspenso mas mantido em sincronia por convenção já documentada no próprio arquivo).
+- **UI radial não usa `.modal-overlay` (tela cheia)** — mesma decisão já tomada pra chat/ranking/
+  mochila (comentário de `canvasInert` em `World3D.tsx`): são atalhos pequenos, o canvas continua
+  interativo ao redor. Fundo do radial é transparente, só captura clique-fora-fecha; os botões
+  circulares reaproveitam o MESMO estilo já auditado pra contraste AA de `.help-button` (anel
+  branco opaco + fundo translúcido), em vez de repetir `--primary` + texto branco (`.chat-quick-btn`
+  já usa essa combinação sem ter passado pela auditoria de contraste — não é regressão desta lab
+  tocar nisso, mas também não faz sentido REPLICAR uma combinação sabidamente arriscada num
+  componente novo quando já existe um padrão validado ao lado).
+- **`useModalA11y` reaproveitado** (mesmo hook de `ChatPanel`/`RankingPanel`/etc.) — Esc fecha,
+  foco entra/sai corretamente, coexiste com outros painéis na pilha compartilhada já existente.
+
+## Decisão de escopo
+
+Confirmada com o usuário via `AskUserQuestion`: escopo completo (transformação radial/contextual +
+reavaliação do portão parental), não a fatia menor nem pular o item. Fora de escopo: texto livre,
+DM, voz (já fora de escopo do próprio item do backlog); remover/afrouxar o portão parental (decisão
+desta lab foi mantê-lo, ver "Investigação prévia" acima); refazer o catálogo por categoria
+existente (`ChatPanel.tsx` continua como está, só ganhou um atalho na frente).
+
+## Funcionalidades planejadas
+
+- [x] Tipo `ChatContext` + mapa de frases contextuais (`contextualQuickChatMessages`) em
+  `chatMessages.ts`, reaproveitando ids existentes + 3 frases novas.
+- [x] `ChatRadial.tsx`: componente novo, botões circulares em arco ao redor de um ícone central,
+  reaproveitando `useModalA11y` e o mesmo `onSend(messageId)` do painel completo — mesma validação
+  de servidor, mesmo portão parental (decidido ANTES de abrir, em `World3D.tsx`).
+  Último botão do arco é sempre "mais opções" (⋯), que troca pro `ChatPanel` completo existente.
+- [x] Ponte `__getChatContext` (`World3D.tsx`) computando o contexto atual sob demanda a partir de
+  estado já existente na cena + `progressRef.current.equippedPetId`.
+- [x] Gatilho de chat do HUD (`onOpenChat`) agora abre o radial primeiro (ainda atrás do mesmo
+  `openMultiplayerFeature`/portão parental de antes); `chatOpenRef`/`hudInert` atualizados pra
+  cobrir os dois pontos de entrada (radial e painel completo).
+- [x] Ids novos sincronizados nas 2 cópias de validação do servidor (`server-cf-relay`, ativo;
+  `server/relay.cjs`, legado).
+- [~] Verificar ao vivo: ambiente de automação desta sessão travou de novo em `document.hidden`
+  (11ª lab seguida — mesma limitação exata; desta vez até a captura de screenshot expirou por
+  timeout, sintoma mais forte de repaint congelado). Documentado abaixo; confiado em `tsc`/testes/
+  build/lint + leitura de código cuidadosa.
+
+## Verificação de código (sem ambiente de automação disponível)
+
+Checagens automatizadas: `npx tsc -b` (app) limpo; `npx tsc --noEmit` (server-cf-relay) limpo;
+`npm run test -- --run` (app): 257/257 (sem mudança — nenhuma lógica de domínio nova, só UI/gatilho
+de chat); `npm run build` sem erros; `npm run lint` (oxlint) sem warning novo (os 2 warnings
+existentes — `PetPanel.tsx` fast-refresh, `domain.test.ts` variável não usada — são anteriores a
+esta lab, não relacionados).
+
+Pontos conferidos por leitura:
+
+- **`__getChatContext` fecha sobre os mesmos `let` do laço de física principal** (`currentPlanetId`,
+  `activeMinigameId`, `insideHouseInterior`, `insideGameCenterInterior`), declarados antes da ponte
+  no mesmo escopo de função — mesma garantia de closure já usada por `__showLocalChatBubble`
+  (registrada logo antes) e por toda outra ponte `__xxx` deste arquivo: como são `let` (não
+  `const` capturado por valor), a ponte sempre lê o valor mais recente no momento em que é
+  CHAMADA (só quando o jogador toca no ícone de chat), não o valor de quando foi registrada.
+- **`progressRef.current.equippedPetId`**: `progressRef` já é atualizado a cada render
+  (`progressRef.current = progress`, fora do efeito de setup) — mesmo padrão já usado por outros
+  pontos do arquivo pra ler o `progress` React mais recente de dentro do closure sem esperar um
+  novo efeito rodar.
+- **`chatOpenRef.current = chatOpen || chatRadialOpen`**: cobre os dois pontos de entrada nos MESMOS
+  3 lugares que já liam `chatOpenRef` antes desta lab (supressão de movimento no laço de física,
+  gatilho de interação, e o guard duplo perto da linha ~13600 já existente) — nenhum desses 3
+  precisou de edição própria, só a fonte que alimenta o ref.
+- **`hudInert` e `onOpenChat`**: único novo estado de UI (`chatContext`) é somente-leitura pro
+  `ChatRadial` — nenhuma outra parte do arquivo depende dele, risco de regressão contido ao
+  componente novo.
+- **IDs novos nos catálogos do servidor**: confirmado que `server-cf-relay/src/index.ts` é o relay
+  ATIVO (README do próprio projeto, citado em `CLAUDE.md`) — sem os 3 ids novos lá, uma mensagem
+  `boa_corrida`/`bem_vindo_casa`/`pet_fofo` enviada pelo radial seria descartada em silêncio pelo
+  servidor (mesma checagem `QUICK_CHAT_IDS.has(msg.messageId)` já existente); `server/relay.cjs`
+  (legado/suspenso) atualizado também, só por convenção de sincronia já documentada no arquivo.
+
+**Risco remanescente, honesto**: a disposição visual exata do arco (ângulos, raio de 80px,
+posição fixa no canto direito da tela) não foi confirmada ao vivo — pode precisar de ajuste fino
+de posição em telas muito estreitas (o `.chat-radial` de 200×200px cabe com folga em qualquer
+tela ≥ 320px de largura, mas não foi testado contra o teclado virtual mobile aberto, por exemplo,
+já que o radial não tem campo de texto nenhum pra abrir teclado). O SENTIDO de prioridade de
+contexto (`casa` > `corrida` > `planeta` > `pet` > `default`) é uma escolha de design, não uma
+correção de bug — outra ordem seria igualmente válida; esta foi escolhida por especificidade
+decrescente do sinal (interior de bolso é o contexto mais "isolado e certo", pet equipado é o mais
+"sempre verdadeiro quando nada mais se aplica").
+
+## Fora de escopo (explicitamente adiado)
+
+- Texto livre, PII, DM, voz — fora de escopo do próprio item do backlog.
+- Remover/afrouxar o portão parental do chat — avaliado e mantido (ver "Investigação prévia").
+- Refazer `ChatPanel.tsx`/categorias existentes — continuam intactos, o radial é um atalho a mais.
+- Corrigir o contraste pré-existente de `.chat-quick-btn` (`--primary` + texto branco) — fora do
+  escopo desta lab (não é uma regressão introduzida aqui), mas documentado como candidato futuro.
+- Lab 197 (órbitas), demais peças do Lab 198 (footstep dust, brilho em interativo, pulso de
+  recompensa, trail de foguete/cometa, feedback de puzzle), Lab 200 (missões físicas por planeta),
+  Lab 191/193 (auditoria de FPS/drawcalls, bloqueados por medição ao vivo indisponível) — candidatos
+  que ficaram de fora desta escolha.
