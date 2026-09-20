@@ -1,7 +1,8 @@
 # Laboratório 211 — Brilho pulsante nos baús de tesouro
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
+Fim: 2026-09-20
 Commit inicial: 684bad21fa7343d51eec23f2def753ec6cc8e043
 
 ## Objetivo do laboratório
