@@ -181,6 +181,15 @@ rodada 5 (marcar `wasGroundedLastFrame = true` ANTES de `scene.render()`) ainda 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
 correção.
 
+**Rodada 7**: "Findings: None", achado da rodada 6 ("Reapply respawn dust suppression after
+re-entrant render") confirmado "Resolved since last review". A contagem bruta de comentários
+inline subiu de 4 pra 5 nesta rodada — verificado id por id (`gh api .../pulls/90/comments`) antes
+de assumir que era achado novo: o 5º comentário (`4056841117`, linha 3967) é exatamente o texto que
+gerou a correção da rodada 6 (reafirmar `wasGroundedLastFrame = true` depois de `scene.render()`),
+só que eu não tinha registrado o id dele nesta tabela até agora — não é um achado adicional, é o
+mesmo já corrigido, agora confirmado resolvido pelo próprio resumo da rodada 7. Nenhum comentário
+genuinamente novo. Pronta pra revisão de merge.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Footstep dust (poeira a cada passo andando) — mais frequente/sensível a performance, merece sua
