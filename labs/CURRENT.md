@@ -1,17 +1,40 @@
 # Laboratório atual
 
-Em andamento: labs/lab-208-chat-radial-contextual/ — backlog "Lab 194 - Quick chat contextual sem
-supervisao pesada": transforma o chat catalogado atual num atalho radial/contextual (frases mais
-relevantes pro estado do jogador — casa/corrida/planeta/pet — num toque só), mantendo o catálogo
-completo por categoria intacto como "mais opções". Reavalia se o novo modo ainda precisa do mesmo
-portão parental do chat/ranking atuais — conclusão: sim, continua precisando (chat sempre envia
-mensagem de verdade a outros jogadores pela rede, diferente do ranking local do lab-205). Origem:
-`docs/gameplay-market-expansion-backlog.md`, "Lab 194 - Quick chat contextual sem supervisao
-pesada" — escolhido com o usuário via `AskUserQuestion` (escopo completo) depois do lab-207 (Lab
-191/193 seguem bloqueados por medição de FPS ao vivo indisponível). Ver
-`labs/lab-208-chat-radial-contextual/FEATURES.md` pra detalhe.
+Último concluído: labs/lab-208-chat-radial-contextual/ — backlog "Lab 194 - Quick chat contextual
+sem supervisao pesada": transforma o chat catalogado atual num atalho radial/contextual (frases
+mais relevantes pro estado do jogador — corrida/casa/planeta/pet — num toque só), mantendo o
+catálogo completo por categoria intacto como "mais opções". Reavalia se o novo modo ainda precisa
+do mesmo portão parental do chat/ranking atuais — conclusão: sim, continua precisando (chat sempre
+envia mensagem de verdade a outros jogadores pela rede, diferente do ranking local do lab-205).
+Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 194 - Quick chat contextual sem
+supervisao pesada" — escolhido com o usuário via `AskUserQuestion` (escopo completo) depois do
+lab-207 (Lab 191/193 seguem bloqueados por medição de FPS ao vivo indisponível). **PR #91 teve 6
+rodadas de review do Copilot**, o ciclo mais longo da sessão até agora: (1) `enterGameCenterInterior`
+liga `insideHouseInterior` JUNTO com `insideGameCenterInterior` — checar casa antes de corrida
+fazia o saguão do centro de jogos nunca cair no contexto certo; mais 3 achados só no resumo (sem
+comentário inline), todos reais: backdrop de tela cheia bloqueando o canvas inteiro (mesma classe
+do bug do lab-205 no ranking), semântica ARIA de menu sem navegação por seta implementada, e
+mensagem "Bem-vindo à minha casa!" podendo aparecer visitando a casa de um amigo; (2) 2 achados de
+documentação (`FEATURES.md` desatualizado depois da correção real); (3) mais 1 referência de doc
+desatualizada, e 2 achados de código: a própria caixa de 200×200px do radial ainda tapava o canvas
+nos espaços vazios entre botões (`pointer-events` padrão) mesmo sem o backdrop de tela cheia, e
+`equippedPetId` sem validar contra o catálogo (`findPetById`) podia habilitar o contexto de pet sem
+nenhum pet de verdade visível; (4) botão de fechar do radial com contraste insuficiente sobre a
+cena 3D (herdava estilo pensado pra um painel opaco atrás, que este radial não tem); (5) a própria
+correção do contraste (rodada 4) tinha encolhido esse botão pra 32px, abaixo do piso de 44px de
+alvo de toque — corrigido voltando pro tamanho certo mantendo o anel opaco; (6) "Findings: None",
+ciclo encerrado. Usuário consultado via `AskUserQuestion` depois da rodada 5 (ciclo incomumente
+longo) — escolheu pedir mais uma rodada, que veio limpa. `npx tsc -b` limpo; testes: app 257/257
+(sem mudança — UI/gatilho de chat, nenhuma lógica de domínio nova); `npm run build` sem regressão.
+**Sem verificação ao vivo — 11ª lab seguida**: o Chrome desta sessão travou de novo em
+`document.hidden === true`, desta vez até a captura de screenshot expirou por timeout — verificação
+só por leitura de código. **Merge confirmado**: PR #91 mesclada (squash) em `main` no commit
+`b23134a` (2026-09-20, confirmado via `AskUserQuestion`). CI de `main` verde (app, server-accounts,
+server-cf-relay); deploy de produção confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200),
+Cloudflare Pages (`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Último concluído: labs/lab-207-efeitos-visuais-leves/ — primeira fatia pequena do backlog "Lab 198 -
+Antes desse: labs/lab-207-efeitos-visuais-leves/ — primeira fatia pequena do backlog "Lab 198 -
 Efeitos visuais de recompensa, movimento e interacao": uma nuvem de poeira ao aterrissar depois de
 qualquer pulo/queda, reaproveitando 100% a técnica de partículas já madura do `rocketFlameSystem`
 (textura por canvas + `ParticleSystem`), só trocando "contínuo ligado/desligado" por um burst único
