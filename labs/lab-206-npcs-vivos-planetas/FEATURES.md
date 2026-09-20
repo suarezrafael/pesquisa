@@ -113,6 +113,13 @@ evidência):
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` continuam limpos depois da
 correção real.
 
+**Rodada 2**: "🟢 Approval recommended" ("não há problemas pendentes que bloqueiem a aprovação"),
+achado real da rodada 1 confirmado como "Resolved since last review". O falso positivo
+(`marker.id`) continua listado como "Open" pela 2ª vez seguida, mesmo com o próprio texto do resumo
+recomendando aprovação — mesmo padrão de thread persistente já visto em labs anteriores (o comentário
+original só some da listagem quando alguém marca "resolved" manualmente na UI do GitHub, não reflete
+mais uma reavaliação real). Nenhum comentário inline novo. Pronta pra revisão de merge.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Escolinhas do planeta principal (não citadas pelo backlog desta lab).
