@@ -258,6 +258,12 @@ problema novo:
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da correção.
 
+**Rodada 6**: "Findings: None", achado da rodada 5 confirmado "Resolved since last review".
+Contagem bruta de comentários inline conferida (5) contra os 5 ids já conhecidos/corrigidos das
+rodadas 1-4 — nenhum comentário genuinamente novo. Ciclo de review encerrado aqui (6 rodadas,
+usuário consultado via `AskUserQuestion` depois da rodada 5 sobre continuar ou parar — escolheu
+pedir mais uma rodada; esta rodada 6 veio limpa). Pronta pra revisão de merge.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Texto livre, PII, DM, voz — fora de escopo do próprio item do backlog.
