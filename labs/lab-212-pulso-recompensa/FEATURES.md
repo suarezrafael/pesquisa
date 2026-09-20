@@ -1,7 +1,8 @@
 # Laboratório 212 — Pulso de recompensa no HUD
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
+Fim: 2026-09-20
 Commit inicial: ea14543b26e16c4243c16ee6d12f892bd9ff8a92
 
 ## Objetivo do laboratório
