@@ -81,7 +81,16 @@ export function RankingPanel({
       tabIndex={-1}
     >
       <div className="chat-panel-header">
-        <span>Ranking {tab === 'online' && (connected ? '🟢 conectado' : '🔴 sem conexão')}</span>
+        <span>
+          Ranking{' '}
+          {/* Achado do review automático do Copilot: sem consentimento de multiplayer ainda,
+              "🔴 sem conexão" soava como um problema técnico (implica "tente de novo"), quando na
+              verdade a criança simplesmente ainda não ativou o modo online — o convite abaixo já
+              explica isso com clareza; o indicador de conexão só faz sentido depois de já ter
+              consentido (aí sim "sem conexão" é uma falha de rede de verdade, não falta de
+              autorização). */}
+          {tab === 'online' && hasMultiplayerConsent && (connected ? '🟢 conectado' : '🔴 sem conexão')}
+        </span>
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar ranking">
           ×
         </button>

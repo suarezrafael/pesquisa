@@ -1995,7 +1995,11 @@ a.nickname-generate-btn {
    ficar pequeno. */
 .ranking-online-gate-btn {
   border: none;
-  background: var(--primary);
+  /* Achado do review automático do Copilot: `--primary` (#f582ae) com texto branco fica em
+     ~2,4:1 de contraste, abaixo do mínimo AA de 4,5:1 — mesmo achado (e mesma correção,
+     `--primary-dark`) já aplicado em `.reward-bonus-line`/`.ranking-row-self` na auditoria WCAG
+     do lab-120. */
+  background: var(--primary-dark);
   color: white;
   font-weight: 700;
   border-radius: 999px;

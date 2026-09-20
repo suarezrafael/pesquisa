@@ -130,6 +130,23 @@ correções.
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 3
 correções (z-index rodada 1, alvo de toque, z-index rodada 2).
 
+**Rodada 3**: 1 achado sob "Previously missed" confirmado e corrigido, mais 1 melhoria de clareza
+identificada pela própria descrição do resumo da rodada (sem comentário inline dedicado, mas
+diretamente relacionada, corrigida junto):
+
+4. **Médio — contraste insuficiente no CTA novo**: `.ranking-online-gate-btn` usava
+   `var(--primary)` (#f582ae) com texto branco (~2,4:1, abaixo do mínimo AA de 4,5:1) — mesmo achado
+   (e mesma correção) já aplicado em `.reward-bonus-line`/`.ranking-row-self` na auditoria WCAG do
+   lab-120. Corrigido trocando pra `var(--primary-dark)`.
+5. **Clareza — indicador de conexão soava como falha técnica antes do consentimento**: "🔴 sem
+   conexão" no cabeçalho, mostrado mesmo sem a criança nunca ter ativado o modo online, sugeria "o
+   multiplayer está com problema, tente de novo" — não é isso, ela simplesmente ainda não
+   autorizou. Corrigido só mostrando o indicador de conexão quando `hasMultiplayerConsent` já é
+   verdadeiro (o convite já explica a situação sem consentimento).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 5
+correções no total.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Remover o portão parental da presença online de verdade — a auditoria concluiu que isso NÃO é
