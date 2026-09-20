@@ -45,11 +45,15 @@ bloqueados por medição ao vivo indisponível nesta sessão). Usuário escolheu
   (`__getChatContext`, mesmo padrão de `__handleInteractPress`/`__refreshPet`/etc.) que combina o
   que já existe num único contexto, calculada sob demanda (só quando o jogador toca no ícone de
   chat), não por quadro.
-- **Contextos e prioridade** (mais específico primeiro): `casa` (dentro de qualquer interior de
-  bolso) > `corrida` (minijogo ativo OU dentro do centro de jogos) > `planeta` (num planeta
-  secundário — funde "planeta atual" e "missão" do backlog, já que todo planeta secundário já É
-  uma missão, ver escolinhas do lab-206) > `pet` (tem um pet equipado, quando nenhum dos anteriores
-  se aplica) > `default` (hub principal, sem nenhum dos anteriores).
+- **Contextos e prioridade** (mais específico primeiro): `corrida` (minijogo ativo OU dentro do
+  centro de jogos) > `casa` (dentro de um interior de bolso que NÃO é o centro de jogos, e que não
+  é uma visita à casa de um amigo) > `planeta` (num planeta secundário — funde "planeta atual" e
+  "missão" do backlog, já que todo planeta secundário já É uma missão, ver escolinhas do lab-206) >
+  `pet` (tem um pet equipado, quando nenhum dos anteriores se aplica) > `default` (hub principal,
+  sem nenhum dos anteriores). Achado do review automático do Copilot (rodada 1): `corrida` precisa
+  vir ANTES de `casa` porque `enterGameCenterInterior()` liga as duas flags juntas
+  (`insideHouseInterior` e `insideGameCenterInterior`) — checar `casa` primeiro faria o saguão do
+  centro de jogos nunca cair em `corrida`.
 - **Frases contextuais reaproveitam o catálogo já existente** sempre que fazem sentido (`explorar`,
   `escolinha`, `ajuda`, `cuidado`, `vamos`, `quase_la`, `consegui`, `vem_aqui`, `trocar`, `legal`,
   `adorei`, `voce_demais`) — só 3 frases novas onde nada do catálogo cobria bem o contexto:
@@ -58,12 +62,16 @@ bloqueados por medição ao vivo indisponível nesta sessão). Usuário escolheu
   legado/suspenso mas mantido em sincronia por convenção já documentada no próprio arquivo).
 - **UI radial não usa `.modal-overlay` (tela cheia)** — mesma decisão já tomada pra chat/ranking/
   mochila (comentário de `canvasInert` em `World3D.tsx`): são atalhos pequenos, o canvas continua
-  interativo ao redor. Fundo do radial é transparente, só captura clique-fora-fecha; os botões
-  circulares reaproveitam o MESMO estilo já auditado pra contraste AA de `.help-button` (anel
-  branco opaco + fundo translúcido), em vez de repetir `--primary` + texto branco (`.chat-quick-btn`
-  já usa essa combinação sem ter passado pela auditoria de contraste — não é regressão desta lab
-  tocar nisso, mas também não faz sentido REPLICAR uma combinação sabidamente arriscada num
-  componente novo quando já existe um padrão validado ao lado).
+  interativo ao redor. Fecha só por × ou Esc (`useModalA11y`), sem nenhum backdrop — achado do
+  review automático do Copilot (rodada 1): uma primeira versão tinha um backdrop transparente de
+  TELA CHEIA só pra fechar com clique-fora, mas isso capturava pointer/wheel em cima do canvas
+  INTEIRO (mesma classe de bug que o lab-205 corrigiu pro ranking), removido de vez — nem
+  `ChatPanel`/`RankingPanel` têm esse comportamento. Os botões circulares reaproveitam o MESMO
+  estilo já auditado pra contraste AA de `.help-button` (anel branco opaco + fundo translúcido), em
+  vez de repetir `--primary` + texto branco (`.chat-quick-btn` já usa essa combinação sem ter
+  passado pela auditoria de contraste — não é regressão desta lab tocar nisso, mas também não faz
+  sentido REPLICAR uma combinação sabidamente arriscada num componente novo quando já existe um
+  padrão validado ao lado).
 - **`useModalA11y` reaproveitado** (mesmo hook de `ChatPanel`/`RankingPanel`/etc.) — Esc fecha,
   foco entra/sai corretamente, coexiste com outros painéis na pilha compartilhada já existente.
 
@@ -175,6 +183,23 @@ o código real antes de corrigir, nenhum descartado como falso positivo:
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 4
 correções.
+
+**Rodada 2**: achado da rodada 1 confirmado "Resolved since last review". 2 achados novos, os dois
+de DOCUMENTAÇÃO (não de código) — confirmados e corrigidos:
+
+5. **Baixo — "Contextos e prioridade" (Investigação prévia) ainda documentava `casa` > `corrida`**:
+   confirmado — a correção real da rodada 1 (inverter a ordem no código) nunca foi refletida na
+   lista de prioridade original desta seção, só no changelog da própria rodada 1 mais abaixo —
+   ficavam contraditórias entre si. Corrigido atualizando a lista original pra `corrida` > `casa`,
+   com nota explicando o motivo (mesmas duas flags ligadas juntas por `enterGameCenterInterior`).
+6. **Baixo — texto sobre "captura clique-fora-fecha" ficou obsoleto**: confirmado — a correção real
+   da rodada 1 (remover o backdrop inteiro) mudou o comportamento de fechar pra só ×/Esc, mas o
+   texto original de "Investigação prévia" ainda descrevia o backdrop transparente capturando
+   clique-fora. Corrigido atualizando o texto pra descrever o comportamento final (sem backdrop),
+   com nota do porquê (mesmo bug de bloqueio de canvas do lab-205, reintroduzido e depois removido).
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos (nenhuma mudança de
+código nesta rodada, só `FEATURES.md`).
 
 ## Fora de escopo (explicitamente adiado)
 
