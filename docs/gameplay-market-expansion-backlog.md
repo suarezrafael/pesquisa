@@ -294,6 +294,33 @@ Requisitos minimos:
 - Riscos: ansiedade de completismo; excesso de trofeus diluir valor.
 - Prioridade: P1.
 
+### Lab 212 - Mercado do jogo (bazar tematico de itens/cosmeticos)
+
+- Problema / hipotese: pedido direto do usuario em chat (2026-09-20): "o jogo tem que ter um
+  mercado". Hoje a "lojinha" e um menu 2D sobreposto (`onOpenShop`), sem nenhum lugar FISICO no
+  mundo 3D que reforce a fantasia de ir a um mercado/bazar pra comprar ou trocar itens — diferente
+  de produtos como PK XD/Toca Boca World, onde a loja tambem existe como espaco navegavel.
+- Usuario beneficiado: crianca (fantasia/imersao) e responsavel (mantem a monetizacao existente,
+  nao cria uma nova).
+- Escopo: **ainda nao definido** — precisa de uma rodada de decisao de escopo com o usuario antes
+  de comecar a implementacao (ex.: um unico predio/banca de mercado perto do hub central versus
+  varias bancas tematicas por categoria de cosmetico; reaproveitar o menu 2D existente atras de um
+  gatilho fisico versus construir uma interface 3D nova; se e so a lojinha atual "mudando de
+  roupa" para parecer um mercado, ou um sistema novo). Registrado aqui como marcador para nao
+  perder o pedido, sem inventar escopo que o usuario nao descreveu.
+- Fora de escopo (por padrao do projeto, ate segunda ordem): troca/comercio direto entre criancas
+  (P2P) — risco de seguranca infantil, ver `docs/prompts/01-seguranca.md`; qualquer mecanismo que
+  gate conteudo educativo ou progressao atras de pagamento — regra inegociavel do projeto, so
+  cosmeticos podem ser pagos (`docs/plano-comercial-backend.md`).
+- Criterios de aceite: a definir junto com o escopo.
+- Metricas esperadas: a definir junto com o escopo.
+- Riscos: escopo aberto demais pode virar outro sistema de loja duplicado sem clareza de por que
+  existe; se vira PvP/troca entre jogadores, esbarra direto nas restricoes de seguranca infantil do
+  projeto (Secao 11 do `prompt.md`, sem chat aberto/interacao nao supervisionada entre criancas).
+- Prioridade: a definir — aguardando o usuario detalhar o que "mercado" significa na proxima vez
+  que for discutido (a pergunta "onde/como voce imagina esse mercado?" ficou em aberto em
+  2026-09-20).
+
 ### Lab 202 - Objetos do mundo alinhados ao relevo
 
 - Problema / hipotese: varios objetos do mapa estao parcialmente enterrados ou atravessando o
@@ -629,7 +656,9 @@ Ordem recomendada apos o lab atual:
 18. Lab 197 - Orbitas com objetos em alto-relevo.
 19. Lab 198 - Efeitos visuais de recompensa, movimento e interacao.
 20. Lab 200 - Extensao de missoes fisicas por planeta.
-21. Lab 199 - Prototipo seguro de filtro de chat livre, somente se pesquisa e responsavel justificarem.
+21. Lab 212 - Mercado do jogo (bazar tematico de itens/cosmeticos) — bloqueado ate o usuario
+    detalhar o escopo desejado.
+22. Lab 199 - Prototipo seguro de filtro de chat livre, somente se pesquisa e responsavel justificarem.
 
 Para cada lab, crie FEATURES.md, mantenha escopo pequeno, rode testes/build quando aplicavel,
 verifique em navegador real se tocar 3D, atualize labs/CURRENT.md e escreva CONTEXT.md baseado no
