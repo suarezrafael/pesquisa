@@ -383,6 +383,10 @@ const RUN_CYCLE_SPEED = WALK_CYCLE_SPEED * (RUN_SPEED / WALK_SPEED)
 // NPCs de qualquer ajuste futuro de velocidade do avatar.
 const NPC_WALK_CYCLE_SPEED = 6.125 // rad/s de fase — histórico (era `WALK_CYCLE_SPEED * 0.7` com WALK_CYCLE_SPEED=8.75)
 const LEG_SWING_MAX = 0.55 // rad — amplitude máxima do balanço de perna/braço
+// Mesmo deslocamento lateral usado em `studentFigure.ts` (`upperPivot.position = new Vector3(side *
+// 0.1, hipY, 0)` pras pernas, `side` -1 = esquerda/`legPivotL`, +1 = direita/`legPivotR`) — usado
+// pra emitir a poeira de passo (lab-213) no pé que realmente pisou, não no centro do avatar.
+const FOOT_X_OFFSET = 0.1
 // Relatado pelo usuário: "o boneco não dobra os joelhos pra andar". A fórmula antiga
 // (`max(0, sin(...))`) fazia o joelho dobrar só na METADE do ciclo (fase de "levantar a perna")
 // e ficar 100% reto (zero) na outra metade (fase de apoio) — biomecanicamente ok, mas na prática
@@ -13782,11 +13786,18 @@ export function World3D({
               // apareceria "flutuando" durante um pulo. Desligada em aparelho fraco, mesmo padrão
               // de `isLowEndDevice` já usado pelo brilho pulsante do baú (lab-211).
               if (grounded && !isLowEndDevice && footstepDustSystem) {
+                // Achado do review automático do Copilot: a primeira versão emitia do centro do
+                // colisor (`pos`), não do pé que pisou — a poeira nunca alternava de lado e ficava
+                // visivelmente deslocada do sapato em câmera próxima. `right` (calculado acima,
+                // mesmo eixo usado pra orientar o personagem visual) + `footSign` (já é ±1, mesma
+                // convenção de `side` em `studentFigure.ts`: -1 esquerda/+1 direita) desloca o
+                // emissor pro pé correto antes de projetar no chão.
+                const footWorldPos = pos.add(right.scale(footSign * FOOT_X_OFFSET))
                 const perp1 = Vector3.Cross(localUp, Vector3.Right())
                 if (perp1.lengthSquared() < 1e-6) perp1.copyFrom(Vector3.Cross(localUp, Vector3.Forward()))
                 perp1.normalize()
                 const perp2 = Vector3.Cross(localUp, perp1).normalize()
-                footstepDustSystem.emitter = pos.subtract(localUp.scale(AVATAR_RADIUS)).clone()
+                footstepDustSystem.emitter = footWorldPos.subtract(localUp.scale(AVATAR_RADIUS)).clone()
                 footstepDustSystem.direction1 = localUp.scale(0.5).add(perp1.scale(-0.3)).add(perp2.scale(-0.3))
                 footstepDustSystem.direction2 = localUp.scale(0.9).add(perp1.scale(0.3)).add(perp2.scale(0.3))
                 footstepDustSystem.gravity = localUp.scale(-2)

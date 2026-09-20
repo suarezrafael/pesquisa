@@ -92,6 +92,24 @@ Pontos conferidos por leitura:
 - **`isLowEndDevice` acessível no mesmo escopo de função** — mesmo padrão já usado pelo brilho do
   baú (lab-211) e por toda decisão de performance do `setup()`.
 
+## Rodada de review — Copilot (PR #96)
+
+**Rodada 1**: 1 achado real, confirmado e corrigido:
+
+1. **Médio — poeira emitida do centro do colisor, não do pé que pisou**: confirmado contra o
+   código — `studentFigure.ts` posiciona as pernas com deslocamento lateral (`upperPivot.position
+   = new Vector3(side * 0.1, hipY, 0)`, `side` -1 = `legPivotL`/esquerda, +1 = `legPivotR`/
+   direita), mas o emissor usava `pos` (centro do colisor físico) direto, sem esse deslocamento —
+   a poeira sempre nascia no meio do avatar, nunca alternando de lado, visivelmente deslocada do
+   sapato em câmera próxima. Corrigido deslocando o ponto de emissão por
+   `right.scale(footSign * FOOT_X_OFFSET)` antes de projetar no chão — `right` já é o mesmo eixo
+   usado pra orientar o personagem visual (`Vector3.Cross(localUp, facing)`, calculado mais acima
+   no mesmo laço) e `footSign` já é ±1 na mesma convenção de `side` (-1 esquerda/+1 direita), então
+   reaproveita variáveis existentes sem introduzir estado novo.
+
+`npx tsc -b --force`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois da
+correção.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Trail de foguete/cometa e feedback de puzzle (peças restantes do Lab 198, cada uma merece sua
