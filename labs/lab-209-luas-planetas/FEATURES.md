@@ -1,7 +1,8 @@
 # Laboratório 209 — Luas orbitando os planetas secundários
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
+Fim: 2026-09-20
 Commit inicial: f674dba0fd84b0192589425fa248ec9117d86706
 
 ## Objetivo do laboratório
