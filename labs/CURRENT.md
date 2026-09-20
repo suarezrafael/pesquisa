@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Em andamento: labs/lab-212-pulso-recompensa/ — backlog "Lab 198 - Efeitos visuais de recompensa,
+movimento e interacao": fecha a peça "pulso de recompensa" — um pulso visual (escala + brilho) na
+barra de XP e no contador de moedas do HUD toda vez que sobem de verdade (`usePulseOnIncrease`,
+`HudHeader.tsx`), puramente CSS, sem gating de `isLowEndDevice` (custo desprezível, não compete com
+o orçamento de quadro da cena 3D). Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 198 -
+Efeitos visuais de recompensa, movimento e interacao" — continuação direta do lab-211 (mesma lab
+pai), escolhida autonomamente depois do lab-211 (escopo pequeno, baixo risco). Ver
+`labs/lab-212-pulso-recompensa/FEATURES.md` pra detalhe.
+
 Último concluído: labs/lab-211-brilho-bau-tesouro/ — backlog "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao": fecha a peça "brilho em interativo" com um brilho pulsante no
 fecho dourado dos baús de tesouro (lab-131) — os únicos colecionáveis de recompensa real ainda sem
