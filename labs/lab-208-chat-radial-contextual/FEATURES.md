@@ -141,9 +141,10 @@ posição fixa no canto direito da tela) não foi confirmada ao vivo — pode pr
 de posição em telas muito estreitas (o `.chat-radial` de 200×200px cabe com folga em qualquer
 tela ≥ 320px de largura, mas não foi testado contra o teclado virtual mobile aberto, por exemplo,
 já que o radial não tem campo de texto nenhum pra abrir teclado). O SENTIDO de prioridade de
-contexto (`casa` > `corrida` > `planeta` > `pet` > `default`) é uma escolha de design, não uma
-correção de bug — outra ordem seria igualmente válida; esta foi escolhida por especificidade
-decrescente do sinal (interior de bolso é o contexto mais "isolado e certo", pet equipado é o mais
+contexto (`corrida` > `casa` > `planeta` > `pet` > `default`) é uma escolha de design pro que vem
+DEPOIS de `corrida` (obrigatório vir primeiro, ver achado da rodada 1 acima) — outra ordem pro
+restante seria igualmente válida; esta foi escolhida por especificidade decrescente do sinal
+(interior de bolso é o contexto mais "isolado e certo" depois de corrida, pet equipado é o mais
 "sempre verdadeiro quando nada mais se aplica").
 
 ## Rodada de review — Copilot (PR #91)
@@ -200,6 +201,35 @@ de DOCUMENTAÇÃO (não de código) — confirmados e corrigidos:
 
 `npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos (nenhuma mudança de
 código nesta rodada, só `FEATURES.md`).
+
+**Rodada 3**: os 2 achados da rodada 2 confirmados "Resolved since last review". 1 achado formal
+novo (comentário inline) + 2 achados "Previously missed" (marcados pelo próprio Copilot como não
+detectados nas rodadas anteriores, em código que não tinha mudado desde a rodada 2) — os 3
+confirmados e corrigidos:
+
+7. **Baixo — 3ª referência desatualizada a `casa > corrida`**: confirmado — a correção da rodada 2
+   arrumou a lista de prioridade em "Investigação prévia", mas o "Risco remanescente" mais abaixo
+   ainda citava a ordem antiga (`casa > corrida > planeta > pet > default`). Corrigido pra refletir
+   a ordem de verdade, com nota de que só a posição de `corrida` é obrigatória (achado da rodada
+   1), o resto continua sendo escolha de design.
+8. **Médio — caixa de 200×200px do radial ainda tapa o canvas nos espaços vazios entre os botões**:
+   confirmado contra o CSS — remover o backdrop de TELA CHEIA (rodada 1) não bastava: `.chat-radial`
+   continuava sendo uma `div` de 200×200px com `pointer-events` padrão (`auto`), então clicar/arrastar
+   num espaço vazio DENTRO dessa caixa (fora dos círculos dos botões, mas ainda dentro do quadrado)
+   continuava sendo capturado por ela, tapando aquele pedaço do canvas. Corrigido devolvendo
+   `pointer-events: none` pro contêiner e `pointer-events: auto` só nos controles de verdade
+   (`.chat-radial-btn`, `.chat-radial-close`) — `pointer-events` é herdado, então sem o `auto`
+   explícito nos botões eles ficariam eles mesmos inclicáveis.
+9. **Médio — `equippedPetId` sozinho não garante que o pet exista de verdade**: confirmado contra
+   `rebuildPet()` (perto da criação do avatar) — ele já resolve `equippedPetId` pelo catálogo
+   (`findPetById`) e simplesmente não constrói nada se o id não for encontrado (progresso
+   persistido é JSON arbitrário, pode ficar com um id de pet removido/renomeado do catálogo). O
+   `__getChatContext` fazia só uma checagem de truthy, sem essa mesma validação — podia oferecer o
+   contexto `pet` com nenhum pet de verdade visível no mundo. Corrigido exigindo
+   `findPetById(equippedPetId)` também.
+
+`npx tsc -b`, `npm run test -- --run` (257/257) e `npm run build` seguem limpos depois das 3
+correções.
 
 ## Fora de escopo (explicitamente adiado)
 

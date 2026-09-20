@@ -1966,6 +1966,13 @@ a.nickname-generate-btn {
   width: 200px;
   height: 200px;
   z-index: 20;
+  /* Achado do review automático do Copilot (rodada 3): remover o backdrop de tela cheia (acima)
+     não bastava — esta própria caixa de 200×200px, com `pointer-events` padrão (`auto`), ainda
+     captura clique/arrasto/roda nos espaços VAZIOS entre os botões circulares (o quadrado ao redor
+     do círculo de botões), tapando um pedaço do canvas embaixo mesmo sem fundo visível. Devolve o
+     "chão" da caixa pro canvas; só os controles de verdade (`.chat-radial-btn`/`-close`,
+     `pointer-events: auto` mais abaixo) voltam a interceptar ponteiro. */
+  pointer-events: none;
 }
 
 /* Mesmo estilo de círculo de `.help-button` (anel branco opaco + fundo translúcido) — já
@@ -1999,6 +2006,9 @@ a.nickname-generate-btn {
   color: var(--ink);
   font-weight: 800;
   cursor: pointer;
+  /* `pointer-events` é herdado — sem isto, os botões herdariam o `none` de `.chat-radial` (achado
+     da rodada 3 acima) e ficariam eles mesmos INCLICÁVEIS, não só o espaço vazio ao redor. */
+  pointer-events: auto;
 }
 
 .chat-radial-btn:hover,
@@ -2015,6 +2025,9 @@ a.nickname-generate-btn {
   position: absolute;
   top: -0.4rem;
   right: -0.4rem;
+  /* Mesmo motivo de `.chat-radial-btn` acima — herdaria `pointer-events: none` de `.chat-radial`
+     sem isto. */
+  pointer-events: auto;
 }
 
 /* Ranking multiplayer (lab-20) */

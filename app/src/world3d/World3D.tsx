@@ -8210,7 +8210,14 @@ export function World3D({
         // prioridade em vez de reaproveitar `casa` incorretamente aqui.
         if (insideHouseInterior && !visitingHouseSnapshot) return 'casa'
         if (currentPlanetId !== null) return 'planeta'
-        if (progressRef.current.equippedPetId) return 'pet'
+        // Achado do review automático do Copilot: `equippedPetId` sozinho não garante que o pet
+        // exista de verdade — é progresso persistido (JSON arbitrário, pode ficar com um id de um
+        // pet removido/renomeado do catálogo). `rebuildPet()` (perto da criação do avatar) já trata
+        // isso resolvendo pelo catálogo (`findPetById`) e simplesmente não constrói nada se não
+        // achar — sem a mesma checagem aqui, o contexto `pet` podia ser oferecido sem nenhum pet
+        // de verdade visível no mundo.
+        const equippedPetId = progressRef.current.equippedPetId
+        if (equippedPetId && findPetById(equippedPetId)) return 'pet'
         return 'default'
       }
 
