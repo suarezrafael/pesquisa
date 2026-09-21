@@ -6,7 +6,7 @@
 // bichos do planeta, reaproveitados sem geometria nova — extraídas de `World3D.tsx` pra também
 // servir o preview da lojinha, `PetPreview3D.tsx`), conforme docs/prompts/03-arquitetura-sistema.md
 // §1.
-export type PetSpecies = 'gato' | 'cachorro'
+export type PetSpecies = 'gato' | 'cachorro' | 'coelho' | 'tartaruga'
 
 export interface PetOption {
   id: string
@@ -50,6 +50,38 @@ export const PET_CATALOG: PetOption[] = [
     cost: 40,
     furColorRgb: [0.92, 0.9, 0.85],
   },
+  {
+    id: 'coelho_branco',
+    name: 'Coelho Branco',
+    species: 'coelho',
+    emoji: '🐰',
+    cost: 45,
+    furColorRgb: [0.94, 0.92, 0.88],
+  },
+  {
+    id: 'coelho_marrom',
+    name: 'Coelho Marrom',
+    species: 'coelho',
+    emoji: '🐇',
+    cost: 45,
+    furColorRgb: [0.55, 0.36, 0.22],
+  },
+  {
+    id: 'tartaruga_verde',
+    name: 'Tartaruga Verde',
+    species: 'tartaruga',
+    emoji: '🐢',
+    cost: 50,
+    furColorRgb: [0.38, 0.68, 0.32],
+  },
+  {
+    id: 'tartaruga_azul',
+    name: 'Tartaruga Azul',
+    species: 'tartaruga',
+    emoji: '🐢',
+    cost: 50,
+    furColorRgb: [0.27, 0.6, 0.72],
+  },
 ]
 
 export function findPetById(id: string): PetOption | undefined {
@@ -66,4 +98,6 @@ export function findPetById(id: string): PetOption | undefined {
 export const PET_SPECIES_SCALE_MULTIPLIER: Record<PetSpecies, number> = {
   gato: 1.6,
   cachorro: 1.8,
+  coelho: 1.65,
+  tartaruga: 1.7,
 }

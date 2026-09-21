@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Em andamento: labs/lab-218-novas-especies-pets/ - amplia o catalogo com coelhos e tartarugas,
+modelos Babylon proprios, acessorios calibrados e orcamento grafico explicito. Origem: parte de
+novas especies/modelos adiada no lab 216 e proxima recomendacao do lab 217.
+
+---
+
 Ultimo concluido: labs/lab-217-babylon-performance-desktop/ - reduziu custo do loop quente do
 Babylon.js: framebuffer/stencil sem uso desligados, distancias ao quadrado, GUI de proximidade e
 entidades distantes a 10 Hz, mundos inativos pausados e menos alocacao de quaternion. TypeScript,

@@ -17,7 +17,7 @@ import {
 import { findPetById } from '../data/pets'
 import { findPetAccessoryById } from '../data/petAccessories'
 import { petVisualScale, type PetStage } from '../state/progression'
-import { applyPetAccessories, buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
+import { applyPetAccessories, buildPetFigure, disposePetFigure, petFurColor } from './petFigure'
 
 interface PetPreview3DProps {
   petId: string
@@ -133,7 +133,7 @@ export function PetPreview3D({ petId, stage, accessoryIds }: PetPreview3DProps) 
     if (!pet) return
 
     const furColor = petFurColor(pet.furColorRgb, stage)
-    const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
+    const root = buildPetFigure(scene, shadowGenerator, pet.species, furColor)
     applyPetAccessories(scene, shadowGenerator, root, pet.species, accessoryIds)
     root.scaling.setAll(petVisualScale(stage, pet.species))
     petRootRef.current = root

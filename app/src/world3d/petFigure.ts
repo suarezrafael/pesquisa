@@ -5,6 +5,7 @@
 // em vez de duplicar geometria/material. `World3D.tsx` importa daqui pro pet no jogo principal — o
 // comportamento lá não muda, só o arquivo onde a função mora.
 import { Color3, Mesh, MeshBuilder, PBRMaterial, type Scene, type ShadowGenerator, TransformNode, Vector3 } from '@babylonjs/core'
+import type { PetSpecies } from '../data/pets'
 import type { PetStage } from '../state/progression'
 import { findPetAccessoryById, type PetAccessoryOption } from '../data/petAccessories'
 
@@ -106,19 +107,157 @@ export function buildCachorro(scene: Scene, shadowGenerator: ShadowGenerator, fu
   return root
 }
 
+// Silhueta com orelhas longas e patas traseiras aparentes. Sao sete malhas e um material, sem
+// textura externa ou animacao propria; o movimento continua vindo da raiz compartilhada do pet.
+export function buildCoelho(scene: Scene, shadowGenerator: ShadowGenerator, furColor: Color3): TransformNode {
+  const root = new TransformNode('coelhoRoot', scene)
+  const furMat = new PBRMaterial('coelhoFur', scene)
+  furMat.albedoColor = furColor
+  furMat.roughness = 0.88
+
+  function add(mesh: Mesh) {
+    mesh.material = furMat
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateCapsule('coelhoBody', { height: 0.32, radius: 0.13 }, scene)
+  body.rotation.x = Math.PI / 2
+  body.position.y = 0.14
+  add(body)
+
+  const head = MeshBuilder.CreateSphere('coelhoHead', { diameter: 0.18, segments: 10 }, scene)
+  head.position = new Vector3(0, 0.23, 0.2)
+  add(head)
+
+  for (const side of [-1, 1]) {
+    const ear = MeshBuilder.CreateCapsule(`coelhoEar${side}`, { height: 0.19, radius: 0.038, tessellation: 8 }, scene)
+    ear.position = new Vector3(side * 0.052, 0.39, 0.18)
+    ear.rotation.z = side * 0.12
+    add(ear)
+
+    const paw = MeshBuilder.CreateCapsule(`coelhoPaw${side}`, { height: 0.14, radius: 0.042, tessellation: 8 }, scene)
+    paw.rotation.x = Math.PI / 2
+    paw.position = new Vector3(side * 0.085, 0.065, -0.1)
+    add(paw)
+  }
+
+  const tail = MeshBuilder.CreateSphere('coelhoTail', { diameter: 0.1, segments: 8 }, scene)
+  tail.position = new Vector3(0, 0.19, -0.2)
+  add(tail)
+
+  return root
+}
+
+// O casco usa um segundo material para continuar legivel mesmo em telas pequenas. O modelo todo
+// respeita o teto do laboratorio: oito malhas-base e dois materiais.
+export function buildTartaruga(scene: Scene, shadowGenerator: ShadowGenerator, skinColor: Color3): TransformNode {
+  const root = new TransformNode('tartarugaRoot', scene)
+  const skinMat = new PBRMaterial('tartarugaSkin', scene)
+  skinMat.albedoColor = skinColor
+  skinMat.roughness = 0.9
+  const shellMat = new PBRMaterial('tartarugaShell', scene)
+  shellMat.albedoColor = Color3.Lerp(skinColor, new Color3(0.1, 0.24, 0.1), 0.48)
+  shellMat.roughness = 0.72
+
+  function add(mesh: Mesh, material: PBRMaterial = skinMat) {
+    mesh.material = material
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+    return mesh
+  }
+
+  const body = MeshBuilder.CreateSphere('tartarugaBody', { diameter: 0.31, segments: 10 }, scene)
+  body.scaling = new Vector3(1.04, 0.44, 1.22)
+  body.position.y = 0.13
+  add(body)
+
+  const shell = MeshBuilder.CreateSphere('tartarugaShell', { diameter: 0.33, segments: 10 }, scene)
+  shell.scaling = new Vector3(0.96, 0.55, 1.08)
+  shell.position = new Vector3(0, 0.2, -0.015)
+  add(shell, shellMat)
+
+  const head = MeshBuilder.CreateSphere('tartarugaHead', { diameter: 0.14, segments: 10 }, scene)
+  head.position = new Vector3(0, 0.14, 0.25)
+  add(head)
+
+  for (const side of [-1, 1]) {
+    for (const direction of [-1, 1]) {
+      const leg = MeshBuilder.CreateCapsule(
+        `tartarugaLeg${side}-${direction}`,
+        { height: 0.12, radius: 0.034, tessellation: 8 },
+        scene,
+      )
+      leg.rotation.x = Math.PI / 2
+      leg.position = new Vector3(side * 0.13, 0.06, direction * 0.1)
+      add(leg)
+    }
+  }
+
+  const tail = MeshBuilder.CreateCylinder(
+    'tartarugaTail',
+    { height: 0.11, diameterTop: 0, diameterBottom: 0.055, tessellation: 4 },
+    scene,
+  )
+  tail.rotation.x = -Math.PI / 2
+  tail.position = new Vector3(0, 0.1, -0.25)
+  add(tail)
+
+  return root
+}
+
+// Fonte unica para o preview e o mundo. O `switch` exaustivo faz o TypeScript acusar toda nova
+// especie que ainda nao ganhou modelo, evitando o fallback silencioso para gato que existia antes.
+export function buildPetFigure(
+  scene: Scene,
+  shadowGenerator: ShadowGenerator,
+  species: PetSpecies,
+  furColor: Color3,
+): TransformNode {
+  switch (species) {
+    case 'gato':
+      return buildGato(scene, shadowGenerator, furColor)
+    case 'cachorro':
+      return buildCachorro(scene, shadowGenerator, furColor)
+    case 'coelho':
+      return buildCoelho(scene, shadowGenerator, furColor)
+    case 'tartaruga':
+      return buildTartaruga(scene, shadowGenerator, furColor)
+  }
+}
+
+interface PetAccessoryFit {
+  neckY: number
+  neckZ: number
+  faceY: number
+  faceZ: number
+  collarDiameter: number
+  capeWidth: number
+  capeDepth: number
+  capeY: number
+  capeZ: number
+  maskWidth: number
+  maskHeight: number
+}
+
+const PET_ACCESSORY_FIT: Record<PetSpecies, PetAccessoryFit> = {
+  gato: { neckY: 0.16, neckZ: 0.105, faceY: 0.19, faceZ: 0.225, collarDiameter: 0.18, capeWidth: 0.2, capeDepth: 0.26, capeY: 0.25, capeZ: -0.07, maskWidth: 0.145, maskHeight: 0.055 },
+  cachorro: { neckY: 0.2, neckZ: 0.14, faceY: 0.205, faceZ: 0.305, collarDiameter: 0.23, capeWidth: 0.26, capeDepth: 0.32, capeY: 0.29, capeZ: -0.085, maskWidth: 0.17, maskHeight: 0.055 },
+  coelho: { neckY: 0.22, neckZ: 0.125, faceY: 0.235, faceZ: 0.29, collarDiameter: 0.2, capeWidth: 0.22, capeDepth: 0.28, capeY: 0.29, capeZ: -0.07, maskWidth: 0.16, maskHeight: 0.052 },
+  tartaruga: { neckY: 0.14, neckZ: 0.2, faceY: 0.15, faceZ: 0.315, collarDiameter: 0.16, capeWidth: 0.3, capeDepth: 0.32, capeY: 0.28, capeZ: -0.04, maskWidth: 0.135, maskHeight: 0.048 },
+}
+
 // Os acessorios usam no maximo uma malha simples por encaixe. Como sao filhos do mesmo `root`,
 // herdam escala/rotacao do pet em qualquer fase e aparecem identicos no preview e no mundo.
 export function applyPetAccessories(
   scene: Scene,
   shadowGenerator: ShadowGenerator,
   root: TransformNode,
-  species: 'gato' | 'cachorro',
+  species: PetSpecies,
   accessoryIds: string[],
 ): void {
-  const neckY = species === 'gato' ? 0.16 : 0.2
-  const neckZ = species === 'gato' ? 0.105 : 0.14
-  const faceY = species === 'gato' ? 0.19 : 0.205
-  const faceZ = species === 'gato' ? 0.225 : 0.305
+  const fit = PET_ACCESSORY_FIT[species]
 
   function addAccessory(item: PetAccessoryOption): void {
     const material = new PBRMaterial(`petAccessoryMat-${item.id}`, scene)
@@ -131,24 +270,24 @@ export function applyPetAccessories(
       mesh = MeshBuilder.CreateTorus(
         `petAccessory-${item.id}`,
         {
-          diameter: species === 'gato' ? 0.18 : 0.23,
+          diameter: fit.collarDiameter,
           thickness: 0.025,
           tessellation: 16,
         },
         scene,
       )
-      mesh.position = new Vector3(0, neckY, neckZ)
+      mesh.position = new Vector3(0, fit.neckY, fit.neckZ)
     } else if (item.shape === 'cape') {
       mesh = MeshBuilder.CreateBox(
         `petAccessory-${item.id}`,
         {
-          width: species === 'gato' ? 0.2 : 0.26,
+          width: fit.capeWidth,
           height: 0.025,
-          depth: species === 'gato' ? 0.26 : 0.32,
+          depth: fit.capeDepth,
         },
         scene,
       )
-      mesh.position = new Vector3(0, neckY + 0.09, species === 'gato' ? -0.07 : -0.085)
+      mesh.position = new Vector3(0, fit.capeY, fit.capeZ)
       mesh.rotation.x = -0.14
     } else {
       // Visor de heroi em vez de uma mascara fechada: deixa focinho/olhos legiveis e evita uma
@@ -156,13 +295,13 @@ export function applyPetAccessories(
       mesh = MeshBuilder.CreateBox(
         `petAccessory-${item.id}`,
         {
-          width: species === 'gato' ? 0.145 : 0.17,
-          height: 0.055,
+          width: fit.maskWidth,
+          height: fit.maskHeight,
           depth: 0.025,
         },
         scene,
       )
-      mesh.position = new Vector3(0, faceY, faceZ)
+      mesh.position = new Vector3(0, fit.faceY, fit.faceZ)
     }
 
     mesh.material = material
