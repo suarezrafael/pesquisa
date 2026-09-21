@@ -1,8 +1,8 @@
 # Laboratorio 216 - Cosmeticos conquistaveis para pets
 
-Status: em andamento
+Status: concluído
 Inicio: 2026-09-20
-Fim: -
+Fim: 2026-09-20
 Commit inicial: f28bb687a9913ca7341b1535957193057bbdb943
 
 ## Objetivo do laboratorio
@@ -80,12 +80,15 @@ não muda por ser item grátis). Nenhum erro no console durante toda a interaç�
 4. **Baixo — acento faltando em "Acessórios"/"Pescoço" na UI**: confirmado em 3 pontos de
    `PetPanel.tsx` (rótulo da aba, texto de apoio, tag do encaixe). Corrigido.
 5. **Baixo — "feche o lab e atualize CURRENT.md/CONTEXT.md antes de concluir"**: o `Status: em
-   andamento`/`Fim: -` deste arquivo e a ausência de `CONTEXT.md` são intencionais, não uma
-   pendência esquecida — mesma convenção já usada em TODAS as labs desta sessão desde o lab-207:
-   o status vira `concluído` numa commit separada em `main`, DEPOIS do merge e da confirmação de
-   deploy em produção (nenhuma das labs 211/213/214/215 tem `CONTEXT.md` tampouco, só
-   `FEATURES.md` com seções de verificação/review inline). Nenhuma mudança feita aqui; será
-   fechado do jeito de sempre depois do merge.
+   andamento`/`Fim: -` deste arquivo é intencional, não uma pendência esquecida — mesma convenção
+   já usada nas labs 211/213/214 desta sessão: o status vira `concluído` numa commit separada em
+   `main`, DEPOIS do merge e da confirmação de deploy em produção. Correção sobre a própria
+   observação inicial: nem toda lab recente pulou o `CONTEXT.md` — o lab-215 TEM um; só 211/213/214
+   (as labs de efeito visual puramente cosmético desta mesma sequência) ficaram só com
+   `FEATURES.md`. Este lab segue o mesmo padrão dessas três (sem `CONTEXT.md`), já que também é uma
+   fatia vertical única, sem decisões arquiteturais que exijam um handoff separado. Nenhuma mudança
+   de código feita por causa deste achado; status/CURRENT.md fechados do jeito de sempre depois do
+   merge.
 
 `npx tsc -b --force`, `npm run test -- --run` (261/261), `npm run lint` (mesmos 2 avisos
 pré-existentes) e `npm run build` seguem limpos depois das correções.

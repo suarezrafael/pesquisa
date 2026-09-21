@@ -1,13 +1,36 @@
 # Laboratório atual
 
-Em andamento: labs/lab-216-pet-cosmeticos/ — primeira fatia vertical do backlog 206: catalogo de
-acessorios conquistaveis para pets, compra com moedas do jogo, equipar por encaixe, preview 3D e
-renderizacao no companheiro do mundo. Sem assinatura, dinheiro real ou efeito de gameplay. Ver
-`FEATURES.md` da pasta.
+Último concluído: labs/lab-216-pet-cosmeticos/ — backlog "Lab 206 - Pets premium de qualidade,
+roupas e mascaras": primeira fatia vertical de personalização visual dos pets. Catálogo de 4
+acessórios em dois encaixes independentes (pescoço/rosto) — 1 grátis, 3 compráveis só com moedas
+ganhas jogando (`data/petAccessories.ts`). Regras de domínio (`unlockPetAccessory`/
+`equipPetAccessory` em `progression.ts`) reaproveitam o helper `unlockGeneric` já usado por outros
+catálogos, com 4 testes novos cobrindo desconto exato, id inválido/repetido, saldo insuficiente,
+encaixe errado e remoção independente por encaixe. Painel de pets ganhou abas (Companheiros/
+Acessórios), preview 3D e "Experimentar" antes de comprar/equipar. Renderização 3D compartilhada
+entre o preview e o pet que segue o avatar (`applyPetAccessories` em `petFigure.ts`), sem gate de
+`isLowEndDevice` (cosmético estático barato, mesmo padrão de `applyHat`/`applyGlasses`). Corrige de
+passagem um vazamento no `ShadowGenerator`: `rebuildPet()` usava `petRoot?.dispose()` direto em vez
+do helper `disposePetFigure` (mesmo bug do boneco desde o lab-176), que passa a importar mais agora
+que trocar de acessório dispara reconstrução do pet com mais frequência. **Lab iniciado em outra
+sessão/agente** (commit "lab-216: inicia..." só existia no branch, nunca chegou a `main`) —
+retomado, verificado e finalizado nesta sessão. **PR #100 teve 1 rodada de review do Copilot**: 4
+achados reais corrigidos (`aria-label` fixo do preview 3D não refletia pet/acessório exibido de
+verdade; preview dessincronizava do que foi equipado quando outro item do mesmo encaixe estava em
+experimentação; acentos faltando em "Máscara"/"Herói"/"Acessórios"/"Pescoço") + 1 achado de processo
+sobre `CONTEXT.md`/status (documentado como intencional, mesma convenção das labs 211/213/214).
+**Rodada 2 nunca aconteceu** (mesmo reviewer travado das labs 214/215, confirmado por 2 tentativas
+de re-pedido ao longo de ~40min); usuário consultado via `AskUserQuestion` — optou por mesclar sem
+a rodada 2. `npx tsc -b --force` limpo; testes: app 261/261; `npm run lint` sem achado novo; `npm
+run build` sem regressão. **Verificação ao vivo — funcionou**: painel de Pets testado no navegador
+com as duas abas, preview 3D, experimentar e equipar, sem erros no console. **Merge confirmado**:
+PR #100 mesclada (squash) em `main` no commit `d365115` (2026-09-21, confirmado via
+`AskUserQuestion`). CI de `main` verde (app, server-accounts, server-cf-relay); deploy de produção
+confirmado: Vercel (`https://app-two-flax-92.vercel.app`, 200), Cloudflare Pages
+(`https://missao-aprender-jogo.pages.dev`, 200) e o Worker `server-accounts`
+(`https://missao-aprender-accounts.rafaelvs.workers.dev/health`, 200).
 
-Antes desse:
-
-Último concluído: labs/lab-215-feedback-puzzle/ — fecha a última peça do backlog "Lab 198 - Efeitos
+Antes desse: labs/lab-215-feedback-puzzle/ — fecha a última peça do backlog "Lab 198 - Efeitos
 visuais de recompensa, movimento e interação" com feedback imediato para Memória/Padrões, Contar
 e Soletrar no Centro de Jogos. Uma única malha de anel é reutilizada nos estados de acerto,
 tentativa incorreta e conclusão; a direção da animação, texto/emoji existente e sons sintetizados
