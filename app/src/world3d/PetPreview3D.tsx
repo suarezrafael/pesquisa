@@ -17,7 +17,7 @@ import {
 import { findPetById } from '../data/pets'
 import { findPetAccessoryById } from '../data/petAccessories'
 import { petVisualScale, type PetStage } from '../state/progression'
-import { applyPetAccessories, buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
+import { applyPetAccessories, buildPetFigure, disposePetFigure, petFurColor } from './petFigure'
 
 interface PetPreview3DProps {
   petId: string
@@ -27,8 +27,8 @@ interface PetPreview3DProps {
 
 // Preview 3D de verdade do pet equipado — mesmo motivo/arquitetura de `AvatarPreview3D.tsx`
 // (motor Babylon próprio, isolado do mundo principal, sem física/Havok, canvas pequeno) e mesma
-// razão de reaproveitar a função de montagem do jogo de verdade (`buildGato`/`buildCachorro`,
-// extraídas de `World3D.tsx` pra `petFigure.ts` só pra isso) em vez de duplicar geometria — o
+// razão de reaproveitar a função de montagem do jogo de verdade (`buildPetFigure`) em vez de
+// duplicar geometria — o
 // mesmo pet que a criança vê seguindo ela no mundo aparece aqui, sem duas fontes de verdade
 // visual pra manter em sincronia.
 export function PetPreview3D({ petId, stage, accessoryIds }: PetPreview3DProps) {
@@ -74,7 +74,7 @@ export function PetPreview3D({ petId, stage, accessoryIds }: PetPreview3DProps) 
     const sun = new DirectionalLight('petPreviewSun', new Vector3(-0.5, -1, -0.3), scene)
     sun.intensity = 1.1
 
-    // Sem isso os materiais PBR do pet (`buildGato`/`buildCachorro`) ficam sem reflexo/ambient
+    // Sem isso os materiais PBR do pet (`buildPetFigure`) ficam sem reflexo/ambient
     // specular nenhum e leem como escuros mesmo com as 2 luzes diretas acima — MESMO achado já
     // corrigido pro preview de avatar (lab-87, "o avatar fica escuro"). Mesmo HDRI/URL já
     // carregado pelo mundo principal e pelo preview de avatar — o navegador já tem em cache
@@ -133,7 +133,7 @@ export function PetPreview3D({ petId, stage, accessoryIds }: PetPreview3DProps) 
     if (!pet) return
 
     const furColor = petFurColor(pet.furColorRgb, stage)
-    const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
+    const root = buildPetFigure(scene, shadowGenerator, pet.species, furColor)
     applyPetAccessories(scene, shadowGenerator, root, pet.species, accessoryIds)
     root.scaling.setAll(petVisualScale(stage, pet.species))
     petRootRef.current = root

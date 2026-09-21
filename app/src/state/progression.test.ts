@@ -1223,10 +1223,14 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
     // multiplicação em si está correta.
     expect(petVisualScale('adulto', 'gato')).toBe(1.6)
     expect(petVisualScale('adulto', 'cachorro')).toBe(1.8)
+    expect(petVisualScale('adulto', 'coelho')).toBe(1.65)
+    expect(petVisualScale('adulto', 'tartaruga')).toBe(1.7)
     // filhote continua proporcionalmente menor que adulto DA MESMA espécie, mesmo com o
     // multiplicador de espécie por cima — a progressão relativa de `petStageScale` não muda.
     expect(petVisualScale('filhote', 'gato')).toBeLessThan(petVisualScale('adulto', 'gato'))
     expect(petVisualScale('filhote', 'cachorro')).toBeLessThan(petVisualScale('adulto', 'cachorro'))
+    expect(petVisualScale('filhote', 'coelho')).toBeLessThan(petVisualScale('adulto', 'coelho'))
+    expect(petVisualScale('filhote', 'tartaruga')).toBeLessThan(petVisualScale('adulto', 'tartaruga'))
   })
 })
 

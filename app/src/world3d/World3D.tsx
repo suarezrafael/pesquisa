@@ -76,7 +76,7 @@ import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage, type ChatContext } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
-import { applyPetAccessories, buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
+import { applyPetAccessories, buildCachorro, buildGato, buildPetFigure, disposePetFigure, petFurColor } from './petFigure'
 import { FURNITURE_CATALOG, findFurnitureById } from '../data/furniture'
 import { findPetById } from '../data/pets'
 import { findTreasureChestById } from '../data/treasureChests'
@@ -12709,7 +12709,7 @@ export function World3D({
         const stage = petLifecycleStage(careStage, ageYears)
         const scale = petVisualScale(stage, pet.species)
         const furColor = petFurColor(pet.furColorRgb, stage)
-        const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
+        const root = buildPetFigure(scene, shadowGenerator, pet.species, furColor)
         const accessoryIds = Object.values(progressRef.current.equippedPetAccessoryIds).filter(
           (id): id is string => typeof id === 'string',
         )

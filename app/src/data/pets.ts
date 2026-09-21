@@ -2,11 +2,9 @@
 // padrão de `hats.ts`/`avatars.ts`. Item de maior alavancagem de engajamento encontrado na
 // pesquisa de mercado desta sessão (relatório "Carta de Navegação") — o core loop do Adopt Me!:
 // adotar, cuidar, ver crescer. `species` só descreve QUAL bicho — quem monta a geometria 3D de
-// verdade é `world3d/petFigure.ts` (`buildGato`/`buildCachorro`, já existentes desde os labs de
-// bichos do planeta, reaproveitados sem geometria nova — extraídas de `World3D.tsx` pra também
-// servir o preview da lojinha, `PetPreview3D.tsx`), conforme docs/prompts/03-arquitetura-sistema.md
-// §1.
-export type PetSpecies = 'gato' | 'cachorro'
+// verdade é `world3d/petFigure.ts` (`buildPetFigure`, compartilhado entre o mundo e o preview da
+// lojinha), conforme docs/prompts/03-arquitetura-sistema.md §1.
+export type PetSpecies = 'gato' | 'cachorro' | 'coelho' | 'tartaruga'
 
 export interface PetOption {
   id: string
@@ -50,6 +48,38 @@ export const PET_CATALOG: PetOption[] = [
     cost: 40,
     furColorRgb: [0.92, 0.9, 0.85],
   },
+  {
+    id: 'coelho_branco',
+    name: 'Coelho Branco',
+    species: 'coelho',
+    emoji: '🐰',
+    cost: 45,
+    furColorRgb: [0.94, 0.92, 0.88],
+  },
+  {
+    id: 'coelho_marrom',
+    name: 'Coelho Marrom',
+    species: 'coelho',
+    emoji: '🐇',
+    cost: 45,
+    furColorRgb: [0.55, 0.36, 0.22],
+  },
+  {
+    id: 'tartaruga_verde',
+    name: 'Tartaruga Verde',
+    species: 'tartaruga',
+    emoji: '🐢',
+    cost: 50,
+    furColorRgb: [0.38, 0.68, 0.32],
+  },
+  {
+    id: 'tartaruga_azul',
+    name: 'Tartaruga Azul',
+    species: 'tartaruga',
+    emoji: '🐢',
+    cost: 50,
+    furColorRgb: [0.27, 0.6, 0.72],
+  },
 ]
 
 export function findPetById(id: string): PetOption | undefined {
@@ -60,10 +90,11 @@ export function findPetById(id: string): PetOption | undefined {
 // altura do avatar — bem menor do que o "companheiro visível" que o backlog pede. Multiplicador
 // aplicado POR CIMA da escala relativa de estágio já existente (`petStageScale`, que continua
 // intocada — filhote/jovem seguem proporcionalmente menores que o adulto da mesma espécie). Cada
-// espécie tem seu próprio limite porque a malha de base (`buildGato`/`buildCachorro`) já tem
-// proporções diferentes entre si — um multiplicador único deixaria uma das duas espécies grande
-// demais ou pequena demais em relação à outra.
+// espécie tem seu próprio limite porque as malhas de base têm proporções diferentes entre si — um
+// multiplicador único deixaria algumas espécies grandes ou pequenas demais em relação às outras.
 export const PET_SPECIES_SCALE_MULTIPLIER: Record<PetSpecies, number> = {
   gato: 1.6,
   cachorro: 1.8,
+  coelho: 1.65,
+  tartaruga: 1.7,
 }

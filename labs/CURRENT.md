@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Ultimo concluido: labs/lab-218-novas-especies-pets/ - catalogo ampliado de quatro para oito pets,
+com duas variantes de coelho e tartaruga. Modelos Babylon proprios usam uma fabrica compartilhada
+entre preview e mundo, acessorios possuem encaixe por especie e o teto e de oito malhas-base/dois
+materiais por pet. TypeScript, 266/266 testes, lint, build e fluxo real no Edge passaram. A proxima
+prioridade e medir o lab 217 em hardware fisico antes de escolher outra otimizacao. Ver
+`FEATURES.md` e `CONTEXT.md` da pasta.
+
+---
+
 Ultimo concluido: labs/lab-217-babylon-performance-desktop/ - reduziu custo do loop quente do
 Babylon.js: framebuffer/stencil sem uso desligados, distancias ao quadrado, GUI de proximidade e
 entidades distantes a 10 Hz, mundos inativos pausados e menos alocacao de quaternion. TypeScript,
