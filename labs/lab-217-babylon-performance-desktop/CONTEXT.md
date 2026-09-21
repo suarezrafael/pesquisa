@@ -14,6 +14,8 @@ Commit inicial -> final: 057c84228bc111e9ff95004cb849e95761b6bc56..d682c39
 - Preview 3D de avatar e pet, troca de pet e camera foram verificados no Edge sem erro de console.
 - O review do Copilot encontrou e a implementacao corrigiu a atualizacao de professores/luas em
   interiores acessados a partir de planetas secundarios (`outdoorWorldActive`).
+- A segunda rodada corrigiu a limpeza da histerese de escola/saudacao ao trocar de planeta, para
+  que a interacao possa abrir novamente ao retornar.
 
 ## Decisoes tecnicas tomadas
 

@@ -14416,10 +14416,16 @@ export function World3D({
             // concluída (mesmo espírito de `portalMeshes`/`completed` acima) via
             // `completedPlanetQuestIds`, NUNCA `completedQuestIds`.
             for (const marker of planetQuestMarkers) {
-              if (marker.planetId !== currentPlanetId) continue
-              if (progressRef.current.completedPlanetQuestIds.includes(marker.quest.id)) continue
-              const dSq = distanceSquared(pos, marker.worldPos)
               const triggerId = `planet-school-${marker.quest.id}`
+              if (marker.planetId !== currentPlanetId) {
+                triggered.delete(triggerId)
+                continue
+              }
+              if (progressRef.current.completedPlanetQuestIds.includes(marker.quest.id)) {
+                triggered.delete(triggerId)
+                continue
+              }
+              const dSq = distanceSquared(pos, marker.worldPos)
               if (dSq < PLANET_SCHOOL_TRIGGER_DISTANCE * PLANET_SCHOOL_TRIGGER_DISTANCE && !triggered.has(triggerId)) {
                 triggered.add(triggerId)
                 onSelectPlanetQuestRef.current(marker.quest.id)
@@ -14435,9 +14441,14 @@ export function World3D({
             // independente de chat/suspensão, só o giro/fala (interação de verdade) fica atrás
             // desta guarda.
             for (const marker of planetQuestMarkers) {
-              if (marker.planetId !== currentPlanetId) continue
-              const dSq = distanceSquared(pos, marker.worldPos)
               const greetTriggerId = `planet-teacher-greet-${marker.quest.id}`
+              if (marker.planetId !== currentPlanetId) {
+                if (triggered.delete(greetTriggerId)) {
+                  marker.teacher.root.rotationQuaternion?.set(0, 0, 0, 1)
+                }
+                continue
+              }
+              const dSq = distanceSquared(pos, marker.worldPos)
               if (dSq < TEACHER_GREETING_TRIGGER_DISTANCE * TEACHER_GREETING_TRIGGER_DISTANCE && !triggered.has(greetTriggerId)) {
                 triggered.add(greetTriggerId)
                 // Direção até o jogador no referencial LOCAL da escolinha (`base`) — evita

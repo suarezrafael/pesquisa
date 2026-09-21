@@ -88,6 +88,11 @@ Android ja registrados no lab-193.
   planeta secundario preserva `currentPlanetId`; a guarda inicial pausava voo e outros planetas,
   mas ainda atualizava professores/luas daquele planeta dentro do interior. A nova guarda
   `outdoorWorldActive` cobre casa, Centro de Jogos e voo. TypeScript e 263/263 testes seguem verdes.
+- Review do Copilot, rodada 2: confirmou a correcao anterior e encontrou uma regressao de
+  histerese. Ao ignorar marcadores de outro planeta, as chaves `planet-school-*` e
+  `planet-teacher-greet-*` podiam ficar presas e impedir nova abertura/saudacao na volta. Agora as
+  chaves sao removidas ao sair do planeta e a rotacao do professor so e restaurada quando a chave
+  realmente existia, sem alocacao recorrente.
 
 ## Referencias tecnicas
 
