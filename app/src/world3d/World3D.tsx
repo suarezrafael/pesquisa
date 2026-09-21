@@ -149,6 +149,8 @@ import { PlanetPickerPanel } from './PlanetPickerPanel'
 import {
   playBirdChirp,
   playCoinCollect,
+  playPuzzleCorrect,
+  playPuzzleTryAgain,
   playFootstep,
   startAmbience,
   playThunder,
@@ -3919,6 +3921,17 @@ export function World3D({
     // próprios `emitter`/`direction`/`manualEmitCount`; um único sistema compartilhado correria o
     // risco de um disparo sobrescrever os parâmetros do outro no meio do burst.
     let footstepDustSystem: ParticleSystem | null = null
+    // Backlog "Lab 198" (lab-215) — um único anel reutilizado pelos puzzles do Centro de Jogos.
+    // Ele é criado sob demanda junto do interior e animado por poucos quadros; não existe uma
+    // malha/sistema por alvo e não adiciona partícula contínua ou pós-processamento novo.
+    let puzzleFeedbackRing: Mesh | null = null
+    let puzzleFeedbackRingMat: PBRMaterial | null = null
+    let puzzleFeedbackAnimation: {
+      elapsedS: number
+      durationS: number
+      startScale: number
+      endScale: number
+    } | null = null
     // Inimigos de Marte (lab-60) — populado dentro de `buildMarsIfNeeded`, lido/mutado pelo laço
     // de IA/combate por quadro (só roda quando `currentPlanetId === 'marte'`).
     const marsEnemies: MarsEnemy[] = []
@@ -10533,6 +10546,37 @@ export function World3D({
         interiorRoot.rotationQuaternion = alignmentQuaternion(GAME_CENTER_INTERIOR_UP)
         gameCenterInteriorRootNode = interiorRoot
 
+        // Feedback de puzzle (backlog "Lab 198", lab-215) — uma única malha reutilizada por todas
+        // as arenas. Fica no espaço de mundo (sem `parent`) porque os gatilhos registrados em
+        // `arenaTargetPositions` também são coordenadas de mundo. É criada só na primeira entrada
+        // no Centro de Jogos, então quem nunca visita o interior não paga nem esta malha barata.
+        puzzleFeedbackRingMat = new PBRMaterial('puzzleFeedbackRingMat', scene)
+        puzzleFeedbackRingMat.unlit = true
+        puzzleFeedbackRingMat.albedoColor = Color3.Black()
+        puzzleFeedbackRingMat.roughness = 0.4
+        puzzleFeedbackRing = MeshBuilder.CreateTorus(
+          'puzzleFeedbackRing',
+          { diameter: 0.75, thickness: 0.065, tessellation: isLowEndDevice ? 12 : 20 },
+          scene,
+        )
+        puzzleFeedbackRing.material = puzzleFeedbackRingMat
+        puzzleFeedbackRing.isPickable = false
+        puzzleFeedbackRing.setEnabled(false)
+        scene.onBeforeRenderObservable.add(() => {
+          if (!puzzleFeedbackRing || !puzzleFeedbackRingMat || !puzzleFeedbackAnimation) return
+          const animation = puzzleFeedbackAnimation
+          animation.elapsedS += Math.min(engine.getDeltaTime() / 1000, 0.05)
+          const progress = Math.min(animation.elapsedS / animation.durationS, 1)
+          const eased = 1 - (1 - progress) * (1 - progress)
+          const scale = animation.startScale + (animation.endScale - animation.startScale) * eased
+          puzzleFeedbackRing.scaling.setAll(scale)
+          puzzleFeedbackRing.visibility = 0.9 * (1 - progress)
+          if (progress >= 1) {
+            puzzleFeedbackRing.setEnabled(false)
+            puzzleFeedbackAnimation = null
+          }
+        })
+
         const S = GAME_CENTER_ROOM_HALF_SIZE
         const H = HOUSE_ROOM_HEIGHT
         const T = HOUSE_WALL_THICK
@@ -11210,6 +11254,36 @@ export function World3D({
         return text
       }
 
+      type PuzzleFeedbackKind = 'correct' | 'try-again' | 'complete'
+      function showPuzzleFeedback(worldPos: Vector3, kind: PuzzleFeedbackKind) {
+        if (kind === 'try-again') playPuzzleTryAgain()
+        else playPuzzleCorrect(kind === 'complete')
+
+        if (!puzzleFeedbackRing || !puzzleFeedbackRingMat) return
+        const color =
+          kind === 'complete'
+            ? new Color3(1, 0.78, 0.15)
+            : kind === 'correct'
+              ? new Color3(0.2, 0.85, 1)
+              : new Color3(1, 0.58, 0.18)
+        puzzleFeedbackRingMat.albedoColor = Color3.Black()
+        puzzleFeedbackRingMat.emissiveColor = color
+        puzzleFeedbackRing.position.copyFrom(worldPos)
+        puzzleFeedbackRing.visibility = 0.9
+        puzzleFeedbackRing.setEnabled(true)
+
+        const durationScale = isLowEndDevice ? 0.65 : 1
+        puzzleFeedbackAnimation = {
+          elapsedS: 0,
+          durationS: (kind === 'complete' ? 0.65 : kind === 'correct' ? 0.42 : 0.32) * durationScale,
+          // Acerto/conclusão expandem; "tente novamente" contrai. A forma do movimento, o som e o
+          // texto/emoji já existente distinguem os estados sem depender apenas da cor.
+          startScale: kind === 'complete' ? 0.55 : kind === 'correct' ? 0.5 : 0.95,
+          endScale: kind === 'complete' ? 1.9 : kind === 'correct' ? 1.25 : 0.55,
+        }
+        puzzleFeedbackRing.scaling.setAll(puzzleFeedbackAnimation.startScale)
+      }
+
       function handleGameCenterPortalInteract(id: GameCenterPortalId) {
         const info = GAME_CENTER_PORTAL_INFO[id]
         trackGamePortalSelected(id)
@@ -11256,6 +11330,8 @@ export function World3D({
       function beginArenaCountdown(id: ArenaId, isRetry: boolean) {
         const config = arenaConfigs[id]
         if (!config) return
+        if (puzzleFeedbackRing) puzzleFeedbackRing.setEnabled(false)
+        puzzleFeedbackAnimation = null
         if (activeArenaId && activeArenaId !== id) {
           // A criança pode terminar uma arena (`success`/`fail`) e ir direto pra placa de outra
           // sem sair do saguão — sem isto, o label de status da arena ANTERIOR (ex.: "Você
@@ -11311,6 +11387,8 @@ export function World3D({
       // prestes a começar, não faz sentido zerar `arenaPhase`/disparar evento no meio do caminho) —
       // critério de aceite do backlog "sair não deixa física/câmera/labels presos".
       function exitActiveArena() {
+        if (puzzleFeedbackRing) puzzleFeedbackRing.setEnabled(false)
+        puzzleFeedbackAnimation = null
         if (!activeArenaId) return
         const config = arenaConfigs[activeArenaId]
         if (arenaPhase === 'playing') trackMinigameExited(activeArenaId)
@@ -11353,13 +11431,20 @@ export function World3D({
 
       function handleMemoryCardInteract(index: number) {
         if (arenaPhase !== 'playing' || !arenaMemoryState) return
+        const wasChoosingSecondCard = arenaMemoryState.revealedIds.length === 1
         const { state, matched } = flipMemoryCard(arenaMemoryState, index)
         arenaMemoryState = state
         for (const card of state.cards) {
           const revealed = state.revealedIds.includes(card.id) || card.matched
           gcMemoryCardLabels[card.id].text = revealed ? card.symbol : '❓'
         }
-        if (matched && isMemoryGameComplete(state)) {
+        const completed = matched && isMemoryGameComplete(state)
+        if (matched) {
+          showPuzzleFeedback(arenaTargetPositions.memoria?.[index] ?? gameCenterPortalPos.memoria, completed ? 'complete' : 'correct')
+        } else if (wasChoosingSecondCard && state.revealedIds.length === 2) {
+          showPuzzleFeedback(arenaTargetPositions.memoria?.[index] ?? gameCenterPortalPos.memoria, 'try-again')
+        }
+        if (completed) {
           arenaPhase = 'success'
           setMemoryCardsVisible(false)
           memoriaLevel = Math.min(memoriaLevel + 1, MEMORY_MAX_PAIRS)
@@ -11433,12 +11518,21 @@ export function World3D({
         if (patternPressFlashTimeout) clearTimeout(patternPressFlashTimeout)
         patternPressFlashTimeout = setTimeout(() => setPatternPadHighlighted(padIndex, false), 200)
         if (!correct) {
+          showPuzzleFeedback(
+            arenaTargetPositions.memoria?.[MEMORY_CARD_COUNT + padIndex] ?? gameCenterPortalPos.memoria,
+            'try-again',
+          )
           if (gameCenterMemoryStatusLabel) gameCenterMemoryStatusLabel.text = '🤔 Ops! Observe de novo...'
           presentPatternSequence(state.sequence)
           return
         }
+        const completed = roundComplete && isPatternGameComplete(state)
+        showPuzzleFeedback(
+          arenaTargetPositions.memoria?.[MEMORY_CARD_COUNT + padIndex] ?? gameCenterPortalPos.memoria,
+          completed ? 'complete' : 'correct',
+        )
         if (!roundComplete) return
-        if (isPatternGameComplete(state)) {
+        if (completed) {
           arenaPhase = 'success'
           setPatternPadsVisible(false)
           trackMinigameCompleted('memoria')
@@ -11492,13 +11586,19 @@ export function World3D({
         const { state, correct } = answerCountingRound(arenaCountingState, chosen)
         arenaCountingState = state
         if (!correct) {
+          showPuzzleFeedback(arenaTargetPositions.contar?.[index] ?? gameCenterPortalPos.contar, 'try-again')
           if (gameCenterCountingStatusLabel) {
             gameCenterCountingStatusLabel.text = '🤔 Quase! Conte de novo e escolha outra placa'
           }
           return
         }
+        const completed = isCountingGameComplete(state)
+        showPuzzleFeedback(
+          arenaTargetPositions.contar?.[index] ?? gameCenterPortalPos.contar,
+          completed ? 'complete' : 'correct',
+        )
         renderCountingRound()
-        if (isCountingGameComplete(state)) {
+        if (completed) {
           arenaPhase = 'success'
           setCountingTargetsVisible(false)
           trackMinigameCompleted('contar')
@@ -11551,13 +11651,19 @@ export function World3D({
         const { state, correct } = collectSpellingTile(arenaSpellingState, tile.id)
         arenaSpellingState = state
         if (!correct) {
+          showPuzzleFeedback(arenaTargetPositions.soletrar?.[index] ?? gameCenterPortalPos.soletrar, 'try-again')
           if (gameCenterSpellingStatusLabel) {
             gameCenterSpellingStatusLabel.text = `🤔 Essa não é a próxima letra! ${state.hint} ${spellingProgressText(state)}`
           }
           return
         }
+        const completed = isSpellingGameComplete(state)
+        showPuzzleFeedback(
+          arenaTargetPositions.soletrar?.[index] ?? gameCenterPortalPos.soletrar,
+          completed ? 'complete' : 'correct',
+        )
         renderSpellingRound()
-        if (isSpellingGameComplete(state)) {
+        if (completed) {
           arenaPhase = 'success'
           setSpellingTilesVisible(false)
           trackMinigameCompleted('soletrar')

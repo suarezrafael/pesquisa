@@ -48,7 +48,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | 194 - Chat radial contextual | 208 | Concluido | PR #91. |
 | 197 - Orbitas/luas | 209 | Concluido | PR #92. |
 | 200 - Missoes fisicas | 210 | Concluido | PR #93. |
-| 198 - Efeitos visuais leves | 207/211/212/213 | Parcial | Faltam trail de foguete/cometa e feedback de puzzle. |
+| 198 - Efeitos visuais leves | 207/211/212/213/214/215 | Concluido | Landing puff, brilho, pulso, poeira de passos, rastro do foguete e feedback de puzzle entregues. |
 | 193 - Otimizacao de draw calls | - | Pendente | Executar depois do baseline Android. |
 | 199 - Filtro de chat livre | - | Condicional | P2; somente apos pesquisa e opt-in parental. |
 | 218 - Mercado/bazar 3D | - | Bloqueado | Escopo ainda precisa ser decidido. |
@@ -69,6 +69,5 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 2. Implementar o backlog 193 com comparacao antes/depois.
 3. Executar o Lab 186 de playtest e as Pesquisas A/B.
 4. Completar pets/cosmeticos do backlog 206.
-5. Completar os dois efeitos restantes do backlog 198.
-6. Priorizar UX 187-190 com base nos testes.
-7. Definir o escopo do mercado/bazar como backlog 218.
+5. Priorizar UX 187-190 com base nos testes.
+6. Definir o escopo do mercado/bazar como backlog 218.

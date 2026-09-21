@@ -551,6 +551,50 @@ export function playCoinCollect(): void {
   })
 }
 
+// Feedback dos puzzles do Centro de Jogos (lab-215). São tons sintetizados curtos, como os demais
+// efeitos deste arquivo: não exigem asset novo, respeitam o mute global e só tocam depois que o
+// AudioContext já foi liberado por uma interação da criança. O acerto sobe; a tentativa incorreta
+// desce suavemente, sem buzzer áspero ou som de punição.
+export function playPuzzleCorrect(completed = false): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const notes = completed ? [659.25, 880, 1174.66] : [659.25, 880]
+  notes.forEach((freq, index) => {
+    const start = now + index * 0.07
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = freq
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.001, start)
+    gain.gain.linearRampToValueAtTime(completed ? 0.11 : 0.08, start + 0.015)
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.16)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(start)
+    osc.stop(start + 0.18)
+  })
+}
+
+export function playPuzzleTryAgain(): void {
+  if (!audioCtx || muted) return
+  const ctx = audioCtx
+  const now = ctx.currentTime
+  const notes = [440, 392]
+  notes.forEach((freq, index) => {
+    const start = now + index * 0.08
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = freq
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.001, start)
+    gain.gain.linearRampToValueAtTime(0.055, start + 0.015)
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.14)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(start)
+    osc.stop(start + 0.16)
+  })
+}
+
 // Ronco do motor do foguete (lab-59, pedido do usuário: "faça um barulho de foguete") — ruído
 // grave filtrado (o "sopro"/turbulência, mesma técnica do vento) somado a um oscilador grave em
 // dente-de-serra com vibrato lento (o "ronco" do motor, mesma técnica do rosnado da onça) — liga
