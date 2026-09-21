@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-217-babylon-performance-desktop/ - otimizar o loop quente do Babylon.js,
+reduzir trabalho de mundos inativos, calculos/alocacoes de proximidade e memoria de framebuffer.
+Prioridade P0 por relato de FPS baixo tambem em desktop. O lab de novas especies/modelos de pets
+vem em seguida, sem misturar as duas entregas. Ver `FEATURES.md` da pasta.
+
+---
+
 Último concluído: labs/lab-216-pet-cosmeticos/ — backlog "Lab 206 - Pets premium de qualidade,
 roupas e mascaras": primeira fatia vertical de personalização visual dos pets. Catálogo de 4
 acessórios em dois encaixes independentes (pescoço/rosto) — 1 grátis, 3 compráveis só com moedas
