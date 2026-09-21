@@ -1,6 +1,15 @@
 # Laboratório atual
 
-Último concluído: labs/lab-216-pet-cosmeticos/ — backlog "Lab 206 - Pets premium de qualidade,
+Ultimo concluido: labs/lab-217-babylon-performance-desktop/ - reduziu custo do loop quente do
+Babylon.js: framebuffer/stencil sem uso desligados, distancias ao quadrado, GUI de proximidade e
+entidades distantes a 10 Hz, mundos inativos pausados e menos alocacao de quaternion. TypeScript,
+263/263 testes, lint, build e Edge passaram. Benchmark numerico ainda precisa de hardware fisico,
+pois a automacao limita `requestAnimationFrame`. O proximo lab deve expandir especies/modelos de
+pets sob um orcamento explicito de malhas e materiais. Ver `FEATURES.md` e `CONTEXT.md` da pasta.
+
+---
+
+Antes desse: labs/lab-216-pet-cosmeticos/ — backlog "Lab 206 - Pets premium de qualidade,
 roupas e mascaras": primeira fatia vertical de personalização visual dos pets. Catálogo de 4
 acessórios em dois encaixes independentes (pescoço/rosto) — 1 grátis, 3 compráveis só com moedas
 ganhas jogando (`data/petAccessories.ts`). Regras de domínio (`unlockPetAccessory`/
