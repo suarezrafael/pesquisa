@@ -1,8 +1,11 @@
 # Laboratório atual
 
-Em andamento: labs/lab-218-novas-especies-pets/ - amplia o catalogo com coelhos e tartarugas,
-modelos Babylon proprios, acessorios calibrados e orcamento grafico explicito. Origem: parte de
-novas especies/modelos adiada no lab 216 e proxima recomendacao do lab 217.
+Ultimo concluido: labs/lab-218-novas-especies-pets/ - catalogo ampliado de quatro para oito pets,
+com duas variantes de coelho e tartaruga. Modelos Babylon proprios usam uma fabrica compartilhada
+entre preview e mundo, acessorios possuem encaixe por especie e o teto e de oito malhas-base/dois
+materiais por pet. TypeScript, 266/266 testes, lint, build e fluxo real no Edge passaram. A proxima
+prioridade e medir o lab 217 em hardware fisico antes de escolher outra otimizacao. Ver
+`FEATURES.md` e `CONTEXT.md` da pasta.
 
 ---
 
