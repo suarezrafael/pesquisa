@@ -177,7 +177,7 @@ export function PetPanel({
                 className={`avatar-shop-tab ${tab === 'acessorios' ? 'active' : ''}`}
                 onClick={() => setTab('acessorios')}
               >
-                🎭 Acessorios
+                🎭 Acessórios
               </button>
             </div>
           </div>
@@ -246,7 +246,7 @@ export function PetPanel({
         {tab === 'acessorios' && (
           <>
             <p className="subtitle pet-accessory-note">
-              Experimente no seu companheiro. Acessorios sao so visuais e nao mudam poderes ou recompensas.
+              Experimente no seu companheiro. Acessórios são só visuais e não mudam poderes ou recompensas.
             </p>
             <div className="avatar-shop-grid">
               {PET_ACCESSORY_CATALOG.map((item) => {
@@ -263,7 +263,7 @@ export function PetPanel({
                       aria-hidden="true"
                     />
                     <span className="avatar-shop-name">{item.emoji} {item.name}</span>
-                    <span className="avatar-shop-tag">{item.slot === 'neck' ? 'Pescoco' : 'Rosto'}</span>
+                    <span className="avatar-shop-tag">{item.slot === 'neck' ? 'Pescoço' : 'Rosto'}</span>
                     {!previewing && (
                       <button type="button" className="avatar-shop-action secondary" onClick={() => setPreviewAccessoryId(item.id)}>
                         Experimentar
@@ -271,11 +271,31 @@ export function PetPanel({
                     )}
                     {previewing && <span className="avatar-shop-tag">No preview</span>}
                     {equipped ? (
-                      <button type="button" className="avatar-shop-action" onClick={() => onEquipAccessory(item.slot, null)}>
+                      <button
+                        type="button"
+                        className="avatar-shop-action"
+                        onClick={() => {
+                          // Achado do review automático do Copilot: equipar/tirar um acessório
+                          // enquanto OUTRO item do mesmo encaixe está em `previewAccessoryId`
+                          // deixava o preview desatualizado — o merge em `previewAccessoryIds`
+                          // continuava priorizando a experimentação antiga sobre o encaixe que
+                          // acabou de mudar de verdade. Limpar a experimentação a cada
+                          // equipar/tirar garante que o preview sempre reflita o estado real.
+                          setPreviewAccessoryId(null)
+                          onEquipAccessory(item.slot, null)
+                        }}
+                      >
                         Tirar
                       </button>
                     ) : owned ? (
-                      <button type="button" className="avatar-shop-action" onClick={() => onEquipAccessory(item.slot, item.id)}>
+                      <button
+                        type="button"
+                        className="avatar-shop-action"
+                        onClick={() => {
+                          setPreviewAccessoryId(null)
+                          onEquipAccessory(item.slot, item.id)
+                        }}
+                      >
                         Usar
                       </button>
                     ) : (

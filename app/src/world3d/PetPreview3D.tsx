@@ -15,6 +15,7 @@ import {
   Vector3,
 } from '@babylonjs/core'
 import { findPetById } from '../data/pets'
+import { findPetAccessoryById } from '../data/petAccessories'
 import { petVisualScale, type PetStage } from '../state/progression'
 import { applyPetAccessories, buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
 
@@ -140,6 +141,19 @@ export function PetPreview3D({ petId, stage, accessoryIds }: PetPreview3DProps) 
 
   // `aria-label` — o canvas recebe `attachControl` (giro por arrasto), então é uma superfície
   // interativa/focável; sem nome acessível, um leitor de tela só anunciaria "canvas", sem indicar
-  // que representa o pet equipado.
-  return <canvas ref={canvasRef} className="pet-preview-3d-canvas" aria-label="Preview 3D do pet equipado" />
+  // o quê. Achado do review automático do Copilot (lab-216): o rótulo era fixo ("pet equipado"),
+  // mas desde as abas de "Ver"/"Experimentar" do painel o preview pode mostrar um pet DIFERENTE
+  // do equipado e acessórios ainda não comprados — o rótulo agora reflete `petId`/`accessoryIds`
+  // de verdade, os mesmos props que decidem o que é renderizado.
+  const previewPetName = findPetById(petId)?.name
+  const previewAccessoryNames = accessoryIds
+    .map((id) => findPetAccessoryById(id)?.name)
+    .filter((name): name is string => Boolean(name))
+  const previewLabel = previewPetName
+    ? previewAccessoryNames.length > 0
+      ? `Preview 3D de ${previewPetName} usando ${previewAccessoryNames.join(' e ')}`
+      : `Preview 3D de ${previewPetName}`
+    : 'Preview 3D do pet'
+
+  return <canvas ref={canvasRef} className="pet-preview-3d-canvas" aria-label={previewLabel} />
 }

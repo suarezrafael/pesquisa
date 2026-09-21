@@ -35,7 +35,7 @@ export const PET_ACCESSORY_CATALOG: PetAccessoryOption[] = [
   },
   {
     id: 'mascara_heroi',
-    name: 'Mascara de Heroi',
+    name: 'Máscara de Herói',
     emoji: '🎭',
     cost: 16,
     slot: 'face',
@@ -44,7 +44,7 @@ export const PET_ACCESSORY_CATALOG: PetAccessoryOption[] = [
   },
   {
     id: 'mascara_raio',
-    name: 'Mascara Raio',
+    name: 'Máscara Raio',
     emoji: '⚡',
     cost: 24,
     slot: 'face',

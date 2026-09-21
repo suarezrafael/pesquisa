@@ -61,6 +61,35 @@ swatch de cor, nome e encaixe; "Experimentar" na Coleira Celeste (grátis) aplic
 no preview em tempo real; "Usar" equipou de verdade (card fica destacado, botão vira "Tirar", moeda
 não muda por ser item grátis). Nenhum erro no console durante toda a interação.
 
+## Rodada de review — Copilot (PR #100)
+
+**Rodada 1**: 5 achados, 4 reais e corrigidos, 1 sobre processo (não é bug de código):
+
+1. **Médio — `aria-label` fixo do preview 3D**: confirmado — `PetPreview3D.tsx` sempre anunciava
+   "Preview 3D do pet equipado", mas as abas "Ver"/"Experimentar" deste lab fazem o preview mostrar
+   um pet ou acessório que pode não estar equipado de verdade. Corrigido derivando o rótulo de
+   `petId`/`accessoryIds` (os mesmos props que decidem o que é renderizado).
+2. **Médio — preview dessincroniza ao equipar item do mesmo encaixe durante uma experimentação**:
+   confirmado — com um item A em `previewAccessoryId`, clicar "Usar" num item B do MESMO encaixe
+   não atualizava a seleção de preview; o `useMemo` de merge continuava priorizando A sobre o
+   encaixe que acabou de mudar de verdade. Corrigido limpando `previewAccessoryId` em toda ação de
+   equipar/tirar (`Usar`/`Tirar`), garantindo que o preview sempre reflita o estado real depois de
+   qualquer confirmação.
+3. **Baixo — acentos faltando em "Máscara"/"Herói"**: confirmado em `data/petAccessories.ts`
+   (`name`, não os `id`, que ficam intactos por serem chave de persistência). Corrigido.
+4. **Baixo — acento faltando em "Acessórios"/"Pescoço" na UI**: confirmado em 3 pontos de
+   `PetPanel.tsx` (rótulo da aba, texto de apoio, tag do encaixe). Corrigido.
+5. **Baixo — "feche o lab e atualize CURRENT.md/CONTEXT.md antes de concluir"**: o `Status: em
+   andamento`/`Fim: -` deste arquivo e a ausência de `CONTEXT.md` são intencionais, não uma
+   pendência esquecida — mesma convenção já usada em TODAS as labs desta sessão desde o lab-207:
+   o status vira `concluído` numa commit separada em `main`, DEPOIS do merge e da confirmação de
+   deploy em produção (nenhuma das labs 211/213/214/215 tem `CONTEXT.md` tampouco, só
+   `FEATURES.md` com seções de verificação/review inline). Nenhuma mudança feita aqui; será
+   fechado do jeito de sempre depois do merge.
+
+`npx tsc -b --force`, `npm run test -- --run` (261/261), `npm run lint` (mesmos 2 avisos
+pré-existentes) e `npm run build` seguem limpos depois das correções.
+
 ## Fora de escopo (explicitamente adiado)
 
 - Assinatura, Stripe, item premium, pedido de compra feito pela crianca ou qualquer vantagem de
