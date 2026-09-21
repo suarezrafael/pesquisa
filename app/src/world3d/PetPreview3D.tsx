@@ -15,12 +15,14 @@ import {
   Vector3,
 } from '@babylonjs/core'
 import { findPetById } from '../data/pets'
+import { findPetAccessoryById } from '../data/petAccessories'
 import { petVisualScale, type PetStage } from '../state/progression'
-import { buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
+import { applyPetAccessories, buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
 
 interface PetPreview3DProps {
   petId: string
   stage: PetStage
+  accessoryIds: string[]
 }
 
 // Preview 3D de verdade do pet equipado — mesmo motivo/arquitetura de `AvatarPreview3D.tsx`
@@ -29,7 +31,7 @@ interface PetPreview3DProps {
 // extraídas de `World3D.tsx` pra `petFigure.ts` só pra isso) em vez de duplicar geometria — o
 // mesmo pet que a criança vê seguindo ela no mundo aparece aqui, sem duas fontes de verdade
 // visual pra manter em sincronia.
-export function PetPreview3D({ petId, stage }: PetPreview3DProps) {
+export function PetPreview3D({ petId, stage, accessoryIds }: PetPreview3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<Scene | null>(null)
   const shadowGeneratorRef = useRef<ShadowGenerator | null>(null)
@@ -132,12 +134,26 @@ export function PetPreview3D({ petId, stage }: PetPreview3DProps) {
 
     const furColor = petFurColor(pet.furColorRgb, stage)
     const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
+    applyPetAccessories(scene, shadowGenerator, root, pet.species, accessoryIds)
     root.scaling.setAll(petVisualScale(stage, pet.species))
     petRootRef.current = root
-  }, [petId, stage])
+  }, [petId, stage, accessoryIds])
 
   // `aria-label` — o canvas recebe `attachControl` (giro por arrasto), então é uma superfície
   // interativa/focável; sem nome acessível, um leitor de tela só anunciaria "canvas", sem indicar
-  // que representa o pet equipado.
-  return <canvas ref={canvasRef} className="pet-preview-3d-canvas" aria-label="Preview 3D do pet equipado" />
+  // o quê. Achado do review automático do Copilot (lab-216): o rótulo era fixo ("pet equipado"),
+  // mas desde as abas de "Ver"/"Experimentar" do painel o preview pode mostrar um pet DIFERENTE
+  // do equipado e acessórios ainda não comprados — o rótulo agora reflete `petId`/`accessoryIds`
+  // de verdade, os mesmos props que decidem o que é renderizado.
+  const previewPetName = findPetById(petId)?.name
+  const previewAccessoryNames = accessoryIds
+    .map((id) => findPetAccessoryById(id)?.name)
+    .filter((name): name is string => Boolean(name))
+  const previewLabel = previewPetName
+    ? previewAccessoryNames.length > 0
+      ? `Preview 3D de ${previewPetName} usando ${previewAccessoryNames.join(' e ')}`
+      : `Preview 3D de ${previewPetName}`
+    : 'Preview 3D do pet'
+
+  return <canvas ref={canvasRef} className="pet-preview-3d-canvas" aria-label={previewLabel} />
 }

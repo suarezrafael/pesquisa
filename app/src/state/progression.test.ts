@@ -25,6 +25,7 @@ import {
   BADGE_PARKOUR_MASTER,
   canChangeNickname,
   equipPet,
+  equipPetAccessory,
   feedPet,
   furnitureQuantity,
   visitFurnitureQuantity,
@@ -68,6 +69,7 @@ import {
   unlockMarsReward,
   markMarsCoinPotFound,
   unlockPantsColor,
+  unlockPetAccessory,
   unlockPlanetFurnitureReward,
   unlockShirtColor,
   unlockShoeColor,
@@ -77,6 +79,7 @@ import {
 import { emptyProgress } from './storage'
 import { findFurnitureById } from '../data/furniture'
 import { PET_CATALOG } from '../data/pets'
+import { PET_ACCESSORY_CATALOG } from '../data/petAccessories'
 import { quests } from '../data/quests'
 import { planetQuests } from '../data/planetQuests'
 import type { Quest } from '../types'
@@ -1224,6 +1227,44 @@ describe('adoptPet/equipPet/feedPet (lab-155)', () => {
     // multiplicador de espécie por cima — a progressão relativa de `petStageScale` não muda.
     expect(petVisualScale('filhote', 'gato')).toBeLessThan(petVisualScale('adulto', 'gato'))
     expect(petVisualScale('filhote', 'cachorro')).toBeLessThan(petVisualScale('adulto', 'cachorro'))
+  })
+})
+
+describe('cosmeticos de pet (lab-216)', () => {
+  const paidNeck = PET_ACCESSORY_CATALOG.find((item) => item.slot === 'neck' && item.cost > 0)!
+  const paidFace = PET_ACCESSORY_CATALOG.find((item) => item.slot === 'face' && item.cost > 0)!
+
+  it('desbloqueia com moedas do jogo e desconta o custo exato', () => {
+    const next = unlockPetAccessory({ ...emptyProgress, coins: paidNeck.cost }, paidNeck.id)
+    expect(next.coins).toBe(0)
+    expect(next.unlockedPetAccessoryIds).toContain(paidNeck.id)
+  })
+
+  it('recusa id inexistente, item repetido ou saldo insuficiente', () => {
+    const progress = { ...emptyProgress, coins: paidFace.cost - 1 }
+    expect(unlockPetAccessory(progress, 'acessorio-inexistente')).toBe(progress)
+    expect(unlockPetAccessory(progress, paidFace.id)).toBe(progress)
+    const owned = { ...progress, unlockedPetAccessoryIds: [...progress.unlockedPetAccessoryIds, paidFace.id] }
+    expect(unlockPetAccessory(owned, paidFace.id)).toBe(owned)
+  })
+
+  it('equipa apenas item possuido no encaixe correto', () => {
+    const unowned = { ...emptyProgress, unlockedPetAccessoryIds: [] }
+    expect(equipPetAccessory(unowned, paidFace.slot, paidFace.id)).toBe(unowned)
+
+    const owned = { ...emptyProgress, unlockedPetAccessoryIds: [paidFace.id] }
+    expect(equipPetAccessory(owned, 'neck', paidFace.id)).toBe(owned)
+    expect(equipPetAccessory(owned, 'face', paidFace.id).equippedPetAccessoryIds.face).toBe(paidFace.id)
+  })
+
+  it('remove um encaixe sem alterar o outro', () => {
+    const progress = {
+      ...emptyProgress,
+      unlockedPetAccessoryIds: [paidNeck.id, paidFace.id],
+      equippedPetAccessoryIds: { neck: paidNeck.id, face: paidFace.id },
+    }
+    const next = equipPetAccessory(progress, 'face', null)
+    expect(next.equippedPetAccessoryIds).toEqual({ neck: paidNeck.id, face: null })
   })
 })
 

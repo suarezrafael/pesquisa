@@ -33,6 +33,8 @@ import {
   applyCoinsCollected,
   adoptPet as applyAdoptPet,
   equipPet as applyEquipPet,
+  equipPetAccessory as applyEquipPetAccessory,
+  unlockPetAccessory as applyUnlockPetAccessory,
   setHouseVisible as applySetHouseVisible,
   feedPet as applyFeedPet,
   type FeedPetResult,
@@ -339,6 +341,22 @@ export function useProgress() {
     })
   }
 
+  function unlockPetAccessory(id: string): void {
+    setProgress((prev) => {
+      const next = applyUnlockPetAccessory(prev, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
+  function equipPetAccessory(slot: 'neck' | 'face', id: string | null): void {
+    setProgress((prev) => {
+      const next = applyEquipPetAccessory(prev, slot, id)
+      saveProgress(next)
+      return next
+    })
+  }
+
   // Casa visitável (lab-175) — mesmo formato trivial de `equipPet` acima.
   function toggleHouseVisible(visible: boolean): void {
     setProgress((prev) => {
@@ -510,6 +528,8 @@ export function useProgress() {
     collectPostcard,
     adoptPet,
     equipPet,
+    unlockPetAccessory,
+    equipPetAccessory,
     feedPet,
     coopChallengeCompleted,
     petDailyChallengeCompleted,
