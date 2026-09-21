@@ -1,10 +1,15 @@
 # Laboratório atual
 
-Em andamento: labs/lab-215-feedback-puzzle/ — última peça do backlog "Lab 198 - Efeitos visuais de
-recompensa, movimento e interação": feedback visual e sonoro imediato para os puzzles de Memória/
-Padrões, Contar e Soletrar no Centro de Jogos. Escopo pequeno: um anel 3D reutilizável com estados
-de acerto, tentativa incorreta e conclusão, dois sons sintetizados respeitando mute e redução em
-aparelhos fracos. Não altera regras, recompensas ou dificuldade. Ver `FEATURES.md` da pasta.
+Último concluído: labs/lab-215-feedback-puzzle/ — fecha a última peça do backlog "Lab 198 - Efeitos
+visuais de recompensa, movimento e interação" com feedback imediato para Memória/Padrões, Contar
+e Soletrar no Centro de Jogos. Uma única malha de anel é reutilizada nos estados de acerto,
+tentativa incorreta e conclusão; a direção da animação, texto/emoji existente e sons sintetizados
+evitam depender só de cor. Os sons respeitam mute; tesselação e duração caem em aparelho fraco.
+Não altera regra, recompensa, dificuldade ou analytics. `npx tsc -b --force`, 257/257 testes,
+lint e build passaram. Validado no Edge real: arena de Memória iniciada, par incorreto exercitado e
+anel inspecionado visualmente; interior entre 32 e 41 FPS na maior parte da sessão desktop. O
+atalho usado para desacelerar apenas a captura foi removido antes do commit. O backlog 198 está
+concluído pelos labs reais 207, 211, 212, 213, 214 e 215. Ver `FEATURES.md` e `CONTEXT.md` da pasta.
 
 Antes desse: labs/lab-214-trilha-do-foguete/ — backlog "Lab 198 - Efeitos visuais de
 recompensa, movimento e interacao": fecha a peça "trail de foguete/cometa" com um rastro tipo

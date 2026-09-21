@@ -718,10 +718,9 @@ Ordem recomendada apos a auditoria de 2026-09-20:
    antes/depois.
 3. Completar o Lab 206: novos modelos de pets e cosmeticos; o preview 3D ja foi entregue no lab
    real 192.
-4. Completar o Lab 198: trail de foguete/cometa e feedback de puzzle; os outros quatro efeitos ja
-   foram entregues nos labs reais 207, 211, 212 e 213.
-5. Refinar o escopo do Lab 218 - Mercado do jogo antes de implementar.
-6. Considerar o Lab 199 apenas se a Pesquisa F e responsaveis justificarem o risco de texto livre.
+4. Refinar o escopo do Lab 218 - Mercado do jogo antes de implementar. O Lab 198 foi concluido
+   pelos labs reais 207, 211, 212, 213, 214 e 215.
+5. Considerar o Lab 199 apenas se a Pesquisa F e responsaveis justificarem o risco de texto livre.
 
 Para cada lab, crie FEATURES.md, mantenha escopo pequeno, rode testes/build quando aplicavel,
 verifique em navegador real se tocar 3D, atualize labs/CURRENT.md e escreva CONTEXT.md baseado no

@@ -1,8 +1,8 @@
 # Laboratório 215 — Feedback visual e sonoro de puzzle
 
-Status: em andamento
+Status: concluído
 Início: 2026-09-20
-Fim: -
+Fim: 2026-09-20
 Commit inicial: d6612c4a3670bb468c5f3378527279ffaa1c03ae
 
 ## Objetivo do laboratório
@@ -16,17 +16,28 @@ Origem: `docs/gameplay-market-expansion-backlog.md`, "Lab 198"; continuação di
 
 ## Funcionalidades planejadas
 
-- [ ] Criar um anel 3D reutilizável no ponto de interação, com animações distintas para acerto,
+- [x] Criar um anel 3D reutilizável no ponto de interação, com animações distintas para acerto,
   tentativa incorreta e conclusão; sem partículas contínuas ou pós-processamento novo.
-- [ ] Integrar o feedback a Memória/Padrões, Contar e Soletrar, cobrindo respostas corretas e
+- [x] Integrar o feedback a Memória/Padrões, Contar e Soletrar, cobrindo respostas corretas e
   incorretas sem punir ou remover progresso.
-- [ ] Adicionar sons sintetizados curtos e diferentes para acerto/conclusão e "tente novamente",
+- [x] Adicionar sons sintetizados curtos e diferentes para acerto/conclusão e "tente novamente",
   respeitando o mute já existente.
-- [ ] Reduzir duração/complexidade visual em `isLowEndDevice` e manter texto/emoji como canal não
+- [x] Reduzir duração/complexidade visual em `isLowEndDevice` e manter texto/emoji como canal não
   dependente de cor.
-- [ ] Verificar TypeScript forçado, testes, build e fluxo no Edge quando o ambiente 3D permitir.
-- [ ] Atualizar `docs/backlog-status.md` quando a última peça do backlog 198 estiver comprovadamente
+- [x] Verificar TypeScript forçado, testes, build e fluxo no Edge quando o ambiente 3D permitir.
+- [x] Atualizar `docs/backlog-status.md` quando a última peça do backlog 198 estiver comprovadamente
   concluída.
+
+## Evidências de conclusão
+
+- `npx tsc -b --force`: sem erros.
+- `npm run test -- --run`: 257/257 testes aprovados.
+- `npm run lint`: sem erros; dois avisos preexistentes fora do escopo.
+- `npm run build`: concluído; permaneceu apenas o aviso preexistente de chunks grandes.
+- Edge real: Centro de Jogos carregado, arena de Memória iniciada, duas cartas diferentes
+  exercitaram a tentativa incorreta e o anel foi inspecionado visualmente. O interior ficou entre
+  32 e 41 FPS durante a maior parte dessa validação na janela desktop usada. Um atalho de QA
+  temporário em `DEV` desacelerou somente a captura do anel e foi removido antes do commit.
 
 ## Fora de escopo (explicitamente adiado)
 
