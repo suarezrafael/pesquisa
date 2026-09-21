@@ -84,6 +84,10 @@ Android ja registrados no lab-193.
 - O Edge controlado por automacao continua limitando `requestAnimationFrame` a cerca de 1-2 FPS,
   comportamento ja documentado no lab-193. Esse numero nao e usado como benchmark de hardware;
   o ganho deve ser confirmado em desktop/Android fisico com `window.__perf.sample(15000)`.
+- Review do Copilot, rodada 1: um achado medio real corrigido. Entrar numa casa a partir de um
+  planeta secundario preserva `currentPlanetId`; a guarda inicial pausava voo e outros planetas,
+  mas ainda atualizava professores/luas daquele planeta dentro do interior. A nova guarda
+  `outdoorWorldActive` cobre casa, Centro de Jogos e voo. TypeScript e 263/263 testes seguem verdes.
 
 ## Referencias tecnicas
 

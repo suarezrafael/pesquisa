@@ -13299,8 +13299,8 @@ export function World3D({
       scene.onBeforeRenderObservable.add(() => {
         const dt = engine.getDeltaTime() / 1000
         time += dt
-        const mainWorldActive =
-          currentPlanetId === null && !insideHouseInterior && !insideGameCenterInterior && !drivingRocket
+        const outdoorWorldActive = !insideHouseInterior && !insideGameCenterInterior && !drivingRocket
+        const mainWorldActive = currentPlanetId === null && outdoorWorldActive
         proximityUiElapsed += dt
         const shouldUpdateProximityUi = proximityUiElapsed >= PROXIMITY_UI_INTERVAL_SECONDS
         if (shouldUpdateProximityUi) proximityUiElapsed %= PROXIMITY_UI_INTERVAL_SECONDS
@@ -13355,7 +13355,7 @@ export function World3D({
         // escolinhas do planeta visitado. Continua independente de chat/modal (estado de UI nao
         // deve congelar a cena visivel), mas professores de outros planetas deixam de consumir CPU.
         for (const marker of planetQuestMarkers) {
-          if (drivingRocket || marker.planetId !== currentPlanetId) continue
+          if (!outdoorWorldActive || marker.planetId !== currentPlanetId) continue
           marker.teacher.root.position.y =
             Math.sin(time * TEACHER_IDLE_BOB_SPEED + marker.idlePhase) * TEACHER_IDLE_BOB_AMPLITUDE
         }
@@ -13377,7 +13377,7 @@ export function World3D({
         // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — a lua do planeta visitado
         // continua orbitando mesmo com chat/modal aberto, mas luas de mundos fora da tela pausam.
         for (const moon of orbitingMoons) {
-          if (drivingRocket || moon.planetId !== currentPlanetId) continue
+          if (!outdoorWorldActive || moon.planetId !== currentPlanetId) continue
           moon.mesh.position = moon.center.add(rotateAroundAxis(moon.basePos, moon.axis, time * moon.speed))
         }
 

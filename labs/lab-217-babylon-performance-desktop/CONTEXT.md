@@ -12,6 +12,8 @@ Commit inicial -> final: 057c84228bc111e9ff95004cb849e95761b6bc56..d682c39
 - Animacoes e IA ambientais param quando o mundo correspondente nao esta ativo.
 - Foram removidos clones recorrentes de quaternion e buscas lineares de indice de quest por quadro.
 - Preview 3D de avatar e pet, troca de pet e camera foram verificados no Edge sem erro de console.
+- O review do Copilot encontrou e a implementacao corrigiu a atualizacao de professores/luas em
+  interiores acessados a partir de planetas secundarios (`outdoorWorldActive`).
 
 ## Decisoes tecnicas tomadas
 
