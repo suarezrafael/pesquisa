@@ -1,5 +1,16 @@
 # Laboratório atual
 
+Ultimo concluido: labs/lab-219-captura-performance-mobile/ - transformou a instrumentacao
+`window.__perf.sample()` em coleta de 15 segundos acionavel pelo HUD, com JSON copiavel e metadados
+de cena/dispositivo, sem rede. Corrigiu o contador do HUD que mostrava zero draw calls por ler antes
+da renderizacao. Edge e Android Emulator passaram; baseline emulado da Terra: 15,07 FPS medio,
+p5 9,36, 2.315 draw calls e camera render 45,59 ms, contra fisica 0,56 ms. A coleta em Redmi/Poco
+fisicos continua pendente; o proximo lab recomendado e uma fatia pequena de instances/thin
+instances para props decorativos repetidos, comparada pelo mesmo relatorio. Ver `FEATURES.md` e
+`CONTEXT.md` da pasta.
+
+---
+
 Ultimo concluido: labs/lab-218-novas-especies-pets/ - catalogo ampliado de quatro para oito pets,
 com duas variantes de coelho e tartaruga. Modelos Babylon proprios usam uma fabrica compartilhada
 entre preview e mundo, acessorios possuem encaixe por especie e o teto e de oito malhas-base/dois

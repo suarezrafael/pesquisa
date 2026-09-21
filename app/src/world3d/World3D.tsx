@@ -2670,6 +2670,12 @@ export function World3D({
   // de propósito — mesmo padrão de `muted` logo abaixo, um ajuste de sessão, não uma preferência
   // duradoura (o pedido original do lab-67 continua valendo por padrão a cada carregamento).
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(true)
+  // lab-219: a instrumentacao `window.__perf.sample()` ja existia, mas exigia DevTools remoto no
+  // Android. O proprio painel agora conduz a coleta e guarda o JSON localmente para um segundo
+  // toque copiar. Nenhum dado sai do aparelho e a amostra so roda quando o usuario pede.
+  const [perfSampleRunning, setPerfSampleRunning] = useState(false)
+  const [perfSampleReport, setPerfSampleReport] = useState<string | null>(null)
+  const [perfSampleFeedback, setPerfSampleFeedback] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   // Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — o gatilho de chat do HUD
@@ -13296,6 +13302,10 @@ export function World3D({
         // window.__forceLightning() dispara um raio na hora, sem esperar o sorteio.
         ;(window as any).__forceLightning = () => triggerLightning()
       }
+      // `SceneInstrumentation.drawCallsCounter.current` e zerado no inicio de cada quadro. O HUD
+      // roda em `onBeforeRender`, portanto ler o contador ali sempre mostrava 0 mesmo quando a
+      // amostra em `onAfterRender` media milhares de chamadas. Guardamos o ultimo quadro completo.
+      let lastCompletedDrawCalls = 0
       scene.onBeforeRenderObservable.add(() => {
         const dt = engine.getDeltaTime() / 1000
         time += dt
@@ -15548,7 +15558,7 @@ export function World3D({
           // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
           // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
           // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${instrumentation.drawCallsCounter.current} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -15574,6 +15584,9 @@ export function World3D({
       instrumentation.captureParticlesRenderTime = true
       instrumentation.captureRenderTargetsRenderTime = true
       instrumentation.captureCameraRenderTime = true
+      scene.onAfterRenderObservable.add(() => {
+        lastCompletedDrawCalls = instrumentation.drawCallsCounter.current
+      })
       const engineInstrumentation = new EngineInstrumentation(engine)
       // No-op em navegadores sem a extensão de GPU timer query (ex.: a maioria dos Android em
       // WebGL1) — `gpuFrameTimeCounter` simplesmente fica em 0, sem lançar erro.
@@ -15599,6 +15612,28 @@ export function World3D({
           return Promise.reject(new Error('Já existe uma amostragem __perf.sample em andamento.'))
         }
         const startedAt = performance.now()
+        // Captura a cena no INICIO da janela. Se o jogador viajar no meio da medicao, o relatorio
+        // continua identificando onde a amostra comecou em vez de rotular tudo pelo destino final.
+        const sampledScene = drivingRocket
+          ? 'voo-foguete'
+          : insideGameCenterInterior
+            ? 'centro-de-jogos'
+            : insideHouseInterior
+              ? 'casa'
+              : currentPlanetId ?? 'terra'
+        const glInfo = engine.getGlInfo()
+        const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number }
+        const device = {
+          userAgent: navigator.userAgent,
+          viewport: `${window.innerWidth}x${window.innerHeight}`,
+          screen: `${window.screen.width}x${window.screen.height}`,
+          devicePixelRatio: window.devicePixelRatio,
+          logicalProcessors: navigator.hardwareConcurrency || null,
+          deviceMemoryGb: navigatorWithMemory.deviceMemory ?? null,
+          webglRenderer: glInfo.renderer,
+          webglVendor: glInfo.vendor,
+          webglVersion: glInfo.version,
+        }
         const deltaTimeSamples: number[] = []
         const frameTimeSamples: number[] = []
         const drawCallsSamples: number[] = []
@@ -15697,6 +15732,10 @@ export function World3D({
             // aplicado direto num array já convertido pra FPS.
             const msToFps = (ms: number) => (ms > 0 ? 1000 / ms : 0)
             resolve({
+              build: __BUILD_STAMP__,
+              capturedAt: new Date().toISOString(),
+              scene: sampledScene,
+              device,
               durationMs: round(performance.now() - startedAt),
               sampleCount: deltaTimeSamples.length,
               hardwareScalingLevel: engine.getHardwareScalingLevel(),
@@ -16110,6 +16149,48 @@ export function World3D({
     pendingMultiplayerOpenRef.current = null
   }
 
+  async function handleStartPerfSample() {
+    const perfHandle = (window as Window & {
+      __perf?: { sample: (durationMs?: number) => Promise<Record<string, unknown>> }
+    }).__perf
+    if (!perfHandle || perfSampleRunning) return
+
+    setPerfSampleRunning(true)
+    setPerfSampleReport(null)
+    setPerfSampleFeedback('Medindo por 15 segundos... continue jogando.')
+    try {
+      const report = await perfHandle.sample(15000)
+      setPerfSampleReport(JSON.stringify(report, null, 2))
+      setPerfSampleFeedback('Amostra pronta. Toque em Copiar JSON.')
+    } catch (error) {
+      setPerfSampleFeedback(error instanceof Error ? error.message : 'Nao foi possivel medir agora.')
+    } finally {
+      setPerfSampleRunning(false)
+    }
+  }
+
+  async function handleCopyPerfSample() {
+    if (!perfSampleReport) return
+    try {
+      await navigator.clipboard.writeText(perfSampleReport)
+      setPerfSampleFeedback('Relatorio copiado.')
+    } catch {
+      // Alguns WebViews/Androids bloqueiam Clipboard API mesmo em HTTPS. O download local mantem
+      // a coleta recuperavel sem servidor e sem pedir permissao adicional.
+      const blobUrl = URL.createObjectURL(new Blob([perfSampleReport], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = `missao-aprender-perf-${Date.now()}.json`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      // Revogar na mesma pilha pode invalidar o download antes de WebViews lentos consumirem a
+      // URL. Um ciclo curto preserva o arquivo e ainda libera o blob logo depois.
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+      setPerfSampleFeedback('Clipboard indisponivel; JSON baixado.')
+    }
+  }
+
   // lab-121: nenhum painel/modal (nem os de App.tsx via `suspendTriggers`, nem os internos deste
   // componente) tirava os botões do HUD da ordem de tabulação enquanto ficavam abertos por cima
   // dele — um usuário de teclado conseguia dar Tab por dentro de um modal visualmente aberto e
@@ -16187,7 +16268,35 @@ export function World3D({
         >
           {debugPanelExpanded ? '▾' : '🐞'}
         </button>
-        {debugPanelExpanded && <div ref={debugRef} className="world3d-debug" />}
+        {debugPanelExpanded && (
+          <div className="world3d-debug-content">
+            <div ref={debugRef} className="world3d-debug" />
+            <div className="world3d-debug-actions">
+              <button
+                type="button"
+                className="world3d-debug-action"
+                onClick={handleStartPerfSample}
+                disabled={!setupReady || perfSampleRunning}
+              >
+                {perfSampleRunning ? 'Medindo...' : 'Medir 15 s'}
+              </button>
+              {perfSampleReport && (
+                <button type="button" className="world3d-debug-action" onClick={handleCopyPerfSample}>
+                  {perfSampleFeedback === 'Relatorio copiado.'
+                    ? 'Copiado'
+                    : perfSampleFeedback === 'Clipboard indisponivel; JSON baixado.'
+                      ? 'JSON baixado'
+                      : 'Copiar JSON'}
+                </button>
+              )}
+              {perfSampleFeedback && (
+                <span className="world3d-debug-feedback" role="status" aria-live="polite">
+                  {perfSampleFeedback}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       <HudHeader
         profile={profile}
