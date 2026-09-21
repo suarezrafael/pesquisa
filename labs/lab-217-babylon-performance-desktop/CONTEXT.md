@@ -16,6 +16,7 @@ Commit inicial -> final: 057c84228bc111e9ff95004cb849e95761b6bc56..d682c39
   interiores acessados a partir de planetas secundarios (`outdoorWorldActive`).
 - A segunda rodada corrigiu a limpeza da histerese de escola/saudacao ao trocar de planeta, para
   que a interacao possa abrir novamente ao retornar.
+- A terceira rodada removeu o descarte de tempo acumulado da simulacao distante apos travadas.
 
 ## Decisoes tecnicas tomadas
 

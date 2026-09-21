@@ -13306,7 +13306,10 @@ export function World3D({
         if (shouldUpdateProximityUi) proximityUiElapsed %= PROXIMITY_UI_INTERVAL_SECONDS
         distantAmbientElapsed += dt
         const shouldUpdateDistantAmbient = distantAmbientElapsed >= DISTANT_AMBIENT_INTERVAL_SECONDS
-        const distantAmbientDt = shouldUpdateDistantAmbient ? Math.min(distantAmbientElapsed, 0.25) : 0
+        // Usa todo o tempo desde o ultimo tick distante. Descartar o excedente depois de uma
+        // travada faria NPCs/fauna andarem em camera lenta; os passos individuais ja limitam o
+        // movimento ao angulo restante do alvo e nao conseguem ultrapassa-lo.
+        const distantAmbientDt = shouldUpdateDistantAmbient ? distantAmbientElapsed : 0
         if (shouldUpdateDistantAmbient) distantAmbientElapsed %= DISTANT_AMBIENT_INTERVAL_SECONDS
 
         // lab-164 — pulso suave de brilho no feixe "comece aqui" (só custa nada quando desligado,

@@ -93,6 +93,10 @@ Android ja registrados no lab-193.
   `planet-teacher-greet-*` podiam ficar presas e impedir nova abertura/saudacao na volta. Agora as
   chaves sao removidas ao sair do planeta e a rotacao do professor so e restaurada quando a chave
   realmente existia, sem alocacao recorrente.
+- Review do Copilot, rodada 3: a histerese e a pausa de interiores foram reconhecidas como
+  resolvidas; apontou que limitar o delta distante a 0,25 s e aplicar modulo depois descartava
+  tempo em uma travada. O tick agora consome todo o intervalo acumulado, preservando a velocidade;
+  o passo angular ja impede ultrapassar o alvo.
 
 ## Referencias tecnicas
 
