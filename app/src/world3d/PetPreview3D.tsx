@@ -42,7 +42,7 @@ export function PetPreview3D({ petId, stage, accessoryIds }: PetPreview3DProps) 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const engine = new Engine(canvas, true, { preserveDrawingBuffer: true })
+    const engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: false })
     const scene = new Scene(engine)
     scene.clearColor = new Color4(0, 0, 0, 0)
 

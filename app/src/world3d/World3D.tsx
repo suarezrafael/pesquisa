@@ -138,6 +138,7 @@ import type { PublicHouseSnapshot } from '../state/usePlayerPublicProfile'
 import type { WeeklyEvent } from '../data/weeklyEvents'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
+import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
 import { ChatRadial } from './ChatRadial'
@@ -495,6 +496,11 @@ function rotateAroundAxis(v: Vector3, axis: Vector3, angle: number): Vector3 {
   return term1.add(term2).add(term3)
 }
 
+function copyRotationQuaternion(root: TransformNode, value: Quaternion): void {
+  if (root.rotationQuaternion) root.rotationQuaternion.copyFrom(value)
+  else root.rotationQuaternion = value.clone()
+}
+
 // Posiciona/orienta `root` num ponto de um trajeto FECHADO (`path`, ex. `streetCenter` — laço
 // completo, sem ponta) a partir de uma posição fracionária (`pathIndex`, envolve pra frente e
 // pra trás via `%` — nunca "acaba"). Reaproveitado pelos carros de IA e pelo carro que o jogador
@@ -529,7 +535,7 @@ function positionOnLoopPath(
   const right = Vector3.Cross(up, fwd).normalize()
   Matrix.FromXYZAxesToRef(right, up, fwd, tmpMatrix)
   Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-  root.rotationQuaternion = tmpQuat.clone()
+  copyRotationQuaternion(root, tmpQuat)
 }
 
 // Centros dos platôs/"montanhas" (direção normalizada no planeta + raio angular de influência +
@@ -2184,8 +2190,7 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     await waitForVisible()
     if (shouldAbort()) return true
 
-    // Achado do review automático do Copilot: o engine REAL (mais abaixo, `new Engine(canvas,
-    // ..., { preserveDrawingBuffer: true, stencil: true })`) não passa `adaptToDeviceRatio` —
+    // O engine REAL (mais abaixo) não passa `adaptToDeviceRatio` —
     // Babylon só multiplica pelo `devicePixelRatio` real quando esse parâmetro é `true`; sem ele,
     // renderiza no tamanho em pixels CSS do canvas, não nos pixels físicos do aparelho. Multiplicar
     // por `dpr` aqui fazia o benchmark medir uma resolução BEM maior (~3x num iPhone com DPR 3) do
@@ -2196,12 +2201,9 @@ async function benchmarkIsWeakGpu(shouldAbort: () => boolean): Promise<boolean> 
     const benchCanvas = document.createElement('canvas')
     benchCanvas.width = width
     benchCanvas.height = height
-    // Achado do review automático do Copilot: `preserveDrawingBuffer: true` (igual ao engine real,
-    // `preserveDrawingBuffer: true` mais abaixo) — em alguns drivers/GPUs, preservar o back buffer
-    // impede otimizações de descarte/renderização em blocos (comum em GPU mobile), um custo real
-    // que o engine de verdade paga mas que `false` aqui deixaria de fora da medição, inflando o
-    // FPS do benchmark em relação ao que o jogo de verdade vai conseguir sustentar.
-    const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: true })
+    // Mantem as mesmas opcoes do engine real. O jogo nao le o framebuffer nem usa stencil;
+    // preservar esses buffers aumentaria memoria/banda e distorceria o benchmark.
+    const benchEngine = new Engine(benchCanvas, true, { preserveDrawingBuffer: false, stencil: false })
     // Achado do review automático do Copilot: registrado ANTES de `setSize` — se `setSize` lançar
     // (contexto WebGL parcialmente perdido, etc.), o `catch` mais abaixo ainda encontra o engine
     // na lista e consegue descartá-lo; empurrar depois deixaria esse exato caminho de erro sem
@@ -3131,7 +3133,9 @@ export function World3D({
       return Math.round(px * deviceScale * READABILITY_SCALE)
     }
 
-    const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: true, stencil: true })
+    // Nenhum fluxo do jogo le pixels do framebuffer ou usa stencil. Deixar ambos desligados
+    // permite ao navegador descartar o back buffer e evita memoria/banda grafica sem uso.
+    const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: false, stencil: false })
     // Valor inicial moderado — nem o melhor nem o pior caso — só até a medição real de FPS (ver
     // `autoTuneResolution` mais abaixo, fora de `setup()`) ajustar pro valor certo pra ESTE
     // aparelho especificamente. Chutar um número fixo (1.5, depois 1.75, depois 1.5 de novo) sem
@@ -3492,7 +3496,7 @@ export function World3D({
     const tmpMatrix = new Matrix()
     const tmpQuat = new Quaternion()
     const triggered = new Set<string>()
-    const portalMeshes: { quest: (typeof quests)[number]; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
+    const portalMeshes: { quest: (typeof quests)[number]; questIndex: number; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
     // lab-164 (jornada de ativação de 10 minutos) — feixe de luz "comece aqui" acima da primeira
     // escolinha (`quests[0]`), criado depois do laço de `quests.forEach` mais abaixo; visibilidade
     // controlada por `applyActivationBeaconVisual` (mesmo gatilho de `applyPortalVisual`).
@@ -5871,6 +5875,7 @@ export function World3D({
       // também — reaproveita este mesmo laço de proximidade/histerese já existente em vez de um
       // registro paralelo novo pro professor de cada escolinha.
       const planetQuestMarkers: {
+        planetId: string
         quest: Quest
         worldPos: Vector3
         base: TransformNode
@@ -5906,7 +5911,7 @@ export function World3D({
       // centro do planeta (não world direto) — a posição de verdade é recalculada a cada quadro
       // como `center + rotateAroundAxis(basePos, axis, tempo*velocidade)` (mesmo idioma já usado
       // por `cloudGroups`, função `rotateAroundAxis` já existente).
-      const orbitingMoons: { mesh: Mesh; center: Vector3; basePos: Vector3; axis: Vector3; speed: number }[] = []
+      const orbitingMoons: { planetId: string; mesh: Mesh; center: Vector3; basePos: Vector3; axis: Vector3; speed: number }[] = []
       const planetMoonFacts: { worldPos: Vector3; text: string; id: string }[] = []
 
       // Backlog "Lab 200 - Extensao de missoes fisicas por planeta" — 3 mecânicas físicas novas em
@@ -6087,6 +6092,7 @@ export function World3D({
       // com o símbolo "?" (cor do tipo de quest, mesma paleta de `questTypeColor`) + o professor
       // parado ao lado é suficiente — não precisa da estrutura completa (paredes/telhado/fundação).
       function buildPlanetEscolinha(
+        planetId: string,
         quest: Quest,
         planetRoot: TransformNode,
         radius: number,
@@ -6136,6 +6142,7 @@ export function World3D({
         // de gatilhos (mais abaixo) precisa da posição correta desde o primeiro frame. Válido
         // porque `planetRoot.position` é sempre o `*_CENTER` fixo do planeta (nunca rotacionado).
         planetQuestMarkers.push({
+          planetId,
           quest,
           worldPos: planetRoot.position.add(localUp.scale(radius)),
           base,
@@ -6189,7 +6196,7 @@ export function World3D({
         mesh.position = center.add(rotateAroundAxis(basePos, landingUp, time * speed))
         mesh.isPickable = false
 
-        orbitingMoons.push({ mesh, center, basePos, axis: landingUp, speed })
+        orbitingMoons.push({ planetId: idSuffix, mesh, center, basePos, axis: landingUp, speed })
         planetMoonFacts.push({
           worldPos: center.add(landingUp.scale(planetRadius + 0.05)),
           text: fact,
@@ -7452,7 +7459,7 @@ export function World3D({
         // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta) — 6 perguntas
         // sobre o próprio Mercúrio, uma por direção de `PLANET_SCHOOL_DIRS`.
         planetQuests.mercurio.forEach((quest, i) => {
-          buildPlanetEscolinha(quest, mercuryRoot, MERCURY_RADIUS, PLANET_SCHOOL_DIRS[i], `mercurio-${i}`)
+          buildPlanetEscolinha('mercurio', quest, mercuryRoot, MERCURY_RADIUS, PLANET_SCHOOL_DIRS[i], `mercurio-${i}`)
         })
 
         // Baú de tesouro escondido (lab-131).
@@ -7571,7 +7578,7 @@ export function World3D({
 
         // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
         planetQuests.venus.forEach((quest, i) => {
-          buildPlanetEscolinha(quest, venusRoot, VENUS_RADIUS, PLANET_SCHOOL_DIRS[i], `venus-${i}`)
+          buildPlanetEscolinha('venus', quest, venusRoot, VENUS_RADIUS, PLANET_SCHOOL_DIRS[i], `venus-${i}`)
         })
 
         // Baú de tesouro escondido (lab-131).
@@ -7845,7 +7852,7 @@ export function World3D({
 
         // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
         planetQuests.jupiter.forEach((quest, i) => {
-          buildPlanetEscolinha(quest, jupiterRoot, JUPITER_RADIUS, PLANET_SCHOOL_DIRS[i], `jupiter-${i}`)
+          buildPlanetEscolinha('jupiter', quest, jupiterRoot, JUPITER_RADIUS, PLANET_SCHOOL_DIRS[i], `jupiter-${i}`)
         })
 
         // Baú de tesouro escondido (lab-131).
@@ -7964,7 +7971,7 @@ export function World3D({
 
         // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
         planetQuests.saturno.forEach((quest, i) => {
-          buildPlanetEscolinha(quest, saturnRoot, SATURN_RADIUS, PLANET_SCHOOL_DIRS[i], `saturno-${i}`)
+          buildPlanetEscolinha('saturno', quest, saturnRoot, SATURN_RADIUS, PLANET_SCHOOL_DIRS[i], `saturno-${i}`)
         })
 
         // Baú de tesouro escondido (lab-131).
@@ -8088,7 +8095,7 @@ export function World3D({
 
         // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
         planetQuests.urano.forEach((quest, i) => {
-          buildPlanetEscolinha(quest, uranusRoot, URANUS_RADIUS, PLANET_SCHOOL_DIRS[i], `urano-${i}`)
+          buildPlanetEscolinha('urano', quest, uranusRoot, URANUS_RADIUS, PLANET_SCHOOL_DIRS[i], `urano-${i}`)
         })
 
         // Baú de tesouro escondido (lab-131).
@@ -8223,7 +8230,7 @@ export function World3D({
 
         // Escolinhas de astronomia (lab-115; lab-127 expandiu pra 6 por planeta).
         planetQuests.netuno.forEach((quest, i) => {
-          buildPlanetEscolinha(quest, neptuneRoot, NEPTUNE_RADIUS, PLANET_SCHOOL_DIRS[i], `netuno-${i}`)
+          buildPlanetEscolinha('netuno', quest, neptuneRoot, NEPTUNE_RADIUS, PLANET_SCHOOL_DIRS[i], `netuno-${i}`)
         })
 
         // Baú de tesouro escondido (lab-131).
@@ -8919,7 +8926,7 @@ export function World3D({
         label.linkWithMesh(roof)
         label.linkOffsetY = -70
 
-        portalMeshes.push({ quest, roof, base, surfacePos })
+        portalMeshes.push({ quest, questIndex: index, roof, base, surfacePos })
       })
 
       // lab-164 (jornada de ativação de 10 minutos, docs/market-metrics-engagement-backlog.md) —
@@ -13252,6 +13259,11 @@ export function World3D({
       }
 
       let time = 0
+      const PROXIMITY_UI_INTERVAL_SECONDS = 0.1
+      let proximityUiElapsed = PROXIMITY_UI_INTERVAL_SECONDS
+      const DISTANT_AMBIENT_INTERVAL_SECONDS = 0.1
+      const NEAR_AMBIENT_DISTANCE = 8
+      let distantAmbientElapsed = DISTANT_AMBIENT_INTERVAL_SECONDS
       // Clima dinâmico: alterna sozinho entre seco e chuva em horários aleatórios (não é um
       // ciclo fixo previsível). `rainAmount` sobe/desce suavemente (não pula direto de 0 pra 1)
       // pra transição de luz/neblina/som/partículas parecer clima de verdade chegando, não um
@@ -13287,6 +13299,15 @@ export function World3D({
       scene.onBeforeRenderObservable.add(() => {
         const dt = engine.getDeltaTime() / 1000
         time += dt
+        const mainWorldActive =
+          currentPlanetId === null && !insideHouseInterior && !insideGameCenterInterior && !drivingRocket
+        proximityUiElapsed += dt
+        const shouldUpdateProximityUi = proximityUiElapsed >= PROXIMITY_UI_INTERVAL_SECONDS
+        if (shouldUpdateProximityUi) proximityUiElapsed %= PROXIMITY_UI_INTERVAL_SECONDS
+        distantAmbientElapsed += dt
+        const shouldUpdateDistantAmbient = distantAmbientElapsed >= DISTANT_AMBIENT_INTERVAL_SECONDS
+        const distantAmbientDt = shouldUpdateDistantAmbient ? Math.min(distantAmbientElapsed, 0.25) : 0
+        if (shouldUpdateDistantAmbient) distantAmbientElapsed %= DISTANT_AMBIENT_INTERVAL_SECONDS
 
         // lab-164 — pulso suave de brilho no feixe "comece aqui" (só custa nada quando desligado,
         // `isEnabled()` evita animar um material invisível à toa). Achado do review do Copilot
@@ -13339,11 +13360,12 @@ export function World3D({
         // vez que o chat abria ou o jogo suspendia. Mesmo lugar/padrão das outras animações
         // puramente cosméticas deste laço (nuvens, pulso do portal) — sempre incondicionais.
         for (const marker of planetQuestMarkers) {
+          if (drivingRocket || marker.planetId !== currentPlanetId) continue
           marker.teacher.root.position.y =
             Math.sin(time * TEACHER_IDLE_BOB_SPEED + marker.idlePhase) * TEACHER_IDLE_BOB_AMPLITUDE
         }
 
-        for (const cloud of cloudGroups) {
+        if (mainWorldActive) for (const cloud of cloudGroups) {
           cloud.node.position = rotateAroundAxis(cloud.basePos, Vector3.Up(), time * cloud.speed)
           // Pedido do usuário: "o mesmo vale pras nuvens quando cruzam a câmera" — a câmera em
           // terceira pessoa às vezes passa perto/dentro de um tufo de nuvem (mais provável perto
@@ -13363,6 +13385,7 @@ export function World3D({
         // cosmética deste laço (achado do review automático do Copilot no lab-206: animação
         // cosmética presa atrás de uma guarda de interação é o bug, não o padrão certo).
         for (const moon of orbitingMoons) {
+          if (drivingRocket || moon.planetId !== currentPlanetId) continue
           moon.mesh.position = moon.center.add(rotateAroundAxis(moon.basePos, moon.axis, time * moon.speed))
         }
 
@@ -13410,7 +13433,7 @@ export function World3D({
         // zona nunca reabre o modal sozinha duas vezes.
         if (pushObjectPuzzle) {
           pushObjectPuzzle.body.applyForce(pushObjectPuzzle.down.scale(-GRAVITY * pushObjectPuzzle.mass), pushObjectPuzzle.mesh.position)
-          const inTargetZone = Vector3.Distance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos) < 0.7
+          const inTargetZone = isWithinDistance(pushObjectPuzzle.mesh.position, pushObjectPuzzle.targetPos, 0.7)
           if (pushObjectPuzzle.done) {
             if (!inTargetZone) pushObjectPuzzle.done = false
           } else if (
@@ -13453,7 +13476,7 @@ export function World3D({
         // verdade. Corrigido: só reabilita quando o jogador NÃO está perto de nenhum dos 3 (mesmo
         // raio de coleta, 1,3) — precisa se afastar e voltar pra coletar de novo de verdade.
         if (scrollsDone && !hudInertRef.current) {
-          const nearAnyScroll = !!avatarMesh && scrollMarkers.some((s) => Vector3.Distance(avatarMesh!.position, s.worldPos) < 1.3)
+          const nearAnyScroll = !!avatarMesh && scrollMarkers.some((s) => isWithinDistance(avatarMesh!.position, s.worldPos, 1.3))
           if (!nearAnyScroll) {
             scrollsDone = false
             for (const s of scrollMarkers) {
@@ -13768,7 +13791,7 @@ export function World3D({
             // "atravessar um plano exato", que exigiria detectar a direção do cruzamento e não só a
             // distância.
             for (const ring of parkourRings) {
-              if (!ring.collected && Vector3.Distance(pos, ring.worldPos) < PARKOUR_TRIGGER_DISTANCE) {
+              if (!ring.collected && isWithinDistance(pos, ring.worldPos, PARKOUR_TRIGGER_DISTANCE)) {
                 ring.collected = true
                 ring.mesh.setEnabled(false)
                 parkourRingsCollectedCount++
@@ -13781,7 +13804,7 @@ export function World3D({
             }
 
             // Impulso — coleta única por corrida (some até a próxima entrada no mini-jogo).
-            if (!parkourBoostCollectedThisRun && Vector3.Distance(pos, parkourBoostPos) < PARKOUR_TRIGGER_DISTANCE) {
+            if (!parkourBoostCollectedThisRun && isWithinDistance(pos, parkourBoostPos, PARKOUR_TRIGGER_DISTANCE)) {
               parkourBoostCollectedThisRun = true
               parkourBoostMesh.setEnabled(false)
               parkourBoostActiveUntil = time + PARKOUR_BOOST_DURATION
@@ -13791,7 +13814,7 @@ export function World3D({
             // Checkpoint — a plataforma mais alta já pisada nesta corrida; nunca regride sozinho
             // (só reseta a 0 numa entrada nova, ver `teleportToMinigameRef.current`).
             for (let i = parkourCheckpointIndex + 1; i < parkourPlatformPositions.length; i++) {
-              if (Vector3.Distance(pos, parkourPlatformPositions[i]) < PARKOUR_TRIGGER_DISTANCE) {
+              if (isWithinDistance(pos, parkourPlatformPositions[i], PARKOUR_TRIGGER_DISTANCE)) {
                 parkourCheckpointIndex = i
               }
             }
@@ -13825,7 +13848,7 @@ export function World3D({
             // as argolas ou não; `App.tsx` decide se ESTA conclusão específica concede o troféu).
             if (!parkourTopReachedThisRun) {
               const topPos = parkourPlatformPositions[parkourPlatformPositions.length - 1]
-              if (Vector3.Distance(pos, topPos) < PARKOUR_TRIGGER_DISTANCE) {
+              if (isWithinDistance(pos, topPos, PARKOUR_TRIGGER_DISTANCE)) {
                 parkourTopReachedThisRun = true
                 const { newBadge } = onParkourCourseCompletedRef.current(
                   parkourRingsCollectedCount,
@@ -13873,7 +13896,7 @@ export function World3D({
           } else {
             Matrix.FromXYZAxesToRef(right, localUp, facing, tmpMatrix)
             Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-            studentFigure.root.rotationQuaternion = tmpQuat.clone()
+            copyRotationQuaternion(studentFigure.root, tmpQuat)
           }
           // Altura extra acima do "grudado no chão" quando o colisor físico sobe (pulo) —
           // sem isso o personagem visual ficava sempre preso na superfície e o pulo não aparecia.
@@ -14201,8 +14224,8 @@ export function World3D({
             const moved =
               !lastSentPos ||
               !lastSentFacing ||
-              Vector3.Distance(currentPos, lastSentPos) > NET_POSITION_EPSILON ||
-              Vector3.Distance(facing, lastSentFacing) > NET_FACING_EPSILON
+              distanceSquared(currentPos, lastSentPos) > NET_POSITION_EPSILON * NET_POSITION_EPSILON ||
+              distanceSquared(facing, lastSentFacing) > NET_FACING_EPSILON * NET_FACING_EPSILON
             const appearanceKey = [
               profileRef.current.equippedHatId,
               hasSwordRef.current,
@@ -14260,7 +14283,7 @@ export function World3D({
             const rRight = Vector3.Cross(rLocalUp, rp.targetFacing).normalize()
             Matrix.FromXYZAxesToRef(rRight, rLocalUp, rp.targetFacing, tmpMatrix)
             Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-            rp.figure.root.rotationQuaternion = tmpQuat.clone()
+            copyRotationQuaternion(rp.figure.root, tmpQuat)
 
             // Animação de andar (lab-55: "eles não mexem as pernas") — um jogador remoto não tem
             // throttle/input local, então a "velocidade" vem da distância percorrida neste quadro
@@ -14324,7 +14347,7 @@ export function World3D({
             // Marte" usado pra decidir a barra de vida (`onSecondPlanet`), mas por distância
             // direta até `SECOND_PLANET_CENTER`, já que o estado remoto só traz posição (sem
             // campo "planeta atual" — não precisa: a posição sozinha já resolve).
-            const remoteNearMars = Vector3.Distance(rp.figure.root.position, SECOND_PLANET_CENTER) < SECOND_PLANET_RADIUS + 3
+            const remoteNearMars = isWithinDistance(rp.figure.root.position, SECOND_PLANET_CENTER, SECOND_PLANET_RADIUS + 3)
             rp.ring.setEnabled(remoteNearMars)
             if (remoteNearMars) {
               const pingT = ((time + rp.ringPhaseOffset) % 1.2) / 1.2
@@ -14364,15 +14387,14 @@ export function World3D({
           // checa proximidade dos portais
           if (!suspendRef.current && !chatOpenRef.current) {
             for (const entry of portalMeshes) {
-              const idx = quests.findIndex((q) => q.id === entry.quest.id)
-              const unlocked = isQuestUnlocked(progressRef.current, idx)
+              const unlocked = isQuestUnlocked(progressRef.current, entry.questIndex)
               const completed = progressRef.current.completedQuestIds.includes(entry.quest.id)
               if (!unlocked || completed) continue
-              const d = Vector3.Distance(pos, entry.surfacePos)
-              if (d < TRIGGER_DISTANCE && !triggered.has(entry.quest.id)) {
+              const dSq = distanceSquared(pos, entry.surfacePos)
+              if (dSq < TRIGGER_DISTANCE * TRIGGER_DISTANCE && !triggered.has(entry.quest.id)) {
                 triggered.add(entry.quest.id)
                 onSelectQuestRef.current(entry.quest.id)
-              } else if (d > RESET_DISTANCE) {
+              } else if (dSq > RESET_DISTANCE * RESET_DISTANCE) {
                 triggered.delete(entry.quest.id)
               }
             }
@@ -14388,11 +14410,11 @@ export function World3D({
             // Limiar bem mais apertado (0,85 ≈ raio da cápsula do avatar + raio da esfera + uma
             // margem pequena de caminhada) pra exigir contato de verdade com o marcador.
             for (const marker of quizMarkers) {
-              const d = Vector3.Distance(pos, marker.worldPos)
-              if (d < QT_QUIZ_TRIGGER_DISTANCE && !triggered.has(marker.id)) {
+              const dSq = distanceSquared(pos, marker.worldPos)
+              if (dSq < QT_QUIZ_TRIGGER_DISTANCE * QT_QUIZ_TRIGGER_DISTANCE && !triggered.has(marker.id)) {
                 triggered.add(marker.id)
                 onSelectSurpriseQuizRef.current(marker.id)
-              } else if (d > RESET_DISTANCE) {
+              } else if (dSq > RESET_DISTANCE * RESET_DISTANCE) {
                 triggered.delete(marker.id)
               }
             }
@@ -14402,13 +14424,14 @@ export function World3D({
             // concluída (mesmo espírito de `portalMeshes`/`completed` acima) via
             // `completedPlanetQuestIds`, NUNCA `completedQuestIds`.
             for (const marker of planetQuestMarkers) {
+              if (marker.planetId !== currentPlanetId) continue
               if (progressRef.current.completedPlanetQuestIds.includes(marker.quest.id)) continue
-              const d = Vector3.Distance(pos, marker.worldPos)
+              const dSq = distanceSquared(pos, marker.worldPos)
               const triggerId = `planet-school-${marker.quest.id}`
-              if (d < PLANET_SCHOOL_TRIGGER_DISTANCE && !triggered.has(triggerId)) {
+              if (dSq < PLANET_SCHOOL_TRIGGER_DISTANCE * PLANET_SCHOOL_TRIGGER_DISTANCE && !triggered.has(triggerId)) {
                 triggered.add(triggerId)
                 onSelectPlanetQuestRef.current(marker.quest.id)
-              } else if (d > RESET_DISTANCE) {
+              } else if (dSq > RESET_DISTANCE * RESET_DISTANCE) {
                 triggered.delete(triggerId)
               }
             }
@@ -14420,9 +14443,10 @@ export function World3D({
             // independente de chat/suspensão, só o giro/fala (interação de verdade) fica atrás
             // desta guarda.
             for (const marker of planetQuestMarkers) {
-              const d = Vector3.Distance(pos, marker.worldPos)
+              if (marker.planetId !== currentPlanetId) continue
+              const dSq = distanceSquared(pos, marker.worldPos)
               const greetTriggerId = `planet-teacher-greet-${marker.quest.id}`
-              if (d < TEACHER_GREETING_TRIGGER_DISTANCE && !triggered.has(greetTriggerId)) {
+              if (dSq < TEACHER_GREETING_TRIGGER_DISTANCE * TEACHER_GREETING_TRIGGER_DISTANCE && !triggered.has(greetTriggerId)) {
                 triggered.add(greetTriggerId)
                 // Direção até o jogador no referencial LOCAL da escolinha (`base`) — evita
                 // qualquer conversão de quaternion mundo↔local: `teacher.root.rotationQuaternion`
@@ -14442,7 +14466,7 @@ export function World3D({
                   questTypeGreeting[marker.quest.type],
                   furnitureReactionTimeout,
                 )
-              } else if (d > RESET_DISTANCE && triggered.has(greetTriggerId)) {
+              } else if (dSq > RESET_DISTANCE * RESET_DISTANCE && triggered.has(greetTriggerId)) {
                 triggered.delete(greetTriggerId)
                 marker.teacher.root.rotationQuaternion = Quaternion.Identity()
               }
@@ -14455,11 +14479,11 @@ export function World3D({
             // o jogador chega, reforçando a hipótese do próprio item do backlog ("orientação
             // espacial": pousa, olha pro céu, associa o fato à lua visível orbitando).
             for (const marker of planetMoonFacts) {
-              const d = Vector3.Distance(pos, marker.worldPos)
-              if (d < MOON_FACT_TRIGGER_DISTANCE && !triggered.has(marker.id)) {
+              const dSq = distanceSquared(pos, marker.worldPos)
+              if (dSq < MOON_FACT_TRIGGER_DISTANCE * MOON_FACT_TRIGGER_DISTANCE && !triggered.has(marker.id)) {
                 triggered.add(marker.id)
                 furnitureReactionTimeout = showChatBubbleText(furnitureReactionLabel, marker.text, furnitureReactionTimeout)
-              } else if (d > RESET_DISTANCE && triggered.has(marker.id)) {
+              } else if (dSq > RESET_DISTANCE * RESET_DISTANCE && triggered.has(marker.id)) {
                 triggered.delete(marker.id)
               }
             }
@@ -14472,7 +14496,7 @@ export function World3D({
             // que foi achado numa sessão anterior).
             for (const chest of treasureChestMarkers) {
               if (!chest.pivot.isEnabled()) continue
-              if (Vector3.Distance(pos, chest.worldPos) < TREASURE_CHEST_TRIGGER_DISTANCE) {
+              if (isWithinDistance(pos, chest.worldPos, TREASURE_CHEST_TRIGGER_DISTANCE)) {
                 chest.pivot.setEnabled(false)
                 chest.label.isVisible = false
                 // Achado do review automático do Copilot (PR #94): sem isto, o material do fecho
@@ -14493,7 +14517,7 @@ export function World3D({
             // guarda).
             for (const secret of planetSecretMarkers) {
               if (!secret.pivot.isEnabled()) continue
-              if (Vector3.Distance(pos, secret.worldPos) < TREASURE_CHEST_TRIGGER_DISTANCE) {
+              if (isWithinDistance(pos, secret.worldPos, TREASURE_CHEST_TRIGGER_DISTANCE)) {
                 secret.pivot.setEnabled(false)
                 onFindPlanetSecretRef.current(secret.secretId)
                 playCoinCollect()
@@ -14509,8 +14533,8 @@ export function World3D({
             // `sittingAtDesk` só volta a `false` quando o jogador se afasta o bastante — o corpo
             // continua congelado mesmo depois de fechar o painel, até andar embora de verdade.
             {
-              const d = Vector3.Distance(pos, deskSurfacePos)
-              if (d < DESK_TRIGGER_DISTANCE && !triggered.has('carteira-estudos')) {
+              const dSq = distanceSquared(pos, deskSurfacePos)
+              if (dSq < DESK_TRIGGER_DISTANCE * DESK_TRIGGER_DISTANCE && !triggered.has('carteira-estudos')) {
                 triggered.add('carteira-estudos')
                 sittingAtDesk = true
                 studentFigure.legPivotL.rotation.x = -1.1
@@ -14522,7 +14546,7 @@ export function World3D({
                 studentFigure.elbowPivotL.rotation.x = 0.9
                 studentFigure.elbowPivotR.rotation.x = 0.9
                 onOpenAchievementsRef.current()
-              } else if (d > RESET_DISTANCE) {
+              } else if (dSq > RESET_DISTANCE * RESET_DISTANCE) {
                 triggered.delete('carteira-estudos')
                 sittingAtDesk = false
               }
@@ -14534,7 +14558,7 @@ export function World3D({
 
             for (const coin of coins) {
               if (coin.collected) continue
-              if (Vector3.Distance(pos, coin.worldPos) < 1.3) {
+              if (isWithinDistance(pos, coin.worldPos, 1.3)) {
                 coin.collected = true
                 coin.pivot.setEnabled(false)
                 onCollectCoinRef.current()
@@ -14547,7 +14571,7 @@ export function World3D({
             // destrava a pergunta ao completar as 3.
             for (const scroll of scrollMarkers) {
               if (scroll.collected) continue
-              if (Vector3.Distance(pos, scroll.worldPos) < 1.3) {
+              if (isWithinDistance(pos, scroll.worldPos, 1.3)) {
                 scroll.collected = true
                 scroll.mesh.setEnabled(false)
                 playCoinCollect()
@@ -14578,7 +14602,7 @@ export function World3D({
             // coletar o pote ANTES de revelado, só por passar perto de onde ele vai aparecer.
             // `marsCoinPotCollected` evita coletar de novo sem sair/voltar.
             if (marsCoinPotPivot && marsCoinPotPivot.isEnabled() && !marsCoinPotCollected) {
-              if (Vector3.Distance(pos, marsCoinPotWorldPos) < MARS_COIN_POT_TRIGGER_DISTANCE) {
+              if (isWithinDistance(pos, marsCoinPotWorldPos, MARS_COIN_POT_TRIGGER_DISTANCE)) {
                 marsCoinPotCollected = true
                 marsCoinPotPivot.setEnabled(false)
                 if (marsCoinPotLabelRef) marsCoinPotLabelRef.isVisible = false
@@ -14601,11 +14625,11 @@ export function World3D({
             // Loja: chegar perto do balcão abre o modal de lojinha já existente. Mesma
             // histerese gatilho/reset dos portais — evita reabrir o modal repetidamente
             // enquanto o jogador fica parado perto do balcão (só reseta ao se afastar).
-            const shopDist = Vector3.Distance(pos, shopCounterWorldPos)
-            if (shopDist < 1.4 && !shopTriggered) {
+            const shopDistSq = distanceSquared(pos, shopCounterWorldPos)
+            if (shopDistSq < 1.4 * 1.4 && !shopTriggered) {
               shopTriggered = true
               onOpenShopRef.current()
-            } else if (shopDist > 2.2) {
+            } else if (shopDistSq > 2.2 * 2.2) {
               shopTriggered = false
             }
           }
@@ -14619,11 +14643,14 @@ export function World3D({
 
         // Bichinhos de terra: IA de vagar (anda até um alvo aleatório na esfera, descansa,
         // escolhe outro) + pulinho enquanto anda (terrestres) ou voo com bater de asa (pássaro).
-        for (const c of critters) {
+        if (mainWorldActive) for (const c of critters) {
+          const nearPlayer = !!avatarMesh && isWithinDistance(c.root.position, avatarMesh.position, NEAR_AMBIENT_DISTANCE)
+          if (!nearPlayer && !shouldUpdateDistantAmbient) continue
+          const simulationDt = nearPlayer ? dt : distantAmbientDt
           const angleToTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(c.up, c.targetUp))))
           const moving = angleToTarget > 0.03
           if (!moving) {
-            c.restTimer -= dt
+            c.restTimer -= simulationDt
             if (c.restTimer <= 0) {
               // Alvo pertinho do ponto atual (raio pequeno no plano tangente), não em qualquer
               // lugar da faixa caminhável — um alvo totalmente aleatório fazia o bicho andar em
@@ -14644,7 +14671,7 @@ export function World3D({
             const axis = Vector3.Cross(c.up, c.targetUp)
             if (axis.lengthSquared() > 1e-8) {
               axis.normalize()
-              const step = Math.min(c.moveSpeed * dt, angleToTarget)
+              const step = Math.min(c.moveSpeed * simulationDt, angleToTarget)
               c.up = rotateAroundAxis(c.up, axis, step).normalize()
             }
           }
@@ -14669,27 +14696,27 @@ export function World3D({
             // bicho (não sincronizado entre eles) — só checa a distância quando o timer zera,
             // não todo quadro, e só toca se o jogador estiver mesmo perto nesse instante.
             if (avatarMesh) {
-              c.chirpTimer = (c.chirpTimer ?? 2 + Math.random() * 5) - dt
+              c.chirpTimer = (c.chirpTimer ?? 2 + Math.random() * 5) - simulationDt
               if (c.chirpTimer <= 0) {
                 c.chirpTimer = 3 + Math.random() * 5
-                if (Vector3.Distance(c.root.position, avatarMesh.position) < BIRD_CHIRP_RADIUS) {
+                if (isWithinDistance(c.root.position, avatarMesh.position, BIRD_CHIRP_RADIUS)) {
                   if (c.kind === 'passarinho') playBirdChirp()
                   else playFalconScreech()
                 }
               }
             }
           } else {
-            c.hopPhase += dt * c.hopSpeed * (moving ? 1 : 0.15)
+            c.hopPhase += simulationDt * c.hopSpeed * (moving ? 1 : 0.15)
             const hop = Math.max(0, Math.sin(c.hopPhase)) * 0.05
             c.root.position.copyFrom(groundPos.add(c.up.scale(hop)))
 
             // Latido/rosnado (cachorro/onça) quando o jogador está perto — mesmo mecanismo do
             // pássaro/falcão acima, timer independente.
             if (avatarMesh && (c.kind === 'cachorro' || c.kind === 'onca')) {
-              c.soundTimer = (c.soundTimer ?? 3 + Math.random() * 5) - dt
+              c.soundTimer = (c.soundTimer ?? 3 + Math.random() * 5) - simulationDt
               if (c.soundTimer <= 0) {
                 c.soundTimer = 4 + Math.random() * 6
-                if (Vector3.Distance(c.root.position, avatarMesh.position) < BIRD_CHIRP_RADIUS) {
+                if (isWithinDistance(c.root.position, avatarMesh.position, BIRD_CHIRP_RADIUS)) {
                   if (c.kind === 'cachorro') playDogBark()
                   else playJaguarGrowl()
                 }
@@ -14701,10 +14728,10 @@ export function World3D({
           // bicho, de vez em quando, quando o jogador está perto. Intervalo bem mais longo que
           // os sons de espécie acima (é um extra raro/cômico, não o som "normal" do bicho).
           if (avatarMesh) {
-            c.funnyTimer = (c.funnyTimer ?? 10 + Math.random() * 20) - dt
+            c.funnyTimer = (c.funnyTimer ?? 10 + Math.random() * 20) - simulationDt
             if (c.funnyTimer <= 0) {
               c.funnyTimer = 20 + Math.random() * 25
-              if (Vector3.Distance(c.root.position, avatarMesh.position) < BIRD_CHIRP_RADIUS) {
+              if (isWithinDistance(c.root.position, avatarMesh.position, BIRD_CHIRP_RADIUS)) {
                 if (Math.random() < 0.5) playFunnyTalk()
                 else playFart()
               }
@@ -14715,7 +14742,7 @@ export function World3D({
           // diferente dos sons acima) porque só dispara UMA vez por espécie no total, não é
           // repetitivo o bastante pra precisar economizar checagens.
           if (avatarMesh && !metSpecies.has(c.kind)) {
-            if (Vector3.Distance(c.root.position, avatarMesh.position) < FRIEND_RADIUS) {
+            if (isWithinDistance(c.root.position, avatarMesh.position, FRIEND_RADIUS)) {
               metSpecies.add(c.kind)
               playCoinCollect()
               onCollectCoinRef.current()
@@ -14725,7 +14752,7 @@ export function World3D({
           const right = Vector3.Cross(c.up, fwd).normalize()
           Matrix.FromXYZAxesToRef(right, c.up, fwd, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-          c.root.rotationQuaternion = tmpQuat.clone()
+          copyRotationQuaternion(c.root, tmpQuat)
         }
 
         // Anel de onda sonora (lab-62) — só visível/animado em Marte, pulsando continuamente
@@ -14782,7 +14809,7 @@ export function World3D({
             swordPickup.root.rotationQuaternion = alignmentQuaternion(SWORD_LOCATION_DIR).multiply(
               Quaternion.RotationAxis(Vector3.Up(), time * 1.2),
             )
-            if (Vector3.Distance(avatarMesh.position, swordPickup.root.position) < WEAPON_PICKUP_RADIUS) {
+            if (isWithinDistance(avatarMesh.position, swordPickup.root.position, WEAPON_PICKUP_RADIUS)) {
               hasSwordRef.current = true
               swordPickup.root.setEnabled(false)
               swordPickup.label.alpha = 0
@@ -14800,7 +14827,7 @@ export function World3D({
             gunPickup.root.rotationQuaternion = alignmentQuaternion(GUN_LOCATION_DIR).multiply(
               Quaternion.RotationAxis(Vector3.Up(), time * 1.2),
             )
-            if (Vector3.Distance(avatarMesh.position, gunPickup.root.position) < WEAPON_PICKUP_RADIUS) {
+            if (isWithinDistance(avatarMesh.position, gunPickup.root.position, WEAPON_PICKUP_RADIUS)) {
               hasGunRef.current = true
               gunPickup.root.setEnabled(false)
               gunPickup.label.alpha = 0
@@ -14902,7 +14929,7 @@ export function World3D({
             const enemyRight = Vector3.Cross(enemy.up, enemyFwd).normalize()
             Matrix.FromXYZAxesToRef(enemyRight, enemy.up, enemyFwd, tmpMatrix)
             Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-            enemy.root.rotationQuaternion = tmpQuat.clone()
+            copyRotationQuaternion(enemy.root, tmpQuat)
 
             // "Solavanco" visual ao atacar (lab-62, pedido do usuário: "mostrar uma animação...
             // não só de soco") — pulso de escala rápido (ET/robô não têm braço articulado pra
@@ -14947,7 +14974,7 @@ export function World3D({
 
         // Gatos no topo dos platôs/telhados: parados, só um giro lento de "olhando ao redor" —
         // não usam a IA de vagar (ver comentário onde são criados).
-        for (const cat of perchedCats) {
+        if (mainWorldActive) for (const cat of perchedCats) {
           const lookAngle = Math.sin(time * 0.3 + cat.phase) * 0.6
           cat.root.rotationQuaternion = alignmentQuaternion(cat.up).multiply(
             Quaternion.RotationAxis(Vector3.Up(), lookAngle),
@@ -14957,11 +14984,14 @@ export function World3D({
         // Pessoas civis: mesma IA de vagar dos bichos de terra (anda até um alvo perto, descansa,
         // escolhe outro), mas com o ciclo de caminhada completo (pernas/joelhos/braços) igual ao
         // personagem jogável, e bolha de fala só durante as pausas.
-        for (const npc of walkerNpcs) {
+        if (mainWorldActive) for (const npc of walkerNpcs) {
+          const nearPlayer = !!avatarMesh && isWithinDistance(npc.figure.root.position, avatarMesh.position, NEAR_AMBIENT_DISTANCE)
+          if (!nearPlayer && !shouldUpdateDistantAmbient) continue
+          const simulationDt = nearPlayer ? dt : distantAmbientDt
           const angleToTarget = Math.acos(Math.max(-1, Math.min(1, Vector3.Dot(npc.up, npc.targetUp))))
           const moving = angleToTarget > 0.03
           if (!moving) {
-            npc.restTimer -= dt
+            npc.restTimer -= simulationDt
             if (npc.restTimer <= 0) {
               const seed = Math.abs(npc.up.y) < 0.9 ? Vector3.Up() : Vector3.Right()
               const tangentA = Vector3.Cross(npc.up, seed).normalize()
@@ -14978,7 +15008,7 @@ export function World3D({
             const axis = Vector3.Cross(npc.up, npc.targetUp)
             if (axis.lengthSquared() > 1e-8) {
               axis.normalize()
-              const step = Math.min(npc.moveSpeed * dt, angleToTarget)
+              const step = Math.min(npc.moveSpeed * simulationDt, angleToTarget)
               npc.up = rotateAroundAxis(npc.up, axis, step).normalize()
             }
           }
@@ -14995,7 +15025,7 @@ export function World3D({
           const npcRight = Vector3.Cross(npc.up, npcFwd).normalize()
           Matrix.FromXYZAxesToRef(npcRight, npc.up, npcFwd, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-          npc.figure.root.rotationQuaternion = tmpQuat.clone()
+          copyRotationQuaternion(npc.figure.root, tmpQuat)
           // Colisor ANIMATED: `setTargetTransform` (não escrever a posição do transform direto)
           // é o jeito certo do Havok pra mover um corpo cinemático — assim ele calcula a
           // velocidade implícita do movimento e consegue empurrar o avatar corretamente em vez
@@ -15003,11 +15033,11 @@ export function World3D({
           // altura da cápsula) igual na criação — a raiz visual (+0.02) fica só nos pés.
           npc.colliderBody.setTargetTransform(
             npc.up.scale(PLANET_RADIUS + terrainHeight(npc.up) + 0.55),
-            npc.figure.root.rotationQuaternion,
+            npc.figure.root.rotationQuaternion!,
           )
 
           if (moving) {
-            npc.walkPhase += dt * NPC_WALK_CYCLE_SPEED
+            npc.walkPhase += simulationDt * NPC_WALK_CYCLE_SPEED
             const swing = Math.sin(npc.walkPhase) * LEG_SWING_MAX
             npc.figure.legPivotL.rotation.x = swing
             npc.figure.legPivotR.rotation.x = -swing
@@ -15032,7 +15062,7 @@ export function World3D({
 
           // Bolha de fala só durante as pausas (parece bater papo antes de seguir andando) —
           // some assim que volta a andar.
-          npc.chatTimer -= dt
+          npc.chatTimer -= simulationDt
           if (!moving && npc.chatTimer <= 0) {
             if (npc.chatLabel.alpha > 0) {
               npc.chatLabel.alpha = 0
@@ -15050,7 +15080,7 @@ export function World3D({
         // Carros de IA: dão voltas contínuas na rua (laço fechado, lab-25) — `pathIndex` sobe
         // sempre na mesma direção, envolvendo (`%`, dentro de `positionOnLoopPath`) em vez de
         // ricochetear numa ponta que não existe mais.
-        for (const car of carros) {
+        if (mainWorldActive) for (const car of carros) {
           if (car === drivingCar) continue // o jogador está no controle deste, não a IA
           car.pathIndex += car.direction * car.speed * dt
           positionOnLoopPath(streetCenter, car.pathIndex, car.direction, car.root, 0.08, tmpMatrix, tmpQuat)
@@ -15264,18 +15294,21 @@ export function World3D({
           if (drivingRocket.progress >= 1 || drivingRocket.progress <= 0) landRocket()
         }
 
+        // Labels de proximidade nao afetam fisica nem gatilhos. Atualiza-las a 10 Hz corta
+        // dezenas de comparacoes e escritas no Babylon GUI por quadro sem atraso perceptivel.
+        if (shouldUpdateProximityUi) {
         // Dica "pressione E" da casa (lab-123) — mesmo padrão do carro/foguete abaixo. Só uma das
         // duas fica visível por vez: a de entrar (fora, perto da fachada) ou a de sair (dentro,
         // perto da porta) — nunca as duas juntas.
         if (avatarMesh && houseEnterHintLabel) {
           houseEnterHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, houseSurfacePos) < HOUSE_TRIGGER_DISTANCE
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, houseSurfacePos, HOUSE_TRIGGER_DISTANCE)
               ? 1
               : 0
         }
         if (avatarMesh && houseExitHintLabel) {
           houseExitHintLabel.alpha =
-            insideHouseInterior && Vector3.Distance(avatarMesh.position, houseDoorInsidePos) < HOUSE_TRIGGER_DISTANCE
+            insideHouseInterior && isWithinDistance(avatarMesh.position, houseDoorInsidePos, HOUSE_TRIGGER_DISTANCE)
               ? 1
               : 0
         }
@@ -15286,7 +15319,7 @@ export function World3D({
         // de terminar sem parceiro.
         if (avatarMesh && coopEnterHintLabel) {
           const nearLandmark =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, coopSurfacePos) < COOP_CHALLENGE_TRIGGER_DISTANCE
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, coopSurfacePos, COOP_CHALLENGE_TRIGGER_DISTANCE)
           coopEnterHintLabel.alpha =
             nearLandmark && nearestRemotePlayerWithin(avatarMesh.position, COOP_PARTNER_NEARBY_DISTANCE) !== null ? 1 : 0
         }
@@ -15295,17 +15328,17 @@ export function World3D({
         // landmark, sem depender de outro jogador (diferente do desafio em dupla acima).
         if (avatarMesh && bridgeEnterHintLabel) {
           bridgeEnterHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, bridgeSurfacePos, ENV_CHALLENGE_TRIGGER_DISTANCE) ? 1 : 0
         }
         if (avatarMesh && rocketFuelEnterHintLabel) {
           rocketFuelEnterHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, rocketFuelSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, rocketFuelSurfacePos, ENV_CHALLENGE_TRIGGER_DISTANCE)
               ? 1
               : 0
         }
         if (avatarMesh && plaqueEnterHintLabel) {
           plaqueEnterHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, plaqueSurfacePos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, plaqueSurfacePos, ENV_CHALLENGE_TRIGGER_DISTANCE) ? 1 : 0
         }
 
         // Backlog "Lab 200" — só o hint do pedestal do circuito ESPERADO A SEGUIR acende (ver
@@ -15314,7 +15347,7 @@ export function World3D({
           for (let i = 0; i < circuitPedestals.length; i++) {
             const ped = circuitPedestals[i]
             ped.hintLabel.alpha =
-              !insideHouseInterior && i === circuitNextIndex && Vector3.Distance(avatarMesh.position, ped.worldPos) < ENV_CHALLENGE_TRIGGER_DISTANCE
+              !insideHouseInterior && i === circuitNextIndex && isWithinDistance(avatarMesh.position, ped.worldPos, ENV_CHALLENGE_TRIGGER_DISTANCE)
                 ? 1
                 : 0
           }
@@ -15324,32 +15357,32 @@ export function World3D({
         // ambientais acima, 4 pontos independentes (2 pedestais de entrada + 2 de retorno).
         if (avatarMesh && hubParkourHintLabel) {
           hubParkourHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, hubParkourPedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, hubParkourPedestalPos, ENV_CHALLENGE_TRIGGER_DISTANCE) ? 1 : 0
         }
         if (avatarMesh && hubBridgeHintLabel) {
           hubBridgeHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, hubBridgePedestalPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, hubBridgePedestalPos, ENV_CHALLENGE_TRIGGER_DISTANCE) ? 1 : 0
         }
         if (avatarMesh && parkourReturnHintLabel) {
           parkourReturnHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, parkourReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, parkourReturnPos, ENV_CHALLENGE_TRIGGER_DISTANCE) ? 1 : 0
         }
         if (avatarMesh && bridgeReturnHintLabel) {
           bridgeReturnHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE ? 1 : 0
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, bridgeReturnPos, ENV_CHALLENGE_TRIGGER_DISTANCE) ? 1 : 0
         }
 
         // Dicas "pressione E" do centro de jogos (backlog "Lab 212") — mesmo padrão da casa acima:
         // só uma das duas portas fica visível por vez (fora/dentro), mais 1 dica por placa.
         if (avatarMesh && gameCenterEnterHintLabel) {
           gameCenterEnterHintLabel.alpha =
-            !insideHouseInterior && Vector3.Distance(avatarMesh.position, gameCenterDoorOutsidePos) < GAME_CENTER_TRIGGER_DISTANCE
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, gameCenterDoorOutsidePos, GAME_CENTER_TRIGGER_DISTANCE)
               ? 1
               : 0
         }
         if (avatarMesh && gameCenterExitHintLabel) {
           gameCenterExitHintLabel.alpha =
-            insideGameCenterInterior && Vector3.Distance(avatarMesh.position, gameCenterDoorInsidePos) < GAME_CENTER_TRIGGER_DISTANCE
+            insideGameCenterInterior && isWithinDistance(avatarMesh.position, gameCenterDoorInsidePos, GAME_CENTER_TRIGGER_DISTANCE)
               ? 1
               : 0
         }
@@ -15357,7 +15390,7 @@ export function World3D({
           const label = gameCenterPortalHintLabel[id]
           if (avatarMesh && label) {
             label.alpha =
-              insideGameCenterInterior && Vector3.Distance(avatarMesh.position, gameCenterPortalPos[id]) < GAME_CENTER_TRIGGER_DISTANCE
+              insideGameCenterInterior && isWithinDistance(avatarMesh.position, gameCenterPortalPos[id], GAME_CENTER_TRIGGER_DISTANCE)
                 ? 1
                 : 0
           }
@@ -15376,7 +15409,7 @@ export function World3D({
           const targetMeshes = arenaTargetMeshes[activeArenaId] ?? []
           for (let i = 0; i < targetPositions.length; i++) {
             const active = targetMeshes[i]?.isEnabled() ?? true
-            hintLabels[i].alpha = active && Vector3.Distance(avatarMesh.position, targetPositions[i]) < ARENA_TARGET_TRIGGER_DISTANCE ? 1 : 0
+            hintLabels[i].alpha = active && isWithinDistance(avatarMesh.position, targetPositions[i], ARENA_TARGET_TRIGGER_DISTANCE) ? 1 : 0
           }
         } else {
           // Achado do review do Copilot: uma lista fixa de arrays aqui (uma por arena) quebra a
@@ -15398,7 +15431,7 @@ export function World3D({
         // `beginArenaCountdown` mexiam nesse `alpha`).
         if (avatarMesh && activeArenaId) {
           const config = arenaConfigs[activeArenaId]
-          const nearArena = Vector3.Distance(avatarMesh.position, gameCenterPortalPos[activeArenaId]) < 3
+          const nearArena = isWithinDistance(avatarMesh.position, gameCenterPortalPos[activeArenaId], 3)
           if (config?.statusLabel) config.statusLabel.alpha = arenaPhase !== 'idle' && nearArena ? 1 : 0
         }
 
@@ -15408,8 +15441,7 @@ export function World3D({
         // só existe dentro do bloco `if (avatarBody && avatarMesh)` acima, já fechado aqui).
         if (!drivingCar && avatarMesh) {
           for (const car of carros) {
-            const d = Vector3.Distance(avatarMesh.position, car.root.position)
-            car.hintLabel.alpha = d < CAR_ENTER_DISTANCE ? 1 : 0
+            car.hintLabel.alpha = isWithinDistance(avatarMesh.position, car.root.position, CAR_ENTER_DISTANCE) ? 1 : 0
           }
         } else {
           for (const car of carros) car.hintLabel.alpha = 0
@@ -15427,17 +15459,21 @@ export function World3D({
           if (activeRocket) {
             // `getAbsolutePosition()` — mesmo motivo do outro ponto de checagem em
             // `handleInteractPress` (o foguete de volta é filho da raiz do planeta).
-            const d = Vector3.Distance(avatarMesh.position, activeRocket.root.getAbsolutePosition())
-            activeRocket.hintLabel.alpha = d < ROCKET_ENTER_DISTANCE ? 1 : 0
+            activeRocket.hintLabel.alpha = isWithinDistance(
+              avatarMesh.position,
+              activeRocket.root.getAbsolutePosition(),
+              ROCKET_ENTER_DISTANCE,
+            ) ? 1 : 0
           }
         } else if (drivingRocket) {
           if (mainRocket) mainRocket.hintLabel.alpha = 0
           for (const r of returnRockets.values()) r.hintLabel.alpha = 0
         }
+        }
 
         // Bichos da lagoa: cada um percorre um círculo no plano local da lagoa (raio/velocidade/
         // fase próprios), orientados pra frente da direção de nado.
-        for (const pc of pondCritters) {
+        if (mainWorldActive) for (const pc of pondCritters) {
           const t = time * pc.speed + pc.angleOffset
           const localX = Math.cos(t) * pc.radius
           const localZ = Math.sin(t) * pc.radius
@@ -15454,12 +15490,12 @@ export function World3D({
           const right = Vector3.Cross(pondUp, fwd).normalize()
           Matrix.FromXYZAxesToRef(right, pondUp, fwd, tmpMatrix)
           Quaternion.FromRotationMatrixToRef(tmpMatrix, tmpQuat)
-          pc.root.rotationQuaternion = tmpQuat.clone()
+          copyRotationQuaternion(pc.root, tmpQuat)
         }
 
         // Gente na piscina: parada (sem ciclo de caminhada), só um balancinho vertical de
         // "boiando" — cada um com fase própria pra não subir/descer em sincronia.
-        for (const pp of poolPeople) {
+        if (mainWorldActive) for (const pp of poolPeople) {
           const bob = Math.sin(time * 1.6 + pp.phase) * 0.05
           // Deriva devagar em círculo dentro da piscina, em vez de ficar plantado no mesmo
           // ponto — "se mexer" sem precisar de física de água de verdade.
@@ -15511,12 +15547,11 @@ export function World3D({
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
         // gira — só o brilho pulsa, pra chamar atenção sem parecer um objeto mágico solto).
-        for (const entry of portalMeshes) {
-          const idx = quests.findIndex((q) => q.id === entry.quest.id)
-          const unlocked = isQuestUnlocked(progressRef.current, idx)
+        if (mainWorldActive) for (const entry of portalMeshes) {
+          const unlocked = isQuestUnlocked(progressRef.current, entry.questIndex)
           const completed = progressRef.current.completedQuestIds.includes(entry.quest.id)
           if (unlocked && !completed) {
-            const pulse = 0.4 + Math.sin(time * 2 + idx) * 0.18
+            const pulse = 0.4 + Math.sin(time * 2 + entry.questIndex) * 0.18
             const color = questTypeColor[entry.quest.type]
             ;(entry.roof.material as PBRMaterial).emissiveColor = color.scale(pulse)
           }
