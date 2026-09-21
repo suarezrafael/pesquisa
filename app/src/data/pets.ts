@@ -2,10 +2,8 @@
 // padrão de `hats.ts`/`avatars.ts`. Item de maior alavancagem de engajamento encontrado na
 // pesquisa de mercado desta sessão (relatório "Carta de Navegação") — o core loop do Adopt Me!:
 // adotar, cuidar, ver crescer. `species` só descreve QUAL bicho — quem monta a geometria 3D de
-// verdade é `world3d/petFigure.ts` (`buildGato`/`buildCachorro`, já existentes desde os labs de
-// bichos do planeta, reaproveitados sem geometria nova — extraídas de `World3D.tsx` pra também
-// servir o preview da lojinha, `PetPreview3D.tsx`), conforme docs/prompts/03-arquitetura-sistema.md
-// §1.
+// verdade é `world3d/petFigure.ts` (`buildPetFigure`, compartilhado entre o mundo e o preview da
+// lojinha), conforme docs/prompts/03-arquitetura-sistema.md §1.
 export type PetSpecies = 'gato' | 'cachorro' | 'coelho' | 'tartaruga'
 
 export interface PetOption {
@@ -92,9 +90,8 @@ export function findPetById(id: string): PetOption | undefined {
 // altura do avatar — bem menor do que o "companheiro visível" que o backlog pede. Multiplicador
 // aplicado POR CIMA da escala relativa de estágio já existente (`petStageScale`, que continua
 // intocada — filhote/jovem seguem proporcionalmente menores que o adulto da mesma espécie). Cada
-// espécie tem seu próprio limite porque a malha de base (`buildGato`/`buildCachorro`) já tem
-// proporções diferentes entre si — um multiplicador único deixaria uma das duas espécies grande
-// demais ou pequena demais em relação à outra.
+// espécie tem seu próprio limite porque as malhas de base têm proporções diferentes entre si — um
+// multiplicador único deixaria algumas espécies grandes ou pequenas demais em relação às outras.
 export const PET_SPECIES_SCALE_MULTIPLIER: Record<PetSpecies, number> = {
   gato: 1.6,
   cachorro: 1.8,

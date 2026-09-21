@@ -242,10 +242,26 @@ interface PetAccessoryFit {
 }
 
 const PET_ACCESSORY_FIT: Record<PetSpecies, PetAccessoryFit> = {
-  gato: { neckY: 0.16, neckZ: 0.105, faceY: 0.19, faceZ: 0.225, collarDiameter: 0.18, capeWidth: 0.2, capeDepth: 0.26, capeY: 0.25, capeZ: -0.07, maskWidth: 0.145, maskHeight: 0.055 },
-  cachorro: { neckY: 0.2, neckZ: 0.14, faceY: 0.205, faceZ: 0.305, collarDiameter: 0.23, capeWidth: 0.26, capeDepth: 0.32, capeY: 0.29, capeZ: -0.085, maskWidth: 0.17, maskHeight: 0.055 },
-  coelho: { neckY: 0.22, neckZ: 0.125, faceY: 0.235, faceZ: 0.29, collarDiameter: 0.2, capeWidth: 0.22, capeDepth: 0.28, capeY: 0.29, capeZ: -0.07, maskWidth: 0.16, maskHeight: 0.052 },
-  tartaruga: { neckY: 0.14, neckZ: 0.2, faceY: 0.15, faceZ: 0.315, collarDiameter: 0.16, capeWidth: 0.3, capeDepth: 0.32, capeY: 0.28, capeZ: -0.04, maskWidth: 0.135, maskHeight: 0.048 },
+  gato: {
+    neckY: 0.16, neckZ: 0.105, faceY: 0.19, faceZ: 0.225,
+    collarDiameter: 0.18, capeWidth: 0.2, capeDepth: 0.26, capeY: 0.25, capeZ: -0.07,
+    maskWidth: 0.145, maskHeight: 0.055,
+  },
+  cachorro: {
+    neckY: 0.2, neckZ: 0.14, faceY: 0.205, faceZ: 0.305,
+    collarDiameter: 0.23, capeWidth: 0.26, capeDepth: 0.32, capeY: 0.29, capeZ: -0.085,
+    maskWidth: 0.17, maskHeight: 0.055,
+  },
+  coelho: {
+    neckY: 0.22, neckZ: 0.125, faceY: 0.235, faceZ: 0.29,
+    collarDiameter: 0.2, capeWidth: 0.22, capeDepth: 0.28, capeY: 0.29, capeZ: -0.07,
+    maskWidth: 0.16, maskHeight: 0.052,
+  },
+  tartaruga: {
+    neckY: 0.14, neckZ: 0.2, faceY: 0.15, faceZ: 0.315,
+    collarDiameter: 0.16, capeWidth: 0.3, capeDepth: 0.32, capeY: 0.28, capeZ: -0.04,
+    maskWidth: 0.135, maskHeight: 0.048,
+  },
 }
 
 // Os acessorios usam no maximo uma malha simples por encaixe. Como sao filhos do mesmo `root`,
@@ -315,7 +331,7 @@ export function applyPetAccessories(
   }
 }
 
-// `buildGato`/`buildCachorro` registram toda malha filha no `ShadowGenerator` via
+// Todos os construtores de pet registram cada malha filha no `ShadowGenerator` via
 // `addShadowCaster` — `root.dispose(false, true)` sozinho libera material/textura recursivamente,
 // mas NUNCA remove essas malhas da `renderList` do gerador (mesmo achado do lab-176 pro boneco,
 // `disposeStudentFigure`). Quem reconstrói o pet repetidamente no mesmo `ShadowGenerator` (o
