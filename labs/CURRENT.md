@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-216-pet-cosmeticos/ — primeira fatia vertical do backlog 206: catalogo de
+acessorios conquistaveis para pets, compra com moedas do jogo, equipar por encaixe, preview 3D e
+renderizacao no companheiro do mundo. Sem assinatura, dinheiro real ou efeito de gameplay. Ver
+`FEATURES.md` da pasta.
+
+Antes desse:
+
 Último concluído: labs/lab-215-feedback-puzzle/ — fecha a última peça do backlog "Lab 198 - Efeitos
 visuais de recompensa, movimento e interação" com feedback imediato para Memória/Padrões, Contar
 e Soletrar no Centro de Jogos. Uma única malha de anel é reutilizada nos estados de acerto,
