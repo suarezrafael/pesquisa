@@ -4,8 +4,13 @@
 // (`.avatar-shop-grid`/`.avatar-shop-item`/`.avatar-shop-emoji`/`.avatar-shop-action`) — mesmo
 // espírito de qualquer outro catálogo comprável com moeda, só com um eixo de "equipar" a mais
 // (só UM pet segue o jogador pelo mundo por vez, mesmo padrão de chapéu/óculos).
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { findPetById, PET_CATALOG } from '../data/pets'
+import {
+  findPetAccessoryById,
+  PET_ACCESSORY_CATALOG,
+  type PetAccessorySlot,
+} from '../data/petAccessories'
 import { quests } from '../data/quests'
 import { petAgeYears, petLifecycleStage, petStageFor, utcDayNumber, type PetStage } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
@@ -21,6 +26,8 @@ interface PetPanelProps {
   progress: Progress
   onAdopt: (id: string) => void
   onEquip: (id: string) => void
+  onUnlockAccessory: (id: string) => void
+  onEquipAccessory: (slot: PetAccessorySlot, id: string | null) => void
   onFeed: () => void
   // lab-174 (achado do review automático do Copilot no PR #48): devolve se a recompensa foi
   // REALMENTE concedida (`applyPetDailyChallengeCompleted.rewarded`) — sem isso, a UI só sabia se
@@ -60,8 +67,20 @@ function pickRandomQuest(): Quest {
   return quests[Math.floor(Math.random() * quests.length)]
 }
 
-export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrect, onClose }: PetPanelProps) {
+export function PetPanel({
+  progress,
+  onAdopt,
+  onEquip,
+  onUnlockAccessory,
+  onEquipAccessory,
+  onFeed,
+  onChallengeCorrect,
+  onClose,
+}: PetPanelProps) {
   const modalRef = useModalA11y(onClose)
+  const [tab, setTab] = useState<'companheiros' | 'acessorios'>('companheiros')
+  const [previewPetId, setPreviewPetId] = useState(progress.equippedPetId ?? PET_CATALOG[0].id)
+  const [previewAccessoryId, setPreviewAccessoryId] = useState<string | null>(null)
   // lab-169 — um só "agora" pra todo o painel (a idade muda no máximo 1x por dia real, não
   // precisa recalcular por pet nem se preocupar com o milissegundo exato do render).
   const nowIso = new Date().toISOString()
@@ -73,13 +92,25 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
   // fluxo normal, mas `Progress` salvo é só validado em formato, não em conteúdo,
   // `state/storage.ts`) cai no mesmo placeholder de "nenhum pet equipado", em vez de montar
   // `PetPreview3D` só pra ele desistir de construir a malha e deixar um canvas vazio.
-  const equippedPet = progress.equippedPetId ? findPetById(progress.equippedPetId) : undefined
-  const equippedStage = equippedPet
-    ? petLifecycleStage(
-        petStageFor(progress.petCareCounts[equippedPet.id] ?? 0),
-        petAgeYears(progress, equippedPet.id, nowIso),
-      )
-    : null
+  const previewPet = findPetById(previewPetId) ?? PET_CATALOG[0]
+  const previewStage = petLifecycleStage(
+    petStageFor(progress.petCareCounts[previewPet.id] ?? 0),
+    petAgeYears(progress, previewPet.id, nowIso),
+  )
+  const previewAccessoryIds = useMemo(() => {
+    const selected = previewAccessoryId ? findPetAccessoryById(previewAccessoryId) : undefined
+    const equipped = Object.entries(progress.equippedPetAccessoryIds)
+      .map(([slot, id]) => {
+        if (!id || !progress.unlockedPetAccessoryIds.includes(id)) return null
+        const item = findPetAccessoryById(id)
+        return item?.slot === slot ? item : null
+      })
+      .filter((item) => item !== null)
+    return [
+      ...equipped.filter((item) => !selected || item.slot !== selected.slot).map((item) => item.id),
+      ...(selected ? [selected.id] : []),
+    ]
+  }, [previewAccessoryId, progress.equippedPetAccessoryIds, progress.unlockedPetAccessoryIds])
   // lab-174 (desafio educativo leve, docs/market-metrics-engagement-backlog.md item 6 da ordem
   // sugerida) — sorteado uma vez por abertura do painel, do mesmo banco de `data/quests.ts` já
   // usado pelo desafio cooperativo (lab-172), sem catálogo novo. Responder errado nunca bloqueia
@@ -108,10 +139,12 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Pets" ref={modalRef} tabIndex={-1}>
-      <div className="modal quest-list-modal">
-        <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
-          ×
-        </button>
+      <div className="modal quest-list-modal pet-panel-modal">
+        <div className="avatar-shop-close-anchor">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">
+            ×
+          </button>
+        </div>
         <h2>🐾 Pets</h2>
         <p className="subtitle">
           Adote um companheiro com as moedas que você já ganhou nas missões. Alimente uma vez por
@@ -119,25 +152,38 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
           ele também fica um adulto idoso — mas continua com você pra sempre.
         </p>
 
-        {/* Preview 3D do pet EQUIPADO — mesmo espírito do preview de avatar em `AvatarShop.tsx`
-            (lab-87), fechando o critério de aceite "preview claro" do backlog de pets premium.
-            Sem pet equipado ainda (ou com um id inválido persistido), mostra um placeholder claro
-            em vez de um preview vazio. */}
-        <div className="pet-preview-3d-wrap">
-          {equippedPet && equippedStage ? (
+        <div className="pet-panel-sticky-header">
+          <div className="pet-preview-3d-wrap">
             <Suspense fallback={<div className="pet-preview-3d-canvas pet-preview-3d-loading" />}>
-              <PetPreview3D petId={equippedPet.id} stage={equippedStage} />
+              <PetPreview3D petId={previewPet.id} stage={previewStage} accessoryIds={previewAccessoryIds} />
             </Suspense>
-          ) : (
-            // `role="img"` + `aria-label` — sem isso, quem usa leitor de tela não tinha NENHUMA
-            // pista de que este espaço representa "nenhum pet equipado" (só a pata emoji, visual).
-            <div className="pet-preview-3d-canvas pet-preview-3d-empty" role="img" aria-label="Nenhum pet equipado ainda">
-              <span aria-hidden="true">🐾</span>
+          </div>
+          <div className="hub-coins avatar-shop-balance">🪙 {progress.coins}</div>
+          <div className="avatar-shop-tabs-wrap">
+            <div className="avatar-shop-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'companheiros'}
+                className={`avatar-shop-tab ${tab === 'companheiros' ? 'active' : ''}`}
+                onClick={() => setTab('companheiros')}
+              >
+                🐾 Companheiros
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'acessorios'}
+                className={`avatar-shop-tab ${tab === 'acessorios' ? 'active' : ''}`}
+                onClick={() => setTab('acessorios')}
+              >
+                🎭 Acessorios
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
-        <div className="avatar-shop-grid">
+        {tab === 'companheiros' && <div className="avatar-shop-grid">
           {PET_CATALOG.map((pet) => {
             const owned = progress.unlockedPetIds.includes(pet.id)
             const equipped = progress.equippedPetId === pet.id
@@ -150,6 +196,11 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
               <div key={pet.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''}`}>
                 <span className="avatar-shop-emoji">{pet.emoji}</span>
                 <span className="avatar-shop-name">{pet.name}</span>
+                {previewPet.id !== pet.id && (
+                  <button type="button" className="avatar-shop-action secondary" onClick={() => setPreviewPetId(pet.id)}>
+                    Ver
+                  </button>
+                )}
 
                 {owned && <span className="avatar-shop-tag">{STAGE_LABEL[stage]}</span>}
                 {owned && (
@@ -174,7 +225,7 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
                     </button>
                   </>
                 ) : owned ? (
-                  <button type="button" className="avatar-shop-action" onClick={() => onEquip(pet.id)}>
+                  <button type="button" className="avatar-shop-action" onClick={() => { setPreviewPetId(pet.id); onEquip(pet.id) }}>
                     Escolher
                   </button>
                 ) : (
@@ -182,7 +233,7 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
                     type="button"
                     className="avatar-shop-action buy"
                     disabled={!affordable}
-                    onClick={() => onAdopt(pet.id)}
+                    onClick={() => { setPreviewPetId(pet.id); onAdopt(pet.id) }}
                   >
                     🪙 {pet.cost}
                   </button>
@@ -190,7 +241,59 @@ export function PetPanel({ progress, onAdopt, onEquip, onFeed, onChallengeCorrec
               </div>
             )
           })}
-        </div>
+        </div>}
+
+        {tab === 'acessorios' && (
+          <>
+            <p className="subtitle pet-accessory-note">
+              Experimente no seu companheiro. Acessorios sao so visuais e nao mudam poderes ou recompensas.
+            </p>
+            <div className="avatar-shop-grid">
+              {PET_ACCESSORY_CATALOG.map((item) => {
+                const owned = progress.unlockedPetAccessoryIds.includes(item.id)
+                const equipped = progress.equippedPetAccessoryIds[item.slot] === item.id
+                const previewing = previewAccessoryId === item.id
+                const affordable = progress.coins >= item.cost
+                const [r, g, b] = item.colorRgb.map((channel) => Math.round(channel * 255))
+                return (
+                  <div key={item.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${previewing ? 'previewing' : ''}`}>
+                    <span
+                      className="avatar-shop-swatch pet-accessory-swatch"
+                      style={{ background: `rgb(${r}, ${g}, ${b})` }}
+                      aria-hidden="true"
+                    />
+                    <span className="avatar-shop-name">{item.emoji} {item.name}</span>
+                    <span className="avatar-shop-tag">{item.slot === 'neck' ? 'Pescoco' : 'Rosto'}</span>
+                    {!previewing && (
+                      <button type="button" className="avatar-shop-action secondary" onClick={() => setPreviewAccessoryId(item.id)}>
+                        Experimentar
+                      </button>
+                    )}
+                    {previewing && <span className="avatar-shop-tag">No preview</span>}
+                    {equipped ? (
+                      <button type="button" className="avatar-shop-action" onClick={() => onEquipAccessory(item.slot, null)}>
+                        Tirar
+                      </button>
+                    ) : owned ? (
+                      <button type="button" className="avatar-shop-action" onClick={() => onEquipAccessory(item.slot, item.id)}>
+                        Usar
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="avatar-shop-action buy"
+                        disabled={!affordable}
+                        onClick={() => onUnlockAccessory(item.id)}
+                      >
+                        🪙 {item.cost}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
 
         {/* `challengeFeedback !== null` mantém o cartão visível depois de responder, mesmo que
             `alreadyChallengedToday` vire `true` no re-render seguinte (progress atualizado com a

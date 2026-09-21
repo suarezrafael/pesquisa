@@ -1715,6 +1715,34 @@ a.nickname-generate-btn {
   opacity: 0.4;
 }
 
+/* O preview, saldo e abas continuam visiveis enquanto a crianca percorre os cosmeticos. O fundo
+   solido evita que cards rolem por tras do canvas transparente. */
+.pet-panel-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding-top: 0.1rem;
+  background: var(--card);
+}
+
+.pet-panel-modal .avatar-shop-action {
+  scroll-margin-top: 15rem;
+}
+
+.pet-accessory-note {
+  margin-top: 0.8rem;
+}
+
+.avatar-shop-item.previewing:not(.equipped) {
+  border-color: #5b6fd6;
+  background: #edf0ff;
+}
+
+.pet-accessory-swatch {
+  border-radius: 0.4rem;
+  box-shadow: inset 0 0 0 0.2rem rgba(255, 255, 255, 0.45);
+}
+
 /* Abas (lab-87) — mesmo visual de "pill" já usado noutros seletores do jogo, sem introduzir um
    componente novo de UI. Fade nas duas bordas (lab-91) — pista visual de "tem mais aba pra
    scrollar" em vez de cortar o texto da última aba no meio, achado testando em largura de
@@ -1864,6 +1892,11 @@ a.nickname-generate-btn {
 
 .avatar-shop-action.buy {
   background: #ffe1a8;
+}
+
+.avatar-shop-action.secondary {
+  background: #e7eaf5;
+  color: #33406e;
 }
 
 .avatar-shop-action:disabled {

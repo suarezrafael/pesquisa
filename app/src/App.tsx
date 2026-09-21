@@ -132,6 +132,8 @@ function GameApp() {
     collectPostcard,
     adoptPet,
     equipPet,
+    unlockPetAccessory,
+    equipPetAccessory,
     feedPet,
     coopChallengeCompleted,
     petDailyChallengeCompleted,
@@ -837,6 +839,8 @@ function GameApp() {
           progress={progress}
           onAdopt={adoptPet}
           onEquip={equipPet}
+          onUnlockAccessory={unlockPetAccessory}
+          onEquipAccessory={equipPetAccessory}
           onFeed={() => feedPet(new Date().toISOString())}
           onChallengeCorrect={() => petDailyChallengeCompleted(new Date().toISOString()).rewarded}
           onClose={() => setShowPets(false)}

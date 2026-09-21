@@ -2,6 +2,7 @@ import type { Profile, Progress } from '../types'
 import { DEFAULT_UNLOCKED_AVATAR_IDS } from '../data/avatars'
 import { DEFAULT_UNLOCKED_HAT_IDS } from '../data/hats'
 import { DEFAULT_UNLOCKED_GLASSES_IDS } from '../data/glasses'
+import { DEFAULT_UNLOCKED_PET_ACCESSORY_IDS } from '../data/petAccessories'
 
 // Chaves LEGADAS (antes do lab-108) — perfil único por aparelho, sem id nenhum. Nunca apagadas:
 // `migrateLegacyProfileIfNeeded` só COPIA o que encontra aqui pro sistema de slots na primeira
@@ -178,6 +179,8 @@ export const emptyProgress: Progress = {
   // Pets adotáveis (lab-155) — ver comentário em `types.ts`.
   unlockedPetIds: [],
   equippedPetId: null,
+  unlockedPetAccessoryIds: DEFAULT_UNLOCKED_PET_ACCESSORY_IDS,
+  equippedPetAccessoryIds: {},
   petCareCounts: {},
   lastPetFeedAt: null,
   // Ciclo de vida (lab-169) — ver comentário em `types.ts`.

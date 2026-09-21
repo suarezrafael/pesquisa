@@ -6,6 +6,7 @@
 // comportamento lá não muda, só o arquivo onde a função mora.
 import { Color3, Mesh, MeshBuilder, PBRMaterial, type Scene, type ShadowGenerator, TransformNode, Vector3 } from '@babylonjs/core'
 import type { PetStage } from '../state/progression'
+import { findPetAccessoryById, type PetAccessoryOption } from '../data/petAccessories'
 
 // Único sinal visual de "idoso" — pelo mais grisalho, mesmo corpo/tamanho de um adulto
 // (`petVisualScale`, `progression.ts`) — nunca some, nunca fica doente, nunca reduz. Extraído pra
@@ -103,6 +104,76 @@ export function buildCachorro(scene: Scene, shadowGenerator: ShadowGenerator, fu
   add(tail)
 
   return root
+}
+
+// Os acessorios usam no maximo uma malha simples por encaixe. Como sao filhos do mesmo `root`,
+// herdam escala/rotacao do pet em qualquer fase e aparecem identicos no preview e no mundo.
+export function applyPetAccessories(
+  scene: Scene,
+  shadowGenerator: ShadowGenerator,
+  root: TransformNode,
+  species: 'gato' | 'cachorro',
+  accessoryIds: string[],
+): void {
+  const neckY = species === 'gato' ? 0.16 : 0.2
+  const neckZ = species === 'gato' ? 0.105 : 0.14
+  const faceY = species === 'gato' ? 0.19 : 0.205
+  const faceZ = species === 'gato' ? 0.225 : 0.305
+
+  function addAccessory(item: PetAccessoryOption): void {
+    const material = new PBRMaterial(`petAccessoryMat-${item.id}`, scene)
+    material.albedoColor = new Color3(...item.colorRgb)
+    material.roughness = 0.55
+    material.metallic = 0.08
+
+    let mesh: Mesh
+    if (item.shape === 'collar') {
+      mesh = MeshBuilder.CreateTorus(
+        `petAccessory-${item.id}`,
+        {
+          diameter: species === 'gato' ? 0.18 : 0.23,
+          thickness: 0.025,
+          tessellation: 16,
+        },
+        scene,
+      )
+      mesh.position = new Vector3(0, neckY, neckZ)
+    } else if (item.shape === 'cape') {
+      mesh = MeshBuilder.CreateBox(
+        `petAccessory-${item.id}`,
+        {
+          width: species === 'gato' ? 0.2 : 0.26,
+          height: 0.025,
+          depth: species === 'gato' ? 0.26 : 0.32,
+        },
+        scene,
+      )
+      mesh.position = new Vector3(0, neckY + 0.09, species === 'gato' ? -0.07 : -0.085)
+      mesh.rotation.x = -0.14
+    } else {
+      // Visor de heroi em vez de uma mascara fechada: deixa focinho/olhos legiveis e evita uma
+      // silhueta assustadora para criancas, com apenas uma caixa achatada por pet.
+      mesh = MeshBuilder.CreateBox(
+        `petAccessory-${item.id}`,
+        {
+          width: species === 'gato' ? 0.145 : 0.17,
+          height: 0.055,
+          depth: 0.025,
+        },
+        scene,
+      )
+      mesh.position = new Vector3(0, faceY, faceZ)
+    }
+
+    mesh.material = material
+    mesh.parent = root
+    shadowGenerator.addShadowCaster(mesh)
+  }
+
+  for (const id of accessoryIds) {
+    const item = findPetAccessoryById(id)
+    if (item) addAccessory(item)
+  }
 }
 
 // `buildGato`/`buildCachorro` registram toda malha filha no `ShadowGenerator` via

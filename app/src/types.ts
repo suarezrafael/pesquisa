@@ -124,6 +124,11 @@ export interface Progress {
   // `equippedHatId`, não um array, pra não encher o planeta de bichos seguindo ao mesmo tempo.
   unlockedPetIds: string[]
   equippedPetId: string | null
+  // Cosmeticos do companheiro (lab-216). O inventario e permanente e os dois encaixes podem ser
+  // usados ao mesmo tempo. Os ids sao resolvidos pelo catalogo em `data/petAccessories.ts`; saves
+  // anteriores recebem os defaults em `state/storage.ts` sem migracao destrutiva.
+  unlockedPetAccessoryIds: string[]
+  equippedPetAccessoryIds: Partial<Record<'neck' | 'face', string | null>>
   // Quantas vezes cada pet já foi alimentado, pra sempre (mesmo trocando de pet ativo e voltando)
   // — determina o estágio de crescimento (`petStageFor`, `state/progression.ts`). Chave = id do
   // catálogo (`data/pets.ts`), não o pet "ativo" — cada pet cresce no próprio ritmo de cuidado.

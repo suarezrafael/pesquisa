@@ -16,11 +16,12 @@ import {
 } from '@babylonjs/core'
 import { findPetById } from '../data/pets'
 import { petVisualScale, type PetStage } from '../state/progression'
-import { buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
+import { applyPetAccessories, buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
 
 interface PetPreview3DProps {
   petId: string
   stage: PetStage
+  accessoryIds: string[]
 }
 
 // Preview 3D de verdade do pet equipado — mesmo motivo/arquitetura de `AvatarPreview3D.tsx`
@@ -29,7 +30,7 @@ interface PetPreview3DProps {
 // extraídas de `World3D.tsx` pra `petFigure.ts` só pra isso) em vez de duplicar geometria — o
 // mesmo pet que a criança vê seguindo ela no mundo aparece aqui, sem duas fontes de verdade
 // visual pra manter em sincronia.
-export function PetPreview3D({ petId, stage }: PetPreview3DProps) {
+export function PetPreview3D({ petId, stage, accessoryIds }: PetPreview3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<Scene | null>(null)
   const shadowGeneratorRef = useRef<ShadowGenerator | null>(null)
@@ -132,9 +133,10 @@ export function PetPreview3D({ petId, stage }: PetPreview3DProps) {
 
     const furColor = petFurColor(pet.furColorRgb, stage)
     const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
+    applyPetAccessories(scene, shadowGenerator, root, pet.species, accessoryIds)
     root.scaling.setAll(petVisualScale(stage, pet.species))
     petRootRef.current = root
-  }, [petId, stage])
+  }, [petId, stage, accessoryIds])
 
   // `aria-label` — o canvas recebe `attachControl` (giro por arrasto), então é uma superfície
   // interativa/focável; sem nome acessível, um leitor de tela só anunciaria "canvas", sem indicar

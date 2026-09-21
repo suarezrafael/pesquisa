@@ -76,7 +76,7 @@ import { planetQuests } from '../data/planetQuests'
 import { findQuickChatMessage, type ChatContext } from '../data/chatMessages'
 import { findHatById } from '../data/hats'
 import { findGlassesById } from '../data/glasses'
-import { buildCachorro, buildGato, petFurColor } from './petFigure'
+import { applyPetAccessories, buildCachorro, buildGato, disposePetFigure, petFurColor } from './petFigure'
 import { FURNITURE_CATALOG, findFurnitureById } from '../data/furniture'
 import { findPetById } from '../data/pets'
 import { findTreasureChestById } from '../data/treasureChests'
@@ -3018,7 +3018,7 @@ export function World3D({
   // precisa reconstruir a malha 3D do pet, sem esperar sair/voltar do jogo pra ver o resultado.
   useEffect(() => {
     ;(sceneRef.current as any)?.__refreshPet?.()
-  }, [progress.equippedPetId, progress.petCareCounts])
+  }, [progress.equippedPetId, progress.equippedPetAccessoryIds, progress.petCareCounts])
 
   // Bug real relatado pelo usuário num Poco C75 real, com screenshot: o HUD de depuração sempre
   // visível (lab-67, `.world3d-debug`) sobrepunha a fileira de ícones do cabeçalho. `top: 3.6rem`
@@ -12684,7 +12684,7 @@ export function World3D({
       // a propriedade a cada quadro.
       const petQuat = new Quaternion()
       function rebuildPet() {
-        petRoot?.dispose()
+        if (petRoot) disposePetFigure(petRoot, shadowGenerator)
         petRoot = null
         if (!avatarMesh) return
         const equippedId = progressRef.current.equippedPetId
@@ -12703,6 +12703,10 @@ export function World3D({
         const scale = petVisualScale(stage, pet.species)
         const furColor = petFurColor(pet.furColorRgb, stage)
         const root = pet.species === 'cachorro' ? buildCachorro(scene, shadowGenerator, furColor) : buildGato(scene, shadowGenerator, furColor)
+        const accessoryIds = Object.values(progressRef.current.equippedPetAccessoryIds).filter(
+          (id): id is string => typeof id === 'string',
+        )
+        applyPetAccessories(scene, shadowGenerator, root, pet.species, accessoryIds)
         root.scaling.setAll(scale)
         root.position.copyFrom(avatarMesh.position)
         root.rotationQuaternion = petQuat

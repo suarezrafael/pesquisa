@@ -22,6 +22,11 @@ import {
   type WeeklyEvent,
 } from '../data/weeklyEvents'
 import { PET_CATALOG, PET_SPECIES_SCALE_MULTIPLIER, type PetSpecies } from '../data/pets'
+import {
+  findPetAccessoryById,
+  PET_ACCESSORY_CATALOG,
+  type PetAccessorySlot,
+} from '../data/petAccessories'
 
 // Cada nível pede um pouco mais de XP que o anterior (progressão simples, sem gambiarra de balanceamento).
 export function xpForLevel(level: number): number {
@@ -1154,6 +1159,30 @@ export function backfillPetAdoptedAt(progress: Progress, nowIso: string): Progre
 export function equipPet(progress: Progress, id: string | null): Progress {
   if (id !== null && !progress.unlockedPetIds.includes(id)) return progress
   return { ...progress, equippedPetId: id }
+}
+
+// Primeira fatia de cosmeticos de pet (lab-216): compra apenas com moeda de jogo, usando a mesma
+// regra central dos outros catalogos. Nenhum item altera atributo, recompensa ou movimento.
+export function unlockPetAccessory(progress: Progress, id: string): Progress {
+  const result = unlockGeneric(
+    progress.coins,
+    progress.unlockedPetAccessoryIds,
+    PET_ACCESSORY_CATALOG,
+    id,
+  )
+  if (!result) return progress
+  return { ...progress, coins: result.coins, unlockedPetAccessoryIds: result.unlockedIds }
+}
+
+export function equipPetAccessory(progress: Progress, slot: PetAccessorySlot, id: string | null): Progress {
+  if (id !== null) {
+    const item = findPetAccessoryById(id)
+    if (!item || item.slot !== slot || !progress.unlockedPetAccessoryIds.includes(id)) return progress
+  }
+  return {
+    ...progress,
+    equippedPetAccessoryIds: { ...progress.equippedPetAccessoryIds, [slot]: id },
+  }
 }
 
 export type PetStage = 'filhote' | 'jovem' | 'adulto' | 'idoso'
