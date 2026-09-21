@@ -51,7 +51,7 @@ comprovado na prática: o hub trocou de 2D pra 3D (lab-02) sem tocar em nenhum d
 ```
 app/
   src/
-    data/          # quests, avatares, chapéus, customização (cor/cabelo), eventos semanais, catálogo de chat — dados puros
+    data/          # quests, avatares, chapéus, pets e seus acessórios, customização (cor/cabelo), eventos semanais, catálogo de chat — dados puros
     state/         # progressão (XP/nível/badges), regras de desbloqueio — sem I/O, sem Babylon
     world3d/       # tudo Babylon.js: cena, física, avatar, multiplayer, áudio, HUD
       World3D.tsx       # arquivo principal da cena — setup, loop de física/render, todos os builders
@@ -60,6 +60,7 @@ app/
     types.ts       # Profile, Progress — contratos entre domínio e UI
   server/            # relay v1 (Node + ws, Fly.io)
   server-cf-relay/   # relay v2 (Cloudflare Workers + Durable Objects)
+  server-accounts/   # backend comercial (Neon + Cloudflare Workers) — conta/assinatura do responsável, nunca dado da criança
 labs/                # histórico de laboratórios (FEATURES.md + CONTEXT.md por lab)
 docs/prompts/        # padrão de qualidade de engenharia (segurança, design, arquitetura, clean code)
 ```
@@ -124,6 +125,17 @@ explorar. A mochila (🎒) mostra as armas já encontradas — a arma **selecion
 na mão do personagem, e apertar "E" com ela equipada dispara/golpeia (com som) em qualquer lugar,
 não só em combate de verdade contra um inimigo.
 
+**Pets**: adote um companheiro (gato ou cachorro, 4 opções) com moedas ganhas jogando — segue a
+criança pelo mundo, cresce por estágio de vida (filhote → jovem → adulto → idoso, cuidado real +
+tempo de convivência) e agora tem cosméticos conquistáveis (coleira/capa no pescoço, máscaras no
+rosto — lab-216), com preview 3D próprio antes de comprar/equipar. Nunca dá vantagem de jogo,
+só personalização.
+
+**Centro de Jogos**: prédio dedicado no planeta principal com quatro arenas de mini-jogos
+reutilizando um template comum (Contar, Soletrar, Memória, Lógica), progresso/troféus por
+categoria e retorno claro ao saguão — complementa as 21 escolas espalhadas pelo mundo com um
+lugar único e reconhecível pra "jogar de novo".
+
 **Multiplayer**: outros jogadores conectados aparecem em tempo real — posição, animação de andar,
 som de passo, balão de chat, chapéu/cor de roupa/cabelo equipados, arma na mão, e o efeito visual
 do golpe/tiro quando alguém ataca (todo mundo vê e ouve, não só quem atacou). Jogadores não
@@ -139,8 +151,16 @@ Requisitos de `docs/prompts/01-seguranca.md` aplicados desde o início:
   confia só na validação do client).
 - **Apelido, não nome real** — onboarding gera um apelido (adjetivo+animal+número) em vez de
   pedir o nome verdadeiro da criança, já que ele fica visível pra outros jogadores.
-- **Sem conta/autenticação/pagamento** — esses itens continuam deliberadamente fora do MVP,
-  documentados como pendência em vários laboratórios, não esquecidos silenciosamente.
+- **A criança nunca tem conta, login ou dado pessoal enviado a servidor algum** — progresso de
+  jogo continua só em `localStorage`, identidade é só o apelido gerado. Desde o lab-78 existe um
+  backend comercial (`app/server-accounts/`, Neon + Cloudflare Workers), mas ele é do
+  **responsável**, não da criança: cadastro/login, assinatura via Stripe e portal de
+  autoatendimento (cancelar, exportar ou apagar dados, LGPD arts. 15/18) — nenhuma dessas tabelas
+  guarda PII da criança. Ver `docs/plano-comercial-backend.md` pro desenho completo.
+- **Assinatura nunca bloqueia conteúdo educativo** — regra inegociável do projeto (`prompt.md`
+  §15, `docs/plano-comercial-backend.md`): o entitlement do responsável só libera **cosméticos**
+  (avatar, chapéus, óculos, pets e seus acessórios); missões, progressão e cooperação são sempre
+  gratuitas.
 
 ## Rodando localmente
 
@@ -206,5 +226,5 @@ cd app/server-cf-relay && npx wrangler deploy               # relay v2 (Cloudfla
 - `docs/prompts/` — padrão de qualidade de engenharia (segurança, design, arquitetura, clean code)
   aplicado a todo o código do jogo.
 - `docs/backlog-status.md` — índice auditado entre números do backlog, labs reais e pendências.
-- `labs/` — histórico completo, laboratório por laboratório (até o lab-213), com o "porquê" de
+- `labs/` — histórico completo, laboratório por laboratório (até o lab-216), com o "porquê" de
   cada decisão.

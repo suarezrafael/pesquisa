@@ -1,6 +1,6 @@
 # Estado auditado dos backlogs
 
-Ultima auditoria: 2026-09-20
+Ultima auditoria: 2026-09-21
 
 Este arquivo e o indice operacional entre os numeros historicos dos backlogs e os diretorios de
 laboratorio realmente executados. `labs/CURRENT.md` continua sendo a fonte de verdade do ultimo lab;
@@ -35,7 +35,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | 204 - Ceu espacial/atmosfera | 189 | Concluido | PR #69. |
 | 205 - Preview fixo da loja | 190 | Concluido | PR #70. |
 | 207 - Troca segura de nickname | 191 | Concluido | PR #71. |
-| 206 - Pets e cosmeticos | 192 | Parcial | Preview 3D pronto; faltam modelos, roupas e mascaras. |
+| 206 - Pets e cosmeticos | 192, 216 | Concluido | Preview 3D (lab-192) + catalogo de acessorios conquistaveis com moeda, dois encaixes, painel com abas (lab-216, PR #100). |
 | 191 - Auditoria de FPS | 193 | Parcial | Instrumentacao pronta; faltam baseline Android e classificacao por cena. |
 | 192 - Locomocao sem moonwalk | 194 | Concluido | PR #76. |
 | 208 - Movimento responsivo | 195 | Concluido | PRs #77/#78. |
@@ -68,6 +68,5 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 1. Medir o baseline Android e fechar o backlog 191.
 2. Implementar o backlog 193 com comparacao antes/depois.
 3. Executar o Lab 186 de playtest e as Pesquisas A/B.
-4. Completar pets/cosmeticos do backlog 206.
-5. Priorizar UX 187-190 com base nos testes.
-6. Definir o escopo do mercado/bazar como backlog 218.
+4. Priorizar UX 187-190 com base nos testes.
+5. Definir o escopo do mercado/bazar como backlog 218 (aguardando o usuario detalhar o pedido).
