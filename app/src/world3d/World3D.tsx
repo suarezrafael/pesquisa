@@ -13352,13 +13352,8 @@ export function World3D({
         grassMaterial.setFloat('time', time)
 
         // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — idle sutil dos professores das
-        // escolinhas dos planetas secundários. Fica FORA do bloco `!suspendRef.current &&
-        // !chatOpenRef.current` mais abaixo (que só deveria proteger GATILHOS de interação, ex.:
-        // abrir um quiz enquanto o chat está aberto) — achado do review automático do Copilot: a
-        // primeira versão desta lab colocava o idle DENTRO daquele bloco, contradizendo o próprio
-        // comentário ("roda sempre, mesmo em escolinha já concluída") e congelando o balanço toda
-        // vez que o chat abria ou o jogo suspendia. Mesmo lugar/padrão das outras animações
-        // puramente cosméticas deste laço (nuvens, pulso do portal) — sempre incondicionais.
+        // escolinhas do planeta visitado. Continua independente de chat/modal (estado de UI nao
+        // deve congelar a cena visivel), mas professores de outros planetas deixam de consumir CPU.
         for (const marker of planetQuestMarkers) {
           if (drivingRocket || marker.planetId !== currentPlanetId) continue
           marker.teacher.root.position.y =
@@ -13379,11 +13374,8 @@ export function World3D({
           }
         }
 
-        // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — luas orbitando os planetas
-        // secundários, mesmo idioma de `cloudGroups` acima (`rotateAroundAxis`); incondicional,
-        // roda sempre, mesmo com chat aberto ou jogo suspenso, igual toda outra animação puramente
-        // cosmética deste laço (achado do review automático do Copilot no lab-206: animação
-        // cosmética presa atrás de uma guarda de interação é o bug, não o padrão certo).
+        // Backlog "Lab 197 - Orbitas com objetos em alto-relevo" — a lua do planeta visitado
+        // continua orbitando mesmo com chat/modal aberto, mas luas de mundos fora da tela pausam.
         for (const moon of orbitingMoons) {
           if (drivingRocket || moon.planetId !== currentPlanetId) continue
           moon.mesh.position = moon.center.add(rotateAroundAxis(moon.basePos, moon.axis, time * moon.speed))
