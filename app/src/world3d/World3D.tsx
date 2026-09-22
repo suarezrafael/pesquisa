@@ -16169,7 +16169,7 @@ export function World3D({
       setPerfSampleReport(JSON.stringify(report, null, 2))
       setPerfSampleFeedback('Amostra pronta. Toque em Copiar JSON.')
     } catch (error) {
-      setPerfSampleFeedback(error instanceof Error ? error.message : 'Nao foi possivel medir agora.')
+      setPerfSampleFeedback(error instanceof Error ? error.message : 'Não foi possível medir agora.')
     } finally {
       perfSampleRunningRef.current = false
       setPerfSampleRunning(false)
@@ -16181,7 +16181,7 @@ export function World3D({
     try {
       await navigator.clipboard.writeText(perfSampleReport)
       setPerfCopyStatus('copied')
-      setPerfSampleFeedback('Relatorio copiado.')
+      setPerfSampleFeedback('Relatório copiado.')
     } catch {
       // Alguns WebViews/Androids bloqueiam Clipboard API mesmo em HTTPS. O download local mantem
       // a coleta recuperavel sem servidor e sem pedir permissao adicional.
@@ -16195,10 +16195,10 @@ export function World3D({
         document.body.appendChild(link)
         link.click()
         setPerfCopyStatus('downloaded')
-        setPerfSampleFeedback('Clipboard indisponivel; JSON baixado.')
+        setPerfSampleFeedback('Clipboard indisponível; JSON baixado.')
       } catch {
         setPerfCopyStatus('idle')
-        setPerfSampleFeedback('Nao foi possivel copiar ou baixar o relatorio.')
+        setPerfSampleFeedback('Não foi possível copiar ou baixar o relatório.')
       } finally {
         link?.remove()
         if (blobUrl) {

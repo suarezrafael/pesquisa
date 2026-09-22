@@ -89,3 +89,5 @@ P0, conclusao operacional do backlog 191 antes da otimizacao de draw calls do ba
 - Review do Copilot, rodada 2: confirmou os dois achados anteriores como resolvidos e encontrou o
   fallback de download desprotegido. Falhas de Blob/DOM agora preservam o handler e exibem feedback
   claro, com limpeza do link e da URL temporaria no `finally`.
+- Review do Copilot, rodada 3: aprovacao recomendada; o unico achado foi a falta de acentos nas
+  mensagens acessiveis novas, corrigida em todas as variantes do fluxo.

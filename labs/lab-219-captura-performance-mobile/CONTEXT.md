@@ -19,6 +19,8 @@ PR: #103
   do estado visual de copia ao texto completo da mensagem acessivel.
 - A segunda rodada confirmou os dois achados como resolvidos e identificou o fallback de download
   desprotegido; o caminho agora captura falhas de Blob/DOM e informa o usuario sem rejeicao solta.
+- A terceira rodada recomendou aprovacao, confirmou o fallback como resolvido e apontou apenas a
+  acentuacao das mensagens acessiveis; todas as strings novas de feedback foram corrigidas.
 
 ## Baseline Android emulado
 
