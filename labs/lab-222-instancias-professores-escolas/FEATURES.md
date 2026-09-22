@@ -24,7 +24,7 @@ relevo ou o culling entregue pelo Lab 221.
   performance usado nos Labs 220 e 221 (referencia: Lab 219).
 - [x] Validar TypeScript forcado, suite completa, lint, build e fluxo visual no Edge.
 
-PR: pendente
+PR: #106
 
 ## Fora de escopo (explicitamente adiado)
 

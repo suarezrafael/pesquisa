@@ -2,7 +2,7 @@
 
 Preenchido em: 2026-09-22
 Commit inicial: 715e806170f94fb6257d559f2841247894757613
-PR: pendente
+PR: #106
 
 ## O que foi feito
 
