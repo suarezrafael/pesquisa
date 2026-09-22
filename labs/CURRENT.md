@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Em andamento: labs/lab-222-instancias-professores-escolas/ - compartilha geometria e materiais
+entre os 30 professores estaticos das escolinhas da Terra por meio de `InstancedMesh`, preservando
+hierarquia, sombras, assentamento e o culling do Lab 221. Commit inicial `715e806`.
+
+---
+
 Ultimo concluido: labs/lab-221-culling-escolinhas-terra/ - aplica oclusao geometrica entre camera,
 topo da escola e esfera da Terra, com margem/histerese e atualizacao a 10 Hz. No mesmo Edge e
 viewport do Lab 220, manteve 20/30 escolas habilitadas no spawn, reduziu draw calls medios de
