@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Ultimo concluido: labs/lab-222-instancias-professores-escolas/ - os 30 professores estaticos das
+escolinhas agora usam 19 meshes-fonte e 551 `InstancedMesh`, compartilhando geometria e materiais
+sem aumentar os 2.264 meshes totais do perfil local. Na medicao direcional contra o Lab 221, draw
+calls medios cairam de 2.726,87 para 1.681,00 (-38,4%), mesmo com 22 escolas habilitadas contra
+20 no baseline. TypeScript, 275/275 testes, lint, build e Edge passaram. PR #106. O proximo
+lab recomendado e instanciar a estrutura visual repetida das escolas. Ver `FEATURES.md` e
+`CONTEXT.md` da pasta.
+
+---
+
 Ultimo concluido: labs/lab-221-culling-escolinhas-terra/ - aplica oclusao geometrica entre camera,
 topo da escola e esfera da Terra, com margem/histerese e atualizacao a 10 Hz. No mesmo Edge e
 viewport do Lab 220, manteve 20/30 escolas habilitadas no spawn, reduziu draw calls medios de

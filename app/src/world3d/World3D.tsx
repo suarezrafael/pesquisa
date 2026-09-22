@@ -8847,6 +8847,15 @@ export function World3D({
       foundationMatShared.albedoColor = new Color3(0.5, 0.42, 0.32)
       foundationMatShared.roughness = 0.95
 
+      // Lab 222: os professores das 30 escolas sao visualmente identicos e nunca animam. A
+      // primeira figura continua sendo uma figura Babylon normal e vira a fonte real das outras
+      // 29 hierarquias. Assim cada parte do corpo mantem seu proprio pivo, mas geometria e
+      // material existem uma unica vez. Usar a primeira escola como fonte evita criar uma figura
+      // oculta adicional apenas como template.
+      let earthSchoolTeacherSource: StudentFigure | null = null
+      let earthSchoolTeacherSourceMeshCount = 0
+      let earthSchoolTeacherInstanceMeshCount = 0
+
       quests.forEach((quest, index) => {
         // lab-95: posição final já vem de `schoolUps` (calculado logo no início de `setup()`,
         // com relevo REAL medido por raycast — ver comentário longo perto dele) — `QUEST_FIXED_UP`
@@ -8920,10 +8929,31 @@ export function World3D({
 
         // Professor parado na porta — mesmo "rig" do estudante, parado (sem animação),
         // com um tom de roupa diferente pra ficar claramente outro personagem.
-        const teacher = buildStudentFigure(scene, new Color3(0.55, 0.25, 0.55), shadowGenerator)
-        teacher.root.scaling.setAll(0.92)
-        teacher.root.position = new Vector3(0.95, 0, 0.55)
-        teacher.root.parent = base
+        let teacherRoot: TransformNode
+        if (!earthSchoolTeacherSource) {
+          earthSchoolTeacherSource = buildStudentFigure(
+            scene,
+            new Color3(0.55, 0.25, 0.55),
+            shadowGenerator,
+          )
+          teacherRoot = earthSchoolTeacherSource.root
+          teacherRoot.name = `teacher-${quest.id}`
+          earthSchoolTeacherSourceMeshCount = teacherRoot.getChildMeshes(false).length
+        } else {
+          const hierarchy = instantiateStaticHierarchy(
+            earthSchoolTeacherSource.root,
+            `teacher-${quest.id}`,
+            (instance) => {
+              shadowGenerator.addShadowCaster(instance, false)
+              earthSchoolTeacherInstanceMeshCount++
+            },
+          )
+          if (!hierarchy) throw new Error(`Nao foi possivel instanciar o professor da escola ${quest.id}`)
+          teacherRoot = hierarchy
+        }
+        teacherRoot.scaling.setAll(0.92)
+        teacherRoot.position = new Vector3(0.95, 0, 0.55)
+        teacherRoot.parent = base
 
         // lab-87, mesmo bug relatado de novo ("morros invisíveis, casas flutuando em algo
         // transparente") apesar da fundação maior do lab-28 — causa raiz real: a fundação fixa
@@ -8938,7 +8968,7 @@ export function World3D({
         // professor ficam de fora da AMOSTRAGEM (lab-95, ver comentário longo em
         // `settleMeshOnTerrain`) — nenhum dos dois toca o chão de verdade, e seu alcance além da
         // pegada das paredes distorcia a decisão de descida do prédio inteiro.
-        settleMeshOnTerrain(base, localUp, [roof, teacher.root])
+        settleMeshOnTerrain(base, localUp, [roof, teacherRoot])
         // `settleMeshOnTerrain` pode ter descido `base` — `surfacePos` (usada mais abaixo pra
         // distância de gatilho da missão e pro topo do telhado) precisa refletir a posição FINAL,
         // não a de antes do ajuste, senão o gatilho fica levemente descolado da escola visível.
@@ -15630,7 +15660,7 @@ export function World3D({
           // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
           // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
           // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · ${buriedSchoolReport}`
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · escolas ${enabledSchoolCount}/${portalMeshes.length} · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -15823,6 +15853,8 @@ export function World3D({
                 enabledMin: Math.min(...enabledSchoolSamples, enabledSchoolCount),
                 enabledMax: Math.max(...enabledSchoolSamples, enabledSchoolCount),
                 total: portalMeshes.length,
+                teacherSourceMeshes: earthSchoolTeacherSourceMeshCount,
+                teacherInstanceMeshes: earthSchoolTeacherInstanceMeshCount,
               },
               fps: {
                 avg: round(msToFps(mean(deltaTimeSamples))),
@@ -15873,7 +15905,12 @@ export function World3D({
         frameTimeMs: () => instrumentation.frameTimeCounter.current.toFixed(2),
         activeMeshes: () => scene.getActiveMeshes().length,
         totalMeshes: () => scene.meshes.length,
-        earthSchools: () => ({ enabled: enabledSchoolCount, total: portalMeshes.length }),
+        earthSchools: () => ({
+          enabled: enabledSchoolCount,
+          total: portalMeshes.length,
+          teacherSourceMeshes: earthSchoolTeacherSourceMeshCount,
+          teacherInstanceMeshes: earthSchoolTeacherInstanceMeshCount,
+        }),
         activeMeshesEvaluationTimeMs: () => instrumentation.activeMeshesEvaluationTimeCounter.current.toFixed(2),
         renderTimeMs: () => instrumentation.renderTimeCounter.current.toFixed(2),
         cameraRenderTimeMs: () => instrumentation.cameraRenderTimeCounter.current.toFixed(2),

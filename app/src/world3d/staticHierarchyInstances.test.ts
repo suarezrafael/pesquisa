@@ -1,4 +1,13 @@
-import { InstancedMesh, MeshBuilder, NullEngine, Quaternion, Scene, TransformNode, Vector3 } from '@babylonjs/core'
+import {
+  InstancedMesh,
+  MeshBuilder,
+  NullEngine,
+  Quaternion,
+  Scene,
+  StandardMaterial,
+  TransformNode,
+  Vector3,
+} from '@babylonjs/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { instantiateStaticHierarchy } from './staticHierarchyInstances'
 
@@ -57,5 +66,44 @@ describe('instantiateStaticHierarchy (lab-220)', () => {
     expect(Math.sign(createdLeaves[0].getWorldMatrix().determinant())).toBe(
       Math.sign(sourceMesh.getWorldMatrix().determinant()),
     )
+  })
+
+  it('mantem instancias independentes quando a hierarquia fonte fica sob um pai desabilitado', () => {
+    engine = new NullEngine()
+    const scene = new Scene(engine)
+    const sourceParent = new TransformNode('source-parent', scene)
+    const sourceRoot = new TransformNode('teacher-root', scene)
+    sourceRoot.parent = sourceParent
+
+    const limbPivot = new TransformNode('arm-pivot', scene)
+    limbPivot.parent = sourceRoot
+    limbPivot.rotation.z = 0.25
+    const sourceMesh = MeshBuilder.CreateCapsule('arm', { height: 0.5, radius: 0.08 }, scene)
+    sourceMesh.parent = limbPivot
+    sourceMesh.material = new StandardMaterial('teacher-material', scene)
+
+    const firstLeaves: InstancedMesh[] = []
+    const secondLeaves: InstancedMesh[] = []
+    const first = instantiateStaticHierarchy(sourceRoot, 'teacher-q02', (mesh) => firstLeaves.push(mesh))
+    const second = instantiateStaticHierarchy(sourceRoot, 'teacher-q03', (mesh) => secondLeaves.push(mesh))
+    const firstSchool = new TransformNode('school-q02', scene)
+    const secondSchool = new TransformNode('school-q03', scene)
+    first!.parent = firstSchool
+    second!.parent = secondSchool
+
+    sourceParent.setEnabled(false)
+    firstSchool.setEnabled(false)
+
+    expect(sourceRoot.isEnabled()).toBe(false)
+    expect(first?.isEnabled()).toBe(false)
+    expect(second?.isEnabled()).toBe(true)
+    expect(firstLeaves).toHaveLength(1)
+    expect(secondLeaves).toHaveLength(1)
+    expect(firstLeaves[0].sourceMesh).toBe(sourceMesh)
+    expect(secondLeaves[0].sourceMesh).toBe(sourceMesh)
+    expect(firstLeaves[0].geometry).toBe(secondLeaves[0].geometry)
+    expect(firstLeaves[0].material).toBe(sourceMesh.material)
+    expect(secondLeaves[0].material).toBe(sourceMesh.material)
+    expect(second?.getChildTransformNodes(true)[0]?.rotation.z).toBe(limbPivot.rotation.z)
   })
 })
