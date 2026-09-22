@@ -1,12 +1,20 @@
 # Laboratório atual
 
-Em andamento: labs/lab-224-materiais-estaticos-terra/ - audita e congela somente materiais
-comprovadamente imutaveis da Terra, mantendo uma lista explicita de exclusao para materiais que
-mudam em runtime. Commit inicial `1fe3205`.
+Em andamento: nenhum. Proximo recomendado: Lab 225 - centralizar o perfil de qualidade mobile,
+instrumentar cada decisao e validar no Redmi Pad 2/Poco C75 sem reduzir conteudo ou legibilidade.
 
 ---
 
-Ultimo concluido: labs/lab-223-instancias-estrutura-escolas/ - as estruturas das 30 escolinhas
+Ultimo concluido: labs/lab-224-materiais-estaticos-terra/ - congela por allowlist 45 materiais de
+primitivas estaticas da Terra, mantendo avatar, pets, GLBs, agua, clima, quests, efeitos,
+minijogos e interiores dinamicos. No mesmo perfil do Lab 223, FPS medio subiu de 16,45 para 17,84
+(+8,4%), active evaluation caiu 12,5% e render caiu 10,2%, com draw calls e meshes estaveis.
+TypeScript, 278/278 testes, lint, build e Edge passaram. O proximo lab recomendado e centralizar e
+instrumentar o perfil de qualidade mobile. Ver `FEATURES.md` e `CONTEXT.md` da pasta.
+
+---
+
+Antes desse: labs/lab-223-instancias-estrutura-escolas/ - as estruturas das 30 escolinhas
 agora usam 3 meshes-fonte e 87 `InstancedMesh`, reduzindo de 90 para 3 geometrias independentes e
 mantendo um `PhysicsAggregate` estatico por parede. Em leitura direcional do HUD com 20 escolas e
 escala 1,60, draw calls cairam de 2.163 para 2.052 (-5,1%). TypeScript, 276/276 testes, lint, build
