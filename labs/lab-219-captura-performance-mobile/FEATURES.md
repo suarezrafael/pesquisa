@@ -86,3 +86,6 @@ P0, conclusao operacional do backlog 191 antes da otimizacao de draw calls do ba
 - Review do Copilot, rodada 1: dois achados reais corrigidos. Uma trava por `ref` impede reentrada
   por duplo-toque antes do state do React atualizar; o estado visual de copia agora e tipado e nao
   depende da pontuacao do texto anunciado por `aria-live`.
+- Review do Copilot, rodada 2: confirmou os dois achados anteriores como resolvidos e encontrou o
+  fallback de download desprotegido. Falhas de Blob/DOM agora preservam o handler e exibem feedback
+  claro, com limpeza do link e da URL temporaria no `finally`.

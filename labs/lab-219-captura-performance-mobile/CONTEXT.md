@@ -17,6 +17,8 @@ PR: #103
   camera; mensagens completas permanecem em `aria-live` sem criar outra linha visual.
 - O review automatico encontrou e a implementacao corrigiu reentrada por duplo-toque e acoplamento
   do estado visual de copia ao texto completo da mensagem acessivel.
+- A segunda rodada confirmou os dois achados como resolvidos e identificou o fallback de download
+  desprotegido; o caminho agora captura falhas de Blob/DOM e informa o usuario sem rejeicao solta.
 
 ## Baseline Android emulado
 

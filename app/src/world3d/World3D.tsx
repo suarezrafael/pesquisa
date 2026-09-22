@@ -16185,18 +16185,29 @@ export function World3D({
     } catch {
       // Alguns WebViews/Androids bloqueiam Clipboard API mesmo em HTTPS. O download local mantem
       // a coleta recuperavel sem servidor e sem pedir permissao adicional.
-      const blobUrl = URL.createObjectURL(new Blob([perfSampleReport], { type: 'application/json' }))
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = `missao-aprender-perf-${Date.now()}.json`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      // Revogar na mesma pilha pode invalidar o download antes de WebViews lentos consumirem a
-      // URL. Um ciclo curto preserva o arquivo e ainda libera o blob logo depois.
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
-      setPerfCopyStatus('downloaded')
-      setPerfSampleFeedback('Clipboard indisponivel; JSON baixado.')
+      let blobUrl: string | null = null
+      let link: HTMLAnchorElement | null = null
+      try {
+        blobUrl = URL.createObjectURL(new Blob([perfSampleReport], { type: 'application/json' }))
+        link = document.createElement('a')
+        link.href = blobUrl
+        link.download = `missao-aprender-perf-${Date.now()}.json`
+        document.body.appendChild(link)
+        link.click()
+        setPerfCopyStatus('downloaded')
+        setPerfSampleFeedback('Clipboard indisponivel; JSON baixado.')
+      } catch {
+        setPerfCopyStatus('idle')
+        setPerfSampleFeedback('Nao foi possivel copiar ou baixar o relatorio.')
+      } finally {
+        link?.remove()
+        if (blobUrl) {
+          // Revogar na mesma pilha pode invalidar o download antes de WebViews lentos consumirem a
+          // URL. Um ciclo curto preserva o arquivo e ainda libera o blob logo depois.
+          const urlToRevoke = blobUrl
+          window.setTimeout(() => URL.revokeObjectURL(urlToRevoke), 1000)
+        }
+      }
     }
   }
 
