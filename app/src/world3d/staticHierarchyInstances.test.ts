@@ -106,4 +106,36 @@ describe('instantiateStaticHierarchy (lab-220)', () => {
     expect(secondLeaves[0].material).toBe(sourceMesh.material)
     expect(second?.getChildTransformNodes(true)[0]?.rotation.z).toBe(limbPivot.rotation.z)
   })
+
+  it('instancia as tres folhas da estrutura e permite identificar a parede pelo mesh fonte', () => {
+    engine = new NullEngine()
+    const scene = new Scene(engine)
+    const sourceRoot = new TransformNode('school-structure-q01', scene)
+    const material = new StandardMaterial('school-material', scene)
+    const walls = MeshBuilder.CreateBox('walls-q01', { width: 1.6, height: 1.1, depth: 1.4 }, scene)
+    const foundation = MeshBuilder.CreateBox(
+      'foundation-q01',
+      { width: 1.72, height: 1.6, depth: 1.52 },
+      scene,
+    )
+    const door = MeshBuilder.CreateBox('door-q01', { width: 0.42, height: 0.62, depth: 0.06 }, scene)
+
+    for (const mesh of [walls, foundation, door]) {
+      mesh.parent = sourceRoot
+      mesh.material = material
+    }
+
+    const createdLeaves: InstancedMesh[] = []
+    const hierarchy = instantiateStaticHierarchy(sourceRoot, 'school-structure-q02', (instance) => {
+      createdLeaves.push(instance)
+    })
+    const wallInstance = createdLeaves.find((instance) => instance.sourceMesh === walls)
+
+    expect(hierarchy?.getChildMeshes(false)).toHaveLength(3)
+    expect(createdLeaves).toHaveLength(3)
+    expect(wallInstance).toBeInstanceOf(InstancedMesh)
+    expect(wallInstance?.geometry).toBe(walls.geometry)
+    expect(createdLeaves.map((instance) => instance.material)).toEqual([material, material, material])
+    expect(createdLeaves.map((instance) => instance.sourceMesh)).toEqual([walls, foundation, door])
+  })
 })

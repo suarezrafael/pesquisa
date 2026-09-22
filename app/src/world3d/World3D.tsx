@@ -13,6 +13,7 @@ import {
   HavokPlugin,
   HDRCubeTexture,
   HemisphericLight,
+  InstancedMesh,
   Matrix,
   Mesh,
   MeshBuilder,
@@ -8855,6 +8856,13 @@ export function World3D({
       let earthSchoolTeacherSource: StudentFigure | null = null
       let earthSchoolTeacherSourceMeshCount = 0
       let earthSchoolTeacherInstanceMeshCount = 0
+      // Lab 223: paredes, fundacao e porta tambem sao identicas e estaticas. A primeira escola
+      // conserva as tres meshes Babylon normais; as demais instanciam as folhas da hierarquia,
+      // compartilhando geometria/material sem misturar o colisor individual de cada parede.
+      let earthSchoolStructureSource: TransformNode | null = null
+      let earthSchoolWallSource: AbstractMesh | null = null
+      let earthSchoolStructureSourceMeshCount = 0
+      let earthSchoolStructureInstanceMeshCount = 0
 
       quests.forEach((quest, index) => {
         // lab-95: posição final já vem de `schoolUps` (calculado logo no início de `setup()`,
@@ -8874,40 +8882,69 @@ export function World3D({
         // (abaixo) provavelmente reage mal a alguma combinação das dimensões/posições menores —
         // causa raiz não confirmada ainda, revertido pra parar o bug ao vivo primeiro. Ver
         // CONTEXT.md do lab-95 pra status da investigação.
-        const walls = MeshBuilder.CreateBox(`walls-${quest.id}`, { width: 1.6, height: 1.1, depth: 1.4 }, scene)
-        walls.position = new Vector3(0, 0.55, 0)
-        walls.material = wallMatShared
-        walls.parent = base
-        walls.receiveShadows = true
+        let walls: AbstractMesh
+        if (!earthSchoolStructureSource) {
+          const structureRoot = new TransformNode(`school-structure-${quest.id}`, scene)
+          structureRoot.parent = base
+
+          walls = MeshBuilder.CreateBox(
+            `walls-${quest.id}`,
+            { width: 1.6, height: 1.1, depth: 1.4 },
+            scene,
+          )
+          walls.position = new Vector3(0, 0.55, 0)
+          walls.material = wallMatShared
+          walls.parent = structureRoot
+          walls.receiveShadows = true
+
+          // Fundacao (pedido do usuario, com screenshots: "a casa flutuando numa superficie
+          // invisivel" mesmo depois de `terrainGroundRadial` confirmar folga ~0 no ANCORA da
+          // escola). A caixa profunda cobre a variacao do relevo sob a estrutura rigida.
+          const foundation = MeshBuilder.CreateBox(
+            `foundation-${quest.id}`,
+            { width: 1.72, height: 1.6, depth: 1.52 },
+            scene,
+          )
+          foundation.position = new Vector3(0, -0.65, 0)
+          foundation.material = foundationMatShared
+          foundation.parent = structureRoot
+          foundation.receiveShadows = true
+
+          const door = MeshBuilder.CreateBox(
+            `door-${quest.id}`,
+            { width: 0.42, height: 0.62, depth: 0.06 },
+            scene,
+          )
+          door.position = new Vector3(0, 0.31, 0.71)
+          door.material = doorMatShared
+          door.parent = structureRoot
+
+          earthSchoolStructureSource = structureRoot
+          earthSchoolWallSource = walls
+          earthSchoolStructureSourceMeshCount = structureRoot.getChildMeshes(false).length
+        } else {
+          const hierarchy = instantiateStaticHierarchy(
+            earthSchoolStructureSource,
+            `school-structure-${quest.id}`,
+            () => earthSchoolStructureInstanceMeshCount++,
+          )
+          if (!hierarchy) throw new Error(`Nao foi possivel instanciar a estrutura da escola ${quest.id}`)
+          hierarchy.parent = base
+
+          const wallInstance = hierarchy.getChildMeshes(false).find(
+            (mesh): mesh is InstancedMesh =>
+              mesh instanceof InstancedMesh && mesh.sourceMesh === earthSchoolWallSource,
+          )
+          if (!wallInstance) throw new Error(`Nao foi possivel localizar a parede da escola ${quest.id}`)
+          walls = wallInstance
+        }
+
         // Pedido do usuário (junto com montanhas maiores/casinhas em cima delas): "precisam ter
         // colisão" — antes o prédio era só visual, o jogador atravessava a parede andando. Mesmo
         // padrão das plataformas de parkour (`PhysicsShapeType.BOX`, `mass: 0` — estático, nunca
         // se move).
         new PhysicsAggregate(walls, PhysicsShapeType.BOX, { mass: 0, friction: 0.7 }, scene)
         shadowGenerator.addShadowCaster(walls)
-
-        // Fundação (pedido do usuário, com screenshots: "a casa flutuando numa superfície
-        // invisível" mesmo depois de `terrainGroundRadial` confirmar folga ~0 no ANCORA da
-        // escola). Causa raiz real: `surfacePos`/`alignmentQuaternion` amostram o terreno em UM
-        // ponto só, mas a caixa de paredes (reduzida no lab-95, ver comentário acima) é rígida —
-        // em terreno com relevo, o terreno varia de um canto ao outro da própria escola, deixando
-        // um canto flutuando (chão visível embaixo) enquanto o oposto afunda. Uma base mais funda
-        // e um pouco mais larga que as paredes garante que nenhum canto fique no ar, sem precisar
-        // inclinar a caixa pra seguir o relevo local.
-        const foundation = MeshBuilder.CreateBox(
-          `foundation-${quest.id}`,
-          { width: 1.72, height: 1.6, depth: 1.52 },
-          scene,
-        )
-        foundation.position = new Vector3(0, -0.65, 0)
-        foundation.material = foundationMatShared
-        foundation.parent = base
-        foundation.receiveShadows = true
-
-        const door = MeshBuilder.CreateBox(`door-${quest.id}`, { width: 0.42, height: 0.62, depth: 0.06 }, scene)
-        door.position = new Vector3(0, 0.31, 0.71)
-        door.material = doorMatShared
-        door.parent = base
 
         // Telhado: carrega a cor/estado da missão (equivalente ao antigo anel).
         const roof = MeshBuilder.CreateCylinder(
@@ -15660,7 +15697,7 @@ export function World3D({
           // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
           // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
           // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · escolas ${enabledSchoolCount}/${portalMeshes.length} · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -15853,6 +15890,8 @@ export function World3D({
                 enabledMin: Math.min(...enabledSchoolSamples, enabledSchoolCount),
                 enabledMax: Math.max(...enabledSchoolSamples, enabledSchoolCount),
                 total: portalMeshes.length,
+                structureSourceMeshes: earthSchoolStructureSourceMeshCount,
+                structureInstanceMeshes: earthSchoolStructureInstanceMeshCount,
                 teacherSourceMeshes: earthSchoolTeacherSourceMeshCount,
                 teacherInstanceMeshes: earthSchoolTeacherInstanceMeshCount,
               },
@@ -15908,6 +15947,8 @@ export function World3D({
         earthSchools: () => ({
           enabled: enabledSchoolCount,
           total: portalMeshes.length,
+          structureSourceMeshes: earthSchoolStructureSourceMeshCount,
+          structureInstanceMeshes: earthSchoolStructureInstanceMeshCount,
           teacherSourceMeshes: earthSchoolTeacherSourceMeshCount,
           teacherInstanceMeshes: earthSchoolTeacherInstanceMeshCount,
         }),
