@@ -1,7 +1,8 @@
 # Laboratório atual
 
-Em andamento: nenhum. Proximo recomendado: Lab 225 - centralizar o perfil de qualidade mobile,
-instrumentar cada decisao e validar no Redmi Pad 2/Poco C75 sem reduzir conteudo ou legibilidade.
+Em andamento: labs/lab-225-perfil-qualidade-mobile/ - centraliza as decisoes graficas e decorativas
+em perfis auditaveis, expoe as reducoes na telemetria e preserva o auto-ajuste de resolucao.
+Commit inicial `a92be87`.
 
 ---
 
