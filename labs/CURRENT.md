@@ -5,7 +5,7 @@ Ultimo concluido: labs/lab-219-captura-performance-mobile/ - transformou a instr
 de cena/dispositivo, sem rede. Corrigiu o contador do HUD que mostrava zero draw calls por ler antes
 da renderizacao. Edge e Android Emulator passaram; baseline emulado da Terra: 15,07 FPS medio,
 p5 9,36, 2.315 draw calls e camera render 45,59 ms, contra fisica 0,56 ms. A coleta em Redmi/Poco
-fisicos continua pendente; o proximo lab recomendado e uma fatia pequena de instances/thin
+fisicos continua pendente. PR #103. O proximo lab recomendado e uma fatia pequena de instances/thin
 instances para props decorativos repetidos, comparada pelo mesmo relatorio. Ver `FEATURES.md` e
 `CONTEXT.md` da pasta.
 

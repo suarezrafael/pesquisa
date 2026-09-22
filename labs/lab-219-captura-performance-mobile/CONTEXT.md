@@ -2,6 +2,7 @@
 
 Preenchido em: 2026-09-21
 Commit inicial: e9ee81c5b7eafd748afa55b4cabf4e3f9f696b3a
+PR: #103
 
 ## O que foi feito
 
@@ -14,6 +15,8 @@ Commit inicial: e9ee81c5b7eafd748afa55b4cabf4e3f9f696b3a
 - O HUD deixou de ler draw calls antes da renderizacao e agora mostra o ultimo quadro concluido.
 - O layout foi ajustado no Android emulado para nao disputar espaco com giro/recentralizacao da
   camera; mensagens completas permanecem em `aria-live` sem criar outra linha visual.
+- O review automatico encontrou e a implementacao corrigiu reentrada por duplo-toque e acoplamento
+  do estado visual de copia ao texto completo da mensagem acessivel.
 
 ## Baseline Android emulado
 

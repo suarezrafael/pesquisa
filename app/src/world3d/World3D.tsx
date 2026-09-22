@@ -2674,8 +2674,10 @@ export function World3D({
   // Android. O proprio painel agora conduz a coleta e guarda o JSON localmente para um segundo
   // toque copiar. Nenhum dado sai do aparelho e a amostra so roda quando o usuario pede.
   const [perfSampleRunning, setPerfSampleRunning] = useState(false)
+  const perfSampleRunningRef = useRef(false)
   const [perfSampleReport, setPerfSampleReport] = useState<string | null>(null)
   const [perfSampleFeedback, setPerfSampleFeedback] = useState<string | null>(null)
+  const [perfCopyStatus, setPerfCopyStatus] = useState<'idle' | 'copied' | 'downloaded'>('idle')
   const [muted, setMuted] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   // Backlog "Lab 194 - Quick chat contextual sem supervisao pesada" — o gatilho de chat do HUD
@@ -16153,10 +16155,14 @@ export function World3D({
     const perfHandle = (window as Window & {
       __perf?: { sample: (durationMs?: number) => Promise<Record<string, unknown>> }
     }).__perf
-    if (!perfHandle || perfSampleRunning) return
+    // `setState` e assíncrono: dois toques no mesmo tick ainda enxergam o valor antigo no closure.
+    // O ref trava a reentrada imediatamente, antes de chamar `sample()` pela primeira vez.
+    if (!perfHandle || perfSampleRunningRef.current) return
 
+    perfSampleRunningRef.current = true
     setPerfSampleRunning(true)
     setPerfSampleReport(null)
+    setPerfCopyStatus('idle')
     setPerfSampleFeedback('Medindo por 15 segundos... continue jogando.')
     try {
       const report = await perfHandle.sample(15000)
@@ -16165,6 +16171,7 @@ export function World3D({
     } catch (error) {
       setPerfSampleFeedback(error instanceof Error ? error.message : 'Nao foi possivel medir agora.')
     } finally {
+      perfSampleRunningRef.current = false
       setPerfSampleRunning(false)
     }
   }
@@ -16173,6 +16180,7 @@ export function World3D({
     if (!perfSampleReport) return
     try {
       await navigator.clipboard.writeText(perfSampleReport)
+      setPerfCopyStatus('copied')
       setPerfSampleFeedback('Relatorio copiado.')
     } catch {
       // Alguns WebViews/Androids bloqueiam Clipboard API mesmo em HTTPS. O download local mantem
@@ -16187,6 +16195,7 @@ export function World3D({
       // Revogar na mesma pilha pode invalidar o download antes de WebViews lentos consumirem a
       // URL. Um ciclo curto preserva o arquivo e ainda libera o blob logo depois.
       window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+      setPerfCopyStatus('downloaded')
       setPerfSampleFeedback('Clipboard indisponivel; JSON baixado.')
     }
   }
@@ -16282,9 +16291,9 @@ export function World3D({
               </button>
               {perfSampleReport && (
                 <button type="button" className="world3d-debug-action" onClick={handleCopyPerfSample}>
-                  {perfSampleFeedback === 'Relatorio copiado.'
+                  {perfCopyStatus === 'copied'
                     ? 'Copiado'
-                    : perfSampleFeedback === 'Clipboard indisponivel; JSON baixado.'
+                    : perfCopyStatus === 'downloaded'
                       ? 'JSON baixado'
                       : 'Copiar JSON'}
                 </button>

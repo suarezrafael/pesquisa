@@ -4,6 +4,7 @@ Status: concluido
 Inicio: 2026-09-21
 Fim: 2026-09-21
 Commit inicial: e9ee81c5b7eafd748afa55b4cabf4e3f9f696b3a
+PR: #103
 
 ## Problema / hipotese
 
@@ -82,3 +83,6 @@ P0, conclusao operacional do backlog 191 antes da otimizacao de draw calls do ba
   com os controles de camera e copia confirmada.
 - Baseline do emulador/Terra (15,1 s): 15,07 FPS medio, p5 9,36, p1 7,56, 2.315 draw calls medios,
   297 meshes ativos, camera render 45,59 ms, active-mesh evaluation 9,14 ms e fisica 0,56 ms.
+- Review do Copilot, rodada 1: dois achados reais corrigidos. Uma trava por `ref` impede reentrada
+  por duplo-toque antes do state do React atualizar; o estado visual de copia agora e tipado e nao
+  depende da pontuacao do texto anunciado por `aria-live`.
