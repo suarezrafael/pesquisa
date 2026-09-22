@@ -83,12 +83,14 @@ motivo real da migração), e é o único ativo em produção.
 
 ### Otimização pra dispositivos fracos
 
-A cena inteira (~1900 meshes, sombras, SSAO, antialiasing) roda tranquilamente em desktop, mas
-pesava demais em tablets de entrada (relatado num Redmi Pad 2). Detecção por user agent móvel
-ativa um caminho de qualidade reduzida: resolução interna menor (`hardwareScalingLevel`), sem
-antialiasing/MSAA/FXAA, sem SSAO2, sombras em resolução menor e sem nenhum caster, menos
-partículas de chuva, e menos itens decorativos (props/pedras/bichos/nuvens/NPCs) — tudo isolado
-atrás de uma detecção só, sem duplicar lógica, e sem nenhuma mudança pro caminho desktop.
+A cena pode pesar em tablets e celulares de entrada. Um benchmark de GPU escolhe o perfil
+`economy` ou `full` definido em `src/world3d/qualityProfile.ts`; FXAA continua ativo nos dois,
+enquanto o perfil econômico reduz MSAA, SSAO2, sombras, partículas e densidade decorativa. A
+resolução interna (`hardwareScalingLevel`) continua ajustando-se pelo FPS durante o jogo, inclusive
+quando a GPU foi classificada como forte. O HUD e `window.__perf.sample()` mostram o perfil,
+as reduções ativas, a escala atual e os ciclos de ajuste. Para testar os dois caminhos no servidor
+de desenvolvimento, use `?gpuTier=weak` ou `?gpuTier=strong`; a opção é ignorada no build de
+produção. Tamanho das legendas e conteúdo educativo não dependem desse perfil.
 
 ## O que tem no jogo
 
