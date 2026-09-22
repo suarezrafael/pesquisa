@@ -2,7 +2,7 @@
 
 Preenchido em: 2026-09-21
 Commit inicial: c8b23f7b1611c48765b0aa8137ecb1a0f0509f0f
-PR: a preencher
+PR: #104
 
 ## O que foi feito
 
@@ -73,4 +73,4 @@ draw calls sem contribuir para o que a crianca enxerga e pode ser ocultado com s
 
 - Repetir a amostra antes/depois em Redmi Pad 2 e Poco C75 fisicos.
 - Medir Marte e ao menos um planeta secundario antes de migrar seus props.
-- Preencher o numero da PR apos a abertura e registrar o merge em `labs/CURRENT.md`.
+- Registrar o merge em `labs/CURRENT.md`.
