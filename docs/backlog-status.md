@@ -49,7 +49,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | 197 - Orbitas/luas | 209 | Concluido | PR #92. |
 | 200 - Missoes fisicas | 210 | Concluido | PR #93. |
 | 198 - Efeitos visuais leves | 207/211/212/213/214/215 | Concluido | Landing puff, brilho, pulso, poeira de passos, rastro do foguete e feedback de puzzle entregues. |
-| 193 - Otimizacao de draw calls | 220/221/222/223 | Parcial | Props instanciados (-7,3%), escolas ocultas pela Terra (-12,0%), professores compartilhados (19 fontes + 551 instancias) e estruturas reduzidas a 3 fontes + 87 instancias (-5,1% direcional no HUD). Faltam auditoria de materiais e Android fisico. |
+| 193 - Otimizacao de draw calls | 220/221/222/223/224 | Parcial | Props e escolas foram instanciados/cullados; 45/389 materiais estaticos foram congelados por allowlist. Contra o mesmo perfil do Lab 223, active evaluation caiu 12,5% e render 10,2%. Falta Android fisico e perfil de qualidade centralizado. |
 | 199 - Filtro de chat livre | - | Condicional | P2; somente apos pesquisa e opt-in parental. |
 | 218 - Mercado/bazar 3D | - | Bloqueado | Escopo ainda precisa ser decidido. |
 
@@ -66,7 +66,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 ## Proxima ordem recomendada
 
 1. Medir o baseline em Redmi Pad 2/Poco C75 e fechar o backlog 191.
-2. Continuar o backlog 193 pelo Lab 224, congelando somente materiais comprovadamente estaticos e medindo CPU/render sem quebrar estados visuais.
+2. Executar o Lab 225: centralizar, instrumentar e validar o perfil de qualidade mobile por custo real.
 3. Executar o Lab 186 de playtest e as Pesquisas A/B.
 4. Priorizar UX 187-190 com base nos testes.
 5. Definir o escopo do mercado/bazar como backlog 218 (aguardando o usuario detalhar o pedido).
