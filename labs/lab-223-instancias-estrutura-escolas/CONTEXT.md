@@ -2,7 +2,7 @@
 
 Preenchido em: 2026-09-22
 Commit inicial: 5027387268f63c48b2d5ee4c56f651c608dc5fb5
-PR: a abrir
+PR: #107
 
 ## O que foi feito
 
