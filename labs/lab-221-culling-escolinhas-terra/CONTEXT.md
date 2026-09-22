@@ -2,7 +2,7 @@
 
 Preenchido em: 2026-09-22
 Commit inicial: 20c2f4c157bcfb3ccdf2bf430cf1edb7aefd4f6c
-PR: a preencher
+PR: #105
 
 ## O que foi feito
 
@@ -77,4 +77,4 @@ calls que outro corte de visibilidade, sem alterar a leitura de NPC em cada esco
 - Repetir a medicao no Redmi Pad 2 e Poco C75 fisicos.
 - Testar aproximacao/afastamento de uma escola durante uma volta completa no planeta em hardware
   com `requestAnimationFrame` normal, observando o horizonte em zoom maximo.
-- Preencher o numero da PR apos a abertura.
+- Registrar o merge em `labs/CURRENT.md`.

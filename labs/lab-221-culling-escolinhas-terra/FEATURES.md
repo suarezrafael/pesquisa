@@ -4,6 +4,7 @@ Status: concluido
 Inicio: 2026-09-22
 Fim: 2026-09-22
 Commit inicial: 20c2f4c157bcfb3ccdf2bf430cf1edb7aefd4f6c
+PR: #105
 
 ## Problema / hipotese
 
