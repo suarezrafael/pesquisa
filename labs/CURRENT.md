@@ -1,18 +1,20 @@
 # Laboratório atual
 
-Em andamento: labs/lab-223-instancias-estrutura-escolas/ - compartilha paredes, fundacoes e portas
-das 30 escolinhas por `InstancedMesh`, mantendo um `PhysicsAggregate` estatico por parede e sem
-alterar telhados dinamicos, professores, relevo ou culling. Commit inicial `5027387`.
+Ultimo concluido: labs/lab-223-instancias-estrutura-escolas/ - as estruturas das 30 escolinhas
+agora usam 3 meshes-fonte e 87 `InstancedMesh`, reduzindo de 90 para 3 geometrias independentes e
+mantendo um `PhysicsAggregate` estatico por parede. Em leitura direcional do HUD com 20 escolas e
+escala 1,60, draw calls cairam de 2.163 para 2.052 (-5,1%). TypeScript, 276/276 testes, lint, build
+e Edge passaram. O proximo lab recomendado e auditar `material.freeze()` apenas em materiais
+comprovadamente estaticos. Ver `FEATURES.md` e `CONTEXT.md` da pasta.
 
 ---
 
-Ultimo concluido: labs/lab-222-instancias-professores-escolas/ - os 30 professores estaticos das
+Antes desse: labs/lab-222-instancias-professores-escolas/ - os 30 professores estaticos das
 escolinhas agora usam 19 meshes-fonte e 551 `InstancedMesh`, compartilhando geometria e materiais
 sem aumentar os 2.264 meshes totais do perfil local. Na medicao direcional contra o Lab 221, draw
 calls medios cairam de 2.726,87 para 1.681,00 (-38,4%), mesmo com 22 escolas habilitadas contra
-20 no baseline. TypeScript, 275/275 testes, lint, build e Edge passaram. PR #106. O proximo
-lab recomendado e instanciar a estrutura visual repetida das escolas. Ver `FEATURES.md` e
-`CONTEXT.md` da pasta.
+20 no baseline. TypeScript, 275/275 testes, lint, build e Edge passaram. PR #106. Ver
+`FEATURES.md` e `CONTEXT.md` da pasta.
 
 ---
 
