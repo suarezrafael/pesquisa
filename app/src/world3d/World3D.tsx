@@ -142,6 +142,7 @@ import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { instantiateStaticHierarchy } from './staticHierarchyInstances'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
+import { QUALITY_PROFILES, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
@@ -811,8 +812,6 @@ const DESTINATION_PLANET_LIST: DestinationPlanet[] = Object.values(DESTINATION_P
 // de propósito (metade em dispositivo fraco) — cada inimigo roda IA por quadro, e o lab-59 acabou
 // de cortar contagens de props/bichos pra recuperar FPS no Redmi Pad 2; não faz sentido adicionar
 // uma feature nova que reintroduza o mesmo problema.
-const MARS_ENEMY_COUNT_LOW_END = 3
-const MARS_ENEMY_COUNT = 6
 const MARS_MAX_HEALTH = 100
 
 // Cronômetro de sobrevivência (lab-129, pedido do usuário: "alguns planetas tem tempo de
@@ -2548,7 +2547,12 @@ export function World3D({
   // pesado que monta o mundo, pra não recarregar o mundo inteiro se algo mais nesse efeito mudar.
   // `'pending'` segura o efeito de montagem do mundo (mais abaixo) até o benchmark terminar.
   const [gpuTier, setGpuTier] = useState<'pending' | 'weak' | 'strong'>('pending')
+  const gpuTierOverride = developmentGpuTierOverride(window.location.search, import.meta.env.DEV)
   useEffect(() => {
+    if (gpuTierOverride) {
+      setGpuTier(gpuTierOverride)
+      return
+    }
     let cancelled = false
     benchmarkIsWeakGpu(() => cancelled).then((isWeak) => {
       if (!cancelled) setGpuTier(isWeak ? 'weak' : 'strong')
@@ -2556,7 +2560,7 @@ export function World3D({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [gpuTierOverride])
   // Achado do review automático do Copilot: `gpuTier === 'pending'` só cobre o benchmark de GPU —
   // depois dele resolver, o efeito pesado ainda tem `setup()` assíncrono pela frente (Havok + 18
   // GLBs), que só registra as pontes de cena (`__recenterCamera` etc.) no FIM. Nessa janela o
@@ -3093,6 +3097,8 @@ export function World3D({
     // hardware"). `gpuTier` mede desempenho real (benchmark síncrono numa cena sintética fora da
     // tela, ver `benchmarkIsWeakGpu`), não o tipo de aparelho.
     const isLowEndDevice = gpuTier === 'weak'
+    const qualityProfile = QUALITY_PROFILES[gpuTier]
+    const reducedSettings = reducedQualitySettings(qualityProfile)
     // Legendas flutuantes (Babylon.GUI, número da escolinha/dica de interação/etc.) — o lab-57 já
     // corrigiu o bug de RESOLUÇÃO da textura de GUI (borrada, upscaled), mas o TAMANHO da fonte em
     // si continuava fixo em pixels reais de dispositivo — grande demais numa tela física pequena
@@ -3147,7 +3153,7 @@ export function World3D({
 
     // Nenhum fluxo do jogo le pixels do framebuffer ou usa stencil. Deixar ambos desligados
     // permite ao navegador descartar o back buffer e evita memoria/banda grafica sem uso.
-    const engine = new Engine(canvas, !isLowEndDevice, { preserveDrawingBuffer: false, stencil: false })
+    const engine = new Engine(canvas, qualityProfile.engineAntialias, { preserveDrawingBuffer: false, stencil: false })
     // Valor inicial moderado — nem o melhor nem o pior caso — só até a medição real de FPS (ver
     // `autoTuneResolution` mais abaixo, fora de `setup()`) ajustar pro valor certo pra ESTE
     // aparelho especificamente. Chutar um número fixo (1.5, depois 1.75, depois 1.5 de novo) sem
@@ -3158,7 +3164,20 @@ export function World3D({
     // C75, mesmo com a medição de FPS já ligada desde o lab-58) — o teto do ajuste automático
     // logo abaixo também baixou; começar mais perto de nítido custa pouco (só ~6s até a primeira
     // medição real ajustar pro valor certo desse aparelho).
-    if (isLowEndDevice) engine.setHardwareScalingLevel(1.15)
+    if (qualityProfile.initialHardwareScalingLevel !== 1) {
+      engine.setHardwareScalingLevel(qualityProfile.initialHardwareScalingLevel)
+    }
+    let lastAutoTuneAverageFps: number | null = null
+    let autoTuneCycles = 0
+    const qualityReport = () => ({
+      ...qualityProfile,
+      gpuTier,
+      gpuTierSource: gpuTierOverride ? 'development-override' : 'benchmark',
+      reducedSettings,
+      hardwareScalingLevel: engine.getHardwareScalingLevel(),
+      autoTuneCycles,
+      lastAutoTuneAverageFps,
+    })
     const scene = new Scene(engine)
     sceneRef.current = scene
     if (import.meta.env.DEV) {
@@ -3422,12 +3441,12 @@ export function World3D({
     ;(scene as any).__recenterCamera = recenterCamera
 
     const pipeline = new DefaultRenderingPipeline('quality', true, scene, [camera])
-    pipeline.samples = isLowEndDevice ? 1 : 4
+    pipeline.samples = qualityProfile.msaaSamples
     // FXAA ligado também no mobile (lab-59, usuário: "a qualidade do 3D está muito baixa no
     // telefone") — MSAA (`samples`) continua desligado (caro, custa por amostra), mas FXAA é um
     // único passe de pós-processamento barato que suaviza serrilhado sem custo por amostra;
     // ajuda a disfarçar um pouco o efeito de `hardwareScalingLevel` reduzido.
-    pipeline.fxaaEnabled = true
+    pipeline.fxaaEnabled = qualityProfile.fxaaEnabled
     pipeline.imageProcessing.toneMappingEnabled = true
     pipeline.imageProcessing.toneMappingType = 1 // ACES
     pipeline.imageProcessing.exposure = 0.9
@@ -3435,7 +3454,7 @@ export function World3D({
 
     // SSAO2 é um dos passes mais caros pra GPU mobile (ratio 0.5 + blur, por quadro) — pulado
     // inteiro em dispositivos fracos.
-    if (!isLowEndDevice) {
+    if (qualityProfile.ssaoEnabled) {
       const ssao = new SSAO2RenderingPipeline('ssao', scene, {
         ssaoRatio: 0.5,
         blurRatio: 0.5,
@@ -3466,8 +3485,8 @@ export function World3D({
     sunLight.intensity = 1.0
     sunLight.position = new Vector3(20, 30, 20)
 
-    const shadowGenerator = new ShadowGenerator(isLowEndDevice ? 512 : 1024, sunLight)
-    shadowGenerator.useBlurExponentialShadowMap = !isLowEndDevice
+    const shadowGenerator = new ShadowGenerator(qualityProfile.shadowMapSize, sunLight)
+    shadowGenerator.useBlurExponentialShadowMap = qualityProfile.blurredShadows
     shadowGenerator.blurKernel = 32
     // lab-87, pedido do usuário: "manchas pretas ao caminhar" no chão do planeta. Suspeita: shadow
     // acne — o planeta é uma esfera deformada com relevo real (curvatura contínua, normais mudando
@@ -3485,12 +3504,12 @@ export function World3D({
     // some ainda mais rápido que o próprio SSAO. Em vez de caçar e editar cada um dos ~40 pontos
     // de chamada, desativa a captura de sombra inteira (o gerador continua existindo, só não
     // recebe casters — sem casters o passe de shadow map roda sobre nada, custo desprezível).
-    if (isLowEndDevice) shadowGenerator.addShadowCaster = () => shadowGenerator
+    if (!qualityProfile.shadowCastersEnabled) shadowGenerator.addShadowCaster = () => shadowGenerator
 
     // GlowLayer roda um passe extra de blur sobre o material emissivo todo quadro — mais um post-
     // process caro pulado em dispositivo fraco (lab-56, "ainda está um pouco pesado pro tablet"),
     // igual já foi feito com SSAO2/sombras/MSAA. Só afeta o brilho dos portais das escolas.
-    if (!isLowEndDevice) {
+    if (qualityProfile.glowEnabled) {
       const glow = new GlowLayer('glow', scene)
       glow.intensity = 0.7
     }
@@ -4992,7 +5011,7 @@ export function World3D({
       // — resolução menor em `isLowEndDevice` (mesmo padrão já usado pro shadow map/MSAA/
       // partículas acima) reduz esse custo, tornando menos provável que a geração fique
       // incompleta/lenta demais bem na hora em que os primeiros quadros já estão renderizando.
-      const hdrTexture = new HDRCubeTexture('/assets/hdri/kiara_4_mid-morning_1k.hdr', scene, isLowEndDevice ? 128 : 256)
+      const hdrTexture = new HDRCubeTexture('/assets/hdri/kiara_4_mid-morning_1k.hdr', scene, qualityProfile.environmentTextureSize)
       scene.environmentTexture = hdrTexture
       scene.environmentIntensity = 0.75
       scene.createDefaultSkybox(hdrTexture, true, 500)
@@ -5651,7 +5670,7 @@ export function World3D({
       // estão com muito lag"). O lab-220 passou a compartilhar as malhas via instancing, mas
       // preserva a densidade reduzida já validada em aparelhos fracos: instancing corta submissao
       // de draw calls, nao o custo de vertices/fragmentos de cada ocorrencia.
-      const PROP_COUNT = isLowEndDevice ? 24 : 65
+      const PROP_COUNT = qualityProfile.earthPropCount
       for (let i = 0; i < PROP_COUNT; i++) {
         const t = i / PROP_COUNT
         // Cobre de perto do polo (onde a bola nasce) até um pouco além do equador —
@@ -5776,7 +5795,7 @@ export function World3D({
         // uma perto da outra" — de 12 pra 7 (menos itens no total) e `radiusFrac` com piso maior
         // (0,25 → 0,35) pra afastar um pouco mais do centro, reduzindo a chance de dois caírem
         // perto um do outro.
-        const DESERT_PROP_COUNT = isLowEndDevice ? 4 : 7
+        const DESERT_PROP_COUNT = qualityProfile.desertPropCount
         for (let i = 0; i < DESERT_PROP_COUNT; i++) {
           const angle = (i / DESERT_PROP_COUNT) * Math.PI * 2 + i * 0.73
           const radiusFrac = 0.35 + ((i * 5) % 7) / 7
@@ -5838,7 +5857,7 @@ export function World3D({
         const seed = Math.abs(plateau.dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
         const tangentA = Vector3.Cross(plateau.dir, seed).normalize()
         const tangentB = Vector3.Cross(plateau.dir, tangentA).normalize()
-        const ROCKS_PER_MOUNTAIN = isLowEndDevice ? 2 : 4
+        const ROCKS_PER_MOUNTAIN = qualityProfile.rocksPerMountain
         for (let ri = 0; ri < ROCKS_PER_MOUNTAIN; ri++) {
           const angle = (ri / ROCKS_PER_MOUNTAIN) * Math.PI * 2 + pi * 0.9
           const radiusFrac = 0.15 + ((ri * 5 + pi * 3) % 7) / 7 / 1.6 // 0.15-0.58 do raio do platô
@@ -6576,7 +6595,7 @@ export function World3D({
       const critters: Critter[] = []
       // 20 → 14 (lab-59, mesmo pedido de FPS do Redmi Pad 2 acima) — cada bicho tem IA de vagar
       // rodando por quadro além do custo de malha, então corta trabalho de CPU e não só GPU.
-      const CRITTER_COUNT = isLowEndDevice ? 14 : 39
+      const CRITTER_COUNT = qualityProfile.critterCount
       for (let i = 0; i < CRITTER_COUNT; i++) {
         const kind: CritterKind =
           i < 8 ? 'coelho'
@@ -6655,7 +6674,7 @@ export function World3D({
       const cloudGroups: { node: Mesh; puffs: Mesh[]; basePos: Vector3; speed: number }[] = []
       // 5 → 4 (lab-59, mesmo pedido de FPS do Redmi Pad 2) — cada nuvem é vários "puffs"
       // (esferas), não uma malha só.
-      const CLOUD_COUNT = isLowEndDevice ? 4 : 9
+      const CLOUD_COUNT = qualityProfile.cloudCount
       for (let i = 0; i < CLOUD_COUNT; i++) {
         const phi = Math.PI * 0.15 + (i / CLOUD_COUNT) * Math.PI * 0.55
         const theta = i * GOLDEN_ANGLE * 2.2
@@ -6708,7 +6727,7 @@ export function World3D({
       rainAnchor.isVisible = false
       rainAnchor.rotationQuaternion = Quaternion.Identity()
 
-      const rainSystem = new ParticleSystem('rain', isLowEndDevice ? 150 : 600, scene)
+      const rainSystem = new ParticleSystem('rain', qualityProfile.rainParticleCapacity, scene)
       rainSystem.particleTexture = rainDropTexture
       rainSystem.emitter = rainAnchor
       rainSystem.isLocal = true
@@ -7024,7 +7043,7 @@ export function World3D({
       // (`onBeforeRenderObservable`) — custo real de malha, não partícula barata — por isso só
       // CRIADO em `!isLowEndDevice` (nunca em aparelho fraco), mesmo padrão de decisão do brilho
       // pulsante do baú (lab-211): em vez de criar e nunca disparar, simplesmente não existe.
-      if (!isLowEndDevice) {
+      if (qualityProfile.rocketTrailEnabled) {
         rocketTrailMesh = new TrailMesh('rocketTrail', flameAnchor, scene, {
           diameter: 0.3,
           length: 9,
@@ -7336,7 +7355,7 @@ export function World3D({
         // exclusão perto do foguete de volta (senão o jogador já nasceria sendo atacado ao
         // pousar). Metade da contagem em dispositivo fraco, mesmo espírito dos cortes de
         // performance do lab-59 — cada inimigo roda IA por quadro.
-        const enemyCount = isLowEndDevice ? MARS_ENEMY_COUNT_LOW_END : MARS_ENEMY_COUNT
+        const enemyCount = qualityProfile.marsEnemyCount
         for (let i = 0; i < enemyCount; i++) {
           const phi = Math.acos(1 - 2 * ((i + 0.5) / enemyCount))
           const theta = i * GOLDEN_ANGLE * 5.1 + 1.7
@@ -8316,7 +8335,7 @@ export function World3D({
       let pondForward = Vector3.Right()
       let pondRight = Vector3.Forward()
       const pondCritters: PondCritter[] = []
-      if (!isLowEndDevice) {
+      if (qualityProfile.pondEnabled) {
         pondUp = POND_CENTER_DIR
         pondCenterPos = pondUp.scale(PLANET_RADIUS + terrainHeight(pondUp) + 0.3)
         pondForward = Vector3.Cross(pondUp, Vector3.Right()).normalize()
@@ -8427,7 +8446,7 @@ export function World3D({
       // Já é 1 draw call só (thin instances), mas cada instância ainda é vértices/fragmentos de
       // verdade pra GPU processar — reduzida de novo no lab-59 (1300 → 900, usuário: "os gráficos
       // do tablet Redmi Pad 2 ainda estão com muito lag").
-      const GRASS_COUNT = isLowEndDevice ? 900 : 2600
+      const GRASS_COUNT = qualityProfile.grassCount
       const grassMatrices = new Float32Array(GRASS_COUNT * 16)
       for (let i = 0; i < GRASS_COUNT; i++) {
         // Resorteia (poucas tentativas bastam) até cair fora do bioma do deserto (lab-23) E fora
@@ -10706,7 +10725,7 @@ export function World3D({
         puzzleFeedbackRingMat.roughness = 0.4
         puzzleFeedbackRing = MeshBuilder.CreateTorus(
           'puzzleFeedbackRing',
-          { diameter: 0.75, thickness: 0.065, tessellation: isLowEndDevice ? 12 : 20 },
+          { diameter: 0.75, thickness: 0.065, tessellation: qualityProfile.collectibleRingTessellation },
           scene,
         )
         puzzleFeedbackRing.material = puzzleFeedbackRingMat
@@ -11422,7 +11441,7 @@ export function World3D({
         puzzleFeedbackRing.visibility = 0.9
         puzzleFeedbackRing.setEnabled(true)
 
-        const durationScale = isLowEndDevice ? 0.65 : 1
+        const durationScale = qualityProfile.visualFeedbackDurationScale
         puzzleFeedbackAnimation = {
           elapsedS: 0,
           durationS: (kind === 'complete' ? 0.65 : kind === 'correct' ? 0.42 : 0.32) * durationScale,
@@ -12972,7 +12991,7 @@ export function World3D({
         // Só a gente nadando continua de fora em aparelho fraco (lab-66) — é a parte cara de
         // verdade (cada pessoa reaproveita o boneco completo do jogador via `buildStudentFigure`,
         // ver comentário no topo deste bloco); água/borda acima já constroem em todo aparelho.
-        if (!isLowEndDevice) {
+        if (qualityProfile.poolPeopleEnabled) {
           for (let i = 0; i < POOL_PEOPLE_COUNT; i++) {
             const figure = buildStudentFigure(scene, POOL_SHIRT_COLORS[i], shadowGenerator)
             const angle = (i / POOL_PEOPLE_COUNT) * Math.PI * 2
@@ -13042,7 +13061,7 @@ export function World3D({
       // 5 → 3 (lab-59, mesmo pedido de FPS do Redmi Pad 2) — cada NPC andante é o mais caro dos
       // figurantes: corpo físico animado (`PhysicsAggregate`) + rig articulado completo (várias
       // malhas), não só decoração parada.
-      const WALKER_COUNT = isLowEndDevice ? 3 : 10
+      const WALKER_COUNT = qualityProfile.walkerCount
       // lab-19: colisor cápsula por NPC, corpo ANIMATED (não DYNAMIC nem STATIC) — eles se movem
       // via IA de vagar (posição escrita direto no transform a cada quadro), não por forças de
       // física, mas ainda precisam bloquear o jogador. ANIMATED é o modo certo pra isso: o motor
@@ -13494,7 +13513,7 @@ export function World3D({
         rainAmount += ((raining ? 1 : 0) - rainAmount) * Math.min(1, dt * 0.5)
         // lab-123: sem chuva dentro de casa (o emissor segue o jogador via `localUp` — sem isso,
         // continuaria chovendo dentro de um ambiente fechado).
-        rainSystem.emitRate = insideHouseInterior ? 0 : rainAmount * (isLowEndDevice ? 130 : 500)
+        rainSystem.emitRate = insideHouseInterior ? 0 : rainAmount * qualityProfile.rainEmitRateMultiplier
 
         // Raio: só sorteia/dispara enquanto chove de verdade (rainAmount alto, não só
         // "raining=true" no instante em que a chuva ainda está começando a aparecer).
@@ -13553,7 +13572,7 @@ export function World3D({
         // Só anima em aparelho não-fraco (`!isLowEndDevice`) — critério de aceite do próprio item
         // ("efeitos desligam/reduzem em mobile"); em aparelho fraco, o material já nasceu no valor
         // de pico (ver construção em `buildTreasureChest`) e fica assim, sem custo por quadro.
-        if (!isLowEndDevice) {
+        if (qualityProfile.treasureGlowAnimationEnabled) {
           const glowT = 0.5 + 0.5 * Math.sin(time * TREASURE_CHEST_GLOW_SPEED)
           for (const mat of treasureChestGlowMats) {
             Color3.LerpToRef(TREASURE_CHEST_GLOW_LOW, TREASURE_CHEST_GLOW_PEAK, glowT, mat.emissiveColor)
@@ -14128,7 +14147,7 @@ export function World3D({
               // ar (comandado por `throttle`, não por `grounded`), e sem essa guarda a poeira
               // apareceria "flutuando" durante um pulo. Desligada em aparelho fraco, mesmo padrão
               // de `isLowEndDevice` já usado pelo brilho pulsante do baú (lab-211).
-              if (grounded && !isLowEndDevice && footstepDustSystem) {
+              if (grounded && qualityProfile.footstepDustEnabled && footstepDustSystem) {
                 // Achado do review automático do Copilot: a primeira versão emitia do centro do
                 // colisor (`pos`), não do pé que pisou — a poeira nunca alternava de lado e ficava
                 // visivelmente deslocada do sapato em câmera próxima. `right` (calculado acima,
@@ -15711,7 +15730,7 @@ export function World3D({
           // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
           // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
           // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -15898,6 +15917,7 @@ export function World3D({
               isLowEndDevice,
               isSmallScreen,
               quality: currentQualityLabel(),
+              qualityProfile: qualityReport(),
               totalMeshes: scene.meshes.length,
               materials: {
                 total: scene.materials.length,
@@ -15991,6 +16011,7 @@ export function World3D({
         isLowEndDevice: () => isLowEndDevice,
         isSmallScreen: () => isSmallScreen,
         quality: () => currentQualityLabel(),
+        qualityProfile: qualityReport,
         sample,
       }
       ;(window as any).__perf = perfHandle
@@ -16141,6 +16162,8 @@ export function World3D({
           if (fpsSamples.length >= 3) {
             if (fpsAutoTuneInterval !== null) window.clearInterval(fpsAutoTuneInterval)
             const avgFps = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length
+            lastAutoTuneAverageFps = avgFps
+            autoTuneCycles += 1
             const target = desiredTierIndex(avgFps)
             if (firstCycle) {
               firstCycle = false
