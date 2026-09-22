@@ -1,6 +1,17 @@
 # Laboratório atual
 
-Ultimo concluido: labs/lab-219-captura-performance-mobile/ - transformou a instrumentacao
+Ultimo concluido: labs/lab-220-instancias-props-terra/ - migrou scatter geral e rochas Nature Kit
+da Terra de clones para hierarquias com `InstancedMesh`, preservando pivôs, densidade, sombras,
+assentamento no relevo e colisores separados. No mesmo Edge/renderer/viewport, draw calls medios
+caíram de 3.492 para 3.236,57 (-7,3%) e o maximo de 3.518 para 3.303 (-6,1%), com 2.264 meshes
+totais preservados. A automacao limitou ambas as versões a ~1 FPS, entao a conclusao de FPS depende
+do Redmi/Poco fisico. TypeScript, 267/267 testes, lint, build e Edge passaram. PR a preencher. O
+proximo lab recomendado e classificar os draw calls restantes e aplicar culling/enablement a uma
+familia estatica dominante. Ver `FEATURES.md` e `CONTEXT.md` da pasta.
+
+---
+
+Antes desse: labs/lab-219-captura-performance-mobile/ - transformou a instrumentacao
 `window.__perf.sample()` em coleta de 15 segundos acionavel pelo HUD, com JSON copiavel e metadados
 de cena/dispositivo, sem rede. Corrigiu o contador do HUD que mostrava zero draw calls por ler antes
 da renderizacao. Edge e Android Emulator passaram; baseline emulado da Terra: 15,07 FPS medio,

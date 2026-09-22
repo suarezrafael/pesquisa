@@ -139,6 +139,7 @@ import type { WeeklyEvent } from '../data/weeklyEvents'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
+import { instantiateStaticHierarchy } from './staticHierarchyInstances'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
 import { ChatRadial } from './ChatRadial'
@@ -5591,6 +5592,11 @@ export function World3D({
       async function loadPropTemplate(file: string) {
         const result = await SceneLoader.ImportMeshAsync(null, ASSET_BASE, file, scene)
         const root = result.meshes[0]
+        // O loader glTF cria `__root__` com Z negativo para conversao de coordenadas, mas todos os
+        // spawns deste catalogo sempre sobrescreveram o clone com `scaling.setAll(scale)`, portanto
+        // a aparencia historica ja usa determinante positivo. A fonte precisa do mesmo sinal das
+        // instancias; do contrario o Babylon ativa `_actAsRegularMesh` e perde todo o batching.
+        root.scaling.setAll(1)
         root.setEnabled(false)
         for (const m of result.meshes) m.receiveShadows = true
         return root
@@ -5605,6 +5611,16 @@ export function World3D({
       ]
       const propTemplates = await Promise.all(propFiles.map(loadPropTemplate))
       if (disposed) return
+
+      // Lab 220: cada GLB possui um pivô e malhas-filhas por material. `instantiateHierarchy`
+      // preserva essa estrutura, mas troca as folhas por `InstancedMesh`, agrupando no mesmo draw
+      // call todas as ocorrencias da mesma folha-fonte. O callback mantem o comportamento anterior
+      // de sombras por prop; colisores continuam malhas fisicas separadas e invisiveis.
+      function instantiateNatureProp(template: TransformNode, name: string): TransformNode | null {
+        return instantiateStaticHierarchy(template, name, (instance) => {
+          shadowGenerator.addShadowCaster(instance, false)
+        })
+      }
 
       // Pedido do usuário: "coloque mais... flores no planeta, e mais árvores" — em vez de só
       // aumentar `PROP_COUNT` (que manteria a mesma proporção de 1/3 árvore, 1/3 pedra, 1/6 flor,
@@ -5621,10 +5637,9 @@ export function World3D({
       ]
 
       // Cortada de novo no lab-59 (34 → 24, usuário: "os gráficos do tablet Redmi Pad 2 ainda
-      // estão com muito lag") — cada prop a menos é um mesh a menos (sem instancing nenhum nesses
-      // loops, ver comentário histórico do lab-55 abaixo), então reduzir a quantidade em cenário
-      // puramente decorativo é o jeito mais simples e seguro de cortar draw calls sem arriscar um
-      // refactor de instancing sem poder testar no aparelho real.
+      // estão com muito lag"). O lab-220 passou a compartilhar as malhas via instancing, mas
+      // preserva a densidade reduzida já validada em aparelhos fracos: instancing corta submissao
+      // de draw calls, nao o custo de vertices/fragmentos de cada ocorrencia.
       const PROP_COUNT = isLowEndDevice ? 24 : 65
       for (let i = 0; i < PROP_COUNT; i++) {
         const t = i / PROP_COUNT
@@ -5667,12 +5682,12 @@ export function World3D({
           isCompactProp = true
         } else if (inDesert) {
           const rockTemplate = propTemplates[DESERT_ROCK_INDICES[i % DESERT_ROCK_INDICES.length]]
-          instance = rockTemplate.clone(`prop-${i}`, null)
+          instance = instantiateNatureProp(rockTemplate, `prop-${i}`)
           isCompactProp = true
         } else {
           const templateIndex = PROP_WEIGHTED_INDICES[i % PROP_WEIGHTED_INDICES.length]
           const template = propTemplates[templateIndex]
-          instance = template.clone(`prop-${i}`, null)
+          instance = instantiateNatureProp(template, `prop-${i}`)
           isCompactProp = ROCK_TEMPLATE_INDICES.has(templateIndex)
         }
         if (!instance) continue
@@ -5683,7 +5698,6 @@ export function World3D({
         )
         if (!isHandBuiltCactus) {
           instance.scaling.setAll(scale)
-          instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
         }
         // Encosta no relevo de verdade (lab-75, relatado pelo usuário com print: "os morros...
         // ficam invisíveis... eu ando sobre o morro invisível" — rochas grandes deste sorteio
@@ -5770,7 +5784,7 @@ export function World3D({
             instance = buildCactus(scene, shadowGenerator)
           } else {
             const rockTemplate = propTemplates[[6, 7, 8, 9, 10, 11][i % 6]]
-            instance = rockTemplate.clone(`desertProp-${i}`, null)
+            instance = instantiateNatureProp(rockTemplate, `desertProp-${i}`)
           }
           if (!instance) continue
           instance.setEnabled(true)
@@ -5779,9 +5793,7 @@ export function World3D({
             Quaternion.RotationAxis(Vector3.Up(), spin),
           )
           instance.scaling.setAll(scale)
-          // `buildCactus` já registra seus próprios shadow casters internamente (ver função) —
-          // registrar de novo aqui duplicaria a malha na lista de sombra do Havok/Babylon.
-          if (!isCactus) instance.getChildMeshes().forEach((m) => shadowGenerator.addShadowCaster(m))
+          // `buildCactus` e `instantiateNatureProp` ja registram seus shadow casters internamente.
           // Mesma correção do scatter geral acima (lab-75) — o raio do deserto pode encostar na
           // borda de um platô próximo, então vale a mesma proteção contra flutuar.
           settleMeshOnTerrain(instance, localUp)
@@ -5827,7 +5839,7 @@ export function World3D({
           const spin = (ri * GOLDEN_ANGLE * 5 + pi) % (Math.PI * 2)
 
           const templateIndex = MOUNTAIN_ROCK_TEMPLATE_INDICES[(ri + pi) % MOUNTAIN_ROCK_TEMPLATE_INDICES.length]
-          const instance = propTemplates[templateIndex].clone(`mountainRock-${pi}-${ri}`, null)
+          const instance = instantiateNatureProp(propTemplates[templateIndex], `mountainRock-${pi}-${ri}`)
           if (!instance) continue
           instance.setEnabled(true)
           instance.position = pos
@@ -5836,7 +5848,6 @@ export function World3D({
           settleMeshOnTerrain(instance, localUp)
           // O terreno já é sólido. Um colisor esférico separado ultrapassava a silhueta
           // irregular da rocha e criava rampas invisíveis ao redor dela.
-          instance.getChildMeshes().forEach((mesh) => shadowGenerator.addShadowCaster(mesh))
           instance.freezeWorldMatrix()
           instance.getChildMeshes().forEach((mesh) => mesh.freezeWorldMatrix())
         }
