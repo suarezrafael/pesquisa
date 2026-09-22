@@ -141,6 +141,7 @@ import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { instantiateStaticHierarchy } from './staticHierarchyInstances'
+import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
@@ -13400,6 +13401,19 @@ export function World3D({
         for (const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id)
       }
 
+      // Lab 224: congela apenas a allowlist auditada de materiais de primitivas estaticas da
+      // Terra. O Babylon 9.21.2 deixa de repetir atualizacoes por mesh para materiais congelados,
+      // mas sua propria API alerta sobre valores por mesh (como morph influences) compartilhados.
+      // Por isso avatar/NPCs, pets, GLBs, agua, clima, quests, efeitos, puzzles e interiores com
+      // fade ficam dinamicos por padrao e nem entram na allowlist de `staticMaterials.ts`.
+      const earthStaticMaterialReport = freezeAuditedEarthMaterials(scene.materials)
+      if (import.meta.env.DEV && earthStaticMaterialReport.missingNames.length) {
+        console.warn(
+          '[lab-224] materiais estaticos auditados ausentes:',
+          earthStaticMaterialReport.missingNames,
+        )
+      }
+
       let time = 0
       const PROXIMITY_UI_INTERVAL_SECONDS = 0.1
       let proximityUiElapsed = PROXIMITY_UI_INTERVAL_SECONDS
@@ -15697,7 +15711,7 @@ export function World3D({
           // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
           // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
           // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -15885,6 +15899,13 @@ export function World3D({
               isSmallScreen,
               quality: currentQualityLabel(),
               totalMeshes: scene.meshes.length,
+              materials: {
+                total: scene.materials.length,
+                frozen: scene.materials.filter((material) => material.isFrozen).length,
+                auditedEarthStatic: earthStaticMaterialReport.frozenMaterials,
+                expectedEarthStatic: earthStaticMaterialReport.expectedNames,
+                missingEarthStatic: earthStaticMaterialReport.missingNames,
+              },
               earthSchools: {
                 enabledAvg: round(mean(enabledSchoolSamples)),
                 enabledMin: Math.min(...enabledSchoolSamples, enabledSchoolCount),
@@ -15944,6 +15965,13 @@ export function World3D({
         frameTimeMs: () => instrumentation.frameTimeCounter.current.toFixed(2),
         activeMeshes: () => scene.getActiveMeshes().length,
         totalMeshes: () => scene.meshes.length,
+        materials: () => ({
+          total: scene.materials.length,
+          frozen: scene.materials.filter((material) => material.isFrozen).length,
+          auditedEarthStatic: earthStaticMaterialReport.frozenMaterials,
+          expectedEarthStatic: earthStaticMaterialReport.expectedNames,
+          missingEarthStatic: earthStaticMaterialReport.missingNames,
+        }),
         earthSchools: () => ({
           enabled: enabledSchoolCount,
           total: portalMeshes.length,
