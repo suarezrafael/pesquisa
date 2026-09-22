@@ -1,7 +1,9 @@
 # Laboratório atual
 
-Em andamento: nenhum. Proximo recomendado: Lab 226 - medir o perfil real no Redmi Pad 2, Poco C75
-e Android intermediario e otimizar a familia de maior custo de camera/render identificada.
+Em andamento: labs/lab-226-baseline-android-fisico/ - coleta e compara amostras de 15 segundos em
+Redmi Pad 2, Poco C75 e, se disponivel, Android intermediario. O roteiro esta em `FEATURES.md`.
+Sem aparelho fisico conectado nem JSON Android atual; a escolha da otimizacao depende dessas
+amostras. Commit inicial `4b24289`.
 
 ---
 
