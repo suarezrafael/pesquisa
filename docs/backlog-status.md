@@ -36,7 +36,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | 205 - Preview fixo da loja | 190 | Concluido | PR #70. |
 | 207 - Troca segura de nickname | 191 | Concluido | PR #71. |
 | 206 - Pets e cosmeticos | 192, 216 | Concluido | Preview 3D (lab-192) + catalogo de acessorios conquistaveis com moeda, dois encaixes, painel com abas (lab-216, PR #100). |
-| 191 - Auditoria de FPS | 193 | Parcial | Instrumentacao pronta; faltam baseline Android e classificacao por cena. |
+| 191 - Auditoria de FPS | 193, 219 | Parcial | Instrumentacao + coleta pelo HUD prontas; baseline emulador registrado. Faltam Android fisico e classificacao por cena. |
 | 192 - Locomocao sem moonwalk | 194 | Concluido | PR #76. |
 | 208 - Movimento responsivo | 195 | Concluido | PRs #77/#78. |
 | 209 - Hub de mini-jogos | 196 | Concluido | PR #79. |
