@@ -140,6 +140,7 @@ import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { instantiateStaticHierarchy } from './staticHierarchyInstances'
+import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
 import { ChatRadial } from './ChatRadial'
@@ -3505,7 +3506,15 @@ export function World3D({
     const tmpMatrix = new Matrix()
     const tmpQuat = new Quaternion()
     const triggered = new Set<string>()
-    const portalMeshes: { quest: (typeof quests)[number]; questIndex: number; roof: Mesh; base: TransformNode; surfacePos: Vector3 }[] = []
+    const portalMeshes: {
+      quest: (typeof quests)[number]
+      questIndex: number
+      roof: Mesh
+      base: TransformNode
+      label: TextBlock
+      surfacePos: Vector3
+      visibilityProbePos: Vector3
+    }[] = []
     // lab-164 (jornada de ativação de 10 minutos) — feixe de luz "comece aqui" acima da primeira
     // escolinha (`quests[0]`), criado depois do laço de `quests.forEach` mais abaixo; visibilidade
     // controlada por `applyActivationBeaconVisual` (mesmo gatilho de `applyPortalVisual`).
@@ -8945,8 +8954,55 @@ export function World3D({
         label.linkWithMesh(roof)
         label.linkOffsetY = -70
 
-        portalMeshes.push({ quest, questIndex: index, roof, base, surfacePos })
+        // O probe fica acima do telhado: a escola so pode ser ocultada quando nem sua parte mais
+        // alta possui linha de visao livre por cima da curvatura do planeta.
+        const visibilityProbePos = surfacePos.add(localUp.scale(2.25))
+        portalMeshes.push({ quest, questIndex: index, roof, base, label, surfacePos, visibilityProbePos })
       })
+
+      // Lab 221: o frustum do Babylon elimina o que sai da camera, mas nao sabe que o proprio
+      // planeta opaco esconde a outra face. Cada escola inclui predio + professor articulado
+      // (~20 malhas), entao manter as 30 habilitadas gera centenas de candidatas e draw calls sem
+      // chance de contribuir para a imagem. A linha camera->topo da escola e comparada com a
+      // esfera-base do planeta: so desliga quando ela atravessa profundamente o planeta. Isso se
+      // adapta a zoom/rotacao, enquanto a histerese evita piscar perto da tangente.
+      let enabledSchoolCount = portalMeshes.length
+      function setAllEarthSchoolsEnabled(enabled: boolean) {
+        for (const entry of portalMeshes) {
+          if (entry.base.isEnabled() !== enabled) entry.base.setEnabled(enabled)
+          entry.label.isVisible = enabled
+        }
+        enabledSchoolCount = enabled ? portalMeshes.length : 0
+      }
+      function updateEarthSchoolVisibility(mainWorldActive: boolean) {
+        // Durante o voo a Terra aparece na transicao e desligar predios produziria um pop visivel.
+        // Em interiores/outros planetas, por outro lado, nenhuma escola da Terra pode aparecer.
+        if (drivingRocket) {
+          setAllEarthSchoolsEnabled(true)
+          return
+        }
+        if (!mainWorldActive) {
+          setAllEarthSchoolsEnabled(false)
+          return
+        }
+        if (!avatarMesh) {
+          setAllEarthSchoolsEnabled(true)
+          return
+        }
+
+        let nextEnabledCount = 0
+        for (const entry of portalMeshes) {
+          const enabled = shouldEnableSphericalObject(
+            true,
+            entry.base.isEnabled(),
+            sphereOcclusionDepth(camera.position, entry.visibilityProbePos, PLANET_RADIUS),
+          )
+          if (entry.base.isEnabled() !== enabled) entry.base.setEnabled(enabled)
+          entry.label.isVisible = enabled
+          if (enabled) nextEnabledCount++
+        }
+        enabledSchoolCount = nextEnabledCount
+      }
 
       // lab-164 (jornada de ativação de 10 minutos, docs/market-metrics-engagement-backlog.md) —
       // "objetivo guiado no primeiro acesso": um feixe de luz vertical acima da PRIMEIRA escolinha
@@ -13326,7 +13382,10 @@ export function World3D({
         const mainWorldActive = currentPlanetId === null && outdoorWorldActive
         proximityUiElapsed += dt
         const shouldUpdateProximityUi = proximityUiElapsed >= PROXIMITY_UI_INTERVAL_SECONDS
-        if (shouldUpdateProximityUi) proximityUiElapsed %= PROXIMITY_UI_INTERVAL_SECONDS
+        if (shouldUpdateProximityUi) {
+          proximityUiElapsed %= PROXIMITY_UI_INTERVAL_SECONDS
+          updateEarthSchoolVisibility(mainWorldActive)
+        }
         distantAmbientElapsed += dt
         const shouldUpdateDistantAmbient = distantAmbientElapsed >= DISTANT_AMBIENT_INTERVAL_SECONDS
         // Usa todo o tempo desde o ultimo tick distante. Descartar o excedente depois de uma
@@ -15658,6 +15717,7 @@ export function World3D({
         const renderTargetsRenderTimeSamples: number[] = []
         const physicsTimeSamples: number[] = []
         const gpuFrameTimeSamples: number[] = []
+        const enabledSchoolSamples: number[] = []
 
         const observer = scene.onAfterRenderObservable.add(() => {
           // Achado do review automático do Copilot (2 rodadas): `engine.getFps()` é o mesmo
@@ -15694,6 +15754,7 @@ export function World3D({
           // vêm em ms via `Tools.StartPerformanceCounter`/`performance.now()`) — sem essa conversão
           // o valor lido era ~10 milhões "ms" (na real, ~10ms reais).
           gpuFrameTimeSamples.push(engineInstrumentation.gpuFrameTimeCounter.current / 1e6)
+          enabledSchoolSamples.push(enabledSchoolCount)
         })
 
         const round = (n: number) => Math.round(n * 100) / 100
@@ -15757,6 +15818,12 @@ export function World3D({
               isSmallScreen,
               quality: currentQualityLabel(),
               totalMeshes: scene.meshes.length,
+              earthSchools: {
+                enabledAvg: round(mean(enabledSchoolSamples)),
+                enabledMin: Math.min(...enabledSchoolSamples, enabledSchoolCount),
+                enabledMax: Math.max(...enabledSchoolSamples, enabledSchoolCount),
+                total: portalMeshes.length,
+              },
               fps: {
                 avg: round(msToFps(mean(deltaTimeSamples))),
                 min: round(msToFps(Math.max(...finite(deltaTimeSamples), 0))),
@@ -15806,6 +15873,7 @@ export function World3D({
         frameTimeMs: () => instrumentation.frameTimeCounter.current.toFixed(2),
         activeMeshes: () => scene.getActiveMeshes().length,
         totalMeshes: () => scene.meshes.length,
+        earthSchools: () => ({ enabled: enabledSchoolCount, total: portalMeshes.length }),
         activeMeshesEvaluationTimeMs: () => instrumentation.activeMeshesEvaluationTimeCounter.current.toFixed(2),
         renderTimeMs: () => instrumentation.renderTimeCounter.current.toFixed(2),
         cameraRenderTimeMs: () => instrumentation.cameraRenderTimeCounter.current.toFixed(2),

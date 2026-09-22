@@ -1,6 +1,16 @@
 # Laboratório atual
 
-Ultimo concluido: labs/lab-220-instancias-props-terra/ - migrou scatter geral e rochas Nature Kit
+Ultimo concluido: labs/lab-221-culling-escolinhas-terra/ - aplica oclusao geometrica entre camera,
+topo da escola e esfera da Terra, com margem/histerese e atualizacao a 10 Hz. No mesmo Edge e
+viewport do Lab 220, manteve 20/30 escolas habilitadas no spawn, reduziu draw calls medios de
+3.123,86 para 2.750,43 (-12,0%) e meshes ativos de 903,07 para 816,71 (-9,6%), com os 2.264
+meshes totais preservados. TypeScript, 274/274 testes, lint, build e Edge passaram. PR #105.
+O proximo lab recomendado e instanciar os professores estaticos das escolas. Ver `FEATURES.md` e
+`CONTEXT.md` da pasta.
+
+---
+
+Antes desse: labs/lab-220-instancias-props-terra/ - migrou scatter geral e rochas Nature Kit
 da Terra de clones para hierarquias com `InstancedMesh`, preservando pivôs, densidade, sombras,
 assentamento no relevo e colisores separados. No mesmo Edge/renderer/viewport, draw calls medios
 caíram de 3.492 para 3.236,57 (-7,3%) e o maximo de 3.518 para 3.303 (-6,1%), com 2.264 meshes
