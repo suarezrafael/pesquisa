@@ -1,12 +1,19 @@
 # Laboratório atual
 
-Em andamento: labs/lab-225-perfil-qualidade-mobile/ - centraliza as decisoes graficas e decorativas
-em perfis auditaveis, expoe as reducoes na telemetria e preserva o auto-ajuste de resolucao.
-Commit inicial `a92be87`.
+Em andamento: nenhum. Proximo recomendado: Lab 226 - medir o perfil real no Redmi Pad 2, Poco C75
+e Android intermediario e otimizar a familia de maior custo de camera/render identificada.
 
 ---
 
-Ultimo concluido: labs/lab-224-materiais-estaticos-terra/ - congela por allowlist 45 materiais de
+Ultimo concluido: labs/lab-225-perfil-qualidade-mobile/ - centraliza 26 decisoes reduzidas no
+perfil `economy`, preserva os valores anteriores e expoe perfil, reducoes e ciclos do autoajuste em
+`window.__perf`. Edge confirmou `full` e `economy` (inclusive viewport de celular); TypeScript,
+281/281 testes, lint e build passaram. FPS em Android fisico continua pendente. Ver `FEATURES.md`
+e `CONTEXT.md` da pasta.
+
+---
+
+Antes desse: labs/lab-224-materiais-estaticos-terra/ - congela por allowlist 45 materiais de
 primitivas estaticas da Terra, mantendo avatar, pets, GLBs, agua, clima, quests, efeitos,
 minijogos e interiores dinamicos. No mesmo perfil do Lab 223, FPS medio subiu de 16,45 para 17,84
 (+8,4%), active evaluation caiu 12,5% e render caiu 10,2%, com draw calls e meshes estaveis.
