@@ -49,7 +49,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | 197 - Orbitas/luas | 209 | Concluido | PR #92. |
 | 200 - Missoes fisicas | 210 | Concluido | PR #93. |
 | 198 - Efeitos visuais leves | 207/211/212/213/214/215 | Concluido | Landing puff, brilho, pulso, poeira de passos, rastro do foguete e feedback de puzzle entregues. |
-| 193 - Otimizacao de draw calls | 220/221 | Parcial | Props instanciados (-7,3%) e escolas ocultas pela Terra (-12,0% na fatia seguinte), sem remover os 2.264 meshes. Faltam grupos repetidos restantes e Android fisico. |
+| 193 - Otimizacao de draw calls | 220/221/222 | Parcial | Props instanciados (-7,3%), escolas ocultas pela Terra (-12,0%) e professores compartilhados (19 fontes + 551 instancias; -38,4% direcional contra o Lab 221). Faltam estruturas repetidas das escolas e Android fisico. |
 | 199 - Filtro de chat livre | - | Condicional | P2; somente apos pesquisa e opt-in parental. |
 | 218 - Mercado/bazar 3D | - | Bloqueado | Escopo ainda precisa ser decidido. |
 
@@ -66,7 +66,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 ## Proxima ordem recomendada
 
 1. Medir o baseline em Redmi Pad 2/Poco C75 e fechar o backlog 191.
-2. Continuar o backlog 193 pelo Lab 222, instanciando professores estaticos das escolas.
+2. Continuar o backlog 193 pelo Lab 223, instanciando a estrutura visual repetida das escolas sem alterar colisao/estado de quest.
 3. Executar o Lab 186 de playtest e as Pesquisas A/B.
 4. Priorizar UX 187-190 com base nos testes.
 5. Definir o escopo do mercado/bazar como backlog 218 (aguardando o usuario detalhar o pedido).

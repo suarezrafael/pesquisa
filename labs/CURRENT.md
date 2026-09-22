@@ -1,8 +1,12 @@
 # Laboratório atual
 
-Em andamento: labs/lab-222-instancias-professores-escolas/ - compartilha geometria e materiais
-entre os 30 professores estaticos das escolinhas da Terra por meio de `InstancedMesh`, preservando
-hierarquia, sombras, assentamento e o culling do Lab 221. Commit inicial `715e806`.
+Ultimo concluido: labs/lab-222-instancias-professores-escolas/ - os 30 professores estaticos das
+escolinhas agora usam 19 meshes-fonte e 551 `InstancedMesh`, compartilhando geometria e materiais
+sem aumentar os 2.264 meshes totais do perfil local. Na medicao direcional contra o Lab 221, draw
+calls medios cairam de 2.726,87 para 1.681,00 (-38,4%), mesmo com 22 escolas habilitadas contra
+20 no baseline. TypeScript, 275/275 testes, lint, build e Edge passaram. PR pendente. O proximo
+lab recomendado e instanciar a estrutura visual repetida das escolas. Ver `FEATURES.md` e
+`CONTEXT.md` da pasta.
 
 ---
 
