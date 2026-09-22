@@ -21,6 +21,8 @@ PR: #103
   desprotegido; o caminho agora captura falhas de Blob/DOM e informa o usuario sem rejeicao solta.
 - A terceira rodada recomendou aprovacao, confirmou o fallback como resolvido e apontou apenas a
   acentuacao das mensagens acessiveis; todas as strings novas de feedback foram corrigidas.
+- A quarta rodada recomendou aprovacao sem achados de codigo e identificou apenas dois rotulos
+  historicos de `labs/CURRENT.md`, normalizados para manter um unico laboratorio como o ultimo.
 
 ## Baseline Android emulado
 

@@ -91,3 +91,5 @@ P0, conclusao operacional do backlog 191 antes da otimizacao de draw calls do ba
   claro, com limpeza do link e da URL temporaria no `finally`.
 - Review do Copilot, rodada 3: aprovacao recomendada; o unico achado foi a falta de acentos nas
   mensagens acessiveis novas, corrigida em todas as variantes do fluxo.
+- Review do Copilot, rodada 4: aprovacao recomendada e nenhum achado de codigo; dois rotulos antigos
+  de `labs/CURRENT.md` foram ajustados para existir apenas um "Ultimo concluido".
