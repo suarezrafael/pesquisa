@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Em andamento: labs/lab-224-materiais-estaticos-terra/ - audita e congela somente materiais
+comprovadamente imutaveis da Terra, mantendo uma lista explicita de exclusao para materiais que
+mudam em runtime. Commit inicial `1fe3205`.
+
+---
+
 Ultimo concluido: labs/lab-223-instancias-estrutura-escolas/ - as estruturas das 30 escolinhas
 agora usam 3 meshes-fonte e 87 `InstancedMesh`, reduzindo de 90 para 3 geometrias independentes e
 mantendo um `PhysicsAggregate` estatico por parede. Em leitura direcional do HUD com 20 escolas e
