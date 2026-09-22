@@ -1,5 +1,11 @@
 # Laboratório atual
 
+Em andamento: labs/lab-223-instancias-estrutura-escolas/ - compartilha paredes, fundacoes e portas
+das 30 escolinhas por `InstancedMesh`, mantendo um `PhysicsAggregate` estatico por parede e sem
+alterar telhados dinamicos, professores, relevo ou culling. Commit inicial `5027387`.
+
+---
+
 Ultimo concluido: labs/lab-222-instancias-professores-escolas/ - os 30 professores estaticos das
 escolinhas agora usam 19 meshes-fonte e 551 `InstancedMesh`, compartilhando geometria e materiais
 sem aumentar os 2.264 meshes totais do perfil local. Na medicao direcional contra o Lab 221, draw
