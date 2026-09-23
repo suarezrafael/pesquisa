@@ -324,6 +324,7 @@ function GameApp() {
   if (!tutorialSeen) {
     return (
       <Tutorial
+        quickStart
         onDone={() => {
           markTutorialSeen()
           setTutorialSeen(true)

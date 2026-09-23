@@ -1,9 +1,16 @@
 # Laboratório atual
 
+Em andamento: labs/lab-232-primeira-sessao/ - UX 190 em fatia pequena: entrada
+curta e objetivos contextuais no mundo. Base `1417859`; testes/build/lint
+passaram, falta playtest com crianca no tablet. O pedido posterior de controle
+touch da camera sera um lab separado. Ver `FEATURES.md` e `CONTEXT.md`.
+
+---
+
 Em andamento urgente: labs/lab-231-saida-parkour/ - corrigir o loop de
 checkpoint que impede a crianca de sair do parkour. Base `9dda215`; ver
-`FEATURES.md`. A PR #119 (Lab 230, lojinha infantil segura) permanece em
-rascunho numa branch separada; nao incluir nesta correcao.
+`FEATURES.md`. Correcao publicada, mas validacao no tablet pendente. A PR #119
+(Lab 230, lojinha infantil segura) permanece em rascunho numa branch separada.
 
 ---
 
