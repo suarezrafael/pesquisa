@@ -7,9 +7,10 @@ Ver `FEATURES.md` e UX Lab 187 em `docs/growth-retention-monetization-backlog.md
 
 ---
 
-Lab 227 encerrado administrativamente sem validacao fisica: a PR #114 publicou
-apenas documentacao, sem nova otimizacao 3D. Todos os criterios de medicao do LOD
-dos professores continuam pendentes ate chegarem duas coletas do Redmi Pad 2.
+Lab 227 encerrado administrativamente: a PR #114 publicou apenas documentacao.
+Chegou uma coleta do Redmi Pad 2 (30,44 FPS medios, p5 25,38, escala 1,15),
+mas `simpleTeachersAvg: 0`, sem ativacao do LOD. A PR #116 ajusta a regra por
+tamanho projetado; aguardam-se publicacao, medicao comparavel e revisao visual.
 Ver `labs/lab-227-validacao-lod-android/CONTEXT.md`.
 
 ---
