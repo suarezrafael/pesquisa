@@ -896,6 +896,36 @@ a.nickname-generate-btn {
   color: #2a3358;
 }
 
+.parkour-hud {
+  position: absolute;
+  top: clamp(9.6rem, 32vmin, 12.4rem);
+  left: clamp(0.5rem, 2.8vmin, 1.1rem);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 1rem);
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2a3358;
+  font-size: 0.85rem;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
+}
+
+.parkour-hud button {
+  min-height: 44px;
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
 /* Alerta de perigo (lab-65) — vinheta vermelha nas bordas da tela, opacidade controlada direto
    pelo laço de física (ver `dangerOverlayRef`) conforme a distância do inimigo mais próximo em
    Marte. Cobre a tela inteira mas não intercepta clique/toque nenhum. */

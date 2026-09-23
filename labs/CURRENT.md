@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento urgente: labs/lab-231-saida-parkour/ - corrigir o loop de
+checkpoint que impede a crianca de sair do parkour. Base `9dda215`; ver
+`FEATURES.md`. A PR #119 (Lab 230, lojinha infantil segura) permanece em
+rascunho numa branch separada; nao incluir nesta correcao.
+
+---
+
 Em andamento: labs/lab-229-linguagem-interativos/ - primeira fatia do UX 188:
 dicas de proximidade coerentes entre teclado (E) e toque (botao E) para carro,
 foguete, casa e portais. Base `14da8e0`; ver `FEATURES.md`.
