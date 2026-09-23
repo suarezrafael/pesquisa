@@ -1,6 +1,6 @@
 # Estado auditado dos backlogs
 
-Ultima auditoria: 2026-09-22
+Ultima auditoria: 2026-09-23
 
 Este arquivo e o indice operacional entre os numeros historicos dos backlogs e os diretorios de
 laboratorio realmente executados. `labs/CURRENT.md` continua sendo a fonte de verdade do ultimo lab;
@@ -21,8 +21,8 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | Labs 176-185 | Labs 176-185 | Concluido | Implementacao, qualidade, monetizacao e analytics entregues. |
 | Lab 186 - Playtest crianca + responsavel | - | Pendente | O lab real 186 foi o bug do ranking; o estudo com 5-8 duplas ainda nao ocorreu. |
 | UX Lab 187 - Mapa de verbos | 228 | Parcial | Inventario e triagem entregues; primeira sessao, planeta secundario e touch fisico pendentes. |
-| UX Lab 188 - Linguagem de interativos | 229 | Em andamento | Primeira fatia de dicas de acao por teclado/toque; padrao global e playtest ainda pendentes. |
-| UX Lab 189 - Monetizacao infantil segura | - | Pendente | Lab 183 auditou a vitrine adulta; esta revisao infantil ainda precisa ser formalizada. |
+| UX Lab 188 - Linguagem de interativos | 229 | Parcial | Dicas de acao por teclado/toque publicadas; botao E validado no tablet, mas legibilidade perto dos objetos, padrao global e playtest ainda pendentes. |
+| UX Lab 189 - Monetizacao infantil segura | 230 | Em andamento | Revisao de badges, copias e fluxo de vinculo infantil; area adulta permanece separada. |
 | UX Lab 190 - Primeira sessao de 10 minutos | - | Pendente | Ainda falta playtest/iteracao da jornada completa. |
 
 ## Jogabilidade e qualidade 3D

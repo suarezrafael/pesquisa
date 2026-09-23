@@ -1,8 +1,15 @@
 # Laboratório atual
 
-Em andamento: labs/lab-229-linguagem-interativos/ - primeira fatia do UX 188:
-dicas de proximidade coerentes entre teclado (E) e toque (botao E) para carro,
-foguete, casa e portais. Base `14da8e0`; ver `FEATURES.md`.
+Em andamento: labs/lab-230-lojinha-infantil-segura/ - UX 189, revisao de
+copias e estados de itens visuais no jogo infantil. Base `9dda215`; ver
+`FEATURES.md`.
+
+---
+
+Ultimo encerrado administrativamente com pendencias: lab-229-linguagem-interativos/.
+Dicas de teclado/toque publicadas pela PR #118 (`9dda215`). O usuario confirmou
+que o botao E funcionou no Redmi Pad 2, mas nao confirmou a legibilidade das
+dicas perto dos objetos. UX 188 segue parcial; ver `FEATURES.md` e `CONTEXT.md`.
 
 ---
 

@@ -1,8 +1,8 @@
 # Laboratorio 229 - Linguagem de interativos por entrada
 
-Status: em andamento
+Status: encerrado administrativamente com pendencias (entrega parcial)
 Inicio: 2026-09-23
-Fim: -
+Fim: 2026-09-23
 Commit inicial: 14da8e028dea81c9ecdc9c12209172c68c2ef2e1
 
 ## Objetivo do laboratorio
@@ -47,4 +47,9 @@ o mapa e as evidencias estao no `VERB-MAP.md` do Lab 228.
   390x844. O botao E permaneceu visivel. O ambiente rodou a ~1 FPS: nao foi
   possivel chegar a um alvo especifico para avaliar sobreposicao de label;
   viewport nao equivale a gesto touch fisico. Item visual permanece aberto.
-- Testes locais: 292/292; lint sem avisos novos; build passou. Falta CI da PR.
+- Testes locais: 292/292; lint sem avisos novos; build passou. PR #118
+  mesclada em `9dda215`; CI da main passou e publicou Vercel, Pages e Workers.
+- O usuario confirmou que o botao E funcionou no Redmi Pad 2 com o build
+  `2026-09-23T18:18:14.381Z`. A amostra de 15 s registrou 29,7 FPS medios e
+  p5 23,64. Isso nao valida a legibilidade da dica de proximidade nem mede
+  ganho de performance deste lab.
