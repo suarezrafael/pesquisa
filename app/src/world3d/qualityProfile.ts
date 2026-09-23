@@ -1,4 +1,12 @@
 export type GpuTier = 'weak' | 'strong'
+export type AdaptiveEffectTier = 0 | 1 | 2
+
+// Scene FPS, unlike the startup GPU benchmark, includes the real world and its render passes.
+export function desiredEffectTier(avgFps: number): AdaptiveEffectTier {
+  if (avgFps < 20) return 2
+  if (avgFps < 30) return 1
+  return 0
+}
 
 export function developmentGpuTierOverride(search: string, enabled: boolean): GpuTier | null {
   if (!enabled) return null

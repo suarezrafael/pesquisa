@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { QUALITY_PROFILES, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
+import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 
 describe('quality profiles (lab-225)', () => {
   it('preserves the mobile and desktop render budgets', () => {
@@ -32,5 +32,11 @@ describe('quality profiles (lab-225)', () => {
     expect(developmentGpuTierOverride('?gpuTier=strong', true)).toBe('strong')
     expect(developmentGpuTierOverride('?gpuTier=weak', false)).toBeNull()
     expect(developmentGpuTierOverride('?gpuTier=unknown', true)).toBeNull()
+  })
+
+  it('reduces real-scene render passes when the startup benchmark overestimates a GPU', () => {
+    expect(desiredEffectTier(11.45)).toBe(2)
+    expect(desiredEffectTier(25)).toBe(1)
+    expect(desiredEffectTier(35)).toBe(0)
   })
 })

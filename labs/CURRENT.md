@@ -1,7 +1,10 @@
 # Laboratório atual
 
-Em andamento: nenhum. Proximo recomendado: Lab 226 - medir o perfil real no Redmi Pad 2, Poco C75
-e Android intermediario e otimizar a familia de maior custo de camera/render identificada.
+Em andamento: labs/lab-226-baseline-android-fisico/ - primeira coleta real do Redmi Pad 2 na
+Terra: 11,45 FPS, 1.937,52 draw calls, perfil `full` e escala 1,60 apos seis ciclos. Um
+experimento adaptativo desliga passes caros com base no FPS da cena real, mantendo desktop
+rapido no perfil completo. Falta comparar depois do deploy no mesmo tablet e coletar Poco C75
+e outras cenas; nao ha aparelho fisico conectado aqui. Ver `FEATURES.md`. Commit inicial `4b24289`.
 
 ---
 
