@@ -9,7 +9,7 @@ import {
   Vector3,
 } from '@babylonjs/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { instantiateStaticHierarchy } from './staticHierarchyInstances'
+import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHierarchyInstances'
 
 describe('instantiateStaticHierarchy (lab-220)', () => {
   let engine: NullEngine | null = null
@@ -137,5 +137,44 @@ describe('instantiateStaticHierarchy (lab-220)', () => {
     expect(wallInstance?.geometry).toBe(walls.geometry)
     expect(createdLeaves.map((instance) => instance.material)).toEqual([material, material, material])
     expect(createdLeaves.map((instance) => instance.sourceMesh)).toEqual([walls, foundation, door])
+  })
+
+  it('congela fonte e instancias depois da posicao final sem bloquear visibilidade ou material', () => {
+    engine = new NullEngine()
+    const scene = new Scene(engine)
+    const firstSchool = new TransformNode('school-q01', scene)
+    firstSchool.position.set(2, 3, 4)
+    const sourceRoot = new TransformNode('teacher-q01', scene)
+    sourceRoot.parent = firstSchool
+    const pivot = new TransformNode('teacher-pivot', scene)
+    pivot.parent = sourceRoot
+    pivot.position.y = 1
+    const sourceMesh = MeshBuilder.CreateBox('teacher-body', { size: 0.5 }, scene)
+    sourceMesh.parent = pivot
+    const material = new StandardMaterial('teacher-material', scene)
+    sourceMesh.material = material
+
+    const secondSchool = new TransformNode('school-q02', scene)
+    secondSchool.position.set(8, 3, 4)
+    const copy = instantiateStaticHierarchy(sourceRoot, 'teacher-q02')!
+    copy.parent = secondSchool
+    const copiedMesh = copy.getChildMeshes(false)[0]
+
+    const firstCount = freezeStaticHierarchy(firstSchool)
+    const secondCount = freezeStaticHierarchy(secondSchool)
+    expect(firstCount).toBe(firstSchool.getChildTransformNodes(false).length + 1)
+    expect(secondCount).toBe(secondSchool.getChildTransformNodes(false).length + 1)
+    expect([firstSchool, ...firstSchool.getChildTransformNodes(false)].every((node) => node.isWorldMatrixFrozen)).toBe(true)
+    expect([secondSchool, ...secondSchool.getChildTransformNodes(false)].every((node) => node.isWorldMatrixFrozen)).toBe(true)
+    expect(sourceMesh.getAbsolutePosition().x).toBeCloseTo(2)
+    expect(copiedMesh.getAbsolutePosition().x).toBeCloseTo(8)
+
+    secondSchool.setEnabled(false)
+    expect(copiedMesh.isEnabled()).toBe(false)
+    secondSchool.setEnabled(true)
+    expect(copiedMesh.isEnabled()).toBe(true)
+    material.diffuseColor.set(0.2, 0.6, 0.8)
+    expect(copiedMesh.material).toBe(material)
+    expect(material.diffuseColor.asArray()).toEqual([0.2, 0.6, 0.8])
   })
 })

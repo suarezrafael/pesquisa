@@ -68,6 +68,16 @@ otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
   investigar o custo de avaliacao de meshes e de render remanescente, preservando
   professores, pistas de quest e legibilidade. Nao afirmar meta de 30 FPS atingida.
 
+## Experimento de CPU e qualidade
+
+- Auditoria, riscos e roteiro em `PERFORMANCE-AUDIT.md`.
+- Congelar matrizes de todas as hierarquias das escolas somente apos assentamento e criacao
+  de todas as instancias; atualizar cor de emissao do telhado sem alocar a cada quadro.
+- Acrescentar ao JSON tempo do loop do jogo e contagens de recursos para distinguir CPU de
+  selecao/render e orientar a proxima auditoria de memoria. Nenhuma qualidade sera reduzida
+  nesta iteracao; o autoajuste pode escolher escala mais nitida caso o FPS melhore.
+- A mudanca fica experimental ate comparacao fisica no Redmi Pad 2 e QA de escolas/relevo.
+
 ## Funcionalidades planejadas
 
 - [ ] Coletar amostras reais de 15 segundos na Terra, no centro de jogos e em Marte ou outro
@@ -84,6 +94,9 @@ otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
 - [ ] Comparar antes/depois no Redmi Pad 2 com duas novas amostras da Terra e revisar nitidez,
   iluminacao, relevo e texto no proprio aparelho. Depois expandir a matriz ao Poco C75 e cenas
   adicionais (referencia: Lab 225 `CONTEXT.md`).
+- [x] Auditar CPU, memoria, estrutura de malhas e alternativas do Babylon; aplicar congelamento
+  apenas nas hierarquias estaticas das escolas e eliminar alocacao por quadro no pulso do telhado.
+- [ ] Validar no Redmi Pad 2 se a otimizacao de CPU melhora FPS/escala sem perder qualidade.
 
 ## Como coletar
 

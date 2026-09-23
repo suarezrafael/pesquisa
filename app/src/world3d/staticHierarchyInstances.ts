@@ -23,3 +23,11 @@ export function instantiateStaticHierarchy(
   hierarchy.setEnabled(true)
   return hierarchy
 }
+
+// Call only after final placement; freezing a parent alone does not freeze its children.
+export function freezeStaticHierarchy(root: TransformNode): number {
+  root.freezeWorldMatrix()
+  const descendants = root.getChildTransformNodes(false)
+  for (const node of descendants) node.freezeWorldMatrix()
+  return descendants.length + 1
+}

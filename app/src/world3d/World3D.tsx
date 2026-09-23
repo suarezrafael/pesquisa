@@ -140,7 +140,7 @@ import type { WeeklyEvent } from '../data/weeklyEvents'
 import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
-import { instantiateStaticHierarchy } from './staticHierarchyInstances'
+import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHierarchyInstances'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -8910,6 +8910,7 @@ export function World3D({
       let earthSchoolWallSource: AbstractMesh | null = null
       let earthSchoolStructureSourceMeshCount = 0
       let earthSchoolStructureInstanceMeshCount = 0
+      let earthSchoolFrozenNodeCount = 0
 
       quests.forEach((quest, index) => {
         // lab-95: posição final já vem de `schoolUps` (calculado logo no início de `setup()`,
@@ -9073,6 +9074,11 @@ export function World3D({
         const visibilityProbePos = surfacePos.add(localUp.scale(2.25))
         portalMeshes.push({ quest, questIndex: index, roof, base, label, surfacePos, visibilityProbePos })
       })
+
+      // All schools are now settled and the first ones have served as instance sources.
+      // Their geometry and quest colors still update normally; only static transforms stop
+      // recalculating during active-mesh evaluation.
+      for (const entry of portalMeshes) earthSchoolFrozenNodeCount += freezeStaticHierarchy(entry.base)
 
       // Lab 221: o frustum do Babylon elimina o que sai da camera, mas nao sabe que o proprio
       // planeta opaco esconde a outra face. Cada escola inclui predio + professor articulado
@@ -13502,7 +13508,9 @@ export function World3D({
       // roda em `onBeforeRender`, portanto ler o contador ali sempre mostrava 0 mesmo quando a
       // amostra em `onAfterRender` media milhares de chamadas. Guardamos o ultimo quadro completo.
       let lastCompletedDrawCalls = 0
+      let lastGameUpdateTimeMs = 0
       scene.onBeforeRenderObservable.add(() => {
+        const gameUpdateStartedAt = performance.now()
         const dt = engine.getDeltaTime() / 1000
         time += dt
         const outdoorWorldActive = !insideHouseInterior && !insideGameCenterInterior && !drivingRocket
@@ -15768,9 +15776,14 @@ export function World3D({
           if (unlocked && !completed) {
             const pulse = 0.4 + Math.sin(time * 2 + entry.questIndex) * 0.18
             const color = questTypeColor[entry.quest.type]
-            ;(entry.roof.material as PBRMaterial).emissiveColor = color.scale(pulse)
+            ;(entry.roof.material as PBRMaterial).emissiveColor.set(
+              color.r * pulse,
+              color.g * pulse,
+              color.b * pulse,
+            )
           }
         }
+        lastGameUpdateTimeMs = performance.now() - gameUpdateStartedAt
       })
 
       // Instrumentação real (não estimada) de FPS/draw calls/física — lida via
@@ -15840,6 +15853,7 @@ export function World3D({
         const drawCallsSamples: number[] = []
         const activeMeshesSamples: number[] = []
         const activeMeshesEvalSamples: number[] = []
+        const gameUpdateTimeSamples: number[] = []
         const renderTimeSamples: number[] = []
         const cameraRenderTimeSamples: number[] = []
         const particlesRenderTimeSamples: number[] = []
@@ -15873,6 +15887,7 @@ export function World3D({
           drawCallsSamples.push(instrumentation.drawCallsCounter.current)
           activeMeshesSamples.push(scene.getActiveMeshes().length)
           activeMeshesEvalSamples.push(instrumentation.activeMeshesEvaluationTimeCounter.current)
+          gameUpdateTimeSamples.push(lastGameUpdateTimeMs)
           renderTimeSamples.push(instrumentation.renderTimeCounter.current)
           cameraRenderTimeSamples.push(instrumentation.cameraRenderTimeCounter.current)
           particlesRenderTimeSamples.push(instrumentation.particlesRenderTimeCounter.current)
@@ -15948,6 +15963,11 @@ export function World3D({
               quality: currentQualityLabel(),
               qualityProfile: qualityReport(),
               totalMeshes: scene.meshes.length,
+              resources: {
+                geometries: scene.geometries.length,
+                textures: scene.textures.length,
+                totalVertices: scene.getTotalVertices(),
+              },
               materials: {
                 total: scene.materials.length,
                 frozen: scene.materials.filter((material) => material.isFrozen).length,
@@ -15964,6 +15984,7 @@ export function World3D({
                 structureInstanceMeshes: earthSchoolStructureInstanceMeshCount,
                 teacherSourceMeshes: earthSchoolTeacherSourceMeshCount,
                 teacherInstanceMeshes: earthSchoolTeacherInstanceMeshCount,
+                frozenTransformNodes: earthSchoolFrozenNodeCount,
               },
               fps: {
                 avg: round(msToFps(mean(deltaTimeSamples))),
@@ -15979,6 +16000,10 @@ export function World3D({
               drawCalls: { avg: round(mean(drawCallsSamples)), max: Math.max(...drawCallsSamples, 0) },
               activeMeshes: { avg: round(mean(activeMeshesSamples)), max: Math.max(...activeMeshesSamples, 0) },
               activeMeshesEvaluationTimeMs: round(mean(activeMeshesEvalSamples)),
+              gameUpdateTimeMs: {
+                avg: round(mean(gameUpdateTimeSamples)),
+                p95: round(worstAt(gameUpdateTimeSamples, 0.05)),
+              },
               renderTimeMs: round(mean(renderTimeSamples)),
               cameraRenderTimeMs: round(mean(cameraRenderTimeSamples)),
               particlesRenderTimeMs: round(mean(particlesRenderTimeSamples)),
@@ -16014,6 +16039,11 @@ export function World3D({
         frameTimeMs: () => instrumentation.frameTimeCounter.current.toFixed(2),
         activeMeshes: () => scene.getActiveMeshes().length,
         totalMeshes: () => scene.meshes.length,
+        resources: () => ({
+          geometries: scene.geometries.length,
+          textures: scene.textures.length,
+          totalVertices: scene.getTotalVertices(),
+        }),
         materials: () => ({
           total: scene.materials.length,
           frozen: scene.materials.filter((material) => material.isFrozen).length,
@@ -16028,8 +16058,10 @@ export function World3D({
           structureInstanceMeshes: earthSchoolStructureInstanceMeshCount,
           teacherSourceMeshes: earthSchoolTeacherSourceMeshCount,
           teacherInstanceMeshes: earthSchoolTeacherInstanceMeshCount,
+          frozenTransformNodes: earthSchoolFrozenNodeCount,
         }),
         activeMeshesEvaluationTimeMs: () => instrumentation.activeMeshesEvaluationTimeCounter.current.toFixed(2),
+        gameUpdateTimeMs: () => lastGameUpdateTimeMs.toFixed(2),
         renderTimeMs: () => instrumentation.renderTimeCounter.current.toFixed(2),
         cameraRenderTimeMs: () => instrumentation.cameraRenderTimeCounter.current.toFixed(2),
         particlesRenderTimeMs: () => instrumentation.particlesRenderTimeCounter.current.toFixed(2),
