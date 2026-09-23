@@ -5,6 +5,13 @@ acoes no mundo em desktop/mobile. Entregavel inicial: tabela de verbos,
 affordances, hints, feedback e inconsistencias priorizadas. Base `2af9c78`.
 Ver `FEATURES.md` e UX Lab 187 em `docs/growth-retention-monetization-backlog.md`.
 
+`VERB-MAP.md` agora inventaria 16 verbos e prioriza a paridade do hint `E`, a
+revisao da monetizacao infantil e o painel tecnico expandido. A solicitacao
+direta de assinatura na copia da lojinha foi removida neste lab. Falta
+percurso de perfil novo/planeta secundario e playtest touch fisico; PR #115
+continua em andamento. A PR #117 de giro suave do avatar foi mesclada e
+publicada na `main` em `377480b`, com CI/deploy Vercel e Pages aprovados.
+
 ---
 
 Lab 227 encerrado administrativamente: a PR #114 publicou apenas documentacao.

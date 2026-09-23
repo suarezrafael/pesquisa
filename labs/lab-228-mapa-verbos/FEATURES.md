@@ -21,7 +21,7 @@ proximos labs, sem adicionar poluicao visual ao jogo.
 
 ## Funcionalidades planejadas
 
-- [ ] Inventariar em `VERB-MAP.md` os verbos existentes (andar, pular, interagir,
+- [x] Inventariar em `VERB-MAP.md` os verbos existentes (andar, pular, interagir,
   responder, comprar com moeda, equipar, cuidar, visitar, dirigir, voar, mover
   e reagir). Para cada um registrar objeto/cena, sinal antes da interacao, hint
   de proximidade, teclado/mouse/toque, feedback, estado concluido e referencia
@@ -30,11 +30,11 @@ proximos labs, sem adicionar poluicao visual ao jogo.
   mobile; registrar evidencias visuais ou limitacoes do ambiente para entradas
   ausentes, labels sobrepostas, alvos pequenos e acoes sem feedback (origem:
   `docs/prompts/02-design-profissional.md`, secoes 1, 3 e 7).
-- [ ] Classificar inconsistencias por impacto na primeira missao e frequencia;
+- [x] Classificar inconsistencias por impacto na primeira missao e frequencia;
   abrir um backlog pequeno para corrigir as P0/P1 sem redesenhar todos os objetos
   neste lab (origem: UX Lab 187 e pesquisa de primeira sessao em
   `docs/market-metrics-engagement-backlog.md`).
-- [ ] Definir criterio reutilizavel para novos interativos: affordance antes,
+- [x] Definir criterio reutilizavel para novos interativos: affordance antes,
   hint durante proximidade, feedback apos acao e paridade desktop/touch;
   diferenciar objeto decorativo de objeto acionavel. Revisar contra seguranca
   infantil, contraste e alvo de toque (origem:
@@ -51,3 +51,11 @@ proximos labs, sem adicionar poluicao visual ao jogo.
 - Reescrever o sistema de input ou aplicar um redesign global de uma vez.
 - Checkout, preco ou apelo comercial no fluxo infantil.
 - Declarar o Lab 227 ou o backlog 191/193 concluidos sem dados Android fisicos.
+
+## Progresso e limite de validacao
+
+O inventario, a triagem e o contrato estao em `VERB-MAP.md`. O item de percurso
+visual permanece aberto: Edge cobriu o mundo e a lojinha em desktop e viewports
+1138x633/390x844, mas nao um perfil novo nem um planeta secundario; rendeu
+1-2 FPS no ambiente automatizado e nao simulou gesto touch fisico. Nao marcar
+o lab concluido antes dessas verificacoes e do playtest com criancas.
