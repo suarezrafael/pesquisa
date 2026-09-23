@@ -20,7 +20,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | --- | --- | --- | --- |
 | Labs 176-185 | Labs 176-185 | Concluido | Implementacao, qualidade, monetizacao e analytics entregues. |
 | Lab 186 - Playtest crianca + responsavel | - | Pendente | O lab real 186 foi o bug do ranking; o estudo com 5-8 duplas ainda nao ocorreu. |
-| UX Lab 187 - Mapa de verbos | - | Pendente | Nao confundir com o lab real 187 de relevo. |
+| UX Lab 187 - Mapa de verbos | 228 | Em andamento | Lab 228 aberto para inventario e auditoria; nao confundir com o lab real 187 de relevo. |
 | UX Lab 188 - Linguagem de interativos | - | Pendente | Partes foram melhoradas, mas nao houve auditoria transversal formal. |
 | UX Lab 189 - Monetizacao infantil segura | - | Pendente | Lab 183 auditou a vitrine adulta; esta revisao infantil ainda precisa ser formalizada. |
 | UX Lab 190 - Primeira sessao de 10 minutos | - | Pendente | Ainda falta playtest/iteracao da jornada completa. |

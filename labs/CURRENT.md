@@ -1,9 +1,16 @@
 # Laboratório atual
 
-Em andamento: labs/lab-227-validacao-lod-android/ - validar no Redmi Pad 2 se o
-detalhe simplificado dos professores (publicado na build
-`2026-09-23T12:51:14.064Z`) realmente ativa, melhora FPS e preserva a aparencia.
-O Lab 227 comeca em `2bdbe17`; consultar `FEATURES.md` antes de mudar o codigo.
+Em andamento: labs/lab-228-mapa-verbos/ - auditar como a crianca descobre e executa
+acoes no mundo em desktop/mobile. Entregavel inicial: tabela de verbos,
+affordances, hints, feedback e inconsistencias priorizadas. Base `2af9c78`.
+Ver `FEATURES.md` e UX Lab 187 em `docs/growth-retention-monetization-backlog.md`.
+
+---
+
+Lab 227 encerrado administrativamente sem validacao fisica: a PR #114 publicou
+apenas documentacao, sem nova otimizacao 3D. Todos os criterios de medicao do LOD
+dos professores continuam pendentes ate chegarem duas coletas do Redmi Pad 2.
+Ver `labs/lab-227-validacao-lod-android/CONTEXT.md`.
 
 ---
 

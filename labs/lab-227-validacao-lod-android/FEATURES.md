@@ -1,8 +1,8 @@
 # Laboratorio 227 - Validacao de detalhe no Android
 
-Status: em andamento
+Status: encerrado administrativamente, aguardando amostras fisicas (nao concluido)
 Inicio: 2026-09-23
-Fim: -
+Fim: 2026-09-23
 Commit inicial: 2bdbe1792b8915c2b16284baa1fb2529f9b46944
 
 ## Objetivo do laboratorio
