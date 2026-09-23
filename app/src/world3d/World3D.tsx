@@ -142,7 +142,7 @@ import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { instantiateStaticHierarchy } from './staticHierarchyInstances'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
-import { QUALITY_PROFILES, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
+import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
 import { TouchActionButton } from './TouchActionButton'
 import { ChatPanel } from './ChatPanel'
@@ -3169,6 +3169,7 @@ export function World3D({
     }
     let lastAutoTuneAverageFps: number | null = null
     let autoTuneCycles = 0
+    let adaptiveEffectTier: 0 | 1 | 2 = qualityProfile.id === 'economy' ? 2 : 0
     const qualityReport = () => ({
       ...qualityProfile,
       gpuTier,
@@ -3177,6 +3178,11 @@ export function World3D({
       hardwareScalingLevel: engine.getHardwareScalingLevel(),
       autoTuneCycles,
       lastAutoTuneAverageFps,
+      adaptiveEffectTier,
+      effectiveMsaaSamples: adaptiveEffectTier >= 1 ? 1 : qualityProfile.msaaSamples,
+      effectiveSsaoEnabled: qualityProfile.ssaoEnabled && adaptiveEffectTier === 0,
+      effectiveGlowEnabled: qualityProfile.glowEnabled && adaptiveEffectTier === 0,
+      effectiveShadowsEnabled: qualityProfile.shadowCastersEnabled && adaptiveEffectTier < 2,
     })
     const scene = new Scene(engine)
     sceneRef.current = scene
@@ -3454,8 +3460,9 @@ export function World3D({
 
     // SSAO2 é um dos passes mais caros pra GPU mobile (ratio 0.5 + blur, por quadro) — pulado
     // inteiro em dispositivos fracos.
+    let ssao: SSAO2RenderingPipeline | null = null
     if (qualityProfile.ssaoEnabled) {
-      const ssao = new SSAO2RenderingPipeline('ssao', scene, {
+      ssao = new SSAO2RenderingPipeline('ssao', scene, {
         ssaoRatio: 0.5,
         blurRatio: 0.5,
       }, [camera])
@@ -3509,9 +3516,29 @@ export function World3D({
     // GlowLayer roda um passe extra de blur sobre o material emissivo todo quadro — mais um post-
     // process caro pulado em dispositivo fraco (lab-56, "ainda está um pouco pesado pro tablet"),
     // igual já foi feito com SSAO2/sombras/MSAA. Só afeta o brilho dos portais das escolas.
+    let glow: GlowLayer | null = null
     if (qualityProfile.glowEnabled) {
-      const glow = new GlowLayer('glow', scene)
+      glow = new GlowLayer('glow', scene)
       glow.intensity = 0.7
+    }
+
+    // The synthetic startup benchmark can label a mobile GPU "strong" even when the actual
+    // scene cannot sustain it. Drop expensive passes only after measuring that scene; keeping
+    // the downgrade one-way avoids repeated pipeline allocations and visual flicker.
+    function applyAdaptiveEffectTier(target: 0 | 1 | 2) {
+      if (target <= adaptiveEffectTier) return
+      if (adaptiveEffectTier < 1) {
+        ssao?.dispose()
+        ssao = null
+        glow?.dispose()
+        glow = null
+        pipeline.samples = 1
+      }
+      if (target >= 2 && adaptiveEffectTier < 2) {
+        shadowGenerator.dispose()
+        sunLight.shadowEnabled = false
+      }
+      adaptiveEffectTier = target
     }
 
     let havokPlugin: HavokPlugin | null = null
@@ -15730,7 +15757,7 @@ export function World3D({
           // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
           // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
           // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes, efeitos ${adaptiveEffectTier}) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -15770,7 +15797,9 @@ export function World3D({
       // rótulo olhava só a classificação inicial do benchmark, nunca o estado atual da escala.
       const currentQualityLabel = () => {
         const scaling = engine.getHardwareScalingLevel()
-        if (scaling > 1) return `reduzida (auto-tune, escala ${scaling.toFixed(2)})`
+        if (scaling > 1 || adaptiveEffectTier > 0) {
+          return `reduzida (auto-tune, escala ${scaling.toFixed(2)}, efeitos ${adaptiveEffectTier})`
+        }
         return isLowEndDevice ? 'baixa (aparelho fraco)' : 'alta'
       }
 
@@ -16164,6 +16193,7 @@ export function World3D({
             const avgFps = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length
             lastAutoTuneAverageFps = avgFps
             autoTuneCycles += 1
+            if (document.visibilityState === 'visible') applyAdaptiveEffectTier(desiredEffectTier(avgFps))
             const target = desiredTierIndex(avgFps)
             if (firstCycle) {
               firstCycle = false

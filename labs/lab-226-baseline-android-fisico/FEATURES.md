@@ -11,6 +11,38 @@ Medir o jogo em Redmi Pad 2, Poco C75 e, se disponivel, um Android intermediario
 roteiro. Identificar com dados qual cena e qual familia de custo devem orientar a proxima
 otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
 
+## Primeira coleta recebida (Redmi Pad 2)
+
+- Build `2026-09-22T22:31:59.915Z`, Terra, Chrome Android/WebGL2, Mali-G57 MC2,
+  viewport 1138x633, DPR 2.25. JSON enviado pelo usuario em 2026-09-22.
+- 15,1 s / 173 amostras: FPS medio 11,45, p5 10,62, p1 10,26; quadro medio 84,48 ms,
+  p95 91,60 ms. Draw calls medias 1.937,52, meshes ativos medios 676,66, avaliacao de
+  meshes 13,39 ms, camera/render 66,73/23,58 ms, render targets 8,30 ms, fisica 0,55 ms.
+- O benchmark classificou a GPU como `strong` e aplicou `full`, incluindo SSAO, glow,
+  MSAA 4x e sombra 1024; seis ciclos de autoajuste chegaram a escala 1,60 e ainda mediram
+  11,32 FPS no ultimo ciclo. Isso evidencia que reduzir apenas resolucao e insuficiente.
+- `gpuFrameTimeMs: 0` significa timer GPU indisponivel. Os tempos de camera, render e
+  render targets nao sao fatias aditivas. Ha apenas uma coleta fisica ate aqui; o gargalo
+  especifico ainda precisa de confirmacao com antes/depois no mesmo aparelho.
+
+## Experimento de render adaptativo
+
+- O perfil inicial continua vindo do benchmark; depois de medir a cena real, abaixo de
+  30 FPS desliga SSAO e glow e reduz MSAA a 1. Abaixo de 20 FPS tambem descarta o shadow map.
+  O ajuste e unidirecional na sessao para evitar alocacoes repetidas e cintilacao.
+- O perfil completo permanece em maquinas que sustentem >=30 FPS. A escala automatica
+  existente continua independente. `qualityProfile.adaptiveEffectTier` e os campos
+  `effective*` no JSON identificam o estado efetivo, nao apenas o perfil inicial.
+- Hipotese: retirar passes extras diminui draw calls e tempo de camera no Redmi Pad 2,
+  permitindo FPS maior sem borrar mais a imagem. Isto ainda nao e um ganho medido.
+- Repetir duas coletas de 15 s na Terra no mesmo percurso apos publicar esta branch:
+  comparar FPS medio/p5/p1, p95 de quadro, draw calls, render targets, escala e legibilidade.
+  Registrar separadamente se `adaptiveEffectTier` chegou a 2. Confirmar no desktop que
+  continua em 0 e sem regressao visual.
+- Verificacao funcional local no Edge: a cena seguiu visivel e interativa apos a mudanca,
+  com contador instantaneo caindo de cerca de 1.950 para cerca de 500 draw calls e FPS
+  instantaneo na faixa de 40-46. Nao e comparacao controlada nem resultado Android.
+
 ## Funcionalidades planejadas
 
 - [ ] Coletar amostras reais de 15 segundos na Terra, no centro de jogos e em Marte ou outro
@@ -22,8 +54,11 @@ otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
 - [ ] Comparar FPS medio/p5/p1, tempo de quadro p95, draw calls, meshes ativos, camera/render,
   render targets, fisica e tempo de GPU quando disponivel. Identificar uma familia de custo com
   evidencia em pelo menos duas amostras do mesmo aparelho/cena (referencia: backlog 193).
-- [ ] Escolher e descrever uma unica otimizacao pequena para o proximo lab, com baseline, roteiro
-  antes/depois e criterio de qualidade visual (referencia: Lab 225 `CONTEXT.md`).
+- [x] Implementar um ajuste pequeno de passes de render com base no FPS da cena real, sem
+  alterar a regra de jogo nem o perfil inicial do desktop; compilar, testar e verificar no Edge.
+- [ ] Comparar antes/depois no Redmi Pad 2 com duas novas amostras da Terra e revisar nitidez,
+  iluminacao, relevo e texto no proprio aparelho. Depois expandir a matriz ao Poco C75 e cenas
+  adicionais (referencia: Lab 225 `CONTEXT.md`).
 
 ## Como coletar
 
@@ -53,6 +88,6 @@ otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
 
 ## Fora de escopo
 
-- Alterar perfil, resolucao, sombras ou densidade sem baseline Android fisico.
+- Alterar densidade/geometria ou reduzir mais a resolucao sem antes/depois Android fisico.
 - Coletar telemetria automaticamente ou enviar dados da crianca ao backend.
 - Marcar o backlog 191 como concluido com apenas amostras desktop/emuladas.
