@@ -249,8 +249,8 @@ export function AvatarShop({
         </div>
         <h2>Lojinha de avatares</h2>
         <p className="subtitle">
-          Troque as moedas que você coletou por novos personagens. Itens com 👑 são exclusivos de
-          assinantes — peça pra quem cuida de você conferir a área dos responsáveis.
+          Troque as moedas que você coletou por novos personagens. Os desafios e a aprendizagem
+          continuam grátis para todo mundo.
         </p>
 
         {/* Preview 3D (lab-87, pedido do usuário: "mostrar um menu com um preview 3D do avatar e

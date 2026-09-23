@@ -1,9 +1,19 @@
 # Laboratório atual
 
-Em andamento: labs/lab-227-validacao-lod-android/ - validar no Redmi Pad 2 se o
-detalhe simplificado dos professores (publicado na build
-`2026-09-23T12:51:14.064Z`) realmente ativa, melhora FPS e preserva a aparencia.
-O Lab 227 comeca em `2bdbe17`; consultar `FEATURES.md` antes de mudar o codigo.
+Ultimo encerrado administrativamente com pendencias: labs/lab-228-mapa-verbos/.
+`VERB-MAP.md` inventaria 16 verbos e prioriza a dica `E` no touch, a revisao
+da monetizacao infantil e o painel tecnico. A frase de solicitacao direta de
+assinatura foi removida da lojinha. Faltam perfil novo, planeta secundario e
+playtest touch fisico; ver `FEATURES.md` e `CONTEXT.md`. Proximo: Lab 229,
+linguagem de interativos (UX 188), iniciado somente apos esta PR entrar em main.
+
+---
+
+Lab 227 encerrado administrativamente: a PR #114 publicou apenas documentacao.
+Chegou uma coleta do Redmi Pad 2 (30,44 FPS medios, p5 25,38, escala 1,15),
+mas `simpleTeachersAvg: 0`, sem ativacao do LOD. A PR #116 ajusta a regra por
+tamanho projetado; aguardam-se publicacao, medicao comparavel e revisao visual.
+Ver `labs/lab-227-validacao-lod-android/CONTEXT.md`.
 
 ---
 
