@@ -45,9 +45,14 @@ Data: 2026-09-22. Base: duas coletas do Redmi Pad 2 na Terra, registradas em `FE
 
 ## Proximos candidatos, nao implementados
 
-- Se a avaliacao de meshes continuar alta, perfilar a hierarquia dos professores e avaliar
-  uma representacao visual com menos nos por escola, mantendo LOD proximo e oclusao por
-  planeta. Instancias ja compartilham geometria, mas continuam sendo objetos selecionaveis.
+- A coleta apos congelar matrizes registrou 28,29 FPS medios, mas 13,53 escolas
+  habilitadas contra 17,99 antes; o ganho nao pode ser isolado. Avaliacao de meshes
+  ainda custa 10,25 ms e o loop do jogo apenas 0,85 ms em media. Foi implementado
+  um experimento adicional: no nivel adaptativo 2, professor distante usa duas
+  meshes instanciadas em vez de 19 partes; perto continua completo. A validacao
+  fisica de FPS e legibilidade segue pendente.
+- Se o experimento nao reduzir avaliacao ou prejudicar a leitura visual, revisar
+  limite de distancia e a forma simplificada antes de manter em producao.
 - Se `gameUpdateTimeMs` dominar, usar um perfil de CPU no aparelho antes de mudar loops ou
   estruturas de dados. As novas contagens de recursos orientam uma auditoria de memoria;
   so propor compressao/texturas menores apos saber tamanhos e impacto visual.
