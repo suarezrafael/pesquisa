@@ -1,8 +1,15 @@
 # Laboratório atual
 
-Em andamento: labs/lab-230-lojinha-infantil-segura/ - UX 189, revisao de
+Em andamento urgente: labs/lab-231-saida-parkour/ - corrigir o loop de
+checkpoint que impede a crianca de sair do parkour. Base `9dda215`; ver
+`FEATURES.md`. PR #120 mesclada e publicada em `1417859`; falta testar a
+saida e reentrada no Redmi Pad 2.
+
+---
+
+Em revisao na PR #119: labs/lab-230-lojinha-infantil-segura/ - UX 189,
 copias e estados de itens visuais no jogo infantil. Base `9dda215`; ver
-`FEATURES.md`.
+`FEATURES.md` e `AUDIT.md`. Nao publicado.
 
 ---
 

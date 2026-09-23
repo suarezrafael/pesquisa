@@ -143,6 +143,7 @@ import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHierarchyInstances'
 import { shouldUseDetailedTeacher } from './teacherDetail'
 import { interactionHint, interactionInputForDevice } from './interactionHint'
+import { parkourFallAction } from './parkourFall'
 import { TOUCH_CAMERA_FOLLOW_SHARE, touchCameraFollowStep } from './touchCameraFollow'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
@@ -363,11 +364,6 @@ const PARKOUR_BOOST_DURATION = 10 // segundos
 const PARKOUR_BOOST_SPEED_MULTIPLIER = 1.5
 const PARKOUR_BOOST_JUMP_MULTIPLIER = 1.25
 const PARKOUR_TRIGGER_DISTANCE = 1.0 // raio de coleta de argola/impulso e de "chegou na plataforma"
-// Altura (ao longo de `PARKOUR_ANCHOR_UP`, relativa à plataforma do checkpoint atual) abaixo da
-// qual o jogador é considerado "caiu" — maior que a folga normal de estar EM CIMA da plataforma
-// (que fica perto de 0), pequena o bastante pra disparar bem antes de bater no chão de verdade lá
-// embaixo.
-const PARKOUR_FALL_MARGIN = 1.3
 // `setup()` usa exatamente esta constante pra `PARKOUR_STEPS` (não um `7` solto de novo) — o total
 // de argolas exibido no HUD (`parkourRings.length`, calculado dentro de `setup()`) sempre deriva
 // dela, sem risco de divergência.
@@ -2784,6 +2780,7 @@ export function World3D({
     secondsLeft: number
   } | null>(null)
   const teleportToMinigameRef = useRef<(id: 'parkour1' | 'ponte-logica') => void>(() => {})
+  const leaveParkourRef = useRef<() => void>(() => {})
   // Backlog "Lab 210" (parkour arcade) — HUD da corrida atual, `null` enquanto fora do `parkour1`. Argolas
   // atualizam na hora (evento raro, no máximo 6x por corrida); cronômetro só 1x/segundo já
   // arredondado (mesmo espírito de `survivalTimeDisplay` acima — não recria o objeto 60x/s por um
@@ -3906,6 +3903,15 @@ export function World3D({
         setParkourStatusMessage(null)
       }, durationMs)
     }
+    function clearParkourRun() {
+      activeMinigameId = null
+      setParkourHud(null)
+      if (parkourStatusMessageTimeout !== null) {
+        window.clearTimeout(parkourStatusMessageTimeout)
+        parkourStatusMessageTimeout = null
+      }
+      setParkourStatusMessage(null)
+    }
     const parkourPlatformPositions: Vector3[] = []
     const parkourRings: { mesh: Mesh; worldPos: Vector3; collected: boolean }[] = []
     const houseFurnitureNodes: Record<string, TransformNode> = {}
@@ -4812,29 +4818,15 @@ export function World3D({
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, parkourReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
-          teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
           // Achado do review automático: cada pedestal de retorno só deve confirmar a conclusão do
           // mini-jogo QUE ELE PRÓPRIO representa — sem esta checagem, dava pra entrar num mini-jogo
           // e sair andando (a pé, sem usar o pedestal certo) até o pedestal de retorno DO OUTRO
           // mini-jogo, gravando `minigame_completed` com o id errado.
           if (activeMinigameId === 'parkour1') {
             trackMinigameCompleted(activeMinigameId)
-            activeMinigameId = null
-            // Some o HUD do percurso ao sair (nunca fica "pendurado" enquanto o jogador
-            // já está de volta no hub); a corrida em si é reiniciada na PRÓXIMA entrada, não aqui.
-            setParkourHud(null)
-            // Achado do review automático do Copilot: sem isto, uma mensagem de status disparada
-            // pouco antes de sair (impulso coletado, troféu conquistado) continuava visível no HUB
-            // até o próprio `setTimeout` de 3-4s expirar — vazando feedback do mini-jogo pra fora
-            // da arena. Cancela o timeout PENDENTE (se houver) — sem isto, ele ainda dispararia
-            // mais tarde e chamaria `setParkourStatusMessage(null)` de novo (inofensivo em si, mas
-            // deixaria `parkourStatusMessageTimeout` com um handle obsoleto).
-            if (parkourStatusMessageTimeout !== null) {
-              window.clearTimeout(parkourStatusMessageTimeout)
-              parkourStatusMessageTimeout = null
-            }
-            setParkourStatusMessage(null)
+            clearParkourRun()
           }
+          teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
@@ -9802,6 +9794,11 @@ export function World3D({
         }
         trackMinigameStarted(id)
       }
+      leaveParkourRef.current = () => {
+        if (disposed || activeMinigameId !== 'parkour1') return
+        clearParkourRun()
+        teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
+      }
 
       // Minha Casa (lab-105, primeira fatia de docs/plano-comercial-backend.md, Fase E) — espaço
       // pessoal GRATUITO de todo jogador, nunca cosmético pago (mesmo princípio já aplicado em
@@ -14128,44 +14125,51 @@ export function World3D({
               }
             }
 
-            // Queda — altura ao longo de `PARKOUR_ANCHOR_UP`, relativa à plataforma do checkpoint
-            // atual (não à plataforma inicial): "queda reseta em checkpoint sem punir" (backlog
-            // "Lab 210") — sem perda de moeda/argola já coletada, só reposiciona.
+            // Quedas junto ao percurso usam o checkpoint. Afastar-se lateralmente deixa o
+            // avatar cair ate o chao e encerra a corrida; o botao no HUD garante saida mesmo
+            // quando o personagem esta preso em um checkpoint alto.
             const checkpointPos = parkourPlatformPositions[parkourCheckpointIndex]
-            const heightVsCheckpoint = Vector3.Dot(pos.subtract(checkpointPos), PARKOUR_ANCHOR_UP)
-            if (heightVsCheckpoint < -PARKOUR_FALL_MARGIN) {
+            const fromCheckpoint = pos.subtract(checkpointPos)
+            const heightVsCheckpoint = Vector3.Dot(fromCheckpoint, PARKOUR_ANCHOR_UP)
+            const lateralDistanceSquared = Math.max(0, fromCheckpoint.lengthSquared() - heightVsCheckpoint ** 2)
+            const fallAction = parkourFallAction(heightVsCheckpoint, lateralDistanceSquared)
+            if (fallAction === 'exit') {
+              clearParkourRun()
+            } else if (fallAction === 'respawn') {
               const respawnPos = checkpointPos.add(PARKOUR_ANCHOR_UP.scale(AVATAR_RADIUS + 0.35))
               teleportAvatarToPosition(respawnPos, parkourForward)
               trackParkourCheckpointRespawn(parkourCheckpointIndex)
             }
 
-            // Cronômetro informativo — nunca afeta dificuldade/recompensa, só feedback. HUD só
-            // atualiza quando o segundo arredondado muda (mesmo espírito de `survivalTimeDisplay`:
-            // evita recriar o objeto do estado 60x/s por um número que só importa 1x/segundo).
-            parkourElapsedSeconds += dt
-            const roundedElapsed = Math.floor(parkourElapsedSeconds)
-            if (roundedElapsed !== parkourLastHudSecond) {
-              parkourLastHudSecond = roundedElapsed
-              setParkourHud({
-                ringsCollected: parkourRingsCollectedCount,
-                totalRings: parkourRings.length,
-                elapsedSeconds: roundedElapsed,
-              })
-            }
+            if (activeMinigameId === 'parkour1') {
+              // Cronômetro informativo — nunca afeta dificuldade/recompensa, só feedback. HUD só
+              // atualiza quando o segundo arredondado muda (mesmo espírito de `survivalTimeDisplay`:
+              // evita recriar o objeto do estado 60x/s por um número que só importa 1x/segundo).
+              parkourElapsedSeconds += dt
+              const roundedElapsed = Math.floor(parkourElapsedSeconds)
+              if (roundedElapsed !== parkourLastHudSecond) {
+                parkourLastHudSecond = roundedElapsed
+                setParkourHud({
+                  ringsCollected: parkourRingsCollectedCount,
+                  totalRings: parkourRings.length,
+                  elapsedSeconds: roundedElapsed,
+                })
+              }
 
-            // Conclusão — alcançar o topo, uma vez por corrida (independente de ter coletado todas
-            // as argolas ou não; `App.tsx` decide se ESTA conclusão específica concede o troféu).
-            if (!parkourTopReachedThisRun) {
-              const topPos = parkourPlatformPositions[parkourPlatformPositions.length - 1]
-              if (isWithinDistance(pos, topPos, PARKOUR_TRIGGER_DISTANCE)) {
-                parkourTopReachedThisRun = true
-                const { newBadge } = onParkourCourseCompletedRef.current(
-                  parkourRingsCollectedCount,
-                  parkourRings.length,
-                  roundedElapsed,
-                )
-                if (newBadge) {
-                  showParkourStatusMessage('🏆 Troféu conquistado: Mestre do Parkour!', 4000)
+              // Conclusão — alcançar o topo, uma vez por corrida (independente de ter coletado todas
+              // as argolas ou não; `App.tsx` decide se ESTA conclusão específica concede o troféu).
+              if (!parkourTopReachedThisRun) {
+                const topPos = parkourPlatformPositions[parkourPlatformPositions.length - 1]
+                if (isWithinDistance(pos, topPos, PARKOUR_TRIGGER_DISTANCE)) {
+                  parkourTopReachedThisRun = true
+                  const { newBadge } = onParkourCourseCompletedRef.current(
+                    parkourRingsCollectedCount,
+                    parkourRings.length,
+                    roundedElapsed,
+                  )
+                  if (newBadge) {
+                    showParkourStatusMessage('🏆 Troféu conquistado: Mestre do Parkour!', 4000)
+                  }
                 }
               }
             }
@@ -16745,9 +16749,10 @@ export function World3D({
       {planetSecretFoundMessage && <p className="mars-death-message">{planetSecretFoundMessage}</p>}
       {postcardFoundMessage && <p className="mars-death-message">{postcardFoundMessage}</p>}
       {parkourHud && (
-        <p className="mars-enemy-count">
-          💍 {parkourHud.ringsCollected}/{parkourHud.totalRings} · ⏱ {parkourHud.elapsedSeconds}s
-        </p>
+        <div className="parkour-hud" inert={hudInert}>
+          <span>💍 {parkourHud.ringsCollected}/{parkourHud.totalRings} · ⏱ {parkourHud.elapsedSeconds}s</span>
+          <button type="button" onClick={() => leaveParkourRef.current()}>Voltar ao hub</button>
+        </div>
       )}
       {parkourStatusMessage && <p className="mars-death-message">{parkourStatusMessage}</p>}
       {minigamePrompt && (
