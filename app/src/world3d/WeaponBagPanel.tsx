@@ -1,4 +1,5 @@
 import { useModalA11y } from '../state/useModalA11y'
+import { interactionHint, interactionInputForDevice } from './interactionHint'
 
 interface WeaponBagPanelProps {
   hasSword: boolean
@@ -8,16 +9,16 @@ interface WeaponBagPanelProps {
   onClose: () => void
 }
 
-const WEAPON_INFO: Record<'sword' | 'gun', { emoji: string; name: string; hint: string }> = {
+const WEAPON_INFO: Record<'sword' | 'gun', { emoji: string; name: string; action: string }> = {
   sword: {
     emoji: '🗡️',
     name: 'Espada',
-    hint: 'Pressione E perto de um ET em Marte pra nocauteá-lo.',
+    action: 'nocautear um ET perto de você em Marte',
   },
   gun: {
     emoji: '🔫',
     name: 'Arma a Laser',
-    hint: 'Pressione E perto de um robô em Marte pra nocauteá-lo.',
+    action: 'nocautear um robô perto de você em Marte',
   },
 }
 
@@ -31,6 +32,10 @@ export function WeaponBagPanel({ hasSword, hasGun, selected, onSelect, onClose }
   if (hasSword) items.push('sword')
   if (hasGun) items.push('gun')
   const panelRef = useModalA11y(onClose)
+  const interactionInput = interactionInputForDevice(
+    window.matchMedia('(pointer: coarse)').matches,
+    navigator.maxTouchPoints,
+  )
 
   return (
     <div
@@ -64,7 +69,7 @@ export function WeaponBagPanel({ hasSword, hasGun, selected, onSelect, onClose }
         })}
       </div>
 
-      {selected && <p className="bag-item-hint">{WEAPON_INFO[selected].hint}</p>}
+      {selected && <p className="bag-item-hint">{interactionHint(WEAPON_INFO[selected].action, interactionInput)}.</p>}
       {items.length === 0 && <p className="chat-empty">Nenhum item ainda — explore a Terra pra achar a espada e a arma.</p>}
     </div>
   )

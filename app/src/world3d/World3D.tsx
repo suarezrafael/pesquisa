@@ -142,6 +142,7 @@ import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHierarchyInstances'
 import { shouldUseDetailedTeacher } from './teacherDetail'
+import { interactionHint, interactionInputForDevice } from './interactionHint'
 import { TOUCH_CAMERA_FOLLOW_SHARE, touchCameraFollowStep } from './touchCameraFollow'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
@@ -3091,6 +3092,11 @@ export function World3D({
     // termina com sucesso (ver `setSetupReady`/`.then` mais abaixo), fechando tanto esse caminho
     // síncrono quanto o de teclas de movimento (consumidas depois, no loop de física).
     let inputReady = false
+    // Resolve uma vez por cena; nenhuma string de GUI e recalculada no render loop.
+    const interactionInput = interactionInputForDevice(
+      window.matchMedia('(pointer: coarse)').matches,
+      navigator.maxTouchPoints,
+    )
 
     // Antes (labs 56-72) isso vinha de um regex de user-agent (`/Android|iPad|iPhone|.../`), que
     // tratava QUALQUER iPhone como GPU fraca — mesmo perfil de um Poco C75/Redmi Pad 2 reais,
@@ -6924,7 +6930,7 @@ export function World3D({
         // Texto próprio ("...no carro", não só "Pressione E pra entrar" genérico) — mesmo achado
         // do usuário que motivou o texto específico da casa (lab-133): carro e casa com o MESMO
         // texto tornava impossível saber qual dos dois E ia acionar quando os dois ficavam perto.
-        const hintLabel = new TextBlock(`carHint-${i}`, 'Pressione E pra entrar no carro')
+        const hintLabel = new TextBlock(`carHint-${i}`, interactionHint('entrar no carro', interactionInput))
         hintLabel.color = 'white'
         hintLabel.fontSize = mobileFontSize(18)
         hintLabel.fontWeight = 'bold'
@@ -6977,7 +6983,7 @@ export function World3D({
         rocketCollider.isVisible = false
         new PhysicsAggregate(rocketCollider, PhysicsShapeType.CYLINDER, { mass: 0 }, scene)
 
-        const rocketHint = new TextBlock('rocketHint', 'Pressione E pra embarcar')
+        const rocketHint = new TextBlock('rocketHint', interactionHint('embarcar', interactionInput))
         rocketHint.color = 'white'
         rocketHint.fontSize = mobileFontSize(18)
         rocketHint.fontWeight = 'bold'
@@ -7377,7 +7383,7 @@ export function World3D({
         returnRocketRoot.parent = secondPlanetRoot
         returnRocketRoot.position = SECOND_PLANET_LANDING_UP.scale(SECOND_PLANET_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(SECOND_PLANET_LANDING_UP)
-        const returnHint = new TextBlock('secondPlanetRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('secondPlanetRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -7559,7 +7565,7 @@ export function World3D({
         returnRocketRoot.parent = mercuryRoot
         returnRocketRoot.position = MERCURY_LANDING_UP.scale(MERCURY_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(MERCURY_LANDING_UP)
-        const returnHint = new TextBlock('mercuryRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('mercuryRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -7678,7 +7684,7 @@ export function World3D({
         returnRocketRoot.parent = venusRoot
         returnRocketRoot.position = VENUS_LANDING_UP.scale(VENUS_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(VENUS_LANDING_UP)
-        const returnHint = new TextBlock('venusRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('venusRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -7781,7 +7787,7 @@ export function World3D({
           guiTexture.addControl(pedLabel)
           pedLabel.linkWithMesh(pedMesh)
           pedLabel.linkOffsetY = -30
-          const pedHint = new TextBlock(`venusPedestalHint-${i}`, 'Pressione E')
+          const pedHint = new TextBlock(`venusPedestalHint-${i}`, interactionHint('', interactionInput))
           pedHint.color = 'white'
           pedHint.fontSize = mobileFontSize(18)
           pedHint.fontWeight = 'bold'
@@ -7952,7 +7958,7 @@ export function World3D({
         returnRocketRoot.parent = jupiterRoot
         returnRocketRoot.position = JUPITER_LANDING_UP.scale(JUPITER_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(JUPITER_LANDING_UP)
-        const returnHint = new TextBlock('jupiterRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('jupiterRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -8071,7 +8077,7 @@ export function World3D({
         returnRocketRoot.parent = saturnRoot
         returnRocketRoot.position = SATURN_LANDING_UP.scale(SATURN_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(SATURN_LANDING_UP)
-        const returnHint = new TextBlock('saturnoRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('saturnoRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -8195,7 +8201,7 @@ export function World3D({
         returnRocketRoot.parent = uranusRoot
         returnRocketRoot.position = URANUS_LANDING_UP.scale(URANUS_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(URANUS_LANDING_UP)
-        const returnHint = new TextBlock('uranoRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('uranoRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -8330,7 +8336,7 @@ export function World3D({
         returnRocketRoot.parent = neptuneRoot
         returnRocketRoot.position = NEPTUNE_LANDING_UP.scale(NEPTUNE_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(NEPTUNE_LANDING_UP)
-        const returnHint = new TextBlock('netunoRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('netunoRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -9391,7 +9397,7 @@ export function World3D({
       // Dica "Pressione E" (lab-172) — só some visível quando há outro jogador por perto (ver
       // uso no loop de física); pra alguém sozinho, mostrar a dica convidaria pra um desafio
       // impossível de terminar sem parceiro.
-      const coopEnterHint = new TextBlock('coopEnterHint', 'Pressione E pro desafio em dupla')
+      const coopEnterHint = new TextBlock('coopEnterHint', interactionHint('iniciar o desafio em dupla', interactionInput))
       coopEnterHint.color = 'white'
       coopEnterHint.fontSize = mobileFontSize(18)
       coopEnterHint.fontWeight = 'bold'
@@ -9462,7 +9468,7 @@ export function World3D({
       bridgeLabel.linkWithMesh(bridgeDeck)
       bridgeLabel.linkOffsetY = -60
 
-      const bridgeEnterHint = new TextBlock('bridgeEnterHint', 'Pressione E pra alinhar a ponte')
+      const bridgeEnterHint = new TextBlock('bridgeEnterHint', interactionHint('alinhar a ponte', interactionInput))
       bridgeEnterHint.color = 'white'
       bridgeEnterHint.fontSize = mobileFontSize(18)
       bridgeEnterHint.fontWeight = 'bold'
@@ -9532,7 +9538,7 @@ export function World3D({
       rocketFuelLabel.linkWithMesh(fuelTank)
       rocketFuelLabel.linkOffsetY = -60
 
-      const rocketFuelEnterHint = new TextBlock('rocketFuelEnterHint', 'Pressione E pra abastecer o foguete')
+      const rocketFuelEnterHint = new TextBlock('rocketFuelEnterHint', interactionHint('abastecer o foguete', interactionInput))
       rocketFuelEnterHint.color = 'white'
       rocketFuelEnterHint.fontSize = mobileFontSize(18)
       rocketFuelEnterHint.fontWeight = 'bold'
@@ -9587,7 +9593,7 @@ export function World3D({
       plaqueLabel.linkWithMesh(plaqueBoard)
       plaqueLabel.linkOffsetY = -50
 
-      const plaqueEnterHint = new TextBlock('plaqueEnterHint', 'Pressione E pra decifrar a placa')
+      const plaqueEnterHint = new TextBlock('plaqueEnterHint', interactionHint('decifrar a placa', interactionInput))
       plaqueEnterHint.color = 'white'
       plaqueEnterHint.fontSize = mobileFontSize(18)
       plaqueEnterHint.fontWeight = 'bold'
@@ -9716,7 +9722,7 @@ export function World3D({
         '🏃 Parkour',
         22,
         -50,
-        'Pressione E pra jogar o Parkour',
+        interactionHint('jogar o Parkour', interactionInput),
         -25,
       )
 
@@ -9735,7 +9741,7 @@ export function World3D({
         '🌉 Ponte',
         22,
         -50,
-        'Pressione E pra jogar a Ponte',
+        interactionHint('jogar a Ponte', interactionInput),
         -25,
       )
 
@@ -9749,7 +9755,7 @@ export function World3D({
       const parkourReturnPedestal = buildHubPedestal('parkourReturnPedestal', parkourReturnBase, hubReturnMat, 0.4, 0.55, 0.7)
       settleMeshOnTerrain(parkourReturnBase, PARKOUR_RETURN_UP)
       parkourReturnPos.copyFrom(parkourReturnBase.position)
-      parkourReturnHintLabel = addHubLabels('parkourReturn', parkourReturnPedestal, '🔙', 24, -40, 'Pressione E pra voltar ao hub', -20)
+      parkourReturnHintLabel = addHubLabels('parkourReturn', parkourReturnPedestal, '🔙', 24, -40, interactionHint('voltar ao hub', interactionInput), -20)
 
       // Pedestal de RETORNO na ponte — `ENV_CHALLENGE_TRIGGER_DISTANCE` é 1.3; a distância até
       // `bridgeSurfacePos` precisa passar de 2×1.3 = 2.6, senão existe uma faixa de chão onde os
@@ -9766,7 +9772,7 @@ export function World3D({
       const bridgeReturnPedestal = buildHubPedestal('bridgeReturnPedestal', bridgeReturnBase, hubReturnMat, 0.4, 0.55, 0.7)
       settleMeshOnTerrain(bridgeReturnBase, BRIDGE_RETURN_UP)
       bridgeReturnPos.copyFrom(bridgeReturnBase.position)
-      bridgeReturnHintLabel = addHubLabels('bridgeReturn', bridgeReturnPedestal, '🔙', 24, -40, 'Pressione E pra voltar ao hub', -20)
+      bridgeReturnHintLabel = addHubLabels('bridgeReturn', bridgeReturnPedestal, '🔙', 24, -40, interactionHint('voltar ao hub', interactionInput), -20)
 
       // Ponte inversa (React → closure) pro hub de mini-jogos — mesmo padrão de `boardRocketToRef`
       // acima, atribuída só aqui porque `PARKOUR_ANCHOR_UP`/`bridgeUp` (destinos do teleporte) só
@@ -9916,7 +9922,7 @@ export function World3D({
       // casa", não só "Pressione E pra entrar" genérico) — achado real do usuário: com o texto
       // genérico idêntico ao do carro, um carro passando perto da casa mostrava a MESMA legenda,
       // e o jogador não tinha como saber qual das duas coisas E ia acionar.
-      const houseEnterHint = new TextBlock('houseEnterHint', 'Pressione E pra entrar em casa')
+      const houseEnterHint = new TextBlock('houseEnterHint', interactionHint('entrar em casa', interactionInput))
       houseEnterHint.color = 'white'
       houseEnterHint.fontSize = mobileFontSize(18)
       houseEnterHint.fontWeight = 'bold'
@@ -10430,7 +10436,7 @@ export function World3D({
         interiorDoor.parent = interiorRoot
         houseDoorInsidePos = interiorRoot.position.add(interiorDoor.position)
 
-        const exitHint = new TextBlock('houseExitHint', 'Pressione E pra sair')
+        const exitHint = new TextBlock('houseExitHint', interactionHint('sair', interactionInput))
         exitHint.color = 'white'
         exitHint.fontSize = mobileFontSize(18)
         exitHint.fontWeight = 'bold'
@@ -10779,7 +10785,7 @@ export function World3D({
       gameCenterSignLabel.linkWithMesh(gameCenterRoof)
       gameCenterSignLabel.linkOffsetY = -40
 
-      const gameCenterEnterHint = new TextBlock('gameCenterEnterHint', 'Pressione E pra entrar')
+      const gameCenterEnterHint = new TextBlock('gameCenterEnterHint', interactionHint('entrar', interactionInput))
       gameCenterEnterHint.color = 'white'
       gameCenterEnterHint.fontSize = mobileFontSize(18)
       gameCenterEnterHint.fontWeight = 'bold'
@@ -10908,7 +10914,7 @@ export function World3D({
         interiorDoor.parent = interiorRoot
         gameCenterDoorInsidePos = interiorRoot.position.add(interiorDoor.position)
 
-        const exitHint = new TextBlock('gcExitHint', 'Pressione E pra sair')
+        const exitHint = new TextBlock('gcExitHint', interactionHint('sair', interactionInput))
         exitHint.color = 'white'
         exitHint.fontSize = mobileFontSize(18)
         exitHint.fontWeight = 'bold'
@@ -10971,7 +10977,7 @@ export function World3D({
           plaqueLabel.linkWithMesh(plaqueBoard)
           plaqueLabel.linkOffsetY = -45
 
-          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? 'Pressione E pra jogar' : 'Pressione E · Em breve')
+          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? interactionHint('jogar', interactionInput) : 'Em breve')
           plaqueHint.color = 'white'
           plaqueHint.fontSize = mobileFontSize(16)
           plaqueHint.fontWeight = 'bold'
@@ -11047,7 +11053,7 @@ export function World3D({
           cardLabel.linkWithMesh(card)
           gcMemoryCardLabels[i] = cardLabel
 
-          const cardHint = new TextBlock(`gcMemoryCardHint-${i}`, 'Pressione E')
+          const cardHint = new TextBlock(`gcMemoryCardHint-${i}`, interactionHint('', interactionInput))
           cardHint.color = 'white'
           cardHint.fontSize = mobileFontSize(14)
           cardHint.fontWeight = 'bold'
@@ -11096,7 +11102,7 @@ export function World3D({
           gcPatternPadMaterials[i] = padMat
           gcPatternPadPos[i] = arenaTargetTriggerPos(pad)
 
-          const padHint = new TextBlock(`gcPatternPadHint-${i}`, 'Pressione E')
+          const padHint = new TextBlock(`gcPatternPadHint-${i}`, interactionHint('', interactionInput))
           padHint.color = 'white'
           padHint.fontSize = mobileFontSize(14)
           padHint.fontWeight = 'bold'
@@ -11225,7 +11231,7 @@ export function World3D({
           optionLabel.linkWithMesh(option)
           gcCountingOptionLabels[i] = optionLabel
 
-          const optionHint = new TextBlock(`gcCountingOptionHint-${i}`, 'Pressione E')
+          const optionHint = new TextBlock(`gcCountingOptionHint-${i}`, interactionHint('', interactionInput))
           optionHint.color = 'white'
           optionHint.fontSize = mobileFontSize(14)
           optionHint.fontWeight = 'bold'
@@ -11317,7 +11323,7 @@ export function World3D({
           tileLabel.linkWithMesh(tile)
           gcSpellingTileLabels[i] = tileLabel
 
-          const tileHint = new TextBlock(`gcSpellingTileHint-${i}`, 'Pressione E')
+          const tileHint = new TextBlock(`gcSpellingTileHint-${i}`, interactionHint('', interactionInput))
           tileHint.color = 'white'
           tileHint.fontSize = mobileFontSize(14)
           tileHint.fontWeight = 'bold'
@@ -11493,7 +11499,7 @@ export function World3D({
         const hintLabel = gameCenterPortalHintLabel[id]
         if (hintLabel) {
           const info = GAME_CENTER_PORTAL_INFO[id]
-          const cta = info.unlocked ? 'Pressione E pra jogar' : 'Pressione E · Em breve'
+          const cta = info.unlocked ? interactionHint('jogar', interactionInput) : 'Em breve'
           hintLabel.text = `${gameCenterTrophyProgressPrefix(completions)}${cta}`
         }
       }
@@ -11730,7 +11736,7 @@ export function World3D({
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
               'memoria',
-              '🎉 Você venceu! Pressione E na placa pra jogar de novo',
+              `🎉 Você venceu! ${interactionHint('jogar de novo na placa', interactionInput)}`,
             )
           }
         }
@@ -11817,7 +11823,7 @@ export function World3D({
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
               'memoria',
-              '🎉 Sequência completa! Pressione E na placa pra jogar de novo',
+              `🎉 Sequência completa! ${interactionHint('jogar de novo na placa', interactionInput)}`,
             )
           }
           return
@@ -11883,7 +11889,7 @@ export function World3D({
           if (gameCenterCountingStatusLabel) {
             gameCenterCountingStatusLabel.text = handleGameCenterMinigameReward(
               'contar',
-              '🎉 Você contou tudo certo! Pressione E na placa pra jogar de novo',
+              `🎉 Você contou tudo certo! ${interactionHint('jogar de novo na placa', interactionInput)}`,
             )
           }
           return
@@ -11948,7 +11954,7 @@ export function World3D({
           if (gameCenterSpellingStatusLabel) {
             gameCenterSpellingStatusLabel.text = handleGameCenterMinigameReward(
               'soletrar',
-              `🎉 Você soletrou ${state.hint} ${state.word}! Pressione E na placa pra jogar de novo`,
+              `🎉 Você soletrou ${state.hint} ${state.word}! ${interactionHint('jogar de novo na placa', interactionInput)}`,
             )
           }
           return
