@@ -9,7 +9,10 @@ Commit inicial `4b24289`.
 
 Experimento seguinte do mesmo lab: congelamento de matrizes das escolas apos assentamento,
 eliminacao de alocacao no pulso dos telhados e telemetria de tempo do loop/recursos. Ver
-`PERFORMANCE-AUDIT.md`; ganho de FPS e qualidade ainda precisam de teste fisico.
+`PERFORMANCE-AUDIT.md`. A primeira coleta apos essa build deu 28,29 FPS no Redmi Pad 2,
+mas teve menos escolas visiveis (13,53 vs. 17,99), portanto nao e A/B controlado.
+Experimento atual: detalhe simplificado para professores distantes apenas no nivel
+adaptativo 2; validar FPS e aparencia no tablet antes de concluir o lab.
 
 ---
 

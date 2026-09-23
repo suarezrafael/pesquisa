@@ -78,6 +78,32 @@ otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
   nesta iteracao; o autoajuste pode escolher escala mais nitida caso o FPS melhore.
 - A mudanca fica experimental ate comparacao fisica no Redmi Pad 2 e QA de escolas/relevo.
 
+## Coleta apos congelar matrizes (Redmi Pad 2)
+
+- Build `2026-09-23T02:35:50.273Z`, Terra, mesmo Mali-G57 MC2, viewport 1138x633,
+  DPR 2.25, escala 1,40 e `adaptiveEffectTier: 2`; 15,1 s / 426 amostras.
+- FPS medio 22,25 -> 28,29 (+27,1%); p5 18,28 -> 23,58; quadro p95 51,60 -> 39,70 ms.
+  `activeMeshesEvaluationTimeMs` 11,30 -> 10,25 ms; `cameraRenderTimeMs` 25,88 ->
+  24,05 ms. `gameUpdateTimeMs` medio 0,85 ms/p95 1,80 ms; 1.236 geometrias,
+  12 texturas, 1.003.991 vertices e 1.020 transform nodes congelados.
+- Comparacao nao controlada: escolas habilitadas medias cairam de 17,99 para 13,53,
+  meshes ativos de 676,43 para 596,54 e draw calls de 427,26 para 389,23. A cena/
+  camera mais leve pode explicar parte importante do ganho; nao atribuir +27,1% ao
+  congelamento sem repetir o mesmo percurso. O p5 ainda nao atinge 30 FPS.
+
+## Experimento de detalhe dos professores distantes
+
+- Cada escola tem um professor estatico de 19 meshes; no nivel adaptativo 2,
+  professores alem de 30 unidades da camera trocam para silhueta de corpo/cabeca
+  com duas meshes compartilhadas por instancias. Abaixo de 25 unidades, voltam
+  ao modelo completo; a faixa intermediaria evita piscadas. Nos niveis 0/1,
+  todos continuam completos. Escolas, quizzes, colisoes e gatilhos nao mudam.
+- O JSON passa a incluir `earthSchools.detailedTeachersAvg` e
+  `earthSchools.simpleTeachersAvg`. A hipotese e reduzir avaliacao/draw calls de
+  detalhes pequenos na tela e preservar professor reconhecivel quando proximo.
+  Comparar no Redmi no mesmo percurso e nivel 2 antes de afirmar ganho; inspecionar
+  a troca aproximando-se de uma escola e durante o voo de foguete.
+
 ## Funcionalidades planejadas
 
 - [ ] Coletar amostras reais de 15 segundos na Terra, no centro de jogos e em Marte ou outro
@@ -97,6 +123,8 @@ otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
 - [x] Auditar CPU, memoria, estrutura de malhas e alternativas do Babylon; aplicar congelamento
   apenas nas hierarquias estaticas das escolas e eliminar alocacao por quadro no pulso do telhado.
 - [ ] Validar no Redmi Pad 2 se a otimizacao de CPU melhora FPS/escala sem perder qualidade.
+- [ ] Validar no Redmi Pad 2 o detalhe adaptativo dos professores contra a build
+  `2026-09-23T02:35:50.273Z`, com o mesmo percurso e verificacao visual.
 
 ## Como coletar
 

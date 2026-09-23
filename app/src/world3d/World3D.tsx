@@ -141,6 +141,7 @@ import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHierarchyInstances'
+import { shouldUseDetailedTeacher } from './teacherDetail'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -3562,6 +3563,9 @@ export function World3D({
       label: TextBlock
       surfacePos: Vector3
       visibilityProbePos: Vector3
+      teacherRoot: TransformNode
+      teacherLodRoot: TransformNode
+      teacherDetailed: boolean
     }[] = []
     // lab-164 (jornada de ativação de 10 minutos) — feixe de luz "comece aqui" acima da primeira
     // escolinha (`quests[0]`), criado depois do laço de `quests.forEach` mais abaixo; visibilidade
@@ -8903,6 +8907,8 @@ export function World3D({
       let earthSchoolTeacherSource: StudentFigure | null = null
       let earthSchoolTeacherSourceMeshCount = 0
       let earthSchoolTeacherInstanceMeshCount = 0
+      let teacherLodBodySource: Mesh | null = null
+      let teacherLodHeadSource: Mesh | null = null
       // Lab 223: paredes, fundacao e porta tambem sao identicas e estaticas. A primeira escola
       // conserva as tres meshes Babylon normais; as demais instanciam as folhas da hierarquia,
       // compartilhando geometria/material sem misturar o colisor individual de cada parede.
@@ -9040,6 +9046,33 @@ export function World3D({
         teacherRoot.position = new Vector3(0.95, 0, 0.55)
         teacherRoot.parent = base
 
+        const teacherLodRoot = new TransformNode(`teacher-lod-${quest.id}`, scene)
+        teacherLodRoot.scaling.setAll(0.92)
+        teacherLodRoot.position.copyFrom(teacherRoot.position)
+        teacherLodRoot.parent = base
+        if (!teacherLodBodySource || !teacherLodHeadSource) {
+          const body = MeshBuilder.CreateCapsule(
+            `teacher-lod-body-${quest.id}`,
+            { height: 1.05, radius: 0.18 },
+            scene,
+          )
+          body.position.y = 0.55
+          body.material = earthSchoolTeacherSource.shirtMat
+          body.parent = teacherLodRoot
+          const head = MeshBuilder.CreateSphere(`teacher-lod-head-${quest.id}`, { diameter: 0.32 }, scene)
+          head.position.y = 1.15
+          head.material = earthSchoolTeacherSource.head.material
+          head.parent = teacherLodRoot
+          teacherLodBodySource = body
+          teacherLodHeadSource = head
+        } else {
+          const body = teacherLodBodySource.createInstance(`teacher-lod-body-${quest.id}`)
+          body.parent = teacherLodRoot
+          const head = teacherLodHeadSource.createInstance(`teacher-lod-head-${quest.id}`)
+          head.parent = teacherLodRoot
+        }
+        teacherLodRoot.setEnabled(false)
+
         // lab-87, mesmo bug relatado de novo ("morros invisíveis, casas flutuando em algo
         // transparente") apesar da fundação maior do lab-28 — causa raiz real: a fundação fixa
         // cobre a variação de relevo TÍPICA sob a escola, mas não a PIOR, que
@@ -9053,7 +9086,7 @@ export function World3D({
         // professor ficam de fora da AMOSTRAGEM (lab-95, ver comentário longo em
         // `settleMeshOnTerrain`) — nenhum dos dois toca o chão de verdade, e seu alcance além da
         // pegada das paredes distorcia a decisão de descida do prédio inteiro.
-        settleMeshOnTerrain(base, localUp, [roof, teacherRoot])
+        settleMeshOnTerrain(base, localUp, [roof, teacherRoot, teacherLodRoot])
         // `settleMeshOnTerrain` pode ter descido `base` — `surfacePos` (usada mais abaixo pra
         // distância de gatilho da missão e pro topo do telhado) precisa refletir a posição FINAL,
         // não a de antes do ajuste, senão o gatilho fica levemente descolado da escola visível.
@@ -9072,7 +9105,10 @@ export function World3D({
         // O probe fica acima do telhado: a escola so pode ser ocultada quando nem sua parte mais
         // alta possui linha de visao livre por cima da curvatura do planeta.
         const visibilityProbePos = surfacePos.add(localUp.scale(2.25))
-        portalMeshes.push({ quest, questIndex: index, roof, base, label, surfacePos, visibilityProbePos })
+        portalMeshes.push({
+          quest, questIndex: index, roof, base, label, surfacePos, visibilityProbePos,
+          teacherRoot, teacherLodRoot, teacherDetailed: true,
+        })
       })
 
       // All schools are now settled and the first ones have served as instance sources.
@@ -9087,12 +9123,31 @@ export function World3D({
       // esfera-base do planeta: so desliga quando ela atravessa profundamente o planeta. Isso se
       // adapta a zoom/rotacao, enquanto a histerese evita piscar perto da tangente.
       let enabledSchoolCount = portalMeshes.length
+      let detailedTeacherCount = portalMeshes.length
+      let simpleTeacherCount = 0
+      function updateTeacherDetail(entry: (typeof portalMeshes)[number]) {
+        const detailed = adaptiveEffectTier < 2 || shouldUseDetailedTeacher(
+          Vector3.DistanceSquared(camera.position, entry.surfacePos),
+          entry.teacherDetailed,
+        )
+        if (entry.teacherDetailed === detailed) return
+        entry.teacherRoot.setEnabled(detailed)
+        entry.teacherLodRoot.setEnabled(!detailed)
+        entry.teacherDetailed = detailed
+      }
       function setAllEarthSchoolsEnabled(enabled: boolean) {
+        let detailedCount = 0
         for (const entry of portalMeshes) {
           if (entry.base.isEnabled() !== enabled) entry.base.setEnabled(enabled)
           entry.label.isVisible = enabled
+          if (enabled) {
+            updateTeacherDetail(entry)
+            if (entry.teacherDetailed) detailedCount++
+          }
         }
         enabledSchoolCount = enabled ? portalMeshes.length : 0
+        detailedTeacherCount = detailedCount
+        simpleTeacherCount = enabledSchoolCount - detailedCount
       }
       function updateEarthSchoolVisibility(mainWorldActive: boolean) {
         // Durante o voo a Terra aparece na transicao e desligar predios produziria um pop visivel.
@@ -9111,6 +9166,7 @@ export function World3D({
         }
 
         let nextEnabledCount = 0
+        let nextDetailedCount = 0
         for (const entry of portalMeshes) {
           const enabled = shouldEnableSphericalObject(
             true,
@@ -9119,9 +9175,15 @@ export function World3D({
           )
           if (entry.base.isEnabled() !== enabled) entry.base.setEnabled(enabled)
           entry.label.isVisible = enabled
-          if (enabled) nextEnabledCount++
+          if (enabled) {
+            updateTeacherDetail(entry)
+            nextEnabledCount++
+            if (entry.teacherDetailed) nextDetailedCount++
+          }
         }
         enabledSchoolCount = nextEnabledCount
+        detailedTeacherCount = nextDetailedCount
+        simpleTeacherCount = nextEnabledCount - nextDetailedCount
       }
 
       // lab-164 (jornada de ativação de 10 minutos, docs/market-metrics-engagement-backlog.md) —
@@ -15861,6 +15923,8 @@ export function World3D({
         const physicsTimeSamples: number[] = []
         const gpuFrameTimeSamples: number[] = []
         const enabledSchoolSamples: number[] = []
+        const detailedTeacherSamples: number[] = []
+        const simpleTeacherSamples: number[] = []
 
         const observer = scene.onAfterRenderObservable.add(() => {
           // Achado do review automático do Copilot (2 rodadas): `engine.getFps()` é o mesmo
@@ -15899,6 +15963,8 @@ export function World3D({
           // o valor lido era ~10 milhões "ms" (na real, ~10ms reais).
           gpuFrameTimeSamples.push(engineInstrumentation.gpuFrameTimeCounter.current / 1e6)
           enabledSchoolSamples.push(enabledSchoolCount)
+          detailedTeacherSamples.push(detailedTeacherCount)
+          simpleTeacherSamples.push(simpleTeacherCount)
         })
 
         const round = (n: number) => Math.round(n * 100) / 100
@@ -15985,6 +16051,8 @@ export function World3D({
                 teacherSourceMeshes: earthSchoolTeacherSourceMeshCount,
                 teacherInstanceMeshes: earthSchoolTeacherInstanceMeshCount,
                 frozenTransformNodes: earthSchoolFrozenNodeCount,
+                detailedTeachersAvg: round(mean(detailedTeacherSamples)),
+                simpleTeachersAvg: round(mean(simpleTeacherSamples)),
               },
               fps: {
                 avg: round(msToFps(mean(deltaTimeSamples))),
@@ -16059,6 +16127,8 @@ export function World3D({
           teacherSourceMeshes: earthSchoolTeacherSourceMeshCount,
           teacherInstanceMeshes: earthSchoolTeacherInstanceMeshCount,
           frozenTransformNodes: earthSchoolFrozenNodeCount,
+          detailedTeachers: detailedTeacherCount,
+          simpleTeachers: simpleTeacherCount,
         }),
         activeMeshesEvaluationTimeMs: () => instrumentation.activeMeshesEvaluationTimeCounter.current.toFixed(2),
         gameUpdateTimeMs: () => lastGameUpdateTimeMs.toFixed(2),
