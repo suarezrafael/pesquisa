@@ -1,18 +1,18 @@
 # Laboratório atual
 
-Em andamento: labs/lab-226-baseline-android-fisico/ - no Redmi Pad 2, Terra, o primeiro
-antes/depois fisico do render adaptativo foi de 11,45 para 22,25 FPS e de 1.937,52 para
-427,26 draw calls, com escala 1,60 -> 1,40. `adaptiveEffectTier: 2` desligou SSAO, glow,
-sombras e MSAA 4x apos medir a cena real. Ainda falta repetir na mesma build/percurso,
-verificar qualidade visual no tablet e coletar Poco C75 e outras cenas. Ver `FEATURES.md`.
-Commit inicial `4b24289`.
+Em andamento: labs/lab-227-validacao-lod-android/ - validar no Redmi Pad 2 se o
+detalhe simplificado dos professores (publicado na build
+`2026-09-23T12:51:14.064Z`) realmente ativa, melhora FPS e preserva a aparencia.
+O Lab 227 comeca em `2bdbe17`; consultar `FEATURES.md` antes de mudar o codigo.
 
-Experimento seguinte do mesmo lab: congelamento de matrizes das escolas apos assentamento,
-eliminacao de alocacao no pulso dos telhados e telemetria de tempo do loop/recursos. Ver
-`PERFORMANCE-AUDIT.md`. A primeira coleta apos essa build deu 28,29 FPS no Redmi Pad 2,
-mas teve menos escolas visiveis (13,53 vs. 17,99), portanto nao e A/B controlado.
-Experimento atual: detalhe simplificado para professores distantes apenas no nivel
-adaptativo 2; validar FPS e aparencia no tablet antes de concluir o lab.
+---
+
+Ultimo encerrado com pendencias: labs/lab-226-baseline-android-fisico/ - render
+adaptativo elevou a primeira medicao de 11,45 para 22,25 FPS. A coleta seguinte
+marcou 28,29 FPS, mas tinha menos escolas ativas e nao isola o ganho das matrizes.
+O detalhe dos professores foi publicado sem medicao fisica posterior. Essa validacao
+migrou para o Lab 227; a matriz Poco C75/outras cenas continua no backlog 191/193.
+Ver `CONTEXT.md` do Lab 226.
 
 ---
 
