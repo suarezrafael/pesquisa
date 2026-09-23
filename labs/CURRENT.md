@@ -1,10 +1,11 @@
 # Laboratório atual
 
-Em andamento: labs/lab-226-baseline-android-fisico/ - primeira coleta real do Redmi Pad 2 na
-Terra: 11,45 FPS, 1.937,52 draw calls, perfil `full` e escala 1,60 apos seis ciclos. Um
-experimento adaptativo desliga passes caros com base no FPS da cena real, mantendo desktop
-rapido no perfil completo. Falta comparar depois do deploy no mesmo tablet e coletar Poco C75
-e outras cenas; nao ha aparelho fisico conectado aqui. Ver `FEATURES.md`. Commit inicial `4b24289`.
+Em andamento: labs/lab-226-baseline-android-fisico/ - no Redmi Pad 2, Terra, o primeiro
+antes/depois fisico do render adaptativo foi de 11,45 para 22,25 FPS e de 1.937,52 para
+427,26 draw calls, com escala 1,60 -> 1,40. `adaptiveEffectTier: 2` desligou SSAO, glow,
+sombras e MSAA 4x apos medir a cena real. Ainda falta repetir na mesma build/percurso,
+verificar qualidade visual no tablet e coletar Poco C75 e outras cenas. Ver `FEATURES.md`.
+Commit inicial `4b24289`.
 
 ---
 
