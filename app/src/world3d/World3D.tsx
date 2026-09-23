@@ -142,6 +142,7 @@ import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHierarchyInstances'
 import { shouldUseDetailedTeacher } from './teacherDetail'
+import { TOUCH_CAMERA_FOLLOW_SHARE, touchCameraFollowStep } from './touchCameraFollow'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -3290,6 +3291,7 @@ export function World3D({
     // antes) — nunca os substitui, porque eles são `<button>` de verdade com suporte a teclado
     // (lab-150), e arrastar é um gesto só de ponteiro/toque.
     let cameraDragging = false
+    let touchCameraTurnPending = 0
     let outdoorDrag = false // true = arrasto começou do lado de fora (só giro); false = dentro de casa (giro+inclinação)
     // lab-153 (achado real do review automático do Copilot): sem rastrear QUAL ponteiro iniciou o
     // arrasto, um segundo dedo tocando em qualquer lugar (ex.: o `TouchJoystick` de movimento, do
@@ -3339,6 +3341,7 @@ export function World3D({
           // fazem sentido ao mesmo tempo.
           cameraDragging = false
           cameraDragPointerId = null
+          touchCameraTurnPending = 0
         }
       }
       if (cameraDragPointerId !== null) return // já tem um dedo/ponteiro girando a câmera — ignora um segundo
@@ -3384,7 +3387,12 @@ export function World3D({
       const dy = e.clientY - cameraDragLastY
       cameraDragLastX = e.clientX
       cameraDragLastY = e.clientY
-      cameraYawOffsetRef.current += dx * CAMERA_DRAG_SENSITIVITY
+      const yawDelta = dx * CAMERA_DRAG_SENSITIVITY
+      cameraYawOffsetRef.current += yawDelta
+      if (e.pointerType === 'touch' && !hudInertRef.current && !drivingCar && !drivingRocket &&
+          !placingFurnitureId && !restingInBedKey) {
+        touchCameraTurnPending += yawDelta * TOUCH_CAMERA_FOLLOW_SHARE
+      }
       // Inclinação vertical (pitch) é um recurso só de dentro de casa (câmera "esférica" do
       // lab-138) — do lado de fora a câmera usa um offset fixo de altura (ver `desiredCamPos` mais
       // abaixo), sem conceito de pitch pra ajustar.
@@ -3426,6 +3434,7 @@ export function World3D({
     // o botão React do HUD conseguir chamar sem precisar de outro ref consumido quadro a quadro.
     function recenterCamera() {
       cameraYawOffsetRef.current = 0
+      touchCameraTurnPending = 0
       outdoorCameraZoomRef.current = 1
       if (insideHouseInterior) {
         houseCameraPitchOffsetRef.current = 0
@@ -10578,6 +10587,7 @@ export function World3D({
         // a cada entrada — não carrega o giro/zoom de uma visita anterior, mesmo espírito de
         // `startFurniturePlacement` sempre começar do zero.
         cameraYawOffsetRef.current = 0
+        touchCameraTurnPending = 0
         houseCameraPitchOffsetRef.current = 0
         houseCameraZoomRef.current = 1
         // Uma pinça de zoom em andamento bem na hora de entrar em casa não deveria continuar
@@ -10638,6 +10648,7 @@ export function World3D({
         // `onCameraPointerMove`.
         cameraDragging = false
         cameraDragPointerId = null
+        touchCameraTurnPending = 0
         // Mesmo espírito da linha acima — uma pinça de zoom em andamento na hora de sair de casa
         // não deveria continuar valendo pro zoom de fora.
         pinchPointers.clear()
@@ -11391,6 +11402,7 @@ export function World3D({
         insideHouseInterior = true
         insideGameCenterInterior = true
         cameraYawOffsetRef.current = 0
+        touchCameraTurnPending = 0
         houseCameraPitchOffsetRef.current = 0
         houseCameraZoomRef.current = 1
         pinchPointers.clear()
@@ -11420,6 +11432,7 @@ export function World3D({
         insideGameCenterInterior = false
         cameraDragging = false
         cameraDragPointerId = null
+        touchCameraTurnPending = 0
         pinchPointers.clear()
         pinchStartDistance = 0
         currentWorldCenter = savedOutsideCenter
@@ -13794,6 +13807,10 @@ export function World3D({
           y /= mag
         }
 
+        if (hudInertRef.current || drivingCar || drivingRocket || placingFurnitureId || restingInBedKey) {
+          touchCameraTurnPending = 0
+        }
+
         if (avatarBody && avatarMesh) {
           const body = avatarBody.body
           const pos = avatarMesh.position
@@ -13943,6 +13960,18 @@ export function World3D({
           // degenerava quando só esquerda/direita era pressionado, sem cima/baixo.)
           if (Math.abs(x) > 0.02) {
             facing = rotateAroundAxis(facing, localUp, x * TURN_RATE * dt)
+          }
+
+          if (touchCameraTurnPending !== 0) {
+            const followStep = touchCameraFollowStep(touchCameraTurnPending, dt)
+            if (followStep !== 0) {
+              facing = rotateAroundAxis(facing, localUp, followStep)
+              // Keep the camera's world-space bearing while the figure catches up.
+              cameraYawOffsetRef.current -= followStep
+              touchCameraTurnPending -= followStep
+            } else {
+              touchCameraTurnPending = 0
+            }
           }
 
           const throttle = Math.max(-1, Math.min(1, -y))
