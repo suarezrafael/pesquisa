@@ -7,6 +7,10 @@ sombras e MSAA 4x apos medir a cena real. Ainda falta repetir na mesma build/per
 verificar qualidade visual no tablet e coletar Poco C75 e outras cenas. Ver `FEATURES.md`.
 Commit inicial `4b24289`.
 
+Experimento seguinte do mesmo lab: congelamento de matrizes das escolas apos assentamento,
+eliminacao de alocacao no pulso dos telhados e telemetria de tempo do loop/recursos. Ver
+`PERFORMANCE-AUDIT.md`; ganho de FPS e qualidade ainda precisam de teste fisico.
+
 ---
 
 Ultimo concluido: labs/lab-225-perfil-qualidade-mobile/ - centraliza 26 decisoes reduzidas no
