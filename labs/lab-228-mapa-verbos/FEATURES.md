@@ -1,8 +1,8 @@
 # Laboratorio 228 - Mapa de verbos e affordances
 
-Status: em andamento
+Status: encerrado administrativamente com pendencias (entrega parcial)
 Inicio: 2026-09-23
-Fim: -
+Fim: 2026-09-23
 Commit inicial: 2af9c78aae3033eeed61227c4860ccf87f783c25
 
 ## Objetivo do laboratorio
@@ -57,5 +57,6 @@ proximos labs, sem adicionar poluicao visual ao jogo.
 O inventario, a triagem e o contrato estao em `VERB-MAP.md`. O item de percurso
 visual permanece aberto: Edge cobriu o mundo e a lojinha em desktop e viewports
 1138x633/390x844, mas nao um perfil novo nem um planeta secundario; rendeu
-1-2 FPS no ambiente automatizado e nao simulou gesto touch fisico. Nao marcar
-o lab concluido antes dessas verificacoes e do playtest com criancas.
+1-2 FPS no ambiente automatizado e nao simulou gesto touch fisico. O lab foi
+encerrado apenas para permitir a proxima fatia; o item aberto migra para UX
+186/190 e nao conta como validado.
