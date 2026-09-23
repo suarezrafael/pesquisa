@@ -1,8 +1,8 @@
 # Laboratorio 226 - Baseline Android fisico
 
-Status: em andamento
+Status: encerrado com validacao fisica pendente (migrada para o Lab 227)
 Inicio: 2026-09-22
-Fim: -
+Fim: 2026-09-23
 Commit inicial: 4b242896698b1e56c9c8a5323026b834a0588d3e
 
 ## Objetivo do laboratorio
