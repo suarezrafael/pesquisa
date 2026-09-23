@@ -34,7 +34,8 @@ otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
   existente continua independente. `qualityProfile.adaptiveEffectTier` e os campos
   `effective*` no JSON identificam o estado efetivo, nao apenas o perfil inicial.
 - Hipotese: retirar passes extras diminui draw calls e tempo de camera no Redmi Pad 2,
-  permitindo FPS maior sem borrar mais a imagem. Isto ainda nao e um ganho medido.
+  permitindo FPS maior sem borrar mais a imagem. A primeira coleta apos o deploy apoia
+  essa hipotese, mas falta repeticao e verificacao visual no tablet.
 - Repetir duas coletas de 15 s na Terra no mesmo percurso apos publicar esta branch:
   comparar FPS medio/p5/p1, p95 de quadro, draw calls, render targets, escala e legibilidade.
   Registrar separadamente se `adaptiveEffectTier` chegou a 2. Confirmar no desktop que
@@ -42,6 +43,30 @@ otimizacao de camera/render, sem sacrificar legibilidade ou conteudo educativo.
 - Verificacao funcional local no Edge: a cena seguiu visivel e interativa apos a mudanca,
   com contador instantaneo caindo de cerca de 1.950 para cerca de 500 draw calls e FPS
   instantaneo na faixa de 40-46. Nao e comparacao controlada nem resultado Android.
+
+## Primeira coleta apos o deploy (Redmi Pad 2)
+
+- Build `2026-09-23T00:22:38.999Z`, Terra, mesmo renderer Mali-G57 MC2, viewport 1138x633
+  e DPR 2.25 do baseline. JSON enviado pelo usuario; 15,0 s / 334 amostras.
+- `adaptiveEffectTier: 2`: SSAO, glow e sombras desligados, MSAA efetivo 1. O perfil
+  inicial continua `full`, mas o ajuste mediu a cena real e chegou a escala 1,40 apos
+  tres ciclos (baseline anterior: escala 1,60 apos seis ciclos).
+- Antes -> depois: FPS medio 11,45 -> 22,25 (+94,3%); p5 10,62 -> 18,28; p1 10,26 ->
+  16,58; quadro medio 84,48 -> 42,61 ms; quadro p95 91,60 -> 51,60 ms. Draw calls
+  medias 1.937,52 -> 427,26 (-78,0%).
+- Camera/render 66,73/23,58 -> 25,88/14,09 ms; render targets 8,30 -> 0 ms; fisica
+  0,55 -> 0,79 ms. Avaliacao de meshes 13,39 -> 11,30 ms e meshes ativos medios
+  676,66 -> 676,43. Escolas habilitadas medias 15,95 -> 17,99, portanto a melhora
+  nao veio de mostrar menos escolas nesta amostra.
+- Leitura: o ganho direcional e grande no mesmo aparelho/cena e com mais escolas visiveis,
+  mas nao e A/B controlado (percursos e tempo de aquecimento podem diferir). A escala
+  menor tambem significa mais nitidez potencial, ainda nao julgada visualmente pelo usuario.
+  `gpuFrameTimeMs: 0` continua sendo timer indisponivel. Nao somar contadores de tempo
+  sobrepostos para explicar o quadro inteiro.
+- Proxima decisao: repetir duas vezes na mesma build/percurso; coletar centro de jogos e
+  Marte e Poco C75 antes de escolher outra reducao. Se 20-23 FPS se mantiver na Terra,
+  investigar o custo de avaliacao de meshes e de render remanescente, preservando
+  professores, pistas de quest e legibilidade. Nao afirmar meta de 30 FPS atingida.
 
 ## Funcionalidades planejadas
 
