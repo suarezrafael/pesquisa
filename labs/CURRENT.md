@@ -1,11 +1,17 @@
 # Laboratório atual
 
+Em andamento: labs/lab-229-linguagem-interativos/ - primeira fatia do UX 188:
+dicas de proximidade coerentes entre teclado (E) e toque (botao E) para carro,
+foguete, casa e portais. Base `14da8e0`; ver `FEATURES.md`.
+
+---
+
 Ultimo encerrado administrativamente com pendencias: labs/lab-228-mapa-verbos/.
 `VERB-MAP.md` inventaria 16 verbos e prioriza a dica `E` no touch, a revisao
 da monetizacao infantil e o painel tecnico. A frase de solicitacao direta de
 assinatura foi removida da lojinha. Faltam perfil novo, planeta secundario e
-playtest touch fisico; ver `FEATURES.md` e `CONTEXT.md`. Proximo: Lab 229,
-linguagem de interativos (UX 188), iniciado somente apos esta PR entrar em main.
+playtest touch fisico; ver `FEATURES.md` e `CONTEXT.md`. PR #115 mesclada em
+`14da8e0` e publicada pelo deploy automatico da main.
 
 ---
 
