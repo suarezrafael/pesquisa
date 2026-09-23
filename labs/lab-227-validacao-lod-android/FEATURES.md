@@ -36,3 +36,24 @@ limite ou a representacao do professor se a medicao e a observacao justificarem.
 - Trocar motor 3D, reduzir resolucao de forma fixa ou piorar visual proximo.
 - Coletar telemetria automaticamente, dados pessoais ou dados da crianca.
 - Declarar backlog 191/193 concluido antes da matriz Poco C75/outras cenas.
+
+## Primeira coleta fisica recebida
+
+- Redmi Pad 2, Terra, build `2026-09-23T14:48:32.765Z`, 15,0 s / 458 amostras,
+  Mali-G57 MC2, viewport 1138x633, DPR 2,25, nivel adaptativo 2.
+- FPS medio 30,44, p5 25,38, quadro p95 35,80 ms, escala 1,15, 15,28
+  escolas habilitadas em media. `simpleTeachersAvg: 0` e
+  `detailedTeachersAvg: 15,28`: o LOD anterior nao ativou nesta coleta.
+- A coleta anterior registrou 28,29 FPS/p5 23,58, escala 1,40 e 13,53 escolas
+  habilitadas. Cena/percurso e resolucao efetiva diferem; nao atribuir a mudanca
+  de FPS ao LOD. O p5 ainda fica abaixo de 30 FPS.
+
+## Ajuste experimental apos a coleta
+
+- Substituir distancia fixa de 25/30 unidades por tamanho aparente aproximado
+  calculado a partir da altura do viewport e FOV vertical. Simplificar abaixo
+  de 42 px e voltar ao detalhe acima de 50 px; manter nivel adaptativo 2 como
+  unica condicao de ativacao.
+- Validar com novo JSON se `simpleTeachersAvg` sobe acima de zero sem perda
+  perceptivel de legibilidade; se nao ativar ou piorar o visual, reavaliar o
+  criterio antes de promover como ganho de performance.

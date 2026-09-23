@@ -4,6 +4,9 @@ Em andamento: labs/lab-227-validacao-lod-android/ - validar no Redmi Pad 2 se o
 detalhe simplificado dos professores (publicado na build
 `2026-09-23T12:51:14.064Z`) realmente ativa, melhora FPS e preserva a aparencia.
 O Lab 227 comeca em `2bdbe17`; consultar `FEATURES.md` antes de mudar o codigo.
+Primeira coleta da build `2026-09-23T14:48:32.765Z`: 30,44 FPS medios no
+Redmi Pad 2, mas `simpleTeachersAvg: 0`; o LOD ainda nao produziu ganho medido.
+Experimento seguinte: limite por tamanho aparente na tela, com teste fisico pendente.
 
 ---
 
