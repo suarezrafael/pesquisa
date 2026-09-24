@@ -2674,14 +2674,10 @@ export function World3D({
   const [placingFurnitureInvalid, setPlacingFurnitureInvalid] = useState(false)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
+  const debugFpsRef = useRef<HTMLSpanElement>(null)
   const debugWrapperRef = useRef<HTMLDivElement>(null)
-  // Pedido do usuário, com screenshot de celular: "o painel de FPS ocupa muito espaço... precisa
-  // de uma opção pra encolher ele quando não está depurando". Começa expandido (mantém o
-  // comportamento padrão já pedido no lab-67 — "preciso de informações de FPS na tela em
-  // produção"), mas agora dá pra encolher pro ícone pequeno via toque. Não persiste entre sessões
-  // de propósito — mesmo padrão de `muted` logo abaixo, um ajuste de sessão, não uma preferência
-  // duradoura (o pedido original do lab-67 continua valendo por padrão a cada carregamento).
-  const [debugPanelExpanded, setDebugPanelExpanded] = useState(true)
+  // O FPS continua visivel em producao; os detalhes tecnicos so ocupam a tela sob demanda.
+  const [debugPanelExpanded, setDebugPanelExpanded] = useState(false)
   // lab-219: a instrumentacao `window.__perf.sample()` ja existia, mas exigia DevTools remoto no
   // Android. O proprio painel agora conduz a coleta e guarda o JSON localmente para um segundo
   // toque copiar. Nenhum dado sai do aparelho e a amostra so roda quando o usuario pede.
@@ -13549,6 +13545,8 @@ export function World3D({
       }
 
       let time = 0
+      const DEBUG_UI_INTERVAL_SECONDS = 0.5
+      let debugUiElapsed = DEBUG_UI_INTERVAL_SECONDS
       const PROXIMITY_UI_INTERVAL_SECONDS = 0.1
       let proximityUiElapsed = PROXIMITY_UI_INTERVAL_SECONDS
       const DISTANT_AMBIENT_INTERVAL_SECONDS = 0.1
@@ -15867,16 +15865,15 @@ export function World3D({
           }
         }
 
-        // Contador de FPS sempre visível, também em produção (lab-67, pedido do usuário:
-        // "preciso de informações de FPS na tela em produção") — antes só aparecia em DEV; sem
-        // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
-        // de performance realmente ajudou ou não.
-        if (debugRef.current) {
-          // `buriedHouseReport` logo depois do build stamp (não no fim, como `buriedSchoolReport`)
-          // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
-          // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
-          // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes, efeitos ${adaptiveEffectTier}) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+        debugUiElapsed += dt
+        if (debugUiElapsed >= DEBUG_UI_INTERVAL_SECONDS) {
+          debugUiElapsed %= DEBUG_UI_INTERVAL_SECONDS
+          const fps = Math.round(engine.getFps())
+          if (debugFpsRef.current) debugFpsRef.current.textContent = `${fps} FPS`
+          if (debugRef.current) {
+            // A casa fica antes da lista longa de escolas para nao sumir em tela estreita.
+            debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${fps} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes, efeitos ${adaptiveEffectTier}) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+          }
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -16685,8 +16682,9 @@ export function World3D({
           onClick={() => setDebugPanelExpanded((expanded) => !expanded)}
           aria-expanded={debugPanelExpanded}
           aria-label={debugPanelExpanded ? 'Encolher painel de depuração' : 'Expandir painel de depuração'}
+          title={debugPanelExpanded ? 'Encolher painel de depuração' : 'Expandir painel de depuração'}
         >
-          {debugPanelExpanded ? '▾' : '🐞'}
+          {debugPanelExpanded ? '▾' : <span ref={debugFpsRef}>-- FPS</span>}
         </button>
         {debugPanelExpanded && (
           <div className="world3d-debug-content">

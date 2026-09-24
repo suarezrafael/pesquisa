@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Em andamento: labs/lab-235-hud-fps-compacto/ - FPS numerico visivel com
+diagnostico recolhido por padrao, sem ocupar o jogo. Base `e387563`;
+build, testes, lint e navegador local passaram; validacao Android fisico
+pendente. Ver `FEATURES.md` e `CONTEXT.md`.
+O Lab 234 esta na PR #123 em rascunho, separado desta branch.
+
+---
+
 Em andamento: labs/lab-232-primeira-sessao/ - UX 190 em fatia pequena: entrada
 curta e objetivos contextuais no mundo. Base `1417859`; testes/build/lint
 passaram, falta playtest com crianca no tablet. Ver `FEATURES.md` e

@@ -1158,13 +1158,17 @@ a.nickname-generate-btn {
    bloquearia toques no mundo 3D por baixo dele. */
 .world3d-debug-toggle {
   pointer-events: auto;
-  min-width: 44px;
+  min-width: 68px;
   min-height: 44px;
   border: none;
-  border-radius: 999px;
+  border-radius: 6px;
   background: rgba(0, 0, 0, 0.75);
   color: #7CFC9A;
-  font-size: 1.1rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1183,8 +1187,7 @@ a.nickname-generate-btn {
      qualquer orientação. Além disso, agora dá pra encolher o painel inteiro via
      `.world3d-debug-toggle` acima, pra quem não está depurando de propósito.
      Achado do review automático do Copilot (PR #58), 2 rodadas: a 1ª tentativa reduziu o fundo
-     (0.55 → 0.4) — mas esse painel é EXPLICITAMENTE mantido visível em produção por pedido do
-     usuário (lab-67, "preciso de informações de FPS na tela em produção"), então o texto verde
+     (0.55 → 0.4) — quando o painel e expandido em producao, o texto verde
      precisa do contraste mínimo AA de texto normal (4.5:1, mesmo §3 do `.help-button` acima)
      contra QUALQUER fundo 3D. A 2ª rodada mediu que até o valor ORIGINAL (0.55) não bastava
      contra um fundo BRANCO no pior caso (preto a 0.55 sobre branco compõe pra `#737373`, e
