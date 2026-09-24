@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-238-toque-direto-portais/ - toque direto nas placas do
+saguão, sem confundir arraste/pinça; implementação e testes locais concluídos,
+validação no tablet pendente. Branch separada da PR #125. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
 Em andamento: labs/lab-237-central-jogos-controles/ - entrada da Central de Jogos,
 seleção de Memória e direção conjunta da câmera/avatar no touch. Implementação e
 testes locais concluídos; validação no Redmi Pad 2 pendente. Ver `FEATURES.md` e

@@ -147,6 +147,7 @@ import { interactionHint, interactionInputForDevice } from './interactionHint'
 import { parkourFallAction } from './parkourFall'
 import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
 import { nearestInteraction } from './nearestInteraction'
+import { isStationaryPortalTap } from './portalTap'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -3197,11 +3198,8 @@ export function World3D({
       ;(window as any).__scene = scene
       ;(window as any).__engine = engine
     }
-    // Nenhum código deste jogo usa `scene.pick`/`onPointerObservable`/hover do Babylon —
-    // interação usa raycast físico direto (`havokPlugin.raycast`) e arrasto de câmera lê eventos de
-    // ponteiro crus do canvas (confirmado por busca no arquivo inteiro, zero ocorrências de
-    // qualquer um dos três). Sem essa flag, o Babylon roda uma varredura de picking na cena INTEIRA
-    // a cada `pointermove` (mouse/touch) por padrão, sempre à toa aqui.
+    // O toque nas placas do saguão usa `scene.pick` somente no pointerup. O arrasto de câmera
+    // continua lendo eventos crus; não há motivo para varrer a cena a cada pointermove.
     scene.skipPointerMovePicking = true
     scene.clearColor = SKY_COLOR_ATMOSPHERE.clone()
     scene.fogMode = Scene.FOGMODE_EXP2
@@ -3285,18 +3283,12 @@ export function World3D({
     // coisa" bastava pra disputar o mesmo gesto. Segurar o botão do mouse pra girar a câmera e usar
     // ◀ ▶/WASD pra mexer na peça funcionam ao mesmo tempo sem briga nenhuma.
     //
-    // lab-153 (pesquisa de mercado: Roblox/Minecraft mobile giram a câmera arrastando a METADE
-    // DIREITA da tela, não só com botões de rotação em velocidade fixa — padrão que o público-alvo
-    // já traz de outros jogos) — do lado de fora, o giro por arraste só COMEÇA se o toque inicial
-    // cair na metade direita do `<canvas>` (`outdoorDrag`, decidido uma vez no `pointerdown`,
-    // guardado até soltar — recalcular a cada `pointermove` deixaria o giro "escapar" pra esquerda
-    // no meio do arraste, sem motivo). A metade esquerda fica reservada pro `TouchJoystick` de
-    // movimento (elemento HTML separado, por cima do canvas — sem conflito de verdade, só reserva
-    // de área). ADITIVO aos botões ◀ ▶ (que continuam existindo e funcionando exatamente como
-    // antes) — nunca os substitui, porque eles são `<button>` de verdade com suporte a teclado
-    // (lab-150), e arrastar é um gesto só de ponteiro/toque.
+    // No touch, só um gesto iniciado na metade direita gira a câmera; a metade esquerda fica
+    // livre para o joystick. `outdoorDrag` distingue apenas o pitch disponível nos interiores.
     let cameraDragging = false
     let touchCameraTurnPending = 0
+    let portalTapStart: { pointerId: number; x: number; y: number } | null = null
+    let selectGameCenterPortalAt: ((clientX: number, clientY: number) => void) | null = null
     let outdoorDrag = false // true = arrasto começou fora de interiores (só giro); false = interior (giro+inclinação)
     // lab-153 (achado real do review automático do Copilot): sem rastrear QUAL ponteiro iniciou o
     // arrasto, um segundo dedo tocando em qualquer lugar (ex.: o `TouchJoystick` de movimento, do
@@ -3347,11 +3339,15 @@ export function World3D({
           cameraDragging = false
           cameraDragPointerId = null
           touchCameraTurnPending = 0
+          portalTapStart = null
         }
       }
       if (cameraDragPointerId !== null) return // já tem um dedo/ponteiro girando a câmera — ignora um segundo
       if (pinchPointers.size >= 2) return // pinça em andamento — não inicia giro de 1 dedo só
       if (!canvas) return
+      if (insideGameCenterInterior && !hudInertRef.current) {
+        portalTapStart = { pointerId: e.pointerId, x: e.clientX, y: e.clientY }
+      }
       if (e.pointerType === 'touch') {
         const rect = canvas.getBoundingClientRect()
         if (e.clientX < rect.left + rect.width / 2) return // metade esquerda: reservada pro joystick de movimento
@@ -3363,6 +3359,10 @@ export function World3D({
       cameraDragLastY = e.clientY
     }
     function onCameraPointerMove(e: PointerEvent) {
+      if (portalTapStart?.pointerId === e.pointerId &&
+          !isStationaryPortalTap(portalTapStart.x, portalTapStart.y, e.clientX, e.clientY)) {
+        portalTapStart = null
+      }
       if (pinchPointers.has(e.pointerId)) {
         pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
         if (pinchPointers.size === 2 && pinchStartDistance > 0) {
@@ -3396,7 +3396,7 @@ export function World3D({
       } else {
         cameraYawOffsetRef.current += yawDelta
       }
-      // Inclinação vertical (pitch) é um recurso só de dentro de casa (câmera "esférica" do
+      // Inclinação vertical (pitch) é um recurso dos interiores (câmera "esférica" do
       // lab-138) — do lado de fora a câmera usa um offset fixo de altura (ver `desiredCamPos` mais
       // abaixo), sem conceito de pitch pra ajustar.
       if (!outdoorDrag) {
@@ -3407,11 +3407,17 @@ export function World3D({
       }
     }
     function onCameraPointerUp(e: PointerEvent) {
+      const activatePortal = e.type === 'pointerup' && e.target === canvas &&
+        portalTapStart?.pointerId === e.pointerId &&
+        isStationaryPortalTap(portalTapStart.x, portalTapStart.y, e.clientX, e.clientY)
+      if (portalTapStart?.pointerId === e.pointerId) portalTapStart = null
       pinchPointers.delete(e.pointerId)
       if (pinchPointers.size < 2) pinchStartDistance = 0
-      if (e.pointerId !== cameraDragPointerId) return // outro dedo/ponteiro soltando — não é o que gira a câmera
-      cameraDragging = false
-      cameraDragPointerId = null
+      if (e.pointerId === cameraDragPointerId) {
+        cameraDragging = false
+        cameraDragPointerId = null
+      }
+      if (activatePortal && pinchPointers.size === 0) selectGameCenterPortalAt?.(e.clientX, e.clientY)
     }
     function onCameraWheel(e: WheelEvent) {
       // Cobre tanto dentro quanto fora de casa (`insideHouseInterior`), cada um com seu próprio
@@ -3730,6 +3736,7 @@ export function World3D({
       memoria: null,
       logica: null,
     }
+    const gameCenterPortalBoards = new Map<AbstractMesh, GameCenterPortalId>()
     // Troféus visuais (Lab 217) — uma malha por portal, criada uma vez junto da placa/post,
     // escondida (`setEnabled(false)`) até `refreshGameCenterTrophyVisuals` decidir mostrar (a
     // criança pode não ter troféu nenhum ainda). `GameCenterPortalId` e `GameCenterCategory` são o
@@ -10813,6 +10820,7 @@ export function World3D({
         memoria: { emoji: '🧠', label: 'Memória', color: new Color3(0.65, 0.3, 0.75), unlocked: true },
         logica: { emoji: '🧩', label: 'Lógica', color: new Color3(0.25, 0.7, 0.35), unlocked: true },
       }
+      const gameCenterPortalActionHint = interactionInput === 'touch' ? 'Toque para jogar' : 'Clique ou pressione E'
       const GAME_CENTER_LOCKED_MAT_COLOR = new Color3(0.4, 0.4, 0.42)
 
       // Construído sob demanda na primeira entrada (mesmo padrão de `buildHouseInteriorIfNeeded`) —
@@ -10953,12 +10961,13 @@ export function World3D({
           plaquePost.receiveShadows = true
           shadowGenerator.addShadowCaster(plaquePost)
 
-          const plaqueBoard = MeshBuilder.CreateBox(`gcPortalBoard-${id}`, { width: 0.9, height: 0.7, depth: 0.1 }, scene)
+          const plaqueBoard = MeshBuilder.CreateBox(`gcPortalBoard-${id}`, { width: 1.2, height: 0.9, depth: 0.1 }, scene)
           plaqueBoard.position = localPos.add(new Vector3(0, 1.35, 0))
           plaqueBoard.material = plaqueMat
           plaqueBoard.parent = interiorRoot
           plaqueBoard.receiveShadows = true
           shadowGenerator.addShadowCaster(plaqueBoard)
+          gameCenterPortalBoards.set(plaqueBoard, id)
           // Achatada quando bloqueada — mesmo sinal visual de `applyPortalVisual` (portais de
           // planeta-destino): dá pra ver que existe, mas visivelmente "menos" que os desbloqueados.
           plaqueBoard.visibility = info.unlocked ? 1 : 0.55
@@ -10975,7 +10984,7 @@ export function World3D({
           plaqueLabel.linkWithMesh(plaqueBoard)
           plaqueLabel.linkOffsetY = -45
 
-          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? interactionHint('jogar', interactionInput) : 'Em breve')
+          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? gameCenterPortalActionHint : 'Em breve')
           plaqueHint.color = 'white'
           plaqueHint.fontSize = mobileFontSize(16)
           plaqueHint.fontWeight = 'bold'
@@ -11405,6 +11414,7 @@ export function World3D({
         savedOutsideLocalUp = avatarMesh.position.subtract(currentWorldCenter).normalize()
         insideHouseInterior = true
         insideGameCenterInterior = true
+        portalTapStart = null
         cameraYawOffsetRef.current = 0
         touchCameraTurnPending = 0
         houseCameraPitchOffsetRef.current = 0
@@ -11441,6 +11451,7 @@ export function World3D({
         if (!insideGameCenterInterior) return
         insideHouseInterior = false
         insideGameCenterInterior = false
+        portalTapStart = null
         cameraDragging = false
         cameraDragPointerId = null
         touchCameraTurnPending = 0
@@ -11504,7 +11515,7 @@ export function World3D({
         const hintLabel = gameCenterPortalHintLabel[id]
         if (hintLabel) {
           const info = GAME_CENTER_PORTAL_INFO[id]
-          const cta = info.unlocked ? interactionHint('jogar', interactionInput) : 'Em breve'
+          const cta = info.unlocked ? gameCenterPortalActionHint : 'Em breve'
           hintLabel.text = `${gameCenterTrophyProgressPrefix(completions)}${cta}`
         }
       }
@@ -11604,6 +11615,18 @@ export function World3D({
           'bridge',
         )
         trackMinigameStarted('ponte-logica')
+      }
+
+      selectGameCenterPortalAt = (clientX, clientY) => {
+        if (!insideGameCenterInterior || hudInertRef.current || !canvas) return
+        const rect = canvas.getBoundingClientRect()
+        const picked = scene.pick(
+          clientX - rect.left,
+          clientY - rect.top,
+          (mesh) => gameCenterPortalBoards.has(mesh),
+        )
+        const id = picked.pickedMesh && gameCenterPortalBoards.get(picked.pickedMesh)
+        if (id) handleGameCenterPortalInteract(id)
       }
 
       // Controlador genérico de arena (Lab 214, generalização confirmada com o usuário) — contagem
@@ -16423,6 +16446,7 @@ export function World3D({
       window.removeEventListener('pointerup', onCameraPointerUp)
       window.removeEventListener('pointercancel', onCameraPointerUp)
       canvas.removeEventListener('wheel', onCameraWheel)
+      selectGameCenterPortalAt = null
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
       ;(scene as any).__cancelPerfSample?.()
