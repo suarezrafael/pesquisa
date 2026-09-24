@@ -26,12 +26,10 @@ e regra inegociavel de `docs/plano-comercial-backend.md`.
 
 ## Riscos ainda abertos
 
-- `AvatarShop.tsx` deriva `equipped` do perfil salvo, mesmo quando
-  `entitlementActive` e falso. `World3D.tsx` tambem le os cosmeticos do perfil
-  para renderizar o avatar. Um item familiar equipado antes do vencimento pode
-  parecer `Em uso` ou permanecer visivel apos a revalidacao. Corrigir o estado
-  efetivo de cosmeticos em um lab de entitlement, com testes de assinatura
-  ativa, vencida e retorno do acesso; nao resolver so ocultando a tag na UI.
+- Na auditoria original, `AvatarShop.tsx` e `World3D.tsx` ainda exibiam
+  cosmeticos do perfil salvo apos o vencimento. O Lab 234 (PR #123) passou a
+  usar a aparencia efetiva no mundo, loja e perfil publico sem alterar o save.
+  Ainda falta validar assinatura ativa, vencida e reativada de ponta a ponta.
 - O uso do link `/familia` parte do jogo, mas o portal adulto aplica o portao
   parental. Revisao de seguranca deve confirmar o percurso final no navegador.
 - Nao ha entrevistas com 5-8 duplas nem medicao de compreensao ou relatos de

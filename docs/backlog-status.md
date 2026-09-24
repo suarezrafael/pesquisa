@@ -23,7 +23,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | UX Lab 187 - Mapa de verbos | 228 | Parcial | Inventario e triagem entregues; primeira sessao, planeta secundario e touch fisico pendentes. |
 | UX Lab 188 - Linguagem de interativos | 229 | Parcial | Dicas de acao por teclado/toque publicadas; botao E validado no tablet, mas legibilidade perto dos objetos, padrao global e playtest ainda pendentes. |
 | UX Lab 189 - Monetizacao infantil segura | 230 | Em andamento | Revisao de badges, copias e fluxo de vinculo infantil; area adulta permanece separada. |
-| UX Lab 190 - Primeira sessao de 10 minutos | - | Pendente | Ainda falta playtest/iteracao da jornada completa. |
+| UX Lab 190 - Primeira sessao de 10 minutos | 232 | Parcial | Entrada curta e guia contextual para movimento, primeira missao e recompensa; faltam playtest/iteracao da jornada completa no tablet. |
 
 ## Jogabilidade e qualidade 3D
 

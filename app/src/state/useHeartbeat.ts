@@ -20,6 +20,8 @@ function equippedLookFrom(profile: Profile) {
 
 type HeartbeatBody = {
   playerId: string
+  avatarEmoji?: string
+  secret?: string
   equippedLook?: unknown
   badges?: string[]
   houseFurnitureIds?: string[]
@@ -162,7 +164,14 @@ export function useHeartbeat(profile: Profile | null, progress: Progress | null)
       const playerId = loadPlayerId()
       if (!playerId) return
       const body: HeartbeatBody = { playerId }
-      if (profileRef.current) body.equippedLook = equippedLookFrom(profileRef.current)
+      if (profileRef.current) {
+        body.equippedLook = equippedLookFrom(profileRef.current)
+        const secret = loadPlayerSecret()
+        if (secret) {
+          body.avatarEmoji = profileRef.current.avatarEmoji
+          body.secret = secret
+        }
+      }
       if (progressRef.current) {
         body.badges = progressRef.current.badges
         // lab-175 ("Lab 171 - Casa visitável somente leitura") — `resolveHouseSyncSnapshot`

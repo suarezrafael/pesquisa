@@ -1,5 +1,33 @@
 # Laboratório atual
 
+Lab 234 publicado: labs/lab-234-visual-entitlement/ - aparencia efetiva quando o
+entitlement expira, sem apagar o perfil salvo. Inclui mundo, loja, amigos e
+heartbeat publico autenticado. PR #123 mesclada em `9d50879`;
+validacao com assinatura real e tablet pendente. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
+Lab 235 publicado: FPS numerico visivel com diagnostico recolhido por padrao.
+PR #124 mesclada na main em `6bc462a`; validacao Android fisico pendente.
+Ver `labs/lab-235-hud-fps-compacto/FEATURES.md` e `CONTEXT.md`.
+
+---
+
+Em andamento: labs/lab-232-primeira-sessao/ - UX 190 em fatia pequena: entrada
+curta e objetivos contextuais no mundo. Base `1417859`; testes/build/lint
+passaram, falta playtest com crianca no tablet. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
+Lab 233 publicado: arrastar a metade direita no touch orienta integralmente
+o boneco na velocidade maxima do joystick esquerdo; pinça para zoom preservada.
+PR #122 mesclada em `a85d959`; deploy de Vercel e Cloudflare Pages passou.
+Falta teste multitouch fisico no Redmi Pad 2; ver `FEATURES.md` e `CONTEXT.md`.
+
+---
+
 Em andamento urgente: labs/lab-231-saida-parkour/ - corrigir o loop de
 checkpoint que impede a crianca de sair do parkour. Base `9dda215`; ver
 `FEATURES.md`. PR #120 mesclada e publicada em `1417859`; falta testar a

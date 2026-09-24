@@ -119,6 +119,7 @@ import {
   GAME_CENTER_WEEKLY_QUEST_REWARD_COINS,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
+import { firstSessionGuideStep } from '../state/firstSessionGuide'
 import {
   trackFirstControl,
   trackCameraRecenterUsed,
@@ -144,7 +145,7 @@ import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHiera
 import { shouldUseDetailedTeacher } from './teacherDetail'
 import { interactionHint, interactionInputForDevice } from './interactionHint'
 import { parkourFallAction } from './parkourFall'
-import { TOUCH_CAMERA_FOLLOW_SHARE, touchCameraFollowStep } from './touchCameraFollow'
+import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -2607,6 +2608,10 @@ export function World3D({
   const outdoorCameraZoomRef = useRef(1)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
+  const firstSessionEligibleRef = useRef(progress.completedQuestIds.length === 0)
+  const firstSessionMovedRef = useRef(false)
+  const [firstSessionMoved, setFirstSessionMoved] = useState(false)
+  const [firstSessionGuideDismissed, setFirstSessionGuideDismissed] = useState(false)
   const entitlementActiveRef = useRef(entitlementActive)
   const suspendRef = useRef(suspendTriggers)
   // Achado do review automático do Copilot: `hudInert` (calculado mais abaixo, combina
@@ -2669,14 +2674,10 @@ export function World3D({
   const [placingFurnitureInvalid, setPlacingFurnitureInvalid] = useState(false)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
+  const debugFpsRef = useRef<HTMLSpanElement>(null)
   const debugWrapperRef = useRef<HTMLDivElement>(null)
-  // Pedido do usuário, com screenshot de celular: "o painel de FPS ocupa muito espaço... precisa
-  // de uma opção pra encolher ele quando não está depurando". Começa expandido (mantém o
-  // comportamento padrão já pedido no lab-67 — "preciso de informações de FPS na tela em
-  // produção"), mas agora dá pra encolher pro ícone pequeno via toque. Não persiste entre sessões
-  // de propósito — mesmo padrão de `muted` logo abaixo, um ajuste de sessão, não uma preferência
-  // duradoura (o pedido original do lab-67 continua valendo por padrão a cada carregamento).
-  const [debugPanelExpanded, setDebugPanelExpanded] = useState(true)
+  // O FPS continua visivel em producao; os detalhes tecnicos so ocupam a tela sob demanda.
+  const [debugPanelExpanded, setDebugPanelExpanded] = useState(false)
   // lab-219: a instrumentacao `window.__perf.sample()` ja existia, mas exigia DevTools remoto no
   // Android. O proprio painel agora conduz a coleta e guarda o JSON localmente para um segundo
   // toque copiar. Nenhum dado sai do aparelho e a amostra so roda quando o usuario pede.
@@ -3368,13 +3369,12 @@ export function World3D({
         if (pinchPointers.size === 2 && pinchStartDistance > 0) {
           const [p1, p2] = Array.from(pinchPointers.values())
           const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
-          const scale = distance / pinchStartDistance
           const zoomRef = insideHouseInterior ? houseCameraZoomRef : outdoorCameraZoomRef
           const zoomMin = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MIN : OUTDOOR_CAMERA_ZOOM_MIN
           const zoomMax = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MAX : OUTDOOR_CAMERA_ZOOM_MAX
           // Afastar os dedos (`scale > 1`) aproxima a câmera (divide, não multiplica) — mesma
           // convenção de "pinça pra dentro" já esperada de fotos/mapas em qualquer app de toque.
-          zoomRef.current = Math.max(zoomMin, Math.min(zoomMax, pinchStartZoom / scale))
+          zoomRef.current = pinchZoom(pinchStartZoom, pinchStartDistance, distance, zoomMin, zoomMax)
         }
       }
       // lab-149 (achado do review automático do Copilot): se o jogador começasse a arrastar dentro
@@ -3394,7 +3394,7 @@ export function World3D({
       cameraYawOffsetRef.current += yawDelta
       if (e.pointerType === 'touch' && !hudInertRef.current && !drivingCar && !drivingRocket &&
           !placingFurnitureId && !restingInBedKey) {
-        touchCameraTurnPending += yawDelta * TOUCH_CAMERA_FOLLOW_SHARE
+        touchCameraTurnPending += yawDelta
       }
       // Inclinação vertical (pitch) é um recurso só de dentro de casa (câmera "esférica" do
       // lab-138) — do lado de fora a câmera usa um offset fixo de altura (ver `desiredCamPos` mais
@@ -8594,10 +8594,12 @@ export function World3D({
       footstepDustSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
       footstepDustSystem.emitRate = 0
 
-      const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, profile.equippedPantsColorId)
-      const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, profile.equippedShoeColorId)
-      const initialBackpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, profile.equippedBackpackColorId)
-      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator, {
+      // O entitlement pode mudar enquanto o setup assíncrono carrega os GLBs.
+      const initialProfile = profileRef.current
+      const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, initialProfile.equippedPantsColorId)
+      const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, initialProfile.equippedShoeColorId)
+      const initialBackpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, initialProfile.equippedBackpackColorId)
+      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(initialProfile.avatarEmoji), shadowGenerator, {
         pantsColor: initialPantsOpt ? new Color3(...initialPantsOpt.colorRgb) : undefined,
         shoeColor: initialShoeOpt ? new Color3(...initialShoeOpt.colorRgb) : undefined,
         backpackColor: initialBackpackOpt ? new Color3(...initialBackpackOpt.colorRgb) : undefined,
@@ -8605,26 +8607,26 @@ export function World3D({
       // lab-122: `buildStudentFigure` já deixa uma cor sólida padrão pronta acima — isso reaplica
       // com `applyClothingLook`, que também trata o `style` de itens exclusivos (textura/metálico),
       // não só a cor.
-      const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, profile.equippedShirtColorId)
-      applyClothingLook(studentFigure.shirtMat, initialShirtOpt, scene, avatarColorFromEmoji(profile.avatarEmoji), 0.7)
+      const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, initialProfile.equippedShirtColorId)
+      applyClothingLook(studentFigure.shirtMat, initialShirtOpt, scene, avatarColorFromEmoji(initialProfile.avatarEmoji), 0.7)
       applyClothingLook(studentFigure.pantsMat, initialPantsOpt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
       applyClothingLook(studentFigure.shoeMat, initialShoeOpt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
       applyClothingLook(
         studentFigure.backpackMat,
         initialBackpackOpt,
         scene,
-        Color3.Lerp(avatarColorFromEmoji(profile.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+        Color3.Lerp(avatarColorFromEmoji(initialProfile.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
         0.75,
       )
-      applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
-      applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
+      applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(initialProfile.avatarEmoji), scene, shadowGenerator)
+      applyHat(studentFigure, initialProfile.equippedHatId ? findHatById(initialProfile.equippedHatId) ?? null : null, scene, shadowGenerator)
       applyGlasses(
         studentFigure,
-        profile.equippedGlassesId ? findGlassesById(profile.equippedGlassesId) ?? null : null,
+        initialProfile.equippedGlassesId ? findGlassesById(initialProfile.equippedGlassesId) ?? null : null,
         scene,
         shadowGenerator,
       )
-      const initialHair = findHairShapeOption(profile.equippedHairShapeId)
+      const initialHair = findHairShapeOption(initialProfile.equippedHairShapeId)
       if (initialHair) applyHairShape(studentFigure, initialHair.shape, scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
       if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure
@@ -13545,6 +13547,8 @@ export function World3D({
       }
 
       let time = 0
+      const DEBUG_UI_INTERVAL_SECONDS = 0.5
+      let debugUiElapsed = DEBUG_UI_INTERVAL_SECONDS
       const PROXIMITY_UI_INTERVAL_SECONDS = 0.1
       let proximityUiElapsed = PROXIMITY_UI_INTERVAL_SECONDS
       const DISTANT_AMBIENT_INTERVAL_SECONDS = 0.1
@@ -13804,7 +13808,13 @@ export function World3D({
         // lab-164 (jornada de ativação de 10 minutos) — "conseguiu controlar o personagem" (mesma
         // definição citada em docs/market-metrics-engagement-backlog.md §4), primeiro sinal de
         // movimento real por teclado OU joystick; a função já só dispara uma vez por sessão.
-        if (mag > 0) trackFirstControl()
+        if (mag > 0) {
+          trackFirstControl()
+          if (firstSessionEligibleRef.current && !firstSessionMovedRef.current) {
+            firstSessionMovedRef.current = true
+            setFirstSessionMoved(true)
+          }
+        }
         if (mag > 1) {
           x /= mag
           y /= mag
@@ -13966,7 +13976,7 @@ export function World3D({
           }
 
           if (touchCameraTurnPending !== 0) {
-            const followStep = touchCameraFollowStep(touchCameraTurnPending, dt)
+            const followStep = touchCameraFollowStep(touchCameraTurnPending, dt, TURN_RATE)
             if (followStep !== 0) {
               facing = rotateAroundAxis(facing, localUp, followStep)
               // Keep the camera's world-space bearing while the figure catches up.
@@ -15857,16 +15867,15 @@ export function World3D({
           }
         }
 
-        // Contador de FPS sempre visível, também em produção (lab-67, pedido do usuário:
-        // "preciso de informações de FPS na tela em produção") — antes só aparecia em DEV; sem
-        // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
-        // de performance realmente ajudou ou não.
-        if (debugRef.current) {
-          // `buriedHouseReport` logo depois do build stamp (não no fim, como `buriedSchoolReport`)
-          // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
-          // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
-          // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes, efeitos ${adaptiveEffectTier}) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+        debugUiElapsed += dt
+        if (debugUiElapsed >= DEBUG_UI_INTERVAL_SECONDS) {
+          debugUiElapsed %= DEBUG_UI_INTERVAL_SECONDS
+          const fps = Math.round(engine.getFps())
+          if (debugFpsRef.current) debugFpsRef.current.textContent = `${fps} FPS`
+          if (debugRef.current) {
+            // A casa fica antes da lista longa de escolas para nao sumir em tela estreita.
+            debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${fps} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes, efeitos ${adaptiveEffectTier}) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+          }
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -16617,6 +16626,17 @@ export function World3D({
   // `z-index: 10`), então ficava aberto mas visualmente escondido até a contagem terminar.
   const hudInert = fullScreenInert || chatOpen || chatRadialOpen || rankingOpen || bagOpen || !!minigamePrompt
   hudInertRef.current = hudInert
+  const guideStep = firstSessionGuideStep(
+    firstSessionEligibleRef.current,
+    firstSessionMoved,
+    progress.completedQuestIds.length,
+    firstSessionGuideDismissed,
+  )
+  useEffect(() => {
+    if (guideStep !== 'reward' || hudInert) return
+    const timeout = window.setTimeout(() => setFirstSessionGuideDismissed(true), 15000)
+    return () => window.clearTimeout(timeout)
+  }, [guideStep, hudInert])
   // Deixar o `<canvas>` inteiro `inert` enquanto chat/ranking/mochila está aberto (como `hudInert`
   // sozinho faria) desabilitava ARRASTO DE CÂMERA/JOYSTICK na área livre inteira, não só na
   // caixinha do painel — muito mais amplo do que o necessário, e a causa provável do relato de
@@ -16664,8 +16684,9 @@ export function World3D({
           onClick={() => setDebugPanelExpanded((expanded) => !expanded)}
           aria-expanded={debugPanelExpanded}
           aria-label={debugPanelExpanded ? 'Encolher painel de depuração' : 'Expandir painel de depuração'}
+          title={debugPanelExpanded ? 'Encolher painel de depuração' : 'Expandir painel de depuração'}
         >
-          {debugPanelExpanded ? '▾' : '🐞'}
+          {debugPanelExpanded ? '▾' : <span ref={debugFpsRef}>-- FPS</span>}
         </button>
         {debugPanelExpanded && (
           <div className="world3d-debug-content">
@@ -16784,7 +16805,13 @@ export function World3D({
           onClose={() => setPlanetPickerOpen(false)}
         />
       )}
-      <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
+      {guideStep && !hudInert && (
+        <p className="world3d-hint" role="status" aria-live="polite">
+          {guideStep === 'move' && 'Mova o boneco para explorar o planeta.'}
+          {guideStep === 'mission' && 'Encontre uma escolinha colorida e interaja para jogar a primeira missão.'}
+          {guideStep === 'reward' && 'Primeira recompensa conquistada! Explore os pets, planetas ou o Centro de Jogos.'}
+        </p>
+      )}
       <TouchJoystick onChange={handleJoystickChange} inert={hudInert} />
       <TouchActionButton
         className="touch-action-jump"
