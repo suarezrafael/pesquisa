@@ -170,7 +170,7 @@ export function HudHeader({
           type="button"
           className="help-button"
           onClick={onOpenPairing}
-          aria-label="Vincular assinatura da família"
+          aria-label="Vincular código da família"
         >
           🔗
         </button>

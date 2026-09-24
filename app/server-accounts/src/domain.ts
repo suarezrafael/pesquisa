@@ -595,6 +595,17 @@ export function isValidUuid(value: string): boolean {
   return UUID_PATTERN.test(value)
 }
 
+export function normalizePublicAvatarEmoji(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const emoji = value.trim()
+  if (!emoji || emoji.length > 32) return null
+  for (const character of emoji) {
+    const code = character.charCodeAt(0)
+    if (code < 32 || code === 127) return null
+  }
+  return emoji
+}
+
 // lab-185 (comparação de coorte antes/depois em `GET /admin/metrics`, `?cohortSplitDate=`) — só
 // `YYYY-MM-DD` (sem hora/fuso, a query compara contra uma coluna `date`). O regex sozinho aceita
 // "2026-02-30"; o `Date.UTC` + re-serialização confere que a data existe de verdade (meses/dias

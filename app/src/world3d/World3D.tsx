@@ -119,6 +119,7 @@ import {
   GAME_CENTER_WEEKLY_QUEST_REWARD_COINS,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
+import { firstSessionGuideStep } from '../state/firstSessionGuide'
 import {
   trackFirstControl,
   trackCameraRecenterUsed,
@@ -142,6 +143,9 @@ import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHierarchyInstances'
 import { shouldUseDetailedTeacher, teacherProjectedHeightScale } from './teacherDetail'
+import { interactionHint, interactionInputForDevice } from './interactionHint'
+import { parkourFallAction } from './parkourFall'
+import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -361,11 +365,6 @@ const PARKOUR_BOOST_DURATION = 10 // segundos
 const PARKOUR_BOOST_SPEED_MULTIPLIER = 1.5
 const PARKOUR_BOOST_JUMP_MULTIPLIER = 1.25
 const PARKOUR_TRIGGER_DISTANCE = 1.0 // raio de coleta de argola/impulso e de "chegou na plataforma"
-// Altura (ao longo de `PARKOUR_ANCHOR_UP`, relativa à plataforma do checkpoint atual) abaixo da
-// qual o jogador é considerado "caiu" — maior que a folga normal de estar EM CIMA da plataforma
-// (que fica perto de 0), pequena o bastante pra disparar bem antes de bater no chão de verdade lá
-// embaixo.
-const PARKOUR_FALL_MARGIN = 1.3
 // `setup()` usa exatamente esta constante pra `PARKOUR_STEPS` (não um `7` solto de novo) — o total
 // de argolas exibido no HUD (`parkourRings.length`, calculado dentro de `setup()`) sempre deriva
 // dela, sem risco de divergência.
@@ -2609,6 +2608,10 @@ export function World3D({
   const outdoorCameraZoomRef = useRef(1)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
+  const firstSessionEligibleRef = useRef(progress.completedQuestIds.length === 0)
+  const firstSessionMovedRef = useRef(false)
+  const [firstSessionMoved, setFirstSessionMoved] = useState(false)
+  const [firstSessionGuideDismissed, setFirstSessionGuideDismissed] = useState(false)
   const entitlementActiveRef = useRef(entitlementActive)
   const suspendRef = useRef(suspendTriggers)
   // Achado do review automático do Copilot: `hudInert` (calculado mais abaixo, combina
@@ -2671,14 +2674,10 @@ export function World3D({
   const [placingFurnitureInvalid, setPlacingFurnitureInvalid] = useState(false)
   const sceneRef = useRef<Scene | null>(null)
   const debugRef = useRef<HTMLDivElement>(null)
+  const debugFpsRef = useRef<HTMLSpanElement>(null)
   const debugWrapperRef = useRef<HTMLDivElement>(null)
-  // Pedido do usuário, com screenshot de celular: "o painel de FPS ocupa muito espaço... precisa
-  // de uma opção pra encolher ele quando não está depurando". Começa expandido (mantém o
-  // comportamento padrão já pedido no lab-67 — "preciso de informações de FPS na tela em
-  // produção"), mas agora dá pra encolher pro ícone pequeno via toque. Não persiste entre sessões
-  // de propósito — mesmo padrão de `muted` logo abaixo, um ajuste de sessão, não uma preferência
-  // duradoura (o pedido original do lab-67 continua valendo por padrão a cada carregamento).
-  const [debugPanelExpanded, setDebugPanelExpanded] = useState(true)
+  // O FPS continua visivel em producao; os detalhes tecnicos so ocupam a tela sob demanda.
+  const [debugPanelExpanded, setDebugPanelExpanded] = useState(false)
   // lab-219: a instrumentacao `window.__perf.sample()` ja existia, mas exigia DevTools remoto no
   // Android. O proprio painel agora conduz a coleta e guarda o JSON localmente para um segundo
   // toque copiar. Nenhum dado sai do aparelho e a amostra so roda quando o usuario pede.
@@ -2782,6 +2781,7 @@ export function World3D({
     secondsLeft: number
   } | null>(null)
   const teleportToMinigameRef = useRef<(id: 'parkour1' | 'ponte-logica') => void>(() => {})
+  const leaveParkourRef = useRef<() => void>(() => {})
   // Backlog "Lab 210" (parkour arcade) — HUD da corrida atual, `null` enquanto fora do `parkour1`. Argolas
   // atualizam na hora (evento raro, no máximo 6x por corrida); cronômetro só 1x/segundo já
   // arredondado (mesmo espírito de `survivalTimeDisplay` acima — não recria o objeto 60x/s por um
@@ -3090,6 +3090,11 @@ export function World3D({
     // termina com sucesso (ver `setSetupReady`/`.then` mais abaixo), fechando tanto esse caminho
     // síncrono quanto o de teclas de movimento (consumidas depois, no loop de física).
     let inputReady = false
+    // Resolve uma vez por cena; nenhuma string de GUI e recalculada no render loop.
+    const interactionInput = interactionInputForDevice(
+      window.matchMedia('(pointer: coarse)').matches,
+      navigator.maxTouchPoints,
+    )
 
     // Antes (labs 56-72) isso vinha de um regex de user-agent (`/Android|iPad|iPhone|.../`), que
     // tratava QUALQUER iPhone como GPU fraca — mesmo perfil de um Poco C75/Redmi Pad 2 reais,
@@ -3290,6 +3295,7 @@ export function World3D({
     // antes) — nunca os substitui, porque eles são `<button>` de verdade com suporte a teclado
     // (lab-150), e arrastar é um gesto só de ponteiro/toque.
     let cameraDragging = false
+    let touchCameraTurnPending = 0
     let outdoorDrag = false // true = arrasto começou do lado de fora (só giro); false = dentro de casa (giro+inclinação)
     // lab-153 (achado real do review automático do Copilot): sem rastrear QUAL ponteiro iniciou o
     // arrasto, um segundo dedo tocando em qualquer lugar (ex.: o `TouchJoystick` de movimento, do
@@ -3339,6 +3345,7 @@ export function World3D({
           // fazem sentido ao mesmo tempo.
           cameraDragging = false
           cameraDragPointerId = null
+          touchCameraTurnPending = 0
         }
       }
       if (cameraDragPointerId !== null) return // já tem um dedo/ponteiro girando a câmera — ignora um segundo
@@ -3362,13 +3369,12 @@ export function World3D({
         if (pinchPointers.size === 2 && pinchStartDistance > 0) {
           const [p1, p2] = Array.from(pinchPointers.values())
           const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
-          const scale = distance / pinchStartDistance
           const zoomRef = insideHouseInterior ? houseCameraZoomRef : outdoorCameraZoomRef
           const zoomMin = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MIN : OUTDOOR_CAMERA_ZOOM_MIN
           const zoomMax = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MAX : OUTDOOR_CAMERA_ZOOM_MAX
           // Afastar os dedos (`scale > 1`) aproxima a câmera (divide, não multiplica) — mesma
           // convenção de "pinça pra dentro" já esperada de fotos/mapas em qualquer app de toque.
-          zoomRef.current = Math.max(zoomMin, Math.min(zoomMax, pinchStartZoom / scale))
+          zoomRef.current = pinchZoom(pinchStartZoom, pinchStartDistance, distance, zoomMin, zoomMax)
         }
       }
       // lab-149 (achado do review automático do Copilot): se o jogador começasse a arrastar dentro
@@ -3384,7 +3390,12 @@ export function World3D({
       const dy = e.clientY - cameraDragLastY
       cameraDragLastX = e.clientX
       cameraDragLastY = e.clientY
-      cameraYawOffsetRef.current += dx * CAMERA_DRAG_SENSITIVITY
+      const yawDelta = dx * CAMERA_DRAG_SENSITIVITY
+      cameraYawOffsetRef.current += yawDelta
+      if (e.pointerType === 'touch' && !hudInertRef.current && !drivingCar && !drivingRocket &&
+          !placingFurnitureId && !restingInBedKey) {
+        touchCameraTurnPending += yawDelta
+      }
       // Inclinação vertical (pitch) é um recurso só de dentro de casa (câmera "esférica" do
       // lab-138) — do lado de fora a câmera usa um offset fixo de altura (ver `desiredCamPos` mais
       // abaixo), sem conceito de pitch pra ajustar.
@@ -3426,6 +3437,7 @@ export function World3D({
     // o botão React do HUD conseguir chamar sem precisar de outro ref consumido quadro a quadro.
     function recenterCamera() {
       cameraYawOffsetRef.current = 0
+      touchCameraTurnPending = 0
       outdoorCameraZoomRef.current = 1
       if (insideHouseInterior) {
         houseCameraPitchOffsetRef.current = 0
@@ -3890,6 +3902,15 @@ export function World3D({
         parkourStatusMessageTimeout = null
         setParkourStatusMessage(null)
       }, durationMs)
+    }
+    function clearParkourRun() {
+      activeMinigameId = null
+      setParkourHud(null)
+      if (parkourStatusMessageTimeout !== null) {
+        window.clearTimeout(parkourStatusMessageTimeout)
+        parkourStatusMessageTimeout = null
+      }
+      setParkourStatusMessage(null)
     }
     const parkourPlatformPositions: Vector3[] = []
     const parkourRings: { mesh: Mesh; worldPos: Vector3; collected: boolean }[] = []
@@ -4797,29 +4818,15 @@ export function World3D({
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, parkourReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
-          teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
           // Achado do review automático: cada pedestal de retorno só deve confirmar a conclusão do
           // mini-jogo QUE ELE PRÓPRIO representa — sem esta checagem, dava pra entrar num mini-jogo
           // e sair andando (a pé, sem usar o pedestal certo) até o pedestal de retorno DO OUTRO
           // mini-jogo, gravando `minigame_completed` com o id errado.
           if (activeMinigameId === 'parkour1') {
             trackMinigameCompleted(activeMinigameId)
-            activeMinigameId = null
-            // Some o HUD do percurso ao sair (nunca fica "pendurado" enquanto o jogador
-            // já está de volta no hub); a corrida em si é reiniciada na PRÓXIMA entrada, não aqui.
-            setParkourHud(null)
-            // Achado do review automático do Copilot: sem isto, uma mensagem de status disparada
-            // pouco antes de sair (impulso coletado, troféu conquistado) continuava visível no HUB
-            // até o próprio `setTimeout` de 3-4s expirar — vazando feedback do mini-jogo pra fora
-            // da arena. Cancela o timeout PENDENTE (se houver) — sem isto, ele ainda dispararia
-            // mais tarde e chamaria `setParkourStatusMessage(null)` de novo (inofensivo em si, mas
-            // deixaria `parkourStatusMessageTimeout` com um handle obsoleto).
-            if (parkourStatusMessageTimeout !== null) {
-              window.clearTimeout(parkourStatusMessageTimeout)
-              parkourStatusMessageTimeout = null
-            }
-            setParkourStatusMessage(null)
+            clearParkourRun()
           }
+          teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
           return
         }
         if (!insideHouseInterior && Vector3.Distance(avatarMesh.position, bridgeReturnPos) < ENV_CHALLENGE_TRIGGER_DISTANCE) {
@@ -6915,7 +6922,7 @@ export function World3D({
         // Texto próprio ("...no carro", não só "Pressione E pra entrar" genérico) — mesmo achado
         // do usuário que motivou o texto específico da casa (lab-133): carro e casa com o MESMO
         // texto tornava impossível saber qual dos dois E ia acionar quando os dois ficavam perto.
-        const hintLabel = new TextBlock(`carHint-${i}`, 'Pressione E pra entrar no carro')
+        const hintLabel = new TextBlock(`carHint-${i}`, interactionHint('entrar no carro', interactionInput))
         hintLabel.color = 'white'
         hintLabel.fontSize = mobileFontSize(18)
         hintLabel.fontWeight = 'bold'
@@ -6968,7 +6975,7 @@ export function World3D({
         rocketCollider.isVisible = false
         new PhysicsAggregate(rocketCollider, PhysicsShapeType.CYLINDER, { mass: 0 }, scene)
 
-        const rocketHint = new TextBlock('rocketHint', 'Pressione E pra embarcar')
+        const rocketHint = new TextBlock('rocketHint', interactionHint('embarcar', interactionInput))
         rocketHint.color = 'white'
         rocketHint.fontSize = mobileFontSize(18)
         rocketHint.fontWeight = 'bold'
@@ -7368,7 +7375,7 @@ export function World3D({
         returnRocketRoot.parent = secondPlanetRoot
         returnRocketRoot.position = SECOND_PLANET_LANDING_UP.scale(SECOND_PLANET_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(SECOND_PLANET_LANDING_UP)
-        const returnHint = new TextBlock('secondPlanetRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('secondPlanetRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -7550,7 +7557,7 @@ export function World3D({
         returnRocketRoot.parent = mercuryRoot
         returnRocketRoot.position = MERCURY_LANDING_UP.scale(MERCURY_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(MERCURY_LANDING_UP)
-        const returnHint = new TextBlock('mercuryRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('mercuryRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -7669,7 +7676,7 @@ export function World3D({
         returnRocketRoot.parent = venusRoot
         returnRocketRoot.position = VENUS_LANDING_UP.scale(VENUS_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(VENUS_LANDING_UP)
-        const returnHint = new TextBlock('venusRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('venusRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -7772,7 +7779,7 @@ export function World3D({
           guiTexture.addControl(pedLabel)
           pedLabel.linkWithMesh(pedMesh)
           pedLabel.linkOffsetY = -30
-          const pedHint = new TextBlock(`venusPedestalHint-${i}`, 'Pressione E')
+          const pedHint = new TextBlock(`venusPedestalHint-${i}`, interactionHint('', interactionInput))
           pedHint.color = 'white'
           pedHint.fontSize = mobileFontSize(18)
           pedHint.fontWeight = 'bold'
@@ -7943,7 +7950,7 @@ export function World3D({
         returnRocketRoot.parent = jupiterRoot
         returnRocketRoot.position = JUPITER_LANDING_UP.scale(JUPITER_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(JUPITER_LANDING_UP)
-        const returnHint = new TextBlock('jupiterRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('jupiterRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -8062,7 +8069,7 @@ export function World3D({
         returnRocketRoot.parent = saturnRoot
         returnRocketRoot.position = SATURN_LANDING_UP.scale(SATURN_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(SATURN_LANDING_UP)
-        const returnHint = new TextBlock('saturnoRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('saturnoRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -8186,7 +8193,7 @@ export function World3D({
         returnRocketRoot.parent = uranusRoot
         returnRocketRoot.position = URANUS_LANDING_UP.scale(URANUS_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(URANUS_LANDING_UP)
-        const returnHint = new TextBlock('uranoRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('uranoRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -8321,7 +8328,7 @@ export function World3D({
         returnRocketRoot.parent = neptuneRoot
         returnRocketRoot.position = NEPTUNE_LANDING_UP.scale(NEPTUNE_RADIUS)
         returnRocketRoot.rotationQuaternion = alignmentQuaternion(NEPTUNE_LANDING_UP)
-        const returnHint = new TextBlock('netunoRocketHint', 'Pressione E pra voltar')
+        const returnHint = new TextBlock('netunoRocketHint', interactionHint('voltar', interactionInput))
         returnHint.color = 'white'
         returnHint.fontSize = mobileFontSize(18)
         returnHint.fontWeight = 'bold'
@@ -8587,10 +8594,12 @@ export function World3D({
       footstepDustSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
       footstepDustSystem.emitRate = 0
 
-      const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, profile.equippedPantsColorId)
-      const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, profile.equippedShoeColorId)
-      const initialBackpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, profile.equippedBackpackColorId)
-      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator, {
+      // O entitlement pode mudar enquanto o setup assíncrono carrega os GLBs.
+      const initialProfile = profileRef.current
+      const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, initialProfile.equippedPantsColorId)
+      const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, initialProfile.equippedShoeColorId)
+      const initialBackpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, initialProfile.equippedBackpackColorId)
+      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(initialProfile.avatarEmoji), shadowGenerator, {
         pantsColor: initialPantsOpt ? new Color3(...initialPantsOpt.colorRgb) : undefined,
         shoeColor: initialShoeOpt ? new Color3(...initialShoeOpt.colorRgb) : undefined,
         backpackColor: initialBackpackOpt ? new Color3(...initialBackpackOpt.colorRgb) : undefined,
@@ -8598,26 +8607,26 @@ export function World3D({
       // lab-122: `buildStudentFigure` já deixa uma cor sólida padrão pronta acima — isso reaplica
       // com `applyClothingLook`, que também trata o `style` de itens exclusivos (textura/metálico),
       // não só a cor.
-      const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, profile.equippedShirtColorId)
-      applyClothingLook(studentFigure.shirtMat, initialShirtOpt, scene, avatarColorFromEmoji(profile.avatarEmoji), 0.7)
+      const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, initialProfile.equippedShirtColorId)
+      applyClothingLook(studentFigure.shirtMat, initialShirtOpt, scene, avatarColorFromEmoji(initialProfile.avatarEmoji), 0.7)
       applyClothingLook(studentFigure.pantsMat, initialPantsOpt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
       applyClothingLook(studentFigure.shoeMat, initialShoeOpt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
       applyClothingLook(
         studentFigure.backpackMat,
         initialBackpackOpt,
         scene,
-        Color3.Lerp(avatarColorFromEmoji(profile.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+        Color3.Lerp(avatarColorFromEmoji(initialProfile.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
         0.75,
       )
-      applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
-      applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
+      applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(initialProfile.avatarEmoji), scene, shadowGenerator)
+      applyHat(studentFigure, initialProfile.equippedHatId ? findHatById(initialProfile.equippedHatId) ?? null : null, scene, shadowGenerator)
       applyGlasses(
         studentFigure,
-        profile.equippedGlassesId ? findGlassesById(profile.equippedGlassesId) ?? null : null,
+        initialProfile.equippedGlassesId ? findGlassesById(initialProfile.equippedGlassesId) ?? null : null,
         scene,
         shadowGenerator,
       )
-      const initialHair = findHairShapeOption(profile.equippedHairShapeId)
+      const initialHair = findHairShapeOption(initialProfile.equippedHairShapeId)
       if (initialHair) applyHairShape(studentFigure, initialHair.shape, scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
       if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure
@@ -9385,7 +9394,7 @@ export function World3D({
       // Dica "Pressione E" (lab-172) — só some visível quando há outro jogador por perto (ver
       // uso no loop de física); pra alguém sozinho, mostrar a dica convidaria pra um desafio
       // impossível de terminar sem parceiro.
-      const coopEnterHint = new TextBlock('coopEnterHint', 'Pressione E pro desafio em dupla')
+      const coopEnterHint = new TextBlock('coopEnterHint', interactionHint('iniciar o desafio em dupla', interactionInput))
       coopEnterHint.color = 'white'
       coopEnterHint.fontSize = mobileFontSize(18)
       coopEnterHint.fontWeight = 'bold'
@@ -9456,7 +9465,7 @@ export function World3D({
       bridgeLabel.linkWithMesh(bridgeDeck)
       bridgeLabel.linkOffsetY = -60
 
-      const bridgeEnterHint = new TextBlock('bridgeEnterHint', 'Pressione E pra alinhar a ponte')
+      const bridgeEnterHint = new TextBlock('bridgeEnterHint', interactionHint('alinhar a ponte', interactionInput))
       bridgeEnterHint.color = 'white'
       bridgeEnterHint.fontSize = mobileFontSize(18)
       bridgeEnterHint.fontWeight = 'bold'
@@ -9526,7 +9535,7 @@ export function World3D({
       rocketFuelLabel.linkWithMesh(fuelTank)
       rocketFuelLabel.linkOffsetY = -60
 
-      const rocketFuelEnterHint = new TextBlock('rocketFuelEnterHint', 'Pressione E pra abastecer o foguete')
+      const rocketFuelEnterHint = new TextBlock('rocketFuelEnterHint', interactionHint('abastecer o foguete', interactionInput))
       rocketFuelEnterHint.color = 'white'
       rocketFuelEnterHint.fontSize = mobileFontSize(18)
       rocketFuelEnterHint.fontWeight = 'bold'
@@ -9581,7 +9590,7 @@ export function World3D({
       plaqueLabel.linkWithMesh(plaqueBoard)
       plaqueLabel.linkOffsetY = -50
 
-      const plaqueEnterHint = new TextBlock('plaqueEnterHint', 'Pressione E pra decifrar a placa')
+      const plaqueEnterHint = new TextBlock('plaqueEnterHint', interactionHint('decifrar a placa', interactionInput))
       plaqueEnterHint.color = 'white'
       plaqueEnterHint.fontSize = mobileFontSize(18)
       plaqueEnterHint.fontWeight = 'bold'
@@ -9710,7 +9719,7 @@ export function World3D({
         '🏃 Parkour',
         22,
         -50,
-        'Pressione E pra jogar o Parkour',
+        interactionHint('jogar o Parkour', interactionInput),
         -25,
       )
 
@@ -9729,7 +9738,7 @@ export function World3D({
         '🌉 Ponte',
         22,
         -50,
-        'Pressione E pra jogar a Ponte',
+        interactionHint('jogar a Ponte', interactionInput),
         -25,
       )
 
@@ -9743,7 +9752,7 @@ export function World3D({
       const parkourReturnPedestal = buildHubPedestal('parkourReturnPedestal', parkourReturnBase, hubReturnMat, 0.4, 0.55, 0.7)
       settleMeshOnTerrain(parkourReturnBase, PARKOUR_RETURN_UP)
       parkourReturnPos.copyFrom(parkourReturnBase.position)
-      parkourReturnHintLabel = addHubLabels('parkourReturn', parkourReturnPedestal, '🔙', 24, -40, 'Pressione E pra voltar ao hub', -20)
+      parkourReturnHintLabel = addHubLabels('parkourReturn', parkourReturnPedestal, '🔙', 24, -40, interactionHint('voltar ao hub', interactionInput), -20)
 
       // Pedestal de RETORNO na ponte — `ENV_CHALLENGE_TRIGGER_DISTANCE` é 1.3; a distância até
       // `bridgeSurfacePos` precisa passar de 2×1.3 = 2.6, senão existe uma faixa de chão onde os
@@ -9760,7 +9769,7 @@ export function World3D({
       const bridgeReturnPedestal = buildHubPedestal('bridgeReturnPedestal', bridgeReturnBase, hubReturnMat, 0.4, 0.55, 0.7)
       settleMeshOnTerrain(bridgeReturnBase, BRIDGE_RETURN_UP)
       bridgeReturnPos.copyFrom(bridgeReturnBase.position)
-      bridgeReturnHintLabel = addHubLabels('bridgeReturn', bridgeReturnPedestal, '🔙', 24, -40, 'Pressione E pra voltar ao hub', -20)
+      bridgeReturnHintLabel = addHubLabels('bridgeReturn', bridgeReturnPedestal, '🔙', 24, -40, interactionHint('voltar ao hub', interactionInput), -20)
 
       // Ponte inversa (React → closure) pro hub de mini-jogos — mesmo padrão de `boardRocketToRef`
       // acima, atribuída só aqui porque `PARKOUR_ANCHOR_UP`/`bridgeUp` (destinos do teleporte) só
@@ -9789,6 +9798,11 @@ export function World3D({
           teleportAvatarTo(Vector3.Zero(), bridgeUp, currentGroundBaseFn)
         }
         trackMinigameStarted(id)
+      }
+      leaveParkourRef.current = () => {
+        if (disposed || activeMinigameId !== 'parkour1') return
+        clearParkourRun()
+        teleportAvatarTo(Vector3.Zero(), HUB_ANCHOR_UP, currentGroundBaseFn)
       }
 
       // Minha Casa (lab-105, primeira fatia de docs/plano-comercial-backend.md, Fase E) — espaço
@@ -9910,7 +9924,7 @@ export function World3D({
       // casa", não só "Pressione E pra entrar" genérico) — achado real do usuário: com o texto
       // genérico idêntico ao do carro, um carro passando perto da casa mostrava a MESMA legenda,
       // e o jogador não tinha como saber qual das duas coisas E ia acionar.
-      const houseEnterHint = new TextBlock('houseEnterHint', 'Pressione E pra entrar em casa')
+      const houseEnterHint = new TextBlock('houseEnterHint', interactionHint('entrar em casa', interactionInput))
       houseEnterHint.color = 'white'
       houseEnterHint.fontSize = mobileFontSize(18)
       houseEnterHint.fontWeight = 'bold'
@@ -10424,7 +10438,7 @@ export function World3D({
         interiorDoor.parent = interiorRoot
         houseDoorInsidePos = interiorRoot.position.add(interiorDoor.position)
 
-        const exitHint = new TextBlock('houseExitHint', 'Pressione E pra sair')
+        const exitHint = new TextBlock('houseExitHint', interactionHint('sair', interactionInput))
         exitHint.color = 'white'
         exitHint.fontSize = mobileFontSize(18)
         exitHint.fontWeight = 'bold'
@@ -10581,6 +10595,7 @@ export function World3D({
         // a cada entrada — não carrega o giro/zoom de uma visita anterior, mesmo espírito de
         // `startFurniturePlacement` sempre começar do zero.
         cameraYawOffsetRef.current = 0
+        touchCameraTurnPending = 0
         houseCameraPitchOffsetRef.current = 0
         houseCameraZoomRef.current = 1
         // Uma pinça de zoom em andamento bem na hora de entrar em casa não deveria continuar
@@ -10641,6 +10656,7 @@ export function World3D({
         // `onCameraPointerMove`.
         cameraDragging = false
         cameraDragPointerId = null
+        touchCameraTurnPending = 0
         // Mesmo espírito da linha acima — uma pinça de zoom em andamento na hora de sair de casa
         // não deveria continuar valendo pro zoom de fora.
         pinchPointers.clear()
@@ -10771,7 +10787,7 @@ export function World3D({
       gameCenterSignLabel.linkWithMesh(gameCenterRoof)
       gameCenterSignLabel.linkOffsetY = -40
 
-      const gameCenterEnterHint = new TextBlock('gameCenterEnterHint', 'Pressione E pra entrar')
+      const gameCenterEnterHint = new TextBlock('gameCenterEnterHint', interactionHint('entrar', interactionInput))
       gameCenterEnterHint.color = 'white'
       gameCenterEnterHint.fontSize = mobileFontSize(18)
       gameCenterEnterHint.fontWeight = 'bold'
@@ -10900,7 +10916,7 @@ export function World3D({
         interiorDoor.parent = interiorRoot
         gameCenterDoorInsidePos = interiorRoot.position.add(interiorDoor.position)
 
-        const exitHint = new TextBlock('gcExitHint', 'Pressione E pra sair')
+        const exitHint = new TextBlock('gcExitHint', interactionHint('sair', interactionInput))
         exitHint.color = 'white'
         exitHint.fontSize = mobileFontSize(18)
         exitHint.fontWeight = 'bold'
@@ -10963,7 +10979,7 @@ export function World3D({
           plaqueLabel.linkWithMesh(plaqueBoard)
           plaqueLabel.linkOffsetY = -45
 
-          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? 'Pressione E pra jogar' : 'Pressione E · Em breve')
+          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? interactionHint('jogar', interactionInput) : 'Em breve')
           plaqueHint.color = 'white'
           plaqueHint.fontSize = mobileFontSize(16)
           plaqueHint.fontWeight = 'bold'
@@ -11039,7 +11055,7 @@ export function World3D({
           cardLabel.linkWithMesh(card)
           gcMemoryCardLabels[i] = cardLabel
 
-          const cardHint = new TextBlock(`gcMemoryCardHint-${i}`, 'Pressione E')
+          const cardHint = new TextBlock(`gcMemoryCardHint-${i}`, interactionHint('', interactionInput))
           cardHint.color = 'white'
           cardHint.fontSize = mobileFontSize(14)
           cardHint.fontWeight = 'bold'
@@ -11088,7 +11104,7 @@ export function World3D({
           gcPatternPadMaterials[i] = padMat
           gcPatternPadPos[i] = arenaTargetTriggerPos(pad)
 
-          const padHint = new TextBlock(`gcPatternPadHint-${i}`, 'Pressione E')
+          const padHint = new TextBlock(`gcPatternPadHint-${i}`, interactionHint('', interactionInput))
           padHint.color = 'white'
           padHint.fontSize = mobileFontSize(14)
           padHint.fontWeight = 'bold'
@@ -11217,7 +11233,7 @@ export function World3D({
           optionLabel.linkWithMesh(option)
           gcCountingOptionLabels[i] = optionLabel
 
-          const optionHint = new TextBlock(`gcCountingOptionHint-${i}`, 'Pressione E')
+          const optionHint = new TextBlock(`gcCountingOptionHint-${i}`, interactionHint('', interactionInput))
           optionHint.color = 'white'
           optionHint.fontSize = mobileFontSize(14)
           optionHint.fontWeight = 'bold'
@@ -11309,7 +11325,7 @@ export function World3D({
           tileLabel.linkWithMesh(tile)
           gcSpellingTileLabels[i] = tileLabel
 
-          const tileHint = new TextBlock(`gcSpellingTileHint-${i}`, 'Pressione E')
+          const tileHint = new TextBlock(`gcSpellingTileHint-${i}`, interactionHint('', interactionInput))
           tileHint.color = 'white'
           tileHint.fontSize = mobileFontSize(14)
           tileHint.fontWeight = 'bold'
@@ -11394,6 +11410,7 @@ export function World3D({
         insideHouseInterior = true
         insideGameCenterInterior = true
         cameraYawOffsetRef.current = 0
+        touchCameraTurnPending = 0
         houseCameraPitchOffsetRef.current = 0
         houseCameraZoomRef.current = 1
         pinchPointers.clear()
@@ -11423,6 +11440,7 @@ export function World3D({
         insideGameCenterInterior = false
         cameraDragging = false
         cameraDragPointerId = null
+        touchCameraTurnPending = 0
         pinchPointers.clear()
         pinchStartDistance = 0
         currentWorldCenter = savedOutsideCenter
@@ -11483,7 +11501,7 @@ export function World3D({
         const hintLabel = gameCenterPortalHintLabel[id]
         if (hintLabel) {
           const info = GAME_CENTER_PORTAL_INFO[id]
-          const cta = info.unlocked ? 'Pressione E pra jogar' : 'Pressione E · Em breve'
+          const cta = info.unlocked ? interactionHint('jogar', interactionInput) : 'Em breve'
           hintLabel.text = `${gameCenterTrophyProgressPrefix(completions)}${cta}`
         }
       }
@@ -11720,7 +11738,7 @@ export function World3D({
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
               'memoria',
-              '🎉 Você venceu! Pressione E na placa pra jogar de novo',
+              `🎉 Você venceu! ${interactionHint('jogar de novo na placa', interactionInput)}`,
             )
           }
         }
@@ -11807,7 +11825,7 @@ export function World3D({
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
               'memoria',
-              '🎉 Sequência completa! Pressione E na placa pra jogar de novo',
+              `🎉 Sequência completa! ${interactionHint('jogar de novo na placa', interactionInput)}`,
             )
           }
           return
@@ -11873,7 +11891,7 @@ export function World3D({
           if (gameCenterCountingStatusLabel) {
             gameCenterCountingStatusLabel.text = handleGameCenterMinigameReward(
               'contar',
-              '🎉 Você contou tudo certo! Pressione E na placa pra jogar de novo',
+              `🎉 Você contou tudo certo! ${interactionHint('jogar de novo na placa', interactionInput)}`,
             )
           }
           return
@@ -11938,7 +11956,7 @@ export function World3D({
           if (gameCenterSpellingStatusLabel) {
             gameCenterSpellingStatusLabel.text = handleGameCenterMinigameReward(
               'soletrar',
-              `🎉 Você soletrou ${state.hint} ${state.word}! Pressione E na placa pra jogar de novo`,
+              `🎉 Você soletrou ${state.hint} ${state.word}! ${interactionHint('jogar de novo na placa', interactionInput)}`,
             )
           }
           return
@@ -13532,6 +13550,8 @@ export function World3D({
       }
 
       let time = 0
+      const DEBUG_UI_INTERVAL_SECONDS = 0.5
+      let debugUiElapsed = DEBUG_UI_INTERVAL_SECONDS
       const PROXIMITY_UI_INTERVAL_SECONDS = 0.1
       let proximityUiElapsed = PROXIMITY_UI_INTERVAL_SECONDS
       const DISTANT_AMBIENT_INTERVAL_SECONDS = 0.1
@@ -13791,10 +13811,20 @@ export function World3D({
         // lab-164 (jornada de ativação de 10 minutos) — "conseguiu controlar o personagem" (mesma
         // definição citada em docs/market-metrics-engagement-backlog.md §4), primeiro sinal de
         // movimento real por teclado OU joystick; a função já só dispara uma vez por sessão.
-        if (mag > 0) trackFirstControl()
+        if (mag > 0) {
+          trackFirstControl()
+          if (firstSessionEligibleRef.current && !firstSessionMovedRef.current) {
+            firstSessionMovedRef.current = true
+            setFirstSessionMoved(true)
+          }
+        }
         if (mag > 1) {
           x /= mag
           y /= mag
+        }
+
+        if (hudInertRef.current || drivingCar || drivingRocket || placingFurnitureId || restingInBedKey) {
+          touchCameraTurnPending = 0
         }
 
         if (avatarBody && avatarMesh) {
@@ -13948,6 +13978,18 @@ export function World3D({
             facing = rotateAroundAxis(facing, localUp, x * TURN_RATE * dt)
           }
 
+          if (touchCameraTurnPending !== 0) {
+            const followStep = touchCameraFollowStep(touchCameraTurnPending, dt, TURN_RATE)
+            if (followStep !== 0) {
+              facing = rotateAroundAxis(facing, localUp, followStep)
+              // Keep the camera's world-space bearing while the figure catches up.
+              cameraYawOffsetRef.current -= followStep
+              touchCameraTurnPending -= followStep
+            } else {
+              touchCameraTurnPending = 0
+            }
+          }
+
           const throttle = Math.max(-1, Math.min(1, -y))
           const currentVel = body.getLinearVelocity()
           let radialSpeed = Vector3.Dot(currentVel, localUp)
@@ -14096,44 +14138,51 @@ export function World3D({
               }
             }
 
-            // Queda — altura ao longo de `PARKOUR_ANCHOR_UP`, relativa à plataforma do checkpoint
-            // atual (não à plataforma inicial): "queda reseta em checkpoint sem punir" (backlog
-            // "Lab 210") — sem perda de moeda/argola já coletada, só reposiciona.
+            // Quedas junto ao percurso usam o checkpoint. Afastar-se lateralmente deixa o
+            // avatar cair ate o chao e encerra a corrida; o botao no HUD garante saida mesmo
+            // quando o personagem esta preso em um checkpoint alto.
             const checkpointPos = parkourPlatformPositions[parkourCheckpointIndex]
-            const heightVsCheckpoint = Vector3.Dot(pos.subtract(checkpointPos), PARKOUR_ANCHOR_UP)
-            if (heightVsCheckpoint < -PARKOUR_FALL_MARGIN) {
+            const fromCheckpoint = pos.subtract(checkpointPos)
+            const heightVsCheckpoint = Vector3.Dot(fromCheckpoint, PARKOUR_ANCHOR_UP)
+            const lateralDistanceSquared = Math.max(0, fromCheckpoint.lengthSquared() - heightVsCheckpoint ** 2)
+            const fallAction = parkourFallAction(heightVsCheckpoint, lateralDistanceSquared)
+            if (fallAction === 'exit') {
+              clearParkourRun()
+            } else if (fallAction === 'respawn') {
               const respawnPos = checkpointPos.add(PARKOUR_ANCHOR_UP.scale(AVATAR_RADIUS + 0.35))
               teleportAvatarToPosition(respawnPos, parkourForward)
               trackParkourCheckpointRespawn(parkourCheckpointIndex)
             }
 
-            // Cronômetro informativo — nunca afeta dificuldade/recompensa, só feedback. HUD só
-            // atualiza quando o segundo arredondado muda (mesmo espírito de `survivalTimeDisplay`:
-            // evita recriar o objeto do estado 60x/s por um número que só importa 1x/segundo).
-            parkourElapsedSeconds += dt
-            const roundedElapsed = Math.floor(parkourElapsedSeconds)
-            if (roundedElapsed !== parkourLastHudSecond) {
-              parkourLastHudSecond = roundedElapsed
-              setParkourHud({
-                ringsCollected: parkourRingsCollectedCount,
-                totalRings: parkourRings.length,
-                elapsedSeconds: roundedElapsed,
-              })
-            }
+            if (activeMinigameId === 'parkour1') {
+              // Cronômetro informativo — nunca afeta dificuldade/recompensa, só feedback. HUD só
+              // atualiza quando o segundo arredondado muda (mesmo espírito de `survivalTimeDisplay`:
+              // evita recriar o objeto do estado 60x/s por um número que só importa 1x/segundo).
+              parkourElapsedSeconds += dt
+              const roundedElapsed = Math.floor(parkourElapsedSeconds)
+              if (roundedElapsed !== parkourLastHudSecond) {
+                parkourLastHudSecond = roundedElapsed
+                setParkourHud({
+                  ringsCollected: parkourRingsCollectedCount,
+                  totalRings: parkourRings.length,
+                  elapsedSeconds: roundedElapsed,
+                })
+              }
 
-            // Conclusão — alcançar o topo, uma vez por corrida (independente de ter coletado todas
-            // as argolas ou não; `App.tsx` decide se ESTA conclusão específica concede o troféu).
-            if (!parkourTopReachedThisRun) {
-              const topPos = parkourPlatformPositions[parkourPlatformPositions.length - 1]
-              if (isWithinDistance(pos, topPos, PARKOUR_TRIGGER_DISTANCE)) {
-                parkourTopReachedThisRun = true
-                const { newBadge } = onParkourCourseCompletedRef.current(
-                  parkourRingsCollectedCount,
-                  parkourRings.length,
-                  roundedElapsed,
-                )
-                if (newBadge) {
-                  showParkourStatusMessage('🏆 Troféu conquistado: Mestre do Parkour!', 4000)
+              // Conclusão — alcançar o topo, uma vez por corrida (independente de ter coletado todas
+              // as argolas ou não; `App.tsx` decide se ESTA conclusão específica concede o troféu).
+              if (!parkourTopReachedThisRun) {
+                const topPos = parkourPlatformPositions[parkourPlatformPositions.length - 1]
+                if (isWithinDistance(pos, topPos, PARKOUR_TRIGGER_DISTANCE)) {
+                  parkourTopReachedThisRun = true
+                  const { newBadge } = onParkourCourseCompletedRef.current(
+                    parkourRingsCollectedCount,
+                    parkourRings.length,
+                    roundedElapsed,
+                  )
+                  if (newBadge) {
+                    showParkourStatusMessage('🏆 Troféu conquistado: Mestre do Parkour!', 4000)
+                  }
                 }
               }
             }
@@ -15821,16 +15870,15 @@ export function World3D({
           }
         }
 
-        // Contador de FPS sempre visível, também em produção (lab-67, pedido do usuário:
-        // "preciso de informações de FPS na tela em produção") — antes só aparecia em DEV; sem
-        // isso não dava pra saber, num aparelho de verdade rodando o jogo publicado, se um ajuste
-        // de performance realmente ajudou ou não.
-        if (debugRef.current) {
-          // `buriedHouseReport` logo depois do build stamp (não no fim, como `buriedSchoolReport`)
-          // — a lista de escolas pode ficar bem longa e cortar o resto da linha fora da tela num
-          // celular estreito; a casa é só um número, precisa aparecer sempre, mesmo cortando o
-          // resto.
-          debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${Math.round(engine.getFps())} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes, efeitos ${adaptiveEffectTier}) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+        debugUiElapsed += dt
+        if (debugUiElapsed >= DEBUG_UI_INTERVAL_SECONDS) {
+          debugUiElapsed %= DEBUG_UI_INTERVAL_SECONDS
+          const fps = Math.round(engine.getFps())
+          if (debugFpsRef.current) debugFpsRef.current.textContent = `${fps} FPS`
+          if (debugRef.current) {
+            // A casa fica antes da lista longa de escolas para nao sumir em tela estreita.
+            debugRef.current.textContent = `build ${__BUILD_STAMP__} · ${buriedHouseReport} · ${fps} FPS · escala ${engine.getHardwareScalingLevel().toFixed(2)} · perfil ${qualityProfile.id} (${reducedSettings.length} reducoes, efeitos ${adaptiveEffectTier}) · fraco=${isLowEndDevice} telaP=${isSmallScreen} · ${lastCompletedDrawCalls} draw calls · ${scene.getActiveMeshes().length}/${scene.meshes.length} meshes · materiais ${earthStaticMaterialReport.frozenMaterials}/${scene.materials.length} fixos · escolas ${enabledSchoolCount}/${portalMeshes.length} · predios ${earthSchoolStructureSourceMeshCount}+${earthSchoolStructureInstanceMeshCount}i · professores ${earthSchoolTeacherSourceMeshCount}+${earthSchoolTeacherInstanceMeshCount}i · ${buriedSchoolReport}`
+          }
         }
 
         // Brilho pulsante suave no telhado das escolas desbloqueadas (prédio não flutua nem
@@ -16581,6 +16629,17 @@ export function World3D({
   // `z-index: 10`), então ficava aberto mas visualmente escondido até a contagem terminar.
   const hudInert = fullScreenInert || chatOpen || chatRadialOpen || rankingOpen || bagOpen || !!minigamePrompt
   hudInertRef.current = hudInert
+  const guideStep = firstSessionGuideStep(
+    firstSessionEligibleRef.current,
+    firstSessionMoved,
+    progress.completedQuestIds.length,
+    firstSessionGuideDismissed,
+  )
+  useEffect(() => {
+    if (guideStep !== 'reward' || hudInert) return
+    const timeout = window.setTimeout(() => setFirstSessionGuideDismissed(true), 15000)
+    return () => window.clearTimeout(timeout)
+  }, [guideStep, hudInert])
   // Deixar o `<canvas>` inteiro `inert` enquanto chat/ranking/mochila está aberto (como `hudInert`
   // sozinho faria) desabilitava ARRASTO DE CÂMERA/JOYSTICK na área livre inteira, não só na
   // caixinha do painel — muito mais amplo do que o necessário, e a causa provável do relato de
@@ -16628,8 +16687,9 @@ export function World3D({
           onClick={() => setDebugPanelExpanded((expanded) => !expanded)}
           aria-expanded={debugPanelExpanded}
           aria-label={debugPanelExpanded ? 'Encolher painel de depuração' : 'Expandir painel de depuração'}
+          title={debugPanelExpanded ? 'Encolher painel de depuração' : 'Expandir painel de depuração'}
         >
-          {debugPanelExpanded ? '▾' : '🐞'}
+          {debugPanelExpanded ? '▾' : <span ref={debugFpsRef}>-- FPS</span>}
         </button>
         {debugPanelExpanded && (
           <div className="world3d-debug-content">
@@ -16713,9 +16773,10 @@ export function World3D({
       {planetSecretFoundMessage && <p className="mars-death-message">{planetSecretFoundMessage}</p>}
       {postcardFoundMessage && <p className="mars-death-message">{postcardFoundMessage}</p>}
       {parkourHud && (
-        <p className="mars-enemy-count">
-          💍 {parkourHud.ringsCollected}/{parkourHud.totalRings} · ⏱ {parkourHud.elapsedSeconds}s
-        </p>
+        <div className="parkour-hud" inert={hudInert}>
+          <span>💍 {parkourHud.ringsCollected}/{parkourHud.totalRings} · ⏱ {parkourHud.elapsedSeconds}s</span>
+          <button type="button" onClick={() => leaveParkourRef.current()}>Voltar ao hub</button>
+        </div>
       )}
       {parkourStatusMessage && <p className="mars-death-message">{parkourStatusMessage}</p>}
       {minigamePrompt && (
@@ -16747,7 +16808,13 @@ export function World3D({
           onClose={() => setPlanetPickerOpen(false)}
         />
       )}
-      <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
+      {guideStep && !hudInert && (
+        <p className="world3d-hint" role="status" aria-live="polite">
+          {guideStep === 'move' && 'Mova o boneco para explorar o planeta.'}
+          {guideStep === 'mission' && 'Encontre uma escolinha colorida e interaja para jogar a primeira missão.'}
+          {guideStep === 'reward' && 'Primeira recompensa conquistada! Explore os pets, planetas ou o Centro de Jogos.'}
+        </p>
+      )}
       <TouchJoystick onChange={handleJoystickChange} inert={hudInert} />
       <TouchActionButton
         className="touch-action-jump"

@@ -1,12 +1,72 @@
 # Laboratório atual
 
-Em andamento: labs/lab-227-validacao-lod-android/ - validar no Redmi Pad 2 se o
-detalhe simplificado dos professores (publicado na build
-`2026-09-23T12:51:14.064Z`) realmente ativa, melhora FPS e preserva a aparencia.
-O Lab 227 comeca em `2bdbe17`; consultar `FEATURES.md` antes de mudar o codigo.
-Primeira coleta da build `2026-09-23T14:48:32.765Z`: 30,44 FPS medios no
-Redmi Pad 2, mas `simpleTeachersAvg: 0`; o LOD ainda nao produziu ganho medido.
-Experimento seguinte: limite por tamanho aparente na tela, com teste fisico pendente.
+Em andamento: labs/lab-227-validacao-lod-android/ - a coleta do Redmi Pad 2
+marcou 30,44 FPS medios, mas `simpleTeachersAvg: 0`. A PR #116 ajusta o
+criterio de LOD por tamanho aparente; medir novamente no tablet e conferir
+a aparencia dos professores antes de atribuir ganho de desempenho.
+
+---
+
+Lab 234 publicado: labs/lab-234-visual-entitlement/ - aparencia efetiva quando o
+entitlement expira, sem apagar o perfil salvo. Inclui mundo, loja, amigos e
+heartbeat publico autenticado. PR #123 mesclada em `9d50879`;
+validacao com assinatura real e tablet pendente. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
+Lab 235 publicado: FPS numerico visivel com diagnostico recolhido por padrao.
+PR #124 mesclada na main em `6bc462a`; validacao Android fisico pendente.
+Ver `labs/lab-235-hud-fps-compacto/FEATURES.md` e `CONTEXT.md`.
+
+---
+
+Em andamento: labs/lab-232-primeira-sessao/ - UX 190 em fatia pequena: entrada
+curta e objetivos contextuais no mundo. Base `1417859`; testes/build/lint
+passaram, falta playtest com crianca no tablet. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
+Lab 233 publicado: arrastar a metade direita no touch orienta integralmente
+o boneco na velocidade maxima do joystick esquerdo; pinça para zoom preservada.
+PR #122 mesclada em `a85d959`; deploy de Vercel e Cloudflare Pages passou.
+Falta teste multitouch fisico no Redmi Pad 2; ver `FEATURES.md` e `CONTEXT.md`.
+
+---
+
+Em andamento urgente: labs/lab-231-saida-parkour/ - corrigir o loop de
+checkpoint que impede a crianca de sair do parkour. Base `9dda215`; ver
+`FEATURES.md`. PR #120 mesclada e publicada em `1417859`; falta testar a
+saida e reentrada no Redmi Pad 2.
+
+---
+
+Lab 230 mesclado na PR #119: labs/lab-230-lojinha-infantil-segura/ - UX 189,
+copias e estados de itens visuais no jogo infantil. Falta playtest com crianca
+e responsavel; ver `FEATURES.md` e `AUDIT.md`.
+
+---
+
+Ultimo encerrado administrativamente com pendencias: lab-229-linguagem-interativos/.
+Dicas de teclado/toque publicadas pela PR #118 (`9dda215`). O usuario confirmou
+que o botao E funcionou no Redmi Pad 2, mas nao confirmou a legibilidade das
+dicas perto dos objetos. UX 188 segue parcial; ver `FEATURES.md` e `CONTEXT.md`.
+
+---
+
+Ultimo encerrado administrativamente com pendencias: labs/lab-228-mapa-verbos/.
+`VERB-MAP.md` inventaria 16 verbos e prioriza a dica `E` no touch, a revisao
+da monetizacao infantil e o painel tecnico. A frase de solicitacao direta de
+assinatura foi removida da lojinha. Faltam perfil novo, planeta secundario e
+playtest touch fisico; ver `FEATURES.md` e `CONTEXT.md`. PR #115 mesclada em
+`14da8e0` e publicada pelo deploy automatico da main.
+
+---
+
+Lab 227 teve uma primeira fase documental na PR #114. A coleta de 30,44 FPS
+medios (p5 25,38, escala 1,15) nao ativou o LOD; a PR #116 propoe o ajuste
+experimental. Ver `labs/lab-227-validacao-lod-android/CONTEXT.md`.
 
 ---
 

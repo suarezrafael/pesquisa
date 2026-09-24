@@ -536,8 +536,8 @@ a.nickname-generate-btn {
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
   background: #fff3d6;
-  /* lab-120, auditoria WCAG AA: escurecido de #9a6b1a (4.24:1 aqui, 3.69:1 no outro uso —
-     `.avatar-shop-tag.subscription-lock` — abaixo do mínimo AA de 4.5:1) */
+  /* lab-120, auditoria WCAG AA: escurecido de #9a6b1a (4.24:1 aqui, 3.69:1
+     em `.avatar-shop-tag.item-unavailable`) — abaixo do minimo AA de 4.5:1. */
   color: #845c16;
 }
 
@@ -896,6 +896,36 @@ a.nickname-generate-btn {
   color: #2a3358;
 }
 
+.parkour-hud {
+  position: absolute;
+  top: clamp(9.6rem, 32vmin, 12.4rem);
+  left: clamp(0.5rem, 2.8vmin, 1.1rem);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 1rem);
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2a3358;
+  font-size: 0.85rem;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(23, 44, 102, 0.2);
+}
+
+.parkour-hud button {
+  min-height: 44px;
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
 /* Alerta de perigo (lab-65) — vinheta vermelha nas bordas da tela, opacidade controlada direto
    pelo laço de física (ver `dangerOverlayRef`) conforme a distância do inimigo mais próximo em
    Marte. Cobre a tela inteira mas não intercepta clique/toque nenhum. */
@@ -1128,13 +1158,17 @@ a.nickname-generate-btn {
    bloquearia toques no mundo 3D por baixo dele. */
 .world3d-debug-toggle {
   pointer-events: auto;
-  min-width: 44px;
+  min-width: 68px;
   min-height: 44px;
   border: none;
-  border-radius: 999px;
+  border-radius: 6px;
   background: rgba(0, 0, 0, 0.75);
   color: #7CFC9A;
-  font-size: 1.1rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1153,8 +1187,7 @@ a.nickname-generate-btn {
      qualquer orientação. Além disso, agora dá pra encolher o painel inteiro via
      `.world3d-debug-toggle` acima, pra quem não está depurando de propósito.
      Achado do review automático do Copilot (PR #58), 2 rodadas: a 1ª tentativa reduziu o fundo
-     (0.55 → 0.4) — mas esse painel é EXPLICITAMENTE mantido visível em produção por pedido do
-     usuário (lab-67, "preciso de informações de FPS na tela em produção"), então o texto verde
+     (0.55 → 0.4) — quando o painel e expandido em producao, o texto verde
      precisa do contraste mínimo AA de texto normal (4.5:1, mesmo §3 do `.help-button` acima)
      contra QUALQUER fundo 3D. A 2ª rodada mediu que até o valor ORIGINAL (0.55) não bastava
      contra um fundo BRANCO no pior caso (preto a 0.55 sobre branco compõe pra `#737373`, e
@@ -1915,9 +1948,8 @@ a.nickname-generate-btn {
   color: var(--primary-dark);
 }
 
-/* Item exclusivo de assinante (Fase E) — mesmo espaço visual do botão de compra, sem ação de
-   clique (a criança não tem como comprar nada; o pagamento só existe no portal do responsável). */
-.avatar-shop-tag.subscription-lock {
+/* Estado informativo, sem CTA infantil; assinatura e preco ficam no portal adulto. */
+.avatar-shop-tag.item-unavailable {
   color: #845c16;
 }
 

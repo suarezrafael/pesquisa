@@ -84,7 +84,7 @@ export function PairingScreen({
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Vincular assinatura da família"
+      aria-label="Vincular código da família"
       ref={modalRef}
       tabIndex={-1}
     >
@@ -110,8 +110,8 @@ export function PairingScreen({
           </>
         ) : active ? (
           <>
-            <h2>Assinatura da família já vinculada! 🎉</h2>
-            <p>Aproveite os itens exclusivos assim que eles chegarem na lojinha.</p>
+            <h2>Código da família vinculado! 🎉</h2>
+            <p>Os visuais da família já podem ser usados na lojinha.</p>
             {/* lab-137 (backlog reportado na sequência do lab-133): o link pra `/familia` só
                 existia na tela de ANTES de vincular — quem cuida da criança e já vinculou não
                 tinha como voltar pra ver relatório/gerenciar assinatura de dentro do jogo. */}
@@ -134,8 +134,8 @@ export function PairingScreen({
           <>
             <h2>Digite o código da família</h2>
             <p>
-              Peça pra quem cuida de você abrir a área dos responsáveis e gerar um código. Digite
-              esse código aqui, uma única vez.
+              Se você já recebeu um código de quem cuida de você, digite aqui. Sem código, pode
+              continuar jogando normalmente.
             </p>
             {/* Pedido do usuário (2026-08-24): não tinha nenhum link de verdade pra `/familia` em
                 lugar nenhum do jogo, só esse texto — quem cuida da criança não tinha como achar a

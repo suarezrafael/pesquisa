@@ -1,8 +1,8 @@
 # Laboratorio 227 - Validacao de detalhe no Android
 
-Status: em andamento
+Status: encerrado administrativamente, primeira amostra recebida; validacao pendente
 Inicio: 2026-09-23
-Fim: -
+Fim: 2026-09-23
 Commit inicial: 2bdbe1792b8915c2b16284baa1fb2529f9b46944
 
 ## Objetivo do laboratorio
@@ -30,6 +30,13 @@ limite ou a representacao do professor se a medicao e a observacao justificarem.
   resultado como ganho, neutralidade ou regressao com ressalva de cenas diferentes.
   Nao afirmar meta de 30 FPS sem p5 e qualidade aceitaveis (origem: Lab 226
   `PERFORMANCE-AUDIT.md`).
+
+## Evidencia recebida
+
+Primeira amostra recebida depois do encerramento: build `2026-09-23T14:48:32.765Z`,
+Redmi Pad 2, Terra, 30,44 FPS medios, p5 25,38, escala 1,15,
+`simpleTeachersAvg: 0`. A regra de LOD nao ativou; PR #116 propoe tamanho
+projetado e precisa ser medida no aparelho antes de atribuir ganho.
 
 ## Fora de escopo
 
