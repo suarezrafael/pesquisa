@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-237-central-jogos-controles/ - entrada da Central de Jogos,
+seleção de Memória e direção conjunta da câmera/avatar no touch. Implementação e
+testes locais concluídos; validação no Redmi Pad 2 pendente. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
 Em andamento: labs/lab-227-validacao-lod-android/ - a coleta do Redmi Pad 2
 marcou 30,44 FPS medios, mas `simpleTeachersAvg: 0`. A PR #116 ajusta o
 criterio de LOD por tamanho aparente; medir novamente no tablet e conferir
