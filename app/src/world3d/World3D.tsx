@@ -142,7 +142,7 @@ import { HudHeader } from './HudHeader'
 import { TouchJoystick } from './TouchJoystick'
 import { distanceSquared, isWithinDistance } from './spatialPerformance'
 import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHierarchyInstances'
-import { shouldUseDetailedTeacher } from './teacherDetail'
+import { shouldUseDetailedTeacher, teacherProjectedHeightScale } from './teacherDetail'
 import { interactionHint, interactionInputForDevice } from './interactionHint'
 import { parkourFallAction } from './parkourFall'
 import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
@@ -9134,10 +9134,11 @@ export function World3D({
       let enabledSchoolCount = portalMeshes.length
       let detailedTeacherCount = portalMeshes.length
       let simpleTeacherCount = 0
-      function updateTeacherDetail(entry: (typeof portalMeshes)[number]) {
+      function updateTeacherDetail(entry: (typeof portalMeshes)[number], projectedHeightScale: number) {
         const detailed = adaptiveEffectTier < 2 || shouldUseDetailedTeacher(
           Vector3.DistanceSquared(camera.position, entry.surfacePos),
           entry.teacherDetailed,
+          projectedHeightScale,
         )
         if (entry.teacherDetailed === detailed) return
         entry.teacherRoot.setEnabled(detailed)
@@ -9146,11 +9147,12 @@ export function World3D({
       }
       function setAllEarthSchoolsEnabled(enabled: boolean) {
         let detailedCount = 0
+        const projectedHeightScale = teacherProjectedHeightScale(window.innerHeight, camera.fov)
         for (const entry of portalMeshes) {
           if (entry.base.isEnabled() !== enabled) entry.base.setEnabled(enabled)
           entry.label.isVisible = enabled
           if (enabled) {
-            updateTeacherDetail(entry)
+            updateTeacherDetail(entry, projectedHeightScale)
             if (entry.teacherDetailed) detailedCount++
           }
         }
@@ -9176,6 +9178,7 @@ export function World3D({
 
         let nextEnabledCount = 0
         let nextDetailedCount = 0
+        const projectedHeightScale = teacherProjectedHeightScale(window.innerHeight, camera.fov)
         for (const entry of portalMeshes) {
           const enabled = shouldEnableSphericalObject(
             true,
@@ -9185,7 +9188,7 @@ export function World3D({
           if (entry.base.isEnabled() !== enabled) entry.base.setEnabled(enabled)
           entry.label.isVisible = enabled
           if (enabled) {
-            updateTeacherDetail(entry)
+            updateTeacherDetail(entry, projectedHeightScale)
             nextEnabledCount++
             if (entry.teacherDetailed) nextDetailedCount++
           }

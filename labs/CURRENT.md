@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Em andamento: labs/lab-227-validacao-lod-android/ - a coleta do Redmi Pad 2
+marcou 30,44 FPS medios, mas `simpleTeachersAvg: 0`. A PR #116 ajusta o
+criterio de LOD por tamanho aparente; medir novamente no tablet e conferir
+a aparencia dos professores antes de atribuir ganho de desempenho.
+
+---
+
 Lab 234 publicado: labs/lab-234-visual-entitlement/ - aparencia efetiva quando o
 entitlement expira, sem apagar o perfil salvo. Inclui mundo, loja, amigos e
 heartbeat publico autenticado. PR #123 mesclada em `9d50879`;
@@ -35,9 +42,9 @@ saida e reentrada no Redmi Pad 2.
 
 ---
 
-Em revisao na PR #119: labs/lab-230-lojinha-infantil-segura/ - UX 189,
-copias e estados de itens visuais no jogo infantil. Base `9dda215`; ver
-`FEATURES.md` e `AUDIT.md`. Nao publicado.
+Lab 230 mesclado na PR #119: labs/lab-230-lojinha-infantil-segura/ - UX 189,
+copias e estados de itens visuais no jogo infantil. Falta playtest com crianca
+e responsavel; ver `FEATURES.md` e `AUDIT.md`.
 
 ---
 
@@ -57,11 +64,9 @@ playtest touch fisico; ver `FEATURES.md` e `CONTEXT.md`. PR #115 mesclada em
 
 ---
 
-Lab 227 encerrado administrativamente: a PR #114 publicou apenas documentacao.
-Chegou uma coleta do Redmi Pad 2 (30,44 FPS medios, p5 25,38, escala 1,15),
-mas `simpleTeachersAvg: 0`, sem ativacao do LOD. A PR #116 ajusta a regra por
-tamanho projetado; aguardam-se publicacao, medicao comparavel e revisao visual.
-Ver `labs/lab-227-validacao-lod-android/CONTEXT.md`.
+Lab 227 teve uma primeira fase documental na PR #114. A coleta de 30,44 FPS
+medios (p5 25,38, escala 1,15) nao ativou o LOD; a PR #116 propoe o ajuste
+experimental. Ver `labs/lab-227-validacao-lod-android/CONTEXT.md`.
 
 ---
 

@@ -1,18 +1,26 @@
 import { MeshBuilder, NullEngine, Scene, TransformNode, UniversalCamera, Vector3 } from '@babylonjs/core'
 import { describe, expect, it } from 'vitest'
-import { shouldUseDetailedTeacher } from './teacherDetail'
+import { shouldUseDetailedTeacher, teacherProjectedHeightScale } from './teacherDetail'
 
-describe('teacher detail distance', () => {
+describe('teacher projected detail', () => {
+  const pixelScale = teacherProjectedHeightScale(633, 0.8)
+
   it('keeps the full figure nearby and simplifies it far away', () => {
-    expect(shouldUseDetailedTeacher(24 * 24, false)).toBe(true)
-    expect(shouldUseDetailedTeacher(31 * 31, true)).toBe(false)
+    expect(shouldUseDetailedTeacher(15 * 15, false, pixelScale)).toBe(true)
+    expect(shouldUseDetailedTeacher(24 * 24, true, pixelScale)).toBe(false)
   })
 
   it('uses hysteresis to prevent rapid switching near the threshold', () => {
-    expect(shouldUseDetailedTeacher(27 * 27, true)).toBe(true)
-    expect(shouldUseDetailedTeacher(27 * 27, false)).toBe(false)
-    expect(shouldUseDetailedTeacher(25 * 25, false)).toBe(false)
-    expect(shouldUseDetailedTeacher(30 * 30, true)).toBe(false)
+    expect(shouldUseDetailedTeacher(19 * 19, true, pixelScale)).toBe(true)
+    expect(shouldUseDetailedTeacher(19 * 19, false, pixelScale)).toBe(false)
+    expect(shouldUseDetailedTeacher(22 * 22, true, pixelScale)).toBe(false)
+    expect(shouldUseDetailedTeacher(17 * 17, false, pixelScale)).toBe(true)
+  })
+
+  it('uses the visible viewport size rather than a fixed world distance', () => {
+    const tallerViewportScale = teacherProjectedHeightScale(950, 0.8)
+    expect(shouldUseDetailedTeacher(24 * 24, true, pixelScale)).toBe(false)
+    expect(shouldUseDetailedTeacher(24 * 24, true, tallerViewportScale)).toBe(true)
   })
 
   it('keeps a distant instance visible when the first school uses its detailed model', () => {
