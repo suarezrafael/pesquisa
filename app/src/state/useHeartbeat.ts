@@ -30,6 +30,15 @@ type HeartbeatBody = {
   nickname?: string
 }
 
+export function effectiveLookHeartbeatBody(playerId: string, profile: Profile, secret: string | null): HeartbeatBody {
+  const body: HeartbeatBody = { playerId, equippedLook: equippedLookFrom(profile) }
+  if (secret) {
+    body.avatarEmoji = profile.avatarEmoji
+    body.secret = secret
+  }
+  return body
+}
+
 function sendHeartbeat(body: HeartbeatBody): void {
   fetch(`${ACCOUNTS_API_URL}/players/heartbeat`, {
     method: 'POST',
@@ -40,6 +49,12 @@ function sendHeartbeat(body: HeartbeatBody): void {
     // Sem heartbeat de heartbeat — se falhar, só tenta de novo no próximo tick (mesmo
     // espírito de `productAnalytics.ts`: nunca interrompe o jogo pra criança por causa disto).
   })
+}
+
+function sendImmediateEffectiveLook(profile: Profile): void {
+  const playerId = loadPlayerId()
+  if (!playerId) return
+  sendHeartbeat(effectiveLookHeartbeatBody(playerId, profile, loadPlayerSecret()))
 }
 
 // lab-175 (achado do review automático do Copilot no PR #49): o toggle de visibilidade em
@@ -147,14 +162,21 @@ export async function sendImmediateNicknameChange(
 // `GET /players/:id/public-profile` (avatar equipado + conquistas) — decisão registrada em
 // `labs/lab-163-.../FEATURES.md`: evita criar um endpoint/intervalo novo só pra isso. `profile`/
 // `progress` podem ser `null` (perfil ainda não criado) — o heartbeat sozinho não depende deles.
-export function useHeartbeat(profile: Profile | null, progress: Progress | null): void {
+export function useHeartbeat(profile: Profile | null, progress: Progress | null, entitlementActive: boolean): void {
   // Refs (não estado) de propósito: trocar de roupa não deve reiniciar o `setInterval` nem causar
   // um heartbeat fora de hora — o próximo tick já lê o valor mais recente sozinho, mesmo padrão já
   // usado aqui pra `loadPlayerId()`.
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
+  const previousEntitlementActiveRef = useRef(entitlementActive)
   profileRef.current = profile
   progressRef.current = progress
+
+  useEffect(() => {
+    if (previousEntitlementActiveRef.current === entitlementActive) return
+    previousEntitlementActiveRef.current = entitlementActive
+    if (profileRef.current) sendImmediateEffectiveLook(profileRef.current)
+  }, [entitlementActive])
 
   useEffect(() => {
     // Lê `loadPlayerId()` A CADA tick, não uma vez só no mount: se o jogador abrir o painel de
@@ -163,15 +185,9 @@ export function useHeartbeat(profile: Profile | null, progress: Progress | null)
     const interval = setInterval(() => {
       const playerId = loadPlayerId()
       if (!playerId) return
-      const body: HeartbeatBody = { playerId }
-      if (profileRef.current) {
-        body.equippedLook = equippedLookFrom(profileRef.current)
-        const secret = loadPlayerSecret()
-        if (secret) {
-          body.avatarEmoji = profileRef.current.avatarEmoji
-          body.secret = secret
-        }
-      }
+      const body: HeartbeatBody = profileRef.current
+        ? effectiveLookHeartbeatBody(playerId, profileRef.current, loadPlayerSecret())
+        : { playerId }
       if (progressRef.current) {
         body.badges = progressRef.current.badges
         // lab-175 ("Lab 171 - Casa visitável somente leitura") — `resolveHouseSyncSnapshot`

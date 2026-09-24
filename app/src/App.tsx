@@ -259,7 +259,7 @@ function GameApp() {
     () => profile ? effectiveCosmeticProfile(profile, entitlement?.active ?? false) : null,
     [profile, entitlement?.active],
   )
-  useHeartbeat(visibleProfile, progress)
+  useHeartbeat(visibleProfile, progress, entitlement?.active ?? false)
   // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
   // decidir se mostra o `ProfilePicker` (quando não há perfil ativo) quanto pra decidir se mostra
   // o botão de trocar perfil no HUD (só faz sentido com 2+ perfis já criados neste aparelho).
