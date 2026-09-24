@@ -119,6 +119,7 @@ import {
   GAME_CENTER_WEEKLY_QUEST_REWARD_COINS,
 } from '../state/progression'
 import { hasMultiplayerConsent, recordMultiplayerConsent } from '../state/storage'
+import { firstSessionGuideStep } from '../state/firstSessionGuide'
 import {
   trackFirstControl,
   trackCameraRecenterUsed,
@@ -2607,6 +2608,10 @@ export function World3D({
   const outdoorCameraZoomRef = useRef(1)
   const profileRef = useRef(profile)
   const progressRef = useRef(progress)
+  const firstSessionEligibleRef = useRef(progress.completedQuestIds.length === 0)
+  const firstSessionMovedRef = useRef(false)
+  const [firstSessionMoved, setFirstSessionMoved] = useState(false)
+  const [firstSessionGuideDismissed, setFirstSessionGuideDismissed] = useState(false)
   const entitlementActiveRef = useRef(entitlementActive)
   const suspendRef = useRef(suspendTriggers)
   // Achado do review automático do Copilot: `hudInert` (calculado mais abaixo, combina
@@ -13803,7 +13808,13 @@ export function World3D({
         // lab-164 (jornada de ativação de 10 minutos) — "conseguiu controlar o personagem" (mesma
         // definição citada em docs/market-metrics-engagement-backlog.md §4), primeiro sinal de
         // movimento real por teclado OU joystick; a função já só dispara uma vez por sessão.
-        if (mag > 0) trackFirstControl()
+        if (mag > 0) {
+          trackFirstControl()
+          if (firstSessionEligibleRef.current && !firstSessionMovedRef.current) {
+            firstSessionMovedRef.current = true
+            setFirstSessionMoved(true)
+          }
+        }
         if (mag > 1) {
           x /= mag
           y /= mag
@@ -16616,6 +16627,17 @@ export function World3D({
   // `z-index: 10`), então ficava aberto mas visualmente escondido até a contagem terminar.
   const hudInert = fullScreenInert || chatOpen || chatRadialOpen || rankingOpen || bagOpen || !!minigamePrompt
   hudInertRef.current = hudInert
+  const guideStep = firstSessionGuideStep(
+    firstSessionEligibleRef.current,
+    firstSessionMoved,
+    progress.completedQuestIds.length,
+    firstSessionGuideDismissed,
+  )
+  useEffect(() => {
+    if (guideStep !== 'reward' || hudInert) return
+    const timeout = window.setTimeout(() => setFirstSessionGuideDismissed(true), 15000)
+    return () => window.clearTimeout(timeout)
+  }, [guideStep, hudInert])
   // Deixar o `<canvas>` inteiro `inert` enquanto chat/ranking/mochila está aberto (como `hudInert`
   // sozinho faria) desabilitava ARRASTO DE CÂMERA/JOYSTICK na área livre inteira, não só na
   // caixinha do painel — muito mais amplo do que o necessário, e a causa provável do relato de
@@ -16783,7 +16805,13 @@ export function World3D({
           onClose={() => setPlanetPickerOpen(false)}
         />
       )}
-      <p className="world3d-hint">Caminhe até uma escolinha colorida pra abrir uma missão</p>
+      {guideStep && !hudInert && (
+        <p className="world3d-hint" role="status" aria-live="polite">
+          {guideStep === 'move' && 'Mova o boneco para explorar o planeta.'}
+          {guideStep === 'mission' && 'Encontre uma escolinha colorida e interaja para jogar a primeira missão.'}
+          {guideStep === 'reward' && 'Primeira recompensa conquistada! Explore os pets, planetas ou o Centro de Jogos.'}
+        </p>
+      )}
       <TouchJoystick onChange={handleJoystickChange} inert={hudInert} />
       <TouchActionButton
         className="touch-action-jump"

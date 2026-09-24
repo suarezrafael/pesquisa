@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 interface TutorialProps {
   onDone: () => void
+  quickStart?: boolean
 }
 
 const STEPS = [
@@ -27,10 +28,21 @@ const STEPS = [
   },
 ]
 
-export function Tutorial({ onDone }: TutorialProps) {
+export function Tutorial({ onDone, quickStart = false }: TutorialProps) {
   const [step, setStep] = useState(0)
   const isLast = step === STEPS.length - 1
   const current = STEPS[step]
+
+  if (quickStart) {
+    return (
+      <div className="screen tutorial-screen">
+        <div className="tutorial-emoji">🪐</div>
+        <h1>Sua primeira missão espera no planeta</h1>
+        <p className="subtitle">Explore à vontade. A escolinha colorida tem um desafio para você começar.</p>
+        <button type="button" className="primary-button" onClick={onDone}>Entrar no planeta</button>
+      </div>
+    )
+  }
 
   return (
     <div className="screen tutorial-screen">

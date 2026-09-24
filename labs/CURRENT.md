@@ -1,17 +1,23 @@
 # Laboratório atual
 
-Em andamento: labs/lab-233-controle-touch-camera/ - arrastar a metade direita
-no touch agora orienta integralmente o boneco na velocidade maxima do joystick
-esquerdo; pinça para zoom preservada e testada na logica. Base `1417859`;
-falta teste multitouch fisico no Redmi Pad 2. Ver `FEATURES.md` e `CONTEXT.md`.
-A PR #121 (Lab 232, primeira sessao) permanece em rascunho separada.
+Em andamento: labs/lab-232-primeira-sessao/ - UX 190 em fatia pequena: entrada
+curta e objetivos contextuais no mundo. Base `1417859`; testes/build/lint
+passaram, falta playtest com crianca no tablet. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
+Lab 233 publicado: arrastar a metade direita no touch orienta integralmente
+o boneco na velocidade maxima do joystick esquerdo; pinça para zoom preservada.
+PR #122 mesclada em `a85d959`; deploy de Vercel e Cloudflare Pages passou.
+Falta teste multitouch fisico no Redmi Pad 2; ver `FEATURES.md` e `CONTEXT.md`.
 
 ---
 
 Em andamento urgente: labs/lab-231-saida-parkour/ - corrigir o loop de
 checkpoint que impede a crianca de sair do parkour. Base `9dda215`; ver
-`FEATURES.md`. A PR #119 (Lab 230, lojinha infantil segura) permanece em
-rascunho numa branch separada; nao incluir nesta correcao.
+`FEATURES.md`. Correcao publicada, mas validacao no tablet pendente. A PR #119
+(Lab 230, lojinha infantil segura) permanece em rascunho numa branch separada.
 
 ---
 
