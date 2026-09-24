@@ -44,6 +44,13 @@ mudança, à parte deste laboratório.
 
 ## Rotas
 
+O `POST /players/heartbeat` continua aceitando clientes antigos. Quando o jogo envia
+`avatarEmoji` junto com o `secret` UUID do perfil, o Worker atualiza o avatar
+público apenas se o segredo corresponder ao `playerId`; um segredo inválido não
+autoriza essa atualização. O `equippedLook` efetivo é sincronizado no mesmo tick.
+Isso permite retirar visuais de assinatura da presença pública sem alterar o
+perfil salvo no aparelho. A atualização periódica pode demorar até 60 segundos.
+
 | Rota | Método | Autenticação | Função |
 |---|---|---|---|
 | `/health` | GET | nenhuma | Resposta estática barata (`{ ok: true }`) — prova só que o Worker está de pé, não consulta o Neon (lab-88: consultar o banco aqui deixava qualquer monitor de disponibilidade normal impedir o compute do Neon de suspender, queimando a cota gratuita) |

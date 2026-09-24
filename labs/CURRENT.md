@@ -1,10 +1,16 @@
 # Laboratório atual
 
-Em andamento: labs/lab-235-hud-fps-compacto/ - FPS numerico visivel com
-diagnostico recolhido por padrao, sem ocupar o jogo. Base `e387563`;
-build, testes, lint e navegador local passaram; validacao Android fisico
-pendente. Ver `FEATURES.md` e `CONTEXT.md`.
-O Lab 234 esta na PR #123 em rascunho, separado desta branch.
+Em andamento: labs/lab-234-visual-entitlement/ - aparencia efetiva quando o
+entitlement expira, sem apagar o perfil salvo. Inclui mundo, loja, amigos e
+heartbeat publico autenticado. Base `e387563`; testes locais passaram;
+validacao com assinatura real e tablet pendente. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
+Lab 235 publicado: FPS numerico visivel com diagnostico recolhido por padrao.
+PR #124 mesclada na main em `6bc462a`; validacao Android fisico pendente.
+Ver `labs/lab-235-hud-fps-compacto/FEATURES.md` e `CONTEXT.md`.
 
 ---
 

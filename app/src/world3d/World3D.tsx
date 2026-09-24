@@ -8594,10 +8594,12 @@ export function World3D({
       footstepDustSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
       footstepDustSystem.emitRate = 0
 
-      const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, profile.equippedPantsColorId)
-      const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, profile.equippedShoeColorId)
-      const initialBackpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, profile.equippedBackpackColorId)
-      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(profile.avatarEmoji), shadowGenerator, {
+      // O entitlement pode mudar enquanto o setup assíncrono carrega os GLBs.
+      const initialProfile = profileRef.current
+      const initialPantsOpt = findColorOption(PANTS_COLOR_CATALOG, initialProfile.equippedPantsColorId)
+      const initialShoeOpt = findColorOption(SHOE_COLOR_CATALOG, initialProfile.equippedShoeColorId)
+      const initialBackpackOpt = findColorOption(BACKPACK_COLOR_CATALOG, initialProfile.equippedBackpackColorId)
+      const studentFigure = buildStudentFigure(scene, avatarColorFromEmoji(initialProfile.avatarEmoji), shadowGenerator, {
         pantsColor: initialPantsOpt ? new Color3(...initialPantsOpt.colorRgb) : undefined,
         shoeColor: initialShoeOpt ? new Color3(...initialShoeOpt.colorRgb) : undefined,
         backpackColor: initialBackpackOpt ? new Color3(...initialBackpackOpt.colorRgb) : undefined,
@@ -8605,26 +8607,26 @@ export function World3D({
       // lab-122: `buildStudentFigure` já deixa uma cor sólida padrão pronta acima — isso reaplica
       // com `applyClothingLook`, que também trata o `style` de itens exclusivos (textura/metálico),
       // não só a cor.
-      const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, profile.equippedShirtColorId)
-      applyClothingLook(studentFigure.shirtMat, initialShirtOpt, scene, avatarColorFromEmoji(profile.avatarEmoji), 0.7)
+      const initialShirtOpt = findColorOption(SHIRT_COLOR_CATALOG, initialProfile.equippedShirtColorId)
+      applyClothingLook(studentFigure.shirtMat, initialShirtOpt, scene, avatarColorFromEmoji(initialProfile.avatarEmoji), 0.7)
       applyClothingLook(studentFigure.pantsMat, initialPantsOpt, scene, new Color3(0.22, 0.28, 0.48), 0.8)
       applyClothingLook(studentFigure.shoeMat, initialShoeOpt, scene, new Color3(0.12, 0.12, 0.14), 0.7)
       applyClothingLook(
         studentFigure.backpackMat,
         initialBackpackOpt,
         scene,
-        Color3.Lerp(avatarColorFromEmoji(profile.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
+        Color3.Lerp(avatarColorFromEmoji(initialProfile.avatarEmoji), new Color3(0.5, 0.15, 0.1), 0.5),
         0.75,
       )
-      applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(profile.avatarEmoji), scene, shadowGenerator)
-      applyHat(studentFigure, profile.equippedHatId ? findHatById(profile.equippedHatId) ?? null : null, scene, shadowGenerator)
+      applyBonecoFeatures(studentFigure, bonecoFeaturesFromEmoji(initialProfile.avatarEmoji), scene, shadowGenerator)
+      applyHat(studentFigure, initialProfile.equippedHatId ? findHatById(initialProfile.equippedHatId) ?? null : null, scene, shadowGenerator)
       applyGlasses(
         studentFigure,
-        profile.equippedGlassesId ? findGlassesById(profile.equippedGlassesId) ?? null : null,
+        initialProfile.equippedGlassesId ? findGlassesById(initialProfile.equippedGlassesId) ?? null : null,
         scene,
         shadowGenerator,
       )
-      const initialHair = findHairShapeOption(profile.equippedHairShapeId)
+      const initialHair = findHairShapeOption(initialProfile.equippedHairShapeId)
       if (initialHair) applyHairShape(studentFigure, initialHair.shape, scene, shadowGenerator)
       studentFigure.root.position = spawnUp.scale(PLANET_RADIUS + terrainHeight(spawnUp) + 0.02)
       if (import.meta.env.DEV) (window as any).__playerFigure = studentFigure

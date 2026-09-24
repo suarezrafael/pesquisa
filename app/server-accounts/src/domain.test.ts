@@ -42,6 +42,7 @@ import {
   isValidProgressSummary,
   isValidSubscriptionStatus,
   isValidUuid,
+  normalizePublicAvatarEmoji,
   MAX_ACTIVE_DEVICES_PER_FAMILY,
   NPS_COOLDOWN_DAYS,
   resolveTrustedOrigin,
@@ -669,6 +670,20 @@ describe('isValidUuid (lab-159)', () => {
     expect(isValidUuid('')).toBe(false)
     expect(isValidUuid('não sou um uuid')).toBe(false)
     expect(isValidUuid('9b1deb4d-3b7d-4bad-9bdd')).toBe(false)
+  })
+})
+
+describe('normalizePublicAvatarEmoji', () => {
+  it('aceita o avatar do catalogo e remove espacos externos', () => {
+    expect(normalizePublicAvatarEmoji(' 🦊 ')).toBe('🦊')
+  })
+
+  it('recusa campos vazios, controles e texto desmedido', () => {
+    expect(normalizePublicAvatarEmoji(null)).toBeNull()
+    expect(normalizePublicAvatarEmoji('  ')).toBeNull()
+    expect(normalizePublicAvatarEmoji('🦊\n')).toBe('🦊')
+    expect(normalizePublicAvatarEmoji('🦊\ntexto')).toBeNull()
+    expect(normalizePublicAvatarEmoji('x'.repeat(33))).toBeNull()
   })
 })
 

@@ -50,6 +50,7 @@ import {
   isValidProgressSummary,
   isValidSubscriptionStatus,
   isValidUuid,
+  normalizePublicAvatarEmoji,
   NPS_COOLDOWN_DAYS,
   resolveTrustedOrigin,
   shouldPromptForNps,
@@ -962,6 +963,7 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
         houseFurnitureIds?: unknown
         housePlacements?: unknown
         houseVisible?: unknown
+        avatarEmoji?: unknown
         nickname?: unknown
         secret?: unknown
       }
@@ -1022,6 +1024,20 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
       return Response.json({ error: 'houseVisible inválido' }, { status: 400 })
     }
     houseVisible = body.houseVisible
+  }
+
+  let avatarEmoji: string | null = null
+  let avatarSecret: string | null = null
+  if (body.avatarEmoji !== undefined) {
+    const normalized = normalizePublicAvatarEmoji(body.avatarEmoji)
+    if (!normalized) {
+      return Response.json({ error: 'avatarEmoji inválido' }, { status: 400 })
+    }
+    if (typeof body.secret !== 'string' || !isValidUuid(body.secret)) {
+      return Response.json({ error: 'secret inválido' }, { status: 400 })
+    }
+    avatarEmoji = normalized
+    avatarSecret = body.secret
   }
 
   const sql = neon(env.DATABASE_URL)
@@ -1092,14 +1108,22 @@ async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   const rows = (await sql`
     update player_identities set
       last_seen_at = now(),
+      avatar_emoji = coalesce(${avatarEmoji}::text, avatar_emoji),
       equipped_look = coalesce(${equippedLookJson}::jsonb, equipped_look),
       badges = coalesce(${badgesJson}::jsonb, badges),
       house_furniture_ids = coalesce(${houseFurnitureIdsJson}::jsonb, house_furniture_ids),
       house_placements = coalesce(${housePlacementsJson}::jsonb, house_placements),
       house_visible = coalesce(${houseVisible}::boolean, house_visible)
-    where id = ${playerId} returning id
+    where id = ${playerId}
+      and (${avatarEmoji}::text is null or player_secret = ${avatarSecret}::uuid)
+    returning id
   `) as { id: string }[]
-  if (rows.length === 0) return Response.json({ error: 'jogador não encontrado' }, { status: 404 })
+  if (rows.length === 0) {
+    return Response.json(
+      { error: avatarEmoji ? 'não autorizado' : 'jogador não encontrado' },
+      { status: avatarEmoji ? 403 : 404 },
+    )
+  }
   return new Response(null, { status: 204 })
 }
 
