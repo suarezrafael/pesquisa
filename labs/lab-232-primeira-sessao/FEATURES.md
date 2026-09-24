@@ -1,6 +1,6 @@
 # Laboratorio 232 - Primeira sessao jogavel
 
-Status: implementacao local, validacao touch pendente
+Status: implementado, playtest touch pendente
 Inicio: 2026-09-23
 Fim: -
 Commit inicial: 1417859cce701dcb72fed8a5b526b41aed87c8a1

@@ -16,6 +16,8 @@
 - 296 testes passaram; `npm run build` passou; `npm run lint` passou com dois
   avisos preexistentes em `domain.test.ts` e `PetPanel.tsx`.
 - Ainda nao foi validado em crianca nem no Redmi Pad 2; UX 190 continua parcial.
+- Apos integrar a main com o Lab 233, 297 testes, build e lint passaram
+  novamente; o conflito ficou restrito ao indice `labs/CURRENT.md`.
 
 ## Proximo laboratorio
 
