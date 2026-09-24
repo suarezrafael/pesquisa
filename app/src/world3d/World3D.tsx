@@ -146,6 +146,7 @@ import { shouldUseDetailedTeacher, teacherProjectedHeightScale } from './teacher
 import { interactionHint, interactionInputForDevice } from './interactionHint'
 import { parkourFallAction } from './parkourFall'
 import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
+import { nearestInteraction } from './nearestInteraction'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -3296,7 +3297,7 @@ export function World3D({
     // (lab-150), e arrastar é um gesto só de ponteiro/toque.
     let cameraDragging = false
     let touchCameraTurnPending = 0
-    let outdoorDrag = false // true = arrasto começou do lado de fora (só giro); false = dentro de casa (giro+inclinação)
+    let outdoorDrag = false // true = arrasto começou fora de interiores (só giro); false = interior (giro+inclinação)
     // lab-153 (achado real do review automático do Copilot): sem rastrear QUAL ponteiro iniciou o
     // arrasto, um segundo dedo tocando em qualquer lugar (ex.: o `TouchJoystick` de movimento, do
     // lado esquerdo, ao mesmo tempo que a câmera é arrastada com o outro dedo) também disparava
@@ -3350,14 +3351,12 @@ export function World3D({
       }
       if (cameraDragPointerId !== null) return // já tem um dedo/ponteiro girando a câmera — ignora um segundo
       if (pinchPointers.size >= 2) return // pinça em andamento — não inicia giro de 1 dedo só
-      if (insideHouseInterior) {
-        outdoorDrag = false
-      } else {
-        if (!canvas) return
+      if (!canvas) return
+      if (e.pointerType === 'touch') {
         const rect = canvas.getBoundingClientRect()
         if (e.clientX < rect.left + rect.width / 2) return // metade esquerda: reservada pro joystick de movimento
-        outdoorDrag = true
       }
+      outdoorDrag = !insideHouseInterior
       cameraDragging = true
       cameraDragPointerId = e.pointerId
       cameraDragLastX = e.clientX
@@ -3391,10 +3390,11 @@ export function World3D({
       cameraDragLastX = e.clientX
       cameraDragLastY = e.clientY
       const yawDelta = dx * CAMERA_DRAG_SENSITIVITY
-      cameraYawOffsetRef.current += yawDelta
       if (e.pointerType === 'touch' && !hudInertRef.current && !drivingCar && !drivingRocket &&
           !placingFurnitureId && !restingInBedKey) {
         touchCameraTurnPending += yawDelta
+      } else {
+        cameraYawOffsetRef.current += yawDelta
       }
       // Inclinação vertical (pitch) é um recurso só de dentro de casa (câmera "esférica" do
       // lab-138) — do lado de fora a câmera usa um offset fixo de altura (ver `desiredCamPos` mais
@@ -4630,13 +4630,14 @@ export function World3D({
               }
             }
           }
-          for (const id of GAME_CENTER_PORTAL_IDS) {
-            if (Vector3.Distance(avatarMesh.position, gameCenterPortalPos[id]) < GAME_CENTER_TRIGGER_DISTANCE) {
-              handleGameCenterPortalInteract(id)
-              return
-            }
+          const nearestPortal = nearestInteraction(
+            avatarMesh.position, gameCenterPortalPos, GAME_CENTER_PORTAL_IDS, GAME_CENTER_TRIGGER_DISTANCE,
+          )
+          if (nearestPortal) {
+            handleGameCenterPortalInteract(nearestPortal)
+            return
           }
-        } else if (Vector3.Distance(avatarMesh.position, gameCenterDoorOutsidePos) < GAME_CENTER_TRIGGER_DISTANCE) {
+        } else if (Vector3.Distance(avatarMesh.position, gameCenterDoorOutsidePos) < GAME_CENTER_ENTRANCE_DISTANCE) {
           enterGameCenterInterior()
           return
         }
@@ -10700,13 +10701,9 @@ export function World3D({
       // criança precisa LER uma a uma).
       const GAME_CENTER_ROOM_HALF_SIZE = 7
 
-      // Duas candidatas anteriores rejeitadas ao vivo: (0.15,0.7,-0.7) media só ~30° do hub
-      // (lab-196) — abaixo da folga mínima que o próprio hub manteve dos vizinhos dele (~35-64°);
-      // (0.75,0.55,0.4) caiu perto demais de uma formação rochosa (câmera 3ª pessoa presa olhando
-      // de cima, achado ao vivo); (0.85,0.15,0.5) media só ~12,7° de `SHOP_ANCHOR_UP` (Lojinha) —
-      // etiquetas sobrepostas na tela, confirmado ao vivo. Esta mede ~93° do hub, ~52° da casa,
-      // ~80° da Lojinha, ~103°/117° de parkour/ponte — confirmada ao vivo sem sobreposição.
-      const GAME_CENTER_CANDIDATE_UP = new Vector3(-0.2, 0.3, 0.9).normalize()
+      // Entrada reposicionada com folga do circuito dos carros (a rua cruza latitude 25 graus,
+      // esta candidata fica perto de 58 graus). A busca abaixo preserva o apoio no relevo.
+      const GAME_CENTER_CANDIDATE_UP = new Vector3(-0.35, 0.52, 0.78).normalize()
       const GAME_CENTER_FOOTPRINT_ANGULAR_RADIUS = 1.6 / PLANET_RADIUS
       const GAME_CENTER_SAFE_TERRAIN_VARIANCE = 0.6
       const gameCenterUp = findFlatterUpReal(
@@ -10716,6 +10713,7 @@ export function World3D({
       )
       const gameCenterSurfacePos = groundSurfacePosition(gameCenterUp)
       const GAME_CENTER_TRIGGER_DISTANCE = 1.6
+      const GAME_CENTER_ENTRANCE_DISTANCE = 2.2
       // `ARENA_TARGET_TRIGGER_DISTANCE` (declarado no topo do closure, junto do resto do
       // controlador genérico de arena) é menor que `GAME_CENTER_TRIGGER_DISTANCE` de propósito —
       // os alvos de qualquer arena (cartas de memória, placas de Contar) ficam bem mais perto entre
@@ -10774,7 +10772,7 @@ export function World3D({
       settleMeshOnTerrain(gameCenterBase, gameCenterUp)
       gameCenterSurfacePos.copyFrom(gameCenterBase.position)
       gameCenterDoorOutsidePos = gameCenterBase.position.add(
-        Vector3.TransformNormal(gameCenterDoor.position, gameCenterBase.getWorldMatrix()),
+        Vector3.TransformNormal(gameCenterDoor.position.add(new Vector3(0, 0, 0.8)), gameCenterBase.getWorldMatrix()),
       )
 
       const gameCenterSignLabel = new TextBlock('gameCenterSignLabel', '🎮 Centro de Jogos')
@@ -10934,12 +10932,10 @@ export function World3D({
           new Vector3(0, AVATAR_RADIUS + 0.05, -(S - spawnClearanceFromBackWall)),
         )
 
-        // 4 placas em leque, de frente pra porta (mesmo espírito do anel de mobília da casa, só
-        // que num arco fixo em vez de posições aleatórias — só 4 placas, sempre as mesmas, fica
-        // mais legível numa fileira do que espalhadas).
+        // 4 placas em leque com mais separação para reduzir a sobreposição dos gatilhos.
         const arcSpan = Math.PI * 0.55
         const arcStart = -arcSpan / 2
-        const ringRadius = S - 2.2
+        const ringRadius = S - 1.7
         GAME_CENTER_PORTAL_IDS.forEach((id, index) => {
           const info = GAME_CENTER_PORTAL_INFO[id]
           const angle = arcStart + (arcSpan * index) / (GAME_CENTER_PORTAL_IDS.length - 1)
@@ -11424,13 +11420,20 @@ export function World3D({
         wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(gameCenterInteriorSpawnPos)
+        facing = Vector3.Forward()
+        camera.position.copyFrom(
+          gameCenterInteriorSpawnPos
+            .subtract(facing.scale(HOUSE_INTERIOR_CAMERA_DISTANCE))
+            .add(Vector3.Up().scale(HOUSE_INTERIOR_CAMERA_HEIGHT)),
+        )
+        camera.upVector.copyFrom(Vector3.Up())
+        camera.setTarget(gameCenterInteriorSpawnPos)
         scene.render()
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
         // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo`.
         wasGroundedLastFrame = true
-        facing = new Vector3(0, 0, 1)
         trackGameCenterEntered()
       }
 
@@ -13982,8 +13985,6 @@ export function World3D({
             const followStep = touchCameraFollowStep(touchCameraTurnPending, dt, TURN_RATE)
             if (followStep !== 0) {
               facing = rotateAroundAxis(facing, localUp, followStep)
-              // Keep the camera's world-space bearing while the figure catches up.
-              cameraYawOffsetRef.current -= followStep
               touchCameraTurnPending -= followStep
             } else {
               touchCameraTurnPending = 0
@@ -15713,7 +15714,7 @@ export function World3D({
         // só uma das duas portas fica visível por vez (fora/dentro), mais 1 dica por placa.
         if (avatarMesh && gameCenterEnterHintLabel) {
           gameCenterEnterHintLabel.alpha =
-            !insideHouseInterior && isWithinDistance(avatarMesh.position, gameCenterDoorOutsidePos, GAME_CENTER_TRIGGER_DISTANCE)
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, gameCenterDoorOutsidePos, GAME_CENTER_ENTRANCE_DISTANCE)
               ? 1
               : 0
         }
@@ -15723,11 +15724,14 @@ export function World3D({
               ? 1
               : 0
         }
+        const nearestPortal = avatarMesh && insideGameCenterInterior
+          ? nearestInteraction(avatarMesh.position, gameCenterPortalPos, GAME_CENTER_PORTAL_IDS, GAME_CENTER_TRIGGER_DISTANCE)
+          : null
         for (const id of GAME_CENTER_PORTAL_IDS) {
           const label = gameCenterPortalHintLabel[id]
           if (avatarMesh && label) {
             label.alpha =
-              insideGameCenterInterior && isWithinDistance(avatarMesh.position, gameCenterPortalPos[id], GAME_CENTER_TRIGGER_DISTANCE)
+              id === nearestPortal
                 ? 1
                 : 0
           }
@@ -15778,7 +15782,12 @@ export function World3D({
         // só existe dentro do bloco `if (avatarBody && avatarMesh)` acima, já fechado aqui).
         if (!drivingCar && avatarMesh) {
           for (const car of carros) {
-            car.hintLabel.alpha = isWithinDistance(avatarMesh.position, car.root.position, CAR_ENTER_DISTANCE) ? 1 : 0
+            car.hintLabel.alpha =
+              !insideHouseInterior &&
+              !isWithinDistance(avatarMesh.position, gameCenterDoorOutsidePos, GAME_CENTER_ENTRANCE_DISTANCE) &&
+              isWithinDistance(avatarMesh.position, car.root.position, CAR_ENTER_DISTANCE)
+                ? 1
+                : 0
           }
         } else {
           for (const car of carros) car.hintLabel.alpha = 0
