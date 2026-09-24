@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Em andamento: labs/lab-233-controle-touch-camera/ - arrastar a metade direita
+no touch agora orienta integralmente o boneco na velocidade maxima do joystick
+esquerdo; pinça para zoom preservada e testada na logica. Base `1417859`;
+falta teste multitouch fisico no Redmi Pad 2. Ver `FEATURES.md` e `CONTEXT.md`.
+A PR #121 (Lab 232, primeira sessao) permanece em rascunho separada.
+
+---
+
 Em andamento urgente: labs/lab-231-saida-parkour/ - corrigir o loop de
 checkpoint que impede a crianca de sair do parkour. Base `9dda215`; ver
 `FEATURES.md`. A PR #119 (Lab 230, lojinha infantil segura) permanece em
