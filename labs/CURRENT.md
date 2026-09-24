@@ -1,8 +1,16 @@
 # Laboratório atual
 
+Em andamento: labs/lab-236-revalidacao-entitlement/ - revalidar assinatura
+durante sessao longa e sincronizar look publico na transicao. Base `e5dfa81`;
+testes locais passaram, validacao com assinatura real e tablet pendente.
+Ver `FEATURES.md` e `CONTEXT.md`.
+
+---
+
 Em andamento: labs/lab-227-validacao-lod-android/ - a coleta do Redmi Pad 2
 marcou 30,44 FPS medios, mas `simpleTeachersAvg: 0`. A PR #116 ajusta o
-criterio de LOD por tamanho aparente; medir novamente no tablet e conferir
+criterio de LOD por tamanho aparente e foi publicada na main em `e5dfa81`;
+medir novamente no tablet e conferir
 a aparencia dos professores antes de atribuir ganho de desempenho.
 
 ---
