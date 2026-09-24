@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Em andamento: labs/lab-234-visual-entitlement/ - aparencia efetiva quando o
+entitlement expira, sem apagar o perfil salvo. Inclui mundo, loja, amigos e
+heartbeat publico autenticado. Base `e387563`; testes locais passaram;
+validacao com assinatura real e tablet pendente. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
 Em andamento: labs/lab-232-primeira-sessao/ - UX 190 em fatia pequena: entrada
 curta e objetivos contextuais no mundo. Base `1417859`; testes/build/lint
 passaram, falta playtest com crianca no tablet. Ver `FEATURES.md` e

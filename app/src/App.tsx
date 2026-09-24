@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleScreen } from './components/TitleScreen'
 import { Onboarding } from './components/Onboarding'
 import { ProfilePicker } from './components/ProfilePicker'
@@ -20,6 +20,7 @@ import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
+import { effectiveCosmeticProfile } from './state/effectiveCosmeticProfile'
 import { useHeartbeat, sendImmediateHouseVisibility, sendImmediateNicknameChange } from './state/useHeartbeat'
 import type { PublicHouseSnapshot } from './state/usePlayerPublicProfile'
 import {
@@ -254,7 +255,11 @@ function GameApp() {
   const [dailyLoginReward, setDailyLoginReward] = useState<{ streak: number; coins: number } | null>(null)
   const { entitlement, redeemCode, redeeming, redeemError, syncProgressSummary, syncProgressBackup, fetchProgressBackup } =
     useEntitlement()
-  useHeartbeat(profile, progress)
+  const visibleProfile = useMemo(
+    () => profile ? effectiveCosmeticProfile(profile, entitlement?.active ?? false) : null,
+    [profile, entitlement?.active],
+  )
+  useHeartbeat(visibleProfile, progress)
   // Múltiplos perfis por aparelho (lab-108) — lido no topo do componente, reaproveitado tanto pra
   // decidir se mostra o `ProfilePicker` (quando não há perfil ativo) quanto pra decidir se mostra
   // o botão de trocar perfil no HUD (só faz sentido com 2+ perfis já criados neste aparelho).
@@ -320,6 +325,8 @@ function GameApp() {
     }
     return <Onboarding onDone={createProfile} />
   }
+
+  const gameProfile = visibleProfile ?? profile
 
   if (!tutorialSeen) {
     return (
@@ -631,7 +638,7 @@ function GameApp() {
     <>
       <Suspense fallback={<div className="world-loading">Carregando o mundo 3D…</div>}>
         <World3D
-          profile={profile}
+          profile={gameProfile}
           progress={progress}
           entitlementActive={entitlement?.active ?? false}
           onSelectQuest={handleSelectQuest}
@@ -849,7 +856,7 @@ function GameApp() {
       )}
 
       {showFriends && (
-        <FriendsPanel profile={profile} onClose={() => setShowFriends(false)} onVisitHouse={handleVisitHouse} />
+        <FriendsPanel profile={gameProfile} onClose={() => setShowFriends(false)} onVisitHouse={handleVisitHouse} />
       )}
 
       {showMarsReward && <MarsRewardToast onContinue={() => setShowMarsReward(false)} />}
@@ -864,7 +871,7 @@ function GameApp() {
 
       {showShop && (
         <AvatarShop
-          profile={profile}
+          profile={gameProfile}
           progress={progress}
           entitlementActive={entitlement?.active ?? false}
           onUnlock={unlockAvatar}
