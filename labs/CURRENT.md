@@ -8,6 +8,12 @@ validacao com assinatura real e tablet pendente. Ver `FEATURES.md` e
 
 ---
 
+Lab 235 publicado: FPS numerico visivel com diagnostico recolhido por padrao.
+PR #124 mesclada na main em `6bc462a`; validacao Android fisico pendente.
+Ver `labs/lab-235-hud-fps-compacto/FEATURES.md` e `CONTEXT.md`.
+
+---
+
 Em andamento: labs/lab-232-primeira-sessao/ - UX 190 em fatia pequena: entrada
 curta e objetivos contextuais no mundo. Base `1417859`; testes/build/lint
 passaram, falta playtest com crianca no tablet. Ver `FEATURES.md` e
