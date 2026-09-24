@@ -2,8 +2,15 @@
 
 Em andamento: labs/lab-232-primeira-sessao/ - UX 190 em fatia pequena: entrada
 curta e objetivos contextuais no mundo. Base `1417859`; testes/build/lint
-passaram, falta playtest com crianca no tablet. O pedido posterior de controle
-touch da camera sera um lab separado. Ver `FEATURES.md` e `CONTEXT.md`.
+passaram, falta playtest com crianca no tablet. Ver `FEATURES.md` e
+`CONTEXT.md`.
+
+---
+
+Lab 233 publicado: arrastar a metade direita no touch orienta integralmente
+o boneco na velocidade maxima do joystick esquerdo; pinça para zoom preservada.
+PR #122 mesclada em `a85d959`; deploy de Vercel e Cloudflare Pages passou.
+Falta teste multitouch fisico no Redmi Pad 2; ver `FEATURES.md` e `CONTEXT.md`.
 
 ---
 

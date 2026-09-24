@@ -145,7 +145,7 @@ import { freezeStaticHierarchy, instantiateStaticHierarchy } from './staticHiera
 import { shouldUseDetailedTeacher } from './teacherDetail'
 import { interactionHint, interactionInputForDevice } from './interactionHint'
 import { parkourFallAction } from './parkourFall'
-import { TOUCH_CAMERA_FOLLOW_SHARE, touchCameraFollowStep } from './touchCameraFollow'
+import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -3373,13 +3373,12 @@ export function World3D({
         if (pinchPointers.size === 2 && pinchStartDistance > 0) {
           const [p1, p2] = Array.from(pinchPointers.values())
           const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
-          const scale = distance / pinchStartDistance
           const zoomRef = insideHouseInterior ? houseCameraZoomRef : outdoorCameraZoomRef
           const zoomMin = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MIN : OUTDOOR_CAMERA_ZOOM_MIN
           const zoomMax = insideHouseInterior ? HOUSE_CAMERA_ZOOM_MAX : OUTDOOR_CAMERA_ZOOM_MAX
           // Afastar os dedos (`scale > 1`) aproxima a câmera (divide, não multiplica) — mesma
           // convenção de "pinça pra dentro" já esperada de fotos/mapas em qualquer app de toque.
-          zoomRef.current = Math.max(zoomMin, Math.min(zoomMax, pinchStartZoom / scale))
+          zoomRef.current = pinchZoom(pinchStartZoom, pinchStartDistance, distance, zoomMin, zoomMax)
         }
       }
       // lab-149 (achado do review automático do Copilot): se o jogador começasse a arrastar dentro
@@ -3399,7 +3398,7 @@ export function World3D({
       cameraYawOffsetRef.current += yawDelta
       if (e.pointerType === 'touch' && !hudInertRef.current && !drivingCar && !drivingRocket &&
           !placingFurnitureId && !restingInBedKey) {
-        touchCameraTurnPending += yawDelta * TOUCH_CAMERA_FOLLOW_SHARE
+        touchCameraTurnPending += yawDelta
       }
       // Inclinação vertical (pitch) é um recurso só de dentro de casa (câmera "esférica" do
       // lab-138) — do lado de fora a câmera usa um offset fixo de altura (ver `desiredCamPos` mais
@@ -13977,7 +13976,7 @@ export function World3D({
           }
 
           if (touchCameraTurnPending !== 0) {
-            const followStep = touchCameraFollowStep(touchCameraTurnPending, dt)
+            const followStep = touchCameraFollowStep(touchCameraTurnPending, dt, TURN_RATE)
             if (followStep !== 0) {
               facing = rotateAroundAxis(facing, localUp, followStep)
               // Keep the camera's world-space bearing while the figure catches up.
