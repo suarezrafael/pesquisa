@@ -1,8 +1,8 @@
 # Laboratório atual
 
-Em andamento: labs/lab-234-visual-entitlement/ - aparencia efetiva quando o
+Lab 234 publicado: labs/lab-234-visual-entitlement/ - aparencia efetiva quando o
 entitlement expira, sem apagar o perfil salvo. Inclui mundo, loja, amigos e
-heartbeat publico autenticado. Base `e387563`; testes locais passaram;
+heartbeat publico autenticado. PR #123 mesclada em `9d50879`;
 validacao com assinatura real e tablet pendente. Ver `FEATURES.md` e
 `CONTEXT.md`.
 
@@ -30,14 +30,21 @@ Falta teste multitouch fisico no Redmi Pad 2; ver `FEATURES.md` e `CONTEXT.md`.
 
 Em andamento urgente: labs/lab-231-saida-parkour/ - corrigir o loop de
 checkpoint que impede a crianca de sair do parkour. Base `9dda215`; ver
-`FEATURES.md`. Correcao publicada, mas validacao no tablet pendente. A PR #119
-(Lab 230, lojinha infantil segura) permanece em rascunho numa branch separada.
+`FEATURES.md`. PR #120 mesclada e publicada em `1417859`; falta testar a
+saida e reentrada no Redmi Pad 2.
 
 ---
 
-Em andamento: labs/lab-229-linguagem-interativos/ - primeira fatia do UX 188:
-dicas de proximidade coerentes entre teclado (E) e toque (botao E) para carro,
-foguete, casa e portais. Base `14da8e0`; ver `FEATURES.md`.
+Em revisao na PR #119: labs/lab-230-lojinha-infantil-segura/ - UX 189,
+copias e estados de itens visuais no jogo infantil. Base `9dda215`; ver
+`FEATURES.md` e `AUDIT.md`. Nao publicado.
+
+---
+
+Ultimo encerrado administrativamente com pendencias: lab-229-linguagem-interativos/.
+Dicas de teclado/toque publicadas pela PR #118 (`9dda215`). O usuario confirmou
+que o botao E funcionou no Redmi Pad 2, mas nao confirmou a legibilidade das
+dicas perto dos objetos. UX 188 segue parcial; ver `FEATURES.md` e `CONTEXT.md`.
 
 ---
 

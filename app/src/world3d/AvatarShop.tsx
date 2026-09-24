@@ -13,6 +13,7 @@ import {
 } from '../data/customization'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Profile, Progress } from '../types'
+import { FamilyVisualTag } from './FamilyVisualTag'
 
 // Carregado sob demanda, não no bundle principal (mesmo raciocínio de `World3D`/`FamilyPortal`
 // em App.tsx) — `AvatarPreview3D` importa `@babylonjs/core` pra desenhar o preview de verdade, e
@@ -104,9 +105,7 @@ function ColorSection({
           return (
             <div key={opt.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
               <span className="avatar-shop-swatch" style={{ background: `rgb(${r}, ${g}, ${b})` }} />
-              <span className="avatar-shop-name">
-                {opt.name} {opt.subscriptionOnly && '👑'}
-              </span>
+              <span className="avatar-shop-name">{opt.name}</span>
 
               {equipped && <span className="avatar-shop-tag">Em uso</span>}
 
@@ -117,7 +116,7 @@ function ColorSection({
               )}
 
               {!equipped && !usable && opt.subscriptionOnly && (
-                <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+                <FamilyVisualTag />
               )}
 
               {!usable && !opt.subscriptionOnly && (
@@ -250,7 +249,7 @@ export function AvatarShop({
         <h2>Lojinha de avatares</h2>
         <p className="subtitle">
           Troque as moedas que você coletou por novos personagens. Os desafios e a aprendizagem
-          continuam grátis para todo mundo.
+          continuam grátis para todo mundo. Alguns visuais fazem parte da coleção da família.
         </p>
 
         {/* Preview 3D (lab-87, pedido do usuário: "mostrar um menu com um preview 3D do avatar e
@@ -307,9 +306,7 @@ export function AvatarShop({
                   className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}
                 >
                   <span className="avatar-shop-emoji">{avatar.emoji}</span>
-                  <span className="avatar-shop-name">
-                    {avatar.name} {avatar.subscriptionOnly && '👑'}
-                  </span>
+                  <span className="avatar-shop-name">{avatar.name}</span>
 
                   {equipped && <span className="avatar-shop-tag">Em uso</span>}
 
@@ -319,9 +316,7 @@ export function AvatarShop({
                     </button>
                   )}
 
-                  {!equipped && !usable && avatar.subscriptionOnly && (
-                    <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
-                  )}
+                  {!equipped && !usable && avatar.subscriptionOnly && <FamilyVisualTag />}
 
                   {!usable && !avatar.subscriptionOnly && (
                     <button
@@ -366,9 +361,7 @@ export function AvatarShop({
                 return (
                   <div key={hat.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
                     <span className="avatar-shop-emoji">{hat.emoji}</span>
-                    <span className="avatar-shop-name">
-                      {hat.name} {hat.subscriptionOnly && '👑'} {hat.marsRewardOnly && '🪐'}
-                    </span>
+                    <span className="avatar-shop-name">{hat.name} {hat.marsRewardOnly && '🪐'}</span>
 
                     {equipped && <span className="avatar-shop-tag">Em uso</span>}
 
@@ -378,14 +371,11 @@ export function AvatarShop({
                       </button>
                     )}
 
-                    {!equipped && !usable && hat.subscriptionOnly && (
-                      <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
-                    )}
+                    {!equipped && !usable && hat.subscriptionOnly && <FamilyVisualTag />}
 
-                    {/* lab-94: brinde exclusivo de Marte — nunca compra com moeda, mesma tag
-                        visual do bloqueio de assinatura (`subscription-lock`), texto diferente. */}
+                    {/* Brinde de Marte: indisponivel ate a conquista, nunca comprado com moeda. */}
                     {!equipped && !usable && hat.marsRewardOnly && (
-                      <span className="avatar-shop-tag subscription-lock">🪐 Vença Marte</span>
+                      <span className="avatar-shop-tag item-unavailable">🪐 Vença Marte</span>
                     )}
 
                     {!usable && !hat.subscriptionOnly && !hat.marsRewardOnly && (
@@ -430,9 +420,7 @@ export function AvatarShop({
                 return (
                   <div key={glasses.id} className={`avatar-shop-item ${equipped ? 'equipped' : ''} ${!usable ? 'locked' : ''}`}>
                     <span className="avatar-shop-emoji">{glasses.emoji}</span>
-                    <span className="avatar-shop-name">
-                      {glasses.name} {glasses.subscriptionOnly && '👑'}
-                    </span>
+                    <span className="avatar-shop-name">{glasses.name}</span>
 
                     {equipped && <span className="avatar-shop-tag">Em uso</span>}
 
@@ -442,9 +430,7 @@ export function AvatarShop({
                       </button>
                     )}
 
-                    {!equipped && !usable && glasses.subscriptionOnly && (
-                      <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
-                    )}
+                    {!equipped && !usable && glasses.subscriptionOnly && <FamilyVisualTag />}
 
                     {!usable && !glasses.subscriptionOnly && (
                       <button

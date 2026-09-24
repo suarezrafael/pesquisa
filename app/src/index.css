@@ -536,8 +536,8 @@ a.nickname-generate-btn {
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
   background: #fff3d6;
-  /* lab-120, auditoria WCAG AA: escurecido de #9a6b1a (4.24:1 aqui, 3.69:1 no outro uso —
-     `.avatar-shop-tag.subscription-lock` — abaixo do mínimo AA de 4.5:1) */
+  /* lab-120, auditoria WCAG AA: escurecido de #9a6b1a (4.24:1 aqui, 3.69:1
+     em `.avatar-shop-tag.item-unavailable`) — abaixo do minimo AA de 4.5:1. */
   color: #845c16;
 }
 
@@ -1948,9 +1948,8 @@ a.nickname-generate-btn {
   color: var(--primary-dark);
 }
 
-/* Item exclusivo de assinante (Fase E) — mesmo espaço visual do botão de compra, sem ação de
-   clique (a criança não tem como comprar nada; o pagamento só existe no portal do responsável). */
-.avatar-shop-tag.subscription-lock {
+/* Estado informativo, sem CTA infantil; assinatura e preco ficam no portal adulto. */
+.avatar-shop-tag.item-unavailable {
   color: #845c16;
 }
 

@@ -3,14 +3,14 @@
 // de mobília por compra de verdade com moeda — reaproveita a mesma grade/botões de
 // `AvatarShop.tsx` (`.avatar-shop-grid`/`.avatar-shop-item`/`.avatar-shop-emoji`/
 // `.avatar-shop-action`), sem eixo de "equipar" (a casa não é uma cena 3D navegável ainda — cada
-// item é só possuído ou não). lab-107 acrescentou os 2 sets exclusivos de assinante ("Quarto
-// Espacial", "Jardim Encantado") — mesma regra `usable = subscriptionOnly ? entitlementActive :
-// owned` e tag "🔒 Assinantes" já usadas em `AvatarShop.tsx` pra chapéus/óculos exclusivos.
+// item é só possuído ou não). lab-107 acrescentou dois sets da coleção da família;
+// a regra de uso segue `subscriptionOnly ? entitlementActive : owned`.
 import { useState } from 'react'
 import { FURNITURE_CATALOG } from '../data/furniture'
 import { furnitureQuantity } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
 import type { Progress } from '../types'
+import { FamilyVisualTag } from './FamilyVisualTag'
 
 interface MyHousePanelProps {
   progress: Progress
@@ -113,9 +113,7 @@ export function MyHousePanel({
             return (
               <div key={item.id} className={`avatar-shop-item ${owned ? 'equipped' : ''}`}>
                 <span className="avatar-shop-emoji">{item.emoji}</span>
-                <span className="avatar-shop-name">
-                  {item.name} {item.subscriptionOnly && '👑'}
-                </span>
+                <span className="avatar-shop-name">{item.name}</span>
 
                 {owned && (
                   <span className="avatar-shop-tag">✓ Tem{quantity > 1 ? ` (${quantity})` : ''}</span>
@@ -146,11 +144,11 @@ export function MyHousePanel({
                 })}
 
                 {!owned && item.subscriptionOnly && (
-                  <span className="avatar-shop-tag subscription-lock">🔒 Assinantes</span>
+                  <FamilyVisualTag />
                 )}
 
                 {!owned && item.planetReward && (
-                  <span className="avatar-shop-tag subscription-lock">🔒 Conquiste o planeta</span>
+                  <span className="avatar-shop-tag item-unavailable">🪐 Conquiste o planeta</span>
                 )}
 
                 {canBuyMore && (
