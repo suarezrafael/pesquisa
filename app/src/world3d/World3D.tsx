@@ -12114,7 +12114,7 @@ export function World3D({
         const feedbackPos = arenaTargetPositions.logica?.[index] ?? gameCenterPortalPos.logica
         if (!correct) {
           showPuzzleFeedback(feedbackPos, 'try-again')
-          if (gameCenterLogicStatusLabel) gameCenterLogicStatusLabel.text = '🤔 Observe como a sequência muda e tente outra placa'
+          if (gameCenterLogicStatusLabel) gameCenterLogicStatusLabel.text = '🤔 Observe a sequência e tente outra placa'
           return
         }
         const completed = isLogicGameComplete(state)
