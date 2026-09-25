@@ -1,9 +1,15 @@
 # Laboratório atual
 
-Em andamento: labs/lab-238-toque-direto-portais/ - toque direto nas placas do
-saguão, sem confundir arraste/pinça; implementação e testes locais concluídos,
-validação no tablet pendente. Branch separada da PR #125. Ver `FEATURES.md` e
-`CONTEXT.md`.
+Lab 239 implementado: labs/lab-239-logica-imersiva/ - portal Logica da Central
+agora abre uma arena 3D de padroes; testes e build locais passaram. A partida
+completa no interior e o toque fisico no Redmi Pad 2 ainda precisam de validacao.
+Ver `FEATURES.md` e `CONTEXT.md`.
+
+---
+
+Lab 238 publicado: toque direto nas placas da Central de Jogos, preservando
+arraste, pinca e E. PR #127 mesclada em `1a9ee9d`; teste no Redmi Pad 2 pendente.
+Ver `labs/lab-238-toque-direto-portais/FEATURES.md` e `CONTEXT.md`.
 
 ---
 

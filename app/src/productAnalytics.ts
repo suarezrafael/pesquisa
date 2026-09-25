@@ -237,11 +237,9 @@ export function trackLearningChallengeCompleted(kind: string): void {
 
 // Backlog "Lab 209 - Hub de mini-jogos e teleport por botão no chão" — nomes exatos citados pelo
 // documento. `minigameId` identifica qual pedestal do hub (`"parkour1"`, `"ponte-logica"`).
-// `minigame_completed` dispara ao voltar pro hub pelo pedestal de retorno de QUALQUER dos dois
-// mini-jogos, não ao resolver o desafio internamente (parkour não tem estado de "resolvido"
-// persistido, e o quiz da ponte roda inteiramente noutro componente) — mede "fez a ida-e-volta
-// pelo hub", não "acertou a missão", mesmo espírito de aproximação já aceito em
-// `trackLearningChallengeStarted` acima (documentado explicitamente, não escondido).
+// No hub, `minigame_completed` dispara ao voltar pelo pedestal de retorno, não ao resolver o
+// desafio internamente. Nas arenas da Central, dispara ao vencer a tentativa; os ids distinguem
+// o desafio da ponte (`ponte-logica`) da arena de padrões (`logica`).
 export function trackMinigameStarted(minigameId: string): void {
   trackEvent('minigame_started', { minigameId })
   trackFirstMinigame()

@@ -53,6 +53,14 @@ import { quests } from '../data/quests'
 import { selectEnvironmentalChallengeQuest } from '../state/progression'
 import { createMemoryGame, flipMemoryCard, isMemoryGameComplete, type MemoryGameState } from '../state/memoryGame'
 import {
+  LOGIC_ROUNDS_TO_WIN,
+  answerLogicRound,
+  createLogicGame,
+  currentLogicRound,
+  isLogicGameComplete,
+  type LogicGameState,
+} from '../state/logicGame'
+import {
   COUNTING_ROUNDS_TO_WIN,
   answerCountingRound,
   createCountingGame,
@@ -252,20 +260,16 @@ interface World3DProps {
   onCollectPostcard: (planetId: string) => boolean
   onCollectCoin: () => void
   // Progresso/troféus do centro de jogos (backlog "Lab 217") — chamado 1x por CONCLUSÃO de verdade
-  // de qualquer arena (memória/contar/soletrar). `App.tsx` repassa pra
+  // de qualquer arena (memória/contar/soletrar/lógica). `App.tsx` repassa pra
   // `useProgress().gameCenterMinigameCompleted`, retorna sincronamente se essa conclusão cruzou um
   // troféu novo e/ou concedeu o bônus da missão semanal — usado aqui só pra decidir a MENSAGEM de
   // status a mostrar (a moeda em si já foi creditada por `onCollectCoin` antes desta chamada).
   // `newCompletions` (a contagem NOVA, não só `newTrophy`) é necessário porque `setProgress` não é
   // síncrono — `progressRef.current` só reflete esta conclusão no PRÓXIMO render, tarde demais pra
   // atualizar o troféu visual AINDA NESTA visita sem esperar a criança sair e voltar (achado ao
-  // revisar o próprio código antes de qualquer teste, ver FEATURES.md do backlog "Lab 217"). O desafio de
-  // Lógica (`kind: 'bridge'`) NÃO passa por aqui — é detectado direto em `App.tsx` (mesmo handler
-  // que já processa `completeQuest` pra qualquer desafio ambiental), então o troféu visual da
-  // placa "Lógica" só reflete uma conclusão na PRÓXIMA vez que a criança entrar no centro de jogos
-  // (`refreshGameCenterTrophyVisuals`, chamado em `enterGameCenterInterior`) — essa parte É uma
-  // limitação conhecida e aceita, sem `newCompletions` equivalente pra contornar (ver FEATURES.md).
-  onGameCenterMinigameCompleted: (category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>) => {
+  // revisar o próprio código antes de qualquer teste, ver FEATURES.md do backlog "Lab 217").
+  // A ponte de lógica fora da Central continua sendo um desafio ambiental separado.
+  onGameCenterMinigameCompleted: (category: GameCenterCategory) => {
     newTrophy: GameCenterTrophyTier | null
     weeklyQuestRewardGranted: boolean
     newCompletions: number
@@ -3288,7 +3292,7 @@ export function World3D({
     let cameraDragging = false
     let touchCameraTurnPending = 0
     let portalTapStart: { pointerId: number; x: number; y: number } | null = null
-    let selectGameCenterPortalAt: ((clientX: number, clientY: number) => void) | null = null
+    let selectGameCenterTapTargetAt: ((clientX: number, clientY: number) => void) | null = null
     let outdoorDrag = false // true = arrasto começou fora de interiores (só giro); false = interior (giro+inclinação)
     // lab-153 (achado real do review automático do Copilot): sem rastrear QUAL ponteiro iniciou o
     // arrasto, um segundo dedo tocando em qualquer lugar (ex.: o `TouchJoystick` de movimento, do
@@ -3417,7 +3421,7 @@ export function World3D({
         cameraDragging = false
         cameraDragPointerId = null
       }
-      if (activatePortal && pinchPointers.size === 0) selectGameCenterPortalAt?.(e.clientX, e.clientY)
+      if (activatePortal && pinchPointers.size === 0) selectGameCenterTapTargetAt?.(e.clientX, e.clientY)
     }
     function onCameraWheel(e: WheelEvent) {
       // Cobre tanto dentro quanto fora de casa (`insideHouseInterior`), cada um com seu próprio
@@ -3765,7 +3769,7 @@ export function World3D({
     // a contagem regressiva/cronômetro opcional/label de status já prontos: registrar um mini-jogo
     // novo agora é "poucos pontos de código" (o próprio critério de aceite do lab-213) — um objeto
     // de config + os alvos 3D dele, não uma segunda cópia de `beginArenaCountdown`/`tickArenaTimer`.
-    type ArenaId = 'memoria' | 'contar' | 'soletrar'
+    type ArenaId = GameCenterPortalId
     interface ArenaConfig {
       label: string
       timeLimitS: number | null
@@ -3862,6 +3866,13 @@ export function World3D({
     const gcSpellingTileLabels: TextBlock[] = []
     const gcSpellingTileHintLabel: TextBlock[] = []
     let gameCenterSpellingStatusLabel: TextBlock | null = null
+    let arenaLogicState: LogicGameState | null = null
+    const gcLogicSequenceMeshes: Mesh[] = []
+    const gcLogicSequenceLabels: TextBlock[] = []
+    const gcLogicOptionMeshes: Mesh[] = []
+    const gcLogicOptionLabels: TextBlock[] = []
+    const gcLogicOptionHintLabels: TextBlock[] = []
+    let gameCenterLogicStatusLabel: TextBlock | null = null
     // lab-172 — mesmo padrão de `houseEnterHintLabel`, só que também exige um parceiro por perto
     // (ver uso no loop de física) — sozinho, o jogador nunca vê a dica, pra não convidar pra um
     // desafio que não dá pra completar sozinho.
@@ -10804,11 +10815,8 @@ export function World3D({
       gameCenterEnterHint.linkOffsetY = -15
       gameCenterEnterHintLabel = gameCenterEnterHint
 
-      // `Lógica` reaproveita o quiz da ponte (lab-180); `Memória` roda a arena própria deste lab
-      // (backlog "Lab 213 - Template de arena educativa reutilizável" — prova de conceito do template, ver
-      // "Decisão de escopo" em `FEATURES.md`). Os 4 portais já abrem algo de verdade: `Lógica`
-      // (quiz da ponte, lab-180), `Memória` (arena própria, backlog "Lab 213"), `Contar` (arena
-      // própria, backlog "Lab 214") e `Soletrar` (arena própria, backlog "Lab 215"). Achado do
+      // Os quatro portais abrem arenas no saguão: Memória, Contar, Soletrar e Lógica.
+      // O desafio ambiental da ponte continua acessível fora da Central. Achado do
       // review automático do Copilot: este comentário ficou desatualizado depois do lab-200 —
       // `unlocked: false` (mesmo tom apagado de `applyPortalVisual`, portais de planeta-destino)
       // não é mais usado por nenhum portal aqui, mas o campo continua no tipo pra um mini-jogo
@@ -11378,16 +11386,107 @@ export function World3D({
             arenaSpellingState = null
           },
         }
+
+        const logicAnchorLocal = gameCenterPortalPos.logica.subtract(interiorRoot.position)
+        const logicSequenceMat = new PBRMaterial('gcLogicSequenceMat', scene)
+        logicSequenceMat.albedoColor = new Color3(0.18, 0.56, 0.42)
+        logicSequenceMat.roughness = 0.55
+        for (let i = 0; i < 4; i++) {
+          const piece = MeshBuilder.CreateBox(`gcLogicSequence-${i}`, { width: 0.43, height: 0.43, depth: 0.12 }, scene)
+          piece.position = logicAnchorLocal.add(new Vector3((i - 1.5) * 0.56, 0.66, 1.4))
+          piece.material = logicSequenceMat
+          piece.parent = interiorRoot
+          piece.isPickable = false
+          piece.setEnabled(false)
+          gcLogicSequenceMeshes[i] = piece
+
+          const label = new TextBlock(`gcLogicSequenceLabel-${i}`, '')
+          label.color = 'white'
+          label.fontSize = mobileFontSize(25)
+          label.fontWeight = 'bold'
+          label.outlineWidth = 3
+          label.outlineColor = 'rgba(0,0,0,0.6)'
+          label.alpha = 0
+          guiTexture.addControl(label)
+          label.linkWithMesh(piece)
+          gcLogicSequenceLabels[i] = label
+        }
+
+        const logicOptionMat = new PBRMaterial('gcLogicOptionMat', scene)
+        logicOptionMat.albedoColor = new Color3(0.22, 0.42, 0.38)
+        logicOptionMat.roughness = 0.5
+        const gcLogicOptionPos: Vector3[] = []
+        for (let i = 0; i < 3; i++) {
+          const option = MeshBuilder.CreateBox(`gcLogicOption-${i}`, { width: 0.55, height: 0.55, depth: 0.08 }, scene)
+          option.position = logicAnchorLocal.add(new Vector3((i - 1) * 0.75, 0.6, 2.4))
+          option.material = logicOptionMat
+          option.parent = interiorRoot
+          option.setEnabled(false)
+          gcLogicOptionMeshes[i] = option
+          gcLogicOptionPos[i] = arenaTargetTriggerPos(option)
+
+          const label = new TextBlock(`gcLogicOptionLabel-${i}`, '')
+          label.color = 'white'
+          label.fontSize = mobileFontSize(28)
+          label.fontWeight = 'bold'
+          label.outlineWidth = 3
+          label.outlineColor = 'rgba(0,0,0,0.6)'
+          label.alpha = 0
+          guiTexture.addControl(label)
+          label.linkWithMesh(option)
+          gcLogicOptionLabels[i] = label
+
+          const hint = new TextBlock(`gcLogicOptionHint-${i}`, interactionHint('', interactionInput))
+          hint.color = 'white'
+          hint.fontSize = mobileFontSize(14)
+          hint.fontWeight = 'bold'
+          hint.outlineWidth = 2
+          hint.outlineColor = 'rgba(0,0,0,0.6)'
+          hint.alpha = 0
+          guiTexture.addControl(hint)
+          hint.linkWithMesh(option)
+          hint.linkOffsetY = 26
+          gcLogicOptionHintLabels[i] = hint
+        }
+
+        const logicStatusLabel = new TextBlock('gcLogicStatusLabel', '')
+        logicStatusLabel.color = 'white'
+        logicStatusLabel.fontSize = mobileFontSize(20)
+        logicStatusLabel.fontWeight = 'bold'
+        logicStatusLabel.outlineWidth = 4
+        logicStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
+        logicStatusLabel.alpha = 0
+        guiTexture.addControl(logicStatusLabel)
+        logicStatusLabel.linkWithMesh(gcLogicOptionMeshes[1])
+        logicStatusLabel.linkOffsetY = -55
+        gameCenterLogicStatusLabel = logicStatusLabel
+
+        arenaTargetPositions.logica = gcLogicOptionPos
+        arenaTargetInteract.logica = handleLogicOptionInteract
+        arenaTargetHintLabels.logica = gcLogicOptionHintLabels
+        arenaTargetMeshes.logica = gcLogicOptionMeshes
+        arenaConfigs.logica = {
+          label: '🧩 Lógica',
+          timeLimitS: null,
+          statusLabel: logicStatusLabel,
+          setTargetsVisible: setLogicTargetsVisible,
+          beginAttempt: () => {
+            arenaLogicState = createLogicGame()
+            setLogicTargetsVisible(true)
+            renderLogicRound()
+          },
+          resetState: () => {
+            arenaLogicState = null
+          },
+        }
       }
 
       function enterGameCenterInterior() {
         buildGameCenterInteriorIfNeeded()
         // Progresso/troféus do centro de jogos (Lab 217) — re-sincroniza com `progressRef.current`
-        // TODA entrada, não só na primeira construção da sala: cobre o caminho do desafio de
-        // Lógica, cuja conclusão é detectada fora deste arquivo (`App.tsx`, `kind: 'bridge'`) e não
-        // tem como empurrar um refresh imediato pra dentro do closure de `setup()` — a criança vê o
-        // troféu atualizado na PRÓXIMA vez que atravessar a porta (limitação conhecida, ver
-        // FEATURES.md do backlog "Lab 217").
+        // TODA entrada, não só na primeira construção da sala: cobre conclusões do desafio
+        // ambiental da ponte fora deste arquivo (`App.tsx`, `kind: 'bridge'`). As vitórias das
+        // arenas atualizam o troféu imediatamente pelo callback próprio.
         refreshGameCenterTrophyVisuals()
         if (!avatarMesh || !avatarBody) return
         // Mesmo bloqueio da casa (lab-175): sair do carro/foguete antes, e nunca pular direto de
@@ -11475,17 +11574,8 @@ export function World3D({
         trackGameCenterReturned()
       }
 
-      // Portal bloqueado só mostra a dica "em breve"; `Lógica` abre o MESMO quiz da ponte
-      // (lab-180) direto do saguão, sem precisar teleportar até a ponte de verdade — metáfora de
-      // "portal de arcade" (entra e joga na hora), diferente do hub do lab-196 (que reloca o
-      // avatar pro local físico do mini-jogo). `minigame_started`/`ponte-logica` reaproveita o
-      // MESMO id do hub de propósito — é o mesmo mini-jogo por baixo, mede o mesmo agregado
-      // independente de por onde a criança entrou. Não dispara `minigame_completed` aqui: não
-      // existe pedestal de retorno neste caminho (o modal fecha sozinho ao responder), então não
-      // há um "voltou" pra medir — `learning_challenge_completed` (já disparado pelo próprio fluxo
-      // do quiz) já cobre a conclusão de verdade pra quem quiser ler aquele evento. `Memória`/
-      // `Contar` (backlog "Lab 213"/Lab 214) são arenas de verdade: primeira interação começa, uma
-      // depois de terminar tenta de novo — interação NO MEIO de uma tentativa (`countdown`/
+      // Os quatro portais usam o mesmo controlador de arena: primeira interação começa, uma
+      // depois de terminar tenta de novo. Interação NO MEIO de uma tentativa (`countdown`/
       // `playing`), da mesma arena OU de outra, não faz nada aqui (não dá pra sequestrar uma
       // tentativa em andamento trocando de portal); os alvos em si é que respondem (ver
       // `arenaTargetInteract`, populado em `buildGameCenterInteriorIfNeeded`).
@@ -11526,7 +11616,7 @@ export function World3D({
         }
       }
 
-      // Compartilhado pelos 4 sucessos de arena (cartas de memória, sequência, contar, soletrar) —
+      // Compartilhado pelos sucessos de arena (memória, contar, soletrar, lógica) —
       // credita o progresso/troféu/missão semanal (`onGameCenterMinigameCompletedRef`, `App.tsx`),
       // atualiza os troféus visuais na hora (sem esperar a próxima entrada no saguão, ver
       // comentário em `onGameCenterMinigameCompleted` na declaração de `World3DProps`) e devolve o
@@ -11534,12 +11624,8 @@ export function World3D({
       // Achado do review automático do Copilot: `trackMinigameTrophyEarned`/
       // `trackGameCenterWeeklyQuestCompleted` NÃO disparam aqui — `App.tsx`
       // (`handleGameCenterMinigameCompleted`) já dispara os dois antes de devolver o resultado;
-      // disparar de novo aqui duplicava os 2 eventos em cada troféu/missão semanal conquistados
-      // por estas 3 arenas (a lógica, tratada à parte em `App.tsx`, nunca teve essa duplicação).
-      function handleGameCenterMinigameReward(
-        category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>,
-        baseStatusText: string,
-      ): string {
+      // disparar de novo aqui duplicaria os 2 eventos em cada troféu/missão semanal.
+      function handleGameCenterMinigameReward(category: GameCenterCategory, baseStatusText: string): string {
         const { newTrophy, weeklyQuestRewardGranted, newCompletions } = onGameCenterMinigameCompletedRef.current(category)
         updateGameCenterTrophyVisual(category, newCompletions)
         let text = baseStatusText
@@ -11594,7 +11680,7 @@ export function World3D({
           )
           return
         }
-        if (id === 'memoria' || id === 'contar' || id === 'soletrar') {
+        if (arenaConfigs[id]) {
           // Achado da generalização (Lab 214): `success`/`fail` só significa "pode tentar de novo"
           // pra ESTA MESMA arena. Terminar uma arena e ir direto pra placa de outra (sem sair do
           // saguão) tem que contar como uma tentativa NOVA, não uma "retentativa" — senão
@@ -11606,25 +11692,24 @@ export function World3D({
           }
           return
         }
-        // `'bridge'` (não uma string nova tipo "game-center-logica") de propósito: é o MESMO kind
-        // de missão ambiental (`learning_challenge_started/completed`), só disparado de um lugar
-        // diferente — inventar um kind novo exigiria mudar o tipo de `onOpenEnvironmentalChallenge`
-        // e a allowlist do Worker (`isValidLearningChallengeKind`) sem nenhum ganho de sinal real.
-        onOpenEnvironmentalChallengeRef.current(
-          selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),
-          'bridge',
-        )
-        trackMinigameStarted('ponte-logica')
       }
 
-      selectGameCenterPortalAt = (clientX, clientY) => {
+      selectGameCenterTapTargetAt = (clientX, clientY) => {
         if (!insideGameCenterInterior || hudInertRef.current || !canvas) return
         const rect = canvas.getBoundingClientRect()
         const picked = scene.pick(
           clientX - rect.left,
           clientY - rect.top,
-          (mesh) => gameCenterPortalBoards.has(mesh),
+          (mesh) => gameCenterPortalBoards.has(mesh) ||
+            (activeArenaId === 'logica' && arenaPhase === 'playing' && gcLogicOptionMeshes.includes(mesh as Mesh)),
         )
+        if (activeArenaId === 'logica' && arenaPhase === 'playing') {
+          const optionIndex = gcLogicOptionMeshes.indexOf(picked.pickedMesh as Mesh)
+          if (optionIndex >= 0) {
+            handleLogicOptionInteract(optionIndex)
+            return
+          }
+        }
         const id = picked.pickedMesh && gameCenterPortalBoards.get(picked.pickedMesh)
         if (id) handleGameCenterPortalInteract(id)
       }
@@ -11989,6 +12074,64 @@ export function World3D({
         }
         if (gameCenterSpellingStatusLabel) {
           gameCenterSpellingStatusLabel.text = `${state.hint} ${spellingProgressText(state)}`
+        }
+      }
+
+      const LOGIC_REWARD_COINS = 3
+      function setLogicTargetsVisible(visible: boolean) {
+        for (let i = 0; i < gcLogicSequenceMeshes.length; i++) {
+          gcLogicSequenceMeshes[i].setEnabled(visible)
+          gcLogicSequenceLabels[i].alpha = visible ? 1 : 0
+        }
+        for (let i = 0; i < gcLogicOptionMeshes.length; i++) {
+          gcLogicOptionMeshes[i].setEnabled(visible)
+          gcLogicOptionLabels[i].alpha = visible ? 1 : 0
+          if (!visible) gcLogicOptionHintLabels[i].alpha = 0
+        }
+      }
+      function renderLogicRound() {
+        if (!arenaLogicState) return
+        const round = currentLogicRound(arenaLogicState)
+        if (!round) return
+        for (let i = 0; i < round.sequence.length; i++) {
+          gcLogicSequenceLabels[i].text = String(round.sequence[i])
+        }
+        gcLogicSequenceLabels[3].text = '?'
+        for (let i = 0; i < round.options.length; i++) {
+          gcLogicOptionLabels[i].text = String(round.options[i])
+        }
+        if (gameCenterLogicStatusLabel) {
+          gameCenterLogicStatusLabel.text = `🧩 Qual número vem depois? ${arenaLogicState.roundsWon + 1}/${LOGIC_ROUNDS_TO_WIN}`
+        }
+      }
+      function handleLogicOptionInteract(index: number) {
+        if (arenaPhase !== 'playing' || activeArenaId !== 'logica' || !arenaLogicState) return
+        const round = currentLogicRound(arenaLogicState)
+        const choice = round?.options[index]
+        if (choice == null) return
+        const { state, correct } = answerLogicRound(arenaLogicState, choice)
+        arenaLogicState = state
+        const feedbackPos = arenaTargetPositions.logica?.[index] ?? gameCenterPortalPos.logica
+        if (!correct) {
+          showPuzzleFeedback(feedbackPos, 'try-again')
+          if (gameCenterLogicStatusLabel) gameCenterLogicStatusLabel.text = '🤔 Observe como a sequência muda e tente outra placa'
+          return
+        }
+        const completed = isLogicGameComplete(state)
+        showPuzzleFeedback(feedbackPos, completed ? 'complete' : 'correct')
+        if (!completed) {
+          renderLogicRound()
+          return
+        }
+        arenaPhase = 'success'
+        setLogicTargetsVisible(false)
+        trackMinigameCompleted('logica')
+        for (let i = 0; i < LOGIC_REWARD_COINS; i++) onCollectCoinRef.current()
+        if (gameCenterLogicStatusLabel) {
+          gameCenterLogicStatusLabel.text = handleGameCenterMinigameReward(
+            'logica',
+            `🎉 Você descobriu os padrões! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+          )
         }
       }
 
@@ -16446,7 +16589,7 @@ export function World3D({
       window.removeEventListener('pointerup', onCameraPointerUp)
       window.removeEventListener('pointercancel', onCameraPointerUp)
       canvas.removeEventListener('wheel', onCameraWheel)
-      selectGameCenterPortalAt = null
+      selectGameCenterTapTargetAt = null
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
       ;(scene as any).__cancelPerfSample?.()

@@ -333,8 +333,9 @@ export function isValidLearningChallengeKind(kind: unknown): kind is string {
 // único sinal que esses dois eventos carregam é justamente este id). `'memoria'` (Lab 213 —
 // template de arena, prova de conceito), `'contar'` (Lab 214) e `'soletrar'` (Lab 215) reaproveitam
 // o MESMO id em `minigame_started`/`completed`/`retried`/`exited` — é o mesmo mini-jogo, iniciado
-// pelo portal do centro de jogos (lab-197).
-const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica', 'memoria', 'contar', 'soletrar'])
+// pelo portal do centro de jogos (lab-197). `'logica'` (Lab 239) distingue a arena
+// imersiva do desafio ambiental da ponte (`'ponte-logica'`).
+const MINIGAME_IDS = new Set(['parkour1', 'ponte-logica', 'memoria', 'contar', 'soletrar', 'logica'])
 
 export function isValidMinigameId(id: unknown): id is string {
   return typeof id === 'string' && MINIGAME_IDS.has(id)

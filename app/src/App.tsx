@@ -416,8 +416,8 @@ function GameApp() {
     const weeklyEventObjectiveBonusCoins = rewardGranted ? WEEKLY_EVENT_OBJECTIVE_REWARD_COINS : undefined
     // Progresso/troféus do centro de jogos (backlog "Lab 217") — `kind === 'bridge'` é a MESMA
     // habilidade de Lógica do centro de jogos (World3D.tsx trata os dois como a categoria
-    // `'logica'`, ver comentário em `types.ts`), venha do local físico original (lab-180) ou do
-    // portal do saguão (lab-197) — objetivo SEPARADO do evento semanal ambiental acima, os dois
+    // `'logica'`, ver comentário em `types.ts`), quando concluído no local físico original
+    // (lab-180) — objetivo SEPARADO do evento semanal ambiental acima, os dois
     // podem conceder na MESMA resposta.
     let gameCenterTrophyEarned: 'bronze' | 'prata' | 'ouro' | undefined
     let gameCenterWeeklyQuestBonusCoins: number | undefined
@@ -461,11 +461,11 @@ function GameApp() {
   // ref com um `attemptId` novo — a comparação em `handleEnvironmentalChallengeCorrect` falha
   // do mesmo jeito, sem precisar que o fechamento zere nada.
   // Progresso/troféus do centro de jogos (backlog "Lab 217") — chamado por `World3D.tsx` na
-  // conclusão de verdade de qualquer arena (memória/contar/soletrar; Lógica é tratada à parte em
-  // `handleEnvironmentalChallengeCorrect` acima, `kind === 'bridge'`). Fires os 2 eventos de
+  // conclusão de verdade de qualquer arena (memória/contar/soletrar/lógica; o desafio da ponte
+  // continua tratado à parte em `handleEnvironmentalChallengeCorrect`, `kind === 'bridge'`). Dispara os 2 eventos de
   // analytics aqui (não em `World3D.tsx`) pra manter as regras de QUANDO disparar
   // (`newTrophy`/`weeklyQuestRewardGranted`) num lugar só, junto da decisão de progressão em si.
-  function handleGameCenterMinigameCompleted(category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>) {
+  function handleGameCenterMinigameCompleted(category: GameCenterCategory) {
     const nowIso = new Date().toISOString()
     const { newTrophy, weeklyQuestRewardGranted, newCompletions } = gameCenterMinigameCompleted(category, nowIso)
     if (newTrophy) trackMinigameTrophyEarned(category, newTrophy)
