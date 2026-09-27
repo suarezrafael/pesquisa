@@ -157,7 +157,7 @@ import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
 import { nearestInteraction } from './nearestInteraction'
 import { isStationaryPortalTap } from './portalTap'
 import { resolveGameCenterTap } from './gameCenterTap'
-import { selectPlanetSchoolQuest } from './planetSchoolTrigger'
+import { nearestPlanetSchoolQuest, selectPlanetSchoolQuest } from './planetSchoolTrigger'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -4620,6 +4620,19 @@ export function World3D({
         }
         if (suspendRef.current || chatOpenRef.current || !avatarMesh) return
 
+        // An explicit retry ignores the proximity latch, but never clears it for auto-opening.
+        if (!insideHouseInterior) {
+          const questId = nearestPlanetSchoolQuest(
+            planetQuestMarkers, avatarMesh.position, currentPlanetId,
+            progressRef.current.completedPlanetQuestIds,
+          )
+          if (questId !== null) {
+            triggered.add(`planet-school-${questId}`)
+            onSelectPlanetQuestRef.current(questId)
+            return
+          }
+        }
+
         // Centro de jogos (backlog "Lab 212") — checado ANTES da casa porque `insideGameCenterInterior`
         // é a flag MAIS ESPECÍFICA (só verdadeira dentro do saguão); `insideHouseInterior` sozinho
         // não distingue as duas salas (ver comentário na declaração dele).
@@ -5040,6 +5053,21 @@ export function World3D({
         if (import.meta.env.DEV && key === 'f8' && !e.repeat) {
           e.preventDefault()
           enterGameCenterInterior()
+          return
+        }
+        if (import.meta.env.DEV && key === 'f9' && !e.repeat) {
+          e.preventDefault()
+          if (insideHouseInterior || drivingRocket || drivingCar) return
+          buildPlanetIfNeeded('venus')
+          const marker = planetQuestMarkers.find((candidate) => candidate.planetId === 'venus' &&
+            !progressRef.current.completedPlanetQuestIds.includes(candidate.quest.id))
+          if (!marker) return
+          const planet = DESTINATION_PLANETS.venus
+          currentPlanetId = 'venus'
+          currentWorldCenter = planet.center
+          currentGroundBaseFn = () => planet.radius
+          const schoolUp = marker.worldPos.subtract(planet.center).normalize()
+          teleportAvatarTo(planet.center, offsetLandingUp(schoolUp, planet.radius, 0.8), currentGroundBaseFn)
           return
         }
         // Latch no próprio evento (não no polling do loop de render) — ver comentário onde
@@ -5996,6 +6024,7 @@ export function World3D({
         base: TransformNode
         teacher: StudentFigure
         label: TextBlock
+        hintLabel: TextBlock
         // Backlog "Lab 196" — fase própria do balanço de idle (sorteada uma vez na construção),
         // pra os professores das 6 escolinhas de um mesmo planeta não balançarem em sincronia.
         idlePhase: number
@@ -6248,6 +6277,22 @@ export function World3D({
         guiTexture.addControl(label)
         label.linkWithMesh(sign)
 
+        const hintLabel = new TextBlock(`planetSchoolHint-${nameSuffix}`, `${interactionHint('', interactionInput)}\nResponder`)
+        hintLabel.color = 'white'
+        hintLabel.fontSize = mobileFontSize(18)
+        hintLabel.fontWeight = 'bold'
+        hintLabel.outlineWidth = 3
+        hintLabel.outlineColor = 'rgba(0,0,0,0.6)'
+        hintLabel.width = '280px'
+        hintLabel.height = '96px'
+        hintLabel.textWrapping = true
+        hintLabel.alpha = 0
+        hintLabel.isPointerBlocker = false
+        hintLabel.isHitTestVisible = false
+        guiTexture.addControl(hintLabel)
+        hintLabel.linkWithMesh(sign)
+        hintLabel.linkOffsetY = -65
+
         const teacher = buildStudentFigure(scene, new Color3(0.55, 0.25, 0.55), shadowGenerator)
         teacher.root.scaling.setAll(0.92)
         teacher.root.position = new Vector3(0.85, 0, 0.4)
@@ -6264,6 +6309,7 @@ export function World3D({
           base,
           teacher,
           label,
+          hintLabel,
           idlePhase: Math.random() * Math.PI * 2,
         })
       }
@@ -15792,8 +15838,21 @@ export function World3D({
         // Labels de proximidade nao afetam fisica nem gatilhos. Atualiza-las a 10 Hz corta
         // dezenas de comparacoes e escritas no Babylon GUI por quadro sem atraso perceptivel.
         if (shouldUpdateProximityUi) {
+        const nearbyPlanetQuestId = avatarMesh && !insideHouseInterior && !drivingRocket && !drivingCar &&
+          !suspendRef.current && !chatOpenRef.current
+          ? nearestPlanetSchoolQuest(
+              planetQuestMarkers, avatarMesh.position, currentPlanetId,
+              progressRef.current.completedPlanetQuestIds,
+            )
+          : null
+        const planetSchoolHintOffset = (canvas?.clientHeight ?? window.innerHeight) <= 450 ? -45 : -65
         for (const marker of planetQuestMarkers) {
           marker.label.text = progressRef.current.completedPlanetQuestIds.includes(marker.quest.id) ? '✓' : '?'
+          const hintAlpha = marker.quest.id === nearbyPlanetQuestId ? 1 : 0
+          if (hintAlpha && marker.hintLabel.linkOffsetY !== planetSchoolHintOffset) {
+            marker.hintLabel.linkOffsetY = planetSchoolHintOffset
+          }
+          if (marker.hintLabel.alpha !== hintAlpha) marker.hintLabel.alpha = hintAlpha
         }
         // Dica "pressione E" da casa (lab-123) — mesmo padrão do carro/foguete abaixo. Só uma das
         // duas fica visível por vez: a de entrar (fora, perto da fachada) ou a de sair (dentro,

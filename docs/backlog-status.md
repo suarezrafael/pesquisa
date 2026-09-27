@@ -21,7 +21,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | Labs 176-185 | Labs 176-185 | Concluido | Implementacao, qualidade, monetizacao e analytics entregues. |
 | Lab 186 - Playtest crianca + responsavel | - | Pendente | O lab real 186 foi o bug do ranking; o estudo com 5-8 duplas ainda nao ocorreu. |
 | UX Lab 187 - Mapa de verbos | 228 | Parcial | Inventario e triagem entregues; primeira sessao, planeta secundario e touch fisico pendentes. |
-| UX Lab 188 - Linguagem de interativos | 229 | Parcial | Dicas de acao por teclado/toque publicadas; botao E validado no tablet, mas legibilidade perto dos objetos, padrao global e playtest ainda pendentes. |
+| UX Lab 188 - Linguagem de interativos | 229, 241; 242 em revisao | Parcial | Lab 241 publicado (PR #129): toque nos alvos das arenas e alcance das escolinhas. Lab 242 permite retomar pergunta por E/touch com dica contextual. Padrao global, legibilidade e playtest fisico ainda pendentes. |
 | UX Lab 189 - Monetizacao infantil segura | 230 | Em andamento | Revisao de badges, copias e fluxo de vinculo infantil; area adulta permanece separada. |
 | UX Lab 190 - Primeira sessao de 10 minutos | 232 | Parcial | Entrada curta e guia contextual para movimento, primeira missao e recompensa; faltam playtest/iteracao da jornada completa no tablet. |
 

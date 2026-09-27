@@ -1,6 +1,6 @@
 # Laboratorio 241 - Toque direto nos alvos das arenas
 
-Status: implementado; revisao de PR e validacao fisica pendentes
+Status: mesclado e publicado; validacao fisica pendente
 Inicio: 2026-09-26
 Fim: 2026-09-26 (implementacao local)
 Commit inicial: 4d038fd
