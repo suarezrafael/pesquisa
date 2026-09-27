@@ -47,6 +47,7 @@ PR: https://github.com/suarezrafael/pesquisa/pull/131
 | 844x390 | Portao, pergunta de Venus, lista/evento, apelido e vinculo dentro da tela; portao/lista/loja entre y=16 e 374, sem overflow horizontal. |
 | 844x390 | Loja em Roupas rolada ate calcas/sapatos: header sticky 104px, preview 96px e fechar 44px; pets com mesma altura de header, itens acessiveis. |
 | 844x240 | Portao e pets entre y=16 e 224; recusa/fechar alcancaveis por scroll. Simulacao de altura menor, nao de IME real. |
+| 320x390 | Loja entre y=0 e 390, header compacto 104px e preview renderizado, sem overflow horizontal da modal (abas tem rolagem horizontal propria). |
 | 390x844 | Portao entre y=301 e 844; loja entre y=169 e 844, preview original e header sticky 277px apos rolagem. |
 | 1138x633 | Portao entre y=56 e 578; loja entre y=63 e 570, header original ~283px. |
 | 1280x720 | Portao entre y=99 e 621, sem scroll/overflow horizontal; texto e acoes legiveis. |
@@ -59,8 +60,13 @@ PR: https://github.com/suarezrafael/pesquisa/pull/131
 
 ## Pendencias e limites
 
-- CI do HEAD e revisao Copilot overview/inline/threads devem ser conferidos
-  antes de merge/publicacao. Nao considerar review vazio como aprovacao.
+- CI de fe59f7d passou nos seis checks (push/PR). Copilot revisou o codigo
+  2dd9b01: COMMENTED, overview "Needs a closer look" exclusivamente pela
+  validacao Android/IME/familias pendente; Findings: None. Comentarios inline,
+  gerais e threads conferidos, vazios. Nao e aprovacao formal nem teste fisico.
+  Commits posteriores sao documentais, conferidos manualmente; verificar CI
+  do HEAD documental final antes de merge. Publicacao via CI da main apos merge;
+  registrar resultado/build na PR #131, sem fechar o playtest fisico.
 - Touch, teclado virtual, barras dinamicas e safe areas em Android fisico
   ainda pendentes. Emulacao de viewport nao valida esses comportamentos.
 - Leitura longa de outras perguntas, zoom de texto e todas as combinacoes

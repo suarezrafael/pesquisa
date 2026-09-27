@@ -1,6 +1,6 @@
 # Laboratorio 243 - Modais acessiveis em telas baixas
 
-Status: implementado; PR #131 em revisao, validacao fisica pendente
+Status: implementado; PR #131 revisada, validacao fisica pendente
 Inicio: 2026-09-27
 Fim: 2026-09-27 (implementacao local)
 Commit inicial: 5eb2675a3060ec8d8444b52f7e430ae7f02d6164
