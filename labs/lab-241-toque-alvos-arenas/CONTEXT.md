@@ -38,8 +38,8 @@ Commit inicial -> implementacao: 4d038fd..84aca90
 
 ## Verificacao
 
-- Suite app: 320 testes / 28 arquivos passaram; 12 testes novos cobrem resolucao
-  de toque e proximidade/histerese das escolinhas.
+- Suite app: 324 testes / 29 arquivos passaram; 16 testes novos cobrem resolucao
+  de toque, proximidade/histerese das escolinhas e picking do Babylon.
 - Lint passou com dois avisos preexistentes: PetPanel.tsx (Fast Refresh) e teste
   de server-accounts (variavel nao usada). Build/TypeScript/PWA passaram; aviso
   preexistente de tamanho dos chunks permanece.
@@ -67,8 +67,10 @@ Commit inicial -> implementacao: 4d038fd..84aca90
   antes da modal; testes novos cobrem resets posteriores ao candidato escolhido.
 - F8: guarda inicial de `insideGameCenterInterior` evita efeitos em reentrada;
   verificado no navegador durante uma partida.
-- Nova revisao solicitada apos ajustes; nao tratar ausencia de comentarios como
-  aprovacao do bot. CI e revisao atual devem ser conferidos antes de merge.
+- Nova revisao em 8f5087d reiterou a conversao das coordenadas. Teste com o motor
+  Babylon instalado (NullEngine com dimensoes de buffer escaladas) confirmou
+  picking CSS em escalas 1, 1.15, 1.4 e 1.6; pre-escalar perde o alvo central.
+  Nao aplicar a conversao dupla. Este teste nao substitui touch fisico no tablet.
 
 ## Pendencias / dividas conhecidas
 
