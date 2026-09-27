@@ -1,11 +1,20 @@
 # Laboratório atual
 
-Lab 242 implementado localmente: labs/lab-242-interacao-escolinhas-planetas/ -
-retomar perguntas pendentes por E/touch perto da placa, com dica contextual e
-sem loop automatico. Suite: 330 testes. PR #130 aberta, CI do codigo e931f90
-passou; overview/inline/threads Copilot conferidos, sem achados em e931f90.
-Touch fisico pendente; conferir CI do HEAD antes de merge.
-Base: main 504c8c6 (PR #129). Ver FEATURES.md e CONTEXT.md.
+Lab 243 implementado: labs/lab-243-modais-telas-baixas/ - altura e rolagem
+compartilhadas de modais, fechar acessivel e previews compactos em tela baixa.
+Suite: 330 testes; lint/build passaram, QA de seis viewports no navegador.
+PR #131: Copilot revisado (sem achados, ressalva de teste fisico), CI de fe59f7d
+passou. Publicacao via CI da main apos merge, com resultado/build na PR.
+Touch/IME fisicos pendentes. Base: main 5eb2675. Ver FEATURES.md e CONTEXT.md.
+
+---
+
+Lab 242 mesclado em 5eb2675 (PR #130): labs/lab-242-interacao-escolinhas-planetas/
+- retomar perguntas pendentes por E/touch, com dica contextual e sem loop.
+Suite: 330 testes. Copilot overview/inline/threads conferidos, sem achados.
+Publicado em 2026-09-27; CI/deploy 36338199304 passou. Touch fisico pendente.
+Build observado em missaoaprendizado.com: 2026-09-27T17:48:42.704Z.
+Ver FEATURES.md e CONTEXT.md.
 
 ---
 

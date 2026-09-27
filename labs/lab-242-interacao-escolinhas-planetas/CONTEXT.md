@@ -86,6 +86,11 @@ Commit inicial -> implementacao: 504c8c6..c576a82
 
 ## Estado do repositorio
 
+- Atualizacao de publicacao em 2026-09-27: PR #130 mesclada em 5eb2675;
+  CI/deploy 36338199304 passou em Vercel, Pages e ambos os Workers.
+  A ausencia de publicacao descrita acima era o estado ao encerrar localmente.
+  Lab 243 sucede esta implementacao; playtest fisico continua pendente.
+
 - Branch: lab-242-interacao-escolinhas-planetas. PR #125 draft nao alterada.
 - Arquivos locais .github/copilot-instructions.md e .vscode/ nao incluidos.
 - Em app/: npm run test, npm run lint, npm run build. Servidor de dev existente
