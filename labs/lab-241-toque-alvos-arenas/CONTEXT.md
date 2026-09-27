@@ -1,7 +1,7 @@
 # Contexto - Laboratorio 241 - Toque direto nos alvos das arenas
 
 Preenchido em: 2026-09-26
-Commit inicial -> implementacao: 4d038fd..4ad9ef3
+Commit inicial -> implementacao: 4d038fd..84aca90
 
 ## O que foi feito
 
@@ -9,16 +9,20 @@ Commit inicial -> implementacao: 4d038fd..4ad9ef3
   portal. `World3D.tsx` encaminha o indice original ao callback existente de
   Memoria, Contar, Soletrar ou Logica, preservando regras e recompensas.
 - Central nasce no centro olhando para as placas, com mirada levemente adiante
-  usando vetor reutilizado. F8 entra na Central apenas em desenvolvimento.
+  usando vetor reutilizado e distancia propria 4.2 para enquadrar o avatar.
+  F8 entra na Central apenas em desenvolvimento e repetir nao reinicia a sala.
 - Status nao depende mais da proximidade da placa: largura limitada, quebra de
   linha e recompensas em linhas separadas; troca/saida escondem status anterior.
 - Sequencia de Logica aparece da esquerda para a direita vista do saguao.
+- Fileira traseira de Soletrar elevada para evitar que letras da frente cubram
+  sua face selecionavel; indices e posicoes de interacao continuam no registro.
 - `index.css` separa E e setas de camera em telas de ate 450px de altura, sem
   reduzir alvos de toque. Mensagens das arenas ficam acima da faixa inferior.
 - `planetSchoolTrigger.ts` corrige alcance de 1.2 para 1.8: a base da placa fica
   afastada do professor (0.85, 0, 0.4) e do centro do avatar (altura 0.6).
   Preserva histerese de saida 3.6, filtra planeta/progresso e limita a abertura a
-  uma pergunta por iteracao desse registro. Placas concluidas mostram check.
+  uma pergunta por iteracao desse registro. Todos os latches inelegiveis/distantes
+  sao limpos antes de abrir a modal. Placas concluidas mostram check.
 
 ## Decisoes tecnicas tomadas
 
@@ -34,7 +38,7 @@ Commit inicial -> implementacao: 4d038fd..4ad9ef3
 
 ## Verificacao
 
-- Suite app: 318 testes / 28 arquivos passaram; 10 testes novos cobrem resolucao
+- Suite app: 320 testes / 28 arquivos passaram; 12 testes novos cobrem resolucao
   de toque e proximidade/histerese das escolinhas.
 - Lint passou com dois avisos preexistentes: PetPanel.tsx (Fast Refresh) e teste
   de server-accounts (variavel nao usada). Build/TypeScript/PWA passaram; aviso
@@ -45,12 +49,30 @@ Commit inicial -> implementacao: 4d038fd..4ad9ef3
   nao respondeu. Enquadramento/status conferidos em 1280x720 e 1138x633.
 - Entrada por F8 valida interior, NAO a caminhada pela porta externa. Clique de
   mouse em viewport de tablet NAO equivale a touch/pinca fisicos.
+- Perfil economico forcado por `?gpuTier=weak`: placa/letra aceitam clique e F8
+  repetido preserva a partida. Auto-tune ja estava em escala 1.00 neste registro;
+  nao afirmar que este teste mediu picking em hardware scaling maior que 1.
 - Correcao das escolinhas secundarias validada por testes geometricos, nao por
   visita fisica no tablet. O planeta/dispositivo do relato ainda nao foi informado.
 
+## Revisao da PR
+
+- PR #129: https://github.com/suarezrafael/pesquisa/pull/129
+- Overview Copilot em c9875c7 apontou tres pontos, sem comentarios inline ou
+  threads nas APIs. Todos analisados e respondidos na PR.
+- Picking: `@babylonjs/core/Culling/ray.core.js`, `CreatePickingRayToRef`, aplica
+  `1 / hardwareScalingLevel` internamente. Manter coordenadas CSS evita conversao
+  dupla; comentario no ponto de chamada documenta o contrato.
+- Histerese: selecao/limpeza extraida para funcao pura, percorre todos os markers
+  antes da modal; testes novos cobrem resets posteriores ao candidato escolhido.
+- F8: guarda inicial de `insideGameCenterInterior` evita efeitos em reentrada;
+  verificado no navegador durante uma partida.
+- Nova revisao solicitada apos ajustes; nao tratar ausencia de comentarios como
+  aprovacao do bot. CI e revisao atual devem ser conferidos antes de merge.
+
 ## Pendencias / dividas conhecidas
 
-- Revisar comentarios do Copilot e CI da PR antes de declarar pronta para merge.
+- Conferir nova revisao do Copilot e CI do HEAD antes de merge/publicacao.
 - Lab 240 continua pendente: porta externa, partida completa das quatro arenas,
   memoria/sequencia, pinca e controles no Redmi Pad 2.
 - Confirmar perguntas ao lado da placa/professor em um planeta secundario,
