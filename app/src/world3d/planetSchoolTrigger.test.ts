@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { distanceSquared } from './spatialPerformance'
-import { planetSchoolTriggerAction, PLANET_SCHOOL_RESET_DISTANCE, PLANET_SCHOOL_TRIGGER_DISTANCE } from './planetSchoolTrigger'
+import { planetSchoolTriggerAction, selectPlanetSchoolQuest, PLANET_SCHOOL_RESET_DISTANCE, PLANET_SCHOOL_TRIGGER_DISTANCE } from './planetSchoolTrigger'
 
 describe('planet school proximity', () => {
   it('opens beside the sign and beside the offset teacher, including avatar height', () => {
@@ -36,5 +36,32 @@ describe('planet school proximity', () => {
   it('never opens a completed quest or a marker on another planet', () => {
     expect(planetSchoolTriggerAction(0, false, false)).toBe('reset')
     expect(planetSchoolTriggerAction(0, false, true)).toBe('reset')
+  })
+
+  it('selects only one quest while still cleaning up markers later in the list', () => {
+    const origin = { x: 0, y: 0, z: 0 }
+    const triggered = new Set(['planet-school-far', 'planet-school-other', 'planet-school-completed'])
+    const markers = [
+      { planetId: 'venus', quest: { id: 'first' }, worldPos: origin },
+      { planetId: 'venus', quest: { id: 'second' }, worldPos: origin },
+      { planetId: 'venus', quest: { id: 'far' }, worldPos: { x: 4, y: 0, z: 0 } },
+      { planetId: 'jupiter', quest: { id: 'other' }, worldPos: origin },
+      { planetId: 'venus', quest: { id: 'completed' }, worldPos: origin },
+    ]
+    expect(selectPlanetSchoolQuest(markers, origin, 'venus', ['completed'], triggered)).toBe('first')
+    expect([...triggered]).toEqual(['planet-school-first'])
+  })
+
+  it('keeps the selected quest latched until departure and allows a return', () => {
+    const origin = { x: 0, y: 0, z: 0 }
+    const markers = [{ planetId: 'venus', quest: { id: 'quiz' }, worldPos: origin }]
+    const triggered = new Set<string>()
+    expect(selectPlanetSchoolQuest(markers, origin, 'venus', [], triggered)).toBe('quiz')
+    expect(selectPlanetSchoolQuest(markers, origin, 'venus', [], triggered)).toBeNull()
+    expect(selectPlanetSchoolQuest(markers, { x: 4, y: 0, z: 0 }, 'venus', [], triggered)).toBeNull()
+    expect(triggered.size).toBe(0)
+    expect(selectPlanetSchoolQuest(markers, origin, 'venus', [], triggered)).toBe('quiz')
+    expect(selectPlanetSchoolQuest(markers, origin, 'venus', ['quiz'], triggered)).toBeNull()
+    expect(triggered.size).toBe(0)
   })
 })

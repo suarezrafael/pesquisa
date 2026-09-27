@@ -157,7 +157,7 @@ import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
 import { nearestInteraction } from './nearestInteraction'
 import { isStationaryPortalTap } from './portalTap'
 import { resolveGameCenterTap } from './gameCenterTap'
-import { planetSchoolTriggerAction } from './planetSchoolTrigger'
+import { selectPlanetSchoolQuest } from './planetSchoolTrigger'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -10729,8 +10729,9 @@ export function World3D({
       // mesmo tempo, sem amontoar (a casa só tem mobília numa anel decorativo, não algo que a
       // criança precisa LER uma a uma).
       const GAME_CENTER_ROOM_HALF_SIZE = 7
+      const GAME_CENTER_CAMERA_DISTANCE = 4.2
       const GAME_CENTER_CAMERA_LOOK_AHEAD = 1.5
-      const GAME_CENTER_CAMERA_TARGET_HEIGHT = 1.2
+      const GAME_CENTER_CAMERA_TARGET_HEIGHT = 0.5
 
       // Entrada reposicionada com folga do circuito dos carros (a rua cruza latitude 25 graus,
       // esta candidata fica perto de 58 graus). A busca abaixo preserva o apoio no relevo.
@@ -11456,6 +11457,7 @@ export function World3D({
       }
 
       function enterGameCenterInterior() {
+        if (insideGameCenterInterior) return
         buildGameCenterInteriorIfNeeded()
         // Progresso/troféus do centro de jogos (Lab 217) — re-sincroniza com `progressRef.current`
         // TODA entrada, não só na primeira construção da sala: cobre conclusões do desafio
@@ -11506,7 +11508,7 @@ export function World3D({
         facing = Vector3.Backward()
         camera.position.copyFrom(
           gameCenterInteriorSpawnPos
-            .subtract(facing.scale(HOUSE_INTERIOR_CAMERA_DISTANCE))
+            .subtract(facing.scale(GAME_CENTER_CAMERA_DISTANCE))
             .add(Vector3.Up().scale(HOUSE_INTERIOR_CAMERA_HEIGHT)),
         )
         camera.upVector.copyFrom(Vector3.Up())
@@ -11677,6 +11679,7 @@ export function World3D({
         const activeTargets = arenaPhase === 'playing' && activeArenaId
           ? arenaTargetMeshes[activeArenaId] ?? []
           : []
+        // scene.pick accepts CSS coordinates; Babylon applies hardware scaling in its ray.
         const picked = scene.pick(
           clientX - rect.left,
           clientY - rect.top,
@@ -14560,7 +14563,8 @@ export function World3D({
           // lab-123: dentro de casa, a distância/altura padrão (pensada pro terreno aberto lá
           // fora) colocaria a câmera do lado de FORA da parede — ver comentário na declaração de
           // `HOUSE_INTERIOR_CAMERA_DISTANCE`.
-          const camDist = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
+          const camDist = insideGameCenterInterior ? GAME_CENTER_CAMERA_DISTANCE
+            : insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
           const camHeight = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_HEIGHT : CAMERA_HEIGHT
           // lab-138: dentro de casa, a câmera vira "esférica" ao redor do jogador (giro horizontal
           // + inclinação vertical + zoom, os três controláveis arrastando/rolando o mouse — ver
@@ -14915,19 +14919,11 @@ export function World3D({
             // histerese gatilho/reset das escolinhas do planeta principal, mas pulando quest já
             // concluída (mesmo espírito de `portalMeshes`/`completed` acima) via
             // `completedPlanetQuestIds`, NUNCA `completedQuestIds`.
-            for (const marker of planetQuestMarkers) {
-              const triggerId = `planet-school-${marker.quest.id}`
-              const eligible = marker.planetId === currentPlanetId &&
-                !progressRef.current.completedPlanetQuestIds.includes(marker.quest.id)
-              const action = planetSchoolTriggerAction(eligible ? distanceSquared(pos, marker.worldPos) : 0, eligible, triggered.has(triggerId))
-              if (action === 'open') {
-                triggered.add(triggerId)
-                onSelectPlanetQuestRef.current(marker.quest.id)
-                break
-              } else if (action === 'reset') {
-                triggered.delete(triggerId)
-              }
-            }
+            const planetQuestToOpen = selectPlanetSchoolQuest(
+              planetQuestMarkers, pos, currentPlanetId,
+              progressRef.current.completedPlanetQuestIds, triggered,
+            )
+            if (planetQuestToOpen !== null) onSelectPlanetQuestRef.current(planetQuestToOpen)
 
             // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — olhar pro jogador e fala
             // catalogada (só na primeira aproximação de cada visita, mesma histerese
