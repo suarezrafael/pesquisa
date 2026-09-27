@@ -10730,7 +10730,7 @@ export function World3D({
       // criança precisa LER uma a uma).
       const GAME_CENTER_ROOM_HALF_SIZE = 7
       const GAME_CENTER_CAMERA_LOOK_AHEAD = 1.5
-      const GAME_CENTER_CAMERA_TARGET_HEIGHT = 0.5
+      const GAME_CENTER_CAMERA_TARGET_HEIGHT = 1.2
 
       // Entrada reposicionada com folga do circuito dos carros (a rua cruza latitude 25 graus,
       // esta candidata fica perto de 58 graus). A busca abaixo preserva o apoio no relevo.
@@ -11707,10 +11707,10 @@ export function World3D({
         label.outlineWidth = 4
         label.outlineColor = 'rgba(0,0,0,0.6)'
         label.width = '80%'
-        label.height = '140px'
+        label.height = '96px'
         label.textWrapping = true
         label.verticalAlignment = TextBlock.VERTICAL_ALIGNMENT_BOTTOM
-        label.top = '-110px'
+        label.top = '-60px'
         label.isPointerBlocker = false
         label.alpha = 0
         guiTexture.addControl(label)

@@ -37,6 +37,8 @@ ganho de engajamento sem o playtest pendente do Lab 240.
 - [x] Evitar corte das mensagens de resultado com largura limitada, quebra de
   linha e texto curto; apresentar sequencia de Logica da esquerda para a direita
   vista do saguao (referencia: verificacao visual no navegador, Lab 241).
+- [x] Separar E e setas da camera em telas de ate 450px de altura, preservando
+  os tamanhos de toque (referencia: sobreposicao reproduzida em 844x390).
 - [x] Corrigir alcance das perguntas das escolinhas dos planetas secundarios:
   considerar altura do avatar e deslocamento do professor; testar histerese,
   filtrar planeta/progresso e sinalizar quest concluida (referencia: relato do

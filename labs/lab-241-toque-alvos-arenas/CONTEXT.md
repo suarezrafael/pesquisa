@@ -13,6 +13,8 @@ Commit inicial -> implementacao: 4d038fd..4ad9ef3
 - Status nao depende mais da proximidade da placa: largura limitada, quebra de
   linha e recompensas em linhas separadas; troca/saida escondem status anterior.
 - Sequencia de Logica aparece da esquerda para a direita vista do saguao.
+- `index.css` separa E e setas de camera em telas de ate 450px de altura, sem
+  reduzir alvos de toque. Mensagens das arenas ficam acima da faixa inferior.
 - `planetSchoolTrigger.ts` corrige alcance de 1.2 para 1.8: a base da placa fica
   afastada do professor (0.85, 0, 0.4) e do centro do avatar (altura 0.6).
   Preserva histerese de saida 3.6, filtra planeta/progresso e limita a abertura a

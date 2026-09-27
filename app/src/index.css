@@ -1382,6 +1382,17 @@ a.nickname-generate-btn {
   font-size: 1.6rem;
 }
 
+@media (max-height: 450px) {
+  .touch-action-cam-left,
+  .touch-action-cam-right {
+    right: 6.8rem;
+  }
+
+  .touch-action-recenter {
+    right: 11rem;
+  }
+}
+
 /* Modals */
 
 .modal-overlay {
