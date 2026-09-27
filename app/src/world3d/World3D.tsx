@@ -156,6 +156,8 @@ import { parkourFallAction } from './parkourFall'
 import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
 import { nearestInteraction } from './nearestInteraction'
 import { isStationaryPortalTap } from './portalTap'
+import { resolveGameCenterTap } from './gameCenterTap'
+import { selectPlanetSchoolQuest } from './planetSchoolTrigger'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -3741,6 +3743,7 @@ export function World3D({
       logica: null,
     }
     const gameCenterPortalBoards = new Map<AbstractMesh, GameCenterPortalId>()
+    const gameCenterCameraTarget = Vector3.Zero()
     // Troféus visuais (Lab 217) — uma malha por portal, criada uma vez junto da placa/post,
     // escondida (`setEnabled(false)`) até `refreshGameCenterTrophyVisuals` decidir mostrar (a
     // criança pode não ter troféu nenhum ainda). `GameCenterPortalId` e `GameCenterCategory` são o
@@ -5033,6 +5036,12 @@ export function World3D({
         const target = e.target as HTMLElement | null
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
         const key = e.key.toLowerCase()
+        // Entrada de QA local; removida do build de producao pelo Vite.
+        if (import.meta.env.DEV && key === 'f8' && !e.repeat) {
+          e.preventDefault()
+          enterGameCenterInterior()
+          return
+        }
         // Latch no próprio evento (não no polling do loop de render) — ver comentário onde
         // `jumpRequested` é consumido, no loop de render. `!keysDown[key]` evita re-latch por
         // key-repeat do SO enquanto o jogador segura a tecla.
@@ -5986,6 +5995,7 @@ export function World3D({
         worldPos: Vector3
         base: TransformNode
         teacher: StudentFigure
+        label: TextBlock
         // Backlog "Lab 196" — fase própria do balanço de idle (sorteada uma vez na construção),
         // pra os professores das 6 escolinhas de um mesmo planeta não balançarem em sincronia.
         idlePhase: number
@@ -6253,6 +6263,7 @@ export function World3D({
           worldPos: planetRoot.position.add(localUp.scale(radius)),
           base,
           teacher,
+          label,
           idlePhase: Math.random() * Math.PI * 2,
         })
       }
@@ -10718,6 +10729,9 @@ export function World3D({
       // mesmo tempo, sem amontoar (a casa só tem mobília numa anel decorativo, não algo que a
       // criança precisa LER uma a uma).
       const GAME_CENTER_ROOM_HALF_SIZE = 7
+      const GAME_CENTER_CAMERA_DISTANCE = 4.2
+      const GAME_CENTER_CAMERA_LOOK_AHEAD = 1.5
+      const GAME_CENTER_CAMERA_TARGET_HEIGHT = 0.5
 
       // Entrada reposicionada com folga do circuito dos carros (a rua cruza latitude 25 graus,
       // esta candidata fica perto de 58 graus). A busca abaixo preserva o apoio no relevo.
@@ -10941,12 +10955,8 @@ export function World3D({
         exitHint.linkWithMesh(interiorDoor)
         gameCenterExitHintLabel = exitHint
 
-        // Nascimento longe da porta (mesma histerese da casa) — evita disparar a saída no mesmo
-        // instante em que se entra.
-        const spawnClearanceFromBackWall = HOUSE_INTERIOR_CAMERA_DISTANCE + 1
-        gameCenterInteriorSpawnPos = interiorRoot.position.add(
-          new Vector3(0, AVATAR_RADIUS + 0.05, -(S - spawnClearanceFromBackWall)),
-        )
+        // Centro da sala: distancia da porta e das placas, com espaco para a camera atras.
+        gameCenterInteriorSpawnPos = interiorRoot.position.add(new Vector3(0, AVATAR_RADIUS + 0.05, 0))
 
         // 4 placas em leque com mais separação para reduzir a sobreposição dos gatilhos.
         const arcSpan = Math.PI * 0.55
@@ -11130,16 +11140,7 @@ export function World3D({
           gcPatternPadHintLabel[i] = padHint
         }
 
-        const memoryStatusLabel = new TextBlock('gcMemoryStatusLabel', '')
-        memoryStatusLabel.color = 'white'
-        memoryStatusLabel.fontSize = mobileFontSize(20)
-        memoryStatusLabel.fontWeight = 'bold'
-        memoryStatusLabel.outlineWidth = 4
-        memoryStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
-        memoryStatusLabel.alpha = 0
-        guiTexture.addControl(memoryStatusLabel)
-        memoryStatusLabel.linkWithMesh(gcMemoryCardMeshes[1])
-        memoryStatusLabel.linkOffsetY = -55
+        const memoryStatusLabel = createArenaStatusLabel('gcMemoryStatusLabel')
         gameCenterMemoryStatusLabel = memoryStatusLabel
 
         // Alvos combinados (cartas + pods) — ver comentário na declaração de `arenaMemoryMode`: os
@@ -11259,16 +11260,7 @@ export function World3D({
           gcCountingOptionHintLabel[i] = optionHint
         }
 
-        const countingStatusLabel = new TextBlock('gcCountingStatusLabel', '')
-        countingStatusLabel.color = 'white'
-        countingStatusLabel.fontSize = mobileFontSize(20)
-        countingStatusLabel.fontWeight = 'bold'
-        countingStatusLabel.outlineWidth = 4
-        countingStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
-        countingStatusLabel.alpha = 0
-        guiTexture.addControl(countingStatusLabel)
-        countingStatusLabel.linkWithMesh(gcCountingOptionMeshes[1])
-        countingStatusLabel.linkOffsetY = -55
+        const countingStatusLabel = createArenaStatusLabel('gcCountingStatusLabel')
         gameCenterCountingStatusLabel = countingStatusLabel
 
         arenaTargetPositions.contar = gcCountingOptionPos
@@ -11318,7 +11310,8 @@ export function World3D({
           )
 
           const tile = MeshBuilder.CreateBox(`gcSpellingTile-${i}`, { width: 0.5, height: 0.5, depth: 0.08 }, scene)
-          tile.position = tileLocalPos.add(new Vector3(0, 0.6, 0))
+          // Raise the back row so foreground tiles do not cover its clickable faces.
+          tile.position = tileLocalPos.add(new Vector3(0, row === 0 ? 1.05 : 0.6, 0))
           tile.material = spellingTileMat.clone(`gcSpellingTileMat-${i}`) as PBRMaterial
           tile.parent = interiorRoot
           tile.receiveShadows = true
@@ -11351,16 +11344,7 @@ export function World3D({
           gcSpellingTileHintLabel[i] = tileHint
         }
 
-        const spellingStatusLabel = new TextBlock('gcSpellingStatusLabel', '')
-        spellingStatusLabel.color = 'white'
-        spellingStatusLabel.fontSize = mobileFontSize(20)
-        spellingStatusLabel.fontWeight = 'bold'
-        spellingStatusLabel.outlineWidth = 4
-        spellingStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
-        spellingStatusLabel.alpha = 0
-        guiTexture.addControl(spellingStatusLabel)
-        spellingStatusLabel.linkWithMesh(gcSpellingTileMeshes[1])
-        spellingStatusLabel.linkOffsetY = -55
+        const spellingStatusLabel = createArenaStatusLabel('gcSpellingStatusLabel')
         gameCenterSpellingStatusLabel = spellingStatusLabel
 
         arenaTargetPositions.soletrar = gcSpellingTilePos
@@ -11393,7 +11377,8 @@ export function World3D({
         logicSequenceMat.roughness = 0.55
         for (let i = 0; i < 4; i++) {
           const piece = MeshBuilder.CreateBox(`gcLogicSequence-${i}`, { width: 0.43, height: 0.43, depth: 0.12 }, scene)
-          piece.position = logicAnchorLocal.add(new Vector3((i - 1.5) * 0.56, 0.66, 1.4))
+          // Viewed from the lobby (+Z), positive X is the left side of the sequence.
+          piece.position = logicAnchorLocal.add(new Vector3((1.5 - i) * 0.56, 0.66, 1.4))
           piece.material = logicSequenceMat
           piece.parent = interiorRoot
           piece.isPickable = false
@@ -11449,16 +11434,7 @@ export function World3D({
           gcLogicOptionHintLabels[i] = hint
         }
 
-        const logicStatusLabel = new TextBlock('gcLogicStatusLabel', '')
-        logicStatusLabel.color = 'white'
-        logicStatusLabel.fontSize = mobileFontSize(20)
-        logicStatusLabel.fontWeight = 'bold'
-        logicStatusLabel.outlineWidth = 4
-        logicStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
-        logicStatusLabel.alpha = 0
-        guiTexture.addControl(logicStatusLabel)
-        logicStatusLabel.linkWithMesh(gcLogicOptionMeshes[1])
-        logicStatusLabel.linkOffsetY = -55
+        const logicStatusLabel = createArenaStatusLabel('gcLogicStatusLabel')
         gameCenterLogicStatusLabel = logicStatusLabel
 
         arenaTargetPositions.logica = gcLogicOptionPos
@@ -11482,6 +11458,7 @@ export function World3D({
       }
 
       function enterGameCenterInterior() {
+        if (insideGameCenterInterior) return
         buildGameCenterInteriorIfNeeded()
         // Progresso/troféus do centro de jogos (Lab 217) — re-sincroniza com `progressRef.current`
         // TODA entrada, não só na primeira construção da sala: cobre conclusões do desafio
@@ -11529,14 +11506,17 @@ export function World3D({
         wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(gameCenterInteriorSpawnPos)
-        facing = Vector3.Forward()
+        facing = Vector3.Backward()
         camera.position.copyFrom(
           gameCenterInteriorSpawnPos
-            .subtract(facing.scale(HOUSE_INTERIOR_CAMERA_DISTANCE))
+            .subtract(facing.scale(GAME_CENTER_CAMERA_DISTANCE))
             .add(Vector3.Up().scale(HOUSE_INTERIOR_CAMERA_HEIGHT)),
         )
         camera.upVector.copyFrom(Vector3.Up())
-        camera.setTarget(gameCenterInteriorSpawnPos)
+        gameCenterCameraTarget.copyFrom(gameCenterInteriorSpawnPos)
+        gameCenterCameraTarget.z -= GAME_CENTER_CAMERA_LOOK_AHEAD
+        gameCenterCameraTarget.y += GAME_CENTER_CAMERA_TARGET_HEIGHT
+        camera.setTarget(gameCenterCameraTarget)
         scene.render()
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
@@ -11631,10 +11611,10 @@ export function World3D({
         let text = baseStatusText
         if (newTrophy) {
           const tierLabel = newTrophy === 'ouro' ? '🏆 Ouro' : newTrophy === 'prata' ? '🥈 Prata' : '🥉 Bronze'
-          text += ` ${tierLabel} desbloqueado!`
+          text += `\n${tierLabel} desbloqueado!`
         }
         if (weeklyQuestRewardGranted) {
-          text += ` 🎁 +${GAME_CENTER_WEEKLY_QUEST_REWARD_COINS} moedas (missão semanal)!`
+          text += `\n🎁 +${GAME_CENTER_WEEKLY_QUEST_REWARD_COINS} moedas (missão semanal)!`
         }
         return text
       }
@@ -11697,21 +11677,21 @@ export function World3D({
       selectGameCenterTapTargetAt = (clientX, clientY) => {
         if (!insideGameCenterInterior || hudInertRef.current || !canvas) return
         const rect = canvas.getBoundingClientRect()
+        const activeTargets = arenaPhase === 'playing' && activeArenaId
+          ? arenaTargetMeshes[activeArenaId] ?? []
+          : []
+        // scene.pick accepts CSS coordinates; Babylon applies hardware scaling in its ray.
         const picked = scene.pick(
           clientX - rect.left,
           clientY - rect.top,
-          (mesh) => gameCenterPortalBoards.has(mesh) ||
-            (activeArenaId === 'logica' && arenaPhase === 'playing' && gcLogicOptionMeshes.includes(mesh as Mesh)),
+          (mesh) => resolveGameCenterTap(mesh, gameCenterPortalBoards, activeTargets) !== null,
         )
-        if (activeArenaId === 'logica' && arenaPhase === 'playing') {
-          const optionIndex = gcLogicOptionMeshes.indexOf(picked.pickedMesh as Mesh)
-          if (optionIndex >= 0) {
-            handleLogicOptionInteract(optionIndex)
-            return
-          }
+        const target = resolveGameCenterTap(picked.pickedMesh, gameCenterPortalBoards, activeTargets)
+        if (target?.kind === 'arena' && activeArenaId && arenaPhase === 'playing') {
+          arenaTargetInteract[activeArenaId]?.(target.index)
+        } else if (target?.kind === 'portal') {
+          handleGameCenterPortalInteract(target.id)
         }
-        const id = picked.pickedMesh && gameCenterPortalBoards.get(picked.pickedMesh)
-        if (id) handleGameCenterPortalInteract(id)
       }
 
       // Controlador genérico de arena (Lab 214, generalização confirmada com o usuário) — contagem
@@ -11723,6 +11703,24 @@ export function World3D({
       // `fail` (só quando há cronômetro, via `config.onTimeout`). `isRetry` só diferencia o evento
       // de analytics disparado (`minigame_started` sempre; `minigame_retried` só quando é de fato
       // uma NOVA tentativa da MESMA arena depois de uma anterior ter terminado).
+      function createArenaStatusLabel(name: string): TextBlock {
+        const label = new TextBlock(name, '')
+        label.color = 'white'
+        label.fontSize = mobileFontSize(18)
+        label.fontWeight = 'bold'
+        label.outlineWidth = 4
+        label.outlineColor = 'rgba(0,0,0,0.6)'
+        label.width = '80%'
+        label.height = '96px'
+        label.textWrapping = true
+        label.verticalAlignment = TextBlock.VERTICAL_ALIGNMENT_BOTTOM
+        label.top = '-60px'
+        label.isPointerBlocker = false
+        label.alpha = 0
+        guiTexture.addControl(label)
+        return label
+      }
+
       function beginArenaCountdown(id: ArenaId, isRetry: boolean) {
         const config = arenaConfigs[id]
         if (!config) return
@@ -11849,7 +11847,7 @@ export function World3D({
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
               'memoria',
-              `🎉 Você venceu! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+              '🎉 Pares encontrados!',
             )
           }
         }
@@ -11936,7 +11934,7 @@ export function World3D({
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
               'memoria',
-              `🎉 Sequência completa! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+              '🎉 Sequência completa!',
             )
           }
           return
@@ -12002,7 +12000,7 @@ export function World3D({
           if (gameCenterCountingStatusLabel) {
             gameCenterCountingStatusLabel.text = handleGameCenterMinigameReward(
               'contar',
-              `🎉 Você contou tudo certo! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+              '🎉 Você contou tudo certo!',
             )
           }
           return
@@ -12067,7 +12065,7 @@ export function World3D({
           if (gameCenterSpellingStatusLabel) {
             gameCenterSpellingStatusLabel.text = handleGameCenterMinigameReward(
               'soletrar',
-              `🎉 Você soletrou ${state.hint} ${state.word}! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+              `🎉 Você soletrou ${state.hint} ${state.word}!`,
             )
           }
           return
@@ -12130,7 +12128,7 @@ export function World3D({
         if (gameCenterLogicStatusLabel) {
           gameCenterLogicStatusLabel.text = handleGameCenterMinigameReward(
             'logica',
-            `🎉 Você descobriu os padrões! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+            '🎉 Você descobriu os padrões!',
           )
         }
       }
@@ -13038,12 +13036,8 @@ export function World3D({
       // desta investigação. Corrigido com folga real acima do mínimo geométrico (~1,25).
       const HOUSE_TRIGGER_DISTANCE = 1.6
 
-      // Distância de gatilho das escolinhas de astronomia dos planetas (lab-115) — mesmo
-      // raciocínio da carteira/Minha Casa: o totem+professor ocupam espaço parecido.
-      const PLANET_SCHOOL_TRIGGER_DISTANCE = 1.2
-
       // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — raio um pouco maior que o da
-      // própria escolinha (1.2): o professor "percebe" o jogador chegando um pouco ANTES dele
+      // própria escolinha (1.8): o professor "percebe" o jogador chegando um pouco ANTES dele
       // acionar o quiz, mesmo espírito de um NPC de verdade notando alguém se aproximar. Usa
       // `RESET_DISTANCE` (já existente, 3.6) como raio de saída — mesma histerese gatilho/reset já
       // usada em toda detecção de proximidade deste arquivo.
@@ -14570,7 +14564,8 @@ export function World3D({
           // lab-123: dentro de casa, a distância/altura padrão (pensada pro terreno aberto lá
           // fora) colocaria a câmera do lado de FORA da parede — ver comentário na declaração de
           // `HOUSE_INTERIOR_CAMERA_DISTANCE`.
-          const camDist = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
+          const camDist = insideGameCenterInterior ? GAME_CENTER_CAMERA_DISTANCE
+            : insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
           const camHeight = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_HEIGHT : CAMERA_HEIGHT
           // lab-138: dentro de casa, a câmera vira "esférica" ao redor do jogador (giro horizontal
           // + inclinação vertical + zoom, os três controláveis arrastando/rolando o mouse — ver
@@ -14658,7 +14653,16 @@ export function World3D({
                 ? desiredCamPos
                 : Vector3.Lerp(camera.position, desiredCamPos, 0.1)
             camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
-            camera.setTarget(pos)
+            if (insideGameCenterInterior) {
+              gameCenterCameraTarget.set(
+                pos.x + camFacing.x * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.x * GAME_CENTER_CAMERA_TARGET_HEIGHT,
+                pos.y + camFacing.y * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.y * GAME_CENTER_CAMERA_TARGET_HEIGHT,
+                pos.z + camFacing.z * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.z * GAME_CENTER_CAMERA_TARGET_HEIGHT,
+              )
+              camera.setTarget(gameCenterCameraTarget)
+            } else {
+              camera.setTarget(pos)
+            }
           }
 
           // Desvanece a parede que estiver entre a câmera e o jogador (lab-136, pedido do
@@ -14916,24 +14920,11 @@ export function World3D({
             // histerese gatilho/reset das escolinhas do planeta principal, mas pulando quest já
             // concluída (mesmo espírito de `portalMeshes`/`completed` acima) via
             // `completedPlanetQuestIds`, NUNCA `completedQuestIds`.
-            for (const marker of planetQuestMarkers) {
-              const triggerId = `planet-school-${marker.quest.id}`
-              if (marker.planetId !== currentPlanetId) {
-                triggered.delete(triggerId)
-                continue
-              }
-              if (progressRef.current.completedPlanetQuestIds.includes(marker.quest.id)) {
-                triggered.delete(triggerId)
-                continue
-              }
-              const dSq = distanceSquared(pos, marker.worldPos)
-              if (dSq < PLANET_SCHOOL_TRIGGER_DISTANCE * PLANET_SCHOOL_TRIGGER_DISTANCE && !triggered.has(triggerId)) {
-                triggered.add(triggerId)
-                onSelectPlanetQuestRef.current(marker.quest.id)
-              } else if (dSq > RESET_DISTANCE * RESET_DISTANCE) {
-                triggered.delete(triggerId)
-              }
-            }
+            const planetQuestToOpen = selectPlanetSchoolQuest(
+              planetQuestMarkers, pos, currentPlanetId,
+              progressRef.current.completedPlanetQuestIds, triggered,
+            )
+            if (planetQuestToOpen !== null) onSelectPlanetQuestRef.current(planetQuestToOpen)
 
             // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — olhar pro jogador e fala
             // catalogada (só na primeira aproximação de cada visita, mesma histerese
@@ -15801,6 +15792,9 @@ export function World3D({
         // Labels de proximidade nao afetam fisica nem gatilhos. Atualiza-las a 10 Hz corta
         // dezenas de comparacoes e escritas no Babylon GUI por quadro sem atraso perceptivel.
         if (shouldUpdateProximityUi) {
+        for (const marker of planetQuestMarkers) {
+          marker.label.text = progressRef.current.completedPlanetQuestIds.includes(marker.quest.id) ? '✓' : '?'
+        }
         // Dica "pressione E" da casa (lab-123) — mesmo padrão do carro/foguete abaixo. Só uma das
         // duas fica visível por vez: a de entrar (fora, perto da fachada) ou a de sair (dentro,
         // perto da porta) — nunca as duas juntas.
@@ -15931,15 +15925,11 @@ export function World3D({
             for (const label of hintLabels) label.alpha = 0
           }
         }
-        // Mensagem de status/resultado da arena ATIVA (contagem, cronômetro, vitória/derrota) —
-        // some se a criança se afastar da área da arena, em vez de ficar flutuando pra sempre
-        // (achado ao verificar ao vivo no lab-198: sem isso, "Você venceu!" continuava visível
-        // mesmo depois de ir pra outro portal, já que só `exitActiveArena`/o próximo
-        // `beginArenaCountdown` mexiam nesse `alpha`).
+        // Toque direto permite responder longe da placa: instrucao/resultado da arena ativa
+        // nao dependem mais da distancia. A troca de arena ou saida esconde o status anterior.
         if (avatarMesh && activeArenaId) {
           const config = arenaConfigs[activeArenaId]
-          const nearArena = isWithinDistance(avatarMesh.position, gameCenterPortalPos[activeArenaId], 3)
-          if (config?.statusLabel) config.statusLabel.alpha = arenaPhase !== 'idle' && nearArena ? 1 : 0
+          if (config?.statusLabel) config.statusLabel.alpha = insideGameCenterInterior && arenaPhase !== 'idle' ? 1 : 0
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
