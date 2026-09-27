@@ -55,13 +55,18 @@ Commit inicial -> implementacao: 504c8c6..c576a82
 
 ## Pendencias / dividas
 
-- Copilot overview, comentarios inline, threads e CI do HEAD devem ser revisados
-  antes de declarar pronto para merge; registrar disposicao de cada achado.
+- PR #130: https://github.com/suarezrafael/pesquisa/pull/130. CI do codigo e931f90
+  passou nos seis checks (push/PR), incluindo npm ci/build/test com fast-uri 3.1.8.
+  Copilot iniciou a revisao; overview/inline/threads ainda sem resultado na
+  ultima consulta. Nao tratar ausencia de comentarios como aprovacao nem declarar
+  pronto para merge antes de analisar o resultado e conferir CI do HEAD.
 - Playtest fisico Lab 240 e visita/retomada das escolinhas no Redmi Pad 2 continuam
   pendentes. Nao ha ganho medido de FPS, retencao ou aprendizagem neste lab.
 - Portao de multiplayer mostrou cabecalho cortado em 844x390. Defeito fora do
   escopo desta interacao; priorizar ajuste de modais em tela baixa no proximo lab,
-  preservando protecao parental e sem autorizar multiplayer durante QA.
+  preservando protecao parental e sem autorizar multiplayer durante QA. Em
+  index.css, .modal nao limita altura/rolagem, enquanto .modal-overlay centraliza
+  em larguras >=480px: celular horizontal entra nesse layout mesmo com altura baixa.
 - World3D continua monolitico; somente selecao extraida para funcao testavel.
 
 ## Funcionalidades planejadas nao concluidas
