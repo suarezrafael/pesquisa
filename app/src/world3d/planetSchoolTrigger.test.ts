@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { distanceSquared } from './spatialPerformance'
-import { planetSchoolTriggerAction, selectPlanetSchoolQuest, PLANET_SCHOOL_RESET_DISTANCE, PLANET_SCHOOL_TRIGGER_DISTANCE } from './planetSchoolTrigger'
+import { nearestPlanetSchoolQuest, planetSchoolTriggerAction, selectPlanetSchoolQuest, PLANET_SCHOOL_RESET_DISTANCE, PLANET_SCHOOL_TRIGGER_DISTANCE } from './planetSchoolTrigger'
 
 describe('planet school proximity', () => {
   it('opens beside the sign and beside the offset teacher, including avatar height', () => {
@@ -63,5 +63,62 @@ describe('planet school proximity', () => {
     expect(selectPlanetSchoolQuest(markers, origin, 'venus', [], triggered)).toBe('quiz')
     expect(selectPlanetSchoolQuest(markers, origin, 'venus', ['quiz'], triggered)).toBeNull()
     expect(triggered.size).toBe(0)
+  })
+})
+
+describe('explicit planet school interaction', () => {
+  const origin = { x: 0, y: 0, z: 0 }
+  const markers = [
+    { planetId: 'venus', quest: { id: 'farther' }, worldPos: { x: 1.5, y: 0, z: 0 } },
+    { planetId: 'venus', quest: { id: 'nearest' }, worldPos: { x: 0.85, y: 0, z: 0.4 } },
+    { planetId: 'mars', quest: { id: 'other' }, worldPos: origin },
+  ]
+
+  it('selects the nearest eligible question, not the first marker', () => {
+    expect(nearestPlanetSchoolQuest(markers, origin, 'venus', [])).toBe('nearest')
+  })
+
+  it('skips completed questions and other planets', () => {
+    expect(nearestPlanetSchoolQuest(markers, origin, 'venus', ['nearest'])).toBe('farther')
+    expect(nearestPlanetSchoolQuest(markers, origin, 'venus', ['nearest', 'farther'])).toBeNull()
+    expect(nearestPlanetSchoolQuest(markers, origin, 'saturno', [])).toBeNull()
+    expect(nearestPlanetSchoolQuest(markers, origin, null, [])).toBeNull()
+  })
+
+  it('shares the strict automatic trigger radius including avatar height', () => {
+    const single = [{ planetId: 'venus', quest: { id: 'quiz' }, worldPos: origin }]
+    expect(nearestPlanetSchoolQuest(single, { x: 1.4, y: 0.6, z: 0.4 }, 'venus', [])).toBe('quiz')
+    expect(nearestPlanetSchoolQuest(single, { x: PLANET_SCHOOL_TRIGGER_DISTANCE, y: 0, z: 0 }, 'venus', [])).toBeNull()
+    expect(nearestPlanetSchoolQuest(single, { x: 0, y: 2, z: 0 }, 'venus', [])).toBeNull()
+  })
+
+  it('keeps the first marker on an equal distance and handles an empty registry', () => {
+    const tied = [
+      { planetId: 'venus', quest: { id: 'first' }, worldPos: { x: -1, y: 0, z: 0 } },
+      { planetId: 'venus', quest: { id: 'second' }, worldPos: { x: 1, y: 0, z: 0 } },
+    ]
+    expect(nearestPlanetSchoolQuest(tied, origin, 'venus', [])).toBe('first')
+    expect(nearestPlanetSchoolQuest([], origin, 'venus', [])).toBeNull()
+  })
+
+  it('allows explicit retry while keeping automatic reopening latched', () => {
+    const single = [{ planetId: 'venus', quest: { id: 'quiz' }, worldPos: origin }]
+    const triggered = new Set<string>()
+    expect(selectPlanetSchoolQuest(single, origin, 'venus', [], triggered)).toBe('quiz')
+    expect(selectPlanetSchoolQuest(single, origin, 'venus', [], triggered)).toBeNull()
+    expect(nearestPlanetSchoolQuest(single, origin, 'venus', [])).toBe('quiz')
+    triggered.add('planet-school-quiz')
+    expect(selectPlanetSchoolQuest(single, origin, 'venus', [], triggered)).toBeNull()
+    expect(nearestPlanetSchoolQuest(single, origin, 'venus', ['quiz'])).toBeNull()
+    expect(selectPlanetSchoolQuest(single, origin, 'venus', ['quiz'], triggered)).toBeNull()
+    expect(triggered.size).toBe(0)
+  })
+
+  it('does not mutate markers or completed progress when finding a hint', () => {
+    const completed = Object.freeze(['farther'])
+    const immutableMarkers = markers.map((marker) => Object.freeze(marker))
+    expect(nearestPlanetSchoolQuest(immutableMarkers, origin, 'venus', completed)).toBe('nearest')
+    expect(completed).toEqual(['farther'])
+    expect(immutableMarkers.map((marker) => marker.quest.id)).toEqual(['farther', 'nearest', 'other'])
   })
 })

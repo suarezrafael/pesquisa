@@ -1,9 +1,20 @@
 # Laboratório atual
 
-Lab 241 implementado localmente: labs/lab-241-toque-alvos-arenas/ - toque
+Lab 242 implementado localmente: labs/lab-242-interacao-escolinhas-planetas/ -
+retomar perguntas pendentes por E/touch perto da placa, com dica contextual e
+sem loop automatico. Suite: 330 testes. PR #130 aberta, CI do codigo e931f90
+passou; overview/inline/threads Copilot conferidos, sem achados em e931f90.
+Touch fisico pendente; conferir CI do HEAD antes de merge.
+Base: main 504c8c6 (PR #129). Ver FEATURES.md e CONTEXT.md.
+
+---
+
+Lab 241 mesclado em 504c8c6 (PR #129): labs/lab-241-toque-alvos-arenas/ - toque
 direto nos alvos das quatro arenas, entrada/enquadramento/status da Central
 e alcance das perguntas dos planetas secundarios. Suite: 324 testes passaram.
-Revisao de PR e teste fisico pendentes; ver `FEATURES.md` e `CONTEXT.md`.
+Copilot revisado/respondido; publicado em 2026-09-27, teste fisico pendente.
+Build em missaoaprendizado.com: 2026-09-27T11:21:42.007Z.
+Ver `FEATURES.md` e `CONTEXT.md`.
 O playtest fisico do Lab 240 continua pendente.
 
 ---

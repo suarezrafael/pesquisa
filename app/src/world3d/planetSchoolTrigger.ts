@@ -19,6 +19,26 @@ interface PlanetSchoolMarker {
   worldPos: Point3Like
 }
 
+export function nearestPlanetSchoolQuest(
+  markers: readonly PlanetSchoolMarker[],
+  avatarPosition: Point3Like,
+  currentPlanetId: string | null,
+  completedQuestIds: readonly string[],
+): string | null {
+  if (currentPlanetId === null) return null
+  let nearestId: string | null = null
+  let nearestDistanceSquared = PLANET_SCHOOL_TRIGGER_DISTANCE ** 2
+  for (const marker of markers) {
+    if (marker.planetId !== currentPlanetId || completedQuestIds.includes(marker.quest.id)) continue
+    const candidateDistanceSquared = distanceSquared(avatarPosition, marker.worldPos)
+    if (candidateDistanceSquared < nearestDistanceSquared) {
+      nearestId = marker.quest.id
+      nearestDistanceSquared = candidateDistanceSquared
+    }
+  }
+  return nearestId
+}
+
 export function selectPlanetSchoolQuest(
   markers: readonly PlanetSchoolMarker[],
   avatarPosition: Point3Like,

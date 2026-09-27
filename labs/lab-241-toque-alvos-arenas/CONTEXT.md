@@ -71,10 +71,13 @@ Commit inicial -> implementacao: 4d038fd..84aca90
   Babylon instalado (NullEngine com dimensoes de buffer escaladas) confirmou
   picking CSS em escalas 1, 1.15, 1.4 e 1.6; pre-escalar perde o alvo central.
   Nao aplicar a conversao dupla. Este teste nao substitui touch fisico no tablet.
+- Comentario respondido com evidencia e thread resolvida. CI do HEAD 4b9e0d1
+  passou antes do merge; PR #129 mesclada em 504c8c6 em 2026-09-27.
+- CI da main 36315378962 concluiu deploy Vercel, Cloudflare Pages e Workers.
+  HTML/asset em missaoaprendizado.com confirmam build 2026-09-27T11:21:42.007Z.
 
 ## Pendencias / dividas conhecidas
 
-- Conferir nova revisao do Copilot e CI do HEAD antes de merge/publicacao.
 - Lab 240 continua pendente: porta externa, partida completa das quatro arenas,
   memoria/sequencia, pinca e controles no Redmi Pad 2.
 - Confirmar perguntas ao lado da placa/professor em um planeta secundario,
