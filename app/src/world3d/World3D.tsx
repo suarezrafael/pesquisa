@@ -11310,7 +11310,8 @@ export function World3D({
           )
 
           const tile = MeshBuilder.CreateBox(`gcSpellingTile-${i}`, { width: 0.5, height: 0.5, depth: 0.08 }, scene)
-          tile.position = tileLocalPos.add(new Vector3(0, 0.6, 0))
+          // Raise the back row so foreground tiles do not cover its clickable faces.
+          tile.position = tileLocalPos.add(new Vector3(0, row === 0 ? 1.05 : 0.6, 0))
           tile.material = spellingTileMat.clone(`gcSpellingTileMat-${i}`) as PBRMaterial
           tile.parent = interiorRoot
           tile.receiveShadows = true

@@ -34,6 +34,8 @@ ganho de engajamento sem o playtest pendente do Lab 240.
 - [x] Manter instrucao/resultado da arena ativa visiveis mesmo ao responder de
   longe por toque; esconder ao trocar de arena ou sair (referencia: defeito
   observado no fluxo de Contar, Lab 241).
+- [x] Evitar sobreposicao das fileiras de letras de Soletrar na vista inicial
+  (referencia: teste de selecao direta com perfil economico).
 - [x] Evitar corte das mensagens de resultado com largura limitada, quebra de
   linha e texto curto; apresentar sequencia de Logica da esquerda para a direita
   vista do saguao (referencia: verificacao visual no navegador, Lab 241).
