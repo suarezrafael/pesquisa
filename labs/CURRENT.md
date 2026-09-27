@@ -3,8 +3,8 @@
 Lab 242 implementado localmente: labs/lab-242-interacao-escolinhas-planetas/ -
 retomar perguntas pendentes por E/touch perto da placa, com dica contextual e
 sem loop automatico. Suite: 330 testes. PR #130 aberta, CI do codigo e931f90
-passou; Copilot em execucao, touch fisico pendente. Nao declarar pronto para
-merge antes de analisar a revisao.
+passou; overview/inline/threads Copilot conferidos, sem achados em e931f90.
+Touch fisico pendente; conferir CI do HEAD antes de merge.
 Base: main 504c8c6 (PR #129). Ver FEATURES.md e CONTEXT.md.
 
 ---

@@ -1,6 +1,6 @@
 # Laboratorio 242 - Interacao explicita nas escolinhas dos planetas
 
-Status: implementado localmente; revisao de PR e validacao fisica pendentes
+Status: implementado; PR #130 aberta, validacao fisica pendente
 Inicio: 2026-09-27
 Fim: 2026-09-27 (implementacao local)
 Commit inicial: 504c8c6a072ecddfba21d839c0469de60706b299

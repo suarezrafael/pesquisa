@@ -57,9 +57,11 @@ Commit inicial -> implementacao: 504c8c6..c576a82
 
 - PR #130: https://github.com/suarezrafael/pesquisa/pull/130. CI do codigo e931f90
   passou nos seis checks (push/PR), incluindo npm ci/build/test com fast-uri 3.1.8.
-  Copilot iniciou a revisao; overview/inline/threads ainda sem resultado na
-  ultima consulta. Nao tratar ausencia de comentarios como aprovacao nem declarar
-  pronto para merge antes de analisar o resultado e conferir CI do HEAD.
+  Copilot revisou e931f90: overview recomenda aprovacao sem achados (estado
+  COMMENTED, nao uma aprovacao formal). APIs inline/threads e comentarios gerais
+  conferidas: nenhuma pendencia. Lock gerado nao foi revisado pelo bot; diff
+  manual limitado a fast-uri e auditoria/CI confirmados. Conferir CI do HEAD
+  documental final antes de merge. Nenhuma publicacao do Lab 242 ainda ocorreu.
 - Playtest fisico Lab 240 e visita/retomada das escolinhas no Redmi Pad 2 continuam
   pendentes. Nao ha ganho medido de FPS, retencao ou aprendizagem neste lab.
 - Portao de multiplayer mostrou cabecalho cortado em 844x390. Defeito fora do
@@ -71,8 +73,8 @@ Commit inicial -> implementacao: 504c8c6..c576a82
 
 ## Funcionalidades planejadas nao concluidas
 
-- Nenhum item de codigo ficou sem implementacao. Revisao/CI e teste fisico nao
-  devem ser contados como aprovados por esta validacao local.
+- Nenhum item de codigo ficou sem implementacao. Teste fisico continua pendente;
+  nao deve ser contado como aprovado por esta validacao local.
 
 ## Proximo laboratorio recomendado
 
