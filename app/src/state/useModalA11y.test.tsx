@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, StrictMode, useRef, useState } from 'react'
+import { act, StrictMode, useRef, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useModalA11y, useModalFocusHistory } from './useModalA11y'
@@ -24,13 +24,17 @@ function TestModal({ name, autoFocus, onClose, onOpenSecond, onCloseFirst }: {
   )
 }
 
+function FocusHistory({ children }: { children: ReactNode }) {
+  useModalFocusHistory()
+  return children
+}
+
 function Harness({ autoFocus = true, secondAutoFocus = false, showOpener = true, onFirstClose = () => {} }: {
   autoFocus?: boolean
   secondAutoFocus?: boolean
   showOpener?: boolean
   onFirstClose?: () => void
 }) {
-  useModalFocusHistory()
   const [first, setFirst] = useState(false)
   const [second, setSecond] = useState(false)
   function closeFirst() {
@@ -72,8 +76,9 @@ describe('useModalA11y focus lifecycle', () => {
       new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }),
     ))
   }
-  function render(props: Parameters<typeof Harness>[0] = {}, strict = false) {
-    act(() => root.render(strict ? <StrictMode><Harness {...props} /></StrictMode> : <Harness {...props} />))
+  function render(props: Parameters<typeof Harness>[0] = {}, strict = false, rememberFocus = true) {
+    const content = rememberFocus ? <FocusHistory><Harness {...props} /></FocusHistory> : <Harness {...props} />
+    act(() => root.render(strict ? <StrictMode>{content}</StrictMode> : content))
   }
 
   beforeEach(() => {
@@ -230,6 +235,13 @@ describe('useModalA11y focus lifecycle', () => {
       key('Escape')
       expect(document.activeElement).toBe(control('opener'))
     }
+  })
+
+  it('keeps the original focus across StrictMode replay without a history owner', () => {
+    render({ autoFocus: false }, true, false)
+    click('opener')
+    key('Escape')
+    expect(document.activeElement).toBe(control('opener'))
   })
 
   it('cleans up every shared/history/keyboard listener on unmount', () => {

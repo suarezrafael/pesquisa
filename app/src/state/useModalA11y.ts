@@ -61,9 +61,8 @@ function registerModalRoot(root: HTMLElement, previouslyFocused: HTMLElement | n
     const isExternal = (target: HTMLElement | null) => target &&
       target.isConnected && target !== document.body &&
       target !== document.documentElement && !root.contains(target)
-    stackOriginFocus = isExternal(previouslyFocused)
-      ? previouslyFocused
-      : isExternal(lastExternalFocus) ? lastExternalFocus : null
+    stackOriginFocus = [previouslyFocused, lastExternalFocus, stackOriginFocus]
+      .find(isExternal) ?? null
   }
   activeModalRoots.push(root)
   if (!sharedFocusInListener) {
@@ -187,7 +186,6 @@ export function useModalA11y(onClose: () => void, initialFocusRef?: RefObject<HT
       if (root) unregisterModalRoot(root)
       // StrictMode replays effects with the dialog still mounted; do not steal its autofocus.
       if (root?.isConnected) {
-        if (activeModalRoots.length === 0) stackOriginFocus = null
         return
       }
       // Achado do review automático do Copilot: com painéis concorrentes, o painel de BAIXO podia
