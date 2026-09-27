@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { generateGateChallenge, isGateAnswerCorrect } from '../data/parentalGate'
 import { useModalA11y } from '../state/useModalA11y'
 
@@ -16,7 +16,8 @@ export function ParentalGateModal({ onAuthorize, onCancel }: ParentalGateModalPr
   const [challenge] = useState(() => generateGateChallenge())
   const [answer, setAnswer] = useState('')
   const [showError, setShowError] = useState(false)
-  const modalRef = useModalA11y(onCancel)
+  const answerRef = useRef<HTMLInputElement>(null)
+  const modalRef = useModalA11y(onCancel, answerRef)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -54,6 +55,7 @@ export function ParentalGateModal({ onAuthorize, onCancel }: ParentalGateModalPr
               {challenge.a} × {challenge.b} = ?
             </span>
             <input
+              ref={answerRef}
               value={answer}
               onChange={(e) => {
                 setAnswer(e.target.value)

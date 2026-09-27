@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 
 // Achado do review automático do Copilot: painéis pequenos (chat/ranking/mochila) podem ficar
 // abertos AO MESMO TEMPO (estados independentes em `World3D.tsx`). Duas rodadas de tentativa de
@@ -18,6 +18,28 @@ let sharedFocusInListener: ((e: FocusEvent) => void) | null = null
 // com painéis concorrentes fechando fora de ordem LIFO, o `previouslyFocused` de quem fecha por
 // último não é o elemento certo pra restaurar (ver `registerModalRoot`/limpeza abaixo).
 let stackOriginFocus: HTMLElement | null = null
+let lastExternalFocus: HTMLElement | null = null
+
+// Track before a dialog's autofocus or the HUD's inert attribute changes activeElement.
+// This listener lives with the game, not with an already-open modal.
+export function useModalFocusHistory() {
+  useEffect(() => {
+    function rememberFocus() {
+      if (activeModalRoots.length > 0) return
+      const target = document.activeElement
+      if (target instanceof HTMLElement && target !== document.body &&
+          target !== document.documentElement && !target.closest('[role="dialog"]')) {
+        lastExternalFocus = target
+      }
+    }
+    rememberFocus()
+    window.addEventListener('focusin', rememberFocus)
+    return () => {
+      window.removeEventListener('focusin', rememberFocus)
+      lastExternalFocus = null
+    }
+  }, [])
+}
 
 function handleSharedFocusIn(e: FocusEvent) {
   const target = e.target as Node | null
@@ -36,7 +58,12 @@ function registerModalRoot(root: HTMLElement, previouslyFocused: HTMLElement | n
   // instância é o painel de baixo (que pode fechar antes deste), não o elemento de antes de
   // qualquer painel; sobrescrever aqui perderia o alvo de restauração certo.
   if (activeModalRoots.length === 0) {
-    stackOriginFocus = previouslyFocused
+    const isExternal = (target: HTMLElement | null) => target &&
+      target.isConnected && target !== document.body &&
+      target !== document.documentElement && !root.contains(target)
+    stackOriginFocus = isExternal(previouslyFocused)
+      ? previouslyFocused
+      : isExternal(lastExternalFocus) ? lastExternalFocus : null
   }
   activeModalRoots.push(root)
   if (!sharedFocusInListener) {
@@ -60,7 +87,7 @@ function unregisterModalRoot(root: HTMLElement) {
 // onde o foco foi parar), (3) o foco volta pro elemento que abriu o painel ao fechar. O elemento
 // raiz do painel precisa aplicar o `ref` devolvido e ter `tabIndex={-1}` (focável via script, não
 // pela ordem normal de Tab).
-export function useModalA11y(onClose: () => void) {
+export function useModalA11y(onClose: () => void, initialFocusRef?: RefObject<HTMLElement | null>) {
   const rootRef = useRef<HTMLDivElement>(null)
   // lab-150 (achado do review automático do Copilot no PR #8, nunca lido antes desta sessão): o
   // `useEffect` abaixo roda só uma vez (`[]`), então `handleKeyDown` fechava sobre o `onClose` da
@@ -90,7 +117,12 @@ export function useModalA11y(onClose: () => void) {
     // Alguns painéis (ex. PairingScreen) já têm `autoFocus` num campo de formulário específico —
     // se o foco já está DENTRO do painel quando este efeito roda, não roubar de volta pro elemento
     // raiz; só move o foco quando nada dentro do painel já pegou o foco sozinho.
-    if (!rootRef.current?.contains(document.activeElement)) {
+    // Nested dialogs can have autofocus intercepted by the already-open panel's trap.
+    // Apply an explicit initial target only after registering the new root.
+    const initialFocus = initialFocusRef?.current
+    if (initialFocus && root?.contains(initialFocus)) {
+      initialFocus.focus({ preventScroll: true })
+    } else if (!rootRef.current?.contains(document.activeElement)) {
       rootRef.current?.focus()
     }
 
@@ -153,13 +185,18 @@ export function useModalA11y(onClose: () => void) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       if (root) unregisterModalRoot(root)
+      // StrictMode replays effects with the dialog still mounted; do not steal its autofocus.
+      if (root?.isConnected) {
+        if (activeModalRoots.length === 0) stackOriginFocus = null
+        return
+      }
       // Achado do review automático do Copilot: com painéis concorrentes, o painel de BAIXO podia
       // fechar primeiro (fora da ordem LIFO natural) — restaurar `previouslyFocused` incondicional
       // roubava o foco do painel de CIMA (ainda aberto) de volta pro que veio antes de ambos. Se
       // ainda sobrar algum painel na pilha depois de remover este, o foco pertence a ele (o novo
       // topo).
       if (activeModalRoots.length > 0) {
-        activeModalRoots[activeModalRoots.length - 1].focus()
+        activeModalRoots[activeModalRoots.length - 1].focus({ preventScroll: true })
         return
       }
       // Achado do review automático do Copilot (rodada 7): quando a pilha esvazia de verdade, o
@@ -171,8 +208,9 @@ export function useModalA11y(onClose: () => void) {
       // devolver pro abridor original de toda a pilha.
       const originFocus = stackOriginFocus
       stackOriginFocus = null
-      if (originFocus && document.contains(originFocus)) {
-        originFocus.focus()
+      if (originFocus?.isConnected && !originFocus.closest('[inert], [hidden]') &&
+          !originFocus.matches(':disabled')) {
+        originFocus.focus({ preventScroll: true })
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
