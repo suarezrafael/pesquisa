@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Lab 241 implementado localmente: labs/lab-241-toque-alvos-arenas/ - toque
+direto nos alvos das quatro arenas, entrada/enquadramento/status da Central
+e alcance das perguntas dos planetas secundarios. Suite: 318 testes passaram.
+Revisao de PR e teste fisico pendentes; ver `FEATURES.md` e `CONTEXT.md`.
+O playtest fisico do Lab 240 continua pendente.
+
+---
+
 Em andamento: labs/lab-240-validacao-central-tablet/ - validar no Redmi Pad 2
 o toque nos portais (Lab 238) e a arena de Logica (Lab 239). A entrada no
 interior e o ciclo completo ainda nao foram confirmados; ver `FEATURES.md`.
