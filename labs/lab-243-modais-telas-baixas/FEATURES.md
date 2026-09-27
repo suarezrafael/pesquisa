@@ -1,7 +1,8 @@
 # Laboratorio 243 - Modais acessiveis em telas baixas
 
-Status: em andamento
+Status: implementado; PR #131 em revisao, validacao fisica pendente
 Inicio: 2026-09-27
+Fim: 2026-09-27 (implementacao local)
 Commit inicial: 5eb2675a3060ec8d8444b52f7e430ae7f02d6164
 Prioridade: P0 - leitura e saida de interacoes bloqueadas
 
@@ -16,13 +17,13 @@ Origens: CONTEXT do Lab 242; UX 189/190; docs/prompts/02-design-profissional.md.
 
 ## Escopo e criterios de aceite
 
-- [ ] Modais cabem na altura disponivel, incluindo telas baixas e safe areas,
+- [x] Modais cabem na altura disponivel, incluindo telas baixas e safe areas,
   com rolagem interna, sem rolagem horizontal ou texto cortado irrecuperavel.
-- [ ] Portao parental permite ler, recusar e fechar; trap de foco e Escape
+- [x] Portao parental permite ler, recusar e fechar; trap de foco e Escape
   permanecem funcionais sem autorizar multiplayer durante o teste.
-- [ ] Perguntas, listas, apelido e vinculo familiar continuam acessiveis.
-- [ ] Lojinha e pets preservam preview fixo e acesso aos itens em tela baixa.
-- [ ] Testar desktop, tablet, celular vertical e horizontal; registrar medidas
+- [x] Perguntas, listas, apelido e vinculo familiar continuam acessiveis.
+- [x] Lojinha e pets preservam preview fixo e acesso aos itens em tela baixa.
+- [x] Testar desktop, tablet, celular vertical e horizontal; registrar medidas
   DOM e screenshots, suite, lint e build. Teclado virtual/touch fisicos pendentes.
 
 ## Fora de escopo

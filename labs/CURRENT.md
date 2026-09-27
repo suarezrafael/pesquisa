@@ -1,8 +1,10 @@
 # Laboratório atual
 
-Em andamento: labs/lab-243-modais-telas-baixas/ - altura e rolagem compartilhadas
-para perguntas e portao parental, preservando previews e acessibilidade.
-Base: main 5eb2675 (PR #130). Ver FEATURES.md.
+Lab 243 implementado: labs/lab-243-modais-telas-baixas/ - altura e rolagem
+compartilhadas de modais, fechar acessivel e previews compactos em tela baixa.
+Suite: 330 testes; lint/build passaram, QA de cinco viewports no navegador.
+PR #131 em revisao; verificar CI e Copilot antes de publicar. Touch/IME fisicos
+pendentes. Base: main 5eb2675 (PR #130). Ver FEATURES.md e CONTEXT.md.
 
 ---
 
