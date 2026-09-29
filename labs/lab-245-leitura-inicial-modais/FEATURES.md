@@ -1,6 +1,6 @@
 # Laboratorio 245 - Leitura inicial em modais educativas e parentais
 
-Status: implementado; PR e revisao pendentes
+Status: implementado; PR #133 em revisao
 Inicio: 2026-09-28
 Fim: 2026-09-29 (implementacao local)
 Commit inicial: 2329f2e3dd60f1cd30a101d982cca5a7860ebf2e

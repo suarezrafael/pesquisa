@@ -2,7 +2,7 @@
 
 Data: 2026-09-29
 Base: 2329f2e3dd60f1cd30a101d982cca5a7860ebf2e (Lab 244, PR #132)
-PR: pendente de abertura
+PR: https://github.com/suarezrafael/pesquisa/pull/133
 
 ## Implementado
 
