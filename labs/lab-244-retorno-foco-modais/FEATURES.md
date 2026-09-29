@@ -1,7 +1,8 @@
 # Laboratorio 244 - Retorno de foco ao fechar modais
 
-Status: em andamento
+Status: implementado; PR #132 em revisao, validacao fisica pendente
 Inicio: 2026-09-27
+Fim: 2026-09-27 (implementacao local)
 Commit inicial: f919cfdc1aaa2e508c07cfe77a91fff0fdf3d264
 Prioridade: P1 - continuidade da interacao por teclado
 
@@ -17,17 +18,19 @@ contrato existente do useModalA11y, introduzido no Lab 121.
 
 ## Escopo e criterios de aceite
 
-- [ ] Recordar a origem antes de autofocus/inert, apenas em memoria durante
+- [x] Recordar a origem antes de autofocus/inert, apenas em memoria durante
   a vida do jogo; ignorar foco em dialogs/painel ativo e alvos removidos.
-- [ ] Fechar por botao/Escape devolve foco ao abridor valido sem scroll
+- [x] Fechar por botao/Escape devolve foco ao abridor valido sem scroll
   inesperado; campos com autofocus continuam recebendo foco ao abrir.
   Portao parental aberto sobre o ranking recebe foco no campo apos registro.
-- [ ] Painel concorrente fica com foco ao fechar outro; ao esvaziar a pilha,
+- [x] Painel concorrente fica com foco ao fechar outro; ao esvaziar a pilha,
   restaurar a origem anterior ao primeiro painel, mesmo fora da ordem LIFO.
-- [ ] Trap Tab/Shift+Tab, bloqueio de escape de foco e callback atualizado
+- [x] Trap Tab/Shift+Tab, bloqueio de escape de foco e callback atualizado
   continuam corretos; StrictMode e listeners limpos ao desmontar.
-- [ ] Testes de integracao DOM e QA real no navegador (desktop/tela baixa),
-  lint/build/auditoria e review Copilot antes de declarar PR pronta.
+- [x] Testes de integracao DOM e QA real no navegador (desktop/tela baixa),
+  lint/build/auditoria registrados em CONTEXT.md.
+- [ ] Conferir CI do HEAD e review Copilot overview/inline/threads antes de
+  declarar PR pronta; achado de libc no lockfile corrigido, CI final pendente.
 
 ## Fora de escopo
 

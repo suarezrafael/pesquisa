@@ -1,8 +1,11 @@
 # Laboratório atual
 
-Em andamento: labs/lab-244-retorno-foco-modais/ - devolver foco ao controle
-que abriu a modal, preservando autofocus, inert e paineis concorrentes.
-Base: main f919cfd (PR #131). Ver FEATURES.md.
+Lab 244 implementado: labs/lab-244-retorno-foco-modais/ - retorno de foco,
+autofocus do portao sobre ranking e preservacao da pilha/StrictMode.
+Suite: 348 testes (18 DOM novos); lint/build/auditoria passaram, QA no navegador
+em desktop/tela baixa. Achado Copilot no lockfile tratado: 32 seletores libc
+restaurados, sem troca de versoes. PR #132 aguarda CI do HEAD antes do merge.
+Android fisico pendente. Base: main f919cfd. Ver FEATURES.md e CONTEXT.md.
 
 ---
 
