@@ -1,11 +1,19 @@
 # Laboratório atual
 
+Lab 245 implementado: labs/lab-245-leitura-inicial-modais/ - foco inicial
+visivel no titulo do portao parental e das perguntas. 350 testes, lint e
+build/PWA passaram; navegador 320x400 e 1280x720 validado. PR #133 em revisao,
+assim como teste fisico Android. Base: main 2329f2e. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 244 implementado: labs/lab-244-retorno-foco-modais/ - retorno de foco,
 autofocus do portao sobre ranking e preservacao da pilha/StrictMode.
 Suite: 348 testes (18 DOM novos); lint/build/auditoria passaram, QA no navegador
 em desktop/tela baixa. Achado Copilot no lockfile tratado: 32 seletores libc
-restaurados, sem troca de versoes. PR #132 aguarda CI do HEAD antes do merge.
-Android fisico pendente. Base: main f919cfd. Ver FEATURES.md e CONTEXT.md.
+restaurados, sem troca de versoes. PR #132 mesclada em 2329f2e apos seis
+checks verdes e thread do Copilot resolvida. Android fisico pendente.
+Base: main f919cfd. Ver FEATURES.md e CONTEXT.md.
 
 ---
 

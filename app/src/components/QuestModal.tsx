@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Quest } from '../types'
 import { questTypeLabels } from '../data/quests'
 import { useModalA11y } from '../state/useModalA11y'
@@ -12,7 +12,8 @@ interface QuestModalProps {
 export function QuestModal({ quest, onCorrect, onClose }: QuestModalProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null)
-  const modalRef = useModalA11y(onClose)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  const modalRef = useModalA11y(onClose, titleRef)
 
   function handleChoose(choiceId: string) {
     if (feedback === 'correct') return
@@ -38,7 +39,7 @@ export function QuestModal({ quest, onCorrect, onClose }: QuestModalProps) {
           ×
         </button>
         <span className="quest-type-tag">{questTypeLabels[quest.type]}</span>
-        <h2>{quest.title}</h2>
+        <h2 ref={titleRef} tabIndex={-1}>{quest.title}</h2>
         {quest.passage && <p className="quest-passage">{quest.passage}</p>}
         <p className="quest-prompt">{quest.prompt}</p>
 
