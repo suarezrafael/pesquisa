@@ -1483,6 +1483,11 @@ a.nickname-generate-btn {
   border-radius: 999px;
 }
 
+.modal > h2:focus {
+  outline: 2px solid var(--accent-dark);
+  outline-offset: 3px;
+}
+
 .modal .nickname-generate-btn {
   min-height: 44px;
 }
