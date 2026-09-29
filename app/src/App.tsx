@@ -18,6 +18,7 @@ import { PetPanel } from './world3d/PetPanel'
 import { FriendsPanel } from './world3d/FriendsPanel'
 import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
+import { useModalFocusHistory } from './state/useModalA11y'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { effectiveCosmeticProfile } from './state/effectiveCosmeticProfile'
@@ -94,6 +95,7 @@ function App() {
 }
 
 function GameApp() {
+  useModalFocusHistory()
   const {
     profile,
     createProfile,

@@ -1,11 +1,20 @@
 # Laboratório atual
 
-Lab 243 implementado: labs/lab-243-modais-telas-baixas/ - altura e rolagem
-compartilhadas de modais, fechar acessivel e previews compactos em tela baixa.
-Suite: 330 testes; lint/build passaram, QA de seis viewports no navegador.
-PR #131: Copilot revisado (sem achados, ressalva de teste fisico), CI de fe59f7d
-passou. Publicacao via CI da main apos merge, com resultado/build na PR.
-Touch/IME fisicos pendentes. Base: main 5eb2675. Ver FEATURES.md e CONTEXT.md.
+Lab 244 implementado: labs/lab-244-retorno-foco-modais/ - retorno de foco,
+autofocus do portao sobre ranking e preservacao da pilha/StrictMode.
+Suite: 348 testes (18 DOM novos); lint/build/auditoria passaram, QA no navegador
+em desktop/tela baixa. Achado Copilot no lockfile tratado: 32 seletores libc
+restaurados, sem troca de versoes. PR #132 aguarda CI do HEAD antes do merge.
+Android fisico pendente. Base: main f919cfd. Ver FEATURES.md e CONTEXT.md.
+
+---
+
+Lab 243 publicado: labs/lab-243-modais-telas-baixas/ - altura/rolagem de modais,
+fechar acessivel e previews compactos. PR #131 mesclada em f919cfd; 330 testes,
+lint/build e QA de seis viewports passaram. Copilot conferido, sem achados.
+CI/deploy 36339057732 passou; smoke test no dominio confirmado.
+Build: 2026-09-27T18:02:31.958Z. Touch/IME fisicos pendentes.
+Ver FEATURES.md e CONTEXT.md e registro de publicacao na PR #131.
 
 ---
 
