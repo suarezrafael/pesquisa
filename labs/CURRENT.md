@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Lab 246 implementado: labs/lab-246-cancelar-recompensa-pendente/ - cancelar
+recompensa atrasada apos fechar/desmontar pergunta e evitar callback duplicado.
+356 testes, lint e build/PWA passaram; smoke local do mundo 3D. PR/review
+pendentes; jogada completa e Android fisico ainda sem validacao. Base: main
+4c4fd31. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 245 publicado: labs/lab-245-leitura-inicial-modais/ - foco inicial
 visivel no titulo do portao parental e das perguntas. 350 testes, lint e
 build/PWA passaram; navegador 320x400 e 1280x720 validado. PR #133 mesclada
