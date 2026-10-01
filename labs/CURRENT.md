@@ -1,9 +1,11 @@
 # Laboratório atual
 
-Lab 245 implementado: labs/lab-245-leitura-inicial-modais/ - foco inicial
+Lab 245 publicado: labs/lab-245-leitura-inicial-modais/ - foco inicial
 visivel no titulo do portao parental e das perguntas. 350 testes, lint e
-build/PWA passaram; navegador 320x400 e 1280x720 validado. PR #133 em revisao,
-assim como teste fisico Android. Base: main 2329f2e. Ver FEATURES.md/CONTEXT.md.
+build/PWA passaram; navegador 320x400 e 1280x720 validado. PR #133 mesclada
+em 28fd529; Copilot sem achados, CI/deploy 36574944205 passou. Bundle
+index-DyslkJtH.js observado em missaoaprendizado.com. Teste fisico Android
+pendente. Base: main 2329f2e. Ver FEATURES.md/CONTEXT.md.
 
 ---
 
