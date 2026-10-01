@@ -3,6 +3,7 @@
 Data: 2026-09-29
 Base: 2329f2e3dd60f1cd30a101d982cca5a7860ebf2e (Lab 244, PR #132)
 PR: https://github.com/suarezrafael/pesquisa/pull/133
+Merge: 28fd529972b676324858fa426691db00e817d309, 2026-09-29
 
 ## Implementado
 
@@ -30,6 +31,11 @@ PR: https://github.com/suarezrafael/pesquisa/pull/133
   2 avisos anteriores (PetPanel.tsx:46, domain.test.ts:923).
 - `npm run build`: TypeScript, Vite e PWA passaram; aviso preexistente de
   chunks >500kB. Nao houve acesso a multiplayer nem compra.
+- Copilot: overview recomendou aprovacao, sem achados; comentarios inline e
+  threads vazios. Seis checks da PR passaram. Workflow de main
+  [36574944205](https://github.com/suarezrafael/pesquisa/actions/runs/36574944205)
+  passou, incluindo Vercel e Cloudflare Pages. `missaoaprendizado.com`
+  respondeu 200 e serviu `index-DyslkJtH.js`, mesmo bundle do workflow.
 - Referencia: [WAI-ARIA APG Dialog Modal Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
   recomenda foco inicial em elemento estatico no inicio quando o conteudo
   longo poderia deixar o comeco fora de vista.
@@ -40,7 +46,6 @@ PR: https://github.com/suarezrafael/pesquisa/pull/133
 - Nao foi possivel abrir uma pergunta 3D por caminhada no QA de navegador;
   o foco da pergunta foi verificado no teste DOM. Validar com crianca quando
   o playtest dos Labs 240-245 ocorrer.
-- Revisao Copilot e CI da PR ainda pendentes neste registro.
 
 ## Proxima prioridade proposta
 
