@@ -721,11 +721,10 @@ function GameApp() {
         />
       </Suspense>
 
-      {/* Lab 247 — mesmo raciocínio do `key={attemptId}` do desafio ambiental abaixo (achado do
-          Copilot na PR #135): `quest.id` é a identidade de tentativa disponível para estes 4
-          chamadores (nenhum tem um `attemptId` próprio). Endurecimento preventivo — nenhuma
-          corrida foi reproduzida ao vivo para estes 4, mas o formato (quest trocada em memória
-          sem desmontar o modal) é o mesmo que causou o travamento no desafio ambiental. */}
+      {/* `key={quest.id}` força remontagem quando a missão troca sem o modal ser desmontado
+          explicitamente, evitando que `feedback`/`selectedId`/o timer de conclusão de uma
+          tentativa antiga fiquem presos na missão nova (ver `key={attemptId}` abaixo para o
+          mesmo raciocínio com um id de tentativa dedicado). */}
       {activeQuest && (
         <QuestModal key={activeQuest.id} quest={activeQuest} onCorrect={handleQuestCorrect} onClose={handleCloseQuest} />
       )}
@@ -753,13 +752,13 @@ function GameApp() {
       )}
 
       {activeEnvironmentalChallenge && (
-        // Achado do review automático do Copilot (PR #135): sem `key`, abrir um landmark novo
-        // enquanto este modal já está montado SUBSTITUI `activeEnvironmentalChallenge` no mesmo
-        // elemento React — a instância de `QuestModal` é reaproveitada, então `feedback`/
-        // `selectedId`/`completionTimer` da tentativa antiga (ex.: "correct", que desabilita as
-        // opções) continuavam presos na tentativa nova, travando-a. `key={attemptId}` força
-        // desmontagem/remontagem a cada tentativa, resetando o estado interno e cancelando o
-        // timer antigo pelo efeito de limpeza do próprio `QuestModal`.
+        // Abrir um landmark novo pode substituir `activeEnvironmentalChallenge` no mesmo
+        // elemento React sem o modal anterior ser desmontado — sem `key`, a instância de
+        // `QuestModal` seria reaproveitada e `feedback`/`selectedId`/`completionTimer` da
+        // tentativa antiga (ex.: "correct", que desabilita as opções) ficariam presos na
+        // tentativa nova, travando-a. `key={attemptId}` força desmontagem/remontagem a cada
+        // tentativa, resetando o estado interno e cancelando o timer antigo pelo efeito de
+        // limpeza do próprio `QuestModal`.
         <QuestModal
           key={activeEnvironmentalChallenge.attemptId}
           quest={activeEnvironmentalChallenge.quest}

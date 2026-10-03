@@ -106,13 +106,11 @@ describe('QuestModal pending completion', () => {
   })
 })
 
-// Achado do review automático do Copilot (PR #135): App.tsx substituía
-// `activeEnvironmentalChallenge` (quest+attemptId) em memória sem desmontar o `QuestModal`
-// quando um landmark novo era aberto por cima de um já ativo. A instância React era reaproveitada
-// — `feedback`/`completionTimer` da tentativa antiga (ex.: "correct", que desabilita as opções)
-// ficavam presos na tentativa nova, travando-a. A correção usa `key={attemptId}` no chamador; este
-// harness reproduz esse padrão (key trocando junto da tentativa) pra garantir que a troca sempre
-// reseta o estado e cancela o timer antigo.
+// Abrir um landmark novo pode substituir a tentativa ativa (quest+attemptId) em memória sem o
+// `QuestModal` ser desmontado — sem uma `key` trocando junto, a instância React seria
+// reaproveitada e `feedback`/`completionTimer` da tentativa antiga ficariam presos na nova,
+// travando-a. Este harness reproduz esse padrão (key trocando junto da tentativa) pra garantir
+// que a troca sempre reseta o estado e cancela o timer antigo.
 function AttemptHarness({ onCorrect }: { onCorrect: () => void }) {
   const [attempt, setAttempt] = useState<{ id: string; questIndex: 0 | 1 } | null>(null)
   return (
@@ -179,13 +177,12 @@ describe('QuestModal reset across attempt replacement', () => {
   })
 })
 
-// Lab 247 — mesmo endurecimento preventivo aplicado aos outros 4 chamadores de `QuestModal`
-// (`activeQuest`, `activeSurpriseQuiz`, `activePlanetQuest`, `activeCoopQuest`), nenhum dos quais
-// tem um `attemptId` próprio: `quest.id` é a identidade de tentativa usada como `key` em App.tsx.
-// Este harness reproduz o formato real desses 4 usos (`{quest && <QuestModal key={quest.id}
-// quest={quest} ... />}`) pra garantir que trocar de missão sem desmontar explicitamente ainda
-// reseta o estado e cancela o timer antigo — mesma garantia do `AttemptHarness` acima, mas com a
-// chave de verdade usada em produção em vez de um id sintético.
+// `quest.id` como `key` é a identidade de tentativa usada quando o chamador não tem um
+// `attemptId` próprio. Este harness reproduz esse formato (`{quest && <QuestModal
+// key={quest.id} quest={quest} ... />}`) pra garantir que trocar de missão sem desmontar
+// explicitamente ainda reseta o estado e cancela o timer antigo — mesma garantia do
+// `AttemptHarness` acima, mas com a chave de verdade usada em produção em vez de um id
+// sintético.
 function QuestIdKeyHarness({ onCorrect }: { onCorrect: () => void }) {
   const [quest, setQuest] = useState<typeof quests[number] | null>(null)
   return (
