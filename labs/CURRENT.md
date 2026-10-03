@@ -1,11 +1,13 @@
 # Laboratório atual
 
-Lab 249 implementado: labs/lab-249-limpeza-avisos-preexistentes/ - extrai
+Lab 249 publicado: labs/lab-249-limpeza-avisos-preexistentes/ - extrai
 `STAGE_LABEL` de `PetPanel.tsx` pra `petStageLabel.ts` (quebrava fast refresh,
 aviso desde ~lab-83) e renomeia variavel descartada em
 `server-accounts/domain.test.ts`. `npm run lint` do `app` sai limpo pela
 primeira vez. 366 testes (app) + 171 (server-accounts), build sem erro novo.
-Sem mudanca de comportamento. PR pendente. Ver FEATURES.md/CONTEXT.md.
+Sem mudanca de comportamento. PR #144 mesclada em 4d4fd91; Copilot
+"Approval recommended", zero achados; CI/deploy em main confirmado. Ver
+FEATURES.md/CONTEXT.md.
 
 ---
 
