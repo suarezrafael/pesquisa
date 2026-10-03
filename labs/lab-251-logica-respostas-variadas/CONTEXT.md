@@ -26,6 +26,11 @@ Commit inicial -> implementacao: c4d2d203cc81991d35ab4ecc952e2fdef0a45295..7d874
 
 - `app`: 368/368 testes, lint sem avisos, TypeScript/build/PWA bem-sucedidos.
 - Vite local responde HTTP 200 em `http://127.0.0.1:5173/`.
+- PR #148 mesclada em `4219bd2f1a5357da56e6534972e68f5f5076ba82`.
+  Copilot recomendou aprovacao sem achados; seis checks da PR passaram.
+  CI da `main` (run 37162582261) passou, incluindo deploy do frontend em
+  Vercel/Cloudflare Pages e dos dois Workers. `missaoaprendizado.com`
+  respondeu HTTP 200 apos a publicacao.
 - O jogo 3D nao foi testado no Redmi Pad 2 nesta sessao; testes de dominio e
   build nao comprovam ergonomia de toque nem retencao infantil.
 
