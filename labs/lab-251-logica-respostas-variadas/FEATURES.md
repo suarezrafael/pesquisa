@@ -1,6 +1,6 @@
 # Laboratorio 251 - Respostas variadas na arena Logica
 
-Status: implementado; PR e validacao fisica pendentes
+Status: publicado; validacao fisica pendente no Lab 240
 Inicio: 2026-10-03
 Fim: 2026-10-03
 Commit inicial: c4d2d203cc81991d35ab4ecc952e2fdef0a45295

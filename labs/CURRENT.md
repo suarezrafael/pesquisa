@@ -1,10 +1,11 @@
 # Laboratório atual
 
-Lab 251 implementado (PR/publicacao pendentes):
+Lab 251 publicado (PR #148):
 labs/lab-251-logica-respostas-variadas/ - resposta correta da arena Logica
 distribuida pelas tres placas, em vez de sempre na central. 368 testes, lint
-e build passaram. Lab 240 continua pendente de validacao fisica no Redmi
-Pad 2. Ver FEATURES.md/CONTEXT.md.
+e build passaram. CI da main (run 37162582261) concluiu com deploy para
+Vercel, Cloudflare Pages e Workers. Lab 240 continua pendente de validacao
+fisica no Redmi Pad 2. Ver FEATURES.md/CONTEXT.md.
 
 ---
 
