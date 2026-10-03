@@ -267,9 +267,13 @@ gate pra maximizar o desejo de assinar, não se o modelo de assinatura funciona.
    dígitos (`POST /pairing/generate`), a criança digita esse código uma vez no jogo
    (`POST /pairing/redeem`) e recebe um token de entitlement assinado por HMAC (não relacionado ao
    JWT do Neon Auth), guardado em `localStorage` e revalidado em background
-   (`GET /entitlement`) contra o status real da assinatura. Testado ao vivo de ponta a ponta,
-   incluindo cancelamento da assinatura refletindo no jogo na revalidação seguinte. Ver
-   `labs/lab-81-.../CONTEXT.md` pro detalhe completo.
+   (`GET /entitlement`) contra o status real da assinatura. Desde o Lab 236,
+   essa revalidacao ocorre ao abrir o jogo, apos pelo menos 5 minutos com a aba
+   visivel e ao retornar a ela se o intervalo passou; falhas de rede preservam
+   o cache local. O pareamento original, incluindo cancelamento refletido na
+   revalidacao seguinte, foi testado ao vivo de ponta a ponta (ver
+   `labs/lab-81-.../CONTEXT.md`). A cadencia durante sessoes longas ainda
+   requer validacao fisica.
 5. **Fase E — Cosmético de verdade gateado (parcialmente concluída em 2026-08-24)**: extensão
    dos catálogos existentes concluída — 3 criaturas, 3 chapéus e 4 cores marcados
    `subscriptionOnly`, escondidos/bloqueados na lojinha sem entitlement ativo (ver

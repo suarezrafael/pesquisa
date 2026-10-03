@@ -27,6 +27,19 @@ Base: main a698712. Ver FEATURES.md/CONTEXT.md.
 
 ---
 
+Em andamento (retomado): labs/lab-236-revalidacao-entitlement/ - revalidar
+assinatura ao abrir o jogo e apos 5+ min com a aba visivel, ignorar tokens
+antigos pos-desvinculo, sincronizar aparencia publica na troca de acesso.
+PR #125 estava parada em rascunho desde 2026-09-24 (11 labs atras, antes do
+lab-237); rebase feito sobre main (`labs/CURRENT.md` resolvido tomando a
+versao de main — unico conflito, nada do codigo colidiu). Suite/lint/build
+a confirmar apos o rebase. Segue em rascunho: falta validacao com assinatura
+real (cancelar/reativar em sessao longa, offline, visualizacao por outro
+jogador, Redmi Pad 2) que esta sessao nao pode fazer. Ver FEATURES.md/
+CONTEXT.md.
+
+---
+
 Lab 246 publicado: labs/lab-246-cancelar-recompensa-pendente/ - cancelar
 recompensa atrasada apos fechar/desmontar pergunta e evitar callback duplicado.
 Achado de severidade alta do Copilot na PR #135 resolvido (QuestModal sem

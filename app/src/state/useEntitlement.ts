@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   clearEntitlement,
   loadEntitlement,
@@ -7,26 +7,35 @@ import {
   type StoredEntitlement,
 } from './entitlementStorage'
 import { getLevel, skillBreakdown } from './progression'
+import { shouldRevalidateOnResume } from './entitlementRefreshPolicy'
 import type { Profile, Progress } from '../types'
 
 const ACCOUNTS_API_URL = import.meta.env.VITE_ACCOUNTS_API_URL as string
+const ENTITLEMENT_POLL_INTERVAL_MS = 60 * 1000
 
 // Entitlement de assinatura no cliente da criança (Fase D, ver docs/plano-comercial-backend.md).
 // A criança nunca autentica — troca um código curto gerado pelo responsável no portal `/familia`
 // por este token, digitado uma única vez (`redeemCode`). Depois disso, `refresh` revalida em
-// background (chamada silenciosa, sem bloquear o jogo) contra o status real da assinatura.
+// background na abertura, a cada 5 minutos visíveis e no retorno à aba após esse intervalo.
 export function useEntitlement() {
   const [entitlement, setEntitlement] = useState<StoredEntitlement | null>(() => loadEntitlement())
   const [redeeming, setRedeeming] = useState(false)
   const [redeemError, setRedeemError] = useState<string | null>(null)
+  const tokenRef = useRef(entitlement?.token ?? null)
+  const inFlightTokenRef = useRef<string | null>(null)
+  const lastRefreshAtRef = useRef(0)
+  tokenRef.current = entitlement?.token ?? null
 
   async function refresh(tokenOverride?: string) {
-    const token = tokenOverride ?? entitlement?.token
-    if (!token) return
+    const token = tokenOverride ?? tokenRef.current
+    if (!token || inFlightTokenRef.current === token) return
+    inFlightTokenRef.current = token
+    lastRefreshAtRef.current = Date.now()
     try {
       const res = await fetch(`${ACCOUNTS_API_URL}/entitlement`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (tokenRef.current !== token) return
       // Erro de rede/servidor real: mantém o cache local em vez de apagar — mesma filosofia
       // "funciona offline" já aplicada ao PWA do jogo. Mas um 401 NÃO é uma falha de rede — é o
       // servidor recusando o token de forma explícita (lab-90, docs/prompts/
@@ -42,16 +51,32 @@ export function useEntitlement() {
         return
       }
       const body = (await res.json()) as { active: boolean; expiresAt: string | null }
+      if (tokenRef.current !== token) return
       const next: StoredEntitlement = { token, active: body.active, expiresAt: body.expiresAt }
       saveEntitlement(next)
       setEntitlement(next)
     } catch {
       // offline — mantém o cache local
+    } finally {
+      if (inFlightTokenRef.current === token) inFlightTokenRef.current = null
     }
   }
 
   useEffect(() => {
-    if (entitlement?.token) refresh()
+    if (tokenRef.current) void refresh()
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      if (shouldRevalidateOnResume(lastRefreshAtRef.current, Date.now())) void refresh()
+    }, ENTITLEMENT_POLL_INTERVAL_MS)
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      if (shouldRevalidateOnResume(lastRefreshAtRef.current, Date.now())) void refresh()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -73,6 +98,7 @@ export function useEntitlement() {
         return null
       }
       const next: StoredEntitlement = { token: body.token, active: false, expiresAt: null }
+      tokenRef.current = body.token
       saveEntitlement(next)
       setEntitlement(next)
       await refresh(body.token)
@@ -86,6 +112,7 @@ export function useEntitlement() {
   }
 
   function unpair() {
+    tokenRef.current = null
     clearEntitlement()
     setEntitlement(null)
   }
