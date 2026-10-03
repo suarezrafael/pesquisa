@@ -746,7 +746,15 @@ function GameApp() {
       )}
 
       {activeEnvironmentalChallenge && (
+        // Achado do review automático do Copilot (PR #135): sem `key`, abrir um landmark novo
+        // enquanto este modal já está montado SUBSTITUI `activeEnvironmentalChallenge` no mesmo
+        // elemento React — a instância de `QuestModal` é reaproveitada, então `feedback`/
+        // `selectedId`/`completionTimer` da tentativa antiga (ex.: "correct", que desabilita as
+        // opções) continuavam presos na tentativa nova, travando-a. `key={attemptId}` força
+        // desmontagem/remontagem a cada tentativa, resetando o estado interno e cancelando o
+        // timer antigo pelo efeito de limpeza do próprio `QuestModal`.
         <QuestModal
+          key={activeEnvironmentalChallenge.attemptId}
           quest={activeEnvironmentalChallenge.quest}
           onCorrect={handleEnvironmentalChallengeCorrect}
           onClose={handleCloseEnvironmentalChallenge}
