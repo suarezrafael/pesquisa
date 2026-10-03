@@ -64,7 +64,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | Item | Lab real | Estado | Observacao |
 | --- | --- | --- | --- |
 | Mascarar cosmeticos de assinatura expirada no perfil publico | 234 | Concluido | PR #123: `effectiveCosmeticProfile` projeta o save pro que o entitlement atual permite, sem alterar o save em si. |
-| Revalidar assinatura durante sessao longa | 236 | Em andamento (rascunho) | PR #125 ficou parada em rascunho de 2026-09-24 a 2026-10-03 (11 labs); rebaseada sobre `main` no lab-248 sem conflito de codigo. Suite/lint/build verdes. Segue bloqueada: precisa de validacao com assinatura Stripe real (cancelar/reativar, offline, segundo jogador) e Redmi Pad 2 — nenhum dos dois esta disponivel para esta sessao. |
+| Revalidar assinatura durante sessao longa | 236 | Concluido (codigo); validacao real pendente | PR #125 mesclada em `7c0258a` em 2026-10-03, apos ficar em rascunho desde 2026-09-24 (11 labs). Decisao explicita do usuario de mesclar sem a validacao fisica/assinatura real — ver `labs/lab-236-revalidacao-entitlement/CONTEXT.md` ("Decisao de merge"). Suite 366/366, lint e build verdes, deploy automatico confirmado. Risco residual: comportamento fim-a-fim com assinatura Stripe real mudando de estado em sessao aberta e touch/desempenho no Redmi Pad 2 nunca foram testados — primeiro lugar a revisar se um responsavel reportar cosmetico desatualizado. |
 
 ## Endurecimento, acessibilidade e correcoes de codigo (sem item de backlog numerado)
 
@@ -98,8 +98,8 @@ teste fisico de touch/teclado virtual/leitor de tela no Redmi Pad 2, acumulada d
   geram retorno.
 - Baseline tecnico: executar `window.__perf.sample(15000)` nas cenas definidas pelo lab real 193 em
   Redmi Pad 2, Poco C75 e ao menos um Android intermediario.
-- Lab 236: validar revalidacao de entitlement com assinatura Stripe real (cancelar/reativar,
-  offline, segundo jogador) e no Redmi Pad 2.
+- Lab 236 (mesclado sem validacao, ver tabela acima): testar revalidacao de entitlement com
+  assinatura Stripe real (cancelar/reativar, offline, segundo jogador) e no Redmi Pad 2.
 
 ## Proxima ordem recomendada
 
@@ -108,8 +108,8 @@ sem um dos tres insumos que faltam: dispositivo Android fisico, uma assinatura S
 testar, ou um playtest com criancas/responsaveis. Em ordem de dependencia:
 
 1. Medir o baseline em Redmi Pad 2/Poco C75 (fecha os backlogs 191 e 193 e desbloqueia o lab-240).
-2. Validar a PR #125 (lab-236) com assinatura real — unico item de codigo pronto esperando so
-   validacao, nao desenvolvimento.
+2. Validar o lab-236 (ja mesclado) com assinatura real — e o unico codigo em produção sem
+   confirmação fim-a-fim; qualquer sintoma de cosmetico desatualizado comeca por ali.
 3. Executar o Lab 186 de playtest e as Pesquisas A/B.
 4. Priorizar UX 187-190 com base nos testes acima.
 5. Definir o escopo do mercado/bazar como backlog 218 (aguardando o usuario detalhar o pedido).
