@@ -721,12 +721,18 @@ function GameApp() {
         />
       </Suspense>
 
+      {/* Lab 247 — mesmo raciocínio do `key={attemptId}` do desafio ambiental abaixo (achado do
+          Copilot na PR #135): `quest.id` é a identidade de tentativa disponível para estes 4
+          chamadores (nenhum tem um `attemptId` próprio). Endurecimento preventivo — nenhuma
+          corrida foi reproduzida ao vivo para estes 4, mas o formato (quest trocada em memória
+          sem desmontar o modal) é o mesmo que causou o travamento no desafio ambiental. */}
       {activeQuest && (
-        <QuestModal quest={activeQuest} onCorrect={handleQuestCorrect} onClose={handleCloseQuest} />
+        <QuestModal key={activeQuest.id} quest={activeQuest} onCorrect={handleQuestCorrect} onClose={handleCloseQuest} />
       )}
 
       {activeSurpriseQuiz && (
         <QuestModal
+          key={activeSurpriseQuiz.id}
           quest={activeSurpriseQuiz}
           onCorrect={handleSurpriseQuizCorrect}
           onClose={() => setActiveSurpriseQuiz(null)}
@@ -735,6 +741,7 @@ function GameApp() {
 
       {activePlanetQuest && (
         <QuestModal
+          key={activePlanetQuest.id}
           quest={activePlanetQuest}
           onCorrect={handleCompletePlanetQuest}
           onClose={handleClosePlanetQuest}
@@ -742,7 +749,7 @@ function GameApp() {
       )}
 
       {activeCoopQuest && (
-        <QuestModal quest={activeCoopQuest} onCorrect={handleCoopQuestCorrect} onClose={handleCloseCoopQuest} />
+        <QuestModal key={activeCoopQuest.id} quest={activeCoopQuest} onCorrect={handleCoopQuestCorrect} onClose={handleCloseCoopQuest} />
       )}
 
       {activeEnvironmentalChallenge && (
