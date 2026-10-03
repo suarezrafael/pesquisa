@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Lab 247 implementado: labs/lab-247-chave-tentativa-questmodal/ - key por
+identidade de tentativa (quest.id) nos 4 QuestModal restantes (activeQuest,
+activeSurpriseQuiz, activePlanetQuest, activeCoopQuest), mesma classe de
+risco do achado do Copilot na PR #135 (lab-246). Endurecimento preventivo,
+sem reproducao ao vivo de corrida real. 358 testes, lint e build/PWA
+passaram. PR pendente. Base: main a698712. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 246 publicado: labs/lab-246-cancelar-recompensa-pendente/ - cancelar
 recompensa atrasada apos fechar/desmontar pergunta e evitar callback duplicado.
 Achado de severidade alta do Copilot na PR #135 resolvido (QuestModal sem

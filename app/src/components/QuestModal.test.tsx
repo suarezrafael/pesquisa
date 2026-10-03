@@ -106,13 +106,11 @@ describe('QuestModal pending completion', () => {
   })
 })
 
-// Achado do review automático do Copilot (PR #135): App.tsx substituía
-// `activeEnvironmentalChallenge` (quest+attemptId) em memória sem desmontar o `QuestModal`
-// quando um landmark novo era aberto por cima de um já ativo. A instância React era reaproveitada
-// — `feedback`/`completionTimer` da tentativa antiga (ex.: "correct", que desabilita as opções)
-// ficavam presos na tentativa nova, travando-a. A correção usa `key={attemptId}` no chamador; este
-// harness reproduz esse padrão (key trocando junto da tentativa) pra garantir que a troca sempre
-// reseta o estado e cancela o timer antigo.
+// Abrir um landmark novo pode substituir a tentativa ativa (quest+attemptId) em memória sem o
+// `QuestModal` ser desmontado — sem uma `key` trocando junto, a instância React seria
+// reaproveitada e `feedback`/`completionTimer` da tentativa antiga ficariam presos na nova,
+// travando-a. Este harness reproduz esse padrão (key trocando junto da tentativa) pra garantir
+// que a troca sempre reseta o estado e cancela o timer antigo.
 function AttemptHarness({ onCorrect }: { onCorrect: () => void }) {
   const [attempt, setAttempt] = useState<{ id: string; questIndex: 0 | 1 } | null>(null)
   return (
@@ -159,6 +157,69 @@ describe('QuestModal reset across attempt replacement', () => {
   })
 
   it('remounts with fresh state and cancels the stale timer when a new attempt replaces an open one', () => {
+    act(() => container.querySelectorAll('button')[0].click())
+    const firstChoices = container.querySelectorAll<HTMLButtonElement>('.quest-choice')
+    const firstCorrectIndex = [...firstChoices].findIndex(
+      (choice) => choice.textContent === quests[0].choices.find((c) => c.id === quests[0].correctChoiceId)?.label,
+    )
+    act(() => firstChoices[firstCorrectIndex].click())
+    expect(container.querySelector('.quest-choice:disabled')).not.toBeNull()
+
+    act(() => container.querySelectorAll('button')[1].click())
+
+    const newChoices = container.querySelectorAll<HTMLButtonElement>('.quest-choice')
+    expect(newChoices.length).toBe(quests[1].choices.length)
+    expect(container.querySelector('.quest-choice:disabled')).toBeNull()
+    expect(container.querySelector('.quest-feedback.correct')).toBeNull()
+
+    act(() => vi.advanceTimersByTime(700))
+    expect(onCorrect).not.toHaveBeenCalled()
+  })
+})
+
+// `quest.id` como `key` é a identidade de tentativa usada quando o chamador não tem um
+// `attemptId` próprio. Este harness reproduz esse formato (`{quest && <QuestModal
+// key={quest.id} quest={quest} ... />}`) pra garantir que trocar de missão sem desmontar
+// explicitamente ainda reseta o estado e cancela o timer antigo — mesma garantia do
+// `AttemptHarness` acima, mas com a chave de verdade usada em produção em vez de um id
+// sintético.
+function QuestIdKeyHarness({ onCorrect }: { onCorrect: () => void }) {
+  const [quest, setQuest] = useState<typeof quests[number] | null>(null)
+  return (
+    <>
+      <button type="button" onClick={() => setQuest(quests[0])}>Abrir pergunta</button>
+      <button type="button" onClick={() => setQuest(quests[1])}>Abrir outra missao</button>
+      {quest && (
+        <QuestModal key={quest.id} quest={quest} onCorrect={onCorrect} onClose={() => setQuest(null)} />
+      )}
+    </>
+  )
+}
+
+describe('QuestModal reset across quest.id key replacement (Lab 247)', () => {
+  let container: HTMLDivElement
+  let root: Root
+  let onCorrect: Mock<() => void>
+
+  beforeEach(() => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    onCorrect = vi.fn()
+    act(() => root.render(<QuestIdKeyHarness onCorrect={onCorrect} />))
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+    vi.clearAllTimers()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('remounts with fresh state and cancels the stale timer when quest.id changes without an explicit close', () => {
     act(() => container.querySelectorAll('button')[0].click())
     const firstChoices = container.querySelectorAll<HTMLButtonElement>('.quest-choice')
     const firstCorrectIndex = [...firstChoices].findIndex(
