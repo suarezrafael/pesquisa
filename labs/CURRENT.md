@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Lab 248 implementado: labs/lab-248-auditoria-backlog-status/ - reconcilia
+`docs/backlog-status.md` com os labs 227-247 (parava no lab-226 desde
+2026-09-23). Sem mudanca de codigo; apenas documentacao. PR pendente. Ver
+FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 247 publicado: labs/lab-247-chave-tentativa-questmodal/ - key por
 identidade de tentativa (quest.id) nos 4 QuestModal restantes (activeQuest,
 activeSurpriseQuiz, activePlanetQuest, activeCoopQuest), mesma classe de
