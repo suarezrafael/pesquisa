@@ -16,7 +16,7 @@ import {
 } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
 import { trackAlbumPlanetOpened } from '../productAnalytics'
-import { STAGE_LABEL } from './PetPanel'
+import { STAGE_LABEL } from './petStageLabel'
 import type { Progress } from '../types'
 
 // Legenda curta pro tipo de slot dentro da lista expandida de cada planeta; os nomes já vêm de

@@ -920,7 +920,7 @@ describe('isValidEquippedLook (lab-163)', () => {
   })
 
   it('rejeita quando falta um eixo', () => {
-    const { equippedGlassesId, ...rest } = VALID_EQUIPPED_LOOK
+    const { equippedGlassesId: _equippedGlassesId, ...rest } = VALID_EQUIPPED_LOOK
     expect(isValidEquippedLook(rest)).toBe(false)
   })
 
