@@ -1382,16 +1382,29 @@ a.nickname-generate-btn {
   font-size: 1.6rem;
 }
 
+@media (max-height: 450px) {
+  .touch-action-cam-left,
+  .touch-action-cam-right {
+    right: 6.8rem;
+  }
+
+  .touch-action-recenter {
+    right: 11rem;
+  }
+}
+
 /* Modals */
 
 .modal-overlay {
   position: fixed;
   inset: 0;
+  max-height: 100dvh;
   background: rgba(23, 44, 102, 0.55);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   /* Achado do review automático do Copilot (backlog "Lab 195"), em 2 rodadas — 1ª: `.chat-panel`/
      `.ranking-panel` (z-index 20) ficavam ACIMA deste overlay (10); 2ª (achado de severidade alta,
      depois de subir só pra 25): `.furniture-placement-bar` (z-index 30, botões de verdade, NÃO
@@ -1409,7 +1422,10 @@ a.nickname-generate-btn {
 @media (min-width: 480px) {
   .modal-overlay {
     align-items: center;
-    padding: 1rem;
+    padding: max(1rem, env(safe-area-inset-top, 0px))
+      max(1rem, env(safe-area-inset-right, 0px))
+      max(1rem, env(safe-area-inset-bottom, 0px))
+      max(1rem, env(safe-area-inset-left, 0px));
   }
 }
 
@@ -1417,6 +1433,10 @@ a.nickname-generate-btn {
   background: var(--card);
   width: 100%;
   max-width: 440px;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   border-radius: 24px 24px 0 0;
   padding: 1.5rem 1.25rem 2rem;
   position: relative;
@@ -1450,6 +1470,26 @@ a.nickname-generate-btn {
   font-size: 1.5rem;
   cursor: pointer;
   color: #6774a3;
+}
+
+/* Direct close buttons must remain reachable when autofocus or reading scrolls the modal. */
+.modal > .modal-close {
+  position: sticky;
+  top: 0;
+  float: right;
+  margin: -1.4rem -1.05rem 0 0.5rem;
+  z-index: 5;
+  background: var(--card);
+  border-radius: 999px;
+}
+
+.modal > h2:focus {
+  outline: 2px solid var(--accent-dark);
+  outline-offset: 3px;
+}
+
+.modal .nickname-generate-btn {
+  min-height: 44px;
 }
 
 .quest-type-tag {
@@ -1608,19 +1648,11 @@ a.nickname-generate-btn {
 
 /* Lista de missões */
 
-.quest-list-modal {
+.quest-list-modal,
+.weekly-event-modal,
+.avatar-shop-modal {
   max-height: 80vh;
-  overflow-y: auto;
-}
-
-/* O painel do evento semanal tem 2 parágrafos longos (status do objetivo + mensagem de "sem
-   pressão") além da descrição do evento — mais texto que os outros usuários de `.reward-modal`
-   (toasts curtos de recompensa). Em telas curtas isso podia empurrar o botão "Fechar" pra fora da
-   área visível, já que `.modal` sozinho não tem limite de altura/scroll — mesmo fix de
-   `.quest-list-modal` acima. */
-.weekly-event-modal {
-  max-height: 80vh;
-  overflow-y: auto;
+  max-height: min(80dvh, 100%);
 }
 
 .quest-list {
@@ -1698,11 +1730,6 @@ a.nickname-generate-btn {
 }
 
 /* Lojinha de avatares */
-
-.avatar-shop-modal {
-  max-height: 80vh;
-  overflow-y: auto;
-}
 
 /* Âncora do botão de fechar — altura zero, não ocupa espaço no fluxo (`<h2>` continua nascendo
    exatamente onde nascia antes), só existe pra dar ao `.modal-close` (absoluto) um ancestral
@@ -1816,7 +1843,53 @@ a.nickname-generate-btn {
 }
 
 .pet-panel-modal .avatar-shop-action {
-  scroll-margin-top: 15rem;
+  scroll-margin-top: var(--shop-action-scroll-margin, 15rem);
+}
+
+@media (max-height: 500px) {
+  .quest-list-modal,
+  .weekly-event-modal,
+  .avatar-shop-modal {
+    max-height: 100%;
+  }
+
+  /* Keep the preview visible without consuming the entire landscape scrollport. */
+  .avatar-shop-sticky-header,
+  .pet-panel-sticky-header {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 0 0.75rem;
+    align-items: center;
+    padding: 0.25rem 0;
+  }
+
+  .avatar-shop-sticky-header .avatar-preview-3d-wrap,
+  .pet-panel-sticky-header .pet-preview-3d-wrap {
+    grid-row: span 2;
+    margin: 0;
+  }
+
+  .avatar-shop-sticky-header .avatar-preview-3d-canvas,
+  .pet-panel-sticky-header .pet-preview-3d-canvas {
+    width: 96px;
+    height: 96px;
+  }
+
+  .avatar-shop-sticky-header .avatar-shop-balance,
+  .pet-panel-sticky-header .avatar-shop-balance {
+    justify-self: start;
+  }
+
+  .avatar-shop-sticky-header .avatar-shop-tabs-wrap,
+  .pet-panel-sticky-header .avatar-shop-tabs-wrap {
+    min-width: 0;
+    margin-top: 0.25rem;
+  }
+
+  .avatar-shop-modal,
+  .pet-panel-modal {
+    --shop-action-scroll-margin: 8rem;
+  }
 }
 
 .pet-accessory-note {
@@ -1976,7 +2049,7 @@ a.nickname-generate-btn {
    cabeçalho fixo (medida ao vivo: ~282px reais) só dentro da lojinha — outros modais reaproveitam
    esta mesma classe de botão sem ter cabeçalho fixo algum, não devem herdar essa reserva. */
 .avatar-shop-modal .avatar-shop-action {
-  scroll-margin-top: 18rem;
+  scroll-margin-top: var(--shop-action-scroll-margin, 18rem);
 }
 
 .avatar-shop-action.buy {

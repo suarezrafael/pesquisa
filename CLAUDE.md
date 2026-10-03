@@ -14,11 +14,13 @@ brief that drives what gets built.
 - `npm run dev` — start the Vite dev server.
 - `npm run build` — typecheck (`tsc -b`) + production build (also generates the PWA manifest/service worker).
 - `npm run preview` — serve the production build locally.
-- `npm run test` — run the Vitest unit suite (domain logic only — quest reward calculation, level
+- `npm run test` — run the Vitest suite (domain logic — quest reward calculation, level
   progression, cosmetic unlock rules including the subscription-only gate). Introduced in lab-83
   per `docs/prompts/04-manutencao-clean-code.md` §5. `app/server-accounts/` has its own
   `npm run test` for the Worker's pure domain logic (entitlement/pairing-code rules, in
   `src/domain.ts`) — run it from that directory.
+  The game also has DOM integration tests for modal focus in `src/state/useModalA11y.test.tsx`;
+  only that file uses jsdom. Other tests retain Vitest's default Node environment.
 
 ## Contents
 

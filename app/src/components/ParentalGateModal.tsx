@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { generateGateChallenge, isGateAnswerCorrect } from '../data/parentalGate'
 import { useModalA11y } from '../state/useModalA11y'
 
@@ -16,7 +16,8 @@ export function ParentalGateModal({ onAuthorize, onCancel }: ParentalGateModalPr
   const [challenge] = useState(() => generateGateChallenge())
   const [answer, setAnswer] = useState('')
   const [showError, setShowError] = useState(false)
-  const modalRef = useModalA11y(onCancel)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  const modalRef = useModalA11y(onCancel, titleRef)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -40,7 +41,7 @@ export function ParentalGateModal({ onAuthorize, onCancel }: ParentalGateModalPr
         <button type="button" className="modal-close" onClick={onCancel} aria-label="Fechar">
           ×
         </button>
-        <h2>🔒 Portão dos responsáveis</h2>
+        <h2 ref={titleRef} tabIndex={-1}>🔒 Portão dos responsáveis</h2>
         <p>
           O multiplayer conecta seu filho(a) com OUTRAS crianças jogando ao mesmo tempo, em
           qualquer lugar (não só na mesma rede) — elas podem se ver e trocar só mensagens de uma
@@ -60,7 +61,6 @@ export function ParentalGateModal({ onAuthorize, onCancel }: ParentalGateModalPr
                 setShowError(false)
               }}
               inputMode="numeric"
-              autoFocus
             />
             {showError && <small className="field-hint">Resposta incorreta, tente de novo.</small>}
           </label>

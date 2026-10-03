@@ -18,6 +18,7 @@ import { PetPanel } from './world3d/PetPanel'
 import { FriendsPanel } from './world3d/FriendsPanel'
 import { AvatarShop } from './world3d/AvatarShop'
 import { useProfile } from './state/useProfile'
+import { useModalFocusHistory } from './state/useModalA11y'
 import { useProgress } from './state/useProgress'
 import { useEntitlement } from './state/useEntitlement'
 import { effectiveCosmeticProfile } from './state/effectiveCosmeticProfile'
@@ -94,6 +95,7 @@ function App() {
 }
 
 function GameApp() {
+  useModalFocusHistory()
   const {
     profile,
     createProfile,
@@ -416,8 +418,8 @@ function GameApp() {
     const weeklyEventObjectiveBonusCoins = rewardGranted ? WEEKLY_EVENT_OBJECTIVE_REWARD_COINS : undefined
     // Progresso/troféus do centro de jogos (backlog "Lab 217") — `kind === 'bridge'` é a MESMA
     // habilidade de Lógica do centro de jogos (World3D.tsx trata os dois como a categoria
-    // `'logica'`, ver comentário em `types.ts`), venha do local físico original (lab-180) ou do
-    // portal do saguão (lab-197) — objetivo SEPARADO do evento semanal ambiental acima, os dois
+    // `'logica'`, ver comentário em `types.ts`), quando concluído no local físico original
+    // (lab-180) — objetivo SEPARADO do evento semanal ambiental acima, os dois
     // podem conceder na MESMA resposta.
     let gameCenterTrophyEarned: 'bronze' | 'prata' | 'ouro' | undefined
     let gameCenterWeeklyQuestBonusCoins: number | undefined
@@ -461,11 +463,11 @@ function GameApp() {
   // ref com um `attemptId` novo — a comparação em `handleEnvironmentalChallengeCorrect` falha
   // do mesmo jeito, sem precisar que o fechamento zere nada.
   // Progresso/troféus do centro de jogos (backlog "Lab 217") — chamado por `World3D.tsx` na
-  // conclusão de verdade de qualquer arena (memória/contar/soletrar; Lógica é tratada à parte em
-  // `handleEnvironmentalChallengeCorrect` acima, `kind === 'bridge'`). Fires os 2 eventos de
+  // conclusão de verdade de qualquer arena (memória/contar/soletrar/lógica; o desafio da ponte
+  // continua tratado à parte em `handleEnvironmentalChallengeCorrect`, `kind === 'bridge'`). Dispara os 2 eventos de
   // analytics aqui (não em `World3D.tsx`) pra manter as regras de QUANDO disparar
   // (`newTrophy`/`weeklyQuestRewardGranted`) num lugar só, junto da decisão de progressão em si.
-  function handleGameCenterMinigameCompleted(category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>) {
+  function handleGameCenterMinigameCompleted(category: GameCenterCategory) {
     const nowIso = new Date().toISOString()
     const { newTrophy, weeklyQuestRewardGranted, newCompletions } = gameCenterMinigameCompleted(category, nowIso)
     if (newTrophy) trackMinigameTrophyEarned(category, newTrophy)
@@ -719,12 +721,17 @@ function GameApp() {
         />
       </Suspense>
 
+      {/* `key={quest.id}` força remontagem quando a missão troca sem o modal ser desmontado
+          explicitamente, evitando que `feedback`/`selectedId`/o timer de conclusão de uma
+          tentativa antiga fiquem presos na missão nova (ver `key={attemptId}` abaixo para o
+          mesmo raciocínio com um id de tentativa dedicado). */}
       {activeQuest && (
-        <QuestModal quest={activeQuest} onCorrect={handleQuestCorrect} onClose={handleCloseQuest} />
+        <QuestModal key={activeQuest.id} quest={activeQuest} onCorrect={handleQuestCorrect} onClose={handleCloseQuest} />
       )}
 
       {activeSurpriseQuiz && (
         <QuestModal
+          key={activeSurpriseQuiz.id}
           quest={activeSurpriseQuiz}
           onCorrect={handleSurpriseQuizCorrect}
           onClose={() => setActiveSurpriseQuiz(null)}
@@ -733,6 +740,7 @@ function GameApp() {
 
       {activePlanetQuest && (
         <QuestModal
+          key={activePlanetQuest.id}
           quest={activePlanetQuest}
           onCorrect={handleCompletePlanetQuest}
           onClose={handleClosePlanetQuest}
@@ -740,11 +748,19 @@ function GameApp() {
       )}
 
       {activeCoopQuest && (
-        <QuestModal quest={activeCoopQuest} onCorrect={handleCoopQuestCorrect} onClose={handleCloseCoopQuest} />
+        <QuestModal key={activeCoopQuest.id} quest={activeCoopQuest} onCorrect={handleCoopQuestCorrect} onClose={handleCloseCoopQuest} />
       )}
 
       {activeEnvironmentalChallenge && (
+        // Abrir um landmark novo pode substituir `activeEnvironmentalChallenge` no mesmo
+        // elemento React sem o modal anterior ser desmontado — sem `key`, a instância de
+        // `QuestModal` seria reaproveitada e `feedback`/`selectedId`/`completionTimer` da
+        // tentativa antiga (ex.: "correct", que desabilita as opções) ficariam presos na
+        // tentativa nova, travando-a. `key={attemptId}` força desmontagem/remontagem a cada
+        // tentativa, resetando o estado interno e cancelando o timer antigo pelo efeito de
+        // limpeza do próprio `QuestModal`.
         <QuestModal
+          key={activeEnvironmentalChallenge.attemptId}
           quest={activeEnvironmentalChallenge.quest}
           onCorrect={handleEnvironmentalChallengeCorrect}
           onClose={handleCloseEnvironmentalChallenge}

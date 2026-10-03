@@ -53,6 +53,14 @@ import { quests } from '../data/quests'
 import { selectEnvironmentalChallengeQuest } from '../state/progression'
 import { createMemoryGame, flipMemoryCard, isMemoryGameComplete, type MemoryGameState } from '../state/memoryGame'
 import {
+  LOGIC_ROUNDS_TO_WIN,
+  answerLogicRound,
+  createLogicGame,
+  currentLogicRound,
+  isLogicGameComplete,
+  type LogicGameState,
+} from '../state/logicGame'
+import {
   COUNTING_ROUNDS_TO_WIN,
   answerCountingRound,
   createCountingGame,
@@ -146,6 +154,10 @@ import { shouldUseDetailedTeacher, teacherProjectedHeightScale } from './teacher
 import { interactionHint, interactionInputForDevice } from './interactionHint'
 import { parkourFallAction } from './parkourFall'
 import { pinchZoom, touchCameraFollowStep } from './touchCameraFollow'
+import { nearestInteraction } from './nearestInteraction'
+import { isStationaryPortalTap } from './portalTap'
+import { resolveGameCenterTap } from './gameCenterTap'
+import { nearestPlanetSchoolQuest, selectPlanetSchoolQuest } from './planetSchoolTrigger'
 import { freezeAuditedEarthMaterials } from './staticMaterials'
 import { QUALITY_PROFILES, desiredEffectTier, developmentGpuTierOverride, reducedQualitySettings } from './qualityProfile'
 import { shouldEnableSphericalObject, sphereOcclusionDepth } from './sphericalCulling'
@@ -250,20 +262,16 @@ interface World3DProps {
   onCollectPostcard: (planetId: string) => boolean
   onCollectCoin: () => void
   // Progresso/troféus do centro de jogos (backlog "Lab 217") — chamado 1x por CONCLUSÃO de verdade
-  // de qualquer arena (memória/contar/soletrar). `App.tsx` repassa pra
+  // de qualquer arena (memória/contar/soletrar/lógica). `App.tsx` repassa pra
   // `useProgress().gameCenterMinigameCompleted`, retorna sincronamente se essa conclusão cruzou um
   // troféu novo e/ou concedeu o bônus da missão semanal — usado aqui só pra decidir a MENSAGEM de
   // status a mostrar (a moeda em si já foi creditada por `onCollectCoin` antes desta chamada).
   // `newCompletions` (a contagem NOVA, não só `newTrophy`) é necessário porque `setProgress` não é
   // síncrono — `progressRef.current` só reflete esta conclusão no PRÓXIMO render, tarde demais pra
   // atualizar o troféu visual AINDA NESTA visita sem esperar a criança sair e voltar (achado ao
-  // revisar o próprio código antes de qualquer teste, ver FEATURES.md do backlog "Lab 217"). O desafio de
-  // Lógica (`kind: 'bridge'`) NÃO passa por aqui — é detectado direto em `App.tsx` (mesmo handler
-  // que já processa `completeQuest` pra qualquer desafio ambiental), então o troféu visual da
-  // placa "Lógica" só reflete uma conclusão na PRÓXIMA vez que a criança entrar no centro de jogos
-  // (`refreshGameCenterTrophyVisuals`, chamado em `enterGameCenterInterior`) — essa parte É uma
-  // limitação conhecida e aceita, sem `newCompletions` equivalente pra contornar (ver FEATURES.md).
-  onGameCenterMinigameCompleted: (category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>) => {
+  // revisar o próprio código antes de qualquer teste, ver FEATURES.md do backlog "Lab 217").
+  // A ponte de lógica fora da Central continua sendo um desafio ambiental separado.
+  onGameCenterMinigameCompleted: (category: GameCenterCategory) => {
     newTrophy: GameCenterTrophyTier | null
     weeklyQuestRewardGranted: boolean
     newCompletions: number
@@ -3196,11 +3204,8 @@ export function World3D({
       ;(window as any).__scene = scene
       ;(window as any).__engine = engine
     }
-    // Nenhum código deste jogo usa `scene.pick`/`onPointerObservable`/hover do Babylon —
-    // interação usa raycast físico direto (`havokPlugin.raycast`) e arrasto de câmera lê eventos de
-    // ponteiro crus do canvas (confirmado por busca no arquivo inteiro, zero ocorrências de
-    // qualquer um dos três). Sem essa flag, o Babylon roda uma varredura de picking na cena INTEIRA
-    // a cada `pointermove` (mouse/touch) por padrão, sempre à toa aqui.
+    // O toque nas placas do saguão usa `scene.pick` somente no pointerup. O arrasto de câmera
+    // continua lendo eventos crus; não há motivo para varrer a cena a cada pointermove.
     scene.skipPointerMovePicking = true
     scene.clearColor = SKY_COLOR_ATMOSPHERE.clone()
     scene.fogMode = Scene.FOGMODE_EXP2
@@ -3284,19 +3289,13 @@ export function World3D({
     // coisa" bastava pra disputar o mesmo gesto. Segurar o botão do mouse pra girar a câmera e usar
     // ◀ ▶/WASD pra mexer na peça funcionam ao mesmo tempo sem briga nenhuma.
     //
-    // lab-153 (pesquisa de mercado: Roblox/Minecraft mobile giram a câmera arrastando a METADE
-    // DIREITA da tela, não só com botões de rotação em velocidade fixa — padrão que o público-alvo
-    // já traz de outros jogos) — do lado de fora, o giro por arraste só COMEÇA se o toque inicial
-    // cair na metade direita do `<canvas>` (`outdoorDrag`, decidido uma vez no `pointerdown`,
-    // guardado até soltar — recalcular a cada `pointermove` deixaria o giro "escapar" pra esquerda
-    // no meio do arraste, sem motivo). A metade esquerda fica reservada pro `TouchJoystick` de
-    // movimento (elemento HTML separado, por cima do canvas — sem conflito de verdade, só reserva
-    // de área). ADITIVO aos botões ◀ ▶ (que continuam existindo e funcionando exatamente como
-    // antes) — nunca os substitui, porque eles são `<button>` de verdade com suporte a teclado
-    // (lab-150), e arrastar é um gesto só de ponteiro/toque.
+    // No touch, só um gesto iniciado na metade direita gira a câmera; a metade esquerda fica
+    // livre para o joystick. `outdoorDrag` distingue apenas o pitch disponível nos interiores.
     let cameraDragging = false
     let touchCameraTurnPending = 0
-    let outdoorDrag = false // true = arrasto começou do lado de fora (só giro); false = dentro de casa (giro+inclinação)
+    let portalTapStart: { pointerId: number; x: number; y: number } | null = null
+    let selectGameCenterTapTargetAt: ((clientX: number, clientY: number) => void) | null = null
+    let outdoorDrag = false // true = arrasto começou fora de interiores (só giro); false = interior (giro+inclinação)
     // lab-153 (achado real do review automático do Copilot): sem rastrear QUAL ponteiro iniciou o
     // arrasto, um segundo dedo tocando em qualquer lugar (ex.: o `TouchJoystick` de movimento, do
     // lado esquerdo, ao mesmo tempo que a câmera é arrastada com o outro dedo) também disparava
@@ -3346,24 +3345,30 @@ export function World3D({
           cameraDragging = false
           cameraDragPointerId = null
           touchCameraTurnPending = 0
+          portalTapStart = null
         }
       }
       if (cameraDragPointerId !== null) return // já tem um dedo/ponteiro girando a câmera — ignora um segundo
       if (pinchPointers.size >= 2) return // pinça em andamento — não inicia giro de 1 dedo só
-      if (insideHouseInterior) {
-        outdoorDrag = false
-      } else {
-        if (!canvas) return
+      if (!canvas) return
+      if (insideGameCenterInterior && !hudInertRef.current) {
+        portalTapStart = { pointerId: e.pointerId, x: e.clientX, y: e.clientY }
+      }
+      if (e.pointerType === 'touch') {
         const rect = canvas.getBoundingClientRect()
         if (e.clientX < rect.left + rect.width / 2) return // metade esquerda: reservada pro joystick de movimento
-        outdoorDrag = true
       }
+      outdoorDrag = !insideHouseInterior
       cameraDragging = true
       cameraDragPointerId = e.pointerId
       cameraDragLastX = e.clientX
       cameraDragLastY = e.clientY
     }
     function onCameraPointerMove(e: PointerEvent) {
+      if (portalTapStart?.pointerId === e.pointerId &&
+          !isStationaryPortalTap(portalTapStart.x, portalTapStart.y, e.clientX, e.clientY)) {
+        portalTapStart = null
+      }
       if (pinchPointers.has(e.pointerId)) {
         pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
         if (pinchPointers.size === 2 && pinchStartDistance > 0) {
@@ -3391,12 +3396,13 @@ export function World3D({
       cameraDragLastX = e.clientX
       cameraDragLastY = e.clientY
       const yawDelta = dx * CAMERA_DRAG_SENSITIVITY
-      cameraYawOffsetRef.current += yawDelta
       if (e.pointerType === 'touch' && !hudInertRef.current && !drivingCar && !drivingRocket &&
           !placingFurnitureId && !restingInBedKey) {
         touchCameraTurnPending += yawDelta
+      } else {
+        cameraYawOffsetRef.current += yawDelta
       }
-      // Inclinação vertical (pitch) é um recurso só de dentro de casa (câmera "esférica" do
+      // Inclinação vertical (pitch) é um recurso dos interiores (câmera "esférica" do
       // lab-138) — do lado de fora a câmera usa um offset fixo de altura (ver `desiredCamPos` mais
       // abaixo), sem conceito de pitch pra ajustar.
       if (!outdoorDrag) {
@@ -3407,11 +3413,17 @@ export function World3D({
       }
     }
     function onCameraPointerUp(e: PointerEvent) {
+      const activatePortal = e.type === 'pointerup' && e.target === canvas &&
+        portalTapStart?.pointerId === e.pointerId &&
+        isStationaryPortalTap(portalTapStart.x, portalTapStart.y, e.clientX, e.clientY)
+      if (portalTapStart?.pointerId === e.pointerId) portalTapStart = null
       pinchPointers.delete(e.pointerId)
       if (pinchPointers.size < 2) pinchStartDistance = 0
-      if (e.pointerId !== cameraDragPointerId) return // outro dedo/ponteiro soltando — não é o que gira a câmera
-      cameraDragging = false
-      cameraDragPointerId = null
+      if (e.pointerId === cameraDragPointerId) {
+        cameraDragging = false
+        cameraDragPointerId = null
+      }
+      if (activatePortal && pinchPointers.size === 0) selectGameCenterTapTargetAt?.(e.clientX, e.clientY)
     }
     function onCameraWheel(e: WheelEvent) {
       // Cobre tanto dentro quanto fora de casa (`insideHouseInterior`), cada um com seu próprio
@@ -3730,6 +3742,8 @@ export function World3D({
       memoria: null,
       logica: null,
     }
+    const gameCenterPortalBoards = new Map<AbstractMesh, GameCenterPortalId>()
+    const gameCenterCameraTarget = Vector3.Zero()
     // Troféus visuais (Lab 217) — uma malha por portal, criada uma vez junto da placa/post,
     // escondida (`setEnabled(false)`) até `refreshGameCenterTrophyVisuals` decidir mostrar (a
     // criança pode não ter troféu nenhum ainda). `GameCenterPortalId` e `GameCenterCategory` são o
@@ -3758,7 +3772,7 @@ export function World3D({
     // a contagem regressiva/cronômetro opcional/label de status já prontos: registrar um mini-jogo
     // novo agora é "poucos pontos de código" (o próprio critério de aceite do lab-213) — um objeto
     // de config + os alvos 3D dele, não uma segunda cópia de `beginArenaCountdown`/`tickArenaTimer`.
-    type ArenaId = 'memoria' | 'contar' | 'soletrar'
+    type ArenaId = GameCenterPortalId
     interface ArenaConfig {
       label: string
       timeLimitS: number | null
@@ -3855,6 +3869,13 @@ export function World3D({
     const gcSpellingTileLabels: TextBlock[] = []
     const gcSpellingTileHintLabel: TextBlock[] = []
     let gameCenterSpellingStatusLabel: TextBlock | null = null
+    let arenaLogicState: LogicGameState | null = null
+    const gcLogicSequenceMeshes: Mesh[] = []
+    const gcLogicSequenceLabels: TextBlock[] = []
+    const gcLogicOptionMeshes: Mesh[] = []
+    const gcLogicOptionLabels: TextBlock[] = []
+    const gcLogicOptionHintLabels: TextBlock[] = []
+    let gameCenterLogicStatusLabel: TextBlock | null = null
     // lab-172 — mesmo padrão de `houseEnterHintLabel`, só que também exige um parceiro por perto
     // (ver uso no loop de física) — sozinho, o jogador nunca vê a dica, pra não convidar pra um
     // desafio que não dá pra completar sozinho.
@@ -4599,6 +4620,19 @@ export function World3D({
         }
         if (suspendRef.current || chatOpenRef.current || !avatarMesh) return
 
+        // An explicit retry ignores the proximity latch, but never clears it for auto-opening.
+        if (!insideHouseInterior) {
+          const questId = nearestPlanetSchoolQuest(
+            planetQuestMarkers, avatarMesh.position, currentPlanetId,
+            progressRef.current.completedPlanetQuestIds,
+          )
+          if (questId !== null) {
+            triggered.add(`planet-school-${questId}`)
+            onSelectPlanetQuestRef.current(questId)
+            return
+          }
+        }
+
         // Centro de jogos (backlog "Lab 212") — checado ANTES da casa porque `insideGameCenterInterior`
         // é a flag MAIS ESPECÍFICA (só verdadeira dentro do saguão); `insideHouseInterior` sozinho
         // não distingue as duas salas (ver comentário na declaração dele).
@@ -4630,13 +4664,14 @@ export function World3D({
               }
             }
           }
-          for (const id of GAME_CENTER_PORTAL_IDS) {
-            if (Vector3.Distance(avatarMesh.position, gameCenterPortalPos[id]) < GAME_CENTER_TRIGGER_DISTANCE) {
-              handleGameCenterPortalInteract(id)
-              return
-            }
+          const nearestPortal = nearestInteraction(
+            avatarMesh.position, gameCenterPortalPos, GAME_CENTER_PORTAL_IDS, GAME_CENTER_TRIGGER_DISTANCE,
+          )
+          if (nearestPortal) {
+            handleGameCenterPortalInteract(nearestPortal)
+            return
           }
-        } else if (Vector3.Distance(avatarMesh.position, gameCenterDoorOutsidePos) < GAME_CENTER_TRIGGER_DISTANCE) {
+        } else if (Vector3.Distance(avatarMesh.position, gameCenterDoorOutsidePos) < GAME_CENTER_ENTRANCE_DISTANCE) {
           enterGameCenterInterior()
           return
         }
@@ -5014,6 +5049,27 @@ export function World3D({
         const target = e.target as HTMLElement | null
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
         const key = e.key.toLowerCase()
+        // Entrada de QA local; removida do build de producao pelo Vite.
+        if (import.meta.env.DEV && key === 'f8' && !e.repeat) {
+          e.preventDefault()
+          enterGameCenterInterior()
+          return
+        }
+        if (import.meta.env.DEV && key === 'f9' && !e.repeat) {
+          e.preventDefault()
+          if (insideHouseInterior || drivingRocket || drivingCar) return
+          buildPlanetIfNeeded('venus')
+          const marker = planetQuestMarkers.find((candidate) => candidate.planetId === 'venus' &&
+            !progressRef.current.completedPlanetQuestIds.includes(candidate.quest.id))
+          if (!marker) return
+          const planet = DESTINATION_PLANETS.venus
+          currentPlanetId = 'venus'
+          currentWorldCenter = planet.center
+          currentGroundBaseFn = () => planet.radius
+          const schoolUp = marker.worldPos.subtract(planet.center).normalize()
+          teleportAvatarTo(planet.center, offsetLandingUp(schoolUp, planet.radius, 0.8), currentGroundBaseFn)
+          return
+        }
         // Latch no próprio evento (não no polling do loop de render) — ver comentário onde
         // `jumpRequested` é consumido, no loop de render. `!keysDown[key]` evita re-latch por
         // key-repeat do SO enquanto o jogador segura a tecla.
@@ -5967,6 +6023,8 @@ export function World3D({
         worldPos: Vector3
         base: TransformNode
         teacher: StudentFigure
+        label: TextBlock
+        hintLabel: TextBlock
         // Backlog "Lab 196" — fase própria do balanço de idle (sorteada uma vez na construção),
         // pra os professores das 6 escolinhas de um mesmo planeta não balançarem em sincronia.
         idlePhase: number
@@ -6219,6 +6277,22 @@ export function World3D({
         guiTexture.addControl(label)
         label.linkWithMesh(sign)
 
+        const hintLabel = new TextBlock(`planetSchoolHint-${nameSuffix}`, `${interactionHint('', interactionInput)}\nResponder`)
+        hintLabel.color = 'white'
+        hintLabel.fontSize = mobileFontSize(18)
+        hintLabel.fontWeight = 'bold'
+        hintLabel.outlineWidth = 3
+        hintLabel.outlineColor = 'rgba(0,0,0,0.6)'
+        hintLabel.width = '280px'
+        hintLabel.height = '96px'
+        hintLabel.textWrapping = true
+        hintLabel.alpha = 0
+        hintLabel.isPointerBlocker = false
+        hintLabel.isHitTestVisible = false
+        guiTexture.addControl(hintLabel)
+        hintLabel.linkWithMesh(sign)
+        hintLabel.linkOffsetY = -65
+
         const teacher = buildStudentFigure(scene, new Color3(0.55, 0.25, 0.55), shadowGenerator)
         teacher.root.scaling.setAll(0.92)
         teacher.root.position = new Vector3(0.85, 0, 0.4)
@@ -6234,6 +6308,8 @@ export function World3D({
           worldPos: planetRoot.position.add(localUp.scale(radius)),
           base,
           teacher,
+          label,
+          hintLabel,
           idlePhase: Math.random() * Math.PI * 2,
         })
       }
@@ -10699,14 +10775,13 @@ export function World3D({
       // mesmo tempo, sem amontoar (a casa só tem mobília numa anel decorativo, não algo que a
       // criança precisa LER uma a uma).
       const GAME_CENTER_ROOM_HALF_SIZE = 7
+      const GAME_CENTER_CAMERA_DISTANCE = 4.2
+      const GAME_CENTER_CAMERA_LOOK_AHEAD = 1.5
+      const GAME_CENTER_CAMERA_TARGET_HEIGHT = 0.5
 
-      // Duas candidatas anteriores rejeitadas ao vivo: (0.15,0.7,-0.7) media só ~30° do hub
-      // (lab-196) — abaixo da folga mínima que o próprio hub manteve dos vizinhos dele (~35-64°);
-      // (0.75,0.55,0.4) caiu perto demais de uma formação rochosa (câmera 3ª pessoa presa olhando
-      // de cima, achado ao vivo); (0.85,0.15,0.5) media só ~12,7° de `SHOP_ANCHOR_UP` (Lojinha) —
-      // etiquetas sobrepostas na tela, confirmado ao vivo. Esta mede ~93° do hub, ~52° da casa,
-      // ~80° da Lojinha, ~103°/117° de parkour/ponte — confirmada ao vivo sem sobreposição.
-      const GAME_CENTER_CANDIDATE_UP = new Vector3(-0.2, 0.3, 0.9).normalize()
+      // Entrada reposicionada com folga do circuito dos carros (a rua cruza latitude 25 graus,
+      // esta candidata fica perto de 58 graus). A busca abaixo preserva o apoio no relevo.
+      const GAME_CENTER_CANDIDATE_UP = new Vector3(-0.35, 0.52, 0.78).normalize()
       const GAME_CENTER_FOOTPRINT_ANGULAR_RADIUS = 1.6 / PLANET_RADIUS
       const GAME_CENTER_SAFE_TERRAIN_VARIANCE = 0.6
       const gameCenterUp = findFlatterUpReal(
@@ -10716,6 +10791,7 @@ export function World3D({
       )
       const gameCenterSurfacePos = groundSurfacePosition(gameCenterUp)
       const GAME_CENTER_TRIGGER_DISTANCE = 1.6
+      const GAME_CENTER_ENTRANCE_DISTANCE = 2.2
       // `ARENA_TARGET_TRIGGER_DISTANCE` (declarado no topo do closure, junto do resto do
       // controlador genérico de arena) é menor que `GAME_CENTER_TRIGGER_DISTANCE` de propósito —
       // os alvos de qualquer arena (cartas de memória, placas de Contar) ficam bem mais perto entre
@@ -10774,7 +10850,7 @@ export function World3D({
       settleMeshOnTerrain(gameCenterBase, gameCenterUp)
       gameCenterSurfacePos.copyFrom(gameCenterBase.position)
       gameCenterDoorOutsidePos = gameCenterBase.position.add(
-        Vector3.TransformNormal(gameCenterDoor.position, gameCenterBase.getWorldMatrix()),
+        Vector3.TransformNormal(gameCenterDoor.position.add(new Vector3(0, 0, 0.8)), gameCenterBase.getWorldMatrix()),
       )
 
       const gameCenterSignLabel = new TextBlock('gameCenterSignLabel', '🎮 Centro de Jogos')
@@ -10799,11 +10875,8 @@ export function World3D({
       gameCenterEnterHint.linkOffsetY = -15
       gameCenterEnterHintLabel = gameCenterEnterHint
 
-      // `Lógica` reaproveita o quiz da ponte (lab-180); `Memória` roda a arena própria deste lab
-      // (backlog "Lab 213 - Template de arena educativa reutilizável" — prova de conceito do template, ver
-      // "Decisão de escopo" em `FEATURES.md`). Os 4 portais já abrem algo de verdade: `Lógica`
-      // (quiz da ponte, lab-180), `Memória` (arena própria, backlog "Lab 213"), `Contar` (arena
-      // própria, backlog "Lab 214") e `Soletrar` (arena própria, backlog "Lab 215"). Achado do
+      // Os quatro portais abrem arenas no saguão: Memória, Contar, Soletrar e Lógica.
+      // O desafio ambiental da ponte continua acessível fora da Central. Achado do
       // review automático do Copilot: este comentário ficou desatualizado depois do lab-200 —
       // `unlocked: false` (mesmo tom apagado de `applyPortalVisual`, portais de planeta-destino)
       // não é mais usado por nenhum portal aqui, mas o campo continua no tipo pra um mini-jogo
@@ -10815,6 +10888,7 @@ export function World3D({
         memoria: { emoji: '🧠', label: 'Memória', color: new Color3(0.65, 0.3, 0.75), unlocked: true },
         logica: { emoji: '🧩', label: 'Lógica', color: new Color3(0.25, 0.7, 0.35), unlocked: true },
       }
+      const gameCenterPortalActionHint = interactionInput === 'touch' ? 'Toque para jogar' : 'Clique ou pressione E'
       const GAME_CENTER_LOCKED_MAT_COLOR = new Color3(0.4, 0.4, 0.42)
 
       // Construído sob demanda na primeira entrada (mesmo padrão de `buildHouseInteriorIfNeeded`) —
@@ -10927,19 +11001,13 @@ export function World3D({
         exitHint.linkWithMesh(interiorDoor)
         gameCenterExitHintLabel = exitHint
 
-        // Nascimento longe da porta (mesma histerese da casa) — evita disparar a saída no mesmo
-        // instante em que se entra.
-        const spawnClearanceFromBackWall = HOUSE_INTERIOR_CAMERA_DISTANCE + 1
-        gameCenterInteriorSpawnPos = interiorRoot.position.add(
-          new Vector3(0, AVATAR_RADIUS + 0.05, -(S - spawnClearanceFromBackWall)),
-        )
+        // Centro da sala: distancia da porta e das placas, com espaco para a camera atras.
+        gameCenterInteriorSpawnPos = interiorRoot.position.add(new Vector3(0, AVATAR_RADIUS + 0.05, 0))
 
-        // 4 placas em leque, de frente pra porta (mesmo espírito do anel de mobília da casa, só
-        // que num arco fixo em vez de posições aleatórias — só 4 placas, sempre as mesmas, fica
-        // mais legível numa fileira do que espalhadas).
+        // 4 placas em leque com mais separação para reduzir a sobreposição dos gatilhos.
         const arcSpan = Math.PI * 0.55
         const arcStart = -arcSpan / 2
-        const ringRadius = S - 2.2
+        const ringRadius = S - 1.7
         GAME_CENTER_PORTAL_IDS.forEach((id, index) => {
           const info = GAME_CENTER_PORTAL_INFO[id]
           const angle = arcStart + (arcSpan * index) / (GAME_CENTER_PORTAL_IDS.length - 1)
@@ -10957,12 +11025,13 @@ export function World3D({
           plaquePost.receiveShadows = true
           shadowGenerator.addShadowCaster(plaquePost)
 
-          const plaqueBoard = MeshBuilder.CreateBox(`gcPortalBoard-${id}`, { width: 0.9, height: 0.7, depth: 0.1 }, scene)
+          const plaqueBoard = MeshBuilder.CreateBox(`gcPortalBoard-${id}`, { width: 1.2, height: 0.9, depth: 0.1 }, scene)
           plaqueBoard.position = localPos.add(new Vector3(0, 1.35, 0))
           plaqueBoard.material = plaqueMat
           plaqueBoard.parent = interiorRoot
           plaqueBoard.receiveShadows = true
           shadowGenerator.addShadowCaster(plaqueBoard)
+          gameCenterPortalBoards.set(plaqueBoard, id)
           // Achatada quando bloqueada — mesmo sinal visual de `applyPortalVisual` (portais de
           // planeta-destino): dá pra ver que existe, mas visivelmente "menos" que os desbloqueados.
           plaqueBoard.visibility = info.unlocked ? 1 : 0.55
@@ -10979,7 +11048,7 @@ export function World3D({
           plaqueLabel.linkWithMesh(plaqueBoard)
           plaqueLabel.linkOffsetY = -45
 
-          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? interactionHint('jogar', interactionInput) : 'Em breve')
+          const plaqueHint = new TextBlock(`gcPortalHint-${id}`, info.unlocked ? gameCenterPortalActionHint : 'Em breve')
           plaqueHint.color = 'white'
           plaqueHint.fontSize = mobileFontSize(16)
           plaqueHint.fontWeight = 'bold'
@@ -11117,16 +11186,7 @@ export function World3D({
           gcPatternPadHintLabel[i] = padHint
         }
 
-        const memoryStatusLabel = new TextBlock('gcMemoryStatusLabel', '')
-        memoryStatusLabel.color = 'white'
-        memoryStatusLabel.fontSize = mobileFontSize(20)
-        memoryStatusLabel.fontWeight = 'bold'
-        memoryStatusLabel.outlineWidth = 4
-        memoryStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
-        memoryStatusLabel.alpha = 0
-        guiTexture.addControl(memoryStatusLabel)
-        memoryStatusLabel.linkWithMesh(gcMemoryCardMeshes[1])
-        memoryStatusLabel.linkOffsetY = -55
+        const memoryStatusLabel = createArenaStatusLabel('gcMemoryStatusLabel')
         gameCenterMemoryStatusLabel = memoryStatusLabel
 
         // Alvos combinados (cartas + pods) — ver comentário na declaração de `arenaMemoryMode`: os
@@ -11246,16 +11306,7 @@ export function World3D({
           gcCountingOptionHintLabel[i] = optionHint
         }
 
-        const countingStatusLabel = new TextBlock('gcCountingStatusLabel', '')
-        countingStatusLabel.color = 'white'
-        countingStatusLabel.fontSize = mobileFontSize(20)
-        countingStatusLabel.fontWeight = 'bold'
-        countingStatusLabel.outlineWidth = 4
-        countingStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
-        countingStatusLabel.alpha = 0
-        guiTexture.addControl(countingStatusLabel)
-        countingStatusLabel.linkWithMesh(gcCountingOptionMeshes[1])
-        countingStatusLabel.linkOffsetY = -55
+        const countingStatusLabel = createArenaStatusLabel('gcCountingStatusLabel')
         gameCenterCountingStatusLabel = countingStatusLabel
 
         arenaTargetPositions.contar = gcCountingOptionPos
@@ -11305,7 +11356,8 @@ export function World3D({
           )
 
           const tile = MeshBuilder.CreateBox(`gcSpellingTile-${i}`, { width: 0.5, height: 0.5, depth: 0.08 }, scene)
-          tile.position = tileLocalPos.add(new Vector3(0, 0.6, 0))
+          // Raise the back row so foreground tiles do not cover its clickable faces.
+          tile.position = tileLocalPos.add(new Vector3(0, row === 0 ? 1.05 : 0.6, 0))
           tile.material = spellingTileMat.clone(`gcSpellingTileMat-${i}`) as PBRMaterial
           tile.parent = interiorRoot
           tile.receiveShadows = true
@@ -11338,16 +11390,7 @@ export function World3D({
           gcSpellingTileHintLabel[i] = tileHint
         }
 
-        const spellingStatusLabel = new TextBlock('gcSpellingStatusLabel', '')
-        spellingStatusLabel.color = 'white'
-        spellingStatusLabel.fontSize = mobileFontSize(20)
-        spellingStatusLabel.fontWeight = 'bold'
-        spellingStatusLabel.outlineWidth = 4
-        spellingStatusLabel.outlineColor = 'rgba(0,0,0,0.6)'
-        spellingStatusLabel.alpha = 0
-        guiTexture.addControl(spellingStatusLabel)
-        spellingStatusLabel.linkWithMesh(gcSpellingTileMeshes[1])
-        spellingStatusLabel.linkOffsetY = -55
+        const spellingStatusLabel = createArenaStatusLabel('gcSpellingStatusLabel')
         gameCenterSpellingStatusLabel = spellingStatusLabel
 
         arenaTargetPositions.soletrar = gcSpellingTilePos
@@ -11373,16 +11416,100 @@ export function World3D({
             arenaSpellingState = null
           },
         }
+
+        const logicAnchorLocal = gameCenterPortalPos.logica.subtract(interiorRoot.position)
+        const logicSequenceMat = new PBRMaterial('gcLogicSequenceMat', scene)
+        logicSequenceMat.albedoColor = new Color3(0.18, 0.56, 0.42)
+        logicSequenceMat.roughness = 0.55
+        for (let i = 0; i < 4; i++) {
+          const piece = MeshBuilder.CreateBox(`gcLogicSequence-${i}`, { width: 0.43, height: 0.43, depth: 0.12 }, scene)
+          // Viewed from the lobby (+Z), positive X is the left side of the sequence.
+          piece.position = logicAnchorLocal.add(new Vector3((1.5 - i) * 0.56, 0.66, 1.4))
+          piece.material = logicSequenceMat
+          piece.parent = interiorRoot
+          piece.isPickable = false
+          piece.setEnabled(false)
+          gcLogicSequenceMeshes[i] = piece
+
+          const label = new TextBlock(`gcLogicSequenceLabel-${i}`, '')
+          label.color = 'white'
+          label.fontSize = mobileFontSize(25)
+          label.fontWeight = 'bold'
+          label.outlineWidth = 3
+          label.outlineColor = 'rgba(0,0,0,0.6)'
+          label.alpha = 0
+          guiTexture.addControl(label)
+          label.linkWithMesh(piece)
+          gcLogicSequenceLabels[i] = label
+        }
+
+        const logicOptionMat = new PBRMaterial('gcLogicOptionMat', scene)
+        logicOptionMat.albedoColor = new Color3(0.22, 0.42, 0.38)
+        logicOptionMat.roughness = 0.5
+        const gcLogicOptionPos: Vector3[] = []
+        for (let i = 0; i < 3; i++) {
+          const option = MeshBuilder.CreateBox(`gcLogicOption-${i}`, { width: 0.55, height: 0.55, depth: 0.08 }, scene)
+          option.position = logicAnchorLocal.add(new Vector3((i - 1) * 0.75, 0.6, 2.4))
+          option.material = logicOptionMat
+          option.parent = interiorRoot
+          option.setEnabled(false)
+          gcLogicOptionMeshes[i] = option
+          gcLogicOptionPos[i] = arenaTargetTriggerPos(option)
+
+          const label = new TextBlock(`gcLogicOptionLabel-${i}`, '')
+          label.color = 'white'
+          label.fontSize = mobileFontSize(28)
+          label.fontWeight = 'bold'
+          label.outlineWidth = 3
+          label.outlineColor = 'rgba(0,0,0,0.6)'
+          label.alpha = 0
+          guiTexture.addControl(label)
+          label.linkWithMesh(option)
+          gcLogicOptionLabels[i] = label
+
+          const hint = new TextBlock(`gcLogicOptionHint-${i}`, interactionHint('', interactionInput))
+          hint.color = 'white'
+          hint.fontSize = mobileFontSize(14)
+          hint.fontWeight = 'bold'
+          hint.outlineWidth = 2
+          hint.outlineColor = 'rgba(0,0,0,0.6)'
+          hint.alpha = 0
+          guiTexture.addControl(hint)
+          hint.linkWithMesh(option)
+          hint.linkOffsetY = 26
+          gcLogicOptionHintLabels[i] = hint
+        }
+
+        const logicStatusLabel = createArenaStatusLabel('gcLogicStatusLabel')
+        gameCenterLogicStatusLabel = logicStatusLabel
+
+        arenaTargetPositions.logica = gcLogicOptionPos
+        arenaTargetInteract.logica = handleLogicOptionInteract
+        arenaTargetHintLabels.logica = gcLogicOptionHintLabels
+        arenaTargetMeshes.logica = gcLogicOptionMeshes
+        arenaConfigs.logica = {
+          label: '🧩 Lógica',
+          timeLimitS: null,
+          statusLabel: logicStatusLabel,
+          setTargetsVisible: setLogicTargetsVisible,
+          beginAttempt: () => {
+            arenaLogicState = createLogicGame()
+            setLogicTargetsVisible(true)
+            renderLogicRound()
+          },
+          resetState: () => {
+            arenaLogicState = null
+          },
+        }
       }
 
       function enterGameCenterInterior() {
+        if (insideGameCenterInterior) return
         buildGameCenterInteriorIfNeeded()
         // Progresso/troféus do centro de jogos (Lab 217) — re-sincroniza com `progressRef.current`
-        // TODA entrada, não só na primeira construção da sala: cobre o caminho do desafio de
-        // Lógica, cuja conclusão é detectada fora deste arquivo (`App.tsx`, `kind: 'bridge'`) e não
-        // tem como empurrar um refresh imediato pra dentro do closure de `setup()` — a criança vê o
-        // troféu atualizado na PRÓXIMA vez que atravessar a porta (limitação conhecida, ver
-        // FEATURES.md do backlog "Lab 217").
+        // TODA entrada, não só na primeira construção da sala: cobre conclusões do desafio
+        // ambiental da ponte fora deste arquivo (`App.tsx`, `kind: 'bridge'`). As vitórias das
+        // arenas atualizam o troféu imediatamente pelo callback próprio.
         refreshGameCenterTrophyVisuals()
         if (!avatarMesh || !avatarBody) return
         // Mesmo bloqueio da casa (lab-175): sair do carro/foguete antes, e nunca pular direto de
@@ -11409,6 +11536,7 @@ export function World3D({
         savedOutsideLocalUp = avatarMesh.position.subtract(currentWorldCenter).normalize()
         insideHouseInterior = true
         insideGameCenterInterior = true
+        portalTapStart = null
         cameraYawOffsetRef.current = 0
         touchCameraTurnPending = 0
         houseCameraPitchOffsetRef.current = 0
@@ -11424,13 +11552,23 @@ export function World3D({
         wasGroundedLastFrame = true
         avatarBody.body.disablePreStep = false
         avatarMesh.position.copyFrom(gameCenterInteriorSpawnPos)
+        facing = Vector3.Backward()
+        camera.position.copyFrom(
+          gameCenterInteriorSpawnPos
+            .subtract(facing.scale(GAME_CENTER_CAMERA_DISTANCE))
+            .add(Vector3.Up().scale(HOUSE_INTERIOR_CAMERA_HEIGHT)),
+        )
+        camera.upVector.copyFrom(Vector3.Up())
+        gameCenterCameraTarget.copyFrom(gameCenterInteriorSpawnPos)
+        gameCenterCameraTarget.z -= GAME_CENTER_CAMERA_LOOK_AHEAD
+        gameCenterCameraTarget.y += GAME_CENTER_CAMERA_TARGET_HEIGHT
+        camera.setTarget(gameCenterCameraTarget)
         scene.render()
         avatarBody.body.setLinearVelocity(Vector3.Zero())
         avatarBody.body.setAngularVelocity(Vector3.Zero())
         avatarBody.body.disablePreStep = true
         // Reafirma DEPOIS de `scene.render()` — mesmo motivo de `teleportAvatarTo`.
         wasGroundedLastFrame = true
-        facing = new Vector3(0, 0, 1)
         trackGameCenterEntered()
       }
 
@@ -11438,6 +11576,7 @@ export function World3D({
         if (!insideGameCenterInterior) return
         insideHouseInterior = false
         insideGameCenterInterior = false
+        portalTapStart = null
         cameraDragging = false
         cameraDragPointerId = null
         touchCameraTurnPending = 0
@@ -11461,17 +11600,8 @@ export function World3D({
         trackGameCenterReturned()
       }
 
-      // Portal bloqueado só mostra a dica "em breve"; `Lógica` abre o MESMO quiz da ponte
-      // (lab-180) direto do saguão, sem precisar teleportar até a ponte de verdade — metáfora de
-      // "portal de arcade" (entra e joga na hora), diferente do hub do lab-196 (que reloca o
-      // avatar pro local físico do mini-jogo). `minigame_started`/`ponte-logica` reaproveita o
-      // MESMO id do hub de propósito — é o mesmo mini-jogo por baixo, mede o mesmo agregado
-      // independente de por onde a criança entrou. Não dispara `minigame_completed` aqui: não
-      // existe pedestal de retorno neste caminho (o modal fecha sozinho ao responder), então não
-      // há um "voltou" pra medir — `learning_challenge_completed` (já disparado pelo próprio fluxo
-      // do quiz) já cobre a conclusão de verdade pra quem quiser ler aquele evento. `Memória`/
-      // `Contar` (backlog "Lab 213"/Lab 214) são arenas de verdade: primeira interação começa, uma
-      // depois de terminar tenta de novo — interação NO MEIO de uma tentativa (`countdown`/
+      // Os quatro portais usam o mesmo controlador de arena: primeira interação começa, uma
+      // depois de terminar tenta de novo. Interação NO MEIO de uma tentativa (`countdown`/
       // `playing`), da mesma arena OU de outra, não faz nada aqui (não dá pra sequestrar uma
       // tentativa em andamento trocando de portal); os alvos em si é que respondem (ver
       // `arenaTargetInteract`, populado em `buildGameCenterInteriorIfNeeded`).
@@ -11501,7 +11631,7 @@ export function World3D({
         const hintLabel = gameCenterPortalHintLabel[id]
         if (hintLabel) {
           const info = GAME_CENTER_PORTAL_INFO[id]
-          const cta = info.unlocked ? interactionHint('jogar', interactionInput) : 'Em breve'
+          const cta = info.unlocked ? gameCenterPortalActionHint : 'Em breve'
           hintLabel.text = `${gameCenterTrophyProgressPrefix(completions)}${cta}`
         }
       }
@@ -11512,7 +11642,7 @@ export function World3D({
         }
       }
 
-      // Compartilhado pelos 4 sucessos de arena (cartas de memória, sequência, contar, soletrar) —
+      // Compartilhado pelos sucessos de arena (memória, contar, soletrar, lógica) —
       // credita o progresso/troféu/missão semanal (`onGameCenterMinigameCompletedRef`, `App.tsx`),
       // atualiza os troféus visuais na hora (sem esperar a próxima entrada no saguão, ver
       // comentário em `onGameCenterMinigameCompleted` na declaração de `World3DProps`) e devolve o
@@ -11520,21 +11650,17 @@ export function World3D({
       // Achado do review automático do Copilot: `trackMinigameTrophyEarned`/
       // `trackGameCenterWeeklyQuestCompleted` NÃO disparam aqui — `App.tsx`
       // (`handleGameCenterMinigameCompleted`) já dispara os dois antes de devolver o resultado;
-      // disparar de novo aqui duplicava os 2 eventos em cada troféu/missão semanal conquistados
-      // por estas 3 arenas (a lógica, tratada à parte em `App.tsx`, nunca teve essa duplicação).
-      function handleGameCenterMinigameReward(
-        category: Extract<GameCenterCategory, 'memoria' | 'contar' | 'soletrar'>,
-        baseStatusText: string,
-      ): string {
+      // disparar de novo aqui duplicaria os 2 eventos em cada troféu/missão semanal.
+      function handleGameCenterMinigameReward(category: GameCenterCategory, baseStatusText: string): string {
         const { newTrophy, weeklyQuestRewardGranted, newCompletions } = onGameCenterMinigameCompletedRef.current(category)
         updateGameCenterTrophyVisual(category, newCompletions)
         let text = baseStatusText
         if (newTrophy) {
           const tierLabel = newTrophy === 'ouro' ? '🏆 Ouro' : newTrophy === 'prata' ? '🥈 Prata' : '🥉 Bronze'
-          text += ` ${tierLabel} desbloqueado!`
+          text += `\n${tierLabel} desbloqueado!`
         }
         if (weeklyQuestRewardGranted) {
-          text += ` 🎁 +${GAME_CENTER_WEEKLY_QUEST_REWARD_COINS} moedas (missão semanal)!`
+          text += `\n🎁 +${GAME_CENTER_WEEKLY_QUEST_REWARD_COINS} moedas (missão semanal)!`
         }
         return text
       }
@@ -11580,7 +11706,7 @@ export function World3D({
           )
           return
         }
-        if (id === 'memoria' || id === 'contar' || id === 'soletrar') {
+        if (arenaConfigs[id]) {
           // Achado da generalização (Lab 214): `success`/`fail` só significa "pode tentar de novo"
           // pra ESTA MESMA arena. Terminar uma arena e ir direto pra placa de outra (sem sair do
           // saguão) tem que contar como uma tentativa NOVA, não uma "retentativa" — senão
@@ -11592,15 +11718,26 @@ export function World3D({
           }
           return
         }
-        // `'bridge'` (não uma string nova tipo "game-center-logica") de propósito: é o MESMO kind
-        // de missão ambiental (`learning_challenge_started/completed`), só disparado de um lugar
-        // diferente — inventar um kind novo exigiria mudar o tipo de `onOpenEnvironmentalChallenge`
-        // e a allowlist do Worker (`isValidLearningChallengeKind`) sem nenhum ganho de sinal real.
-        onOpenEnvironmentalChallengeRef.current(
-          selectEnvironmentalChallengeQuest('logica', progressRef.current.completedQuestIds),
-          'bridge',
+      }
+
+      selectGameCenterTapTargetAt = (clientX, clientY) => {
+        if (!insideGameCenterInterior || hudInertRef.current || !canvas) return
+        const rect = canvas.getBoundingClientRect()
+        const activeTargets = arenaPhase === 'playing' && activeArenaId
+          ? arenaTargetMeshes[activeArenaId] ?? []
+          : []
+        // scene.pick accepts CSS coordinates; Babylon applies hardware scaling in its ray.
+        const picked = scene.pick(
+          clientX - rect.left,
+          clientY - rect.top,
+          (mesh) => resolveGameCenterTap(mesh, gameCenterPortalBoards, activeTargets) !== null,
         )
-        trackMinigameStarted('ponte-logica')
+        const target = resolveGameCenterTap(picked.pickedMesh, gameCenterPortalBoards, activeTargets)
+        if (target?.kind === 'arena' && activeArenaId && arenaPhase === 'playing') {
+          arenaTargetInteract[activeArenaId]?.(target.index)
+        } else if (target?.kind === 'portal') {
+          handleGameCenterPortalInteract(target.id)
+        }
       }
 
       // Controlador genérico de arena (Lab 214, generalização confirmada com o usuário) — contagem
@@ -11612,6 +11749,24 @@ export function World3D({
       // `fail` (só quando há cronômetro, via `config.onTimeout`). `isRetry` só diferencia o evento
       // de analytics disparado (`minigame_started` sempre; `minigame_retried` só quando é de fato
       // uma NOVA tentativa da MESMA arena depois de uma anterior ter terminado).
+      function createArenaStatusLabel(name: string): TextBlock {
+        const label = new TextBlock(name, '')
+        label.color = 'white'
+        label.fontSize = mobileFontSize(18)
+        label.fontWeight = 'bold'
+        label.outlineWidth = 4
+        label.outlineColor = 'rgba(0,0,0,0.6)'
+        label.width = '80%'
+        label.height = '96px'
+        label.textWrapping = true
+        label.verticalAlignment = TextBlock.VERTICAL_ALIGNMENT_BOTTOM
+        label.top = '-60px'
+        label.isPointerBlocker = false
+        label.alpha = 0
+        guiTexture.addControl(label)
+        return label
+      }
+
       function beginArenaCountdown(id: ArenaId, isRetry: boolean) {
         const config = arenaConfigs[id]
         if (!config) return
@@ -11738,7 +11893,7 @@ export function World3D({
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
               'memoria',
-              `🎉 Você venceu! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+              '🎉 Pares encontrados!',
             )
           }
         }
@@ -11825,7 +11980,7 @@ export function World3D({
           if (gameCenterMemoryStatusLabel) {
             gameCenterMemoryStatusLabel.text = handleGameCenterMinigameReward(
               'memoria',
-              `🎉 Sequência completa! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+              '🎉 Sequência completa!',
             )
           }
           return
@@ -11891,7 +12046,7 @@ export function World3D({
           if (gameCenterCountingStatusLabel) {
             gameCenterCountingStatusLabel.text = handleGameCenterMinigameReward(
               'contar',
-              `🎉 Você contou tudo certo! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+              '🎉 Você contou tudo certo!',
             )
           }
           return
@@ -11956,13 +12111,71 @@ export function World3D({
           if (gameCenterSpellingStatusLabel) {
             gameCenterSpellingStatusLabel.text = handleGameCenterMinigameReward(
               'soletrar',
-              `🎉 Você soletrou ${state.hint} ${state.word}! ${interactionHint('jogar de novo na placa', interactionInput)}`,
+              `🎉 Você soletrou ${state.hint} ${state.word}!`,
             )
           }
           return
         }
         if (gameCenterSpellingStatusLabel) {
           gameCenterSpellingStatusLabel.text = `${state.hint} ${spellingProgressText(state)}`
+        }
+      }
+
+      const LOGIC_REWARD_COINS = 3
+      function setLogicTargetsVisible(visible: boolean) {
+        for (let i = 0; i < gcLogicSequenceMeshes.length; i++) {
+          gcLogicSequenceMeshes[i].setEnabled(visible)
+          gcLogicSequenceLabels[i].alpha = visible ? 1 : 0
+        }
+        for (let i = 0; i < gcLogicOptionMeshes.length; i++) {
+          gcLogicOptionMeshes[i].setEnabled(visible)
+          gcLogicOptionLabels[i].alpha = visible ? 1 : 0
+          if (!visible) gcLogicOptionHintLabels[i].alpha = 0
+        }
+      }
+      function renderLogicRound() {
+        if (!arenaLogicState) return
+        const round = currentLogicRound(arenaLogicState)
+        if (!round) return
+        for (let i = 0; i < round.sequence.length; i++) {
+          gcLogicSequenceLabels[i].text = String(round.sequence[i])
+        }
+        gcLogicSequenceLabels[3].text = '?'
+        for (let i = 0; i < round.options.length; i++) {
+          gcLogicOptionLabels[i].text = String(round.options[i])
+        }
+        if (gameCenterLogicStatusLabel) {
+          gameCenterLogicStatusLabel.text = `🧩 Qual número vem depois? ${arenaLogicState.roundsWon + 1}/${LOGIC_ROUNDS_TO_WIN}`
+        }
+      }
+      function handleLogicOptionInteract(index: number) {
+        if (arenaPhase !== 'playing' || activeArenaId !== 'logica' || !arenaLogicState) return
+        const round = currentLogicRound(arenaLogicState)
+        const choice = round?.options[index]
+        if (choice == null) return
+        const { state, correct } = answerLogicRound(arenaLogicState, choice)
+        arenaLogicState = state
+        const feedbackPos = arenaTargetPositions.logica?.[index] ?? gameCenterPortalPos.logica
+        if (!correct) {
+          showPuzzleFeedback(feedbackPos, 'try-again')
+          if (gameCenterLogicStatusLabel) gameCenterLogicStatusLabel.text = '🤔 Observe a sequência e tente outra placa'
+          return
+        }
+        const completed = isLogicGameComplete(state)
+        showPuzzleFeedback(feedbackPos, completed ? 'complete' : 'correct')
+        if (!completed) {
+          renderLogicRound()
+          return
+        }
+        arenaPhase = 'success'
+        setLogicTargetsVisible(false)
+        trackMinigameCompleted('logica')
+        for (let i = 0; i < LOGIC_REWARD_COINS; i++) onCollectCoinRef.current()
+        if (gameCenterLogicStatusLabel) {
+          gameCenterLogicStatusLabel.text = handleGameCenterMinigameReward(
+            'logica',
+            '🎉 Você descobriu os padrões!',
+          )
         }
       }
 
@@ -12869,12 +13082,8 @@ export function World3D({
       // desta investigação. Corrigido com folga real acima do mínimo geométrico (~1,25).
       const HOUSE_TRIGGER_DISTANCE = 1.6
 
-      // Distância de gatilho das escolinhas de astronomia dos planetas (lab-115) — mesmo
-      // raciocínio da carteira/Minha Casa: o totem+professor ocupam espaço parecido.
-      const PLANET_SCHOOL_TRIGGER_DISTANCE = 1.2
-
       // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — raio um pouco maior que o da
-      // própria escolinha (1.2): o professor "percebe" o jogador chegando um pouco ANTES dele
+      // própria escolinha (1.8): o professor "percebe" o jogador chegando um pouco ANTES dele
       // acionar o quiz, mesmo espírito de um NPC de verdade notando alguém se aproximar. Usa
       // `RESET_DISTANCE` (já existente, 3.6) como raio de saída — mesma histerese gatilho/reset já
       // usada em toda detecção de proximidade deste arquivo.
@@ -13982,8 +14191,6 @@ export function World3D({
             const followStep = touchCameraFollowStep(touchCameraTurnPending, dt, TURN_RATE)
             if (followStep !== 0) {
               facing = rotateAroundAxis(facing, localUp, followStep)
-              // Keep the camera's world-space bearing while the figure catches up.
-              cameraYawOffsetRef.current -= followStep
               touchCameraTurnPending -= followStep
             } else {
               touchCameraTurnPending = 0
@@ -14403,7 +14610,8 @@ export function World3D({
           // lab-123: dentro de casa, a distância/altura padrão (pensada pro terreno aberto lá
           // fora) colocaria a câmera do lado de FORA da parede — ver comentário na declaração de
           // `HOUSE_INTERIOR_CAMERA_DISTANCE`.
-          const camDist = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
+          const camDist = insideGameCenterInterior ? GAME_CENTER_CAMERA_DISTANCE
+            : insideHouseInterior ? HOUSE_INTERIOR_CAMERA_DISTANCE : CAMERA_DISTANCE
           const camHeight = insideHouseInterior ? HOUSE_INTERIOR_CAMERA_HEIGHT : CAMERA_HEIGHT
           // lab-138: dentro de casa, a câmera vira "esférica" ao redor do jogador (giro horizontal
           // + inclinação vertical + zoom, os três controláveis arrastando/rolando o mouse — ver
@@ -14491,7 +14699,16 @@ export function World3D({
                 ? desiredCamPos
                 : Vector3.Lerp(camera.position, desiredCamPos, 0.1)
             camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
-            camera.setTarget(pos)
+            if (insideGameCenterInterior) {
+              gameCenterCameraTarget.set(
+                pos.x + camFacing.x * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.x * GAME_CENTER_CAMERA_TARGET_HEIGHT,
+                pos.y + camFacing.y * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.y * GAME_CENTER_CAMERA_TARGET_HEIGHT,
+                pos.z + camFacing.z * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.z * GAME_CENTER_CAMERA_TARGET_HEIGHT,
+              )
+              camera.setTarget(gameCenterCameraTarget)
+            } else {
+              camera.setTarget(pos)
+            }
           }
 
           // Desvanece a parede que estiver entre a câmera e o jogador (lab-136, pedido do
@@ -14749,24 +14966,11 @@ export function World3D({
             // histerese gatilho/reset das escolinhas do planeta principal, mas pulando quest já
             // concluída (mesmo espírito de `portalMeshes`/`completed` acima) via
             // `completedPlanetQuestIds`, NUNCA `completedQuestIds`.
-            for (const marker of planetQuestMarkers) {
-              const triggerId = `planet-school-${marker.quest.id}`
-              if (marker.planetId !== currentPlanetId) {
-                triggered.delete(triggerId)
-                continue
-              }
-              if (progressRef.current.completedPlanetQuestIds.includes(marker.quest.id)) {
-                triggered.delete(triggerId)
-                continue
-              }
-              const dSq = distanceSquared(pos, marker.worldPos)
-              if (dSq < PLANET_SCHOOL_TRIGGER_DISTANCE * PLANET_SCHOOL_TRIGGER_DISTANCE && !triggered.has(triggerId)) {
-                triggered.add(triggerId)
-                onSelectPlanetQuestRef.current(marker.quest.id)
-              } else if (dSq > RESET_DISTANCE * RESET_DISTANCE) {
-                triggered.delete(triggerId)
-              }
-            }
+            const planetQuestToOpen = selectPlanetSchoolQuest(
+              planetQuestMarkers, pos, currentPlanetId,
+              progressRef.current.completedPlanetQuestIds, triggered,
+            )
+            if (planetQuestToOpen !== null) onSelectPlanetQuestRef.current(planetQuestToOpen)
 
             // Backlog "Lab 196 - NPCs vivos nos planetas secundarios" — olhar pro jogador e fala
             // catalogada (só na primeira aproximação de cada visita, mesma histerese
@@ -15634,6 +15838,22 @@ export function World3D({
         // Labels de proximidade nao afetam fisica nem gatilhos. Atualiza-las a 10 Hz corta
         // dezenas de comparacoes e escritas no Babylon GUI por quadro sem atraso perceptivel.
         if (shouldUpdateProximityUi) {
+        const nearbyPlanetQuestId = avatarMesh && !insideHouseInterior && !drivingRocket && !drivingCar &&
+          !suspendRef.current && !chatOpenRef.current
+          ? nearestPlanetSchoolQuest(
+              planetQuestMarkers, avatarMesh.position, currentPlanetId,
+              progressRef.current.completedPlanetQuestIds,
+            )
+          : null
+        const planetSchoolHintOffset = (canvas?.clientHeight ?? window.innerHeight) <= 450 ? -45 : -65
+        for (const marker of planetQuestMarkers) {
+          marker.label.text = progressRef.current.completedPlanetQuestIds.includes(marker.quest.id) ? '✓' : '?'
+          const hintAlpha = marker.quest.id === nearbyPlanetQuestId ? 1 : 0
+          if (hintAlpha && marker.hintLabel.linkOffsetY !== planetSchoolHintOffset) {
+            marker.hintLabel.linkOffsetY = planetSchoolHintOffset
+          }
+          if (marker.hintLabel.alpha !== hintAlpha) marker.hintLabel.alpha = hintAlpha
+        }
         // Dica "pressione E" da casa (lab-123) — mesmo padrão do carro/foguete abaixo. Só uma das
         // duas fica visível por vez: a de entrar (fora, perto da fachada) ou a de sair (dentro,
         // perto da porta) — nunca as duas juntas.
@@ -15713,7 +15933,7 @@ export function World3D({
         // só uma das duas portas fica visível por vez (fora/dentro), mais 1 dica por placa.
         if (avatarMesh && gameCenterEnterHintLabel) {
           gameCenterEnterHintLabel.alpha =
-            !insideHouseInterior && isWithinDistance(avatarMesh.position, gameCenterDoorOutsidePos, GAME_CENTER_TRIGGER_DISTANCE)
+            !insideHouseInterior && isWithinDistance(avatarMesh.position, gameCenterDoorOutsidePos, GAME_CENTER_ENTRANCE_DISTANCE)
               ? 1
               : 0
         }
@@ -15723,11 +15943,14 @@ export function World3D({
               ? 1
               : 0
         }
+        const nearestPortal = avatarMesh && insideGameCenterInterior
+          ? nearestInteraction(avatarMesh.position, gameCenterPortalPos, GAME_CENTER_PORTAL_IDS, GAME_CENTER_TRIGGER_DISTANCE)
+          : null
         for (const id of GAME_CENTER_PORTAL_IDS) {
           const label = gameCenterPortalHintLabel[id]
           if (avatarMesh && label) {
             label.alpha =
-              insideGameCenterInterior && isWithinDistance(avatarMesh.position, gameCenterPortalPos[id], GAME_CENTER_TRIGGER_DISTANCE)
+              id === nearestPortal
                 ? 1
                 : 0
           }
@@ -15761,15 +15984,11 @@ export function World3D({
             for (const label of hintLabels) label.alpha = 0
           }
         }
-        // Mensagem de status/resultado da arena ATIVA (contagem, cronômetro, vitória/derrota) —
-        // some se a criança se afastar da área da arena, em vez de ficar flutuando pra sempre
-        // (achado ao verificar ao vivo no lab-198: sem isso, "Você venceu!" continuava visível
-        // mesmo depois de ir pra outro portal, já que só `exitActiveArena`/o próximo
-        // `beginArenaCountdown` mexiam nesse `alpha`).
+        // Toque direto permite responder longe da placa: instrucao/resultado da arena ativa
+        // nao dependem mais da distancia. A troca de arena ou saida esconde o status anterior.
         if (avatarMesh && activeArenaId) {
           const config = arenaConfigs[activeArenaId]
-          const nearArena = isWithinDistance(avatarMesh.position, gameCenterPortalPos[activeArenaId], 3)
-          if (config?.statusLabel) config.statusLabel.alpha = arenaPhase !== 'idle' && nearArena ? 1 : 0
+          if (config?.statusLabel) config.statusLabel.alpha = insideGameCenterInterior && arenaPhase !== 'idle' ? 1 : 0
         }
 
         // Dica "pressione E" (lab-25) — só visível perto de um carro parado e só quando o
@@ -15778,7 +15997,12 @@ export function World3D({
         // só existe dentro do bloco `if (avatarBody && avatarMesh)` acima, já fechado aqui).
         if (!drivingCar && avatarMesh) {
           for (const car of carros) {
-            car.hintLabel.alpha = isWithinDistance(avatarMesh.position, car.root.position, CAR_ENTER_DISTANCE) ? 1 : 0
+            car.hintLabel.alpha =
+              !insideHouseInterior &&
+              !isWithinDistance(avatarMesh.position, gameCenterDoorOutsidePos, GAME_CENTER_ENTRANCE_DISTANCE) &&
+              isWithinDistance(avatarMesh.position, car.root.position, CAR_ENTER_DISTANCE)
+                ? 1
+                : 0
           }
         } else {
           for (const car of carros) car.hintLabel.alpha = 0
@@ -16414,6 +16638,7 @@ export function World3D({
       window.removeEventListener('pointerup', onCameraPointerUp)
       window.removeEventListener('pointercancel', onCameraPointerUp)
       canvas.removeEventListener('wheel', onCameraWheel)
+      selectGameCenterTapTargetAt = null
       ;(scene as any).__removeKeyListeners?.()
       ;(scene as any).__disposeMultiplayer?.()
       ;(scene as any).__cancelPerfSample?.()

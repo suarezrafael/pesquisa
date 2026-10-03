@@ -1,16 +1,124 @@
 # Laboratório atual
 
-Em andamento: labs/lab-236-revalidacao-entitlement/ - revalidar assinatura
-durante sessao longa e sincronizar look publico na transicao. Base `e5dfa81`;
-testes locais passaram, validacao com assinatura real e tablet pendente.
+Lab 247 publicado: labs/lab-247-chave-tentativa-questmodal/ - key por
+identidade de tentativa (quest.id) nos 4 QuestModal restantes (activeQuest,
+activeSurpriseQuiz, activePlanetQuest, activeCoopQuest), mesma classe de
+risco do achado do Copilot na PR #135 (lab-246). Endurecimento preventivo,
+sem reproducao ao vivo de corrida real. 358 testes, lint e build/PWA
+passaram. PR #137 mesclada em e82377d; 2 achados de convencao do Copilot
+(comentarios referenciando lab/PR) corrigidos no mesmo PR. CI em main (run
+37133198977) passou e inclui o deploy automatico pra produção (Vercel +
+Cloudflare Pages/Workers, `.github/workflows/ci.yml`, secrets ja configurados
+desde o lab-104) — confirmado ao vivo em missaoaprendizado.com
+(`index-CcSzaPg9.js`) apos o merge. Android fisico ainda sem validacao.
+Base: main a698712. Ver FEATURES.md/CONTEXT.md.
+
+---
+
+Em andamento (retomado): labs/lab-236-revalidacao-entitlement/ - revalidar
+assinatura ao abrir o jogo e apos 5+ min com a aba visivel, ignorar tokens
+antigos pos-desvinculo, sincronizar aparencia publica na troca de acesso.
+PR #125 estava parada em rascunho desde 2026-09-24 (11 labs atras, antes do
+lab-237); rebase feito sobre main (`labs/CURRENT.md` resolvido tomando a
+versao de main — unico conflito, nada do codigo colidiu). Suite/lint/build
+a confirmar apos o rebase. Segue em rascunho: falta validacao com assinatura
+real (cancelar/reativar em sessao longa, offline, visualizacao por outro
+jogador, Redmi Pad 2) que esta sessao nao pode fazer. Ver FEATURES.md/
+CONTEXT.md.
+
+---
+
+Lab 246 publicado: labs/lab-246-cancelar-recompensa-pendente/ - cancelar
+recompensa atrasada apos fechar/desmontar pergunta e evitar callback duplicado.
+Achado de severidade alta do Copilot na PR #135 resolvido (QuestModal sem
+reset ao trocar de tentativa no desafio ambiental; corrigido com
+key={attemptId} + teste de regressao). 357 testes, lint e build/PWA
+passaram; smoke local do mundo 3D. PR #135 mesclada em 3f84977; CI em main
+(run 37129285538) passou, incluindo o deploy automatico pra produção
+(Vercel + Cloudflare, mesmo workflow do lab-247 abaixo) — correção
+registrada depois: a nota original deste lab dizia "deploy nao verificado",
+o que estava errado, o deploy e automatico desde o lab-104 e roda dentro
+do proprio job de CI. Jogada completa e Android fisico ainda sem validacao.
+Base: main 4c4fd31. Ver FEATURES.md/CONTEXT.md.
+
+---
+
+Lab 245 publicado: labs/lab-245-leitura-inicial-modais/ - foco inicial
+visivel no titulo do portao parental e das perguntas. 350 testes, lint e
+build/PWA passaram; navegador 320x400 e 1280x720 validado. PR #133 mesclada
+em 28fd529; Copilot sem achados, CI/deploy 36574944205 passou. Bundle
+index-DyslkJtH.js observado em missaoaprendizado.com. Teste fisico Android
+pendente. Base: main 2329f2e. Ver FEATURES.md/CONTEXT.md.
+
+---
+
+Lab 244 implementado: labs/lab-244-retorno-foco-modais/ - retorno de foco,
+autofocus do portao sobre ranking e preservacao da pilha/StrictMode.
+Suite: 348 testes (18 DOM novos); lint/build/auditoria passaram, QA no navegador
+em desktop/tela baixa. Achado Copilot no lockfile tratado: 32 seletores libc
+restaurados, sem troca de versoes. PR #132 mesclada em 2329f2e apos seis
+checks verdes e thread do Copilot resolvida. Android fisico pendente.
+Base: main f919cfd. Ver FEATURES.md e CONTEXT.md.
+
+---
+
+Lab 243 publicado: labs/lab-243-modais-telas-baixas/ - altura/rolagem de modais,
+fechar acessivel e previews compactos. PR #131 mesclada em f919cfd; 330 testes,
+lint/build e QA de seis viewports passaram. Copilot conferido, sem achados.
+CI/deploy 36339057732 passou; smoke test no dominio confirmado.
+Build: 2026-09-27T18:02:31.958Z. Touch/IME fisicos pendentes.
+Ver FEATURES.md e CONTEXT.md e registro de publicacao na PR #131.
+
+---
+
+Lab 242 mesclado em 5eb2675 (PR #130): labs/lab-242-interacao-escolinhas-planetas/
+- retomar perguntas pendentes por E/touch, com dica contextual e sem loop.
+Suite: 330 testes. Copilot overview/inline/threads conferidos, sem achados.
+Publicado em 2026-09-27; CI/deploy 36338199304 passou. Touch fisico pendente.
+Build observado em missaoaprendizado.com: 2026-09-27T17:48:42.704Z.
+Ver FEATURES.md e CONTEXT.md.
+
+---
+
+Lab 241 mesclado em 504c8c6 (PR #129): labs/lab-241-toque-alvos-arenas/ - toque
+direto nos alvos das quatro arenas, entrada/enquadramento/status da Central
+e alcance das perguntas dos planetas secundarios. Suite: 324 testes passaram.
+Copilot revisado/respondido; publicado em 2026-09-27, teste fisico pendente.
+Build em missaoaprendizado.com: 2026-09-27T11:21:42.007Z.
 Ver `FEATURES.md` e `CONTEXT.md`.
+O playtest fisico do Lab 240 continua pendente.
+
+---
+
+Em andamento: labs/lab-240-validacao-central-tablet/ - validar no Redmi Pad 2
+o toque nos portais (Lab 238) e a arena de Logica (Lab 239). A entrada no
+interior e o ciclo completo ainda nao foram confirmados; ver `FEATURES.md`.
+
+---
+
+Lab 239 implementado: labs/lab-239-logica-imersiva/ - portal Logica da Central
+agora abre uma arena 3D de padroes; testes e build locais passaram. A partida
+completa no interior e o toque fisico no Redmi Pad 2 ainda precisam de validacao.
+Ver `FEATURES.md` e `CONTEXT.md`.
+
+---
+
+Lab 238 publicado: toque direto nas placas da Central de Jogos, preservando
+arraste, pinca e E. PR #127 mesclada em `1a9ee9d`; teste no Redmi Pad 2 pendente.
+Ver `labs/lab-238-toque-direto-portais/FEATURES.md` e `CONTEXT.md`.
+
+---
+
+Em andamento: labs/lab-237-central-jogos-controles/ - entrada da Central de Jogos,
+seleção de Memória e direção conjunta da câmera/avatar no touch. Implementação e
+testes locais concluídos; validação no Redmi Pad 2 pendente. Ver `FEATURES.md` e
+`CONTEXT.md`.
 
 ---
 
 Em andamento: labs/lab-227-validacao-lod-android/ - a coleta do Redmi Pad 2
 marcou 30,44 FPS medios, mas `simpleTeachersAvg: 0`. A PR #116 ajusta o
-criterio de LOD por tamanho aparente e foi publicada na main em `e5dfa81`;
-medir novamente no tablet e conferir
+criterio de LOD por tamanho aparente; medir novamente no tablet e conferir
 a aparencia dos professores antes de atribuir ganho de desempenho.
 
 ---

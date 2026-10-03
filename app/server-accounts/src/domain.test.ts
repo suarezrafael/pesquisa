@@ -805,6 +805,7 @@ describe('isValidMinigameId (Hub de mini-jogos, backlog "Lab 209")', () => {
     expect(isValidMinigameId('memoria')).toBe(true)
     expect(isValidMinigameId('contar')).toBe(true)
     expect(isValidMinigameId('soletrar')).toBe(true)
+    expect(isValidMinigameId('logica')).toBe(true)
   })
 
   it('recusa id fora do conjunto conhecido', () => {
