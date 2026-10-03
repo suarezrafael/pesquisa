@@ -1,4 +1,4 @@
-# Laboratório 250 — Corrigir vulnerabilidade de alta severidade em `brace-expansion` (app)
+# Laboratório 250 — Corrigir vulnerabilidades de alta severidade (app + Workers)
 
 Status: concluído
 Início: 2026-10-03
@@ -19,19 +19,20 @@ backlog numerado nem feature pedida pelo usuário disponível para avançar (ver
 
 - [x] `app`: corrigir a vulnerabilidade de `brace-expansion` (DoS por expansão quadrática/recursão
   descontrolada, GHSA-q2hr-2g5m-vwhr e relacionadas) via `npm audit fix` — sem `--force`, sem
-  bump de versão maior em nenhuma dependência direta.
-  Package.json direto ficou intocado — só `package-lock.json`.
+  bump de versão maior em nenhuma dependência direta. `package.json` direto ficou intocado — só
+  `package-lock.json`.
 - [x] Confirmar `npm audit` limpo em `app` (0 vulnerabilidades, antes 1 de severidade alta).
 - [x] Confirmar `npm run test` (366/366), `npm run lint` (zero avisos) e `npm run build` sem
   regressão.
-- [x] Investigar `app/server-accounts` e `app/server-cf-relay` (4 vulnerabilidades de alta
-  severidade cada, em `undici`/`sharp`/`miniflare`, todas transitivas de `wrangler`) e documentar
-  por que não há correção segura disponível agora — não aplicar `--force` sem necessidade.
+- [x] `app/server-accounts` e `app/server-cf-relay` (4 vulnerabilidades de alta severidade cada,
+  em `undici`/`sharp`/`miniflare`, transitivas de `wrangler`): corrigido com `npm install
+  wrangler@latest` (4.125.0/4.124.0 → 4.147.0; `package.json` dos dois atualizado de
+  `^4.124.0` pra `^4.147.0`, comportamento padrão do `npm install <pkg>@latest`). Achado do
+  review automático do Copilot na PR #146: a conclusão original deste item ("já na última
+  versão, sem correção disponível") estava errada — baseada em `npm ls`/`npm view`, não no que o
+  `package-lock.json` committed de fato fixava. Ver "Achado real" no `CONTEXT.md`.
 
 ## Fora de escopo (explicitamente adiado)
 
 - Qualquer mudança de comportamento, UI ou regra de jogo/domínio.
-- Atualizar `wrangler`/`miniflare`/`undici`/`sharp` em `server-accounts`/`server-cf-relay` à força
-  — `wrangler` já está na última versão publicada (4.147.0) e `npm audit fix --force` não propôs
-  nenhuma mudança real; esperar um release do Cloudflare que resolva as dependências transitivas.
-- Qualquer dependência que exija bump de versão maior ou `--force`.
+- Qualquer dependência que exigisse bump de versão maior ou `--force` — nenhuma exigiu.

@@ -1,12 +1,14 @@
 # Laboratório atual
 
 Lab 250 implementado: labs/lab-250-correcao-vulnerabilidade-brace-expansion/ -
-`npm audit fix` em `app` corrige vulnerabilidade de alta severidade (DoS) em
-`brace-expansion` (transitiva, dev-only). `server-accounts`/`server-cf-relay`
-continuam com 4 vulnerabilidades altas cada em `undici` via `wrangler`, sem
-correcao disponivel ainda (wrangler ja na ultima versao publicada) -
-documentado, nao forcado. 366 testes, lint zero avisos, build sem erro novo.
-PR pendente. Ver FEATURES.md/CONTEXT.md.
+`npm audit fix` em `app` corrige `brace-expansion` (DoS, transitiva, dev-only).
+`server-accounts`/`server-cf-relay` corrigidos tambem: achado do Copilot na
+PR #146 mostrou que a conclusao original ("wrangler ja na ultima versao, sem
+correcao disponivel") estava errada — os lockfiles fixavam 4.125.0/4.124.0,
+nao 4.147.0; `npm install wrangler@latest` resolveu de verdade. Os 3 pacotes
+agora tem `npm audit` limpo (0 vulnerabilidades, antes 1 + 4 + 4 altas). 366
+testes (app) + 171 (server-accounts) + 13 (server-cf-relay), lint zero
+avisos, build/tsc sem erro novo. PR pendente. Ver FEATURES.md/CONTEXT.md.
 
 ---
 
