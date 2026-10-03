@@ -1,11 +1,11 @@
 # Laboratório atual
 
-Em andamento: labs/lab-247-chave-tentativa-questmodal/ - estender key por
-identidade de tentativa aos 4 QuestModal restantes (activeQuest,
+Lab 247 implementado: labs/lab-247-chave-tentativa-questmodal/ - key por
+identidade de tentativa (quest.id) nos 4 QuestModal restantes (activeQuest,
 activeSurpriseQuiz, activePlanetQuest, activeCoopQuest), mesma classe de
 risco do achado do Copilot na PR #135 (lab-246). Endurecimento preventivo,
-sem reproducao ao vivo de corrida real. Base: main a698712. Ver
-FEATURES.md.
+sem reproducao ao vivo de corrida real. 358 testes, lint e build/PWA
+passaram. PR pendente. Base: main a698712. Ver FEATURES.md/CONTEXT.md.
 
 ---
 

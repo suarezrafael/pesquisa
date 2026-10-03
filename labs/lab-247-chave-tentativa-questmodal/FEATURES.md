@@ -1,8 +1,8 @@
 # Laboratório 247 — Chave de tentativa nos QuestModal restantes
 
-Status: em andamento
+Status: implementado; PR pendente
 Início: 2026-10-03
-Fim: -
+Fim: 2026-10-03 (implementação local)
 Commit inicial: a698712abbbe4472ca00fb9b1179a920f8cce2cc
 Prioridade: P1 — endurecimento preventivo, mesma classe de risco do Lab 246
 
@@ -30,17 +30,17 @@ nenhuma regra de pontuação/XP/moeda.
 
 ## Funcionalidades planejadas
 
-- [ ] `App.tsx`: adicionar `key` por identidade da tentativa aos 4
+- [x] `App.tsx`: adicionar `key` por identidade da tentativa aos 4
   `QuestModal` restantes — `activeQuest`/`activeSurpriseQuiz`/
   `activePlanetQuest` por `quest.id` (identidade já única e estável por
   missão); `activeCoopQuest` precisa de uma identidade própria (não tem
   `attemptId` hoje — avaliar se `quest.id` basta ou se precisa de um id de
   tentativa gerado em `handleOpenCoopChallenge`/`onOpenCoopChallenge`,
   mesmo raciocínio do `attemptId` ambiental).
-- [ ] `QuestModal.test.tsx`: teste de regressão reproduzindo a troca de
+- [x] `QuestModal.test.tsx`: teste de regressão reproduzindo a troca de
   tentativa com `key` nova para pelo menos um caso adicional representativo
   (mesmo padrão do `AttemptHarness` do lab-246), confirmando reset de estado.
-- [ ] Suite completa, lint e build/PWA sem regressão.
+- [x] Suite completa, lint e build/PWA sem regressão.
 
 ## Fora de escopo (explicitamente adiado)
 
