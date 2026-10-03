@@ -1,8 +1,8 @@
 # Laboratorio 246 - Cancelar conclusao pendente da pergunta
 
-Status: implementado; PR #135 em revisao
+Status: concluído; PR #135 mesclada
 Inicio: 2026-09-30
-Fim: 2026-09-30 (implementacao local)
+Fim: 2026-10-03
 Commit inicial: 4c4fd3132af38623370869e0aa38fddd15a44133
 Prioridade: P0 - integridade do progresso educativo
 
