@@ -34,3 +34,20 @@ avisos preexistentes, build/PWA sem erro novo. A pendencia de validacao com
 assinatura real (acima) continua sem mudanca — nao foi tentada nesta sessao,
 que nao tem como simular cancelamento/reativacao de uma assinatura Stripe
 real nem testar no Redmi Pad 2.
+
+## Decisao de merge sem a validacao fisica/assinatura real
+
+O usuario pediu explicitamente, apos ser informado da pendencia acima em duas
+mensagens anteriores desta sessao, pra finalizar e mesclar esta PR mesmo
+assim ("promova tudo que esta codado e pronto"). Mesclado com base nisso —
+nao por a pendencia ter sido resolvida. Registrando pra quem retomar:
+- O codigo em si (testes unitarios da politica de revalidacao e do payload
+  do heartbeat) tem cobertura; o que NAO tem cobertura e o comportamento
+  fim-a-fim com uma assinatura Stripe real mudando de estado enquanto o jogo
+  esta aberto, nem o touch/teclado/desempenho no Redmi Pad 2.
+- Se um responsavel reportar que o status de assinatura (cosmeticos/avatar
+  publico) nao atualiza durante uma sessao longa, ou atualiza errado, este e
+  o primeiro lugar a revisar — a janela de 5 minutos e o guard de token em
+  `useEntitlement.ts`/`entitlementRefreshPolicy.ts`.
+- Nenhum endpoint novo, dado pessoal novo ou mudanca no Stripe — o risco e
+  de comportamento incorreto na revalidacao, nao de seguranca/privacidade.

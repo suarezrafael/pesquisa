@@ -1,8 +1,8 @@
 # Laboratorio 236 - Revalidacao de entitlement durante a sessao
 
-Status: implementado localmente; validacao com assinatura real pendente
+Status: mesclado sem a validacao fisica/assinatura real (decisao explicita do usuario)
 Inicio: 2026-09-24
-Fim: -
+Fim: 2026-10-03
 Commit inicial: e5dfa817699eeeb208dfcfa1e2e6ea904637bd52
 Prioridade: P1
 Origem: pendencia do Lab 234 e Fase D em `docs/plano-comercial-backend.md`.
