@@ -64,7 +64,10 @@ Commit inicial → final: a698712abbbe4472ca00fb9b1179a920f8cce2cc..a5baf07
   motivo comportamental em cada comentário; a mesma limpeza foi aplicada por
   consistência ao comentário equivalente do lab-246 (desafio ambiental), que
   tinha a mesma violação e está no mesmo arquivo. CI em `main` (run
-  37133198977) passou 3/3 jobs após o merge.
+  37133198977) passou 3/3 jobs após o merge — isso já inclui o deploy
+  automático para produção (Vercel + Cloudflare, `.github/workflows/ci.yml`,
+  secrets configurados desde o lab-104); confirmado ao vivo em
+  `missaoaprendizado.com` servindo `index-CcSzaPg9.js` após o merge.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
