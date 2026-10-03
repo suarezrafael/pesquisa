@@ -20,3 +20,17 @@ resposta do Worker. Nao houve deploy neste lab.
 Proxima validacao: comparar dois perfis no tablet, cancelar e reativar pelo
 portal adulto, observar avatar local e publico sem recarregar a pagina; repetir
 offline para confirmar que o jogo e o progresso permanecem disponiveis.
+
+## Rebase (2026-10-03)
+
+A PR #125 ficou parada em rascunho desde 2026-09-24, 11 laboratorios atras
+(237-247 ja mesclados em `main`). Rebaseada sobre `main` em `f6c5c41`; unico
+conflito foi `labs/CURRENT.md` (resolvido tomando a versao de `main` e
+inserindo uma entrada nova pra este lab retomado, sem reescrever a ordem
+historica). Nenhum conflito de codigo — `App.tsx` recebeu o parametro novo de
+`useHeartbeat` sem colidir com o `key` adicionado nos labs 246/247. Suite
+completa apos o rebase: 363/363 testes (34 arquivos), lint com os mesmos 2
+avisos preexistentes, build/PWA sem erro novo. A pendencia de validacao com
+assinatura real (acima) continua sem mudanca — nao foi tentada nesta sessao,
+que nao tem como simular cancelamento/reativacao de uma assinatura Stripe
+real nem testar no Redmi Pad 2.
