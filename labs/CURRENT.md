@@ -1,11 +1,14 @@
 # Laboratório atual
 
-Lab 247 implementado: labs/lab-247-chave-tentativa-questmodal/ - key por
+Lab 247 publicado: labs/lab-247-chave-tentativa-questmodal/ - key por
 identidade de tentativa (quest.id) nos 4 QuestModal restantes (activeQuest,
 activeSurpriseQuiz, activePlanetQuest, activeCoopQuest), mesma classe de
 risco do achado do Copilot na PR #135 (lab-246). Endurecimento preventivo,
 sem reproducao ao vivo de corrida real. 358 testes, lint e build/PWA
-passaram. PR pendente. Base: main a698712. Ver FEATURES.md/CONTEXT.md.
+passaram. PR #137 mesclada em e82377d; 2 achados de convencao do Copilot
+(comentarios referenciando lab/PR) corrigidos no mesmo PR; CI em main
+passou. Android fisico ainda sem validacao. Base: main a698712. Ver
+FEATURES.md/CONTEXT.md.
 
 ---
 

@@ -1,6 +1,6 @@
 # Laboratório 247 — Chave de tentativa nos QuestModal restantes
 
-Status: implementado; PR pendente
+Status: concluído; PR #137 mesclada
 Início: 2026-10-03
 Fim: 2026-10-03 (implementação local)
 Commit inicial: a698712abbbe4472ca00fb9b1179a920f8cce2cc
