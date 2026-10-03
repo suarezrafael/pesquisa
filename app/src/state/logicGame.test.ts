@@ -17,6 +17,29 @@ describe('logic game', () => {
         expect(new Set(round.options).size).toBe(3)
         expect(round.options.filter((option) => option === round.answer)).toHaveLength(1)
       }
+      expect(game.rounds.map((round) => round.options.indexOf(round.answer)).sort()).toEqual([0, 1, 2])
+    }
+  })
+
+  it('varies answer placement between attempts without mutating the catalog', () => {
+    const first = createLogicGame(() => 0)
+    let calls = 0
+    const second = createLogicGame(() => calls++ === 0 ? 0 : 0.99)
+    expect(first.rounds.map((round) => round.options.indexOf(round.answer)))
+      .not.toEqual(second.rounds.map((round) => round.options.indexOf(round.answer)))
+    expect(second.rounds.map((round) => round.sequence)).toEqual(first.rounds.map((round) => round.sequence))
+    expect(createLogicGame(() => 0).rounds).toEqual(first.rounds)
+  })
+
+  it('cannot be completed by choosing the same plate in every round', () => {
+    const game = createLogicGame(() => 0)
+    for (const plate of [0, 1, 2]) {
+      let state = game
+      for (let attempt = 0; attempt < LOGIC_ROUNDS_TO_WIN; attempt++) {
+        const round = currentLogicRound(state)!
+        state = answerLogicRound(state, round.options[plate]).state
+      }
+      expect(isLogicGameComplete(state)).toBe(false)
     }
   })
 

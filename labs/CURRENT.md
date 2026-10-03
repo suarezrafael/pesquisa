@@ -1,5 +1,13 @@
 # Laboratório atual
 
+Lab 251 implementado (PR/publicacao pendentes):
+labs/lab-251-logica-respostas-variadas/ - resposta correta da arena Logica
+distribuida pelas tres placas, em vez de sempre na central. 368 testes, lint
+e build passaram. Lab 240 continua pendente de validacao fisica no Redmi
+Pad 2. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 250 publicado: labs/lab-250-correcao-vulnerabilidade-brace-expansion/ -
 `npm audit fix` em `app` corrige `brace-expansion` (DoS, transitiva, dev-only).
 `server-accounts`/`server-cf-relay` corrigidos tambem: achado do Copilot na

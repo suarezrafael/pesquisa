@@ -22,8 +22,24 @@ const LOGIC_ROUNDS: readonly LogicRound[] = [
 
 export function createLogicGame(random: () => number = Math.random): LogicGameState {
   const offset = Math.min(Math.max(Math.floor(random() * LOGIC_ROUNDS.length), 0), LOGIC_ROUNDS.length - 1)
+  const answerSlots = [0, 1, 2]
+  for (let i = answerSlots.length - 1; i > 0; i--) {
+    const j = Math.min(Math.max(Math.floor(random() * (i + 1)), 0), i)
+    const slot = answerSlots[i]
+    answerSlots[i] = answerSlots[j]
+    answerSlots[j] = slot
+  }
   return {
-    rounds: Array.from({ length: LOGIC_ROUNDS_TO_WIN }, (_, index) => LOGIC_ROUNDS[(offset + index) % LOGIC_ROUNDS.length]),
+    rounds: Array.from({ length: LOGIC_ROUNDS_TO_WIN }, (_, index) => {
+      const round = LOGIC_ROUNDS[(offset + index) % LOGIC_ROUNDS.length]
+      const options: [number, number, number] = [...round.options]
+      const answerIndex = options.indexOf(round.answer)
+      const targetIndex = answerSlots[index]
+      const answer = options[answerIndex]
+      options[answerIndex] = options[targetIndex]
+      options[targetIndex] = answer
+      return { ...round, options }
+    }),
     roundsWon: 0,
   }
 }
