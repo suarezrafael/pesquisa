@@ -1,13 +1,27 @@
 # Laboratório atual
 
+Lab 236 publicado: labs/lab-236-revalidacao-entitlement/ - revalidar
+assinatura ao abrir o jogo e apos 5+ min com a aba visivel, ignorar tokens
+antigos pos-desvinculo, sincronizar aparencia publica na troca de acesso.
+PR #125 ficou parada em rascunho de 2026-09-24 a 2026-10-03 (11 labs atras);
+rebaseada sobre main nesta sessao (unico conflito foi este arquivo, nada de
+codigo colidiu). Suite 366/366 (teste novo de transicao de entitlement no
+`useHeartbeat`, achado de cobertura do Copilot na PR #125), lint com os 2
+avisos preexistentes, build/PWA sem erro novo. **Mesclada sem a validacao
+fisica/assinatura real** (cancelar/reativar em sessao longa, offline,
+segundo jogador, Redmi Pad 2) — decisao explicita do usuario depois de ser
+avisado da pendencia duas vezes nesta sessao; ver "Decisao de merge" no
+CONTEXT.md pra detalhe e o que observar se um responsavel reportar
+cosmetico desatualizado. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 248 publicado: labs/lab-248-auditoria-backlog-status/ - reconcilia
 `docs/backlog-status.md` com os labs 227-247 (parava no lab-226 desde
 2026-09-23). Sem mudanca de codigo; apenas documentacao. PR #140 mesclada;
 Copilot encontrou 1 achado real (UX 189 marcado `Concluido` incorretamente —
 AUDIT.md do lab-230 mostra que a validacao de compreensao com responsaveis
-nunca ocorreu), corrigido na PR #141 pra `Parcial`. Lab 236 (PR #125)
-verificado e rebaseado sobre main nesta mesma sessao, continua em rascunho
-aguardando validacao com assinatura real do usuario. Ver FEATURES.md/
+nunca ocorreu), corrigido na PR #141 pra `Parcial`. Ver FEATURES.md/
 CONTEXT.md.
 
 ---
@@ -24,19 +38,6 @@ Cloudflare Pages/Workers, `.github/workflows/ci.yml`, secrets ja configurados
 desde o lab-104) — confirmado ao vivo em missaoaprendizado.com
 (`index-CcSzaPg9.js`) apos o merge. Android fisico ainda sem validacao.
 Base: main a698712. Ver FEATURES.md/CONTEXT.md.
-
----
-
-Em andamento (retomado): labs/lab-236-revalidacao-entitlement/ - revalidar
-assinatura ao abrir o jogo e apos 5+ min com a aba visivel, ignorar tokens
-antigos pos-desvinculo, sincronizar aparencia publica na troca de acesso.
-PR #125 estava parada em rascunho desde 2026-09-24 (11 labs atras, antes do
-lab-237); rebase feito sobre main (`labs/CURRENT.md` resolvido tomando a
-versao de main — unico conflito, nada do codigo colidiu). Suite/lint/build
-a confirmar apos o rebase. Segue em rascunho: falta validacao com assinatura
-real (cancelar/reativar em sessao longa, offline, visualizacao por outro
-jogador, Redmi Pad 2) que esta sessao nao pode fazer. Ver FEATURES.md/
-CONTEXT.md.
 
 ---
 

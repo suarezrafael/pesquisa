@@ -19,8 +19,11 @@ brief that drives what gets built.
   per `docs/prompts/04-manutencao-clean-code.md` §5. `app/server-accounts/` has its own
   `npm run test` for the Worker's pure domain logic (entitlement/pairing-code rules, in
   `src/domain.ts`) — run it from that directory.
-  The game also has DOM integration tests for modal focus in `src/state/useModalA11y.test.tsx`;
-  only that file uses jsdom. Other tests retain Vitest's default Node environment.
+  The game also has DOM integration tests that mount real components/hooks: modal focus in
+  `src/state/useModalA11y.test.tsx`, quest-modal attempt/key reset in
+  `src/components/QuestModal.test.tsx`, and the heartbeat entitlement-transition effect in
+  `src/state/useHeartbeat.entitlementTransition.test.tsx` — only these use jsdom. Other tests
+  retain Vitest's default Node environment.
 
 ## Contents
 

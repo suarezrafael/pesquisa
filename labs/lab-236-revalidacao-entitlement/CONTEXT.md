@@ -35,6 +35,23 @@ assinatura real (acima) continua sem mudanca — nao foi tentada nesta sessao,
 que nao tem como simular cancelamento/reativacao de uma assinatura Stripe
 real nem testar no Redmi Pad 2.
 
+## Achado do review automatico do Copilot na PR #125
+
+3 achados de severidade baixa, todos corrigidos antes do merge:
+- `useHeartbeat.test.ts` cobria só a função pura `effectiveLookHeartbeatBody`,
+  nunca o efeito que decide QUANDO mandar o look efetivo (transição de
+  `entitlementActive`, não toda renderização). Adicionado
+  `useHeartbeat.entitlementTransition.test.tsx` (jsdom, monta o hook de
+  verdade) — 3 testes novos provando que só dispara nas transições
+  false→true/true→false, nunca em renderizações sem mudança. Suite: 366/366
+  (era 363/363 antes). `CLAUDE.md` atualizado — a nota de que só
+  `useModalA11y.test.tsx` usa jsdom estava desatualizada desde o lab-246
+  (`QuestModal.test.tsx` já usa também); agora lista os 3 arquivos.
+- `labs/CURRENT.md` ainda marcava este lab como "em andamento" — corrigido
+  pra refletir o merge.
+- `labs/CURRENT.md` dizia "suite/lint/build a confirmar" quando o `CONTEXT.md`
+  já tinha os resultados — corrigido pra carregar os números de verdade.
+
 ## Decisao de merge sem a validacao fisica/assinatura real
 
 O usuario pediu explicitamente, apos ser informado da pendencia acima em duas
