@@ -2,9 +2,12 @@
 
 Lab 246 implementado: labs/lab-246-cancelar-recompensa-pendente/ - cancelar
 recompensa atrasada apos fechar/desmontar pergunta e evitar callback duplicado.
-356 testes, lint e build/PWA passaram; smoke local do mundo 3D. PR/review
-pendentes; jogada completa e Android fisico ainda sem validacao. Base: main
-4c4fd31. Ver FEATURES.md/CONTEXT.md.
+Achado de severidade alta do Copilot na PR #135 resolvido (QuestModal sem
+reset ao trocar de tentativa no desafio ambiental; corrigido com
+key={attemptId} + teste de regressao). 357 testes, lint e build/PWA
+passaram; smoke local do mundo 3D. PR #135 em revisao; jogada completa e
+Android fisico ainda sem validacao. Base: main 4c4fd31. Ver
+FEATURES.md/CONTEXT.md.
 
 ---
 

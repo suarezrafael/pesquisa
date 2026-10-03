@@ -3,7 +3,7 @@
 Data: 2026-09-30
 Base: 4c4fd3132af38623370869e0aa38fddd15a44133 (Lab 245 publicado)
 Codigo: 28c2eca
-PR: pendente
+PR: https://github.com/suarezrafael/pesquisa/pull/135
 
 ## Problema confirmado
 
@@ -39,6 +39,29 @@ PR: pendente
 - `git log` desde a base: 28c2eca. `git diff --stat`: so
   `QuestModal.tsx` e `QuestModal.test.tsx` no commit de codigo.
 
+## Achado do review automatico do Copilot (PR #135)
+
+- Severidade alta: `App.tsx` substituia `activeEnvironmentalChallenge`
+  (quest+attemptId) em memoria sem desmontar o `QuestModal` quando um
+  landmark novo era aberto por cima de um ja ativo. A instancia React era
+  reaproveitada — `feedback`/`selectedId`/`completionTimer` da tentativa
+  antiga (ex.: "correct", que desabilita as opcoes) ficavam presos na
+  tentativa nova, travando-a sem possibilidade de resposta.
+- Corrigido com `key={activeEnvironmentalChallenge.attemptId}` no
+  `QuestModal` desse chamador (unico com repro concreto documentado em
+  `App.tsx:191-198`/`396-401`); a troca de `key` forca desmontagem e
+  remontagem a cada tentativa, resetando o estado interno e cancelando o
+  timer antigo pelo proprio efeito de limpeza do `QuestModal`.
+- Teste de regressao novo em `QuestModal.test.tsx` (`AttemptHarness`)
+  reproduz o padrao de key-por-tentativa: responde certo na tentativa 1,
+  substitui pela tentativa 2 antes dos 700 ms, confirma opcoes destravadas
+  e `onCorrect` nao chamado pelo timer antigo. Suite: 357/357 em 32
+  arquivos (6 -> 7 testes em `QuestModal.test.tsx`).
+- Os outros quatro usos de `QuestModal` (`activeQuest`, `activeSurpriseQuiz`,
+  `activePlanetQuest`, `activeCoopQuest`) nao tem caminho de substituicao em
+  memoria documentado/reproduzido — ficam sem `key` por ora; revisar se
+  algum caminho assim for encontrado.
+
 ## Pendencias e riscos
 
 - Playtest real em escolinha/planeta no Redmi Pad 2: fechar logo apos acertar,
@@ -48,7 +71,7 @@ PR: pendente
   discutir UX de recompensa imediata ou impedir fechamento nessa janela,
   sem reintroduzir callbacks atrasados.
 - Outros modais com callbacks temporizados nao foram auditados neste lab.
-- CI, review Copilot, merge e publicacao ainda pendentes neste registro.
+- Merge e publicacao ainda pendentes neste registro.
 
 ## Proxima prioridade proposta
 

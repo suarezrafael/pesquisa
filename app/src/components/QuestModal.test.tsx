@@ -105,3 +105,76 @@ describe('QuestModal pending completion', () => {
     expect(onCorrect).toHaveBeenCalledTimes(1)
   })
 })
+
+// Achado do review automático do Copilot (PR #135): App.tsx substituía
+// `activeEnvironmentalChallenge` (quest+attemptId) em memória sem desmontar o `QuestModal`
+// quando um landmark novo era aberto por cima de um já ativo. A instância React era reaproveitada
+// — `feedback`/`completionTimer` da tentativa antiga (ex.: "correct", que desabilita as opções)
+// ficavam presos na tentativa nova, travando-a. A correção usa `key={attemptId}` no chamador; este
+// harness reproduz esse padrão (key trocando junto da tentativa) pra garantir que a troca sempre
+// reseta o estado e cancela o timer antigo.
+function AttemptHarness({ onCorrect }: { onCorrect: () => void }) {
+  const [attempt, setAttempt] = useState<{ id: string; questIndex: 0 | 1 } | null>(null)
+  return (
+    <>
+      <button type="button" onClick={() => setAttempt({ id: 'attempt-1', questIndex: 0 })}>
+        Abrir pergunta
+      </button>
+      <button type="button" onClick={() => setAttempt({ id: 'attempt-2', questIndex: 1 })}>
+        Abrir outro landmark
+      </button>
+      {attempt && (
+        <QuestModal
+          key={attempt.id}
+          quest={quests[attempt.questIndex]}
+          onCorrect={onCorrect}
+          onClose={() => setAttempt(null)}
+        />
+      )}
+    </>
+  )
+}
+
+describe('QuestModal reset across attempt replacement', () => {
+  let container: HTMLDivElement
+  let root: Root
+  let onCorrect: Mock<() => void>
+
+  beforeEach(() => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    onCorrect = vi.fn()
+    act(() => root.render(<AttemptHarness onCorrect={onCorrect} />))
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+    vi.clearAllTimers()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('remounts with fresh state and cancels the stale timer when a new attempt replaces an open one', () => {
+    act(() => container.querySelectorAll('button')[0].click())
+    const firstChoices = container.querySelectorAll<HTMLButtonElement>('.quest-choice')
+    const firstCorrectIndex = [...firstChoices].findIndex(
+      (choice) => choice.textContent === quests[0].choices.find((c) => c.id === quests[0].correctChoiceId)?.label,
+    )
+    act(() => firstChoices[firstCorrectIndex].click())
+    expect(container.querySelector('.quest-choice:disabled')).not.toBeNull()
+
+    act(() => container.querySelectorAll('button')[1].click())
+
+    const newChoices = container.querySelectorAll<HTMLButtonElement>('.quest-choice')
+    expect(newChoices.length).toBe(quests[1].choices.length)
+    expect(container.querySelector('.quest-choice:disabled')).toBeNull()
+    expect(container.querySelector('.quest-feedback.correct')).toBeNull()
+
+    act(() => vi.advanceTimersByTime(700))
+    expect(onCorrect).not.toHaveBeenCalled()
+  })
+})

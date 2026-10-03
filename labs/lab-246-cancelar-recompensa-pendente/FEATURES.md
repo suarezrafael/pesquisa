@@ -1,6 +1,6 @@
 # Laboratorio 246 - Cancelar conclusao pendente da pergunta
 
-Status: implementado; PR/revisao pendentes
+Status: implementado; PR #135 em revisao
 Inicio: 2026-09-30
 Fim: 2026-09-30 (implementacao local)
 Commit inicial: 4c4fd3132af38623370869e0aa38fddd15a44133
@@ -22,6 +22,9 @@ Usuario: crianca que responde quizzes e acompanha progresso.
   recompensa mais de uma vez, preservando o feedback visual de 700 ms.
 - [x] Confirmar resposta correta normal, alternativa errada, Escape, retorno
   de foco, suite, lint, build e smoke local sem alterar regras de pontuacao.
+- [x] Resolver achado de severidade alta do review automatico do Copilot na
+  PR #135 (`QuestModal` sem reset ao trocar de tentativa no desafio
+  ambiental) com `key={attemptId}` e teste de regressao. Ver CONTEXT.md.
 
 ## Fora de escopo
 
