@@ -12,8 +12,9 @@ import {
   type PetAccessorySlot,
 } from '../data/petAccessories'
 import { quests } from '../data/quests'
-import { petAgeYears, petLifecycleStage, petStageFor, utcDayNumber, type PetStage } from '../state/progression'
+import { petAgeYears, petLifecycleStage, petStageFor, utcDayNumber } from '../state/progression'
 import { useModalA11y } from '../state/useModalA11y'
+import { STAGE_LABEL } from './petStageLabel'
 import type { Progress, Quest } from '../types'
 
 // Carregado sob demanda, não no bundle principal — mesmo raciocínio de `AvatarPreview3D` em
@@ -36,20 +37,6 @@ interface PetPanelProps {
   // corrompido/inválido).
   onChallengeCorrect: () => boolean
   onClose: () => void
-}
-
-// lab-171 (achado do review automático do Copilot): `Record<string, string>` era permissivo
-// demais — um typo ou um `PetStage` novo sem entrada aqui viraria `undefined` em runtime sem o
-// TypeScript avisar. `Record<PetStage, string>` obriga cobrir todo estágio existente.
-// Exportado pra `AchievementsPanel.tsx` reaproveitar o mesmo rótulo na nova seção de pets do
-// álbum, em vez de duplicar o mapa.
-export const STAGE_LABEL: Record<PetStage, string> = {
-  filhote: '🍼 Filhote',
-  jovem: '🌱 Jovem',
-  adulto: '⭐ Adulto',
-  // lab-169 — ciclo de vida (1 dia real = 1 "ano" de convivência). Nunca substitui/remove o pet:
-  // é só um selo de carinho por tempo de companhia, ver `petLifecycleStage` (`progression.ts`).
-  idoso: '🧓 Idoso',
 }
 
 // lab-174 (achado do review automático do Copilot no PR #48): antes comparava calendário LOCAL

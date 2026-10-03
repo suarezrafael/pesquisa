@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Lab 249 implementado: labs/lab-249-limpeza-avisos-preexistentes/ - extrai
+`STAGE_LABEL` de `PetPanel.tsx` pra `petStageLabel.ts` (quebrava fast refresh,
+aviso desde ~lab-83) e renomeia variavel descartada em
+`server-accounts/domain.test.ts`. `npm run lint` do `app` sai limpo pela
+primeira vez. 366 testes (app) + 171 (server-accounts), build sem erro novo.
+Sem mudanca de comportamento. PR pendente. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 236 publicado: labs/lab-236-revalidacao-entitlement/ - revalidar
 assinatura ao abrir o jogo e apos 5+ min com a aba visivel, ignorar tokens
 antigos pos-desvinculo, sincronizar aparencia publica na troca de acesso.
