@@ -1,5 +1,12 @@
 # Laboratório atual
 
+Lab 251 em andamento: labs/lab-251-logica-respostas-variadas/ - corrigir a
+posicao fixa da resposta certa na arena Logica (sempre no meio) sem mudar
+regras de recompensa. Lab 240 continua pendente de validacao fisica no Redmi
+Pad 2. Ver FEATURES.md.
+
+---
+
 Lab 250 publicado: labs/lab-250-correcao-vulnerabilidade-brace-expansion/ -
 `npm audit fix` em `app` corrige `brace-expansion` (DoS, transitiva, dev-only).
 `server-accounts`/`server-cf-relay` corrigidos tambem: achado do Copilot na
