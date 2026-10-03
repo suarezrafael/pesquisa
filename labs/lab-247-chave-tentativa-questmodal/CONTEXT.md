@@ -53,7 +53,18 @@ Commit inicial → final: a698712abbbe4472ca00fb9b1179a920f8cce2cc..a5baf07
   relato de usuário ou reprodução confirmada.
 - Teste físico Android (Redmi Pad 2) continua pendente, acumulado dos labs
   238-247.
-- PR/merge/publicação ainda pendentes neste registro.
+
+## Publicação
+
+- PR #137 mesclada (squash) em `e82377d`. Review do Copilot: 2 achados de
+  severidade baixa, ambos sobre convenção — comentários novos referenciando
+  laboratório/PR/Copilot violavam `docs/prompts/04-manutencao-clean-code.md`
+  (MUST, linhas 24-27: esse histórico pertence ao `CONTEXT.md` e ao git log,
+  não ao código). Corrigido no mesmo PR (commit `9f292f1`), mantendo só o
+  motivo comportamental em cada comentário; a mesma limpeza foi aplicada por
+  consistência ao comentário equivalente do lab-246 (desafio ambiental), que
+  tinha a mesma violação e está no mesmo arquivo. CI em `main` (run
+  37133198977) passou 3/3 jobs após o merge.
 
 ## Funcionalidades planejadas que NÃO foram concluídas
 
