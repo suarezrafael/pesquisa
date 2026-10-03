@@ -1,5 +1,15 @@
 # Laboratório atual
 
+Lab 250 implementado: labs/lab-250-correcao-vulnerabilidade-brace-expansion/ -
+`npm audit fix` em `app` corrige vulnerabilidade de alta severidade (DoS) em
+`brace-expansion` (transitiva, dev-only). `server-accounts`/`server-cf-relay`
+continuam com 4 vulnerabilidades altas cada em `undici` via `wrangler`, sem
+correcao disponivel ainda (wrangler ja na ultima versao publicada) -
+documentado, nao forcado. 366 testes, lint zero avisos, build sem erro novo.
+PR pendente. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 249 publicado: labs/lab-249-limpeza-avisos-preexistentes/ - extrai
 `STAGE_LABEL` de `PetPanel.tsx` pra `petStageLabel.ts` (quebrava fast refresh,
 aviso desde ~lab-83) e renomeia variavel descartada em
