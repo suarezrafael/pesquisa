@@ -71,7 +71,16 @@ PR: https://github.com/suarezrafael/pesquisa/pull/135
   discutir UX de recompensa imediata ou impedir fechamento nessa janela,
   sem reintroduzir callbacks atrasados.
 - Outros modais com callbacks temporizados nao foram auditados neste lab.
-- Merge e publicacao ainda pendentes neste registro.
+
+## Publicacao
+
+- PR #135 mesclada (squash) em `3f84977`, apos resposta ao achado do Copilot
+  acima. CI em `main` (run 37129285538) passou 3/3 jobs (app, server-accounts,
+  server-cf-relay). Deploy automatico em producao nao verificado nesta
+  sessao (sem acesso a navegador); confirmar `missaoaprendizado.com` quando
+  possivel.
+- Teste fisico Android (Redmi Pad 2) continua pendente, acumulado dos labs
+  238-246.
 
 ## Proxima prioridade proposta
 
