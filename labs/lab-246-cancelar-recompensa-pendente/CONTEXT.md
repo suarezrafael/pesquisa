@@ -76,9 +76,14 @@ PR: https://github.com/suarezrafael/pesquisa/pull/135
 
 - PR #135 mesclada (squash) em `3f84977`, apos resposta ao achado do Copilot
   acima. CI em `main` (run 37129285538) passou 3/3 jobs (app, server-accounts,
-  server-cf-relay). Deploy automatico em producao nao verificado nesta
-  sessao (sem acesso a navegador); confirmar `missaoaprendizado.com` quando
-  possivel.
+  server-cf-relay) — e isso JÁ inclui o deploy automático para produção
+  (Vercel + Cloudflare Pages/Workers, passo `Deploy to Vercel (production)`/
+  `Deploy to Cloudflare Pages (production)` em `.github/workflows/ci.yml`,
+  secrets `VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` configurados desde o
+  lab-104). Correção a um erro desta mesma sessão: a nota original aqui
+  dizia "deploy não verificado" por achar que precisava rodar `vercel
+  --prod` manualmente — não precisa; o CI já faz isso a cada push em
+  `main`, e o log do job confirma o deploy bem-sucedido.
 - Teste fisico Android (Redmi Pad 2) continua pendente, acumulado dos labs
   238-246.
 

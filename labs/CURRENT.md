@@ -6,9 +6,12 @@ activeSurpriseQuiz, activePlanetQuest, activeCoopQuest), mesma classe de
 risco do achado do Copilot na PR #135 (lab-246). Endurecimento preventivo,
 sem reproducao ao vivo de corrida real. 358 testes, lint e build/PWA
 passaram. PR #137 mesclada em e82377d; 2 achados de convencao do Copilot
-(comentarios referenciando lab/PR) corrigidos no mesmo PR; CI em main
-passou. Android fisico ainda sem validacao. Base: main a698712. Ver
-FEATURES.md/CONTEXT.md.
+(comentarios referenciando lab/PR) corrigidos no mesmo PR. CI em main (run
+37133198977) passou e inclui o deploy automatico pra produção (Vercel +
+Cloudflare Pages/Workers, `.github/workflows/ci.yml`, secrets ja configurados
+desde o lab-104) — confirmado ao vivo em missaoaprendizado.com
+(`index-CcSzaPg9.js`) apos o merge. Android fisico ainda sem validacao.
+Base: main a698712. Ver FEATURES.md/CONTEXT.md.
 
 ---
 
@@ -18,9 +21,12 @@ Achado de severidade alta do Copilot na PR #135 resolvido (QuestModal sem
 reset ao trocar de tentativa no desafio ambiental; corrigido com
 key={attemptId} + teste de regressao). 357 testes, lint e build/PWA
 passaram; smoke local do mundo 3D. PR #135 mesclada em 3f84977; CI em main
-(run 37129285538) passou. Deploy em producao nao verificado nesta sessao;
-jogada completa e Android fisico ainda sem validacao. Base: main 4c4fd31.
-Ver FEATURES.md/CONTEXT.md.
+(run 37129285538) passou, incluindo o deploy automatico pra produção
+(Vercel + Cloudflare, mesmo workflow do lab-247 abaixo) — correção
+registrada depois: a nota original deste lab dizia "deploy nao verificado",
+o que estava errado, o deploy e automatico desde o lab-104 e roda dentro
+do proprio job de CI. Jogada completa e Android fisico ainda sem validacao.
+Base: main 4c4fd31. Ver FEATURES.md/CONTEXT.md.
 
 ---
 
