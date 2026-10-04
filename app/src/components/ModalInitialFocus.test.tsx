@@ -69,7 +69,9 @@ describe('initial reading focus in long dialogs', () => {
     const opener = open('quest', vi.fn(), onCorrect)
     expect(document.activeElement).toBe(container.querySelector('h2'))
     expect(container.querySelector('.quest-passage')).not.toBeNull()
-    const wrong = container.querySelector<HTMLButtonElement>('.quest-choice')!
+    const correctLabel = quests[2].choices.find((choice) => choice.id === quests[2].correctChoiceId)!.label
+    const wrong = [...container.querySelectorAll<HTMLButtonElement>('.quest-choice')]
+      .find((button) => button.textContent !== correctLabel)!
     act(() => wrong.click())
     expect(container.querySelector('.quest-feedback.wrong')).not.toBeNull()
     expect(onCorrect).not.toHaveBeenCalled()

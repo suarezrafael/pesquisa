@@ -1,5 +1,16 @@
 # Laboratório atual
 
+Lab 252 implementado: labs/lab-252-alternativas-embaralhadas/ - embaralha a
+ordem visual das alternativas de `QuestModal` (Fisher-Yates, mesma tecnica do
+lab-251) sem mudar IDs/recompensas; 35 das 36 perguntas dos planetas tinham a
+resposta certa na primeira posicao (recontado e confirmado nesta sessao).
+Reaproveita o remount-por-tentativa dos labs 246/247 pra manter a ordem
+estavel enquanto a pergunta esta aberta. 371 testes, lint zero avisos, build
+sem erro novo. Lab 240 continua pendente de validacao fisica no Redmi Pad 2.
+PR pendente. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 251 publicado (PR #148):
 labs/lab-251-logica-respostas-variadas/ - resposta correta da arena Logica
 distribuida pelas tres placas, em vez de sempre na central. 368 testes, lint
