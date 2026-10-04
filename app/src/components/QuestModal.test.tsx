@@ -116,9 +116,24 @@ describe('QuestModal pending completion', () => {
     expect(onCorrect).toHaveBeenCalledTimes(1)
   })
 
-  it('accepts the correct planet answer by id after reordering its choices', () => {
+  it('actually reorders the rendered choices, not just by coincidence', () => {
+    // Achado do review automático do Copilot (PR #150): o teste anterior escolhia o botão pelo
+    // rótulo correto em qualquer posição, então passava mesmo se `QuestModal` parasse de chamar
+    // `shuffleQuestChoices` e voltasse a renderizar `quest.choices` na ordem original do
+    // catálogo. `planetQuests.mercurio[0]` tem a resposta certa ("Mercúrio") na posição 0 — forçar
+    // `Math.random` a sempre devolver 0 produz uma permutação Fisher-Yates conhecida
+    // (["Vênus", "Terra", "Mercúrio"]), diferente da ordem original, provando que a reordenação
+    // de verdade aconteceu antes de clicar na resposta certa.
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0)
     const planetQuest = planetQuests.mercurio[0]
+    const originalOrder = planetQuest.choices.map((choice) => choice.label)
     act(() => root.render(<Harness onCorrect={onCorrect} quest={planetQuest} />))
+    const renderedOrder = [...container.querySelectorAll<HTMLButtonElement>('.quest-choice')]
+      .map((button) => button.textContent)
+    expect(renderedOrder).toEqual(['Vênus', 'Terra', 'Mercúrio'])
+    expect(renderedOrder).not.toEqual(originalOrder)
+    randomSpy.mockRestore()
+
     const correctLabel = planetQuest.choices.find((choice) => choice.id === planetQuest.correctChoiceId)!.label
     const correct = [...container.querySelectorAll<HTMLButtonElement>('.quest-choice')]
       .find((button) => button.textContent === correctLabel)!

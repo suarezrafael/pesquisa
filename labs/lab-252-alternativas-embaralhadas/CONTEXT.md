@@ -28,7 +28,7 @@ Commit inicial → final: d620866223710233b8593ea72dc638185b59e3bb..(ver PR)
 
 Contei de novo, independente do que o `FEATURES.md` já afirmava: 35 das 36 perguntas em
 `app/src/data/planetQuests.ts` têm `choices[0].id === correctChoiceId`. Qualquer criança (ou
-adulto) that notasse esse padrão podia resolver a escolinha de qualquer planeta sem ler a
+adulto) que notasse esse padrão podia resolver a escolinha de qualquer planeta sem ler a
 pergunta — sempre clicando a primeira opção. Isso contraria o próprio propósito educativo do
 catálogo.
 
@@ -50,6 +50,17 @@ catálogo.
   com comparador aleatório é um viés conhecido (não produz distribuição uniforme); Fisher-Yates
   é correto e já é o padrão estabelecido em `logicGame.ts` (lab-251) — reaproveitar a mesma técnica
   em vez de inventar outra.
+
+## Achado do review automático do Copilot na PR #150
+
+2 achados, corrigidos antes do merge:
+- O teste de integração escolhia o botão correto pelo RÓTULO em qualquer posição — passava
+  mesmo se `QuestModal` parasse de chamar `shuffleQuestChoices` e voltasse a renderizar
+  `quest.choices` na ordem original. Corrigido: `Math.random` mockado pra sempre devolver `0`
+  (permutação Fisher-Yates conhecida, `["Vênus", "Terra", "Mercúrio"]`), com asserção direta de
+  que a ordem renderizada mudou em relação à ordem original do catálogo, antes de clicar na
+  resposta certa.
+- Typo: "that" em vez de "que" numa frase em português neste `CONTEXT.md`.
 
 ## Pendências / dívidas conhecidas
 
