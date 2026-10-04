@@ -1,5 +1,23 @@
 # Laboratório atual
 
+Lab 240 encerrado parcialmente (2026-10-04): labs/lab-240-validacao-central-tablet/ -
+usuario confirmou em chat que a entrada/saida da Central e o toque nas 4
+placas sem ativacao acidental funcionam no Redmi Pad 2. Achado do Copilot na
+PR #152: "retorno ao planeta" e "independencia do desafio da ponte" na arena
+de Logica NAO foram confirmados item a item — marcados parciais, nao
+concluidos. Confirmacao verbal, sem numeros de FPS/build — backlog 191/193
+(auditoria de FPS) segue Parcial por isso. Nenhum defeito reportado. Sem
+mudanca de codigo. Ver FEATURES.md/CONTEXT.md.
+
+---
+
+Verificar se quests.ts (catalogo principal, 30 missoes) tinha o mesmo padrao
+de posicao fixa de planetQuests.ts (lab-252): tem um vies real (70% das
+respostas certas na posicao do meio), mas o shuffle do lab-252 ja e aplicado
+dentro do proprio `QuestModal` pra TODOS os catalogos — nada a corrigir.
+
+---
+
 Lab 252 publicado: labs/lab-252-alternativas-embaralhadas/ - embaralha a
 ordem visual das alternativas de `QuestModal` (Fisher-Yates, mesma tecnica do
 lab-251) sem mudar IDs/recompensas; 35 das 36 perguntas dos planetas tinham a

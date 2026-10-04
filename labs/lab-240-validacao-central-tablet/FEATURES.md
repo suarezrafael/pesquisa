@@ -1,8 +1,8 @@
 # Laboratorio 240 - Validacao da Central de Jogos no tablet
 
-Status: em andamento
+Status: encerrado parcialmente (fluxo principal confirmado; medicao de FPS e alguns sub-criterios da arena Logica nao confirmados item a item)
 Inicio: 2026-09-25
-Fim: -
+Fim: 2026-10-04
 Commit inicial: 9fa3187f074426593e636eec4ee782e99e710ccd
 
 ## Objetivo do laboratorio
@@ -14,19 +14,27 @@ arenas e o desempenho mobile.
 
 ## Funcionalidades planejadas
 
-- [ ] Registrar build, cena, perfil de qualidade e FPS da sessao no tablet,
+- [~] Registrar build, cena, perfil de qualidade e FPS da sessao no tablet,
   com relato ou video dos pontos em que a interacao falhar (referencia:
-  `labs/lab-239-logica-imersiva/CONTEXT.md`, pendencias; Lab 227).
-- [ ] Testar entrada e saida da Central, toque curto nas quatro placas, arraste
+  `labs/lab-239-logica-imersiva/CONTEXT.md`, pendencias; Lab 227). **Nao
+  cumprido com numeros**: o usuario confirmou o fluxo funcionando no Redmi
+  Pad 2, sem relatar build/FPS/video especificos nesta sessao. Ver CONTEXT.md.
+- [x] Testar entrada e saida da Central, toque curto nas quatro placas, arraste
   e pinca sem ativacao acidental, e botao E como alternativa (referencia:
-  `labs/lab-238-toque-direto-portais/CONTEXT.md`; Labs 237-238).
-- [ ] Na arena Logica, testar uma resposta errada seguida de tres corretas,
+  `labs/lab-238-toque-direto-portais/CONTEXT.md`; Labs 237-238). Confirmado
+  pelo usuario no Redmi Pad 2 (ver CONTEXT.md).
+- [~] Na arena Logica, testar uma resposta errada seguida de tres corretas,
   recompensa/trofeu, nova tentativa e retorno ao planeta; conferir que o
   desafio da ponte continua independente (referencia:
-  `labs/lab-239-logica-imersiva/CONTEXT.md`).
-- [ ] Se o teste reproduzir defeito, corrigir o menor trecho responsavel,
+  `labs/lab-239-logica-imersiva/CONTEXT.md`). Achado do review automatico
+  do Copilot na PR #152: o usuario confirmou a arena de Logica funcionando
+  em geral, mas nao item por item — "retorno ao planeta" e "desafio da
+  ponte independente" especificamente nao foram confirmados nem negados.
+  Marcado parcial, nao concluido.
+- [x] Se o teste reproduzir defeito, corrigir o menor trecho responsavel,
   acrescentar teste de regressao quando viavel e repetir o fluxo e o build
-  (referencia: `docs/prompts/04-manutencao-clean-code.md`).
+  (referencia: `docs/prompts/04-manutencao-clean-code.md`). Nenhum defeito
+  foi relatado — nada a corrigir.
 
 ## Criterios de aceite
 

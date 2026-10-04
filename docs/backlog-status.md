@@ -27,7 +27,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | Labs 176-185 | Labs 176-185 | Concluido | Implementacao, qualidade, monetizacao e analytics entregues. |
 | Lab 186 - Playtest crianca + responsavel | - | Bloqueado | O lab real 186 foi o bug do ranking; o estudo com 5-8 duplas ainda nao ocorreu — depende de acesso a familias, nao de codigo. |
 | UX Lab 187 - Mapa de verbos | 228 | Parcial | Inventario e triagem entregues (PR #115). Primeira sessao, planeta secundario e touch fisico seguem sem lab novo desde a ultima auditoria. |
-| UX Lab 188 - Linguagem de interativos | 229, 237, 238, 241, 242 | Parcial | Labs 229 (PR #118), 237 (PR #126), 238 (PR #127, toque direto nos portais), 241 (PR #129, toque nos alvos das 4 arenas) e 242 (PR #130, retomar pergunta por E/touch) ja mesclados — cobertura de touch na Central de Jogos bem mais ampla que na auditoria anterior. Padrao global fora da Central e playtest fisico continuam pendentes. |
+| UX Lab 188 - Linguagem de interativos | 229, 237, 238, 241, 242 | Parcial | Labs 229 (PR #118), 237 (PR #126), 238 (PR #127, toque direto nos portais), 241 (PR #129, toque nos alvos das 4 arenas) e 242 (PR #130, retomar pergunta por E/touch) ja mesclados — cobertura de touch na Central de Jogos bem mais ampla que na auditoria anterior. Playtest fisico da Central confirmado funcionando (lab-240, 2026-10-04). Padrao global de linguagem de interativos FORA da Central continua pendente. |
 | UX Lab 189 - Monetizacao infantil segura | 230 | Parcial | PR #119: copia/fluxo de vinculo infantil revisados, area adulta separada. Achado do review automatico do Copilot (PR #140): status anterior deste indice dizia `Concluido`, mas `labs/lab-230-lojinha-infantil-segura/AUDIT.md` e o criterio de aceite original (`docs/growth-retention-monetization-backlog.md`) exigem testar compreensao com responsaveis/criancas antes de concluir — isso nunca ocorreu (nenhuma entrevista com as 5-8 duplas). Nenhum lab novo tocou este item desde a ultima auditoria (lab-234/236 abaixo sao Fases D/E do backend, relacionadas mas com escopo proprio). |
 | UX Lab 190 - Primeira sessao de 10 minutos | 232 | Parcial | PR #121: entrada curta e guia contextual para movimento, primeira missao e recompensa. Playtest/iteracao da jornada completa no tablet continua pendente. |
 
@@ -46,7 +46,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | 192 - Locomocao sem moonwalk | 194 | Concluido | PR #76. |
 | 208 - Movimento responsivo | 195, 233 | Concluido | PRs #77/#78; giro touch do avatar alinhado ao direcional e suavizacao ajustada no lab-233 (PR #122) — validacao fisica desse refinamento ainda pendente. |
 | 209 - Hub de mini-jogos | 196 | Concluido | PR #79. |
-| 212-217 - Centro e arenas educativas | 197-202, 237-240 | Parcial | Nucleo (saguao, portais, 4 arenas, progressao) concluido nas PRs #80-#85. Segunda rodada de controles/conteudo (labs 237-240) ampliou isto: entrada/selecao por toque (lab-237, PR #126), toque direto nos portais (lab-238, PR #127), arena de Logica imersiva nova (lab-239, PR #128). Lab 240 (validacao no Redmi Pad 2) nunca rodou — bloqueado por falta de dispositivo, sem CONTEXT.md; ver backlog 191 acima pro mesmo bloqueio recorrente. |
+| 212-217 - Centro e arenas educativas | 197-202, 237-240 | Parcial | Nucleo (saguao, portais, 4 arenas, progressao) concluido nas PRs #80-#85. Segunda rodada de controles/conteudo (labs 237-240) ampliou isto: entrada/selecao por toque (lab-237, PR #126), toque direto nos portais (lab-238, PR #127), arena de Logica imersiva nova (lab-239, PR #128). Lab 240 (validacao no Redmi Pad 2): usuario confirmou em 2026-10-04 entrada/saida e toque nas 4 placas sem ativacao acidental; retorno ao planeta e independencia do desafio da ponte nao foram confirmados item a item (achado do Copilot na PR #152). Sem numeros de FPS/build (ver backlog 191 abaixo). |
 | 210 - Parkour arcade | 203, 231 | Concluido | PR #86; bug de saida sem checkpoint corrigido no lab-231 (PR #120). |
 | 211 - Trofeus | 204 | Concluido | PR #87. |
 | 195 - Ranking sem friccao | 205 | Concluido | PR #88. |
@@ -91,7 +91,9 @@ teste fisico de touch/teclado virtual/leitor de tela no Redmi Pad 2, acumulada d
 ## Pesquisa pendente
 
 - Lab 186: playtest guiado com 5-8 duplas crianca/responsavel.
-- Lab 240: validacao da Central de Jogos (entrada, 4 arenas, saida) no Redmi Pad 2 — nunca rodou.
+- Lab 240: entrada/saida da Central e toque nas 4 placas confirmados pelo usuario em 2026-10-04.
+  Ainda faltam: retorno ao planeta e independencia do desafio da ponte (nao confirmados item a
+  item) e a medicao numerica de FPS/build (ver backlog 191/193 acima).
 - Pesquisas A-E: teste dos 10 segundos, camera/primeira sessao, valor da assinatura, riqueza dos
   planetas e linguagem etica de monetizacao.
 - Pesquisas F-H: necessidade real de chat livre, controle percebido e elementos de planeta que
@@ -107,7 +109,8 @@ A auditoria deste lab (248) nao achou nenhum item de backlog numerado que esta s
 sem um dos tres insumos que faltam: dispositivo Android fisico, uma assinatura Stripe real pra
 testar, ou um playtest com criancas/responsaveis. Em ordem de dependencia:
 
-1. Medir o baseline em Redmi Pad 2/Poco C75 (fecha os backlogs 191 e 193 e desbloqueia o lab-240).
+1. Medir o baseline de FPS em Redmi Pad 2/Poco C75 (fecha os backlogs 191 e 193 — a parte
+   funcional do lab-240 ja foi confirmada em 2026-10-04, falta so o numero).
 2. Validar o lab-236 (ja mesclado) com assinatura real — e o unico codigo em produção sem
    confirmação fim-a-fim; qualquer sintoma de cosmetico desatualizado comeca por ali.
 3. Executar o Lab 186 de playtest e as Pesquisas A/B.
