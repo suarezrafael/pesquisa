@@ -47,13 +47,18 @@ describe('migração de perfil legado (storage.ts)', () => {
     localStorage.setItem(LEGACY_TUTORIAL_SEEN_KEY, 'true')
     localStorage.setItem(LEGACY_LAST_PLAYED_KEY, '2026-10-01T00:00:00.000Z')
 
+    // Achado do review automático do Copilot (PR #153): `loadProfile()` é o primeiro ponto de
+    // entrada real na ordem de inicialização (`useProfile()` em `App.tsx` roda antes de
+    // `listProfiles()`) — chamar `listProfiles()` primeiro aqui mascararia uma regressão em que
+    // a migração fosse removida especificamente de `loadProfile()`, já que `listProfiles()` já
+    // teria migrado por conta própria antes.
+    const profile = loadProfile()
+    expect(profile).toMatchObject({ name: 'Ana', avatarEmoji: '🐱' })
+
     const roster = listProfiles()
     expect(roster).toHaveLength(1)
     expect(roster[0]).toMatchObject({ name: 'Ana', avatarEmoji: '🐱' })
     expect(getActiveProfileId()).toBe(roster[0].id)
-
-    const profile = loadProfile()
-    expect(profile).toMatchObject({ name: 'Ana', avatarEmoji: '🐱' })
     expect(loadProgress()).toMatchObject({ completedQuestIds: ['q01'], xp: 40, coins: 10 })
     expect(hasTutorialBeenSeen()).toBe(true)
     expect(loadLastPlayedAt()).toBe('2026-10-01T00:00:00.000Z')

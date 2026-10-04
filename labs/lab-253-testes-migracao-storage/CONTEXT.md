@@ -32,6 +32,17 @@ no código descreve) e confirmei que exatamente o teste 6 falha — um segundo p
 roster com um `id` novo, diferente do primeiro. Revertido antes de rodar a suite completa; `git
 diff` confirma que `storage.ts` não tem nenhuma mudança neste lab.
 
+## Achado do review automático do Copilot na PR #153
+
+1 achado real, corrigido antes do merge: o teste de migração completa chamava `listProfiles()`
+antes de `loadProfile()`, mascarando uma regressão em que a migração fosse removida
+especificamente de `loadProfile()` — `listProfiles()` já teria migrado por conta própria antes
+desse teste conseguir notar. `App.tsx` chama `useProfile()` (que lê via `loadProfile()`) ANTES
+de `listProfiles()` na ordem real de inicialização (linha ~111 vs. ~268), então `loadProfile()`
+é o ponto de entrada que de fato protege o startup real. Reordenado pra chamar `loadProfile()`
+primeiro; confirmei manualmente que o teste falha se a chamada a `migrateLegacyProfileIfNeeded()`
+for removida de dentro de `loadProfile()` especificamente (revertido antes do commit final).
+
 ## Decisões técnicas tomadas
 
 - **Testar via API pública, não a função interna.** `migrateLegacyProfileIfNeeded` não é
