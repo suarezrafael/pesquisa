@@ -1,5 +1,14 @@
 # Laboratório atual
 
+Lab 253 implementado: labs/lab-253-testes-migracao-storage/ - 6 testes novos
+para `migrateLegacyProfileIfNeeded` em `storage.ts` (zero cobertura antes
+disso), incluindo regressao do bug documentado de migracao duplicada ao
+trocar de perfil (confirmado que o teste falha se o guard antigo voltar).
+Zero mudanca de comportamento. 377 testes, lint zero avisos, build sem erro
+novo. PR pendente. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 240 encerrado parcialmente (2026-10-04): labs/lab-240-validacao-central-tablet/ -
 usuario confirmou em chat que a entrada/saida da Central e o toque nas 4
 placas sem ativacao acidental funcionam no Redmi Pad 2. Achado do Copilot na
