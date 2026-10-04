@@ -1,11 +1,14 @@
 # Laboratório atual
 
-Lab 253 implementado: labs/lab-253-testes-migracao-storage/ - 6 testes novos
+Lab 253 publicado: labs/lab-253-testes-migracao-storage/ - 6 testes novos
 para `migrateLegacyProfileIfNeeded` em `storage.ts` (zero cobertura antes
 disso), incluindo regressao do bug documentado de migracao duplicada ao
 trocar de perfil (confirmado que o teste falha se o guard antigo voltar).
-Zero mudanca de comportamento. 377 testes, lint zero avisos, build sem erro
-novo. PR pendente. Ver FEATURES.md/CONTEXT.md.
+Copilot achou 1 achado real (teste nao protegia a ordem real de
+inicializacao do App.tsx), corrigido no mesmo PR. Zero mudanca de
+comportamento. 377 testes, lint zero avisos, build sem erro novo. PR #153
+mesclada em d0a2d43; CI/deploy em main confirmado. Ver FEATURES.md/
+CONTEXT.md.
 
 ---
 
