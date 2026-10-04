@@ -1,13 +1,15 @@
 # Laboratório atual
 
-Lab 252 implementado: labs/lab-252-alternativas-embaralhadas/ - embaralha a
+Lab 252 publicado: labs/lab-252-alternativas-embaralhadas/ - embaralha a
 ordem visual das alternativas de `QuestModal` (Fisher-Yates, mesma tecnica do
 lab-251) sem mudar IDs/recompensas; 35 das 36 perguntas dos planetas tinham a
 resposta certa na primeira posicao (recontado e confirmado nesta sessao).
 Reaproveita o remount-por-tentativa dos labs 246/247 pra manter a ordem
-estavel enquanto a pergunta esta aberta. 371 testes, lint zero avisos, build
-sem erro novo. Lab 240 continua pendente de validacao fisica no Redmi Pad 2.
-PR pendente. Ver FEATURES.md/CONTEXT.md.
+estavel enquanto a pergunta esta aberta. Copilot achou 1 achado real (teste
+de integracao nao provava a reordenacao de verdade) + 1 typo, corrigidos no
+mesmo PR. 371 testes, lint zero avisos, build sem erro novo. PR #150
+mesclada em 7388d54; CI/deploy em main confirmado. Lab 240 continua
+pendente de validacao fisica no Redmi Pad 2. Ver FEATURES.md/CONTEXT.md.
 
 ---
 
