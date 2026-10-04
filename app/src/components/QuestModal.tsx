@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Quest } from '../types'
 import { questTypeLabels } from '../data/quests'
+import { shuffleQuestChoices } from '../state/questChoiceOrder'
 import { useModalA11y } from '../state/useModalA11y'
 
 interface QuestModalProps {
@@ -14,6 +15,7 @@ export function QuestModal({ quest, onCorrect, onClose }: QuestModalProps) {
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const orderedChoices = useMemo(() => shuffleQuestChoices(quest.choices), [quest.choices])
 
   useEffect(() => () => {
     if (completionTimer.current !== null) clearTimeout(completionTimer.current)
@@ -61,7 +63,7 @@ export function QuestModal({ quest, onCorrect, onClose }: QuestModalProps) {
         <p className="quest-prompt">{quest.prompt}</p>
 
         <div className="quest-choices">
-          {quest.choices.map((choice) => {
+          {orderedChoices.map((choice) => {
             const isSelected = selectedId === choice.id
             const showCorrect = feedback === 'correct' && isSelected
             const showWrong = feedback === 'wrong' && isSelected

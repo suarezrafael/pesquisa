@@ -2,15 +2,17 @@
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { planetQuests } from '../data/planetQuests'
 import { quests } from '../data/quests'
+import type { Quest } from '../types'
 import { QuestModal } from './QuestModal'
 
-function Harness({ onCorrect }: { onCorrect: () => void }) {
+function Harness({ onCorrect, quest = quests[0] }: { onCorrect: () => void; quest?: Quest }) {
   const [open, setOpen] = useState(false)
   return (
     <>
       <button type="button" onClick={() => setOpen(true)}>Abrir pergunta</button>
-      {open && <QuestModal quest={quests[0]} onCorrect={onCorrect} onClose={() => setOpen(false)} />}
+      {open && <QuestModal quest={quest} onCorrect={onCorrect} onClose={() => setOpen(false)} />}
     </>
   )
 }
@@ -43,9 +45,14 @@ describe('QuestModal pending completion', () => {
     vi.unstubAllGlobals()
   })
 
+  function choiceButton(correct: boolean): HTMLButtonElement {
+    const correctLabel = quests[0].choices.find((choice) => choice.id === quests[0].correctChoiceId)!.label
+    return [...container.querySelectorAll<HTMLButtonElement>('.quest-choice')]
+      .find((button) => (button.textContent === correctLabel) === correct)!
+  }
+
   function answerCorrectly() {
-    const choice = container.querySelectorAll<HTMLButtonElement>('.quest-choice')[1]
-    act(() => choice.click())
+    act(() => choiceButton(true).click())
   }
 
   it('does not complete after the player closes a correctly answered question', () => {
@@ -76,9 +83,13 @@ describe('QuestModal pending completion', () => {
   })
 
   it('allows a wrong answer before completing a later correct answer', () => {
-    const wrong = container.querySelectorAll<HTMLButtonElement>('.quest-choice')[0]
+    const initialOrder = [...container.querySelectorAll<HTMLButtonElement>('.quest-choice')]
+      .map((button) => button.textContent)
+    const wrong = choiceButton(false)
     act(() => wrong.click())
     expect(container.querySelector('.quest-feedback.wrong')).not.toBeNull()
+    expect([...container.querySelectorAll<HTMLButtonElement>('.quest-choice')].map((button) => button.textContent))
+      .toEqual(initialOrder)
     act(() => vi.advanceTimersByTime(700))
     expect(onCorrect).not.toHaveBeenCalled()
     answerCorrectly()
@@ -96,13 +107,40 @@ describe('QuestModal pending completion', () => {
   })
 
   it('does not schedule duplicate completion on rapid repeated activation', () => {
-    const choice = container.querySelectorAll<HTMLButtonElement>('.quest-choice')[1]
+    const choice = choiceButton(true)
     act(() => {
       choice.click()
       choice.click()
     })
     act(() => vi.advanceTimersByTime(700))
     expect(onCorrect).toHaveBeenCalledTimes(1)
+  })
+
+  it('actually reorders the rendered choices, not just by coincidence', () => {
+    // Achado do review automático do Copilot (PR #150): o teste anterior escolhia o botão pelo
+    // rótulo correto em qualquer posição, então passava mesmo se `QuestModal` parasse de chamar
+    // `shuffleQuestChoices` e voltasse a renderizar `quest.choices` na ordem original do
+    // catálogo. `planetQuests.mercurio[0]` tem a resposta certa ("Mercúrio") na posição 0 — forçar
+    // `Math.random` a sempre devolver 0 produz uma permutação Fisher-Yates conhecida
+    // (["Vênus", "Terra", "Mercúrio"]), diferente da ordem original, provando que a reordenação
+    // de verdade aconteceu antes de clicar na resposta certa.
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0)
+    const planetQuest = planetQuests.mercurio[0]
+    const originalOrder = planetQuest.choices.map((choice) => choice.label)
+    act(() => root.render(<Harness onCorrect={onCorrect} quest={planetQuest} />))
+    const renderedOrder = [...container.querySelectorAll<HTMLButtonElement>('.quest-choice')]
+      .map((button) => button.textContent)
+    expect(renderedOrder).toEqual(['Vênus', 'Terra', 'Mercúrio'])
+    expect(renderedOrder).not.toEqual(originalOrder)
+    randomSpy.mockRestore()
+
+    const correctLabel = planetQuest.choices.find((choice) => choice.id === planetQuest.correctChoiceId)!.label
+    const correct = [...container.querySelectorAll<HTMLButtonElement>('.quest-choice')]
+      .find((button) => button.textContent === correctLabel)!
+    act(() => correct.click())
+    expect(container.querySelector('.quest-feedback.correct')).not.toBeNull()
+    act(() => vi.advanceTimersByTime(700))
+    expect(onCorrect).toHaveBeenCalledOnce()
   })
 })
 
