@@ -1,6 +1,6 @@
 # Laboratorio 240 - Validacao da Central de Jogos no tablet
 
-Status: concluído
+Status: encerrado parcialmente (fluxo principal confirmado; medicao de FPS e alguns sub-criterios da arena Logica nao confirmados item a item)
 Inicio: 2026-09-25
 Fim: 2026-10-04
 Commit inicial: 9fa3187f074426593e636eec4ee782e99e710ccd
@@ -23,11 +23,14 @@ arenas e o desempenho mobile.
   e pinca sem ativacao acidental, e botao E como alternativa (referencia:
   `labs/lab-238-toque-direto-portais/CONTEXT.md`; Labs 237-238). Confirmado
   pelo usuario no Redmi Pad 2 (ver CONTEXT.md).
-- [x] Na arena Logica, testar uma resposta errada seguida de tres corretas,
+- [~] Na arena Logica, testar uma resposta errada seguida de tres corretas,
   recompensa/trofeu, nova tentativa e retorno ao planeta; conferir que o
   desafio da ponte continua independente (referencia:
-  `labs/lab-239-logica-imersiva/CONTEXT.md`). Confirmado pelo usuario no
-  Redmi Pad 2 (ver CONTEXT.md).
+  `labs/lab-239-logica-imersiva/CONTEXT.md`). Achado do review automatico
+  do Copilot na PR #152: o usuario confirmou a arena de Logica funcionando
+  em geral, mas nao item por item — "retorno ao planeta" e "desafio da
+  ponte independente" especificamente nao foram confirmados nem negados.
+  Marcado parcial, nao concluido.
 - [x] Se o teste reproduzir defeito, corrigir o menor trecho responsavel,
   acrescentar teste de regressao quando viavel e repetir o fluxo e o build
   (referencia: `docs/prompts/04-manutencao-clean-code.md`). Nenhum defeito

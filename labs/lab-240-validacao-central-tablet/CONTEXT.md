@@ -5,9 +5,9 @@ Commit inicial → encerramento: 9fa3187f074426593e636eec4ee782e99e710ccd..(ver 
 
 ## O que foi feito
 
-Este laboratório ficou aberto desde 2026-09-25 (14 laboratórios atrás) sem nenhum commit de
-código — era uma validação física pura, bloqueada por falta de acesso a um Redmi Pad 2 durante
-as sessões anteriores (240, 241-252). O usuário confirmou nesta sessão, diretamente em chat, que
+Este laboratório ficou aberto desde 2026-09-25 (12 laboratórios atrás: 241 a 252) sem nenhum
+commit de código — era uma validação física pura, bloqueada por falta de acesso a um Redmi Pad 2
+durante as sessões anteriores. O usuário confirmou nesta sessão, diretamente em chat, que
 fez o teste físico no Redmi Pad 2 e que **está funcionando**.
 
 **Isto é um registro de confirmação verbal do usuário, não um log instrumentado.** O usuário não

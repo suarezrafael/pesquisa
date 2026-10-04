@@ -1,11 +1,13 @@
 # Laboratório atual
 
-Lab 240 encerrado (2026-10-04): labs/lab-240-validacao-central-tablet/ -
-usuario confirmou em chat que o fluxo da Central de Jogos funciona no Redmi
-Pad 2 (entrada/saida, toque nas 4 placas sem ativacao acidental, ciclo
-completo da arena de Logica). Confirmacao verbal, sem numeros de FPS/build —
-backlog 191/193 (auditoria de FPS) segue Parcial por isso. Nenhum defeito
-reportado. Sem mudanca de codigo. Ver FEATURES.md/CONTEXT.md.
+Lab 240 encerrado parcialmente (2026-10-04): labs/lab-240-validacao-central-tablet/ -
+usuario confirmou em chat que a entrada/saida da Central e o toque nas 4
+placas sem ativacao acidental funcionam no Redmi Pad 2. Achado do Copilot na
+PR #152: "retorno ao planeta" e "independencia do desafio da ponte" na arena
+de Logica NAO foram confirmados item a item — marcados parciais, nao
+concluidos. Confirmacao verbal, sem numeros de FPS/build — backlog 191/193
+(auditoria de FPS) segue Parcial por isso. Nenhum defeito reportado. Sem
+mudanca de codigo. Ver FEATURES.md/CONTEXT.md.
 
 ---
 

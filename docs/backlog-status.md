@@ -46,7 +46,7 @@ os documentos de backlog continuam sendo a fonte do problema, hipotese e criteri
 | 192 - Locomocao sem moonwalk | 194 | Concluido | PR #76. |
 | 208 - Movimento responsivo | 195, 233 | Concluido | PRs #77/#78; giro touch do avatar alinhado ao direcional e suavizacao ajustada no lab-233 (PR #122) — validacao fisica desse refinamento ainda pendente. |
 | 209 - Hub de mini-jogos | 196 | Concluido | PR #79. |
-| 212-217 - Centro e arenas educativas | 197-202, 237-240 | Concluido | Nucleo (saguao, portais, 4 arenas, progressao) concluido nas PRs #80-#85. Segunda rodada de controles/conteudo (labs 237-240) ampliou isto: entrada/selecao por toque (lab-237, PR #126), toque direto nos portais (lab-238, PR #127), arena de Logica imersiva nova (lab-239, PR #128). Lab 240 (validacao no Redmi Pad 2) confirmado funcionando pelo usuario em 2026-10-04 — entrada/saida, toque nas 4 placas sem ativacao acidental, ciclo completo da arena de Logica. Sem numeros de FPS/build (ver backlog 191 abaixo, que segue parcial por isso). |
+| 212-217 - Centro e arenas educativas | 197-202, 237-240 | Parcial | Nucleo (saguao, portais, 4 arenas, progressao) concluido nas PRs #80-#85. Segunda rodada de controles/conteudo (labs 237-240) ampliou isto: entrada/selecao por toque (lab-237, PR #126), toque direto nos portais (lab-238, PR #127), arena de Logica imersiva nova (lab-239, PR #128). Lab 240 (validacao no Redmi Pad 2): usuario confirmou em 2026-10-04 entrada/saida e toque nas 4 placas sem ativacao acidental; retorno ao planeta e independencia do desafio da ponte nao foram confirmados item a item (achado do Copilot na PR #152). Sem numeros de FPS/build (ver backlog 191 abaixo). |
 | 210 - Parkour arcade | 203, 231 | Concluido | PR #86; bug de saida sem checkpoint corrigido no lab-231 (PR #120). |
 | 211 - Trofeus | 204 | Concluido | PR #87. |
 | 195 - Ranking sem friccao | 205 | Concluido | PR #88. |
@@ -91,9 +91,9 @@ teste fisico de touch/teclado virtual/leitor de tela no Redmi Pad 2, acumulada d
 ## Pesquisa pendente
 
 - Lab 186: playtest guiado com 5-8 duplas crianca/responsavel.
-- ~~Lab 240: validacao da Central de Jogos (entrada, 4 arenas, saida) no Redmi Pad 2~~ —
-  confirmado funcionando pelo usuario em 2026-10-04. Falta so a medicao numerica de FPS/build
-  (ver backlog 191/193 acima), nao o funcional.
+- Lab 240: entrada/saida da Central e toque nas 4 placas confirmados pelo usuario em 2026-10-04.
+  Ainda faltam: retorno ao planeta e independencia do desafio da ponte (nao confirmados item a
+  item) e a medicao numerica de FPS/build (ver backlog 191/193 acima).
 - Pesquisas A-E: teste dos 10 segundos, camera/primeira sessao, valor da assinatura, riqueza dos
   planetas e linguagem etica de monetizacao.
 - Pesquisas F-H: necessidade real de chat livre, controle percebido e elementos de planeta que
