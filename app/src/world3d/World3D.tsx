@@ -5607,11 +5607,29 @@ export function World3D({
         g += (rockColor.g - g) * rockBlend
         b += (rockColor.b - b) * rockBlend
 
-        // Acima de 0.5 de altura (a ondulação de base do planeta não passa de ~0.27, então só
+        // Acima de 0.28 de altura (a ondulação de base do planeta não passa de ~0.27, então só
         // platôs de verdade entram aqui) até 2.0 é o platô mais alto — rampa vira marrom, topo
         // achatado vira verde escuro, com `rockBlend` decidindo a mistura entre os dois.
+        // Limiar de 0.5 (histórico) achado ao vivo (lab-257, print do usuário: "arvores flutuando
+        // em morros invisiveis... o boneco fica em cima desse morro invisivel") deixava boa parte
+        // da rampa EXTERNA de qualquer platô (onde a altura ainda é real, mas baixa — a rampa
+        // nasce suave por design, só junta altura perto do centro) sem NENHUMA cor própria: nem
+        // `rockBlend` (baseado na inclinação da normal, que o `smoothstep` da borda do platô
+        // deixa quase plana de propósito, pra não ter costura) nem este `hillBlend` antigo (só
+        // começava acima de 0.5 de altura) cobriam essa faixa. Medido ao vivo com raycast físico
+        // real: um ponto a ~4m de uma árvore já mostrava 0,99 de altura real e terreno
+        // completamente plano/verde aos olhos — nenhuma pista visual de que ali é "morro", mesmo
+        // sendo colisão sólida de verdade (não um bug de malha/culling — já descartado nos labs
+        // 95/124/151/254/255/256; aqui é SÓ cor). Baixado pra logo acima do teto da ondulação de
+        // base (0,27) — qualquer altura daí pra cima só pode vir de um platô de verdade, nunca da
+        // ondulação comum, então não cria falso positivo em terreno normal longe de platô nenhum.
+        // Divisor também reduzido (1,5 → 0,9): a inclinação da normal (`rockBlend`) não ajuda
+        // nessa faixa (medido ao vivo: normal praticamente radial, `slope` ~1, mesmo em pontos com
+        // quase 1m de altura real — a malha de 48 segmentos não capta a curvatura suave do
+        // `smoothstep` aí), então o `hillBlend` precisa sozinho dar um sinal visual forte o
+        // bastante pra qualquer altura perceptível, não só pro topo do platô mais alto.
         const height = posLen - PLANET_RADIUS
-        const hillBlend = Math.max(0, Math.min(1, (height - 0.5) / 1.5))
+        const hillBlend = Math.max(0, Math.min(1, (height - 0.28) / 0.9))
         const hillMixR = hillGreenColor.r + (hillBrownColor.r - hillGreenColor.r) * rockBlend
         const hillMixG = hillGreenColor.g + (hillBrownColor.g - hillGreenColor.g) * rockBlend
         const hillMixB = hillGreenColor.b + (hillBrownColor.b - hillGreenColor.b) * rockBlend
