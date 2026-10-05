@@ -1,5 +1,23 @@
 # Laboratório atual
 
+Lab 256 implementado (P0, prioridade do usuario): labs/lab-256-busca-mais-ampla-rochas/ -
+minutos depois do deploy do lab-255, usuario mandou um TERCEIRO print ("se vc tivesse achado a
+causa esse morro aqui nao estaria flutuando") mostrando rochas bem maiores e totalmente
+destacadas do chao perto de "Centro de Jogos" - pior que o caso do lab-255. Reproduzido ao vivo:
+`mountainRock-1-1` (`rock_tallA`, escala 3,2) sem nenhum contato visivel com o chao. Causa: o
+`findFlatterUpReal` reaproveitado no lab-255 ja escolhia levar em conta o footprint da rocha, mas
+o passo de busca entre aneis (herdado da versao pra fundacao de predio, 0,065 rad) e MENOR que o
+footprint de uma rocha grande (~0,135-0,16 rad) - a busca mal conseguia se afastar alem do proprio
+tamanho da rocha, incapaz de escapar de uma regiao ruim maior que ela mesma (toda a borda de um
+plato). Corrigido com um parametro opcional `ringStep` em `findFlatterUpReal` (predios/escolas
+inalterados, continuam no valor padrao) e passando um passo proporcional ao footprint de cada
+rocha. Medido ao vivo: a rocha do print caiu de ~1,2 pra 0,63 de variacao e ficou visivelmente
+grounded (zoom confirmado, base solida sem fresta). 2 das 9 rochas reavaliadas ainda ficam com
+variacao >1,0 - nao confirmadas visualmente nesta sessao (ver CONTEXT.md). 377 testes, lint zero
+avisos, tsc -b e build limpos. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 255 implementado (P0, prioridade do usuario): labs/lab-255-rocha-flutuando-platos/ -
 depois do deploy do lab-254, usuario reportou que o sintoma "morro invisivel" persistia e pediu
 teste ao vivo de verdade, nao mais especulacao. Testado ao vivo com raycast fisico real + leitura

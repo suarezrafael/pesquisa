@@ -5425,15 +5425,28 @@ export function World3D({
 
       // Busca em anéis crescentes ao redor de `baseUp` por um ponto com variação de relevo REAL
       // segura o bastante pra um prédio não afundar — nunca se afasta mais que ~0.26 rad (~3,4m)
-      // do ponto de partida. Orçamento de busca reduzido em relação à primeira versão (que usava a
-      // fórmula, bem mais barata) porque cada amostra aqui é um raycast físico de verdade, não uma
-      // conta analítica — ainda assim, roda só uma vez por prédio, no carregamento. Sempre devolve
-      // alguma direção (o melhor candidato achado, mesmo que nenhum fique 100% dentro do limite
-      // seguro) — nunca trava esperando um ponto perfeito. `angularRadius`/`safeVariance`
-      // parametrizados (lab-134, achado do usuário: "acho que a casa está enterrada na terra" —
-      // mesma classe de bug do lab-95, mas em "Minha Casa", não numa escolinha) pra reaproveitar a
-      // mesma busca pra qualquer prédio com footprint/fundação diferentes, não só escolinhas.
-      function findFlatterUpReal(baseUp: Vector3, angularRadius: number, safeVariance: number): Vector3 {
+      // do ponto de partida (com o `ringStep` padrão). Orçamento de busca reduzido em relação à
+      // primeira versão (que usava a fórmula, bem mais barata) porque cada amostra aqui é um
+      // raycast físico de verdade, não uma conta analítica — ainda assim, roda só uma vez por
+      // prédio, no carregamento. Sempre devolve alguma direção (o melhor candidato achado, mesmo
+      // que nenhum fique 100% dentro do limite seguro) — nunca trava esperando um ponto perfeito.
+      // `angularRadius`/`safeVariance` parametrizados (lab-134, achado do usuário: "acho que a
+      // casa está enterrada na terra" — mesma classe de bug do lab-95, mas em "Minha Casa", não
+      // numa escolinha) pra reaproveitar a mesma busca pra qualquer prédio com footprint/fundação
+      // diferentes, não só escolinhas.
+      // `ringStep` opcional (lab-255, achado ao vivo com print do usuário: uma rocha de montanha
+      // grande — `rockFootprintAngularRadius` de ~0,16 rad — ficava visivelmente flutuando mesmo
+      // depois de aplicar esta busca, porque o passo padrão de anel (0,065 rad) é pequeno demais
+      // perto do próprio footprint da rocha: a busca mal se afasta além do tamanho dela mesma,
+      // incapaz de escapar de uma região ruim mais larga que um único footprint, como perto da
+      // borda de um platô). Prédios/escolas continuam usando o padrão (chamada sem este
+      // argumento) — não mudar o comportamento já validado deles.
+      function findFlatterUpReal(
+        baseUp: Vector3,
+        angularRadius: number,
+        safeVariance: number,
+        ringStep = 0.065,
+      ): Vector3 {
         let best = baseUp
         let bestVariance = terrainVarianceNearbyReal(baseUp, angularRadius, 4)
         if (bestVariance <= safeVariance) return baseUp
@@ -5443,7 +5456,7 @@ export function World3D({
         const tangentB = Vector3.Cross(baseUp, tangentA).normalize()
 
         for (let ring = 1; ring <= 3; ring++) {
-          const ringRadius = ring * 0.065
+          const ringRadius = ring * ringStep
           for (let a = 0; a < 6; a++) {
             const angle = (a / 6) * Math.PI * 2
             const candidate = baseUp
@@ -5986,7 +5999,18 @@ export function World3D({
           // `findFlatterUpReal` usa pra amostrar variação de terreno ao redor do candidato.
           const rockFootprintAngularRadius = (scale * 0.55) / PLANET_RADIUS
           const candidateUp = plateau.dir.add(offset).normalize()
-          const localUp = findFlatterUpReal(candidateUp, rockFootprintAngularRadius, MOUNTAIN_ROCK_SAFE_TERRAIN_VARIANCE)
+          // Passo de anel proporcional ao footprint da PRÓPRIA rocha (em vez do padrão de
+          // `findFlatterUpReal`, pensado pra fundação de prédio, bem menor) — uma busca que mal se
+          // afasta além do tamanho da rocha nunca escapa de uma região ruim mais larga que ela
+          // mesma, como perto da borda de um platô (achado ao vivo medindo a rocha do print do
+          // usuário: com o passo padrão, a melhor candidata encontrada ainda ficava visivelmente
+          // flutuando).
+          const localUp = findFlatterUpReal(
+            candidateUp,
+            rockFootprintAngularRadius,
+            MOUNTAIN_ROCK_SAFE_TERRAIN_VARIANCE,
+            rockFootprintAngularRadius * 0.9,
+          )
           const pos = groundSurfacePosition(localUp)
           const spin = (ri * GOLDEN_ANGLE * 5 + pi) % (Math.PI * 2)
 
