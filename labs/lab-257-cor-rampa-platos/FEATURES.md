@@ -25,12 +25,13 @@ verdade perto dali, mas não tem NENHUMA cor própria que avise disso.
 - [x] Confirmar visualmente (teleporte + captura de tela no mesmo ponto medido): terreno
   perfeitamente plano/verde aos olhos, nenhuma pista de elevação, apesar de 1m de altura real —
   reproduzido de forma inequívoca.
-- [x] Identificar por que NENHUM dos dois mecanismos de cor existentes cobre essa faixa:
-  `rockBlend` (baseado na inclinação da normal) mede slope ~1,0 (perfeitamente plano) mesmo nesse
-  ponto elevado — o `smoothstep` da rampa do platô é por design quase sem inclinação longe do
-  pico (e a malha de 48 segmentos não resolve a curvatura fina mesmo onde a fórmula tem
-  inclinação real); `hillBlend` (baseado em altura) só começava acima de 0,5 de altura, deixando
-  a faixa de 0 a 0,5 (boa parte de qualquer rampa) sem cor nenhuma.
+- [x] Identificar por que os dois mecanismos de cor existentes davam sinal fraco/nenhum demais
+  nessa faixa: `rockBlend` (baseado na inclinação da normal) mede slope ~1,0 (perfeitamente plano)
+  mesmo nesse ponto elevado — o `smoothstep` da rampa do platô é por design quase sem inclinação
+  longe do pico (e a malha de 48 segmentos não resolve a curvatura fina mesmo onde a fórmula tem
+  inclinação real), zero contribuição de verdade; `hillBlend` (baseado em altura) já estava ATIVO
+  a 0,84-0,99m (acima do limiar antigo de 0,5), mas só dava um blend fraco (~0,23-0,33) —
+  insuficiente pra ser percebido contra a grama, não ausente.
 - [x] Corrigir `hillBlend`: limiar baixado de 0,5 para 0,28 (logo acima do teto da ondulação de
   base do planeta, ~0,27 — qualquer altura daí pra cima só pode vir de um platô de verdade) e
   divisor reduzido de 1,5 para 0,9 (satura mais rápido, já que `rockBlend` não ajuda nessa faixa).

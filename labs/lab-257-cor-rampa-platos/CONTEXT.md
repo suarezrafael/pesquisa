@@ -40,13 +40,17 @@ Investigados os DOIS mecanismos de cor que já existem pra isso:
   inflexão (perto da borda E perto do pico, só é íngreme no meio) — combinado com a malha de
   apenas 48 segmentos (não resolve essa curvatura fina), o resultado prático é que boa parte da
   rampa simplesmente não aciona `rockBlend` nenhum.
-- `hillBlend` (baseado em altura, antigo limiar 0,5): a 0,84-0,99m de altura, ainda abaixo do
-  limiar antigo — zero contribuição.
+- `hillBlend` (baseado em altura, fórmula antiga `(height-0.5)/1.5`): a 0,84-0,99m de altura, JÁ
+  estava acima do limiar antigo (0,5) — não é zero. Dava um blend de ~0,23-0,33, fraco demais pra
+  ser perceptível contra a grama (confirmado comparando a cor renderizada de verdade — pixel real
+  do canvas — nesse ponto com a grama normal ao redor: nenhuma diferença visível a olho nu antes
+  do ajuste, apesar do número não ser literalmente zero).
 
-Ou seja: nos pontos onde a elevação já é real e perceptível ao andar (quase 1m), NENHUM dos dois
-mecanismos de cor dava qualquer sinal visual. Confirmado que não é bug de malha/culling/bounding
-info (já descartados nos labs 95/124/151/254) nem de posicionamento de prop decorativo (labs
-255/256) — é puramente um buraco na lógica de cor.
+Ou seja: nos pontos onde a elevação já é real e perceptível ao andar (quase 1m), o único sinal de
+cor que existia (`hillBlend`, já que `rockBlend` mede ~0 nessa faixa) era fraco demais pra ser
+percebido — não inativo, mas insuficiente. Confirmado que não é bug de malha/culling/bounding info
+(já descartados nos labs 95/124/151/254) nem de posicionamento de prop decorativo (labs 255/256) —
+é um problema de CONTRASTE insuficiente na lógica de cor, não uma lacuna onde nada acontecia.
 
 ## Decisões técnicas tomadas
 
