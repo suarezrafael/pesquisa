@@ -29,7 +29,7 @@ Investigação ao vivo, nessa ordem:
    vivo).
 4. Medido o ângulo entre o `up` do avatar e o `up` da escolinha nessa situação: 24,7°, com os dois
    a ~6,5m de distância. Consistente com a curvatura geométrica do planeta: arco/raio = 6,5/13 ≈
-   0,5 rad ≈ 28,6°, bem próximo do valor medido (a pequena diferença é porque o personagie não
+   0,5 rad ≈ 28,6°, bem próximo do valor medido (a pequena diferença é porque o personagem não
    estava exatamente a 6,5m na linha reta até a escolinha).
 
 Conclusão: isto não é um bug de posicionamento, cor ou malha (as 4 causas anteriores já

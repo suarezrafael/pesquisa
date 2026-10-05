@@ -14800,7 +14800,17 @@ export function World3D({
             // foguete/interior de casa, ou fica com ângulo errado "grudado" depois de uma viagem
             // rápida) — não tentada aqui por falta de como testar todos esses pontos ao vivo nesta
             // sessão.
-            camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.025).normalize()
+            // Achado do review automático do Copilot: um fator fixo por QUADRO (não por tempo)
+            // depende da taxa de quadros do aparelho — o mesmo 0,025 convergeria bem mais devagar
+            // num celular a 30fps (parkour mais arriscado ainda) e bem mais rápido numa tela de
+            // 120fps (perdendo boa parte da suavização pretendida). Convertido pra um fator
+            // derivado de `dt` (tempo real do quadro), preservando o MESMO comportamento a 60fps
+            // já medido ao vivo (fórmula padrão de suavização independente de taxa de quadros:
+            // `1 - (1-fator)^(dt*60)`). `dt` limitado a 0,1s pra não gerar um fator >1 (e
+            // ultrapassar o alvo) depois de uma pausa longa da aba/engasgo do navegador.
+            const upVectorDt = Math.min(engine.getDeltaTime() / 1000, 0.1)
+            const upVectorAlpha = 1 - Math.pow(1 - 0.025, upVectorDt * 60)
+            camera.upVector = Vector3.Lerp(camera.upVector, localUp, upVectorAlpha).normalize()
             if (insideGameCenterInterior) {
               gameCenterCameraTarget.set(
                 pos.x + camFacing.x * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.x * GAME_CENTER_CAMERA_TARGET_HEIGHT,
