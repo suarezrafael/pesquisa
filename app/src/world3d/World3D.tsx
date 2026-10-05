@@ -416,6 +416,14 @@ const BIRD_CHIRP_RADIUS = 3.5 // pedido do usuário: pássaros cantam baixinho q
 const CAMERA_DISTANCE = 9
 const CAMERA_HEIGHT = 4.5
 const CAMERA_ROTATE_SPEED = 1.6 // rad/s — velocidade de giro da câmera segurando os botões ◀/▶
+// lab-259 — raio (metros, aproximado por distância reta) da âncora de `camera.upVector`: parado
+// dentro deste raio da última âncora, a câmera para de perseguir o `localUp` exato do jogador a
+// cada quadro (ver comentário completo no ponto de uso). Preço consciente: até
+// `CAMERA_UP_ANCHOR_RADIUS / PLANET_RADIUS` radianos de inclinação residual perto dos próprios pés
+// do jogador (2 / 13 ≈ 0,154 rad ≈ 8,8°) — valor escolhido pra cortar a maior parte do tombo de
+// prédios/platôs a poucos metros (o caso relatado, ~25° a 6-7m) sem deixar o chão imediato do
+// jogador visivelmente torto.
+const CAMERA_UP_ANCHOR_RADIUS = 2
 // lab-155 — o pet adotável não anda por conta própria; só persegue o `localUp` do jogador a cada
 // quadro (`Vector3.Lerp`, não uma velocidade angular fixa como a câmera acima). Valor achado por
 // tentativa: alto o bastante pra não "sumir" de vista quando o jogador corre, baixo o bastante
@@ -8950,6 +8958,15 @@ export function World3D({
       camera.upVector = spawnUp
       camera.setTarget(avatarMesh.position)
 
+      // lab-259 (usuário, depois do lab-258 já suavizar o giro: "ainda morros flutuantes
+      // invisiveis", circulando uma escolinha a poucos metros de distância, parado olhando pra
+      // ela por tempo suficiente pro giro suavizado terminar de convergir mesmo assim). Âncora
+      // de "para onde a câmera aponta", só reancorada quando o jogador anda mais que
+      // `CAMERA_UP_ANCHOR_RADIUS` desde a última âncora — ver comentário completo no ponto de
+      // uso (perto de `camera.upVector = Vector3.Lerp(...)`).
+      let cameraUpAnchor = spawnUp.clone()
+      let cameraUpAnchorPos = avatarMesh.position.clone()
+
       if (import.meta.env.DEV) {
         // Teleporte de QA — só em dev, pra testar o gatilho dos portais sem depender
         // de simular teclado segurado por um tempo real. Recebe uma DIREÇÃO (normalizada
@@ -14791,26 +14808,43 @@ export function World3D({
             // quadros (~1s a 60fps) parado, o ângulo que falta convergir caiu de perto de zero
             // (0,15 já convergia quase tudo em poucos quadros) pra ainda uns 20% do giro original
             // restante — suaviza o giro do dia a dia (andar, olhar ao redor, pausas curtas).
-            // Limite honesto: se o jogador ficar parado tempo suficiente (alguns segundos), a
-            // câmera ainda converge pro `localUp` exato de onde ele está — isto só suaviza o giro
-            // rápido do dia a dia, não elimina o tombo se alguém ficar parado olhando por muito
-            // tempo. Resolver isso de vez exigiria uma referência de câmera com atraso próprio
-            // (não só mais lenta), persistente entre quadros — mudança bem mais arriscada (precisa
-            // ser reiniciada certinho em cada ponto de teleporte/viagem entre planetas/carro/
-            // foguete/interior de casa, ou fica com ângulo errado "grudado" depois de uma viagem
-            // rápida) — não tentada aqui por falta de como testar todos esses pontos ao vivo nesta
-            // sessão.
-            // Achado do review automático do Copilot: um fator fixo por QUADRO (não por tempo)
-            // depende da taxa de quadros do aparelho — o mesmo 0,025 convergeria bem mais devagar
-            // num celular a 30fps (parkour mais arriscado ainda) e bem mais rápido numa tela de
-            // 120fps (perdendo boa parte da suavização pretendida). Convertido pra um fator
-            // derivado de `dt` (tempo real do quadro), preservando o MESMO comportamento a 60fps
-            // já medido ao vivo (fórmula padrão de suavização independente de taxa de quadros:
-            // `1 - (1-fator)^(dt*60)`). `dt` limitado a 0,1s pra não gerar um fator >1 (e
-            // ultrapassar o alvo) depois de uma pausa longa da aba/engasgo do navegador.
+            // Achado do review automático do Copilot (lab-258): um fator fixo por QUADRO (não por
+            // tempo) depende da taxa de quadros do aparelho — o mesmo 0,025 convergeria bem mais
+            // devagar num celular a 30fps (parkour mais arriscado ainda) e bem mais rápido numa
+            // tela de 120fps. Convertido pra um fator derivado de `dt` (tempo real do quadro),
+            // preservando o MESMO comportamento a 60fps já medido ao vivo (fórmula padrão de
+            // suavização independente de taxa de quadros: `1 - (1-fator)^(dt*60)`). `dt` limitado
+            // a 0,1s pra não gerar um fator >1 (e ultrapassar o alvo) depois de uma pausa longa da
+            // aba/engasgo do navegador.
             const upVectorDt = Math.min(engine.getDeltaTime() / 1000, 0.1)
             const upVectorAlpha = 1 - Math.pow(1 - 0.025, upVectorDt * 60)
-            camera.upVector = Vector3.Lerp(camera.upVector, localUp, upVectorAlpha).normalize()
+            // lab-259: o lab-258 só atrasava a convergência pro `localUp` EXATO de onde o jogador
+            // está — suficiente pra andar/olhar ao redor, mas se o jogador ficasse parado tempo
+            // suficiente (alguns segundos) olhando pra um prédio/platô próximo, a câmera ainda
+            // convergia por completo e o tombo voltava a aparecer por inteiro (achado ao vivo pelo
+            // usuário, parado perto de uma escolinha). Como o tombo de um objeto distante É a
+            // curvatura real do planeta (confirmado no lab-258: a escolinha está matematicamente
+            // reta, só a câmera gira com a posição exata do jogador) — qualquer forma de nunca
+            // deixar isso acontecer de verdade PRECISA que `camera.upVector` pare de bater
+            // EXATAMENTE com o `localUp` do jogador o tempo todo, mesmo parado. Única forma segura
+            // testada: uma ÂNCORA (`cameraUpAnchor`) que só se move quando o jogador anda mais que
+            // `CAMERA_UP_ANCHOR_RADIUS` desde a última âncora — parado dentro desse raio, a âncora
+            // (e portanto a câmera, depois de convergir) FICA PARADA, não persegue o `localUp`
+            // exato a cada quadro. Troca consciente, confirmada com o usuário antes de implementar:
+            // isso tira o tombo de prédios/platôs distantes de vez, mas o CHÃO perto dos PRÓPRIOS
+            // pés do jogador pode ficar com até `CAMERA_UP_ANCHOR_RADIUS`/`PLANET_RADIUS` radianos
+            // de inclinação residual (raio 2 → até ~8,8°) — sutil, mas existe, é o preço de nunca
+            // perseguir o `localUp` exato o tempo todo. Reancorar É barato de verdade (não precisa
+            // nenhum tratamento especial em teleporte/portal/carro/foguete): assim que a posição
+            // muda bastante (inclusive um teleporte instantâneo), a próxima checagem de distância
+            // já dispara uma reancoragem sozinha — sem precisar resetar isto em cada ponto de
+            // viagem espalhado pelo código.
+            const distFromCameraUpAnchor = Vector3.Distance(pos, cameraUpAnchorPos)
+            if (distFromCameraUpAnchor > CAMERA_UP_ANCHOR_RADIUS) {
+              cameraUpAnchor.copyFrom(localUp)
+              cameraUpAnchorPos.copyFrom(pos)
+            }
+            camera.upVector = Vector3.Lerp(camera.upVector, cameraUpAnchor, upVectorAlpha).normalize()
             if (insideGameCenterInterior) {
               gameCenterCameraTarget.set(
                 pos.x + camFacing.x * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.x * GAME_CENTER_CAMERA_TARGET_HEIGHT,

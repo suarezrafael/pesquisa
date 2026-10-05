@@ -1,5 +1,24 @@
 # Laboratório atual
 
+Lab 259 implementado (P0, prioridade do usuario): labs/lab-259-ancora-giro-camera/ -
+minutos depois do deploy do lab-258, usuario circulou de novo a MESMA escolinha "28" ainda
+tombada - o lab-258 so atrasava a convergencia, nao limitava, exatamente o limite ja documentado.
+Perguntado ao usuario: suavizar mais ou implementar um limite de verdade (trade-off exposto: chao
+perto dos proprios pes do jogador pode ficar levemente inclinado) - escolheu o limite de verdade.
+Implementada uma ANCORA de `camera.upVector` (`CAMERA_UP_ANCHOR_RADIUS = 2` metros): so reancora
+quando o jogador anda mais que o raio desde a ultima ancora: parado dentro do raio, a ancora (e a
+camera) fica parada, nao persegue o `localUp` exato do jogador pra sempre. Reancorar e automatico
+em qualquer transicao (teleporte/portal/carro/foguete) sem tratamento especial. Obstaculo de
+ambiente NOVO encontrado e resolvido: o navegador de automacao ficou preso minutos na fase de
+BENCHMARK DE GPU (antes da propria Scene existir, throttle de rAF em aba em segundo plano) -
+contornado com `?gpuTier=strong` (parametro de URL ja existente no codigo, so dev). Medido ao vivo
+com movimento real (nao teleporte instantaneo, que sempre mascara o teste): angulo de giro
+pendente agora PLATEIA (1,93 graus estavel por segundos) em vez de convergir a 0 como antes.
+Confirmado visualmente: escolinha "28" e Torre do Tesouro aparecem retas no mesmo cenario do
+print do usuario. 377 testes, lint zero avisos, build limpo. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 258 implementado (P0, prioridade do usuario): labs/lab-258-suaviza-giro-camera/ -
 depois do deploy do lab-257, usuario mandou um QUINTO print ("olha isso eu estou flutuando"),
 escuro/ambiguo (chovendo no jogo) - esclarecido que era o proprio personagem. Um SEXTO print, mais
