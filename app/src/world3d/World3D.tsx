@@ -3567,7 +3567,21 @@ export function World3D({
         pipeline.samples = 1
       }
       if (target >= 2 && adaptiveEffectTier < 2) {
-        shadowGenerator.dispose()
+        // Achado ao vivo (usuário, print num celular real: manchas PRETAS enormes cobrindo boa
+        // parte do chão — bem mais graves que a "acne" pontual já conhecida do lab-87). Causa:
+        // `shadowGenerator.dispose()` destrói a TEXTURA do shadow map, mas dezenas de meshes
+        // espalhadas pelo arquivo (incluindo `planet`) já têm `receiveShadows = true` — o shader
+        // PBR delas já foi compilado esperando amostrar essa textura. Descartar o recurso debaixo
+        // de um shader que ainda tenta lê-lo faz o fator de sombra ler como "totalmente ocluído"
+        // (preto) em vez de "sem sombra nenhuma" — e isso acontece bem no MEIO do jogo (quando o
+        // auto-tune mede FPS baixo o bastante, não só no carregamento), exatamente quando o
+        // usuário já está olhando pro terreno. Esvaziar a lista de renderização da própria
+        // textura do shadow map (em vez de destruí-la) desliga o CUSTO do passe de sombra (nada
+        // pra renderizar = passe desprezível, mesmo raciocínio já usado desde o início pro tier
+        // fraco em `shadowCastersEnabled`) sem invalidar o recurso que os shaders já compilados
+        // esperam encontrar.
+        const shadowMap = shadowGenerator.getShadowMap()
+        if (shadowMap) shadowMap.renderList = []
         sunLight.shadowEnabled = false
       }
       adaptiveEffectTier = target
@@ -8999,6 +9013,15 @@ export function World3D({
           avatarBody.body.setAngularVelocity(Vector3.Zero())
           avatarBody.body.disablePreStep = true
           wasGroundedLastFrame = true // Reafirma DEPOIS de scene.render() (reentrante pode sobrescrever).
+        }
+        // Gatilho de QA (lab-260) pro downgrade dinâmico de qualidade (`applyAdaptiveEffectTier`)
+        // — sem isto, só reproduz de verdade esperando o auto-tune medir FPS baixo por tempo
+        // real num dispositivo genuinamente fraco (não dá pra simular com `engine._deltaTime`
+        // forçado, que engana a própria medição de FPS do jogo). Usado pra confirmar ao vivo o
+        // bug de manchas pretas (`shadowGenerator.dispose()` invalidando a textura de sombra
+        // debaixo de shaders já compilados) sem precisar de um celular de verdade travando.
+        ;(window as any).__debugForceAdaptiveTier = (target: 0 | 1 | 2) => {
+          applyAdaptiveEffectTier(target)
         }
         // Ajusta a direção pra onde o personagem anda (dev-only, QA) — teleportar não muda
         // `facing` (fica sempre o que era antes), então sem isto não dá pra testar "andar até X"
