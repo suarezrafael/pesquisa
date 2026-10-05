@@ -1,5 +1,26 @@
 # Laboratório atual
 
+Lab 257 implementado (P0, prioridade do usuario): labs/lab-257-cor-rampa-platos/ -
+minutos depois do deploy do lab-256, usuario mandou um QUARTO print ("arvores flutuando em morros
+invisiveis... o boneco fica em cima desse morro invisivel"), mas desta vez a arvore apontada
+(`prop-33/tree_default`) estava CORRETAMENTE assentada no chao (raycast real: gap -0,074) - causa
+diferente dos labs 255/256 (rochas decorativas). Mapeada a altura real do terreno ao redor da
+arvore com raycast fisico: um ponto a so 4m dali ja tinha ~1m de altura real (plato 6, perto da
+borda), mas renderizava identico a grama plana - reproduzido com teleporte+captura no ponto exato.
+Causa: nenhum dos dois mecanismos de cor do terreno cobria essa faixa - `rockBlend` (por
+inclinacao de normal) media slope~1,0 (perfeitamente plano) mesmo com quase 1m de altura real (o
+`smoothstep` da rampa e por design quase sem inclinacao longe do pico, e a malha de 48 segmentos
+nao resolve a curvatura fina); `hillBlend` (por altura) so comecava acima de 0,5 de altura. Nao e
+bug de malha/culling/posicionamento - e um buraco puro na logica de cor. Corrigido baixando o
+limiar de `hillBlend` pra 0,28 (logo acima do teto da ondulacao de base do planeta, ~0,27 - nunca
+cria falso positivo em terreno sem plato) e reduzindo o divisor de 1,5 para 0,9 (satura mais
+rapido, ja que `rockBlend` nao ajuda nessa faixa). Medido ao vivo com pixel real do canvas: cor do
+terreno no ponto testado foi de indistinguivel da grama pra uma diferenca real e mensuravel.
+Nenhuma regressao visual nos platos ja testados (255/256). 377 testes, lint zero avisos, build
+limpo. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 256 implementado (P0, prioridade do usuario): labs/lab-256-busca-mais-ampla-rochas/ -
 minutos depois do deploy do lab-255, usuario mandou um TERCEIRO print ("se vc tivesse achado a
 causa esse morro aqui nao estaria flutuando") mostrando rochas bem maiores e totalmente
