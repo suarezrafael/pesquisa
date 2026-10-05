@@ -1,5 +1,28 @@
 # Laboratório atual
 
+Lab 260 implementado (P0, prioridade do usuario): labs/lab-260-manchas-pretas-sombra/ -
+usuario mandou print de um CELULAR REAL (10 FPS, Android/Chrome) mostrando uma mancha preta
+solida grande no chao perto do "Hub de Jogos" - primeira vez testando num aparelho genuinamente
+fraco nesta sessao (labs 255-259 foram tudo desktop). Nao reproduziu com `?gpuTier=weak` (tier
+fraco nunca registra casters de sombra desde o inicio, entao a teoria classica de shadow acne do
+lab-87 nao se aplica ali). Lendo o sistema de qualidade adaptativa (`applyAdaptiveEffectTier`):
+quando o FPS medido DURANTE o jogo fica baixo o bastante (nao so no benchmark inicial, que pode
+classificar errado um aparelho "forte" que nao aguenta o jogo completo), o codigo chamava
+`shadowGenerator.dispose()` ao atingir o tier mais baixo - isso DESTROI a textura do shadow map,
+mas dezenas de meshes (incluindo o `planet`) ja tem `receiveShadows = true` com shader compilado
+esperando amostrar essa textura. Adicionado gatilho de QA (`__debugForceAdaptiveTier`, dev-only,
+mantido permanente) pra forcar esse downgrade sem precisar de celular travando (forcar so
+`engine._deltaTime` engana a propria medicao de FPS que decide quando isso dispara). CONTROLE
+NEGATIVO antes de corrigir: descartada a textura do shadow map manualmente numa cena rodando -
+reproduziu manchas pretas solidas imediatamente (carro e trechos de estrada), confirmando a causa
+com alta confianca. Corrigido: `shadowGenerator.dispose()` virou esvaziar a lista de renderizacao
+da textura (`getShadowMap().renderList = []`) - mesmo efeito de custo (nada renderizado) sem
+destruir o recurso que shaders ja compilados esperam. Confirmado ao vivo: forcar o downgrade
+depois da correcao NAO produz mais manchas pretas no mesmo cenario. 377 testes, lint zero avisos,
+build limpo. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 259 implementado (P0, prioridade do usuario): labs/lab-259-ancora-giro-camera/ -
 minutos depois do deploy do lab-258, usuario circulou de novo a MESMA escolinha "28" ainda
 tombada - o lab-258 so atrasava a convergencia, nao limitava, exatamente o limite ja documentado.
