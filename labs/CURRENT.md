@@ -1,5 +1,25 @@
 # Laboratório atual
 
+Lab 258 implementado (P0, prioridade do usuario): labs/lab-258-suaviza-giro-camera/ -
+depois do deploy do lab-257, usuario mandou um QUINTO print ("olha isso eu estou flutuando"),
+escuro/ambiguo (chovendo no jogo) - esclarecido que era o proprio personagem. Um SEXTO print, mais
+claro, mostrou a escolinha "28" visivelmente tombada na tela perto da "Torre do Tesouro". Desta
+vez, DIFERENTE de todos os labs anteriores (95/124/151/254/255/256/257), nao e bug de
+posicionamento/cor/malha: confirmado matematicamente que a escolinha esta corretamente orientada
+(seu rotationQuaternion reproduz exatamente a direcao radial da propria posicao) e que
+`camera.upVector` acompanha a direcao radial de ONDE O JOGADOR ESTA parado (nao do predio olhado,
+confirmado batendo ate a 4a casa decimal). Medido: ~25 graus de diferenca entre o "up" do jogador
+e o da escolinha a so 6,5m de distancia - consistente com a curvatura de um planeta de raio 13m
+(arco/raio = 6,5/13 ~ 0,5 rad ~ 28,6 graus). Perguntado ao usuario se queria suavizar esse
+comportamento de camera - confirmou que sim. Reduzida a velocidade do giro da camera a pe (fator
+de lerp 0,15 para 0,025), descartado misturar com uma referencia "mundo" fixa apos medir que ela
+fica a mais de 90 graus do up real perto de platos do hemisferio sul (pioraria a camera ali).
+Medido ao vivo: convergencia que antes era quase instantanea agora leva ~3s. Nao elimina o tombo
+se o jogador ficar parado tempo suficiente - so atrasa, documentado como limite honesto. 377
+testes, lint zero avisos, build limpo. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 257 implementado (P0, prioridade do usuario): labs/lab-257-cor-rampa-platos/ -
 minutos depois do deploy do lab-256, usuario mandou um QUARTO print ("arvores flutuando em morros
 invisiveis... o boneco fica em cima desse morro invisivel"), mas desta vez a arvore apontada
