@@ -5424,8 +5424,9 @@ export function World3D({
       }
 
       // Busca em anéis crescentes ao redor de `baseUp` por um ponto com variação de relevo REAL
-      // segura o bastante pra um prédio não afundar — nunca se afasta mais que ~0.26 rad (~3,4m)
-      // do ponto de partida (com o `ringStep` padrão). Orçamento de busca reduzido em relação à
+      // segura o bastante pra um prédio não afundar — nunca se afasta mais que `3 * ringStep`
+      // do ponto de partida (~0,195 rad, ~2,5m, com o `ringStep` padrão). Orçamento de busca
+      // reduzido em relação à
       // primeira versão (que usava a fórmula, bem mais barata) porque cada amostra aqui é um
       // raycast físico de verdade, não uma conta analítica — ainda assim, roda só uma vez por
       // prédio, no carregamento. Sempre devolve alguma direção (o melhor candidato achado, mesmo
@@ -5434,7 +5435,7 @@ export function World3D({
       // casa está enterrada na terra" — mesma classe de bug do lab-95, mas em "Minha Casa", não
       // numa escolinha) pra reaproveitar a mesma busca pra qualquer prédio com footprint/fundação
       // diferentes, não só escolinhas.
-      // `ringStep` opcional (lab-255, achado ao vivo com print do usuário: uma rocha de montanha
+      // `ringStep` opcional (lab-256, achado ao vivo com print do usuário: uma rocha de montanha
       // grande — `rockFootprintAngularRadius` de ~0,16 rad — ficava visivelmente flutuando mesmo
       // depois de aplicar esta busca, porque o passo padrão de anel (0,065 rad) é pequeno demais
       // perto do próprio footprint da rocha: a busca mal se afasta além do tamanho dela mesma,
