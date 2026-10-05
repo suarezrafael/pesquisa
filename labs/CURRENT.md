@@ -1,14 +1,16 @@
 # Laboratório atual
 
-Lab 254 implementado (P0, prioridade do usuario): labs/lab-254-corrige-bounding-info-montanhas/ -
+Lab 254 publicado (P0, prioridade do usuario): labs/lab-254-corrige-bounding-info-montanhas/ -
 usuario reportou com print "morro invisivel" nas montanhas do planeta principal (mesmo sintoma
 dos labs 95/124/151, nunca confirmado resolvido). Achada causa nunca tentada antes: `planet.
 updateVerticesData` nao recalculava a caixa delimitadora apos deslocar vertices das montanhas,
 confirmado lendo o codigo-fonte do @babylonjs/core instalado. Corrigido com `updateExtends: true`.
-377 testes, lint zero avisos, tsc -b e build limpos. **Validacao ao vivo nao foi possivel nesta
-sessao** - navegador automatizado travou >3min carregando o mundo 3D (aba em segundo plano trava
-os timers do jogo, limitacao do ambiente). PR pendente; aguardando confirmacao do usuario apos
-deploy. Ver FEATURES.md/CONTEXT.md.
+377 testes, lint zero avisos, tsc -b e build limpos. Copilot: zero achados de codigo (so
+confirmou a mesma pendencia de validacao visual ja documentada). PR #155 mesclada em 4dee930;
+CI/deploy em main confirmado. **Validacao ao vivo pelo usuario, na mesma situacao do print,
+continua pendente e e o proximo passo obrigatorio** - se o sintoma persistir apos isso, ver
+hipoteses seguintes (shadow acne) no CONTEXT.md antes de tentar mais uma correcao especulativa.
+Ver FEATURES.md/CONTEXT.md.
 
 ---
 
