@@ -1,5 +1,30 @@
 # Laboratório atual
 
+Lab 259 implementado (P0, prioridade do usuario): labs/lab-259-ancora-giro-camera/ -
+minutos depois do deploy do lab-258, usuario circulou de novo a MESMA escolinha "28" ainda
+tombada - o lab-258 so atrasava a convergencia, nao limitava, exatamente o limite ja documentado.
+Perguntado ao usuario: suavizar mais ou implementar um limite de verdade (trade-off exposto: chao
+perto dos proprios pes do jogador pode ficar levemente inclinado) - escolheu o limite de verdade.
+DUAS versoes: a v1 (ancora de `camera.upVector` por distancia andada, raio 2m) foi implementada,
+testada ao vivo e aberta em PR, mas o review automatico do Copilot achou 2 problemas reais antes
+de mesclar - (severidade alta) a ancora nao garantia reduzir o tombo do predio especifico (se o
+jogador parasse bem na hora de reancorar, o gap zerava igual a antes, numa direcao arbitraria que
+podia tanto ajudar quanto piorar); (severidade media) o raio em METROS nao escalava com o tamanho
+do planeta (Mercurio, raio 4, daria ~24 graus residuais em vez dos ~8,8 pretendidos). Reprojetada
+do zero (v2): em vez de ancora por posicao, inclina `localUp` um angulo FIXO
+(`CAMERA_UP_LOOK_AHEAD_ANGLE = 0,2` rad) em direcao a `camFacing` - puramente angular (sem metros
+nem raio de planeta), sempre alinhado com o que o jogador esta olhando. Medido ao vivo em 3
+abordagens diferentes ate parar perto da escolinha (caminhada real via teclado, nao teleporte
+instantaneo que mascararia o teste): angulo ate o `localUp` real dela caiu de forma CONSISTENTE
+em todos os casos (25,3->12,8; 16,4->4,3; 7,5->4,0 graus) - nunca piorou. Confirmado visualmente:
+escolinha "28" e Torre do Tesouro aparecem retas no mesmo cenario do print do usuario. Obstaculo
+de ambiente NOVO encontrado e resolvido (valido pras duas versoes): o navegador de automacao
+ficou preso minutos na fase de BENCHMARK DE GPU (antes da propria Scene existir, throttle de rAF
+em aba em segundo plano) - contornado com `?gpuTier=strong` (parametro de URL ja existente no
+codigo, so dev). 377 testes, lint zero avisos, build limpo. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 258 implementado (P0, prioridade do usuario): labs/lab-258-suaviza-giro-camera/ -
 depois do deploy do lab-257, usuario mandou um QUINTO print ("olha isso eu estou flutuando"),
 escuro/ambiguo (chovendo no jogo) - esclarecido que era o proprio personagem. Um SEXTO print, mais
