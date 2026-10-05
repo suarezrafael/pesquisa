@@ -14824,9 +14824,9 @@ export function World3D({
             // PRÓPRIO jogador — não tem nenhuma relação com o ângulo até o PRÉDIO específico que
             // motivou a reclamação; se o jogador parasse bem na hora de reancorar, a âncora batia
             // exatamente com a posição atual e o tombo completo voltava, sem nenhuma garantia
-            // de que isso não aconteceria. (2) o raio em METROS correspondia a um raio ANGULAR bem maior em
-            // planetas menores que o principal (Mercúrio, raio 4) — o mesmo "2 metros" vira uma
-            // fatia bem maior do planeta lá, destruindo o limite pretendido.
+            // de que isso não aconteceria. (2) o raio em METROS correspondia a um raio ANGULAR
+            // bem maior em planetas menores que o principal (Mercúrio, raio 4) — o mesmo "2
+            // metros" vira uma fatia bem maior do planeta lá, destruindo o limite pretendido.
             //
             // Troca por uma correção DIRECIONAL, não uma âncora congelada: inclina `localUp` um
             // ângulo fixo (`CAMERA_UP_LOOK_AHEAD_ANGLE`, puramente angular — sem metros nem raio
