@@ -5508,7 +5508,18 @@ export function World3D({
         planetPositions[i + 1] = dir.y * newRadius
         planetPositions[i + 2] = dir.z * newRadius
       }
-      planet.updateVerticesData(VertexBuffer.PositionKind, planetPositions)
+      // `updateVerticesData` só recalcula a caixa delimitadora (bounding info) do mesh quando o
+      // 3º argumento (`updateExtends`) é `true` — sem ele (default `false`), o mesh continua
+      // registrado com os limites da esfera LISA original (raio `PLANET_RADIUS`), mesmo depois do
+      // laço acima deslocar vértices até `PLANET_RADIUS + 2,6` nos platôs mais altos. O motor usa
+      // essa caixa (não a geometria real) pra decidir se o mesh está dentro do campo de visão da
+      // câmera (frustum culling); com ela errada, o pico de uma montanha pode ficar fora da caixa
+      // registrada mas dentro do campo de visão real, levando o motor a não renderizar o mesh
+      // mesmo a física (que sempre lê a malha de verdade, nunca essa caixa) continuando correta —
+      // exatamente o padrão relatado desde o lab-95 ("morro sólido mas invisível, só em certos
+      // ângulos"), nunca atacado pelas 3 tentativas anteriores (culling de face traseira,
+      // iluminação de face traseira, inclinação da rampa — nenhuma delas mexe em bounding info).
+      planet.updateVerticesData(VertexBuffer.PositionKind, planetPositions, true)
       const planetNormals: number[] = []
       VertexData.ComputeNormals(planetPositions, planet.getIndices()!, planetNormals)
       // lab-124 — reforço de robustez pro mesmo problema do lab-95 (triângulos dobrados nas rampas
