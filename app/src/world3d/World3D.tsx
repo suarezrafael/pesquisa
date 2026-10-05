@@ -5958,6 +5958,19 @@ export function World3D({
       // logo depois do `havokPlugin` existir — ver comentário lá pro histórico do bug de
       // ping-pong entre dois colisores que motivou virar uma função compartilhada única).
       const MOUNTAIN_ROCK_TEMPLATE_INDICES = [6, 7, 10] // rock_largeA / rock_largeC / rock_tallA
+      // Achado ao vivo (usuário mandou print em produção: "rocha flutuando num morro invisível"):
+      // `settleMeshOnTerrain` só garante que o ponto mais BAIXO amostrado da rocha encoste no
+      // chão — nunca checou o resto da silhueta. `rock_largeA`/`rock_tallA` têm um "capacete"
+      // largo que se projeta bem além da base de apoio; perto da BORDA de um platô (onde a altura
+      // cai rápido dentro de poucos metros), esse capacete pode ficar pairando sobre um trecho de
+      // terreno bem mais baixo do que onde a base encostou — uma fresta de céu visível por baixo
+      // da rocha, sólida só na base. Medido ao vivo via raycast real contra o mesh `planet`:
+      // variação de ~1,2m de altura de chão dentro do footprint de uma única rocha de escala
+      // ~2,9. Mesma classe de problema que motivou `findFlatterUpReal` pros prédios (lab-134) —
+      // reaproveitada aqui com o footprint de CADA rocha (depende de `scale`, variável por
+      // rocha), em vez de aceitar a primeira direção sorteada mesmo que ela caia perto de uma
+      // borda íngreme.
+      const MOUNTAIN_ROCK_SAFE_TERRAIN_VARIANCE = 0.35
       PLATEAU_CENTERS.forEach((plateau, pi) => {
         const seed = Math.abs(plateau.dir.y) < 0.9 ? Vector3.Up() : Vector3.Right()
         const tangentA = Vector3.Cross(plateau.dir, seed).normalize()
@@ -5968,9 +5981,13 @@ export function World3D({
           const radiusFrac = 0.15 + ((ri * 5 + pi * 3) % 7) / 7 / 1.6 // 0.15-0.58 do raio do platô
           const wanderRadius = plateau.radius * radiusFrac
           const offset = tangentA.scale(Math.cos(angle) * wanderRadius).add(tangentB.scale(Math.sin(angle) * wanderRadius))
-          const localUp = plateau.dir.add(offset).normalize()
-          const pos = groundSurfacePosition(localUp)
           const scale = 2.6 + ((ri * 7 + pi * 5) % 5) * 0.3 // bem maior que props/rochas normais
+          // Metade do footprint aproximado do modelo base (~1,1m) já escalado — raio angular que
+          // `findFlatterUpReal` usa pra amostrar variação de terreno ao redor do candidato.
+          const rockFootprintAngularRadius = (scale * 0.55) / PLANET_RADIUS
+          const candidateUp = plateau.dir.add(offset).normalize()
+          const localUp = findFlatterUpReal(candidateUp, rockFootprintAngularRadius, MOUNTAIN_ROCK_SAFE_TERRAIN_VARIANCE)
+          const pos = groundSurfacePosition(localUp)
           const spin = (ri * GOLDEN_ANGLE * 5 + pi) % (Math.PI * 2)
 
           const templateIndex = MOUNTAIN_ROCK_TEMPLATE_INDICES[(ri + pi) % MOUNTAIN_ROCK_TEMPLATE_INDICES.length]
