@@ -14771,7 +14771,36 @@ export function World3D({
               lastCameraClipWasObstructed || pathObstructed
                 ? desiredCamPos
                 : Vector3.Lerp(camera.position, desiredCamPos, 0.1)
-            camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.15).normalize()
+            // 0.15 → 0.025 (lab-258, pedido do usuário depois de um print: um prédio a poucos
+            // metros de distância aparecia claramente tombado na tela). Não é um bug de
+            // posicionamento — confirmado ao vivo que `camera.upVector` acompanha exatamente o
+            // `localUp` de ONDE O JOGADOR ESTÁ (não do prédio olhado), e um planeta deste tamanho
+            // (raio 13) já gira a direção radial ~25° em só 6-7m de distância percorrida — então
+            // qualquer prédio/platô a poucos metros girava a câmera o bastante pra parecer
+            // tombado na tela, mesmo estando perfeitamente vertical no próprio referencial dele.
+            // Reduzir só a VELOCIDADE do lerp (não o alvo) suaviza esse giro durante o jogo normal
+            // (andando, olhando ao redor) sem precisar de uma referência "mundo" fixa — testei
+            // misturar parcialmente com `Vector3.Up()` antes de decidir por isto: perto dos platôs
+            // do hemisfério sul do planeta (`PLATEAU_CENTERS` com Y bem negativo, ex.: índices
+            // 8-11), `Vector3.Up()` fica a mais de 90° do `localUp` de verdade ali — misturar com
+            // ele deixaria a câmera PIOR (menos alinhada com o chão de verdade), não melhor.
+            // 0,025 escolhido (não mais lento) de propósito: o parkour deste jogo depende da
+            // câmera acompanhar rápido o chão debaixo do personagem durante pulos — um fator bem
+            // mais lento reduziria o giro parado, mas atrasaria perigosamente a resposta da câmera
+            // durante um pulo rápido (risco de julgar mal a aterrissagem). Medido ao vivo: a 60
+            // quadros (~1s a 60fps) parado, o ângulo que falta convergir caiu de perto de zero
+            // (0,15 já convergia quase tudo em poucos quadros) pra ainda uns 20% do giro original
+            // restante — suaviza o giro do dia a dia (andar, olhar ao redor, pausas curtas).
+            // Limite honesto: se o jogador ficar parado tempo suficiente (alguns segundos), a
+            // câmera ainda converge pro `localUp` exato de onde ele está — isto só suaviza o giro
+            // rápido do dia a dia, não elimina o tombo se alguém ficar parado olhando por muito
+            // tempo. Resolver isso de vez exigiria uma referência de câmera com atraso próprio
+            // (não só mais lenta), persistente entre quadros — mudança bem mais arriscada (precisa
+            // ser reiniciada certinho em cada ponto de teleporte/viagem entre planetas/carro/
+            // foguete/interior de casa, ou fica com ângulo errado "grudado" depois de uma viagem
+            // rápida) — não tentada aqui por falta de como testar todos esses pontos ao vivo nesta
+            // sessão.
+            camera.upVector = Vector3.Lerp(camera.upVector, localUp, 0.025).normalize()
             if (insideGameCenterInterior) {
               gameCenterCameraTarget.set(
                 pos.x + camFacing.x * GAME_CENTER_CAMERA_LOOK_AHEAD + localUp.x * GAME_CENTER_CAMERA_TARGET_HEIGHT,
