@@ -1,5 +1,25 @@
 # Laboratório atual
 
+Lab 255 implementado (P0, prioridade do usuario): labs/lab-255-rocha-flutuando-platos/ -
+depois do deploy do lab-254, usuario reportou que o sintoma "morro invisivel" persistia e pediu
+teste ao vivo de verdade, nao mais especulacao. Testado ao vivo com raycast fisico real + leitura
+de pixel real do canvas (nao captura de tela) contra o mesh `planet`: as 3 correcoes anteriores
+(labs 95/124/151/254) confirmadas corretas e ativas, zero ponto "solido mas invisivel" em ~2400
+pixels varridos. Usuario entao mandou um segundo print em producao apontando pra uma ROCHA
+DECORATIVA (`mountainRock-0-3`, `rock_largeA`) flutuando com fresta de ceu visivel por baixo.
+Causa raiz medida ao vivo: `settleMeshOnTerrain` so garante que o ponto mais baixo amostrado da
+rocha encosta no chao, nunca verificou o resto da silhueta - perto da borda de um plato (onde a
+altura cai rapido), o "capacete" largo da rocha fica pairando sobre terreno bem mais baixo.
+Corrigido reaproveitando `findFlatterUpReal` (ja usado pros predios desde o lab-134) tambem pras
+rochas de montanha, com raio angular baseado na escala de cada rocha. Medido ao vivo: variacao de
+altura no footprint da rocha testada caiu de 1,23m pra 0,72m; fresta de ceu do print do usuario
+confirmada ausente no mesmo angulo (zoom). 377 testes, lint zero avisos, tsc -b e build limpos.
+**Validacao ao vivo pelo usuario, na mesma situacao do print, continua sendo o criterio final** -
+ver CONTEXT.md pra proximos ajustes se a fresta (menor, mas talvez ainda presente nalgum outro
+plato) persistir. Ver FEATURES.md/CONTEXT.md.
+
+---
+
 Lab 254 publicado (P0, prioridade do usuario): labs/lab-254-corrige-bounding-info-montanhas/ -
 usuario reportou com print "morro invisivel" nas montanhas do planeta principal (mesmo sintoma
 dos labs 95/124/151, nunca confirmado resolvido). Achada causa nunca tentada antes: `planet.
